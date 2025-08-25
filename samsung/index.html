@@ -3,31 +3,124 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwiftBuyBack - Turn Your Old Phone into Cash!</title>
+    <title>SwiftBuyBack - Choose Your Samsung Device Type</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Font Awesome Brands for PayPal -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         body {
             font-family: 'Inter', sans-serif;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
-        /* Styling for the clickable card on the homepage */
-        .homepage-card-link {
+        /* Custom styles for hidden radio buttons and clickable images */
+        .carrier-option input[type="radio"] {
+            display: none; /* Hide the actual radio button */
+        }
+        .carrier-option label {
+            cursor: pointer;
+            border: 2px solid transparent; /* Default border */
+            border-radius: 0.75rem; /* rounded-xl equivalent */
+            transition: all 0.2s ease-in-out;
+            display: flex; /* Use flex to center image and text */
+            flex-direction: column; /* Stack image and text vertically */
+            align-items: center; /* Center horizontally */
+            justify-content: center; /* Center vertically */
+            height: 100%; /* Ensure label takes full height of grid item */
+        }
+        .carrier-option input[type="radio"]:checked + label {
+            border-color: #4f46e5; /* Indigo-600 for checked state */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* shadow-lg equivalent */
+            transform: scale(1.02); /* Slight scale on selection */
+        }
+        .carrier-option label:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* shadow-lg on hover */
+        }
+
+        /* Styling for the clickable card */
+        .phone-card-link {
             display: flex; /* Make the entire link a flex container */
             flex-direction: column; /* Stack content vertically */
             height: 100%; /* Ensure it fills the grid cell height */
             text-decoration: none; /* Remove underline from the link */
             color: inherit; /* Inherit text color */
         }
-        .homepage-card-link:hover .homepage-card-inner {
+
+        /* Ensure the card retains its styling on hover via the link */
+        .phone-card-link:hover .phone-card-inner {
             transform: scale(1.05);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Tailwind shadow-lg */
         }
-        /* Styles for the circular monogram */
+
+        /* Modal specific styles - copied from index.html */
+        .modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            opacity: 0;
+            visibility: hidden;
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+            display: flex; /* Use flex to center */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal.is-visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto;
+            padding: 2rem; /* p-8 */
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
+            max-width: 90%;
+            width: 450px; /* Adjusted width for modal */
+            position: relative;
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-out;
+        }
+        .modal.is-visible .modal-content {
+            transform: translateY(0);
+        }
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        /* Tab styles */
+        .tab-button {
+            padding: 0.75rem 1.5rem; /* px-6 py-3 */
+            font-weight: 600; /* font-semibold */
+            border-bottom-width: 2px;
+            border-color: transparent;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+        .tab-button.active {
+            border-color: #4f46e5; /* indigo-600 */
+            color: #4f46e5; /* indigo-600 */
+        }
+        .tab-button:hover {
+            color: #4f46e5; /* indigo-600 */
+        }
+        /* Styles for the circular monogram - FIXED: Replaced @apply with direct Tailwind classes */
         .user-monogram {
             display: flex; /* flex */
             align-items: center; /* items-center */
@@ -41,38 +134,22 @@
             font-size: 1.125rem; /* text-lg */
             cursor: pointer; /* cursor-pointer */
             user-select: none; /* select-none */
+            border-width: 2px; /* border-2 */
+            border-color: #6366f1; /* border-indigo-500 */
         }
         .auth-dropdown {
+            /* This is crucial for positioning the dropdown below the monogram */
             position: absolute;
             right: 0;
             margin-top: 0.5rem;
-            width: 12rem;
+            width: 12rem; /* w-48 */
             background-color: white;
-            border-radius: 0.375rem;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            padding-top: 0.25rem;
-            padding-bottom: 0.25rem;
+            border-radius: 0.375rem; /* rounded-md */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-lg */
+            padding-top: 0.25rem; /* py-1 */
+            padding-bottom: 0.25rem; /* py-1 */
             z-index: 20;
         }
-
-        /* Modal specific styles */
-        .modal {
-            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
-            opacity: 0;
-            visibility: hidden;
-        }
-        .modal.is-visible {
-            opacity: 1;
-            visibility: visible;
-        }
-        .modal-content {
-            transform: translateY(-20px);
-            transition: transform 0.3s ease-out;
-        }
-        .modal.is-visible .modal-content {
-            transform: translateY(0);
-        }
-
         /* Button styles for Google/Email login */
         .btn-google-style {
             display: flex;
@@ -125,16 +202,18 @@
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800">
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
 
-    <!-- Header -->
+    <!-- Header (reused for consistency) -->
     <header class="bg-white shadow-sm py-4">
         <div class="container mx-auto px-4 flex justify-between items-center">
             <a href="index.html" class="text-2xl font-bold text-indigo-700 rounded-md p-2">SwiftBuyBack</a>
-            <nav class="space-x-4 flex items-center">
-                <a href="sell-device.html" class="text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Sell Your Device</a>
+            <nav class="space-x-4">
+                <!-- Updated link to the new homepage -->
+                <a href="index.html" class="text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Sell Your Device</a>
                 
                 <!-- Authentication Status Container -->
+                <!-- IMPORTANT: This parent needs 'position: relative' for the dropdown to position correctly -->
                 <div id="authStatusContainer" class="relative inline-block">
                     <!-- This will be dynamically updated by JS -->
                     <a href="#" id="loginNavBtn" class="text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Login/Sign Up</a>
@@ -152,215 +231,68 @@
         </div>
     </header>
 
-    <!-- Hero Section -->
-    <section class="bg-indigo-700 text-white py-20 text-center rounded-b-3xl mx-auto mt-4 max-w-7xl shadow-lg">
-        <div class="container mx-auto px-4">
-            <h1 class="text-4xl md:text-5xl font-extrabold mb-4 leading-tight">Turn Your Old Phone into Cash!</h1>
-            <p class="text-lg md:text-xl mb-8 opacity-90">Quick, easy, and transparent buyback for iPhones and Samsung Galaxy devices.</p>
-            <a href="sell-device.html" class="bg-white text-indigo-700 px-8 py-4 rounded-full font-bold text-lg shadow-xl hover:bg-gray-100 transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white focus:ring-opacity-50 inline-block">
-                Sell Your Phone Now!
-            </a>
-        </div>
-    </section>
+    <!-- Main Content - Device Type Selection -->
+    <main class="flex-grow container mx-auto px-4 py-12">
+        <h1 class="text-4xl font-bold text-center text-gray-800 mb-10">What type of Samsung device do you want to sell?</h1>
+        <p class="text-lg text-center text-gray-600 mb-12">Select a device type to see available models and get an instant quote!</p>
 
-    <!-- Feature Highlights -->
-    <section class="container mx-auto px-4 py-16">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div class="bg-white p-6 rounded-xl shadow-lg text-center transform hover:scale-105 transition duration-300">
-                <div class="text-indigo-600 text-4xl mb-4">📦</div>
-                <h3 class="text-xl font-semibold mb-2">Hassle-Free Returns</h3>
-                <p class="text-gray-600">Enjoy peace of mind with our 30-day return policy.</p>
-            </div>
-            <div class="bg-white p-6 rounded-xl shadow-lg text-center transform hover:scale-105 transition duration-300">
-                <div class="text-indigo-600 text-4xl mb-4">🚚</div>
-                <h3 class="text-xl font-semibold mb-2">Free Shipping</h3>
-                <p class="text-gray-600">Ship your device to us at no cost to you.</p>
-            </div>
-            <div class="bg-white p-6 rounded-xl shadow-lg text-center transform hover:scale-105 transition duration-300">
-                <div class="text-indigo-600 text-4xl mb-4">🔍</div>
-                <h3 class="text-xl font-semibold mb-2">Certified Inspection</h3>
-                <p class="text-gray-600">Every device undergoes a thorough 55-point inspection.</p>
-            </div>
-            <div class="bg-white p-6 rounded-xl shadow-lg text-center transform hover:scale-105 transition duration-300">
-                <div class="text-indigo-600 text-4xl mb-4">📞</div>
-                <h3 class="text-xl font-semibold mb-2">Dedicated Support</h3>
-                <p class="text-gray-600">Customer service available 7 days a week.</p>
-            </div>
-        </div>
-    </section>
+        <!-- Adjusted grid classes for better responsiveness -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8 mx-auto">
 
-    <!-- Shop by Category -->
-    <section class="bg-indigo-50 py-16">
-        <div class="container mx-auto px-4">
-            <h2 class="text-3xl font-bold text-center mb-10 text-gray-800">Shop by Category</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                <!-- iPhone Category -->
-                <a href="iphone/models/" class="homepage-card-link">
-                    <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                        <img id="iphone_cat_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/apple" alt="iPhones Category" class="mx-auto mb-4 rounded-lg w-20 h-20 object-contain">
-                        <h3 class="text-xl font-semibold mb-2">iPhones</h3>
-                        <button class="bg-indigo-600 text-white px-6 py-2 rounded-full hover:bg-indigo-700 transition duration-300 mt-auto w-full">Sell Now</button>
-                    </div>
-                </a>
-                <!-- Samsung Galaxy Category -->
-                <a href="samsung/index.html" class="homepage-card-link">
-                    <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                        <img id="samsung_cat_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/samsung" alt="Samsung Galaxy Category" class="mx-auto mb-4 rounded-lg w-20 h-20 object-contain">
-                        <h3 class="text-xl font-semibold mb-2">Samsung Galaxy</h3>
-                        <button class="bg-indigo-600 text-white px-6 py-2 rounded-full hover:bg-indigo-700 transition duration-300 mt-auto w-full">Sell Now</button>
-                    </div>
-                </a>
-                <!-- Tablets Category -->
-                <a href="tablet/models/" class="homepage-card-link">
-                    <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                        <img id="tablet_cat_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/tablet/assets/tablet_category" alt="Tablets Category" class="mx-auto mb-4 rounded-lg w-20 h-20 object-contain">
-                        <h3 class="text-xl font-semibold mb-2">Tablets</h3>
-                        <button class="bg-indigo-600 text-white px-6 py-2 rounded-full hover:bg-indigo-700 transition duration-300 mt-auto w-full">Sell Now</button>
-                    </div>
-                </a>
-                <!-- Google Phones Category -->
-                <a href="google/models/" class="homepage-card-link">
-                    <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                        <img id="google_cat_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/googlepixel" alt="Google Phones Category" class="mx-auto mb-4 rounded-lg w-20 h-20 object-contain">
-                        <h3 class="text-xl font-semibold mb-2">Google Phones</h3>
-                        <button class="bg-indigo-600 text-white px-6 py-2 rounded-full hover:bg-indigo-700 transition duration-300 mt-auto w-full">Sell Now</button>
-                    </div>
-                </a>
-            </div>
-        </div>
-    </section>
+            <!-- Samsung S Series Card -->
+            <a href="models/s-series/index.html"" class="phone-card-link">
+                <div class="phone-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full justify-between transition duration-300">
+                    <img src="https://placehold.co/680x528/f0f4ff/6366f1?text=S+Series" alt="Samsung S Series" class="mx-auto mb-4 rounded-lg" width="680" height="528">
+                    <h3 class="text-xl font-semibold mb-2">Samsung Galaxy S Series</h3>
+                    <p class="text-gray-600 mb-4">Flagship models with cutting-edge features.</p>
+                    <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-medium mt-auto w-full transition duration-300">View S Series Models</button>
+                </div>
+            </a>
 
-    <!-- Popular Phones We Buy -->
-    <section class="container mx-auto px-4 py-16">
-        <h2 class="text-3xl font-bold text-center mb-10 text-gray-800">Popular Phones We Buy</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-            <!-- iPhone 15 Pro Max -->
-            <a href="phones/iphone-15-pro-max.html" class="homepage-card-link">
-                <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                    <img id="i15pm_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/i15pm" alt="iPhone 15 Pro Max" class="mx-auto mb-4 rounded-lg">
-                    <h3 class="text-xl font-semibold mb-2">iPhone 15 Pro Max</h3>
-                    <p class="text-indigo-600 font-bold mb-4">Starting from $700</p>
-                    <button class="bg-gray-200 text-gray-800 px-6 py-2 rounded-full font-medium mt-auto w-full">Sell This</button>
+            <!-- Samsung A Series Card -->
+            <a href="models/a-series/index.html" class="phone-card-link">
+                <div class="phone-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full justify-between transition duration-300">
+                    <img src="https://placehold.co/680x528/f0f4ff/6366f1?text=A+Series" alt="Samsung A Series" class="mx-auto mb-4 rounded-lg" width="680" height="528">
+                    <h3 class="text-xl font-semibold mb-2">Samsung Galaxy A Series</h3>
+                    <p class="text-gray-600 mb-4">Feature-rich devices for everyday use.</p>
+                    <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-medium mt-auto w-full transition duration-300">View A Series Models</button>
                 </div>
             </a>
-            <!-- iPhone 14 Pro -->
-            <a href="phones/iphone-14-pro.html" class="homepage-card-link">
-                <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                    <img id="i14p_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/i14p" alt="iPhone 14 Pro" class="mx-auto mb-4 rounded-lg">
-                    <h3 class="text-xl font-semibold mb-2">iPhone 14 Pro</h3>
-                    <p class="text-indigo-600 font-bold mb-4">Starting from $450</p>
-                    <button class="bg-gray-200 text-gray-800 px-6 py-2 rounded-full font-medium mt-auto w-full">Sell This</button>
-                </div>
-            </a>
-            <!-- iPhone 13 -->
-            <a href="phones/iphone-13.html" class="homepage-card-link">
-                <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                    <img id="i13_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/i13" alt="iPhone 13" class="mx-auto mb-4 rounded-lg">
-                    <h3 class="text-xl font-semibold mb-2">iPhone 13</h3>
-                    <p class="text-indigo-600 font-bold mb-4">Starting from $400</p>
-                    <button class="bg-gray-200 text-gray-800 px-6 py-2 rounded-full font-medium mt-auto w-full">Sell This</button>
-                </div>
-            </a>
-            <!-- Samsung Galaxy S24 Ultra -->
-            <a href="phones/samsung-galaxy-s24-ultra.html" class="homepage-card-link">
-                <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                    <img id="s24u_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/samsung/assets/s24u" alt="Samsung Galaxy S24 Ultra" class="mx-auto mb-4 rounded-lg">
-                    <h3 class="text-xl font-semibold mb-2">Samsung Galaxy S24 Ultra</h3>
-                    <p class="text-indigo-600 font-bold mb-4">Starting from $600</p>
-                    <button class="bg-gray-200 text-gray-800 px-6 py-2 rounded-full font-medium mt-auto w-full">Sell This</button>
-                </div>
-            </a>
-            <!-- Samsung Galaxy S22 -->
-            <a href="phones/samsung-galaxy-s22.html" class="homepage-card-link">
-                <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                    <img id="s22_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/samsung/assets/s22" alt="Samsung Galaxy S22" class="mx-auto mb-4 rounded-lg">
-                    <h3 class="text-xl font-semibold mb-2">Samsung Galaxy S22</h3>
-                    <p class="text-indigo-600 font-bold mb-4">Starting from $250</p>
-                    <button class="bg-gray-200 text-gray-800 px-6 py-2 rounded-full font-medium mt-auto w-full">Sell This</button>
-                </div>
-            </a>
-            <!-- Google Pixel 8 -->
-            <a href="phones/google-pixel-8.html" class="homepage-card-link">
-                <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                    <img id="gp8_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/google/assets/gp8" alt="Google Pixel 8" class="mx-auto mb-4 rounded-lg">
-                    <h3 class="text-xl font-semibold mb-2">Google Pixel 8</h3>
-                    <p class="text-indigo-600 font-bold mb-4">Starting from $400</p>
-                    <button class="bg-gray-200 text-gray-800 px-6 py-2 rounded-full font-medium mt-auto w-full">Sell This</button>
-                </div>
-            </a>
-            <!-- Tablet iPad Pro (M2) -->
-            <a href="phones/ipad-pro-m2.html" class="homepage-card-link">
-                <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                    <img id="ipm2_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/tablet/assets/ipm2" alt="Tablet iPad Pro (M2)" class="mx-auto mb-4 rounded-lg">
-                    <h3 class="text-xl font-semibold mb-2">Tablet iPad Pro (M2)</h3>
-                    <p class="text-indigo-600 font-bold mb-4">Starting from $550</p>
-                    <button class="bg-gray-200 text-gray-800 px-6 py-2 rounded-full font-medium mt-auto w-full">Sell This</button>
-                </div>
-            </a>
-            <!-- Samsung Galaxy Tab S9 Ultra -->
-            <a href="phones/samsung-galaxy-tab-s9-ultra.html" class="homepage-card-link">
-                <div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full transition duration-300">
-                    <img id="tbs9u_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/samsung/assets/tbs9u" alt="Samsung Galaxy Tab S9 Ultra" class="mx-auto mb-4 rounded-lg">
-                    <h3 class="text-xl font-semibold mb-2">Samsung Galaxy Tab S9 Ultra</h3>
-                    <p class="text-indigo-600 font-bold mb-4">Starting from $400</p>
-                    <button class="bg-gray-200 text-gray-800 px-6 py-2 rounded-full font-medium mt-auto w-full">Sell This</button>
-                </div>
-            </a>
-        </div>
-    </section>
 
-    <!-- What Customers Are Saying -->
-    <section class="bg-indigo-50 py-16">
-        <div class="container mx-auto px-4">
-            <h2 class="text-3xl font-bold text-center mb-10 text-gray-800">What Customers Are Saying</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <div class="bg-white p-6 rounded-xl shadow-lg flex items-start space-x-4">
-                    <div class="text-4xl">🚀</div>
-                    <div>
-                        <p class="text-gray-700 mb-2">"Extremely fast delivery and excellent communication throughout the process!"</p>
-                        <p class="font-semibold text-gray-800">- Happy Seller</p>
-                    </div>
+            <!-- Samsung Z Fold Series Card -->
+            <a href="models/z-fold-series/index.html" class="phone-card-link">
+                <div class="phone-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full justify-between transition duration-300">
+                    <img src="https://placehold.co/680x528/f0f4ff/6366f1?text=Z+Fold" alt="Samsung Z Fold Series" class="mx-auto mb-4 rounded-lg" width="680" height="528">
+                    <h3 class="text-xl font-semibold mb-2">Samsung Galaxy Z Fold Series</h3>
+                    <p class="text-gray-600 mb-4">Innovative foldable phones for productivity.</p>
+                    <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-medium mt-auto w-full transition duration-300">View Z Fold Models</button>
                 </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg flex items-start space-x-4">
-                    <div class="text-4xl">😊</div>
-                    <div>
-                        <p class="text-gray-700 mb-2">"Customer service was excellent and timely; they answered all my questions."</p>
-                        <p class="font-semibold text-gray-800">- Satisfied Customer</p>
-                    </div>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg flex items-start space-x-4">
-                    <div class="text-4xl">💸</div>
-                    <div>
-                        <p class="text-gray-700 mb-2">"Phone was in great shape for a great price, totally worth it!"</p>
-                        <p class="font-semibold text-gray-800">- Smart Buyer</p>
-                    </div>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg flex items-start space-x-4">
-                    <div class="text-4xl">⭐</div>
-                    <div>
-                        <p class="text-gray-700 mb-2">"Easy order, efficient process, and clear communication every step of the way."</p>
-                        <p class="font-semibold text-gray-800">- Verified Purchase</p>
-                    </div>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg flex items-start space-x-4">
-                    <div class="text-4xl">👍</div>
-                    <div>
-                        <p class="text-gray-700 mb-2">"Got more than I expected for my old phone. Smooth transaction!"</p>
-                        <p class="font-semibold text-gray-800">- Delighted Seller</p>
-                    </div>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg flex items-start space-x-4">
-                    <div class="4xl">🌟</div>
-                    <div>
-                        <p class="text-gray-700 mb-2">"The best experience selling a device online. Highly recommend SwiftBuyBack!"</p>
-                        <p class="font-semibold text-gray-800">- Enthusiastic User</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
+            </a>
 
-    <!-- Footer -->
+            <!-- Samsung Z Flip Series Card -->
+            <a href="models/z-flip-series/index.html" class="phone-card-link">
+                <div class="phone-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full justify-between transition duration-300">
+                    <img src="https://placehold.co/680x528/f0f4ff/6366f1?text=Z+Flip" alt="Samsung Z Flip Series" class="mx-auto mb-4 rounded-lg" width="680" height="528">
+                    <h3 class="text-xl font-semibold mb-2">Samsung Galaxy Z Flip Series</h3>
+                    <p class="text-gray-600 mb-4">Stylish foldable phones with a compact design.</p>
+                    <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-medium mt-auto w-full transition duration-300">View Z Flip Models</button>
+                </div>
+            </a>
+
+            <!-- Samsung Tab Series Card -->
+            <a href="models/tab-series/index.html" class="phone-card-link">
+                <div class="phone-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full justify-between transition duration-300">
+                    <img src="https://placehold.co/680x528/f0f4ff/6366f1?text=Tab+Series" alt="Samsung Tab Series" class="mx-auto mb-4 rounded-lg" width="680" height="528">
+                    <h3 class="text-xl font-semibold mb-2">Samsung Galaxy Tab Series</h3>
+                    <p class="text-gray-600 mb-4">Versatile tablets for work and entertainment.</p>
+                    <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-full font-medium mt-auto w-full transition duration-300">View Tab Models</button>
+                </div>
+            </a>
+
+        </div>
+    </main>
+
+    <!-- Footer (reused for consistency) -->
     <footer class="bg-gray-800 text-white py-12 mt-8 w-full">
         <div class="container mx-auto px-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div>
@@ -371,7 +303,7 @@
                 <h3 class="text-xl font-bold mb-4">Quick Links</h3>
                 <ul class="space-y-2">
                     <li><a href="index.html" class="text-gray-400 hover:text-white transition duration-300">Home</a></li>
-                    <li><a href="sell-device.html" class="text-gray-400 hover:text-white transition duration-300">Sell Your Phone</a></li>
+                    <li><a href="index.html" class="text-gray-400 hover:text-white transition duration-300">Sell Your Phone</a></li>
                     <li><a href="my-account.html" class="text-gray-400 hover:text-white transition duration-300">My Account</a></li>
                     <li><a href="about-us.html" class="text-gray-400 hover:text-white transition duration-300">About Us</a></li>
                     <li><a href="contact.html" class="text-gray-400 hover:text-white transition duration-300">Contact</a></li>
@@ -386,9 +318,9 @@
         </div>
     </footer>
 
-    <!-- Modal for Login/Signup -->
-    <div id="loginModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content">
+    <!-- Login/Signup Modal (reused) -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
             <button id="closeModalBtn" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200">
                 <i class="fa-solid fa-xmark text-xl"></i>
             </button>
@@ -420,7 +352,7 @@
                     <input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="current-password">
                 </div>
                 <button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button>
-                <p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-indigo-600 font-semibold hover:underline">Reset it here</a></p>
+                <p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" class="text-indigo-600 font-semibold hover:underline">Reset it here</a></p>
             </form>
 
             <!-- Sign Up Form (Hidden by default) -->
@@ -453,17 +385,6 @@
                 <button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button>
                 <p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-indigo-600 font-semibold hover:underline">Log in here</a></p>
             </form>
-
-            <!-- Forgot Password Form -->
-            <form id="forgotPasswordForm" class="space-y-4 hidden">
-                <p class="text-slate-600 text-center">Enter your email address to receive a password reset link.</p>
-                <div>
-                    <label for="forgotEmail" class="sr-only">Email Address</label>
-                    <input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                <button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button>
-                <p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-indigo-600 font-semibold hover:underline">Return to Login</a></p>
-            </form>
             <div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div>
         </div>
     </div>
@@ -479,11 +400,8 @@
             GoogleAuthProvider,
             signInWithEmailAndPassword,
             createUserWithEmailAndPassword,
-            updateProfile,
-            sendPasswordResetEmail
+            updateProfile
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
 
         // Your Firebase configuration
         const firebaseConfig = {
@@ -499,14 +417,12 @@
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        const db = getFirestore(app); // Initialize Firestore
-
 
         document.addEventListener('DOMContentLoaded', function() {
             // Function to load image with fallback extensions
             function loadImageWithFallback(imgElement) {
                 const baseSrc = imgElement.dataset.baseSrc;
-                const extensions = ['.webp', '.png', '.jpeg', '.jpg']; // Order of preference, .webp first
+                const extensions = ['.avif','.webp', '.png', '.jpeg', '.jpg']; // Order of preference, .webp first
                 let foundImage = false;
 
                 for (let i = 0; i < extensions.length; i++) {
@@ -521,26 +437,34 @@
                     img.onerror = function() {
                         if (i === extensions.length - 1 && !foundImage) {
                             // Determine appropriate placeholder based on context
-                            if (imgElement.id.includes('_cat_img')) { // Category images on homepage
-                                imgElement.src = "https://placehold.co/80x80/e0e7ff/4338ca?text=Category"; // Adjusted size
-                            } else if (imgElement.id.includes('_pop_img')) { // Popular phone images on homepage
-                                // Reverting to original size, removing fixed width/height
-                                imgElement.src = "https://placehold.co/150x150/f0f4ff/6366f1?text=No+Image";
-                            } else { // Generic fallback
-                                imgElement.src = "https://placehold.co/150x150/cccccc/333333?text=Error";
-                            }
+                            // For this homepage, we'll use generic placeholders for categories
+                            imgElement.src = "https://placehold.co/680x528/f0f4ff/6366f1?text=No+Image"; 
                             imgElement.alt = "Image not found";
                         }
                     };
-                    img.src = testSrc;
+                    if (baseSrc) { // Only attempt to load if baseSrc is defined
+                        img.src = testSrc;
+                    } else { // Fallback if no baseSrc is provided (e.g., for direct placeholder usage)
+                         imgElement.src = imgElement.src || "https://placehold.co/680x528/f0f4ff/6366f1?text=No+Image";
+                         imgElement.alt = "Image not found";
+                    }
                 }
             }
 
-            // Apply to all images on the homepage that have data-base-src
-            const homepageImages = document.querySelectorAll('img[data-base-src]');
-            homepageImages.forEach(img => {
+            // Apply to all images on the page that have data-base-src
+            const allImages = document.querySelectorAll('img[data-base-src]');
+            allImages.forEach(img => {
                 loadImageWithFallback(img);
             });
+            // Also apply to images that might be using direct src with a placeholder
+            document.querySelectorAll('img:not([data-base-src])').forEach(img => {
+                if (img.src.includes('placehold.co') && !img.complete) {
+                    img.onerror = function() {
+                        // Already a placeholder, no further fallback needed.
+                    };
+                }
+            });
+
 
             // --- Header Link Management based on Firebase Auth State ---
             const authStatusContainer = document.getElementById('authStatusContainer');
@@ -568,12 +492,6 @@
             const signupPhoneInput = document.getElementById('signupPhone');
             const authMessage = document.getElementById('authMessage');
             const switchToLogin = document.getElementById('switchToLogin');
-            const forgotPasswordLink = document.getElementById('forgotPasswordLink');
-            const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-            const forgotEmailInput = document.getElementById('forgotEmail');
-            const sendResetEmailBtn = document.getElementById('sendResetEmailBtn');
-            const returnToLoginLink = document.getElementById('returnToLogin');
-
 
             // Function to generate a random light background color for monogram
             function getRandomLightColor() {
@@ -586,12 +504,16 @@
             // --- Login Modal Functions ---
             function showLoginModal() {
                 loginModal.classList.add('is-visible');
+                // Ensure the modal is displayed as flex to center it
+                loginModal.style.display = 'flex'; 
                 clearAuthMessage(); // Clear messages when modal opens
                 showTab('login');
             }
 
             function hideLoginModal() {
                 loginModal.classList.remove('is-visible');
+                // Hide the modal completely after transition
+                loginModal.style.display = 'none'; 
             }
 
             function showTab(tabName) {
@@ -600,26 +522,15 @@
                 signupTabBtn.classList.remove('border-indigo-600', 'text-indigo-600');
                 loginTabBtn.classList.add('border-transparent', 'text-slate-500');
                 signupTabBtn.classList.add('border-transparent', 'text-slate-500');
-                loginTabBtn.classList.remove('hidden'); // Ensure tabs are visible by default
-                signupTabBtn.classList.remove('hidden'); // Ensure tabs are visible by default
 
                 if (tabName === 'login') {
                     loginForm.classList.remove('hidden');
                     signupForm.classList.add('hidden');
-                    forgotPasswordForm.classList.add('hidden');
                     loginTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
-                } else if (tabName === 'signup') {
+                } else { // signup
                     signupForm.classList.remove('hidden');
                     loginForm.classList.add('hidden');
-                    forgotPasswordForm.classList.add('hidden');
                     signupTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
-                } else if (tabName === 'forgotPassword') {
-                    forgotPasswordForm.classList.remove('hidden');
-                    loginForm.classList.add('hidden');
-                    signupForm.classList.add('hidden');
-                    // Hide tabs when showing password reset form
-                    loginTabBtn.classList.add('hidden');
-                    signupTabBtn.classList.add('hidden');
                 }
             }
 
@@ -661,42 +572,6 @@
                     showTab('login');
                 });
             }
-            // New event listener for "Forgot your password?" link
-            if (forgotPasswordLink) {
-                forgotPasswordLink.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    showTab('forgotPassword');
-                });
-            }
-            // New event listener for password reset form submission
-            if (forgotPasswordForm) {
-                forgotPasswordForm.addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    const email = forgotEmailInput.value;
-                    if (!email) {
-                        showAuthMessage('Please enter your email address.', 'error');
-                        return;
-                    }
-                    
-                    try {
-                        clearAuthMessage();
-                        showAuthMessage('Sending password reset email...', 'info');
-                        await sendPasswordResetEmail(auth, email);
-                        showAuthMessage('A password reset link has been sent to your email. Check your inbox and spam folder.', 'success');
-                        forgotEmailInput.value = ''; // Clear the input field
-                    } catch (error) {
-                        console.error("Password reset error:", error);
-                        showAuthMessage(`Password reset failed: ${error.message}`, 'error');
-                    }
-                });
-            }
-            // New event listener for "Return to Login" link
-            if (returnToLoginLink) {
-                returnToLoginLink.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    showTab('login');
-                });
-            }
 
 
             // --- Firebase Authentication Logic ---
@@ -720,7 +595,8 @@
                     clearAuthMessage();
                     showAuthMessage('Signing up with Google...', 'info');
                     await signInWithPopup(auth, googleProvider);
-                } catch (error) {
+                }
+                catch (error) {
                     console.error("Google signup error:", error);
                     showAuthMessage(`Google signup failed: ${error.message}`, 'error');
                 }
@@ -769,6 +645,16 @@
                     await updateProfile(userCredential.user, {
                         displayName: name
                     });
+                    // You might want to store phone in Firestore if provided
+                    // const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api'; // Define if needed
+                    // if (phone) {
+                    //     const response = await fetch(`${BACKEND_URL}/save-user-profile`, {
+                    //          method: 'POST',
+                    //          headers: { 'Content-Type': 'application/json' },
+                    //          body: JSON.stringify({ uid: userCredential.user.uid, phone: phone })
+                    //     });
+                    //     if (!response.ok) console.error("Failed to save phone number");
+                    // }
                     showAuthMessage('Account created successfully! You are now logged in.', 'success');
                 } catch (error) {
                     console.error("Email signup error:", error);
@@ -832,3 +718,4 @@
     </script>
 </body>
 </html>
+
