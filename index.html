@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Font Awesome Brands for PayPal -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -27,13 +29,33 @@
         }
         /* Styles for the circular monogram */
         .user-monogram {
-            @apply flex items-center justify-center w-10 h-10 rounded-full bg-indigo-100 text-indigo-800 font-bold text-lg cursor-pointer select-none;
+            display: flex; /* flex */
+            align-items: center; /* items-center */
+            justify-content: center; /* justify-center */
+            width: 2.5rem; /* w-10 */
+            height: 2.5rem; /* h-10 */
+            border-radius: 9999px; /* rounded-full */
+            background-color: #e0e7ff; /* bg-indigo-100 */
+            color: #4338ca; /* text-indigo-800 */
+            font-weight: 700; /* font-bold */
+            font-size: 1.125rem; /* text-lg */
+            cursor: pointer; /* cursor-pointer */
+            user-select: none; /* select-none */
         }
         .auth-dropdown {
-            @apply absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20;
+            position: absolute;
+            right: 0;
+            margin-top: 0.5rem;
+            width: 12rem;
+            background-color: white;
+            border-radius: 0.375rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding-top: 0.25rem;
+            padding-bottom: 0.25rem;
+            z-index: 20;
         }
 
-        /* Modal specific styles - copied from iphone-16-pro-max.html */
+        /* Modal specific styles */
         .modal {
             transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
             opacity: 0;
@@ -51,7 +73,7 @@
             transform: translateY(0);
         }
 
-        /* Button styles for Google/Email login - copied from iphone-16-pro-max.html */
+        /* Button styles for Google/Email login */
         .btn-google-style {
             display: flex;
             align-items: center;
@@ -109,10 +131,10 @@
     <header class="bg-white shadow-sm py-4">
         <div class="container mx-auto px-4 flex justify-between items-center">
             <a href="index.html" class="text-2xl font-bold text-indigo-700 rounded-md p-2">SwiftBuyBack</a>
-            <nav class="space-x-4">
+            <nav class="space-x-4 flex items-center">
                 <a href="sell-device.html" class="text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Sell Your Device</a>
                 
-                <!-- Authentication Status Container - Updated to match iphone-16-pro-max.html -->
+                <!-- Authentication Status Container -->
                 <div id="authStatusContainer" class="relative inline-block">
                     <!-- This will be dynamically updated by JS -->
                     <a href="#" id="loginNavBtn" class="text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Login/Sign Up</a>
@@ -364,7 +386,7 @@
         </div>
     </footer>
 
-    <!-- Modal for Login/Signup - Copied from iphone-16-pro-max.html -->
+    <!-- Modal for Login/Signup -->
     <div id="loginModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
         <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content">
             <button id="closeModalBtn" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200">
@@ -398,7 +420,7 @@
                     <input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" autocomplete="current-password">
                 </div>
                 <button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button>
-                <p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" class="text-indigo-600 font-semibold hover:underline">Reset it here</a></p>
+                <p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-indigo-600 font-semibold hover:underline">Reset it here</a></p>
             </form>
 
             <!-- Sign Up Form (Hidden by default) -->
@@ -431,6 +453,17 @@
                 <button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button>
                 <p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-indigo-600 font-semibold hover:underline">Log in here</a></p>
             </form>
+
+            <!-- Forgot Password Form -->
+            <form id="forgotPasswordForm" class="space-y-4 hidden">
+                <p class="text-slate-600 text-center">Enter your email address to receive a password reset link.</p>
+                <div>
+                    <label for="forgotEmail" class="sr-only">Email Address</label>
+                    <input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button>
+                <p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-indigo-600 font-semibold hover:underline">Return to Login</a></p>
+            </form>
             <div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div>
         </div>
     </div>
@@ -446,8 +479,11 @@
             GoogleAuthProvider,
             signInWithEmailAndPassword,
             createUserWithEmailAndPassword,
-            updateProfile
+            updateProfile,
+            sendPasswordResetEmail
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
 
         // Your Firebase configuration
         const firebaseConfig = {
@@ -463,6 +499,8 @@
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
+        const db = getFirestore(app); // Initialize Firestore
+
 
         document.addEventListener('DOMContentLoaded', function() {
             // Function to load image with fallback extensions
@@ -505,32 +543,37 @@
             });
 
             // --- Header Link Management based on Firebase Auth State ---
-            // const loginLink = document.getElementById('login-link'); // No longer needed as loginNavBtn replaces it
-            const authStatusContainer = document.getElementById('authStatusContainer'); // New
-            const loginNavBtn = document.getElementById('loginNavBtn'); // New
-            const userMonogram = document.getElementById('userMonogram'); // New
-            const authDropdown = document.getElementById('authDropdown'); // New
-            const logoutBtn = document.getElementById('logoutBtn'); // New
+            const authStatusContainer = document.getElementById('authStatusContainer');
+            const loginNavBtn = document.getElementById('loginNavBtn');
+            const userMonogram = document.getElementById('userMonogram');
+            const authDropdown = document.getElementById('authDropdown');
+            const logoutBtn = document.getElementById('logoutBtn');
 
             // Login Modal Elements
-            const loginModal = document.getElementById('loginModal'); // New
-            const closeModalBtn = document.getElementById('closeModalBtn'); // New
-            const loginTabBtn = document.getElementById('loginTabBtn'); // New
-            const signupTabBtn = document.getElementById('signupTabBtn'); // New
-            const loginForm = document.getElementById('loginForm'); // New
-            const signupForm = document.getElementById('signupForm'); // New
-            const googleLoginBtn = document.getElementById('googleLoginBtn'); // New
-            const emailLoginBtn = document.getElementById('emailLoginBtn'); // New
-            const loginEmailInput = document.getElementById('loginEmail'); // New
-            const loginPasswordInput = document.getElementById('loginPassword'); // New
-            const googleSignupBtn = document.getElementById('googleSignupBtn'); // New
-            const emailSignupBtn = document.getElementById('emailSignupBtn'); // New
-            const signupNameInput = document.getElementById('signupName'); // New
-            const signupEmailInput = document.getElementById('signupEmail'); // New
-            const signupPasswordInput = document.getElementById('signupPassword'); // New
-            const signupPhoneInput = document.getElementById('signupPhone'); // New
-            const authMessage = document.getElementById('authMessage'); // New
-            const switchToLogin = document.getElementById('switchToLogin'); // New
+            const loginModal = document.getElementById('loginModal');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const loginTabBtn = document.getElementById('loginTabBtn');
+            const signupTabBtn = document.getElementById('signupTabBtn');
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+            const googleLoginBtn = document.getElementById('googleLoginBtn');
+            const emailLoginBtn = document.getElementById('emailLoginBtn');
+            const loginEmailInput = document.getElementById('loginEmail');
+            const loginPasswordInput = document.getElementById('loginPassword');
+            const googleSignupBtn = document.getElementById('googleSignupBtn');
+            const emailSignupBtn = document.getElementById('emailSignupBtn');
+            const signupNameInput = document.getElementById('signupName');
+            const signupEmailInput = document.getElementById('signupEmail');
+            const signupPasswordInput = document.getElementById('signupPassword');
+            const signupPhoneInput = document.getElementById('signupPhone');
+            const authMessage = document.getElementById('authMessage');
+            const switchToLogin = document.getElementById('switchToLogin');
+            const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+            const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+            const forgotEmailInput = document.getElementById('forgotEmail');
+            const sendResetEmailBtn = document.getElementById('sendResetEmailBtn');
+            const returnToLoginLink = document.getElementById('returnToLogin');
+
 
             // Function to generate a random light background color for monogram
             function getRandomLightColor() {
@@ -557,15 +600,26 @@
                 signupTabBtn.classList.remove('border-indigo-600', 'text-indigo-600');
                 loginTabBtn.classList.add('border-transparent', 'text-slate-500');
                 signupTabBtn.classList.add('border-transparent', 'text-slate-500');
+                loginTabBtn.classList.remove('hidden'); // Ensure tabs are visible by default
+                signupTabBtn.classList.remove('hidden'); // Ensure tabs are visible by default
 
                 if (tabName === 'login') {
                     loginForm.classList.remove('hidden');
                     signupForm.classList.add('hidden');
+                    forgotPasswordForm.classList.add('hidden');
                     loginTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
-                } else { // signup
+                } else if (tabName === 'signup') {
                     signupForm.classList.remove('hidden');
                     loginForm.classList.add('hidden');
+                    forgotPasswordForm.classList.add('hidden');
                     signupTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
+                } else if (tabName === 'forgotPassword') {
+                    forgotPasswordForm.classList.remove('hidden');
+                    loginForm.classList.add('hidden');
+                    signupForm.classList.add('hidden');
+                    // Hide tabs when showing password reset form
+                    loginTabBtn.classList.add('hidden');
+                    signupTabBtn.classList.add('hidden');
                 }
             }
 
@@ -603,6 +657,42 @@
             // Link to switch from signup to login form
             if (switchToLogin) { // Check if element exists before adding listener
                 switchToLogin.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showTab('login');
+                });
+            }
+            // New event listener for "Forgot your password?" link
+            if (forgotPasswordLink) {
+                forgotPasswordLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showTab('forgotPassword');
+                });
+            }
+            // New event listener for password reset form submission
+            if (forgotPasswordForm) {
+                forgotPasswordForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const email = forgotEmailInput.value;
+                    if (!email) {
+                        showAuthMessage('Please enter your email address.', 'error');
+                        return;
+                    }
+                    
+                    try {
+                        clearAuthMessage();
+                        showAuthMessage('Sending password reset email...', 'info');
+                        await sendPasswordResetEmail(auth, email);
+                        showAuthMessage('A password reset link has been sent to your email. Check your inbox and spam folder.', 'success');
+                        forgotEmailInput.value = ''; // Clear the input field
+                    } catch (error) {
+                        console.error("Password reset error:", error);
+                        showAuthMessage(`Password reset failed: ${error.message}`, 'error');
+                    }
+                });
+            }
+            // New event listener for "Return to Login" link
+            if (returnToLoginLink) {
+                returnToLoginLink.addEventListener('click', (e) => {
                     e.preventDefault();
                     showTab('login');
                 });
@@ -679,16 +769,6 @@
                     await updateProfile(userCredential.user, {
                         displayName: name
                     });
-                    // You might want to store phone in Firestore if provided
-                    // const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api'; // Define if needed
-                    // if (phone) {
-                    //     const response = await fetch(`${BACKEND_URL}/save-user-profile`, {
-                    //          method: 'POST',
-                    //          headers: { 'Content-Type': 'application/json' },
-                    //          body: JSON.stringify({ uid: userCredential.user.uid, phone: phone })
-                    //     });
-                    //     if (!response.ok) console.error("Failed to save phone number");
-                    // }
                     showAuthMessage('Account created successfully! You are now logged in.', 'success');
                 } catch (error) {
                     console.error("Email signup error:", error);

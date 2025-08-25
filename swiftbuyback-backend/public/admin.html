@@ -540,11 +540,23 @@
                 modalStatus.textContent = formatStatus(order.status);
                 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
 
-                if (order.uspsLabelUrl) {
+                // Logic to handle which label to display
+                if (order.status === 'return-label-generated' && order.returnLabelUrl) {
+                    modalReturnLabelLink.href = order.returnLabelUrl;
+                    modalReturnLabelLink.textContent = `View Return Label`;
+                    modalTrackingNumber.textContent = order.returnTrackingNumber || 'N/A'; // Assuming the tracking number is here
+                    modalReturnLabelRow.classList.remove('hidden');
+                    modalLabelRow.classList.add('hidden'); // Ensure the shipping label row is hidden
+                } else if (order.uspsLabelUrl) {
                     modalLabelLink.href = order.uspsLabelUrl;
                     modalTrackingNumber.textContent = order.trackingNumber || 'N/A';
                     modalLabelRow.classList.remove('hidden');
+                    modalReturnLabelRow.classList.add('hidden'); // Ensure the return label row is hidden
+                } else {
+                    modalLabelRow.classList.add('hidden');
+                    modalReturnLabelRow.classList.add('hidden');
                 }
+
 
                 renderActionButtons(order);
                 modalLoadingMessage.classList.add('hidden');

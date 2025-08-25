@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Configuration ---
-BACKEND_URL="https://us-central1-buyback-a0f05.cloudfunctions.net/api" # <-- REPLACE 'buyback-a0f05' with your actual Firebase Project ID
+BACKEND_URL="https://us-central1-buyback-a0f05.cloudfunctions.net" # <-- REPLACE 'buyback-a0f05' with your actual Firebase Project ID
 CUSTOMER_EMAIL="saulsetton191@gmail.com"
 CUSTOMER_PHONE="9295845753"
 CUSTOMER_NAME="Saul Setton"
