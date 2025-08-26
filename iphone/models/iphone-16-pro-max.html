@@ -2,13 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SwiftBuyBack - Sell iPhone 16 Pro Max</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- Font Awesome Brands for PayPal -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    <!-- Google Maps Places API script -->
+    <!-- You MUST replace YOUR_API_KEY with your actual API key from Google Cloud.
+         Ensure you have enabled the Maps JavaScript API and the Places API. -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places&callback=initAutocomplete" async defer></script>
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -34,7 +39,6 @@
             setDoc
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Your Firebase configuration (using placeholder for security)
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
             authDomain: "buyback-a0f05.firebaseapp.com",
@@ -45,12 +49,10 @@
             measurementId: "G-6WWQN44JHT"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        const db = getFirestore(app); // Initialize Firestore
+        const db = getFirestore(app);
 
-        // Expose Firebase auth and provider globally for use in DOMContentLoaded
         window.firebaseAuth = auth;
         window.GoogleAuthProvider = GoogleAuthProvider;
         window.signInWithPopup = signInWithPopup;
@@ -60,8 +62,8 @@
         window.onAuthStateChanged = onAuthStateChanged;
         window.updateProfile = updateProfile;
         window.sendPasswordResetEmail = sendPasswordResetEmail;
-        window.firebaseDb = db; // Expose Firestore instance
-        window.firebaseServerTimestamp = serverTimestamp; // Expose serverTimestamp
+        window.firebaseDb = db;
+        window.firebaseServerTimestamp = serverTimestamp;
     </script>
     <style>
         body {
@@ -69,7 +71,6 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
-
         /* Custom styles for hidden radio buttons and clickable images */
         .carrier-option input[type="radio"],
         .payment-option input[type="radio"],
@@ -295,6 +296,7 @@
             box-shadow: none;
             transform: none;
         }
+        /* Mobile-first adjustments for layout and typography */
         @media (max-width: 1023px) {
             .main-content-layout {
                 flex-direction: column-reverse;
@@ -306,7 +308,48 @@
             .main-content-layout > div:nth-child(1) {
                 margin-top: 2rem;
             }
+            .text-4xl {
+                font-size: 2.25rem;
+            }
+            .text-3xl {
+                font-size: 1.875rem;
+            }
+            .text-lg {
+                font-size: 1rem;
+            }
+            .question-group {
+                padding: 0.75rem;
+            }
+            .carrier-option label,
+            .payment-option label,
+            .shipping-option label {
+                padding: 0.75rem;
+            }
+            .h-10.w-10 {
+                height: 2rem;
+                width: 2rem;
+            }
+            .text-4xl {
+                font-size: 2rem;
+            }
+            .text-3xl {
+                font-size: 1.75rem;
+            }
+            .btn-primary-blue,
+            .btn-secondary-green,
+            .btn-primary-indigo {
+                padding: 0.75rem 1.5rem;
+                font-size: 1rem;
+            }
+            .modal-content {
+                width: 95%;
+                padding: 1.5rem;
+            }
+            .modal-content .text-5xl {
+                font-size: 3rem;
+            }
         }
+        /* Desktop-specific layout rules */
         @media (min-width: 1024px) {
             .lg\:text-left .question-group .flex {
                 justify-content: flex-start;
@@ -354,53 +397,6 @@
             padding-top: 0.25rem;
             padding-bottom: 0.25rem;
             z-index: 20;
-        }
-
-        /* Mobile-specific adjustments */
-        @media (max-width: 640px) { /* Targeting screens smaller than 'sm' breakpoint */
-            .main-content-layout {
-                padding: 1rem; /* Reduce overall padding */
-            }
-            .text-4xl { /* Adjust main heading size */
-                font-size: 2.25rem; /* Equivalent to text-3xl */
-            }
-            .text-3xl { /* Adjust sub-heading size */
-                font-size: 1.875rem; /* Equivalent to text-2xl */
-            }
-            .text-lg { /* Adjust paragraph text size */
-                font-size: 1rem; /* Equivalent to text-base */
-            }
-            .question-group {
-                padding: 0.75rem; /* Reduce padding for question groups */
-            }
-            .carrier-option label,
-            .payment-option label,
-            .shipping-option label {
-                padding: 0.75rem; /* Reduce padding within option labels */
-            }
-            .h-10.w-10 { /* Adjust icon size */
-                height: 2rem;
-                width: 2rem;
-            }
-            .text-4xl { /* Adjust icon font size */
-                font-size: 2rem;
-            }
-            .text-3xl { /* Adjust icon font size */
-                font-size: 1.75rem;
-            }
-            .btn-primary-blue,
-            .btn-secondary-green,
-            .btn-primary-indigo {
-                padding: 0.75rem 1.5rem; /* Smaller button padding */
-                font-size: 1rem; /* Smaller button font size */
-            }
-            .modal-content {
-                width: 95%; /* Make modal slightly narrower on small screens */
-                padding: 1.5rem; /* Adjust modal padding */
-            }
-            .modal-content .text-5xl {
-                font-size: 3rem; /* Adjust quote amount in modal */
-            }
         }
     </style>
 </head>
@@ -459,7 +455,7 @@
                             </select>
                         </div>
                     </div>
-                
+                    
                     <!-- Q2: Carrier -->
                     <div class="mb-8 hidden" id="carrierSection">
                         <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">2. Select Your Carrier</label>
@@ -516,7 +512,7 @@
                             </label>
                         </div>
                     </div>
-                
+                    
                     <!-- Q4: Functional Condition -->
                     <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="functionalSection">
                         <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left flex items-center justify-center lg:justify-start sm:text-base">
@@ -562,7 +558,7 @@
                             </label>
                         </div>
                     </div>
-                
+                    
                     <!-- Q6: Cosmetic Condition -->
                     <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cosmeticSection">
                         <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">6. What’s the overall cosmetic condition?</p>
@@ -616,7 +612,7 @@
                                 <input type="radio" id="zelle" name="payment_method" value="zelle">
                                 <label for="zelle" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
                                     <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48" class="h-10 w-10 mb-2 mx-auto sm:h-8 sm:w-8">
-                                        <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22 C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5	C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5	C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5	h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5	h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298	C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
+                                        <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22 C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5    C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5    C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5    h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5    h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298    C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
                                     </svg>
                                     <span class="font-semibold block sm:text-sm">Zelle</span>
                                 </label>
@@ -696,8 +692,9 @@
                                 <input type="email" id="email" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
                             </div>
                             <div class="md:col-span-2">
-                                <label for="streetAddress" class="block text-sm font-medium text-slate-700">Street Address</label>
-                                <input type="text" id="streetAddress" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
+                                <label for="street-address" class="block text-sm font-medium text-slate-700">Street Address</label>
+                                <!-- The ID for this input has been changed to 'street-address' for Google Maps API -->
+                                <input type="text" id="street-address" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
                             </div>
                             <div>
                                 <label for="city" class="block text-sm font-medium text-slate-700">City</label>
@@ -708,8 +705,8 @@
                                 <input type="text" id="state" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
                             </div>
                             <div>
-                                <label for="zipCode" class="block text-sm font-medium text-slate-700">ZIP Code</label>
-                                <input type="text" id="zipCode" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
+                                <label for="zip-code" class="block text-sm font-medium text-slate-700">ZIP Code</label>
+                                <input type="text" id="zip-code" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
                             </div>
                         </div>
 
@@ -859,8 +856,61 @@
     </footer>
 
     <script>
+        // Callback function for Google Maps API. It's called after the API script loads.
+        window.initAutocomplete = function() {
+            const streetAddressInput = document.getElementById('street-address');
+            
+            // Initialize the Autocomplete object, restricting to US addresses
+            const autocomplete = new google.maps.places.Autocomplete(streetAddressInput, {
+                componentRestrictions: { 'country': ['us'] }, 
+                fields: ['address_components'],
+                types: ['address'],
+            });
+
+            // Add listener for when a place is selected from the suggestions
+            autocomplete.addListener('place_changed', () => {
+                const place = autocomplete.getPlace();
+                let streetNumber = '';
+                let streetName = '';
+                let city = '';
+                let state = '';
+                let zipCode = '';
+
+                // Loop through the address components to extract the parts we need
+                for (const component of place.address_components) {
+                    const componentType = component.types[0];
+                    switch (componentType) {
+                        case 'street_number':
+                            streetNumber = component.long_name;
+                            break;
+                        case 'route':
+                            streetName = component.long_name;
+                            break;
+                        case 'locality':
+                            city = component.long_name;
+                            break;
+                        case 'administrative_area_level_1':
+                            state = component.short_name;
+                            break;
+                        case 'postal_code':
+                            zipCode = component.long_name;
+                            break;
+                    }
+                }
+                
+                // Populate the form fields with the extracted address components
+                document.getElementById('street-address').value = `${streetNumber} ${streetName}`.trim();
+                document.getElementById('city').value = city;
+                document.getElementById('state').value = state;
+                document.getElementById('zip-code').value = zipCode;
+
+                // Manually trigger an input event to update the order overview
+                const event = new Event('input', { bubbles: true });
+                document.getElementById('street-address').dispatchEvent(event);
+            });
+        };
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Retrieve Firebase auth and provider from window object
             const auth = window.firebaseAuth;
             const GoogleAuthProvider = window.GoogleAuthProvider;
             const signInWithPopup = window.signInWithPopup;
@@ -870,8 +920,8 @@
             const onAuthStateChanged = window.onAuthStateChanged;
             const updateProfile = window.updateProfile;
             const sendPasswordResetEmail = window.sendPasswordResetEmail;
-            const db = window.firebaseDb; // Get Firestore instance
-            const serverTimestamp = window.firebaseServerTimestamp; // Get serverTimestamp
+            const db = window.firebaseDb;
+            const serverTimestamp = window.firebaseServerTimestamp;
 
             const getQuoteBtn = document.getElementById('getQuoteBtn');
             const quoteMessage = document.getElementById('quoteMessage');
@@ -918,7 +968,6 @@
             const signupForm = document.getElementById('signupForm');
             const switchToLogin = document.getElementById('switchToLogin');
             
-            // New elements for password reset form
             const forgotPasswordLink = document.getElementById('forgotPasswordLink');
             const forgotPasswordForm = document.getElementById('forgotPasswordForm');
             const forgotEmailInput = document.getElementById('forgotEmail');
@@ -927,9 +976,15 @@
 
             // Shipping info email input
             const shippingInfoEmailInput = document.getElementById('email');
+
+            // Address-specific inputs, now with the new IDs
+            const streetAddressInput = document.getElementById('street-address');
+            const cityInput = document.getElementById('city');
+            const stateInput = document.getElementById('state');
+            const zipCodeInput = document.getElementById('zip-code');
             
             let isUserLoggedIn = false;
-            let currentUserId = null; // Store current user ID
+            let currentUserId = null;
             let finalQuote = 0;
 
             function getRandomLightColor() {
@@ -942,7 +997,7 @@
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     isUserLoggedIn = true;
-                    currentUserId = user.uid; // Set current user ID
+                    currentUserId = user.uid;
                     console.log("User is logged in:", user.uid);
                     loginNavBtn.classList.add('hidden');
                     userMonogram.classList.remove('hidden');
@@ -964,7 +1019,6 @@
 
                     hideLoginModal();
 
-                    // Pre-fill shipping email if logged in, but keep it editable
                     if (shippingInfoEmailInput && user.email) {
                         shippingInfoEmailInput.value = user.email;
                     }
@@ -976,7 +1030,7 @@
                     }
                 } else {
                     isUserLoggedIn = false;
-                    currentUserId = null; // Clear current user ID
+                    currentUserId = null;
                     console.log("User is logged out.");
                     loginNavBtn.classList.remove('hidden');
                     loginNavBtn.textContent = 'Login/Sign Up';
@@ -984,7 +1038,6 @@
                     userMonogram.textContent = '';
                     authDropdown.classList.add('hidden');
 
-                    // Clear shipping email if logged out
                     if (shippingInfoEmailInput) {
                         shippingInfoEmailInput.value = '';
                     }
@@ -1041,13 +1094,12 @@
 
             function showTab(tabName) {
                 clearAuthMessage();
-                // Reset tab button visibility and styling
                 loginTabBtn.classList.remove('border-indigo-600', 'text-indigo-600');
                 signupTabBtn.classList.remove('border-indigo-600', 'text-indigo-600');
                 loginTabBtn.classList.add('border-transparent', 'text-slate-500');
                 signupTabBtn.classList.add('border-transparent', 'text-slate-500');
-                loginTabBtn.classList.remove('hidden'); // Ensure tabs are visible by default
-                signupTabBtn.classList.remove('hidden'); // Ensure tabs are visible by default
+                loginTabBtn.classList.remove('hidden');
+                signupTabBtn.classList.remove('hidden');
 
                 if (tabName === 'login') {
                     loginForm.classList.remove('hidden');
@@ -1063,7 +1115,6 @@
                     forgotPasswordForm.classList.remove('hidden');
                     loginForm.classList.add('hidden');
                     signupForm.classList.add('hidden');
-                    // Hide tabs when showing password reset form
                     loginTabBtn.classList.add('hidden');
                     signupTabBtn.classList.add('hidden');
                 }
@@ -1102,13 +1153,11 @@
                 showTab('login');
             });
             
-            // New event listener for "Forgot your password?" link
             forgotPasswordLink.addEventListener('click', (e) => {
                 e.preventDefault();
                 showTab('forgotPassword');
             });
 
-            // New event listener for password reset form submission
             forgotPasswordForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const email = forgotEmailInput.value;
@@ -1122,13 +1171,12 @@
                     showAuthMessage('Sending password reset email...', 'info');
                     await sendPasswordResetEmail(auth, email);
                     showAuthMessage('A password reset link has been sent to your email. Check your inbox and spam folder.', 'success');
-                    forgotEmailInput.value = ''; // Clear the input field
+                    forgotEmailInput.value = '';
                 } catch (error) {
                     console.error("Password reset error:", error);
                     showAuthMessage(`Password reset failed: ${error.message}`, 'error');
                 }
             });
-
 
             quoteModalContinueBtn.addEventListener('click', () => {
                 hideQuotePopup();
@@ -1141,9 +1189,6 @@
                     showLoginModal();
                 }
             });
-
-
-            // --- Firebase Authentication Logic --- 
 
             const googleProvider = new GoogleAuthProvider();
 
@@ -1269,7 +1314,6 @@
                 });
             });
 
-            // --- New Conditional Logic and Flow Control ---
             const carrierSection = document.getElementById('carrierSection');
             const powerOnSection = document.getElementById('powerOnSection');
             const functionalSection = document.getElementById('functionalSection');
@@ -1277,7 +1321,6 @@
             const cosmeticSection = document.getElementById('cosmeticSection');
             
             function hideAllQuestions() {
-                // Keep storageSection visible, hide all others
                 [carrierSection, powerOnSection, functionalSection, cracksSection, cosmeticSection, getQuoteBtn].forEach(el => {
                     el.classList.add('hidden');
                 });
@@ -1286,17 +1329,15 @@
                 nextSteps.classList.add('hidden');
             }
             
-            // Initial state: Hide all but storage
             hideAllQuestions();
 
             document.getElementById('storage').addEventListener('change', function() {
                 if (this.value) {
                     carrierSection.classList.remove('hidden');
-                    // Reset state for subsequent questions
                     [powerOnSection, functionalSection, cracksSection, cosmeticSection, getQuoteBtn].forEach(el => el.classList.add('hidden'));
                     clearQuoteMessage();
                     this.classList.remove('highlight-missing');
-                    saveFormState(); // Save state on change
+                    saveFormState();
                 } else {
                     hideAllQuestions();
                 }
@@ -1305,10 +1346,9 @@
             document.querySelectorAll('input[name="carrier"]').forEach(radio => {
                 radio.addEventListener('change', () => {
                     powerOnSection.classList.remove('hidden');
-                    // Reset state for subsequent questions
                     [functionalSection, cracksSection, cosmeticSection, getQuoteBtn].forEach(el => el.classList.add('hidden'));
                     clearQuoteMessage();
-                    saveFormState(); // Save state on change
+                    saveFormState();
                 });
             });
 
@@ -1318,17 +1358,15 @@
                         functionalSection.classList.remove('hidden');
                         cracksSection.classList.add('hidden');
                         cosmeticSection.classList.add('hidden');
-                        getQuoteBtn.classList.add('hidden'); // Hide until functional is answered
+                        getQuoteBtn.classList.add('hidden');
                         clearQuoteMessage();
                     } else {
-                        // Device does not power on, bypass to quote, show getQuoteBtn
                         functionalSection.classList.add('hidden');
                         cracksSection.classList.add('hidden');
                         cosmeticSection.classList.add('hidden');
-                        getQuoteBtn.classList.remove('hidden'); // Show quote button
-                        // No automatic call to calculateQuoteAndDisplay() here
+                        getQuoteBtn.classList.remove('hidden');
                     }
-                    saveFormState(); // Save state on change
+                    saveFormState();
                 });
             });
 
@@ -1337,15 +1375,14 @@
                     if (radio.value === 'yes') {
                         cracksSection.classList.remove('hidden');
                         cosmeticSection.classList.add('hidden');
-                        getQuoteBtn.classList.add('hidden'); // Hide until cracks is answered
+                        getQuoteBtn.classList.add('hidden');
                         clearQuoteMessage();
                     } else {
-                        // Device is not fully functional, bypass cracks and cosmetic, show getQuoteBtn
                         cracksSection.classList.add('hidden');
                         cosmeticSection.classList.add('hidden');
-                        getQuoteBtn.classList.remove('hidden'); // Show quote button
+                        getQuoteBtn.classList.remove('hidden');
                     }
-                    saveFormState(); // Save state on change
+                    saveFormState();
                 });
             });
             
@@ -1353,23 +1390,21 @@
                 radio.addEventListener('change', () => {
                     if (radio.value === 'yes') {
                         cosmeticSection.classList.remove('hidden');
-                        getQuoteBtn.classList.add('hidden'); // Hide until cosmetic is answered
+                        getQuoteBtn.classList.add('hidden');
                         clearQuoteMessage();
                     } else {
-                        // Device has cracks, bypass cosmetic condition, show getQuoteBtn
                         cosmeticSection.classList.add('hidden');
-                        getQuoteBtn.classList.remove('hidden'); // Show quote button
-                        // No automatic call to calculateQuoteAndDisplay() here
+                        getQuoteBtn.classList.remove('hidden');
                     }
-                    saveFormState(); // Save state on change
+                    saveFormState();
                 });
             });
 
             document.querySelectorAll('input[name="q4_cosmetic_condition"]').forEach(radio => {
                 radio.addEventListener('change', () => {
-                    getQuoteBtn.classList.remove('hidden'); // Show quote button
+                    getQuoteBtn.classList.remove('hidden');
                     clearQuoteMessage();
-                    saveFormState(); // Save state on change
+                    saveFormState();
                 });
             });
             
@@ -1383,7 +1418,6 @@
                 const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
                 const q4Cosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
 
-                // Validate based on the current flow state
                 if (!selectedStorage || !selectedCarrier || !q1PowerOn) {
                     showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
                     return;
@@ -1420,15 +1454,14 @@
                 } else {
                     if (q2Functional === 'no') { 
                         currentQuote *= 0.75; 
-                    } else { // Only apply crack and cosmetic deductions if device powers on and is functional
+                    } else {
                         if (q3NoCracks === 'no') { 
                             currentQuote -= 50; 
-                        } else if (q3NoCracks === 'yes') { // Only apply cosmetic if no cracks
+                        } else if (q3NoCracks === 'yes') {
                             switch (q4Cosmetic) {
                                 case 'damaged': currentQuote -= 45; break;
                                 case 'fair': currentQuote -= 25; break;
                                 case 'good': currentQuote -= 15; break;
-                                // 'flawless' has no deduction
                             }
                         }
                     }
@@ -1471,7 +1504,7 @@
                 });
             });
 
-            const shippingInputs = document.querySelectorAll('#paymentAndShipping input[type="text"], #paymentAndShipping input[type="email"]');
+            const shippingInputs = document.querySelectorAll('#paymentAndShipping input');
             shippingInputs.forEach(input => {
                 input.addEventListener('input', updateOverview);
             });
@@ -1488,10 +1521,10 @@
                 }
 
                 const fullName = document.getElementById('fullName').value;
-                const streetAddress = document.getElementById('streetAddress').value;
-                const city = document.getElementById('city').value;
-                const state = document.getElementById('state').value;
-                const zipCode = document.getElementById('zipCode').value;
+                const streetAddress = streetAddressInput.value;
+                const city = cityInput.value;
+                const state = stateInput.value;
+                const zipCode = zipCodeInput.value;
 
                 overviewQuote.textContent = `$${finalQuote.toFixed(2)}`;
                 overviewPayment.textContent = selectedPayment.charAt(0).toUpperCase() + selectedPayment.slice(1);
@@ -1510,10 +1543,6 @@
                 const termsAccepted = document.getElementById('termsAccepted');
                 const fullName = document.getElementById('fullName');
                 const email = document.getElementById('email');
-                const streetAddress = document.getElementById('streetAddress');
-                const city = document.getElementById('city');
-                const state = document.getElementById('state');
-                const zipCode = document.getElementById('zipCode');
 
                 let firstMissingElement = null;
 
@@ -1548,10 +1577,10 @@
 
                 if (!fullName.value) { fullName.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = fullName; }
                 if (!email.value) { email.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = email; }
-                if (!streetAddress.value) { streetAddress.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = streetAddress; }
-                if (!city.value) { city.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = city; }
-                if (!state.value) { state.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = state; }
-                if (!zipCode.value) { zipCode.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = zipCode; }
+                if (!streetAddressInput.value) { streetAddressInput.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = streetAddressInput; }
+                if (!cityInput.value) { cityInput.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = cityInput; }
+                if (!stateInput.value) { stateInput.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = stateInput; }
+                if (!zipCodeInput.value) { zipCodeInput.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = zipCodeInput; }
                 if (!termsAccepted.checked) {
                     document.querySelector('#orderOverview .checkmark').classList.add('highlight-missing');
                     if (!firstMissingElement) firstMissingElement = termsAccepted;
@@ -1578,19 +1607,19 @@
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
                     estimatedQuote: finalQuote,
                     paymentMethod: selectedPayment.value,
-                    shippingPreference: selectedShippingPreference.value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested', // Updated here
+                    shippingPreference: selectedShippingPreference.value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
                     paymentDetails: {},
                     shippingInfo: {
                         fullName: fullName.value,
-                        email: email.value, // This is the email from the form, potentially different from login email
-                        streetAddress: streetAddress.value,
-                        city: city.value,
-                        state: state.value,
-                        zipCode: zipCode.value
+                        email: email.value,
+                        streetAddress: streetAddressInput.value,
+                        city: cityInput.value,
+                        state: stateInput.value,
+                        zipCode: zipCodeInput.value
                     },
                     termsAccepted: termsAccepted.checked,
-                    userId: currentUserId, // Include the current user's ID
-                    createdAt: serverTimestamp() // Add server timestamp
+                    userId: currentUserId,
+                    createdAt: serverTimestamp()
                 };
 
                 if (selectedPayment.value === 'venmo') {
@@ -1617,11 +1646,9 @@
                         throw new Error(result.error || 'Failed to submit order.');
                     }
                     
-                    // On successful order submission, redirect to the thank you page
-                    // Pass the shipping preference as a URL parameter to customize the message
                     setTimeout(() => {
                         window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${selectedShippingPreference.value}`;
-                    }, 2000); // Wait 2 seconds before redirecting
+                    }, 2000);
                     
                 } catch (e) {
                     console.error("Error submitting order: ", e);
@@ -1634,7 +1661,6 @@
                 }
             });
 
-            // --- localStorage functions ---
             function saveFormState() {
                 const formState = {
                     storage: document.getElementById('storage').value,
@@ -1652,13 +1678,11 @@
                 if (savedState) {
                     const formState = JSON.parse(savedState);
 
-                    // Restore Storage
                     document.getElementById('storage').value = formState.storage || '';
                     if (formState.storage) {
                         carrierSection.classList.remove('hidden');
                     }
 
-                    // Restore Carrier
                     if (formState.carrier) {
                         const carrierRadio = document.querySelector(`input[name="carrier"][value="${formState.carrier}"]`);
                         if (carrierRadio) {
@@ -1667,7 +1691,6 @@
                         }
                     }
 
-                    // Restore Power On
                     if (formState.q1_power_on) {
                         const powerOnRadio = document.querySelector(`input[name="q1_power_on"][value="${formState.q1_power_on}"]`);
                         if (powerOnRadio) {
@@ -1680,7 +1703,6 @@
                         }
                     }
 
-                    // Restore Functional
                     if (formState.q2_fully_functional) {
                         const functionalRadio = document.querySelector(`input[name="q2_fully_functional"][value="${formState.q2_fully_functional}"]`);
                         if (functionalRadio) {
@@ -1693,7 +1715,6 @@
                         }
                     }
 
-                    // Restore Cracks
                     if (formState.q3_no_cracks) {
                         const cracksRadio = document.querySelector(`input[name="q3_no_cracks"][value="${formState.q3_no_cracks}"]`);
                         if (cracksRadio) {
@@ -1706,7 +1727,6 @@
                         }
                     }
 
-                    // Restore Cosmetic
                     if (formState.q4_cosmetic_condition) {
                         const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${formState.q4_cosmetic_condition}"]`);
                         if (cosmeticRadio) {
@@ -1719,7 +1739,6 @@
                 }
             }
 
-            // Load state when the DOM is fully loaded
             loadFormState();
         });
     </script>
