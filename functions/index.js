@@ -15,7 +15,9 @@ const app = express();
 // Configure CORS for all routes.
 const allowedOrigins = [
     "https://toratyosef.github.io",
-    "https://buyback-a0f05.web.app"
+    "https://buyback-a0f05.web.app",
+    "https://secondhandcell.com",
+    "https://www.secondhandcell.com" // Added this from a previous conversation
 ];
 
 app.use(cors({
@@ -557,16 +559,6 @@ app.post("/submit-order", async (req, res) => {
         // Generate a unique five-digit order number, which will be the document ID
         const orderId = await generateUniqueFiveDigitOrderNumber();
 
-        // Use .set() with the generated orderId to create the document with that specific ID
-        // The userId will be stored if present in the request body
-        await ordersCollection.doc(orderId).set({
-            ...orderData,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            status: "pending_shipment",
-            // userId will be stored if it exists in orderData (from frontend)
-            // If userId is null or undefined, it won't be explicitly added, which is fine.
-        });
-
         // Customer-Facing Email: Order Received
         const customerEmailHtml = ORDER_RECEIVED_EMAIL_HTML
             .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
@@ -591,12 +583,24 @@ app.post("/submit-order", async (req, res) => {
             <p>Please generate and send the shipping label from the admin dashboard.</p>
         `;
 
+        // Attempt to send the email and Zendesk comment first.
+        // The Promises will throw an error if anything fails, stopping the function.
         await Promise.all([
             transporter.sendMail(customerMailOptions),
             sendZendeskComment(orderData, internalSubject, internalHtmlBody, false) // isPublic: false for internal comment
         ]);
 
         console.log('Order received email and internal notification sent successfully.');
+
+        // If the notifications succeed, then submit the order to Firestore.
+        // This is the key change.
+        await ordersCollection.doc(orderId).set({
+            ...orderData,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: "pending_shipment",
+            // userId will be stored if it exists in orderData (from frontend)
+            // If userId is null or undefined, it won't be explicitly added, which is fine.
+        });
 
         // Return the new document ID (which is the XX-XXX format)
         res.status(201).json({ message: "Order submitted", orderId: orderId });
