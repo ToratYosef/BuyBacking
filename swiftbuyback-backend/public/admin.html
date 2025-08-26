@@ -101,6 +101,11 @@
                     </a>
                 </li>
                 <li>
+                    <a href="#" data-status="shipping_kit_requested" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-box mr-3"></i> Shipping Kit Requested
+                    </a>
+                </li>
+                <li>
                     <a href="#" data-status="label_generated" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
                         <i class="fas fa-file-invoice mr-3"></i> Label Generated
                     </a>
@@ -159,6 +164,13 @@
                     <div id="pending-shipment-count" class="text-4xl font-extrabold mt-1">0</div>
                 </div>
                 <i class="fas fa-box-open text-5xl opacity-40"></i>
+            </div>
+            <div id="card-shipping_kit_requested" data-status="shipping_kit_requested" class="dashboard-card bg-indigo-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                <div>
+                    <div class="text-sm font-semibold opacity-80">Shipping Kit Requested</div>
+                    <div id="shipping-kit-requested-count" class="text-4xl font-extrabold mt-1">0</div>
+                </div>
+                <i class="fas fa-box text-5xl opacity-40"></i>
             </div>
             <div id="card-label_generated" data-status="label_generated" class="dashboard-card bg-yellow-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
                 <div>
@@ -259,8 +271,12 @@
                     </ul>
                 </p>
                 <p><strong>Current Status:</strong> <span id="modal-status" class="font-semibold px-2 py-1 rounded-full text-xs"></span></p>
-                <p id="modal-label-row" class="hidden"><strong>Shipping Label:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
-                <p id="modal-return-label-row" class="hidden"><strong>Return Label:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a></p>
+                
+                <!-- Updated label display for flexibility -->
+                <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
+                <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
+                <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
+
                 <p id="modal-loading-message" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
             </div>
 
@@ -344,6 +360,7 @@
         const dashboardCards = document.querySelectorAll('.dashboard-card');
 
         const pendingShipmentCount = document.getElementById('pending-shipment-count');
+        const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count'); // New count element
         const labelGeneratedCount = document.getElementById('label-generated-count');
         const receivedCount = document.getElementById('received-count');
         const completedCount = document.getElementById('completed-count');
@@ -370,11 +387,23 @@
         const modalConditionCracks = document.getElementById('modal-condition-cracks');
         const modalConditionCosmetic = document.getElementById('modal-condition-cosmetic');
         const modalStatus = document.getElementById('modal-status');
+        
+        // New/Updated label elements in modal
         const modalLabelRow = document.getElementById('modal-label-row');
+        const modalLabelDescription = document.getElementById('modal-label-description');
         const modalLabelLink = document.getElementById('modal-label-link');
         const modalTrackingNumber = document.getElementById('modal-tracking-number');
+
+        const modalSecondaryLabelRow = document.getElementById('modal-secondary-label-row');
+        const modalSecondaryLabelDescription = document.getElementById('modal-secondary-label-description');
+        const modalSecondaryLabelLink = document.getElementById('modal-secondary-label-link');
+        const modalSecondaryTrackingNumberDisplay = document.getElementById('modal-secondary-tracking-number-display');
+
         const modalReturnLabelRow = document.getElementById('modal-return-label-row');
+        const modalReturnLabelDescription = document.getElementById('modal-return-label-description');
         const modalReturnLabelLink = document.getElementById('modal-return-label-link');
+        const modalReturnTrackingNumberDisplay = document.getElementById('modal-return-tracking-number-display');
+
         const modalActionButtons = document.getElementById('modal-action-buttons');
         const modalLoadingMessage = document.getElementById('modal-loading-message');
         const modalMessage = document.getElementById('modal-message');
@@ -400,6 +429,7 @@
 
         function updateDashboardCounts(ordersData) {
             pendingShipmentCount.textContent = ordersData.filter(o => o.status === 'pending_shipment').length;
+            shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length; // New count update
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
             receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
             completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
@@ -474,6 +504,7 @@
         function getStatusClass(status) {
             switch (status) {
                 case 'pending_shipment': return 'bg-blue-100 text-blue-800 status-bubble';
+                case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble'; // New status class
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
@@ -490,24 +521,26 @@
             modalLoadingMessage.classList.add('hidden');
             modalMessage.classList.add('hidden');
             modalMessage.textContent = '';
-            modalLabelRow.classList.add('hidden');
-            modalReturnLabelRow.classList.add('hidden');
             modalVenmoUsernameRow.classList.add('hidden');
             reofferFormContainer.classList.add('hidden');
             
+            // Hide all label rows initially
+            modalLabelRow.classList.add('hidden');
+            modalSecondaryLabelRow.classList.add('hidden');
+            modalReturnLabelRow.classList.add('hidden');
+
             orderDetailsModal.classList.remove('hidden');
 
             try {
                 modalLoadingMessage.classList.remove('hidden');
-                // CORRECTED: Removed the extra /api/ prefix. BACKEND_BASE_URL already includes /api.
                 const url = `${BACKEND_BASE_URL}/orders/${orderId}`; 
-                console.log("Fetching order details from:", url); // Log the URL being fetched
+                console.log("Fetching order details from:", url);
                 const response = await fetch(url);
 
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error("Backend error response:", response.status, errorText);
-                    throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`); // Limit error text length
+                    throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
                 }
                 const order = await response.json();
 
@@ -540,21 +573,36 @@
                 modalStatus.textContent = formatStatus(order.status);
                 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
 
-                // Logic to handle which label to display
-                if (order.status === 'return-label-generated' && order.returnLabelUrl) {
-                    modalReturnLabelLink.href = order.returnLabelUrl;
-                    modalReturnLabelLink.textContent = `View Return Label`;
-                    modalTrackingNumber.textContent = order.returnTrackingNumber || 'N/A'; // Assuming the tracking number is here
-                    modalReturnLabelRow.classList.remove('hidden');
-                    modalLabelRow.classList.add('hidden'); // Ensure the shipping label row is hidden
-                } else if (order.uspsLabelUrl) {
+                // Logic to handle which label(s) to display
+                if (order.shippingPreference === 'Shipping Kit Requested') {
+                    // For shipping kit, display both outbound (kit) and inbound (device) labels
+                    if (order.outboundLabelUrl) {
+                        modalLabelLink.href = order.outboundLabelUrl;
+                        modalTrackingNumber.textContent = order.outboundTrackingNumber || 'N/A';
+                        modalLabelDescription.textContent = 'Outbound Kit Label';
+                        modalLabelRow.classList.remove('hidden');
+                    }
+                    if (order.inboundLabelUrl) {
+                        modalSecondaryLabelLink.href = order.inboundLabelUrl;
+                        modalSecondaryTrackingNumberDisplay.textContent = order.inboundTrackingNumber || 'N/A';
+                        modalSecondaryLabelDescription.textContent = 'Inbound Device Label';
+                        modalSecondaryLabelRow.classList.remove('hidden');
+                    }
+                } else if (order.shippingPreference === 'Email Label Requested' && order.uspsLabelUrl) {
+                    // For email label, show the single USPS label (which is the inbound label)
                     modalLabelLink.href = order.uspsLabelUrl;
                     modalTrackingNumber.textContent = order.trackingNumber || 'N/A';
+                    modalLabelDescription.textContent = 'Shipping Label';
                     modalLabelRow.classList.remove('hidden');
-                    modalReturnLabelRow.classList.add('hidden'); // Ensure the return label row is hidden
-                } else {
-                    modalLabelRow.classList.add('hidden');
-                    modalReturnLabelRow.classList.add('hidden');
+                }
+
+                // This block handles return labels specifically for re-offer declines,
+                // distinct from the inbound/outbound labels for shipping kits.
+                if (order.returnLabelUrl) {
+                    modalReturnLabelLink.href = order.returnLabelUrl;
+                    modalReturnTrackingNumberDisplay.textContent = order.returnTrackingNumber || 'N/A';
+                    modalReturnLabelDescription.textContent = 'Return Label';
+                    modalReturnLabelRow.classList.remove('hidden');
                 }
 
 
@@ -581,6 +629,7 @@
             const currentStatus = order.status;
             switch (currentStatus) {
                 case 'pending_shipment':
+                case 'shipping_kit_requested': // Added new status here
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     break;
                 case 'label_generated':
@@ -635,9 +684,8 @@
             modalMessage.classList.add('hidden');
 
             try {
-                // CORRECTED: Removed the extra /api/ prefix. BACKEND_BASE_URL already includes /api.
                 const url = `${BACKEND_BASE_URL}/orders/${orderId}/re-offer`;
-                console.log("Submitting re-offer to:", url); // Log the URL being fetched
+                console.log("Submitting re-offer to:", url);
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -675,17 +723,14 @@
 
                 switch(actionType) {
                     case 'generateLabel':
-                        // CORRECTED: Removed the extra /api/ prefix. BACKEND_BASE_URL already includes /api.
                         url = `${BACKEND_BASE_URL}/generate-label/${orderId}`;
                         method = 'POST';
                         break;
                     case 'markReceived':
-                        // CORRECTED: Removed the extra /api/ prefix. BACKEND_BASE_URL already includes /api.
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
                         body = { status: 'received' };
                         break;
                     case 'markCompleted':
-                        // CORRECTED: Removed the extra /api/ prefix. BACKEND_BASE_URL already includes /api.
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
                         body = { status: 'completed' };
                         break;
@@ -706,7 +751,6 @@
                         modalActionButtons.classList.remove('hidden');
                         return;
                     case 'sendReturnLabel':
-                         // CORRECTED: Removed the extra /api/ prefix. BACKEND_BASE_URL already includes /api.
                          url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
                          method = 'POST';
                          break;
@@ -714,7 +758,7 @@
                         throw new Error('Unknown action.');
                 }
 
-                console.log(`Performing action ${actionType} to:`, url); // Log the URL being fetched
+                console.log(`Performing action ${actionType} to:`, url);
                 const response = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },

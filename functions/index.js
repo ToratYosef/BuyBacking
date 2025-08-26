@@ -468,6 +468,49 @@ async function sendZendeskComment(orderData, subject, html_body, isPublic) {
     }
 }
 
+/**
+ * Helper function to create a shipping label using ShipEngine API.
+ *
+ * @param {object} fromAddress - The sender's address object.
+ * @param {object} toAddress - The recipient's address object.
+ * @param {string} labelReference - A reference string to include in the label messages.
+ * @returns {Promise<object>} The label data from ShipEngine.
+ */
+async function createShipEngineLabel(fromAddress, toAddress, labelReference) {
+    const isSandbox = true; // Set to false for production
+    const payload = {
+        shipment: {
+            service_code: "usps_priority_mail",
+            ship_to: toAddress,
+            ship_from: fromAddress,
+            packages: [{
+                weight: { value: 1, unit: "ounce" }, // Default weight, adjust if needed
+                label_messages: {
+                    reference1: labelReference
+                }
+            }]
+        }
+    };
+    if (isSandbox) payload.testLabel = true;
+
+    const shipEngineApiKey = functions.config().shipengine.key;
+    if (!shipEngineApiKey) {
+        throw new Error("ShipEngine API key not configured. Please set 'shipengine.key' environment variable.");
+    }
+
+    const response = await axios.post(
+        "https://api.shipengine.com/v1/labels",
+        payload, {
+            headers: {
+                "API-Key": shipEngineApiKey,
+                "Content-Type": "application/json"
+            }
+        }
+    );
+    return response.data;
+}
+
+
 // ------------------------------
 // ROUTES
 // ------------------------------
@@ -544,6 +587,7 @@ app.post("/submit-order", async (req, res) => {
             <p>Order ID: <strong>${orderId}</strong></p>
             <p>Estimated Quote: <strong>$${orderData.estimatedQuote.toFixed(2)}</strong></p>
             ${orderData.userId ? `<p>Associated User ID: <strong>${orderData.userId}</strong></p>` : '<p>Not associated with a logged-in user.</p>'}
+            <p><strong>Shipping Preference:</strong> ${orderData.shippingPreference}</p>
             <p>Please generate and send the shipping label from the admin dashboard.</p>
         `;
 
@@ -562,95 +606,7 @@ app.post("/submit-order", async (req, res) => {
     }
 });
 
-/**
- * Helper function to create a shipping label using ShipEngine API.
- * This function can now be used for both initial labels (buyer to SwiftBuyBack)
- * and return labels (SwiftBuyBack to buyer) by setting the isReturnLabel flag.
- *
- * @param {object} order - The order data. The 'id' property now contains the XX-XXX order ID.
- * @param {boolean} [isReturnLabel=false] - If true, generates a return label (from SwiftBuyBack to buyer).
- * @returns {Promise<object>} The label data from ShipEngine.
- */
-async function createShipStationLabel(order, isReturnLabel = false) {
-    const isSandbox = true;
-    const buyerShippingInfo = order.shippingInfo;
-
-    // Define SwiftBuyBack's fixed address for consistent use
-    const swiftBuyBackAddress = {
-        name: "SwiftBuyBack Returns",
-        company_name: "SwiftBuyBack",
-        phone: "555-555-5555", // Placeholder phone number
-        address_line1: "1795 West 3rd St",
-        city_locality: "Brooklyn",
-        state_province: "NY",
-        postal_code: "11223",
-        country_code: "US"
-    };
-
-    // Construct the buyer's address from order data
-    const buyerAddress = {
-        name: buyerShippingInfo.fullName,
-        phone: "555-555-5555", // Placeholder phone number, consider using actual buyer phone if available
-        address_line1: buyerShippingInfo.streetAddress,
-        city_locality: buyerShippingInfo.city,
-        state_province: buyerShippingInfo.state,
-        postal_code: buyerShippingInfo.zipCode,
-        country_code: "US"
-    };
-
-    let shipFromAddress;
-    let shipToAddress;
-
-    if (isReturnLabel) {
-        // For a return label, the shipment is FROM SwiftBuyBack TO the buyer
-        shipFromAddress = swiftBuyBackAddress;
-        shipToAddress = buyerAddress;
-    } else {
-        // For the initial label, the shipment is FROM the buyer TO SwiftBuyBack
-        shipFromAddress = buyerAddress;
-        shipToAddress = swiftBuyBackAddress;
-    }
-
-    // Use the document ID (which is now the XX-XXX order ID) for tracking on the label
-    const orderIdForLabel = order.id || 'N/A';
-
-    const payload = {
-        shipment: {
-            service_code: "usps_priority_mail", // Or adjust as needed for returns
-            ship_to: shipToAddress,
-            ship_from: shipFromAddress,
-            packages: [{
-                weight: { value: 1, unit: "ounce" }, // Default weight, adjust if needed
-                // Add the order ID to the label messages for easier tracking.
-                // This will typically appear as a reference number on the physical label.
-                label_messages: {
-                    reference1: `OrderRef: ${orderIdForLabel}`
-                }
-            }]
-        }
-    };
-    if (isSandbox) payload.testLabel = true; // Use test label for sandbox environment
-
-    // IMPORTANT: Ensure you have configured this environment variable:
-    // firebase functions:config:set shipengine.key="YOUR_SHIPENGINE_API_KEY"
-    const shipEngineApiKey = functions.config().shipengine.key;
-    if (!shipEngineApiKey) {
-        throw new Error("ShipEngine API key not configured. Please set 'shipengine.key' environment variable.");
-    }
-
-    const response = await axios.post(
-        "https://api.shipengine.com/v1/labels",
-        payload, {
-            headers: {
-                "API-Key": shipEngineApiKey, // Using config object for ShipEngine API key
-                "Content-Type": "application/json"
-            }
-        }
-    );
-    return response.data;
-}
-
-// Generate initial shipping label and send email to buyer
+// Generate initial shipping label(s) and send email to buyer
 // Frontend should call: POST https://<cloud-function-url>/api/generate-label/:id
 app.post("/generate-label/:id", async (req, res) => {
     try {
@@ -658,50 +614,128 @@ app.post("/generate-label/:id", async (req, res) => {
         if (!doc.exists) return res.status(404).json({ error: "Order not found" });
 
         const order = { id: doc.id, ...doc.data() };
-        // Generate the initial label (buyer to SwiftBuyBack)
-        const labelData = await createShipStationLabel(order, false); // Explicitly false for initial label
+        const buyerShippingInfo = order.shippingInfo;
+        const orderIdForLabel = order.id || 'N/A';
 
-        const trackingNumber = labelData.tracking_number;
+        // Define SwiftBuyBack's fixed address
+        const swiftBuyBackAddress = {
+            name: "SwiftBuyBack Returns",
+            company_name: "SwiftBuyBack",
+            phone: "555-555-5555", // Placeholder phone number
+            address_line1: "1795 West 3rd St",
+            city_locality: "Brooklyn",
+            state_province: "NY",
+            postal_code: "11223",
+            country_code: "US"
+        };
 
-        await ordersCollection.doc(req.params.id).update({
-            status: "label_generated",
-            uspsLabelUrl: labelData.label_download?.pdf,
-            trackingNumber: trackingNumber
-        });
+        // Construct the buyer's address from order data
+        const buyerAddress = {
+            name: buyerShippingInfo.fullName,
+            phone: "555-555-5555", // Placeholder phone number, consider using actual buyer phone if available
+            address_line1: buyerShippingInfo.streetAddress,
+            city_locality: buyerShippingInfo.city,
+            state_province: buyerShippingInfo.state,
+            postal_code: buyerShippingInfo.zipCode,
+            country_code: "US"
+        };
 
-        // Customer-Facing Email: Shipping Label Sent
-        const customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, order.id)
-            .replace(/\*\*TRACKING_NUMBER\*\*/g, trackingNumber || 'N/A')
-            .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelData.label_download?.pdf);
+        let customerLabelData; // This will be the label sent to the customer
+        let updateData = { status: "label_generated" }; // Data to update in Firestore
+        let internalHtmlBody = '';
+        let customerEmailSubject = '';
+        let customerEmailHtml = '';
+
+        if (order.shippingPreference === 'Shipping Kit Requested') { // Updated check
+            // Scenario: Customer requested a shipping kit.
+            // 1. Generate the outbound label for the empty kit (SwiftBuyBack -> Buyer)
+            const outboundLabelData = await createShipEngineLabel(swiftBuyBackAddress, buyerAddress, `${orderIdForLabel}-OUTBOUND-KIT`);
+            
+            // 2. Generate the inbound label for the device (Buyer -> SwiftBuyBack)
+            // This is the label the customer will use to send their device back.
+            const inboundLabelData = await createShipEngineLabel(buyerAddress, swiftBuyBackAddress, `${orderIdForLabel}-INBOUND-DEVICE`);
+
+            customerLabelData = inboundLabelData; // The customer receives the inbound label
+            
+            updateData = {
+                ...updateData,
+                outboundLabelUrl: outboundLabelData.label_download?.pdf,
+                outboundTrackingNumber: outboundLabelData.tracking_number,
+                inboundLabelUrl: inboundLabelData.label_download?.pdf, // This is the customer's label
+                inboundTrackingNumber: inboundLabelData.tracking_number, // This is the customer's tracking
+                uspsLabelUrl: inboundLabelData.label_download?.pdf, // Keep for general label reference
+                trackingNumber: inboundLabelData.tracking_number // Keep for general tracking reference
+            };
+
+            customerEmailSubject = `Your SwiftBuyBack Inbound Shipping Label for Order #${order.id}`;
+            customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
+                .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
+                .replace(/\*\*ORDER_ID\*\*/g, order.id)
+                .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || 'N/A')
+                .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, customerLabelData.label_download?.pdf);
+
+            internalHtmlBody = `
+                <p><strong>Shipping Kit Order:</strong> Labels generated for Order <strong>#${order.id}</strong>.</p>
+                <p><strong>Outbound Kit Label (SwiftBuyBack -> Customer):</strong></p>
+                <ul>
+                    <li>Tracking: <strong>${outboundLabelData.tracking_number || 'N/A'}</strong></li>
+                    <li>Download: <a href="${outboundLabelData.label_download?.pdf}" target="_blank">PDF</a></li>
+                </ul>
+                <p><strong>Inbound Device Label (Customer -> SwiftBuyBack - sent to customer):</strong></p>
+                <ul>
+                    <li>Tracking: <strong>${inboundLabelData.tracking_number || 'N/A'}</strong></li>
+                    <li>Download: <a href="${inboundLabelData.label_download?.pdf}" target="_blank">PDF</a></li>
+                </ul>
+                <p>The inbound device label has been sent to the customer.</p>
+            `;
+
+        } else if (order.shippingPreference === 'Email Label Requested') { // Explicit check for email label
+            // Scenario: Customer chose to print their own label.
+            // Only generate the inbound label (Buyer -> SwiftBuyBack)
+            customerLabelData = await createShipEngineLabel(buyerAddress, swiftBuyBackAddress, `${orderIdForLabel}-INBOUND-DEVICE`);
+
+            updateData = {
+                ...updateData,
+                uspsLabelUrl: customerLabelData.label_download?.pdf,
+                trackingNumber: customerLabelData.tracking_number
+            };
+
+            customerEmailSubject = `Your SwiftBuyBack Shipping Label for Order #${order.id}`;
+            customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
+                .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
+                .replace(/\*\*ORDER_ID\*\*/g, order.id)
+                .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || 'N/A')
+                .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, customerLabelData.label_download?.pdf);
+
+            internalHtmlBody = `
+                <p>The shipping label for Order <strong>#${order.id}</strong> (email label option) has been successfully generated and sent to the customer.</p>
+                <p>Tracking Number: <strong>${customerLabelData.tracking_number || 'N/A'}</strong></p>
+            `;
+        } else {
+            // Handle unexpected shippingPreference, though this shouldn't happen with frontend validation
+            throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
+        }
+
+        await ordersCollection.doc(req.params.id).update(updateData);
 
         const customerMailOptions = {
             from: functions.config().email.user,
-            to: order.shippingInfo.email, // Use the email from shippingInfo
-            subject: `Your SwiftBuyBack Shipping Label for Order #${order.id}`,
+            to: order.shippingInfo.email,
+            subject: customerEmailSubject,
             html: customerEmailHtml
         };
 
-        // Internal Admin Notification: Shipping Label Generated & Emailed
-        const internalSubject = `Shipping Label Generated for Order #${order.id}`;
-        const internalHtmlBody = `
-            <p>The shipping label for Order <strong>#${order.id}</strong> has been successfully generated and sent to the customer.</p>
-            <p>Tracking Number: <strong>${trackingNumber || 'N/A'}</strong></p>
-        `;
-
         await Promise.all([
             transporter.sendMail(customerMailOptions),
-            sendZendeskComment(order, internalSubject, internalHtmlBody, false) // isPublic: false
+            sendZendeskComment(order, `Shipping Label Generated for Order #${order.id}`, internalHtmlBody, false)
         ]);
 
         console.log('Shipping label email and internal notification sent successfully.');
 
         res.json({
-            message: "Label generated",
-            uspsLabelUrl: labelData.label_download?.pdf,
-            trackingNumber: trackingNumber,
-            orderId: order.id // The orderId is now the XX-XXX custom ID
+            message: "Label(s) generated successfully",
+            orderId: order.id,
+            ...updateData // Return all updated label info
         });
     } catch (err) {
         console.error("Error generating label:", err.response?.data || err);
@@ -887,8 +921,34 @@ app.post("/orders/:id/return-label", async (req, res) => {
         if (!doc.exists) return res.status(404).json({ error: "Order not found" });
         const order = { id: doc.id, ...doc.data() };
 
-        // Generate the return label (SwiftBuyBack to buyer)
-        const returnLabelData = await createShipStationLabel(order, true); // Pass true for a return label
+        const buyerShippingInfo = order.shippingInfo;
+        const orderIdForLabel = order.id || 'N/A';
+
+        // Define SwiftBuyBack's fixed address for consistent use
+        const swiftBuyBackAddress = {
+            name: "SwiftBuyBack Returns",
+            company_name: "SwiftBuyBack",
+            phone: "555-555-5555", // Placeholder phone number
+            address_line1: "1795 West 3rd St",
+            city_locality: "Brooklyn",
+            state_province: "NY",
+            postal_code: "11223",
+            country_code: "US"
+        };
+
+        // Construct the buyer's address from order data
+        const buyerAddress = {
+            name: buyerShippingInfo.fullName,
+            phone: "555-555-5555", // Placeholder phone number, consider using actual buyer phone if available
+            address_line1: buyerShippingInfo.streetAddress,
+            city_locality: buyerShippingInfo.city,
+            state_province: buyerShippingInfo.state,
+            postal_code: buyerShippingInfo.zipCode,
+            country_code: "US"
+        };
+
+        // Generate the return label (SwiftBuyBack -> buyer)
+        const returnLabelData = await createShipEngineLabel(swiftBuyBackAddress, buyerAddress, `${orderIdForLabel}-RETURN`);
 
         const returnTrackingNumber = returnLabelData.tracking_number;
 
