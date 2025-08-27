@@ -1571,52 +1571,6 @@ exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
 // These functions will trigger specifically for chat-related events.
 // ------------------------------
 
-// Cloud Function to notify admins about a new chat opened
-exports.onChatCreated = functions.firestore
-    .document('chats/{chatId}')
-    .onCreate(async (snapshot, context) => {
-        const chatData = snapshot.data();
-        const chatId = snapshot.id;
-
-        // Only create a notification if the chat is not already assigned
-        if (!chatData.assignedAdminUid) {
-            const notificationMessage = `A new chat (#${chatId}) has been opened by ${chatData.ownerUid || chatData.guestId}.`;
-            await createNotification(
-                'new_chat_opened',
-                notificationMessage,
-                chatId,
-                'chat',
-                'admin' // Notify all admins
-            );
-
-            // --- NEW: Send FCM Push Notification to all admins ---
-            const adminTokensSnapshot = await db.collectionGroup('fcmTokens').get(); // Get all FCM tokens from all admins
-            const tokens = adminTokensSnapshot.docs.map(doc => doc.id);
-
-            if (tokens.length > 0) {
-                const message = {
-                    notification: {
-                        title: `New Chat Opened by ${chatData.ownerUid || chatData.guestId}`, // Updated title
-                        body: notificationMessage
-                    },
-                    data: {
-                        chatId: chatId,
-                        type: 'chat_notification',
-                        action: 'open_chat' // Custom action for frontend to handle
-                    },
-                    tokens: tokens,
-                };
-                try {
-                    const response = await admin.messaging().sendEachForMulticast(message);
-                    console.log('Successfully sent FCM message for new chat:', response);
-                } catch (error) {
-                    console.error('Error sending FCM message for new chat:', error);
-                }
-            }
-        }
-        return null;
-    });
-
 // Cloud Function to notify admins about new user messages in a chat
 exports.onNewChatMessage = functions.firestore
     .document('chats/{chatId}/messages/{messageId}')
@@ -1634,14 +1588,16 @@ exports.onNewChatMessage = functions.firestore
             }
             const chatData = chatDoc.data();
 
+            // Determine the user's display name or ID for the notification title
+            const userName = chatData.ownerUid || chatData.guestId;
+            const notificationTitle = `New message from ${userName}`;
+            const notificationMessageBody = `${messageData.text.substring(0, 50)}${messageData.text.length > 50 ? '...' : ''}`; // Message snippet
+
             let recipientId = 'admin'; // Default to all admins for unassigned chats
-            let notificationMessage = `New message in chat #${chatId}: "${messageData.text.substring(0, 50)}..."`;
-            let notificationTitle = `New message from ${chatData.ownerUid || chatData.guestId}`; // Dynamic title
             let fcmTokens = [];
 
             if (chatData.assignedAdminUid) {
                 recipientId = chatData.assignedAdminUid; // Notify the assigned admin
-                notificationMessage = `New message in your assigned chat #${chatId}: "${messageData.text.substring(0, 50)}..."`;
                 // Fetch FCM tokens for the specific assigned admin
                 const adminTokensSnapshot = await db.collection(`admins/${recipientId}/fcmTokens`).get();
                 fcmTokens = adminTokensSnapshot.docs.map(doc => doc.id);
@@ -1651,20 +1607,21 @@ exports.onNewChatMessage = functions.firestore
                 fcmTokens = allAdminTokensSnapshot.docs.map(doc => doc.id);
             }
 
+            // Create in-app notification
             await createNotification(
                 'new_chat_message',
-                notificationMessage,
+                notificationMessageBody, // In-app notification body is just the message
                 chatId,
                 'chat',
                 recipientId
             );
 
-            // --- NEW: Send FCM Push Notification ---
+            // --- Send FCM Push Notification ---
             if (fcmTokens.length > 0) {
                 const message = {
                     notification: {
-                        title: notificationTitle, // Use the dynamic title
-                        body: notificationMessage // Use the message snippet
+                        title: notificationTitle,
+                        body: notificationMessageBody
                     },
                     data: {
                         chatId: chatId,
@@ -1683,6 +1640,13 @@ exports.onNewChatMessage = functions.firestore
         }
         return null;
     });
+
+// Removed exports.onChatCreated as per user request.
+// exports.onChatCreated = functions.firestore
+//     .document('chats/{chatId}')
+//     .onCreate(async (snapshot, context) => {
+//         // ... (removed logic) ...
+//     });
 
 // Expose the Express app as a single Cloud Function
 exports.api = functions.https.onRequest(app);
