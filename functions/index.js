@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+ const functions = require("firebase-functions");
  const express = require("express");
  const cors = require("cors");
  const admin = require("firebase-admin");
@@ -29,15 +29,20 @@ const functions = require("firebase-functions");
  app.use(express.json()); // Middleware to parse JSON request bodies
 
  // Set up Nodemailer transporter using the Firebase Functions config
- // IMPORTANT: Ensure you have configured these environment variables:
+ // IMPORTANT: Ensure you have configured these environment variables using the CLI:
  // firebase functions:config:set email.user="your_email@gmail.com" email.pass="your_app_password"
- const transporter = nodemailer.createTransport({
-     service: 'gmail',
-     auth: {
-         user: functions.config().email.user,
-         pass: functions.config().email.pass
-     }
- });
+ let transporter;
+ if (functions.config().email) {
+     transporter = nodemailer.createTransport({
+         service: 'gmail',
+         auth: {
+             user: functions.config().email.user,
+             pass: functions.config().email.pass
+         }
+     });
+ } else {
+     console.warn("Nodemailer transporter not configured. Email notifications will fail.");
+ }
 
  // --- Email HTML Templates ---
 
@@ -714,15 +719,17 @@ const functions = require("firebase-functions");
              <p><strong>Shipping Preference:</strong> ${orderData.shippingPreference}</p>
              <p>Please generate and send the shipping label from the admin dashboard.</p>
          `;
-
-         // Attempt to send the email and Zendesk comment first.
-         await Promise.all([
-             transporter.sendMail(customerMailOptions),
-             sendZendeskComment(orderData, internalSubject, internalHtmlBody, false) // isPublic: false for internal comment
-         ]);
-
-         console.log('Order received email and internal notification sent successfully.');
-
+         
+         if (transporter) {
+             await Promise.all([
+                 transporter.sendMail(customerMailOptions),
+                 sendZendeskComment(orderData, internalSubject, internalHtmlBody, false) // isPublic: false for internal comment
+             ]);
+             console.log('Order received email and internal notification sent successfully.');
+         } else {
+             console.warn("Emails and Zendesk comments were not sent because the transporter is not configured.");
+         }
+         
          // If the notifications succeed, then submit the order to Firestore.
          await ordersCollection.doc(orderId).set({
              ...orderData,
@@ -862,13 +869,16 @@ const functions = require("firebase-functions");
 
          await ordersCollection.doc(req.params.id).update(updateData);
 
-         await Promise.all([
-             transporter.sendMail(customerMailOptions),
-             sendZendeskComment(order, `Shipping Label Generated for Order #${order.id}`, internalHtmlBody, false)
-         ]);
-
-         console.log('Shipping label email and internal notification sent successfully.');
-
+         if (transporter) {
+             await Promise.all([
+                 transporter.sendMail(customerMailOptions),
+                 sendZendeskComment(order, `Shipping Label Generated for Order #${order.id}`, internalHtmlBody, false)
+             ]);
+             console.log('Shipping label email and internal notification sent successfully.');
+         } else {
+             console.warn("Emails and Zendesk comments were not sent because the transporter is not configured.");
+         }
+         
          res.json({
              message: "Label(s) generated successfully",
              orderId: order.id,
@@ -907,7 +917,7 @@ const functions = require("firebase-functions");
                      .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
                      .replace(/\*\*ORDER_ID\*\*/g, order.id);
 
-                 customerNotificationPromise = transporter.sendMail({
+                 customerNotificationPromise = transporter?.sendMail({
                      from: functions.config().email.user,
                      to: order.shippingInfo.email,
                      subject: 'Your SwiftBuyBack Device Has Arrived',
@@ -923,7 +933,7 @@ const functions = require("firebase-functions");
                  break;
              case "completed":
                  // Customer-Facing Email: Order Completed
-                 customerNotificationPromise = transporter.sendMail({
+                 customerNotificationPromise = transporter?.sendMail({
                      from: functions.config().email.user,
                      to: order.shippingInfo.email,
                      subject: 'Your SwiftBuyBack Order is Complete',
@@ -947,9 +957,13 @@ const functions = require("firebase-functions");
                  internalNotificationPromise = Promise.resolve();
          }
 
-         await Promise.all([customerNotificationPromise, internalNotificationPromise]);
-         console.log(`Status update notifications sent for order ${orderId}.`);
-
+         if (transporter) {
+             await Promise.all([customerNotificationPromise, internalNotificationPromise]);
+             console.log(`Status update notifications sent for order ${orderId}.`);
+         } else {
+             console.warn("Emails and Zendesk comments were not sent because the transporter is not configured.");
+         }
+         
          res.json({ message: `Order marked as ${status}` });
      } catch (err) {
          console.error("Error updating status:", err);
@@ -1041,7 +1055,7 @@ const functions = require("firebase-functions");
           `;
          const zendeskSubject = `Re-offer for Order #${order.id}`;
 
-         await sendZendeskComment(order, zendeskSubject, zendeskHtmlContent, true); // isPublic: true
+         await sendZendeskComment(order, zendeskSubject, zendeskHtmlContent, true);
 
          res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
      } catch (err) {
@@ -1098,7 +1112,7 @@ const functions = require("firebase-functions");
          // Customer-Facing Email: Return Label Sent
          const customerMailOptions = {
              from: functions.config().email.user,
-             to: order.shippingInfo.email, // Use the email from shippingInfo
+             to: order.shippingInfo.email,
              subject: 'Your SwiftBuyBack Return Label',
              html: `
                  <p>Hello ${order.shippingInfo.fullName},</p>
@@ -1117,11 +1131,15 @@ const functions = require("firebase-functions");
              <p>Return Tracking Number: <strong>${returnTrackingNumber || 'N/A'}</strong></p>
          `;
 
-         await Promise.all([
-             transporter.sendMail(customerMailOptions),
-             sendZendeskComment(order, internalSubject, internalHtmlBody, false)
-         ]);
-
+         if (transporter) {
+             await Promise.all([
+                 transporter.sendMail(customerMailOptions),
+                 sendZendeskComment(order, internalSubject, internalHtmlBody, false)
+             ]);
+         } else {
+             console.warn("Emails and Zendesk comments were not sent because the transporter is not configured.");
+         }
+         
          res.json({
              message: "Return label generated successfully.",
              returnLabelUrl: returnLabelData.label_download?.pdf,
@@ -1171,11 +1189,15 @@ const functions = require("firebase-functions");
              <p>Please proceed with payment processing.</p>
          `;
 
-         await Promise.all([
-             sendZendeskComment(orderData, `Offer Accepted for Order #${orderData.id}`, customerHtmlBody, true),
-             sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
-         ]);
-
+         if (transporter) {
+             await Promise.all([
+                 sendZendeskComment(orderData, `Offer Accepted for Order #${orderData.id}`, customerHtmlBody, true),
+                 sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
+             ]);
+         } else {
+             console.warn("Emails and Zendesk comments were not sent because the transporter is not configured.");
+         }
+         
          res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
      } catch (err) {
          console.error("Error accepting offer:", err);
@@ -1220,11 +1242,15 @@ const functions = require("firebase-functions");
              <p>Please initiate the return process and send a return shipping label.</p>
          `;
 
-         await Promise.all([
-             sendZendeskComment(orderData, `Return Requested for Order #${orderData.id}`, customerHtmlBody, true),
-             sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
-         ]);
-
+         if (transporter) {
+             await Promise.all([
+                 sendZendeskComment(orderData, `Return Requested for Order #${orderData.id}`, customerHtmlBody, true),
+                 sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
+             ]);
+         } else {
+             console.warn("Emails and Zendesk comments were not sent because the transporter is not configured.");
+         }
+         
          res.json({ message: "Return requested successfully.", orderId: orderData.id });
      } catch (err) {
          console.error("Error requesting return:", err);
@@ -1260,11 +1286,15 @@ const functions = require("firebase-functions");
              <p>Please proceed with payment processing.</p>
          `;
 
-         await Promise.all([
-             sendZendeskComment(orderData, `Revised Offer Auto-Accepted for Order #${orderData.id}`, customerHtmlBody, true),
-             sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
-         ]);
-
+         if (transporter) {
+             await Promise.all([
+                 sendZendeskComment(orderData, `Revised Offer Auto-Accepted for Order #${orderData.id}`, customerHtmlBody, true),
+                 sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
+             ]);
+         } else {
+             console.warn("Emails and Zendesk comments were not sent because the transporter is not configured.");
+         }
+         
          console.log(`Auto-accepting expired offer for order ID: ${orderData.id}`);
          return orderRef.update({
              status: 're-offered-auto-accepted',
@@ -1289,7 +1319,7 @@ const functions = require("firebase-functions");
              createdAt: admin.firestore.FieldValue.serverTimestamp()
          };
 
-         await usersCollection.doc(user.uid).set(userData);
+         await db.collection('users').doc(user.uid).set(userData);
          console.log(`User data for ${user.uid} saved to Firestore.`);
      } catch (error) {
          console.error("Error saving user data to Firestore:", error);
@@ -1298,3 +1328,4 @@ const functions = require("firebase-functions");
 
  // Expose the Express app as a single Cloud Function
  exports.api = functions.https.onRequest(app);
+ 
