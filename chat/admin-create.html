@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Admin User - SecondHandCell</title>
+    <title>Admin Management - SecondHandCell</title>
+    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         body {
@@ -17,44 +20,157 @@
 </head>
 <body class="bg-slate-100">
 
-    <div class="flex items-center justify-center min-h-screen">
-        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
+    <div class="flex items-center justify-center min-h-screen p-4">
+
+        <!-- Login Form Container (Visible by default) -->
+        <div id="login-container" class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
             <div>
-                <h2 class="text-3xl font-bold text-center text-slate-800">Create New Admin</h2>
-                <p class="mt-2 text-sm text-center text-slate-500">This user will have access to the admin chat dashboard.</p>
+                <h2 class="text-3xl font-bold text-center text-slate-800">Admin Login</h2>
+                <p class="mt-2 text-sm text-center text-slate-500">Please sign in to manage admin users.</p>
             </div>
-            <form id="create-admin-form" class="space-y-4">
+            <form id="login-form" class="space-y-4">
                 <div>
-                    <label for="admin-email" class="block text-sm font-medium text-slate-700">Email Address</label>
-                    <input type="email" id="admin-email" required class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="admin@example.com">
+                    <label for="login-email" class="block text-sm font-medium text-slate-700">Email Address</label>
+                    <input type="email" id="login-email" required class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="admin@example.com">
                 </div>
                 <div>
-                    <label for="admin-password" class="block text-sm font-medium text-slate-700">Password</label>
+                    <label for="login-password" class="block text-sm font-medium text-slate-700">Password</label>
+                    <input type="password" id="login-password" required class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                </div>
+                <button type="submit" id="login-btn" class="w-full px-4 py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>Login with Email</span>
+                </button>
+            </form>
+            
+            <div class="relative flex items-center py-2">
+                <div class="flex-grow border-t border-slate-300"></div>
+                <span class="flex-shrink mx-4 text-slate-500 text-sm">OR</span>
+                <div class="flex-grow border-t border-slate-300"></div>
+            </div>
+
+            <!-- Google Sign-In Button -->
+            <button id="google-login-btn" class="w-full px-4 py-3 font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center justify-center gap-3">
+                <i class="fa-brands fa-google"></i>
+                <span>Sign in with Google</span>
+            </button>
+            <p id="login-message" class="text-sm text-center text-red-500 h-4"></p>
+        </div>
+
+        <!-- Create Admin Form Container (Hidden by default) -->
+        <div id="create-admin-container" class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg hidden">
+             <div class="flex justify-between items-center">
+                <h2 class="text-3xl font-bold text-slate-800">Create New Admin</h2>
+                <button id="logout-btn" title="Logout" class="text-slate-500 hover:text-red-600 transition-colors">
+                    <i class="fa-solid fa-right-from-bracket fa-lg"></i>
+                </button>
+            </div>
+            <form id="create-admin-form" class="space-y-4">
+                 <div>
+                    <label for="admin-email" class="block text-sm font-medium text-slate-700">New Admin's Email</label>
+                    <input type="email" id="admin-email" required class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="new.admin@example.com">
+                </div>
+                <div>
+                    <label for="admin-password" class="block text-sm font-medium text-slate-700">New Admin's Password</label>
                     <input type="password" id="admin-password" required minlength="6" class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
                 </div>
                 <div>
-                    <label for="admin-display-name" class="block text-sm font-medium text-slate-700">Display Name</label>
-                    <input type="text" id="admin-display-name" required class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., John">
-                    <p class="mt-1 text-xs text-slate-500">This is the name customers will see (e.g., "John has joined the chat").</p>
+                    <label for="admin-display-name" class="block text-sm font-medium text-slate-700">New Admin's Display Name</label>
+                    <input type="text" id="admin-display-name" required class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Jane">
+                    <p class="mt-1 text-xs text-slate-500">This is the name customers will see.</p>
                 </div>
                 <button type="submit" id="submit-btn" class="w-full px-4 py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
                     <i class="fa-solid fa-user-plus"></i>
                     <span>Create Admin User</span>
                 </button>
-                <p id="form-message" class="text-sm text-center"></p>
+                <p id="form-message" class="text-sm text-center h-4"></p>
             </form>
         </div>
+
     </div>
 
     <script type="module">
-        // NOTE: This page is for creating admin users. It requires a secure backend function
-        // to handle the actual user creation in Firebase Auth and set custom admin claims.
-        // Direct client-side creation of admins is not secure.
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+        // --- IMPORTANT: PASTE YOUR FIREBASE CONFIGURATION OBJECT HERE ---
+        const firebaseConfig = {
+  apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+  authDomain: "buyback-a0f05.firebaseapp.com",
+  projectId: "buyback-a0f05",
+  storageBucket: "buyback-a0f05.firebasestorage.app",
+  messagingSenderId: "876430429098",
+  appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+  measurementId: "G-6WWQN44JHT"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        // Get DOM elements
+        const loginContainer = document.getElementById('login-container');
+        const createAdminContainer = document.getElementById('create-admin-container');
+        const loginForm = document.getElementById('login-form');
+        const googleLoginBtn = document.getElementById('google-login-btn');
         const createAdminForm = document.getElementById('create-admin-form');
         const submitBtn = document.getElementById('submit-btn');
         const formMessage = document.getElementById('form-message');
+        const loginMessage = document.getElementById('login-message');
+        const logoutBtn = document.getElementById('logout-btn');
 
+        // --- Authentication State Observer ---
+        // This function acts as the main controller. It checks the user's login state
+        // and shows the appropriate view (login page or create admin page).
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // If a user is logged in, hide the login form and show the admin creation form.
+                loginContainer.classList.add('hidden');
+                createAdminContainer.classList.remove('hidden');
+                loginMessage.textContent = '';
+            } else {
+                // If no user is logged in, show the login form and hide the admin creation form.
+                loginContainer.classList.remove('hidden');
+                createAdminContainer.classList.add('hidden');
+            }
+        });
+
+        // --- Email & Password Login Logic ---
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            loginMessage.textContent = '';
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                // onAuthStateChanged will automatically handle showing the create admin page on success.
+            } catch (error) {
+                console.error("Login failed:", error.code);
+                loginMessage.textContent = "Login failed. Please check your credentials.";
+            }
+        });
+
+        // --- Google Login Logic ---
+        googleLoginBtn.addEventListener('click', async () => {
+            const googleProvider = new GoogleAuthProvider();
+            loginMessage.textContent = '';
+            try {
+                await signInWithPopup(auth, googleProvider);
+                // onAuthStateChanged will automatically handle showing the create admin page on success.
+            } catch (error) {
+                console.error("Google Sign-In failed:", error);
+                loginMessage.textContent = "Google Sign-In failed. Please try again.";
+            }
+        });
+
+        // --- Logout Button Logic ---
+        logoutBtn.addEventListener('click', () => {
+            signOut(auth);
+        });
+        
+        // --- Create Admin Form Logic ---
         createAdminForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -62,9 +178,10 @@
             const password = document.getElementById('admin-password').value;
             const displayName = document.getElementById('admin-display-name').value;
 
-            // Basic validation
-            if (!email || !password || !displayName) {
-                formMessage.textContent = "Please fill out all fields.";
+            // Get the currently logged-in admin user. This is crucial for authorization.
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+                formMessage.textContent = "Authentication error. Please log in again.";
                 formMessage.className = "text-sm text-center text-red-500";
                 return;
             }
@@ -76,17 +193,24 @@
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                <span>Creating...</span>
-            `;
+                <span>Creating...</span>`;
             formMessage.textContent = '';
 
             try {
-                // IMPORTANT: This URL should point to your secure Cloud Function endpoint.
-                const cloudFunctionUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/create-admin'; // Example URL
+                // Get the ID token from the logged-in admin. This token is the proof
+                // that an authorized user is making this request.
+                const idToken = await currentUser.getIdToken();
+
+                // The URL of your secure backend Cloud Function
+                const cloudFunctionUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/create-admin';
 
                 const response = await fetch(cloudFunctionUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // The Authorization header is what your backend middleware will check.
+                        'Authorization': `Bearer ${idToken}`
+                    },
                     body: JSON.stringify({ email, password, displayName })
                 });
 
@@ -104,12 +228,9 @@
                 formMessage.textContent = `Error: ${error.message}`;
                 formMessage.className = "text-sm text-center text-red-500";
             } finally {
-                // Re-enable button and restore original text
+                // Re-enable the button and restore its original content
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = `
-                    <i class="fa-solid fa-user-plus"></i>
-                    <span>Create Admin User</span>
-                `;
+                submitBtn.innerHTML = `<i class="fa-solid fa-user-plus"></i> <span>Create Admin User</span>`;
             }
         });
     </script>

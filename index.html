@@ -663,7 +663,7 @@
                 unsubscribeFromChatSession = onSnapshot(doc(db, "chats", chatId), (docSnap) => {
                     const data = docSnap.data();
                     if (!data) return;
-                    if (data.agentName && !document.getElementById(`agent-joined-${data.agentName}`)) {
+                    if (data.agentName && data.agentHasJoined && !document.getElementById(`agent-joined-${data.agentName}`)) {
                         const joinMsg = { type: 'system', text: `<i class="fa-solid fa-headset mr-2"></i>${data.agentName} has joined the chat.` };
                         const joinDiv = document.createElement('div');
                         joinDiv.id = `agent-joined-${data.agentName}`;
@@ -781,7 +781,11 @@
                 const messageData = { text, timestamp: serverTimestamp(), sender: user ? user.uid : currentGuestId };
                 await addDoc(collection(db, `chats/${currentChatId}/messages`), messageData);
                 chatInput.value = '';
-                await updateDoc(doc(db, "chats", currentChatId), { userTypingText: '', lastMessage: text });
+                await updateDoc(doc(db, "chats", currentChatId), { 
+                    userTypingText: '', 
+                    lastMessage: `User: ${text}`,
+                    lastMessageTimestamp: serverTimestamp() 
+                });
             };
 
             chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(chatInput.value); } });
@@ -791,10 +795,10 @@
                     if (currentChatId) {
                         await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
                     }
-                }, 500);
+                }, 300); // Shortened delay for faster preview
             });
 
-            guestLoginBtn.addEventListener('click', () => document.getElementById('loginNavBtn').click());
+            guestLoginBtn.addEventListener('click', () => openModal('loginModal'));
             guestContinueBtn.addEventListener('click', () => {
                 guestPromptContainer.classList.add('hidden');
                 chatInputContainer.classList.remove('hidden');

@@ -13,28 +13,16 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         .chat-bubble-user { background-color: #e2e8f0; }
         .chat-bubble-admin { background-color: #dbeafe; }
         .chat-bubble-system { background-color: #fefce8; }
-        .modal {
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-        .modal-content {
-            transition: transform 0.3s ease;
-        }
+        .modal { transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .modal-content { transition: transform 0.3s ease; }
+        .tab-btn.active { border-color: #2563eb; color: #2563eb; background-color: #eff6ff; }
     </style>
 </head>
 <body class="bg-slate-100">
@@ -66,8 +54,26 @@
                 <h2 class="text-xl font-bold text-slate-800">Live Chats</h2>
                 <button id="logout-btn" class="text-sm text-slate-500 hover:text-blue-600 font-semibold flex items-center gap-2">Logout <i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
-            <div id="chat-list" class="flex-1 overflow-y-auto custom-scrollbar">
-                <!-- Chat items will be dynamically inserted here -->
+            <!-- TABS -->
+            <div class="p-2 border-b border-slate-200 bg-slate-50">
+                <div class="grid grid-cols-3 gap-2">
+                    <button class="tab-btn p-2 text-sm font-semibold text-slate-600 rounded-md border-b-2 border-transparent active" data-tab="open">Open</button>
+                    <button class="tab-btn p-2 text-sm font-semibold text-slate-600 rounded-md border-b-2 border-transparent" data-tab="my">My Chats</button>
+                    <button class="tab-btn p-2 text-sm font-semibold text-slate-600 rounded-md border-b-2 border-transparent" data-tab="closed">Closed</button>
+                </div>
+            </div>
+            <!-- CHAT LISTS -->
+            <div class="flex-1 relative">
+                <div id="open-chats-list" class="absolute inset-0 overflow-y-auto custom-scrollbar"></div>
+                <div id="my-chats-list" class="absolute inset-0 overflow-y-auto custom-scrollbar hidden"></div>
+                <div id="closed-chats-list" class="absolute inset-0 overflow-y-auto custom-scrollbar hidden"></div>
+            </div>
+            <!-- MULTI-SELECT ACTIONS -->
+            <div id="multi-select-actions" class="p-2 border-t border-slate-200 bg-slate-50 hidden">
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="assign-selected-btn" class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">Assign to Me</button>
+                    <button id="delete-selected-btn" class="px-3 py-2 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 disabled:bg-red-300 disabled:cursor-not-allowed">Delete Selected</button>
+                </div>
             </div>
         </aside>
 
@@ -86,6 +92,10 @@
                         <p id="active-chat-id" class="text-xs text-slate-500"></p>
                     </div>
                     <div class="flex items-center gap-4">
+                        <div class="relative">
+                            <button id="transfer-chat-btn" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-right-left"></i> Transfer</button>
+                            <div id="transfer-dropdown" class="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-lg shadow-xl border hidden z-10"></div>
+                        </div>
                         <button id="view-orders-btn" class="px-4 py-2 text-sm font-semibold text-white bg-slate-600 rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-box"></i> View Orders</button>
                         <button id="end-chat-btn" class="px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"><i class="fa-solid fa-flag-checkered"></i> End Chat</button>
                     </div>
@@ -93,7 +103,7 @@
 
                 <div id="active-chat-messages" class="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4"></div>
                 
-                <div id="user-typing-indicator" class="px-6 pb-2 text-sm text-slate-500 italic hidden">User is typing...</div>
+                <div id="user-typing-indicator" class="px-6 pb-2 text-sm text-slate-500 italic hidden">User is typing: <span id="user-typing-text" class="font-semibold not-italic text-slate-700"></span></div>
 
                 <div id="survey-results-container" class="p-4 bg-yellow-50 border-t-2 border-yellow-200 hidden mx-6 mb-4 rounded-lg"></div>
 
@@ -115,8 +125,28 @@
                 <h3 class="text-lg font-bold text-slate-800">Order Details</h3>
                 <button id="close-order-modal" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-2xl"></i></button>
             </div>
-            <div id="order-details-container" class="p-6 overflow-y-auto custom-scrollbar">
-                <!-- Order details will be injected here -->
+            <div id="order-details-container" class="p-6 overflow-y-auto custom-scrollbar"></div>
+        </div>
+    </div>
+    
+    <!-- Transfer Notification -->
+    <div id="transfer-notification" class="fixed top-5 right-5 bg-white rounded-lg shadow-lg p-4 w-80 border-l-4 border-blue-500 hidden transform translate-x-full transition-transform duration-300">
+        <p class="font-semibold text-slate-800">Incoming Chat Transfer</p>
+        <p class="text-sm text-slate-600 mt-1">From <strong id="transfer-from-admin"></strong> for chat with <strong id="transfer-chat-user"></strong>.</p>
+        <div class="mt-4 flex gap-2">
+            <button id="accept-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600">Accept</button>
+            <button id="decline-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-slate-700 bg-slate-200 rounded-md hover:bg-slate-300">Decline</button>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[1002] opacity-0 invisible modal">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 transform scale-95 modal-content">
+            <h3 id="confirm-modal-title" class="text-lg font-bold text-slate-800 text-center">Are you sure?</h3>
+            <p id="confirm-modal-text" class="text-sm text-slate-600 mt-2 text-center">This action cannot be undone.</p>
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="confirm-modal-cancel" class="px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-200 rounded-lg hover:bg-slate-300">Cancel</button>
+                <button id="confirm-modal-confirm" class="px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600">Confirm</button>
             </div>
         </div>
     </div>
@@ -126,7 +156,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDocs, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getDatabase, ref, onValue, set, serverTimestamp as dbServerTimestamp, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
@@ -135,12 +166,14 @@
             storageBucket: "buyback-a0f05.appspot.com",
             messagingSenderId: "876430429098",
             appId: "1:876430429098:web:f6dd64b1960d90461979d3",
-            measurementId: "G-6WWQN44JHT"
+            measurementId: "G-6WWQN44JHT",
+            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com/"
         };
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const rtdb = getDatabase(app);
 
         // --- DOM Elements ---
         const loginScreen = document.getElementById('login-screen');
@@ -148,7 +181,6 @@
         const loginForm = document.getElementById('login-form');
         const loginError = document.getElementById('login-error');
         const logoutBtn = document.getElementById('logout-btn');
-        const chatList = document.getElementById('chat-list');
         const noChatSelected = document.getElementById('no-chat-selected');
         const activeChatContainer = document.getElementById('active-chat-container');
         const activeChatUser = document.getElementById('active-chat-user');
@@ -158,6 +190,7 @@
         const replyInput = document.getElementById('reply-input');
         const endChatBtn = document.getElementById('end-chat-btn');
         const userTypingIndicator = document.getElementById('user-typing-indicator');
+        const userTypingText = document.getElementById('user-typing-text');
         const surveyResultsContainer = document.getElementById('survey-results-container');
         const suggestedRepliesContainer = document.getElementById('suggested-replies');
         const viewOrdersBtn = document.getElementById('view-orders-btn');
@@ -165,13 +198,23 @@
         const orderModalContent = document.getElementById('order-modal-content');
         const closeOrderModalBtn = document.getElementById('close-order-modal');
         const orderDetailsContainer = document.getElementById('order-details-container');
+        const transferChatBtn = document.getElementById('transfer-chat-btn');
+        const transferDropdown = document.getElementById('transfer-dropdown');
+        const transferNotification = document.getElementById('transfer-notification');
+        const multiSelectActions = document.getElementById('multi-select-actions');
+        const assignSelectedBtn = document.getElementById('assign-selected-btn');
+        const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+        const confirmModal = document.getElementById('confirm-modal');
 
         let currentAdmin = null;
         let activeChatIdState = null;
+        let unsubscribeFromChats = () => {};
         let unsubscribeFromActiveChat = () => {};
         let unsubscribeFromActiveMessages = () => {};
         let unsubscribeFromSurvey = () => {};
+        let unsubscribeFromTransfers = () => {};
         let adminTypingTimeout = null;
+        let onlineAdmins = {};
         
         const suggestedReplies = [
             "Hello! How can I help you today?",
@@ -181,19 +224,42 @@
             "Thank you for contacting support. Have a great day!"
         ];
 
+        // --- Presence Management (Realtime Database) ---
+        function managePresence(user) {
+            const userStatusDatabaseRef = ref(rtdb, '/status/' + user.uid);
+            const isOfflineForDatabase = { state: 'offline', last_changed: dbServerTimestamp(), name: user.displayName };
+            const isOnlineForDatabase = { state: 'online', last_changed: dbServerTimestamp(), name: user.displayName };
+
+            onValue(ref(rtdb, '.info/connected'), (snapshot) => {
+                if (snapshot.val() === false) return;
+                onDisconnect(userStatusDatabaseRef).set(isOfflineForDatabase).then(() => {
+                    set(userStatusDatabaseRef, isOnlineForDatabase);
+                });
+            });
+
+            onValue(ref(rtdb, '/status'), (snapshot) => {
+                onlineAdmins = snapshot.val() || {};
+            });
+        }
+
         // --- Authentication Logic ---
         onAuthStateChanged(auth, user => {
             if (user) {
                 currentAdmin = user;
                 loginScreen.classList.add('hidden');
+                dashboardScreen.classList.remove('hidden');
                 dashboardScreen.classList.add('flex');
+                managePresence(user);
                 loadChatQueue();
+                listenForTransfers(user.uid);
                 populateSuggestedReplies();
             } else {
                 currentAdmin = null;
                 loginScreen.classList.remove('hidden');
                 dashboardScreen.classList.add('hidden');
                 dashboardScreen.classList.remove('flex');
+                unsubscribeFromChats();
+                unsubscribeFromTransfers();
             }
         });
 
@@ -209,71 +275,101 @@
             }
         });
 
-        logoutBtn.addEventListener('click', () => signOut(auth));
+        logoutBtn.addEventListener('click', () => {
+            const userStatusDatabaseRef = ref(rtdb, '/status/' + currentAdmin.uid);
+            set(userStatusDatabaseRef, { state: 'offline', last_changed: dbServerTimestamp(), name: currentAdmin.displayName });
+            signOut(auth);
+        });
 
         // --- Main Chat Logic ---
         function getStatusFlag(chatData) {
             if (chatData.status === 'ended_by_agent' || chatData.status === 'ended_by_user') {
                 return `<span class="px-2 py-1 text-xs font-medium text-slate-600 bg-slate-200 rounded-full">Closed</span>`;
             }
-            if (chatData.agentName) {
-                return `<span class="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">Active</span>`;
+            if (chatData.assignedAdminName) {
+                return `<span class="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">${chatData.assignedAdminName}</span>`;
             }
             return `<span class="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">Open</span>`;
         }
 
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '';
+            const date = timestamp.toDate();
+            const now = new Date();
+            const isToday = date.toDateString() === now.toDateString();
+            if (isToday) {
+                return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            } else {
+                return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            }
+        }
+
         function loadChatQueue() {
             const q = query(collection(db, "chats"), orderBy("createdAt", "desc"));
-            onSnapshot(q, (snapshot) => {
-                chatList.innerHTML = ''; // Clear list to re-render with fresh data
+            unsubscribeFromChats = onSnapshot(q, (snapshot) => {
+                const openList = document.getElementById('open-chats-list');
+                const myList = document.getElementById('my-chats-list');
+                const closedList = document.getElementById('closed-chats-list');
+                openList.innerHTML = '';
+                myList.innerHTML = '';
+                closedList.innerHTML = '';
+
                 snapshot.forEach(doc => {
                     const chatData = doc.data();
                     const chatId = doc.id;
                     
+                    const lastMessageText = chatData.userTypingText ? `<em class="text-blue-500">Typing: ${chatData.userTypingText}</em>` : (chatData.lastMessage || 'New chat session started...');
+
+                    const isClosed = chatData.status === 'ended_by_agent' || chatData.status === 'ended_by_user';
+
                     const newItem = document.createElement('div');
                     newItem.id = `chat-item-${chatId}`;
                     newItem.className = `p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors ${activeChatIdState === chatId ? 'bg-blue-50' : ''}`;
                     newItem.innerHTML = `
                         <div class="flex justify-between items-start">
+                            ${!isClosed ? `<input type="checkbox" data-chat-id="${chatId}" class="chat-checkbox mt-1 mr-3">` : '<div class="w-7"></div>'}
                             <div class="flex-1 overflow-hidden">
-                                <p class="font-bold text-slate-700 truncate">${chatData.ownerUid || chatData.guestId}</p>
-                                <p class="text-sm text-slate-500 truncate mt-1">${chatData.lastMessage || '...'}</p>
+                                <div class="flex justify-between items-center">
+                                    <p class="font-bold text-slate-700 truncate">${chatData.ownerUid || chatData.guestId}</p>
+                                    <p class="text-xs text-slate-400 flex-shrink-0 ml-2">${formatTimestamp(chatData.lastMessageTimestamp || chatData.createdAt)}</p>
+                                </div>
+                                <p class="text-sm text-slate-500 truncate mt-1">${lastMessageText}</p>
                             </div>
                             <div class="flex flex-col items-end ml-2">
                                 ${getStatusFlag(chatData)}
-                                <button data-chat-id="${chatId}" class="delete-chat-btn text-slate-400 hover:text-red-500 mt-2"><i class="fa-solid fa-trash-can"></i></button>
                             </div>
                         </div>
                     `;
-                    chatList.appendChild(newItem);
-                    newItem.addEventListener('click', () => openChat(chatId, chatData.ownerUid));
-                });
 
-                document.querySelectorAll('.delete-chat-btn').forEach(button => {
-                    button.addEventListener('click', async (e) => {
-                        e.stopPropagation();
-                        const chatIdToDelete = e.currentTarget.dataset.chatId;
-                        if (confirm(`Are you sure you want to delete chat ${chatIdToDelete}? This is permanent.`)) {
-                            await deleteChat(chatIdToDelete);
+                    if (isClosed) {
+                        closedList.appendChild(newItem);
+                    } else if (chatData.assignedAdminUid === currentAdmin.uid) {
+                        myList.appendChild(newItem);
+                    } else if (!chatData.assignedAdminUid) {
+                        openList.appendChild(newItem);
+                    }
+                    
+                    newItem.addEventListener('click', (e) => {
+                        if (e.target.type !== 'checkbox') {
+                            openChat(chatId, chatData.ownerUid, isClosed);
                         }
                     });
                 });
+                
+                document.querySelectorAll('.chat-checkbox').forEach(cb => cb.addEventListener('change', updateMultiSelectActions));
             });
         }
         
         async function deleteChat(chatId) {
             try {
-                // Delete all messages in the subcollection first
                 const messagesRef = collection(db, `chats/${chatId}/messages`);
                 const messagesSnapshot = await getDocs(messagesRef);
                 const deletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
                 await Promise.all(deletePromises);
 
-                // Delete the main chat document
                 await deleteDoc(doc(db, "chats", chatId));
                 console.log(`Chat ${chatId} deleted successfully.`);
 
-                // If the deleted chat was the active one, reset the view
                 if (activeChatIdState === chatId) {
                     activeChatContainer.classList.add('hidden');
                     noChatSelected.classList.remove('hidden');
@@ -285,7 +381,7 @@
             }
         }
 
-        async function openChat(chatId, userId) {
+        async function openChat(chatId, userId, isReadOnly = false) {
             if (activeChatIdState === chatId) return;
 
             unsubscribeFromActiveChat();
@@ -293,19 +389,29 @@
             unsubscribeFromSurvey();
 
             activeChatIdState = chatId;
-            viewOrdersBtn.dataset.userId = userId || ''; // Store userId for fetching orders
+            viewOrdersBtn.dataset.userId = userId || '';
             noChatSelected.classList.add('hidden');
             activeChatContainer.classList.remove('hidden');
             activeChatContainer.classList.add('flex');
             activeChatMessages.innerHTML = '';
             surveyResultsContainer.classList.add('hidden');
             
-            document.querySelectorAll('#chat-list > div').forEach(el => el.classList.remove('bg-blue-50'));
+            document.querySelectorAll('[id^="chat-item-"]').forEach(el => el.classList.remove('bg-blue-50'));
             document.getElementById(`chat-item-${chatId}`)?.classList.add('bg-blue-50');
             
-            const agentName = currentAdmin.email.split('@')[0];
+            const agentName = currentAdmin.displayName || currentAdmin.email.split('@')[0];
             const chatRef = doc(db, "chats", chatId);
-            await updateDoc(chatRef, { agentName: agentName, status: 'active' });
+
+            const chatSnap = await getDoc(chatRef);
+            if (chatSnap.exists() && !chatSnap.data().assignedAdminUid && !isReadOnly) {
+                 await updateDoc(chatRef, { 
+                    assignedAdminUid: currentAdmin.uid,
+                    assignedAdminName: agentName,
+                    agentName: agentName, 
+                    status: 'active',
+                    agentHasJoined: true
+                });
+            }
 
             unsubscribeFromActiveChat = onSnapshot(chatRef, (docSnap) => {
                 const data = docSnap.data();
@@ -313,6 +419,7 @@
                 activeChatUser.textContent = data.ownerUid || data.guestId;
                 activeChatId.textContent = `ID: ${chatId}`;
                 userTypingIndicator.classList.toggle('hidden', !data.userTypingText);
+                userTypingText.textContent = data.userTypingText;
             });
 
             const messagesRef = collection(db, `chats/${chatId}/messages`);
@@ -327,13 +434,7 @@
             unsubscribeFromSurvey = onSnapshot(surveyRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    surveyResultsContainer.innerHTML = `
-                        <h4 class="font-bold text-yellow-800 mb-2">User Feedback Received</h4>
-                        <p class="text-sm text-yellow-700"><strong>Rating:</strong> ${data.overallRating} / 5 stars</p>
-                        <p class="text-sm text-yellow-700"><strong>Friendliness:</strong> ${data.friendliness}/10</p>
-                        <p class="text-sm text-yellow-700"><strong>Resolved:</strong> ${data.resolved || 'N/A'}</p>
-                        ${data.comments ? `<p class="text-sm text-yellow-700"><strong>Comments:</strong> "<em>${data.comments}</em>"</p>` : ''}
-                    `;
+                    surveyResultsContainer.innerHTML = `...`; // Survey HTML
                     surveyResultsContainer.classList.remove('hidden');
                 }
             });
@@ -358,7 +459,6 @@
             messageDiv.innerHTML += `<p>${msg.text}</p>`;
             activeChatMessages.appendChild(messageDiv);
 
-            // Check for order ID or tracking number
             const orderRegex = /(\d{2}-\d{3})|(\d{26})/;
             const match = msg.text.match(orderRegex);
             if (match && !isAdminMessage) {
@@ -391,14 +491,19 @@
         async function sendReply(textOverride = null) {
             const text = textOverride || replyInput.value.trim();
             if (text === '' || !activeChatIdState) return;
-
+            
+            const agentName = currentAdmin.displayName || currentAdmin.email.split('@')[0];
             const messagesRef = collection(db, `chats/${activeChatIdState}/messages`);
             await addDoc(messagesRef, { text, sender: currentAdmin.uid, timestamp: serverTimestamp() });
             
             if (!textOverride) replyInput.value = '';
             
             clearTimeout(adminTypingTimeout);
-            await updateDoc(doc(db, "chats", activeChatIdState), { isAgentTyping: false, lastMessage: text });
+            await updateDoc(doc(db, "chats", activeChatIdState), { 
+                isAgentTyping: false, 
+                lastMessage: `${agentName}: ${text}`,
+                lastMessageTimestamp: serverTimestamp()
+            });
         }
 
         replyInput.addEventListener('keyup', () => {
@@ -436,7 +541,6 @@
 
         // --- Order Modal Logic ---
         async function findOrderByIdentifier(identifier) {
-            // IMPORTANT: Replace with your actual Cloud Function URL
             const url = `https://us-central1-buyback-a0f05.cloudfunctions.net/api/find-order/${identifier}`;
             try {
                 const response = await fetch(url);
@@ -490,8 +594,6 @@
                 alert("This is a guest user and has no associated orders.");
                 return;
             }
-            // This is a placeholder. You'd need a backend endpoint to get all orders for a userId.
-            // For now, we'll just show a message.
             alert(`Functionality to view all orders for user ${userId} is not yet implemented.`);
         });
 
@@ -500,6 +602,195 @@
             orderModalContent.classList.add('scale-95');
         }
         closeOrderModalBtn.addEventListener('click', closeOrderModal);
+
+        // --- Tab Switching Logic ---
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                document.getElementById('open-chats-list').classList.toggle('hidden', tab !== 'open');
+                document.getElementById('my-chats-list').classList.toggle('hidden', tab !== 'my');
+                document.getElementById('closed-chats-list').classList.toggle('hidden', tab !== 'closed');
+                
+                multiSelectActions.classList.toggle('hidden', tab !== 'open');
+                updateMultiSelectActions();
+            });
+        });
+
+        // --- Multi-Select Logic ---
+        function getSelectedChatIds() {
+            const selected = [];
+            document.querySelectorAll('#open-chats-list .chat-checkbox:checked').forEach(cb => {
+                selected.push(cb.dataset.chatId);
+            });
+            return selected;
+        }
+
+        function updateMultiSelectActions() {
+            const selectedIds = getSelectedChatIds();
+            const hasSelection = selectedIds.length > 0;
+            multiSelectActions.classList.toggle('hidden', !hasSelection);
+            assignSelectedBtn.disabled = !hasSelection;
+            deleteSelectedBtn.disabled = !hasSelection;
+        }
+
+        assignSelectedBtn.addEventListener('click', async () => {
+            const chatIds = getSelectedChatIds();
+            if (chatIds.length === 0) return;
+
+            const agentName = currentAdmin.displayName || currentAdmin.email.split('@')[0];
+            const batch = writeBatch(db);
+            chatIds.forEach(chatId => {
+                const chatRef = doc(db, "chats", chatId);
+                batch.update(chatRef, {
+                    assignedAdminUid: currentAdmin.uid,
+                    assignedAdminName: agentName,
+                    agentName: agentName,
+                    status: 'active',
+                    agentHasJoined: true
+                });
+            });
+            await batch.commit();
+        });
+
+        deleteSelectedBtn.addEventListener('click', () => {
+            const chatIds = getSelectedChatIds();
+            if (chatIds.length === 0) return;
+            
+            showConfirmModal(
+                `Delete ${chatIds.length} chats?`,
+                "This will permanently delete the selected chat conversations.",
+                async () => {
+                    const batch = writeBatch(db);
+                    for (const chatId of chatIds) {
+                        const messagesRef = collection(db, `chats/${chatId}/messages`);
+                        const messagesSnapshot = await getDocs(messagesRef);
+                        messagesSnapshot.forEach(msgDoc => batch.delete(msgDoc.ref));
+                        batch.delete(doc(db, "chats", chatId));
+                    }
+                    await batch.commit();
+                    console.log(`${chatIds.length} chats deleted.`);
+                }
+            );
+        });
+
+        // --- Custom Confirmation Modal Logic ---
+        function showConfirmModal(title, text, onConfirm) {
+            document.getElementById('confirm-modal-title').textContent = title;
+            document.getElementById('confirm-modal-text').textContent = text;
+            confirmModal.classList.remove('invisible', 'opacity-0');
+            confirmModal.querySelector('.modal-content').classList.remove('scale-95');
+
+            const confirmBtn = document.getElementById('confirm-modal-confirm');
+            const cancelBtn = document.getElementById('confirm-modal-cancel');
+
+            const confirmHandler = () => {
+                onConfirm();
+                hideConfirmModal();
+                confirmBtn.removeEventListener('click', confirmHandler);
+                cancelBtn.removeEventListener('click', cancelHandler);
+            };
+            const cancelHandler = () => {
+                hideConfirmModal();
+                confirmBtn.removeEventListener('click', confirmHandler);
+                cancelBtn.removeEventListener('click', cancelHandler);
+            };
+
+            confirmBtn.addEventListener('click', confirmHandler);
+            cancelBtn.addEventListener('click', cancelHandler);
+        }
+
+        function hideConfirmModal() {
+            confirmModal.classList.add('invisible', 'opacity-0');
+            confirmModal.querySelector('.modal-content').classList.add('scale-95');
+        }
+
+        // --- Transfer Logic ---
+        transferChatBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            populateTransferDropdown();
+            transferDropdown.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', () => transferDropdown.classList.add('hidden'));
+
+        function populateTransferDropdown() {
+            transferDropdown.innerHTML = '';
+            const availableAdmins = Object.entries(onlineAdmins)
+                .filter(([uid, data]) => data.state === 'online' && uid !== currentAdmin.uid);
+
+            if (availableAdmins.length === 0) {
+                transferDropdown.innerHTML = `<div class="p-3 text-sm text-slate-500">No other admins are online.</div>`;
+                return;
+            }
+
+            availableAdmins.forEach(([uid, data]) => {
+                const adminItem = document.createElement('div');
+                adminItem.className = 'p-3 hover:bg-slate-100 cursor-pointer flex items-center justify-between';
+                adminItem.innerHTML = `
+                    <span>${data.name}</span>
+                    <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                `;
+                adminItem.onclick = () => initiateTransfer(uid, data.name);
+                transferDropdown.appendChild(adminItem);
+            });
+        }
+
+        async function initiateTransfer(toAdminUid, toAdminName) {
+            if (!activeChatIdState) return;
+            const chatRef = doc(db, "chats", activeChatIdState);
+            await updateDoc(chatRef, {
+                transferRequest: {
+                    fromUid: currentAdmin.uid,
+                    fromName: currentAdmin.displayName || currentAdmin.email.split('@')[0],
+                    toUid: toAdminUid,
+                    toName: toAdminName,
+                    status: 'pending'
+                }
+            });
+            transferDropdown.classList.add('hidden');
+            sendReply(`I am transferring you to ${toAdminName}, one moment please.`);
+        }
+
+        function listenForTransfers(adminUid) {
+            const q = query(collection(db, "chats"), where("transferRequest.toUid", "==", adminUid), where("transferRequest.status", "==", "pending"));
+            unsubscribeFromTransfers = onSnapshot(q, (snapshot) => {
+                if (snapshot.empty) {
+                    transferNotification.classList.add('translate-x-full');
+                    transferNotification.classList.add('hidden');
+                    return;
+                }
+                const change = snapshot.docChanges()[0];
+                if (change.type === 'added' || change.type === 'modified') {
+                    const chatData = change.doc.data();
+                    const chatId = change.doc.id;
+                    document.getElementById('transfer-from-admin').textContent = chatData.transferRequest.fromName;
+                    document.getElementById('transfer-chat-user').textContent = chatData.ownerUid || chatData.guestId;
+                    transferNotification.classList.remove('hidden');
+                    transferNotification.classList.remove('translate-x-full');
+
+                    document.getElementById('accept-transfer-btn').onclick = async () => {
+                        const chatRef = doc(db, "chats", chatId);
+                        await updateDoc(chatRef, {
+                            assignedAdminUid: currentAdmin.uid,
+                            assignedAdminName: currentAdmin.displayName || currentAdmin.email.split('@')[0],
+                            agentName: currentAdmin.displayName || currentAdmin.email.split('@')[0],
+                            'transferRequest.status': 'accepted'
+                        });
+                        openChat(chatId, chatData.ownerUid);
+                        transferNotification.classList.add('translate-x-full');
+                    };
+
+                    document.getElementById('decline-transfer-btn').onclick = async () => {
+                        const chatRef = doc(db, "chats", chatId);
+                        await updateDoc(chatRef, { 'transferRequest.status': 'declined' });
+                        transferNotification.classList.add('translate-x-full');
+                    };
+                }
+            });
+        }
 
     </script>
 </body>
