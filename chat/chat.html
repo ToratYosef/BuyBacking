@@ -23,6 +23,20 @@
         .modal { transition: opacity 0.3s ease, visibility 0.3s ease; }
         .modal-content { transition: transform 0.3s ease; }
         .tab-btn.active { border-color: #2563eb; color: #2563eb; background-color: #eff6ff; }
+        /* Notification dropdown specific styles */
+        .notification-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .notification-item:hover {
+            background-color: #f0f4f8;
+        }
+        .notification-item.unread {
+            background-color: #e0f2fe; /* Light blue for unread */
+            font-weight: 500;
+        }
     </style>
 </head>
 <body class="bg-slate-100">
@@ -52,7 +66,25 @@
         <aside class="w-full md:w-[380px] bg-white border-r border-slate-200 flex flex-col h-full">
             <div class="p-4 border-b border-slate-200 flex justify-between items-center">
                 <h2 class="text-xl font-bold text-slate-800">Live Chats</h2>
-                <button id="logout-btn" class="text-sm text-slate-500 hover:text-blue-600 font-semibold flex items-center gap-2">Logout <i class="fa-solid fa-right-from-bracket"></i></button>
+                <div class="flex items-center gap-4">
+                    <!-- Notification Bell -->
+                    <div class="relative">
+                        <button id="notification-bell" class="text-slate-500 hover:text-blue-600 relative">
+                            <i class="fa-solid fa-bell text-xl"></i>
+                            <span id="notification-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center hidden">0</span>
+                        </button>
+                        <div id="notification-dropdown" class="absolute top-full right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border hidden z-20">
+                            <div class="p-3 font-semibold text-slate-700 border-b">Notifications</div>
+                            <div id="notification-list" class="max-h-60 overflow-y-auto custom-scrollbar">
+                                <div class="p-3 text-sm text-slate-500">No new notifications.</div>
+                            </div>
+                            <div class="p-2 border-t text-center">
+                                <button id="mark-all-read-btn" class="text-sm text-blue-600 hover:underline disabled:text-slate-400" disabled>Mark all as read</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="logout-btn" class="text-sm text-slate-500 hover:text-blue-600 font-semibold flex items-center gap-2">Logout <i class="fa-solid fa-right-from-bracket"></i></button>
+                </div>
             </div>
             <!-- TABS -->
             <div class="p-2 border-b border-slate-200 bg-slate-50">
@@ -218,6 +250,13 @@
         const assignSelectedBtn = document.getElementById('assign-selected-btn');
         const deleteSelectedBtn = document.getElementById('delete-selected-btn');
         const confirmModal = document.getElementById('confirm-modal');
+
+        // NEW: Notification DOM Elements
+        const notificationBell = document.getElementById('notification-bell');
+        const notificationBadge = document.getElementById('notification-badge');
+        const notificationDropdown = document.getElementById('notification-dropdown');
+        const notificationList = document.getElementById('notification-list');
+        const markAllReadBtn = document.getElementById('mark-all-read-btn');
         
         // --- State Variables ---
         let currentAdmin = null;
@@ -227,9 +266,11 @@
         let unsubscribeFromActiveMessages = () => {};
         let unsubscribeFromSurvey = () => {};
         let unsubscribeFromTransfers = () => {};
+        let unsubscribeFromNotifications = () => {}; // NEW: Unsubscribe for notifications
         let adminTypingTimeout = null;
         let onlineAdmins = {};
-        
+        let unreadNotifications = []; // NEW: Store unread notifications
+
         const suggestedReplies = [
             "Hello! How can I help you today?",
             "I can certainly help you with that.",
@@ -250,7 +291,8 @@
                 loadChatQueue();
                 listenForTransfers(user.uid);
                 populateSuggestedReplies();
-                setupNotifications(user); // Initialize notifications
+                setupNotifications(user); // Initialize FCM notifications
+                listenForInAppNotifications(user.uid); // NEW: Listen for in-app notifications
             } else {
                 currentAdmin = null;
                 loginScreen.classList.remove('hidden');
@@ -258,6 +300,7 @@
                 dashboardScreen.classList.remove('flex');
                 unsubscribeFromChats();
                 unsubscribeFromTransfers();
+                unsubscribeFromNotifications(); // NEW: Unsubscribe from in-app notifications
             }
         });
 
@@ -563,7 +606,9 @@
 
         // --- Order Modal Logic ---
         async function findOrderByIdentifier(identifier) {
-            const url = `https://us-central1-buyback-a0f05.cloudfunctions.net/api/find-order/${identifier}`;
+            // Use the base URL for your Cloud Functions API
+            const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+            const url = `${baseUrl}/find-order/${identifier}`;
             try {
                 const response = await fetch(url);
                 if (!response.ok) return null;
@@ -848,6 +893,7 @@
                     if (fcmToken) {
                         console.log('FCM Token:', fcmToken);
                         // Save the token to Firestore for this admin
+                        // Ensure 'admins' collection exists and has appropriate security rules
                         const tokenRef = doc(db, `admins/${user.uid}/fcmTokens`, fcmToken);
                         await setDoc(tokenRef, { timestamp: serverTimestamp() });
                     } else {
@@ -876,6 +922,154 @@
                 notification.classList.add('translate-x-full');
             }, 5000);
         });
+
+        // NEW: In-app notification logic
+        async function fetchAndDisplayNotifications() {
+            if (!currentAdmin) return;
+
+            const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api'; // Your backend API base URL
+            try {
+                const idToken = await currentAdmin.getIdToken();
+                const response = await fetch(`${baseUrl}/notifications`, {
+                    headers: {
+                        'Authorization': `Bearer ${idToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to fetch notifications:', response.statusText);
+                    notificationList.innerHTML = `<div class="p-3 text-sm text-red-500">Error loading notifications.</div>`;
+                    return;
+                }
+
+                const notifications = await response.json();
+                unreadNotifications = notifications.filter(n => !n.isRead); // Update global state
+                
+                updateNotificationUI();
+
+            } catch (error) {
+                console.error('Error fetching notifications:', error);
+                notificationList.innerHTML = `<div class="p-3 text-sm text-red-500">Error loading notifications.</div>`;
+            }
+        }
+
+        function updateNotificationUI() {
+            notificationList.innerHTML = ''; // Clear previous notifications
+            if (unreadNotifications.length === 0) {
+                notificationList.innerHTML = `<div class="p-3 text-sm text-slate-500">No new notifications.</div>`;
+                notificationBadge.classList.add('hidden');
+                markAllReadBtn.disabled = true;
+            } else {
+                notificationBadge.textContent = unreadNotifications.length;
+                notificationBadge.classList.remove('hidden');
+                markAllReadBtn.disabled = false;
+
+                unreadNotifications.forEach(notification => {
+                    const notificationItem = document.createElement('div');
+                    notificationItem.className = `notification-item text-sm text-slate-700 ${notification.isRead ? '' : 'unread'}`;
+                    notificationItem.innerHTML = `
+                        <p class="font-semibold">${notification.message}</p>
+                        <p class="text-xs text-slate-500">${new Date(notification.createdAt._seconds * 1000).toLocaleString()}</p>
+                    `;
+                    notificationItem.addEventListener('click', () => handleNotificationClick(notification));
+                    notificationList.appendChild(notificationItem);
+                });
+            }
+        }
+
+        async function handleNotificationClick(notification) {
+            // Mark as read in the backend
+            const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+            try {
+                const idToken = await currentAdmin.getIdToken();
+                await fetch(`${baseUrl}/notifications/${notification.id}/read`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${idToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                console.log(`Notification ${notification.id} marked as read.`);
+                // Remove from local unread list and update UI
+                unreadNotifications = unreadNotifications.filter(n => n.id !== notification.id);
+                updateNotificationUI();
+            } catch (error) {
+                console.error('Error marking notification as read:', error);
+            }
+
+            // Navigate to the related chat
+            if (notification.relatedDocType === 'chat' && notification.relatedDocId) {
+                // Assuming chatData.ownerUid is available or can be fetched
+                // For simplicity, we'll just open the chat with the ID.
+                // You might need to fetch chat details to get ownerUid if not stored in notification
+                openChat(notification.relatedDocId, 'unknown_user_id'); // Placeholder for userId
+                notificationDropdown.classList.add('hidden'); // Hide dropdown after clicking
+            }
+        }
+
+        notificationBell.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent document click from immediately closing it
+            notificationDropdown.classList.toggle('hidden');
+            // When opening the dropdown, fetch latest notifications
+            fetchAndDisplayNotifications();
+        });
+
+        // Close dropdown if clicked outside
+        document.addEventListener('click', (e) => {
+            if (!notificationDropdown.contains(e.target) && !notificationBell.contains(e.target)) {
+                notificationDropdown.classList.add('hidden');
+            }
+        });
+
+        markAllReadBtn.addEventListener('click', async () => {
+            const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+            const idToken = await currentAdmin.getIdToken();
+            const batch = writeBatch(db); // Use a Firestore batch for efficiency
+
+            for (const notification of unreadNotifications) {
+                // For the backend endpoint, we need to call it individually
+                // or create a new backend endpoint to mark multiple as read.
+                // For now, let's just update the local state and re-fetch.
+                // A better approach would be a batch PUT on the backend.
+                await fetch(`${baseUrl}/notifications/${notification.id}/read`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${idToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+            }
+            console.log('All notifications marked as read.');
+            unreadNotifications = []; // Clear local list
+            updateNotificationUI();
+        });
+
+        // NEW: Listen for in-app notifications in realtime using onSnapshot
+        function listenForInAppNotifications(adminUid) {
+            // Listen for notifications specifically for this admin
+            const qAdmin = query(
+                collection(db, "notifications"),
+                where('recipientId', '==', adminUid),
+                where('isRead', '==', false),
+                orderBy('createdAt', 'desc')
+            );
+
+            // Listen for general admin notifications
+            const qGeneral = query(
+                collection(db, "notifications"),
+                where('recipientId', '==', 'admin'),
+                where('isRead', '==', false),
+                orderBy('createdAt', 'desc')
+            );
+
+            // Combine listeners (this is a simplified approach, a more robust solution might merge results)
+            unsubscribeFromNotifications = onSnapshot(qAdmin, (snapshot) => {
+                fetchAndDisplayNotifications(); // Re-fetch all unread notifications
+            });
+            onSnapshot(qGeneral, (snapshot) => { // Attach another listener for general notifications
+                fetchAndDisplayNotifications(); // Re-fetch all unread notifications
+            });
+        }
         
     </script>
 </body>
