@@ -266,10 +266,10 @@
         let unsubscribeFromActiveMessages = () => {};
         let unsubscribeFromSurvey = () => {};
         let unsubscribeFromTransfers = () => {};
-        let unsubscribeFromNotifications = () => {}; // NEW: Unsubscribe for notifications
+        let unsubscribeFromNotifications = () => {};
         let adminTypingTimeout = null;
         let onlineAdmins = {};
-        let unreadNotifications = []; // NEW: Store unread notifications
+        let unreadNotifications = [];
 
         const suggestedReplies = [
             "Hello! How can I help you today?",
@@ -292,7 +292,17 @@
                 listenForTransfers(user.uid);
                 populateSuggestedReplies();
                 setupNotifications(user); // Initialize FCM notifications
-                listenForInAppNotifications(user.uid); // NEW: Listen for in-app notifications
+                listenForInAppNotifications(user.uid); // Listen for in-app notifications
+
+                // NEW: Check for chatId in URL on login/load
+                const urlParams = new URLSearchParams(window.location.search);
+                const chatIdFromUrl = urlParams.get('chatId');
+                if (chatIdFromUrl) {
+                    openChat(chatIdFromUrl, 'unknown_user_id'); // Open the chat directly
+                    // Optionally, clear the URL parameter to prevent re-opening on refresh
+                    history.replaceState({}, document.title, window.location.pathname);
+                }
+
             } else {
                 currentAdmin = null;
                 loginScreen.classList.remove('hidden');
@@ -300,7 +310,7 @@
                 dashboardScreen.classList.remove('flex');
                 unsubscribeFromChats();
                 unsubscribeFromTransfers();
-                unsubscribeFromNotifications(); // NEW: Unsubscribe from in-app notifications
+                unsubscribeFromNotifications();
             }
         });
 
@@ -917,10 +927,18 @@
 
             notification.classList.remove('hidden', 'translate-x-full');
             
-            // Hide the notification after 5 seconds
+            // Auto-hide the notification after 5 seconds
             setTimeout(() => {
                 notification.classList.add('translate-x-full');
             }, 5000);
+
+            // NEW: Handle foreground notification click to open chat
+            if (payload.data && payload.data.chatId && payload.data.action === 'open_chat') {
+                notification.onclick = () => {
+                    openChat(payload.data.chatId, 'unknown_user_id'); // Open the chat
+                    notification.classList.add('translate-x-full'); // Hide the toast
+                };
+            }
         });
 
         // NEW: In-app notification logic
@@ -999,10 +1017,7 @@
 
             // Navigate to the related chat
             if (notification.relatedDocType === 'chat' && notification.relatedDocId) {
-                // Assuming chatData.ownerUid is available or can be fetched
-                // For simplicity, we'll just open the chat with the ID.
-                // You might need to fetch chat details to get ownerUid if not stored in notification
-                openChat(notification.relatedDocId, 'unknown_user_id'); // Placeholder for userId
+                openChat(notification.relatedDocId, 'unknown_user_id');
                 notificationDropdown.classList.add('hidden'); // Hide dropdown after clicking
             }
         }
@@ -1024,24 +1039,28 @@
         markAllReadBtn.addEventListener('click', async () => {
             const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
             const idToken = await currentAdmin.getIdToken();
-            const batch = writeBatch(db); // Use a Firestore batch for efficiency
-
-            for (const notification of unreadNotifications) {
-                // For the backend endpoint, we need to call it individually
-                // or create a new backend endpoint to mark multiple as read.
-                // For now, let's just update the local state and re-fetch.
-                // A better approach would be a batch PUT on the backend.
-                await fetch(`${baseUrl}/notifications/${notification.id}/read`, {
+            
+            // Use Promise.all to send all mark-as-read requests concurrently
+            const markAsReadPromises = unreadNotifications.map(notification => 
+                fetch(`${baseUrl}/notifications/${notification.id}/read`, {
                     method: 'PUT',
                     headers: {
                         'Authorization': `Bearer ${idToken}`,
                         'Content-Type': 'application/json'
                     }
-                });
+                })
+            );
+
+            try {
+                await Promise.all(markAsReadPromises);
+                console.log('All notifications marked as read.');
+                unreadNotifications = []; // Clear local list
+                updateNotificationUI();
+            } catch (error) {
+                console.error('Error marking all notifications as read:', error);
+                // Optionally re-fetch to ensure UI is consistent with backend state
+                fetchAndDisplayNotifications(); 
             }
-            console.log('All notifications marked as read.');
-            unreadNotifications = []; // Clear local list
-            updateNotificationUI();
         });
 
         // NEW: Listen for in-app notifications in realtime using onSnapshot

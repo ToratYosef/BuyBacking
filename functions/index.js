@@ -10,8 +10,8 @@ admin.initializeApp();
 const db = admin.firestore();
 const ordersCollection = db.collection("orders");
 const usersCollection = db.collection("users");
-const chatsCollection = db.collection("chats"); // Added chat collection reference
-const notificationsCollection = db.collection("notifications"); // Keep notifications collection
+const chatsCollection = db.collection("chats");
+const notificationsCollection = db.collection("notifications");
 
 const app = express();
 
@@ -26,13 +26,10 @@ const allowedOrigins = [
 app.use(cors({
     origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"], // Allow Authorization header
+    allowedHeaders: ["Content-Type", "Authorization"],
 }));
-app.use(express.json()); // Middleware to parse JSON request bodies
+app.use(express.json());
 
-// Set up Nodemailer transporter using the Firebase Functions config
-// IMPORTANT: Ensure you have configured these environment variables using the CLI:
-// firebase functions:config:set email.user="your_email@gmail.com" email.pass="your_app_password"
 let transporter;
 if (functions.config().email) {
     transporter = nodemailer.createTransport({
@@ -46,7 +43,6 @@ if (functions.config().email) {
     console.warn("Nodemailer transporter not configured. Email notifications will fail.");
 }
 
-// --- Admin Verification Middleware ---
 const verifyAdmin = async (req, res, next) => {
     const idToken = req.headers.authorization?.split('Bearer ')[1];
     if (!idToken) {
@@ -55,7 +51,7 @@ const verifyAdmin = async (req, res, next) => {
     try {
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         if (decodedToken.admin === true) {
-            req.user = decodedToken; // Add user info to the request object
+            req.user = decodedToken;
             return next();
         }
         return res.status(403).json({ error: 'Forbidden: User is not an admin.' });
@@ -65,7 +61,6 @@ const verifyAdmin = async (req, res, next) => {
     }
 };
 
-// --- Helper function to create a new notification ---
 async function createNotification(type, message, relatedDocId, relatedDocType, recipientId) {
     try {
         await notificationsCollection.add({
@@ -73,7 +68,7 @@ async function createNotification(type, message, relatedDocId, relatedDocType, r
             message,
             relatedDocId,
             relatedDocType,
-            recipientId, // This could be the admin's UID or a general 'admin' string
+            recipientId,
             isRead: false,
             createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
@@ -83,13 +78,7 @@ async function createNotification(type, message, relatedDocId, relatedDocType, r
     }
 }
 
-// --- AI Chat Summary Function ---
-/**
- * Generates a summary of a chat conversation using the Gemini API.
- * @param {string} chatTranscript - The full transcript of the chat.
- * @param {object} surveyData - The user's survey feedback.
- * @returns {Promise<string>} The AI-generated summary.
- */
+// --- AI Chat Summary Function (unchanged) ---
 async function getChatSummary(chatTranscript, surveyData) {
     const geminiApiKey = functions.config().gemini.key;
     if (!geminiApiKey) {
@@ -135,7 +124,7 @@ async function getChatSummary(chatTranscript, surveyData) {
     }
 }
 
-// --- Route to handle chat feedback submission ---
+// --- Route to handle chat feedback submission (unchanged) ---
 app.post("/submit-chat-feedback", async (req, res) => {
     try {
         const { chatId, surveyData } = req.body;
@@ -144,7 +133,6 @@ app.post("/submit-chat-feedback", async (req, res) => {
             return res.status(400).json({ error: "Chat ID and survey data are required." });
         }
 
-        // 1. Fetch chat messages from Firestore
         const messagesRef = db.collection(`chats/${chatId}/messages`);
         const messagesSnapshot = await messagesRef.orderBy("timestamp").get();
         
@@ -152,7 +140,6 @@ app.post("/submit-chat-feedback", async (req, res) => {
             return res.status(404).json({ error: "Chat history not found." });
         }
 
-        // 2. Format the chat transcript
         let chatTranscript = "";
         messagesSnapshot.forEach(doc => {
             const msg = doc.data();
@@ -162,10 +149,8 @@ app.post("/submit-chat-feedback", async (req, res) => {
             }
         });
 
-        // 3. Get AI Summary
         const aiSummary = await getChatSummary(chatTranscript, surveyData);
 
-        // 4. Construct and send the email
         const mailOptions = {
             from: functions.config().email.user,
             to: "support@secondhandcell.com",
@@ -205,8 +190,7 @@ app.post("/submit-chat-feedback", async (req, res) => {
     }
 });
 
-// --- Email HTML Templates ---
-
+// --- Email HTML Templates (unchanged) ---
 const SHIPPING_LABEL_EMAIL_HTML = `
 <!DOCTYPE html>
 <html lang="en">
@@ -427,7 +411,7 @@ const SHIPPING_KIT_EMAIL_HTML = `
         </div>
         <div class="content">
             <p>Hello **CUSTOMER_NAME**,</p>
-            <p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p>
+            <p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its Way to you.</p>
             <p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p>
             <p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p>
             <p>We're excited to receive your device!</p>
@@ -1596,13 +1580,39 @@ exports.onChatCreated = functions.firestore
 
         // Only create a notification if the chat is not already assigned
         if (!chatData.assignedAdminUid) {
+            const notificationMessage = `A new chat (#${chatId}) has been opened by ${chatData.ownerUid || chatData.guestId}.`;
             await createNotification(
                 'new_chat_opened',
-                `A new chat (#${chatId}) has been opened by ${chatData.ownerUid || chatData.guestId}.`,
+                notificationMessage,
                 chatId,
                 'chat',
                 'admin' // Notify all admins
             );
+
+            // --- NEW: Send FCM Push Notification to all admins ---
+            const adminTokensSnapshot = await db.collectionGroup('fcmTokens').get(); // Get all FCM tokens from all admins
+            const tokens = adminTokensSnapshot.docs.map(doc => doc.id);
+
+            if (tokens.length > 0) {
+                const message = {
+                    notification: {
+                        title: `New Chat Opened by ${chatData.ownerUid || chatData.guestId}`, // Updated title
+                        body: notificationMessage
+                    },
+                    data: {
+                        chatId: chatId,
+                        type: 'chat_notification',
+                        action: 'open_chat' // Custom action for frontend to handle
+                    },
+                    tokens: tokens,
+                };
+                try {
+                    const response = await admin.messaging().sendEachForMulticast(message);
+                    console.log('Successfully sent FCM message for new chat:', response);
+                } catch (error) {
+                    console.error('Error sending FCM message for new chat:', error);
+                }
+            }
         }
         return null;
     });
@@ -1615,7 +1625,8 @@ exports.onNewChatMessage = functions.firestore
         const chatId = context.params.chatId;
 
         // Check if the message is from a user (not an admin) and not a system message
-        if (messageData.type !== 'system' && !messageData.sender.startsWith('admin_')) { // Assuming admin UIDs are prefixed or recognizable
+        // Assuming admin UIDs are prefixed with 'admin_' or can be identified by checking the 'users' collection
+        if (messageData.type !== 'system' && !messageData.sender.startsWith('admin_')) {
             const chatDoc = await chatsCollection.doc(chatId).get();
             if (!chatDoc.exists) {
                 console.warn(`Chat ${chatId} not found for new message notification.`);
@@ -1625,10 +1636,19 @@ exports.onNewChatMessage = functions.firestore
 
             let recipientId = 'admin'; // Default to all admins for unassigned chats
             let notificationMessage = `New message in chat #${chatId}: "${messageData.text.substring(0, 50)}..."`;
+            let notificationTitle = `New message from ${chatData.ownerUid || chatData.guestId}`; // Dynamic title
+            let fcmTokens = [];
 
             if (chatData.assignedAdminUid) {
                 recipientId = chatData.assignedAdminUid; // Notify the assigned admin
                 notificationMessage = `New message in your assigned chat #${chatId}: "${messageData.text.substring(0, 50)}..."`;
+                // Fetch FCM tokens for the specific assigned admin
+                const adminTokensSnapshot = await db.collection(`admins/${recipientId}/fcmTokens`).get();
+                fcmTokens = adminTokensSnapshot.docs.map(doc => doc.id);
+            } else {
+                // Fetch FCM tokens for all admins
+                const allAdminTokensSnapshot = await db.collectionGroup('fcmTokens').get();
+                fcmTokens = allAdminTokensSnapshot.docs.map(doc => doc.id);
             }
 
             await createNotification(
@@ -1638,6 +1658,28 @@ exports.onNewChatMessage = functions.firestore
                 'chat',
                 recipientId
             );
+
+            // --- NEW: Send FCM Push Notification ---
+            if (fcmTokens.length > 0) {
+                const message = {
+                    notification: {
+                        title: notificationTitle, // Use the dynamic title
+                        body: notificationMessage // Use the message snippet
+                    },
+                    data: {
+                        chatId: chatId,
+                        type: 'chat_notification',
+                        action: 'open_chat'
+                    },
+                    tokens: fcmTokens,
+                };
+                try {
+                    const response = await admin.messaging().sendEachForMulticast(message);
+                    console.log('Successfully sent FCM message for new chat message:', response);
+                } catch (error) {
+                    console.error('Error sending FCM message for new chat message:', error);
+                }
+            }
         }
         return null;
     });

@@ -1,3 +1,5 @@
+// firebase-messaging-sw.js
+
 // Import the Firebase app and messaging scripts.
 // These are special 'compat' versions required for service workers.
 importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js");
@@ -34,9 +36,46 @@ messaging.onBackgroundMessage(function(payload) {
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
         body: payload.notification.body,
-        icon: '/apple-touch-icon.png' // Optional: path to an icon for the notification
+        icon: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png', // Updated icon path
+        data: payload.data // Pass along custom data for click handling
     };
 
     // The service worker shows the notification to the user.
     return self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+/**
+ * Handles clicks on notifications.
+ * This is crucial for navigating the admin to the correct chat.
+ */
+self.addEventListener('notificationclick', function(event) {
+    console.log('[firebase-messaging-sw.js] Notification click received.', event);
+    event.notification.close(); // Close the notification
+
+    const clickedNotification = event.notification;
+    const notificationData = clickedNotification.data; // Access the data payload
+
+    if (notificationData && notificationData.chatId && notificationData.action === 'open_chat') {
+        const chatId = notificationData.chatId;
+        const chatUrl = `https://secondhandcell.com/chat/chat.html?chatId=${chatId}`; // Construct dynamic URL
+
+        event.waitUntil(
+            clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+                for (let i = 0; i < clientList.length; i++) {
+                    const client = clientList[i];
+                    // If the admin dashboard is already open, focus it and navigate
+                    if (client.url.includes('admin-dashboard.html')) {
+                        return client.focus().then(() => client.navigate(chatUrl));
+                    }
+                }
+                // If dashboard is not open, open a new window
+                return clients.openWindow(chatUrl);
+            })
+        );
+    } else {
+        // Fallback if no specific chat data is present
+        event.waitUntil(
+            clients.openWindow('https://secondhandcell.com/chat/chat.html') // Default dashboard URL
+        );
+    }
 });
