@@ -36,7 +36,7 @@ messaging.onBackgroundMessage(function(payload) {
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
         body: payload.notification.body,
-        icon: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png', // Updated icon path
+        icon: 'https://secondhandcell.com/assets/logo.png', // Updated icon path
         data: payload.data // Pass along custom data for click handling
     };
 
