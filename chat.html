@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecondHandCell - Turn Your Old Phone into Cash!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Tailwind slate-50 */
+            color: #1e293b; /* Tailwind slate-800 */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .homepage-card-link:hover .homepage-card-inner,
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); /* Tailwind shadow-2xl */
+        }
+        .homepage-card-inner, .feature-card {
+             transition: all 0.3s ease-in-out;
+        }
+        .user-monogram {
+            display: flex; align-items: center; justify-content: center;
+            width: 2.5rem; height: 2.5rem;
+            border-radius: 9999px;
+            background-color: #dbeafe; color: #1d4ed8; /* blue-100, blue-700 */
+            font-weight: 700; font-size: 1.125rem;
+            cursor: pointer; user-select: none;
+        }
+        .auth-dropdown {
+            position: absolute; right: 0; margin-top: 0.5rem;
+            width: 12rem; background-color: white;
+            border-radius: 0.375rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding-top: 0.25rem; padding-bottom: 0.25rem;
+            z-index: 50;
+        }
+        .modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            opacity: 0; visibility: hidden;
+        }
+        .modal.is-visible {
+            opacity: 1; visibility: visible;
+        }
+        .modal-content {
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-out;
+        }
+        .modal.is-visible .modal-content {
+            transform: translateY(0);
+        }
+        .btn-google-style {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; background-color: white; color: #475569;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            border: 1px solid #cbd5e1; font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+        }
+        .btn-google-style:hover { background-color: #f8fafc; }
+        .btn-dark-slate {
+            width: 100%; background-color: #1e293b; color: white;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            font-weight: 600; transition: all 0.3s ease;
+            border: none; cursor: pointer;
+        }
+        .btn-dark-slate:hover { background-color: #0f172a; }
+        .btn-red-logout {
+            display: block; width: 100%; text-align: left;
+            padding: 0.5rem 1rem; font-size: 0.875rem; color: #dc2626;
+            background-color: transparent; border: none;
+            transition: background-color 0.2s ease; cursor: pointer;
+        }
+        .btn-red-logout:hover { background-color: #fef2f2; }
+
+        /* --- Chat Widget Styles --- */
+        #chat-widget-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 1000; }
+        #chat-open-btn {
+            background-color: #2563eb; color: white;
+            width: 4rem; height: 4rem; border-radius: 9999px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            cursor: pointer; transition: transform 0.2s ease-in-out; position: relative;
+        }
+        #chat-open-btn:hover { transform: scale(1.1); }
+        #unread-counter {
+            position: absolute; top: -4px; right: -4px;
+            background-color: #ef4444; color: white;
+            border-radius: 9999px; font-size: 0.75rem; font-weight: bold;
+            width: 1.5rem; height: 1.5rem;
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid white;
+            transform: scale(0); transition: transform 0.2s ease-out;
+        }
+        #unread-counter.visible { transform: scale(1); }
+        #chat-window {
+            position: absolute; bottom: 5rem; right: 0;
+            width: 24rem; height: 32rem; background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            display: flex; flex-direction: column; overflow: hidden;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            opacity: 0; transform: translateY(20px); pointer-events: none;
+        }
+        #chat-window.is-visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        #chat-messages { display: flex; flex-direction: column; }
+        .chat-bubble-user { background-color: rgba(229, 231, 235, 0.7); } /* light grey transparent */
+        .chat-bubble-agent { background-color: rgba(219, 234, 254, 0.7); } /* light blue transparent */
+        .typing-indicator { display: flex; align-items: center; padding: 8px 12px; }
+        .typing-indicator span {
+            height: 8px; width: 8px; margin: 0 2px;
+            background-color: #9ca3af; border-radius: 50%;
+            display: inline-block; animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+        .star-rating i { color: #d1d5db; cursor: pointer; transition: color 0.2s; }
+        .star-rating:hover i, .star-rating i.selected { color: #f59e0b; }
+        .star-rating i:hover ~ i { color: #d1d5db; }
+        
+        .prose { max-width: 65ch; color: #334155; }
+        .prose h3 { font-size: 1.125rem; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.5em; }
+        .prose p, .prose ul { margin-bottom: 1em; }
+        .prose ul { list-style-position: inside; padding-left: 1em; }
+        .prose li { margin-bottom: 0.5em; }
+    </style>
+</head>
+<body class="bg-slate-50">
+
+    <!-- HEADER AND MAIN CONTENT -->
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex-1">
+                <a href="#" class="h-16 inline-block">
+                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+                </a>
+            </div>
+            <div class="hidden md:flex flex-col items-center flex-1">
+                <div class="text-2xl font-extrabold text-slate-800">SecondHandCell</div>
+                <p class="text-sm text-slate-500 -mt-1">Turn Your Old Phone into Cash!</p>
+            </div>
+            <nav class="flex items-center space-x-4 flex-1 justify-end">
+                <div id="authStatusContainer" class="relative inline-block">
+                    <a href="#" id="loginNavBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Login/Sign Up</a>
+                    <div id="userMonogram" class="user-monogram hidden"></div>
+                    <div id="authDropdown" class="auth-dropdown hidden">
+                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
+                        <button id="logoutBtn" class="btn-red-logout">Logout</button>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+    <main class="container mx-auto p-4 md:p-8">
+        <h1 class="text-4xl font-extrabold text-center text-slate-800 mb-8">Main Content Area</h1>
+        <p class="text-center text-lg text-slate-600">Your application's main content would go here.</p>
+    </main>
+    <footer class="bg-slate-800 text-white p-8 text-center">
+        <p>&copy; 2024 SecondHandCell. All rights reserved.</p>
+    </footer>
+    <!-- ALL MODALS HERE -->
+
+
+    <!-- CHAT WIDGET -->
+    <div id="chat-widget-container">
+        <div id="chat-window">
+            <!-- Chat Header -->
+            <div class="bg-blue-700 text-white p-4 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Customer Support</h3>
+                <div>
+                    <button id="chat-minimize-btn" class="text-white hover:text-blue-200"><i class="fa-solid fa-minus text-xl"></i></button>
+                </div>
+            </div>
+            <!-- Messages Area -->
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto bg-slate-50"></div>
+            <!-- Typing Indicator -->
+            <div id="typing-indicator-container" class="p-2 hidden">
+                <div class="p-3 rounded-lg max-w-[85%] mb-2 break-words chat-bubble-agent">
+                    <div class="typing-indicator"><span></span><span></span><span></span></div>
+                </div>
+            </div>
+            <!-- Input Area -->
+            <div id="chat-input-container" class="p-4 border-t border-slate-200">
+                <input type="text" id="chat-input" placeholder="Type your message..." class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <!-- Guest Prompt -->
+            <div id="guest-prompt-container" class="p-4 border-t border-slate-200 hidden">
+                <p class="text-center text-sm text-slate-600 mb-3">To provide the best support, please log in or continue as a guest.</p>
+                <div class="space-y-2">
+                    <button id="guest-login-btn" class="btn-dark-slate">Login / Sign Up</button>
+                    <button id="guest-continue-btn" class="w-full bg-slate-200 text-slate-800 p-3 rounded-lg font-semibold hover:bg-slate-300 transition-colors">Ask a General Question</button>
+                </div>
+            </div>
+            <!-- Survey -->
+            <div id="chat-survey-container" class="p-4 border-t border-slate-200 hidden overflow-y-auto">
+                <p class="text-center font-semibold mb-2">The agent has ended the chat.</p>
+                <p class="text-center text-sm text-slate-600 mb-4">Please rate your experience.</p>
+                <form id="chat-survey-form">
+                    <div class="mb-4">
+                        <label class="font-semibold text-slate-700 block mb-2">Overall Rating:</label>
+                        <div id="star-rating" class="star-rating text-3xl flex justify-center" data-rating="0">
+                            <i class="fa-solid fa-star" data-value="1"></i><i class="fa-solid fa-star" data-value="2"></i><i class="fa-solid fa-star" data-value="3"></i><i class="fa-solid fa-star" data-value="4"></i><i class="fa-solid fa-star" data-value="5"></i>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="friendliness-rating" class="font-semibold text-slate-700 block mb-2">Agent Friendliness: <span id="friendliness-value" class="font-bold text-blue-600">5</span>/10</label>
+                        <input type="range" id="friendliness-rating" min="1" max="10" value="5" class="w-full">
+                    </div>
+                    <div class="mb-4">
+                        <label class="font-semibold text-slate-700 block mb-2">Was your issue resolved?</label>
+                        <div class="flex justify-center gap-4">
+                            <label><input type="radio" name="issue-resolved" value="yes" class="mr-1"> Yes</label>
+                            <label><input type="radio" name="issue-resolved" value="no" class="mr-1"> No</label>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                         <label for="survey-comments" class="font-semibold text-slate-700 block mb-2">Additional Comments (optional):</label>
+                         <textarea id="survey-comments" rows="2" class="w-full border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <button type="submit" class="btn-dark-slate">Submit Feedback</button>
+                </form>
+            </div>
+        </div>
+        <button id="chat-open-btn">
+            <i class="fa-solid fa-comments text-3xl"></i>
+            <span id="unread-counter">0</span>
+        </button>
+    </div>
+
+    <!-- FIREBASE SCRIPT -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Your Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.appspot.com",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM fully loaded and parsed");
+            
+            // --- START: ADVANCED LIVE CHAT LOGIC ---
+            const chatWindow = document.getElementById('chat-window');
+            const chatOpenBtn = document.getElementById('chat-open-btn');
+            const chatMinimizeBtn = document.getElementById('chat-minimize-btn');
+            const chatMessages = document.getElementById('chat-messages');
+            const chatInput = document.getElementById('chat-input');
+            const chatInputContainer = document.getElementById('chat-input-container');
+            const guestPromptContainer = document.getElementById('guest-prompt-container');
+            const guestLoginBtn = document.getElementById('guest-login-btn');
+            const guestContinueBtn = document.getElementById('guest-continue-btn');
+            const unreadCounter = document.getElementById('unread-counter');
+            const typingIndicatorContainer = document.getElementById('typing-indicator-container');
+            const surveyContainer = document.getElementById('chat-survey-container');
+            const surveyForm = document.getElementById('chat-survey-form');
+            const starRatingContainer = document.getElementById('star-rating');
+            const friendlinessRating = document.getElementById('friendliness-rating');
+            const friendlinessValue = document.getElementById('friendliness-value');
+
+
+            let currentChatId = null;
+            let unsubscribeFromMessages = null;
+            let unsubscribeFromChatSession = null;
+            let isChatMinimized = true;
+            let unreadCount = 0;
+            let hasUserTypedFirstMessage = false;
+            let userTypingTimeout = null;
+
+            const notificationSound = new Audio('https://cdn.freesound.org/previews/253/253887_3900531-lq.mp3');
+            notificationSound.volume = 0.5;
+
+            // --- PERSISTENT GUEST ID ---
+            const getOrCreateGuestId = () => {
+                let id = localStorage.getItem('guestChatId');
+                if (!id) {
+                    id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                    localStorage.setItem('guestChatId', id);
+                    console.log("New Guest ID created:", id);
+                } else {
+                    console.log("Existing Guest ID found:", id);
+                }
+                return id;
+            };
+
+            // --- PERSISTENT CHAT SESSION ---
+            const getOrCreateChatSession = async () => {
+                let chatId = localStorage.getItem('chatSessionId');
+                if (chatId) {
+                    console.log("Existing chat session found:", chatId);
+                    return chatId;
+                }
+                
+                console.log("No active chat session found. Creating a new one.");
+                const user = auth.currentUser;
+                const currentGuestId = getOrCreateGuestId();
+                const chatSessionData = {
+                    createdAt: serverTimestamp(),
+                    ownerUid: user ? user.uid : null,
+                    guestId: user ? null : currentGuestId,
+                    status: 'active', // active, ended_by_user, ended_by_agent
+                    agentName: null,
+                    isAgentTyping: false,
+                    userTypingText: ''
+                };
+                const docRef = await addDoc(collection(db, "chats"), chatSessionData);
+                chatId = docRef.id;
+                localStorage.setItem('chatSessionId', chatId);
+                console.log("New chat session created:", chatId);
+                return chatId;
+            };
+
+            const renderMessage = (msg, isHistorical = false) => {
+                const messageDiv = document.createElement('div');
+                const user = auth.currentUser;
+                const currentGuestId = localStorage.getItem('guestChatId');
+                const isMyMessage = (user && msg.sender === user.uid) || (!user && msg.sender === currentGuestId);
+                
+                let classes = 'p-3 rounded-lg max-w-[85%] mb-2 break-words';
+                if (msg.type === 'system') {
+                    classes = 'text-center text-sm text-slate-500 my-2';
+                    messageDiv.innerHTML = `<span class="bg-white px-2 py-1 rounded-full">${msg.text}</span>`;
+                } else {
+                    classes += isMyMessage ? ' bg-gray-200 text-slate-800 self-end' : ' bg-blue-100 text-blue-800 self-start';
+                    messageDiv.textContent = msg.text;
+                }
+                messageDiv.className = classes;
+                chatMessages.appendChild(messageDiv);
+                if (!isHistorical) {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            };
+            
+            const listenForChatSessionChanges = (chatId) => {
+                if (unsubscribeFromChatSession) unsubscribeFromChatSession();
+                unsubscribeFromChatSession = onSnapshot(doc(db, "chats", chatId), (docSnap) => {
+                    const data = docSnap.data();
+                    if (!data) return;
+
+                    if (data.agentName && !document.getElementById(`agent-joined-${data.agentName}`)) {
+                        const joinMsg = { type: 'system', text: `<i class="fa-solid fa-headset mr-2"></i>${data.agentName} has joined the chat.` };
+                        const joinDiv = document.createElement('div');
+                        joinDiv.id = `agent-joined-${data.agentName}`;
+                        joinDiv.className = 'text-center text-sm text-slate-500 my-2';
+                        joinDiv.innerHTML = `<span class="bg-white px-2 py-1 rounded-full">${joinMsg.text}</span>`;
+                        chatMessages.appendChild(joinDiv);
+                    }
+
+                    typingIndicatorContainer.style.display = data.isAgentTyping ? 'block' : 'none';
+                    if (data.isAgentTyping) chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                    if (data.status === 'ended_by_agent') {
+                        chatInputContainer.classList.add('hidden');
+                        guestPromptContainer.classList.add('hidden');
+                        surveyContainer.classList.remove('hidden');
+                        // When agent ends, we can clear the session ID so a new one starts next time
+                        localStorage.removeItem('chatSessionId');
+                    }
+                });
+            };
+
+            const listenForMessages = (chatId) => {
+                if (unsubscribeFromMessages) unsubscribeFromMessages();
+                currentChatId = chatId;
+                const messagesRef = collection(db, `chats/${chatId}/messages`);
+                const q = query(messagesRef, orderBy("timestamp"));
+
+                unsubscribeFromMessages = onSnapshot(q, (snapshot) => {
+                    if (snapshot.empty && !hasUserTypedFirstMessage) {
+                        const user = auth.currentUser;
+                        const userName = user?.displayName?.split(' ')[0] || 'there';
+                        chatMessages.innerHTML = `<div class="p-3 rounded-lg max-w-[85%] mb-2 break-words bg-blue-100 text-blue-800 self-start">Hi ${userName}, how can we help you today?</div>`;
+                        return;
+                    }
+                    
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === "added") {
+                            const msgData = change.doc.data();
+                            renderMessage(msgData, false);
+                            
+                            const user = auth.currentUser;
+                            const currentGuestId = localStorage.getItem('guestChatId');
+                            const isMyMessage = (user && msgData.sender === user.uid) || (!user && msgData.sender === currentGuestId);
+
+                            if (!isMyMessage && isChatMinimized) {
+                                unreadCount++;
+                                unreadCounter.textContent = unreadCount;
+                                unreadCounter.classList.add('visible');
+                                notificationSound.play().catch(e => console.log("Audio play failed:", e));
+                            }
+                        }
+                    });
+                });
+            };
+
+            const resetChatUI = () => {
+                console.log("Resetting chat UI state.");
+                surveyContainer.classList.add('hidden');
+                guestPromptContainer.classList.add('hidden');
+                chatInputContainer.classList.remove('hidden');
+                typingIndicatorContainer.style.display = 'none';
+            };
+
+            const openChat = async () => {
+                console.log("--- openChat function called ---");
+                resetChatUI();
+
+                chatWindow.classList.add('is-visible');
+                isChatMinimized = false;
+                unreadCount = 0;
+                unreadCounter.classList.remove('visible');
+                const chatId = await getOrCreateChatSession();
+                if (chatId) {
+                    listenForMessages(chatId);
+                    listenForChatSessionChanges(chatId);
+                }
+            };
+            chatOpenBtn.addEventListener('click', openChat);
+
+            const minimizeChat = () => {
+                console.log("--- minimizeChat function called ---");
+                chatWindow.classList.remove('is-visible');
+                isChatMinimized = true;
+            };
+            chatMinimizeBtn.addEventListener('click', minimizeChat);
+
+            const sendMessage = async (text) => {
+                if (text.trim() === '' || !currentChatId) return;
+                const user = auth.currentUser;
+                
+                if (!user && !hasUserTypedFirstMessage) {
+                    hasUserTypedFirstMessage = true;
+                    chatInputContainer.classList.add('hidden');
+                    guestPromptContainer.classList.remove('hidden');
+                    return;
+                }
+
+                const currentGuestId = getOrCreateGuestId();
+                const messageData = { text, timestamp: serverTimestamp(), sender: user ? user.uid : currentGuestId };
+                await addDoc(collection(db, `chats/${currentChatId}/messages`), messageData);
+                chatInput.value = '';
+                await updateDoc(doc(db, "chats", currentChatId), { userTypingText: '' });
+            };
+
+            chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(chatInput.value); } });
+            chatInput.addEventListener('keyup', () => {
+                clearTimeout(userTypingTimeout);
+                userTypingTimeout = setTimeout(async () => {
+                    if (currentChatId) {
+                        await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
+                    }
+                }, 500);
+            });
+
+            guestLoginBtn.addEventListener('click', () => document.getElementById('loginNavBtn').click());
+            guestContinueBtn.addEventListener('click', () => {
+                guestPromptContainer.classList.add('hidden');
+                chatInputContainer.classList.remove('hidden');
+                renderMessage({ type: 'system', text: 'An agent will be with you shortly. Please provide any relevant details like order numbers.' });
+                chatInput.focus();
+            });
+
+            // Survey Logic
+            friendlinessRating.addEventListener('input', (e) => {
+                friendlinessValue.textContent = e.target.value;
+            });
+
+            starRatingContainer.addEventListener('mouseover', e => {
+                if (e.target.tagName === 'I') {
+                    const rating = e.target.dataset.value;
+                    Array.from(starRatingContainer.children).forEach(star => {
+                        star.classList.toggle('selected', star.dataset.value <= rating);
+                    });
+                }
+            });
+            starRatingContainer.addEventListener('mouseout', () => {
+                const currentRating = starRatingContainer.dataset.rating;
+                Array.from(starRatingContainer.children).forEach(star => {
+                    star.classList.toggle('selected', star.dataset.value <= currentRating);
+                });
+            });
+            starRatingContainer.addEventListener('click', e => {
+                if (e.target.tagName === 'I') {
+                    starRatingContainer.dataset.rating = e.target.dataset.value;
+                }
+            });
+
+            surveyForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const surveyData = {
+                    overallRating: parseInt(starRatingContainer.dataset.rating, 10),
+                    friendliness: document.getElementById('friendliness-rating').value,
+                    resolved: document.querySelector('input[name="issue-resolved"]:checked')?.value || null,
+                    comments: document.getElementById('survey-comments').value
+                };
+                
+                // Save to Firestore for your records
+                await setDoc(doc(db, `chats/${currentChatId}/survey/feedback`), {
+                    ...surveyData,
+                    submittedAt: serverTimestamp()
+                });
+
+                // Call the backend function to send the email with AI summary
+                try {
+                    // IMPORTANT: Replace with your actual Cloud Function URL
+                    const cloudFunctionUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-chat-feedback';
+                    
+                    const response = await fetch(cloudFunctionUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            chatId: currentChatId,
+                            surveyData: surveyData
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    
+                    const result = await response.json();
+                    console.log('Feedback email sent successfully:', result.message);
+
+                } catch (error) {
+                    console.error("Error sending feedback email:", error);
+                }
+
+                surveyContainer.innerHTML = '<p class="text-center font-semibold text-green-600">Thank you for your feedback!</p>';
+            });
+            // --- END: ADVANCED LIVE CHAT LOGIC ---
+        });
+    </script>
+</body>
+</html>

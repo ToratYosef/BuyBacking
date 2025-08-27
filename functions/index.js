@@ -44,6 +44,128 @@
      console.warn("Nodemailer transporter not configured. Email notifications will fail.");
  }
 
+ // --- NEW: AI Chat Summary Function ---
+ /**
+  * Generates a summary of a chat conversation using the Gemini API.
+  * @param {string} chatTranscript - The full transcript of the chat.
+  * @param {object} surveyData - The user's survey feedback.
+  * @returns {Promise<string>} The AI-generated summary.
+  */
+ async function getChatSummary(chatTranscript, surveyData) {
+     const geminiApiKey = functions.config().gemini.key;
+     if (!geminiApiKey) {
+         console.error("Gemini API key is not configured.");
+         return "AI summary could not be generated (API key missing).";
+     }
+
+     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`;
+
+     const prompt = `
+         You are an AI assistant for SecondHandCell, a company that buys used phones.
+         Your task is to summarize a customer support chat conversation and the user's feedback.
+         
+         **Chat Transcript:**
+         ${chatTranscript}
+
+         **User Feedback:**
+         - Overall Rating: ${surveyData.overallRating}/5 stars
+         - Agent Friendliness: ${surveyData.friendliness}/10
+         - Was issue resolved?: ${surveyData.resolved || 'Not answered'}
+         - Comments: "${surveyData.comments || 'No comment'}"
+
+         **Instructions:**
+         Based on the transcript and feedback, provide a concise summary in HTML format. The summary should include:
+         1.  A one-sentence summary of the **Customer's Problem**.
+         2.  A one-sentence summary of the **Solution Provided**.
+         3.  A one-sentence summary of the **User's Feedback**.
+         
+         Structure your response like this:
+         <p><strong>Customer's Problem:</strong> [Your summary of the problem]</p>
+         <p><strong>Solution Provided:</strong> [Your summary of the solution]</p>
+         <p><strong>User's Feedback:</strong> [Your summary of the feedback]</p>
+     `;
+
+     try {
+         const response = await axios.post(apiUrl, {
+             contents: [{ parts: [{ text: prompt }] }]
+         });
+         return response.data.candidates[0].content.parts[0].text;
+     } catch (error) {
+         console.error("Error calling Gemini API:", error.response?.data || error.message);
+         return "AI summary failed to generate.";
+     }
+ }
+
+ // --- NEW: Route to handle chat feedback submission ---
+ app.post("/submit-chat-feedback", async (req, res) => {
+     try {
+         const { chatId, surveyData } = req.body;
+
+         if (!chatId || !surveyData) {
+             return res.status(400).json({ error: "Chat ID and survey data are required." });
+         }
+
+         // 1. Fetch chat messages from Firestore
+         const messagesRef = db.collection(`chats/${chatId}/messages`);
+         const messagesSnapshot = await messagesRef.orderBy("timestamp").get();
+         
+         if (messagesSnapshot.empty) {
+             return res.status(404).json({ error: "Chat history not found." });
+         }
+
+         // 2. Format the chat transcript
+         let chatTranscript = "";
+         messagesSnapshot.forEach(doc => {
+             const msg = doc.data();
+             if (msg.type !== 'system') {
+                 const sender = msg.sender.startsWith('guest_') || msg.sender.length > 20 ? "User" : "Agent";
+                 chatTranscript += `${sender}: ${msg.text}\n`;
+             }
+         });
+
+         // 3. Get AI Summary
+         const aiSummary = await getChatSummary(chatTranscript, surveyData);
+
+         // 4. Construct and send the email
+         const mailOptions = {
+             from: functions.config().email.user,
+             to: "support@secondhandcell.com",
+             subject: `New Chat Feedback Received - Chat ID: ${chatId}`,
+             html: `
+                 <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ccc; border-radius: 8px;">
+                     <h2 style="color: #1e293b;">New Chat Feedback Summary</h2>
+                     <p><strong>Chat ID:</strong> ${chatId}</p>
+                     <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                     
+                     <h3 style="color: #1e293b;">AI-Generated Summary</h3>
+                     ${aiSummary}
+                     
+                     <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                     
+                     <h3 style="color: #1e293b;">Detailed User Feedback</h3>
+                     <ul>
+                         <li><strong>Overall Rating:</strong> ${surveyData.overallRating} out of 5</li>
+                         <li><strong>Agent Friendliness:</strong> ${surveyData.friendliness} out of 10</li>
+                         <li><strong>Issue Resolved:</strong> ${surveyData.resolved || 'N/A'}</li>
+                         <li><strong>User Comments:</strong> <p style="white-space: pre-wrap; background-color: #f8fafc; padding: 10px; border-radius: 4px;">${surveyData.comments || 'No comments provided.'}</p></li>
+                     </ul>
+                 </div>
+             `
+         };
+
+         if (transporter) {
+             await transporter.sendMail(mailOptions);
+             console.log(`Feedback email sent for chat ID: ${chatId}`);
+             res.status(200).json({ message: "Feedback submitted and email sent successfully." });
+         } else {
+             throw new Error("Nodemailer transporter is not configured.");
+         }
+     } catch (error) {
+         console.error("Error in /submit-chat-feedback:", error);
+         res.status(500).json({ error: "Failed to process chat feedback." });
+     }
+ });
+
  // --- Email HTML Templates ---
 
  const SHIPPING_LABEL_EMAIL_HTML = `
@@ -1328,4 +1450,3 @@
 
  // Expose the Express app as a single Cloud Function
  exports.api = functions.https.onRequest(app);
- 
