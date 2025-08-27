@@ -10,11 +10,26 @@
     <!-- Font Awesome Brands for PayPal -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
-    <!-- Google Maps Places API script with async loading -->
-    <!-- You MUST replace YOUR_API_KEY with your actual API key from Google Cloud.
-         Ensure you have enabled the Maps JavaScript API and the Places API. -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAqQLYjYP3Xe8ysVtcbA-65dusM0yvpm5s&loading=async&libraries=places&callback=initAutocomplete"></script>
+    <!-- 
+        GOOGLE MAPS API ERROR FIX:
+        The error "LegacyApiNotActivatedMapError" means the "Places API" is not enabled for your API key.
+        1. Go to your Google Cloud Console: https://console.cloud.google.com/
+        2. Select the project associated with your API key.
+        3. In the navigation menu, go to "APIs & Services" -> "Library".
+        4. Search for "Places API" and click on it.
+        5. Make sure it is ENABLED for your project.
+        6. Also ensure your API key has no restrictions that would block this website's domain.
+    -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvU0S58N4TVxJ5Ag4l7B-r534hng4BxVw&libraries=places&callback=initAutocomplete" async defer></script>
     
+    <!-- 
+        FIREBASE AUTHENTICATION ERROR FIX:
+        The error "auth/unauthorized-domain" means you need to authorize the domain where this page is hosted.
+        1. Go to your Firebase Console: https://console.firebase.google.com/
+        2. Select your project ("buyback-a0f05").
+        3. Go to "Authentication" -> "Settings" tab -> "Authorized domains".
+        4. Click "Add domain" and enter the domain where you are running this code (e.g., localhost if testing locally, or your website's domain).
+    -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import {
@@ -43,7 +58,7 @@
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
             authDomain: "buyback-a0f05.firebaseapp.com",
             projectId: "buyback-a0f05",
-            storageBucket: "buyback-a0f05.firebasestorage.app",
+            storageBucket: "buyback-a0f05.appspot.com",
             messagingSenderId: "876430429098",
             appId: "1:876430429098:web:f6dd64b1960d90461979d3",
             measurementId: "G-6WWQN44JHT"
@@ -693,10 +708,8 @@
                             </div>
                             <div class="md:col-span-2">
                                 <label for="street-address" class="block text-sm font-medium text-slate-700">Street Address</label>
-                                <!-- The ID for this input has been changed to 'street-address' for Google Maps API -->
-                                <div id="autocomplete-container">
-                                    <input type="text" id="street-address" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
-                                </div>
+                                <!-- This input is now used by the Google Maps Autocomplete API -->
+                                <input type="text" id="street-address" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="Start typing your address...">
                             </div>
                             <div>
                                 <label for="city" class="block text-sm font-medium text-slate-700">City</label>
@@ -858,64 +871,80 @@
     </footer>
 
     <script>
-        // Callback function for Google Maps API. It's called after the API script loads.
+        // Global variable to hold the autocomplete instance
+        let autocomplete;
+
+        // This function is called by the Google Maps script when it has loaded.
         function initAutocomplete() {
-            // New way to use Place Autocomplete
-            const container = document.getElementById('autocomplete-container');
-            const placeAutocomplete = new google.maps.places.PlaceAutocompleteElement();
-            placeAutocomplete.placeholder = "Enter your address";
-            placeAutocomplete.input.className = "mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm";
-            placeAutocomplete.input.id = "street-address";
-            container.appendChild(placeAutocomplete);
-
-            // Add an event listener to populate the other fields when a place is selected
-            placeAutocomplete.addEventListener('placechange', () => {
-                const place = placeAutocomplete.getPlace();
-                if (!place || !place.addressComponents) return;
-
-                const streetAddressInput = document.getElementById('street-address');
-                const cityInput = document.getElementById('city');
-                const stateInput = document.getElementById('state');
-                const zipCodeInput = document.getElementById('zip-code');
-
-                let streetNumber = '';
-                let streetName = '';
-                let city = '';
-                let state = '';
-                let zipCode = '';
-
-                for (const component of place.addressComponents) {
-                    const componentType = component.types[0];
-                    switch (componentType) {
-                        case 'street_number':
-                            streetNumber = component.longText;
-                            break;
-                        case 'route':
-                            streetName = component.longText;
-                            break;
-                        case 'locality':
-                            city = component.longText;
-                            break;
-                        case 'administrative_area_level_1':
-                            state = component.shortText;
-                            break;
-                        case 'postal_code':
-                            zipCode = component.longText;
-                            break;
-                    }
-                }
-                
-                streetAddressInput.value = `${streetNumber} ${streetName}`.trim();
-                cityInput.value = city;
-                stateInput.value = state;
-                zipCodeInput.value = zipCode;
-
-                // Manually trigger an input event to update the order overview
-                const event = new Event('input', { bubbles: true });
-                streetAddressInput.dispatchEvent(event);
+            // Get the input element
+            const streetAddressInput = document.getElementById('street-address');
+            
+            // Create the autocomplete object, restricting the search to geographical location types.
+            autocomplete = new google.maps.places.Autocomplete(streetAddressInput, {
+                types: ['address']
             });
-        };
 
+            // When the user selects an address from the dropdown, populate the address fields in the form.
+            autocomplete.addListener('place_changed', fillInAddress);
+        }
+
+        function fillInAddress() {
+            // Get the place details from the autocomplete object.
+            const place = autocomplete.getPlace();
+
+            if (!place || !place.address_components) {
+                console.warn("Autocomplete's returned place contains no address components");
+                return;
+            }
+
+            // Get each component of the address from the place details,
+            // and then fill-in the corresponding field on the form.
+            const streetAddressInput = document.getElementById('street-address');
+            const cityInput = document.getElementById('city');
+            const stateInput = document.getElementById('state');
+            const zipCodeInput = document.getElementById('zip-code');
+
+            // Clear out the fields first
+            streetAddressInput.value = '';
+            cityInput.value = '';
+            stateInput.value = '';
+            zipCodeInput.value = '';
+
+            let streetNumber = '';
+            let route = '';
+
+            for (const component of place.address_components) {
+                const componentType = component.types[0];
+
+                switch (componentType) {
+                    case 'street_number':
+                        streetNumber = component.long_name;
+                        break;
+                    case 'route':
+                        route = component.short_name;
+                        break;
+                    case 'locality':
+                        cityInput.value = component.long_name;
+                        break;
+                    case 'administrative_area_level_1':
+                        stateInput.value = component.short_name;
+                        break;
+                    case 'postal_code':
+                        zipCodeInput.value = component.long_name;
+                        break;
+                }
+            }
+            
+            streetAddressInput.value = `${streetNumber} ${route}`.trim();
+
+            // Manually trigger an input event on each field to let other scripts know they've changed
+            const event = new Event('input', { bubbles: true });
+            streetAddressInput.dispatchEvent(event);
+            cityInput.dispatchEvent(event);
+            stateInput.dispatchEvent(event);
+            zipCodeInput.dispatchEvent(event);
+        }
+        
         document.addEventListener('DOMContentLoaded', function() {
             const auth = window.firebaseAuth;
             const GoogleAuthProvider = window.GoogleAuthProvider;
@@ -932,7 +961,7 @@
             const getQuoteBtn = document.getElementById('getQuoteBtn');
             const quoteMessage = document.getElementById('quoteMessage');
             const nextSteps = document.getElementById('nextSteps');
-            const finalQuoteAmountMain = document.getElementById('mainQuoteDisplay');
+            const finalQuoteAmountMainDisplay = document.getElementById('mainQuoteDisplay');
             const finalQuoteAmountMainText = document.getElementById('finalQuoteAmountMain');
             const finalQuoteAmountPopup = document.getElementById('finalQuoteAmountPopup');
             const paymentAndShipping = document.getElementById('paymentAndShipping');
@@ -1184,7 +1213,7 @@
 
             quoteModalContinueBtn.addEventListener('click', () => {
                 hideQuotePopup();
-                finalQuoteAmountMain.classList.remove('hidden');
+                finalQuoteAmountMainDisplay.classList.remove('hidden');
                 if (isUserLoggedIn) {
                     nextSteps.classList.remove('hidden');
                     paymentAndShipping.classList.remove('hidden');
@@ -1275,7 +1304,7 @@
                 } else if (type === 'success') {
                     quoteMessage.classList.add('bg-green-100', 'text-green-700');
                 } else if (type === 'info') {
-                    quoteMessage.classList.add('bg-blue-100', 'text-blue-700');
+                    authMessage.classList.add('bg-blue-100', 'text-blue-700');
                 }
                 quoteMessage.classList.remove('hidden');
             }
@@ -1329,7 +1358,7 @@
                     el.classList.add('hidden');
                 });
                 clearQuoteMessage();
-                finalQuoteAmountMain.classList.add('hidden');
+                finalQuoteAmountMainDisplay.classList.add('hidden');
                 nextSteps.classList.add('hidden');
             }
             
