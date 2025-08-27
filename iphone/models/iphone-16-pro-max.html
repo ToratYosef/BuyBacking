@@ -7,12 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- Font Awesome Brands for PayPal -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
-    <!-- Google Maps Places API script -->
-    <!-- You MUST replace YOUR_API_KEY with your actual API key from Google Cloud.
-         Ensure you have enabled the Maps JavaScript API and the Places API. -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDmPwxtDa0NtsdfXkCq8mXnzkrTBCDvgEA&libraries=places&callback=initAutocomplete" async defer></script>
     
     <script type="module">
@@ -439,10 +435,8 @@
                     We offer a quick, transparent, and hassle-free process with free shipping and certified inspection.
                 </p>
                 
-                <!-- Main Question Container -->
                 <div class="space-y-6">
 
-                    <!-- Q1: Storage -->
                     <div class="mb-8" id="storageSection">
                         <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">1. Select Storage Amount</label>
                         <div class="flex justify-center lg:justify-start">
@@ -456,7 +450,6 @@
                         </div>
                     </div>
                     
-                    <!-- Q2: Carrier -->
                     <div class="mb-8 hidden" id="carrierSection">
                         <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">2. Select Your Carrier</label>
                         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4" id="carrierOptions">
@@ -498,7 +491,6 @@
                         </div>
                     </div>
 
-                    <!-- Q3: Power On -->
                     <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="powerOnSection">
                         <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">3. Does the device power on?</p>
                         <div class="flex space-x-6 justify-center lg:justify-start" id="q1Options">
@@ -513,7 +505,6 @@
                         </div>
                     </div>
                     
-                    <!-- Q4: Functional Condition -->
                     <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="functionalSection">
                         <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left flex items-center justify-center lg:justify-start sm:text-base">
                             4. Is the screen fully functional and free of defects?
@@ -544,7 +535,6 @@
                         </div>
                     </div>
                     
-                    <!-- Q5: Cracks -->
                     <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cracksSection">
                         <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">5. Are the front and back free of cracks?</p>
                         <div class="flex space-x-6 justify-center lg:justify-start" id="q3Options">
@@ -559,7 +549,6 @@
                         </div>
                     </div>
                     
-                    <!-- Q6: Cosmetic Condition -->
                     <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cosmeticSection">
                         <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">6. What’s the overall cosmetic condition?</p>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="q4Options">
@@ -693,7 +682,6 @@
                             </div>
                             <div class="md:col-span-2">
                                 <label for="street-address" class="block text-sm font-medium text-slate-700">Street Address</label>
-                                <!-- The ID for this input has been changed to 'street-address' for Google Maps API -->
                                 <input type="text" id="street-address" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
                             </div>
                             <div>
@@ -1062,7 +1050,8 @@
                 }
             });
 
-            const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+            // *** MODIFIED *** - Use your actual backend URL here
+            const BACKEND_URL = 'https://us-central1-secondhandcell-585bd.cloudfunctions.net/api';
 
             function showAuthMessage(msg, type) {
                 authMessage.textContent = msg;
@@ -1533,11 +1522,15 @@
                 const fullAddress = [fullName, streetAddress, city, state, zipCode].filter(Boolean).join(', ');
                 overviewAddress.textContent = fullAddress || 'Not Entered';
             }
-
+            
+            // ==========================================================
+            // /// *** NEW AND MODIFIED CODE FOR ADDRESS VALIDATION *** ///
+            // ==========================================================
             sendPhoneBtn.addEventListener('click', async () => {
                 clearQuoteMessage();
                 clearHighlights();
 
+                // --- 1. First, validate all fields as before ---
                 const selectedPayment = document.querySelector('input[name="payment_method"]:checked');
                 const selectedShippingPreference = document.querySelector('input[name="shipping_preference"]:checked');
                 const termsAccepted = document.getElementById('termsAccepted');
@@ -1592,10 +1585,45 @@
                     return;
                 }
                 
+                // --- 2. If fields are filled, now validate the address via backend ---
                 sendPhoneBtn.disabled = true;
-                sendPhoneBtn.textContent = 'Order Submitting...';
-                sendPhoneBtn.classList.remove('btn-primary-indigo');
+                sendPhoneBtn.textContent = 'Validating Address...';
                 sendPhoneBtn.classList.add('btn-disabled');
+
+                try {
+                    const validationResponse = await fetch(`${BACKEND_URL}/validate-address`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            streetAddress: streetAddressInput.value,
+                            city: cityInput.value,
+                            state: stateInput.value,
+                            zipCode: zipCodeInput.value
+                        })
+                    });
+
+                    const validationResult = await validationResponse.json();
+
+                    if (!validationResponse.ok || !validationResult.isValid) {
+                        throw new Error(validationResult.message || 'The address entered is not valid. Please check and try again.');
+                    }
+                    
+                    // Address is valid, now submit the order
+                    await submitOrder();
+
+                } catch (error) {
+                    console.error("Address validation error:", error);
+                    showQuoteMessage(error.message, 'error');
+                    streetAddressInput.classList.add('highlight-missing');
+                    // Re-enable the button if validation fails
+                    sendPhoneBtn.disabled = false;
+                    sendPhoneBtn.textContent = 'Send Phone In Now';
+                    sendPhoneBtn.classList.remove('btn-disabled');
+                }
+            });
+            
+            async function submitOrder() {
+                sendPhoneBtn.textContent = 'Submitting Order...';
 
                 const orderData = {
                     device: "iPhone 16 Pro Max",
@@ -1606,27 +1634,28 @@
                     condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
                     estimatedQuote: finalQuote,
-                    paymentMethod: selectedPayment.value,
-                    shippingPreference: selectedShippingPreference.value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+                    paymentMethod: document.querySelector('input[name="payment_method"]:checked').value,
+                    shippingPreference: document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
                     paymentDetails: {},
                     shippingInfo: {
-                        fullName: fullName.value,
-                        email: email.value,
+                        fullName: document.getElementById('fullName').value,
+                        email: document.getElementById('email').value,
                         streetAddress: streetAddressInput.value,
                         city: cityInput.value,
                         state: stateInput.value,
                         zipCode: zipCodeInput.value
                     },
-                    termsAccepted: termsAccepted.checked,
+                    termsAccepted: document.getElementById('termsAccepted').checked,
                     userId: currentUserId,
-                    createdAt: serverTimestamp()
+                    createdAt: serverTimestamp() // This won't work client-side, your backend handles this.
                 };
-
-                if (selectedPayment.value === 'venmo') {
+                
+                const selectedPaymentValue = document.querySelector('input[name="payment_method"]:checked').value;
+                if (selectedPaymentValue === 'venmo') {
                     orderData.paymentDetails.venmoUsername = document.getElementById('venmoUsername').value;
-                } else if (selectedPayment.value === 'zelle') {
+                } else if (selectedPaymentValue === 'zelle') {
                     orderData.paymentDetails.zelleIdentifier = document.getElementById('zelleIdentifier').value;
-                } else if (selectedPayment.value === 'paypal') {
+                } else if (selectedPaymentValue === 'paypal') {
                     orderData.paymentDetails.paypalEmail = document.getElementById('paypalEmail').value;
                 }
 
@@ -1634,9 +1663,7 @@
                     showQuoteMessage('Submitting your order...', 'info');
                     const response = await fetch(`${BACKEND_URL}/submit-order`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(orderData),
                     });
 
@@ -1647,7 +1674,7 @@
                     }
                     
                     setTimeout(() => {
-                        window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${selectedShippingPreference.value}`;
+                        window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${document.querySelector('input[name="shipping_preference"]:checked').value}`;
                     }, 2000);
                     
                 } catch (e) {
@@ -1657,9 +1684,9 @@
                     sendPhoneBtn.disabled = false;
                     sendPhoneBtn.textContent = 'Send Phone In Now';
                     sendPhoneBtn.classList.remove('btn-disabled');
-                    sendPhoneBtn.classList.add('btn-primary-indigo');
                 }
-            });
+            }
+
 
             function saveFormState() {
                 const formState = {
