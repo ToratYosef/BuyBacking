@@ -47,9 +47,9 @@
     </div>
 
     <!-- MAIN DASHBOARD -->
-    <div id="dashboard-screen" class="hidden h-screen w-screen flex">
+    <div id="dashboard-screen" class="hidden h-screen w-screen flex flex-col md:flex-row overflow-hidden">
         <!-- Left Sidebar: Chat Queue -->
-        <aside class="w-[380px] bg-white border-r border-slate-200 flex flex-col">
+        <aside class="w-full md:w-[380px] bg-white border-r border-slate-200 flex flex-col h-full">
             <div class="p-4 border-b border-slate-200 flex justify-between items-center">
                 <h2 class="text-xl font-bold text-slate-800">Live Chats</h2>
                 <button id="logout-btn" class="text-sm text-slate-500 hover:text-blue-600 font-semibold flex items-center gap-2">Logout <i class="fa-solid fa-right-from-bracket"></i></button>
@@ -78,7 +78,7 @@
         </aside>
 
         <!-- Right Section: Active Chat View -->
-        <main id="chat-view" class="flex-1 flex flex-col bg-slate-50">
+        <main id="chat-view" class="flex-1 flex-col bg-slate-50 hidden md:flex h-full">
             <div id="no-chat-selected" class="flex flex-col items-center justify-center h-full text-slate-500">
                 <i class="fa-solid fa-comments text-6xl mb-4"></i>
                 <p class="text-xl font-semibold">Select a chat to begin</p>
@@ -87,17 +87,20 @@
 
             <div id="active-chat-container" class="hidden h-full flex flex-col">
                 <div class="p-4 bg-white border-b border-slate-200 flex justify-between items-center">
-                    <div>
-                        <h3 id="active-chat-user" class="font-bold text-slate-800"></h3>
-                        <p id="active-chat-id" class="text-xs text-slate-500"></p>
+                    <div class="flex items-center gap-3">
+                         <button id="back-to-list-btn" class="text-slate-600 hover:text-blue-600 md:hidden"><i class="fa-solid fa-arrow-left text-xl"></i></button>
+                         <div>
+                            <h3 id="active-chat-user" class="font-bold text-slate-800"></h3>
+                            <p id="active-chat-id" class="text-xs text-slate-500"></p>
+                         </div>
                     </div>
-                    <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 sm:gap-4">
                         <div class="relative">
-                            <button id="transfer-chat-btn" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-right-left"></i> Transfer</button>
+                            <button id="transfer-chat-btn" class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-right-left"></i> <span class="hidden sm:inline">Transfer</span></button>
                             <div id="transfer-dropdown" class="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-lg shadow-xl border hidden z-10"></div>
                         </div>
-                        <button id="view-orders-btn" class="px-4 py-2 text-sm font-semibold text-white bg-slate-600 rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-box"></i> View Orders</button>
-                        <button id="end-chat-btn" class="px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"><i class="fa-solid fa-flag-checkered"></i> End Chat</button>
+                        <button id="view-orders-btn" class="px-3 py-2 text-sm font-semibold text-white bg-slate-600 rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-box"></i> <span class="hidden sm:inline">View Orders</span></button>
+                        <button id="end-chat-btn" class="px-3 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"><i class="fa-solid fa-flag-checkered"></i> <span class="hidden sm:inline">End Chat</span></button>
                     </div>
                 </div>
 
@@ -130,13 +133,19 @@
     </div>
     
     <!-- Transfer Notification -->
-    <div id="transfer-notification" class="fixed top-5 right-5 bg-white rounded-lg shadow-lg p-4 w-80 border-l-4 border-blue-500 hidden transform translate-x-full transition-transform duration-300">
+    <div id="transfer-notification" class="fixed top-5 right-5 bg-white rounded-lg shadow-lg p-4 w-80 border-l-4 border-blue-500 hidden transform translate-x-full transition-transform duration-300 z-[1001]">
         <p class="font-semibold text-slate-800">Incoming Chat Transfer</p>
         <p class="text-sm text-slate-600 mt-1">From <strong id="transfer-from-admin"></strong> for chat with <strong id="transfer-chat-user"></strong>.</p>
         <div class="mt-4 flex gap-2">
             <button id="accept-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600">Accept</button>
             <button id="decline-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-slate-700 bg-slate-200 rounded-md hover:bg-slate-300">Decline</button>
         </div>
+    </div>
+    
+    <!-- In-App Notification Toast for FCM -->
+    <div id="in-app-notification" class="fixed top-24 right-5 bg-white rounded-lg shadow-lg p-4 w-80 border-l-4 border-green-500 hidden transform translate-x-full transition-transform duration-300 z-[1001]">
+        <h4 id="in-app-notification-title" class="font-semibold text-slate-800"></h4>
+        <p id="in-app-notification-body" class="text-sm text-slate-600 mt-1"></p>
     </div>
 
     <!-- Custom Confirmation Modal -->
@@ -151,13 +160,13 @@
         </div>
     </div>
 
-
     <!-- FIREBASE SCRIPT -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDocs, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDocs, getDoc, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getDatabase, ref, onValue, set, serverTimestamp as dbServerTimestamp, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
@@ -174,10 +183,14 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const rtdb = getDatabase(app);
+        const messaging = getMessaging(app);
 
         // --- DOM Elements ---
         const loginScreen = document.getElementById('login-screen');
         const dashboardScreen = document.getElementById('dashboard-screen');
+        const chatListAside = dashboardScreen.querySelector('aside');
+        const mainChatView = document.getElementById('chat-view');
+        const backToListBtn = document.getElementById('back-to-list-btn');
         const loginForm = document.getElementById('login-form');
         const loginError = document.getElementById('login-error');
         const logoutBtn = document.getElementById('logout-btn');
@@ -205,7 +218,8 @@
         const assignSelectedBtn = document.getElementById('assign-selected-btn');
         const deleteSelectedBtn = document.getElementById('delete-selected-btn');
         const confirmModal = document.getElementById('confirm-modal');
-
+        
+        // --- State Variables ---
         let currentAdmin = null;
         let activeChatIdState = null;
         let unsubscribeFromChats = () => {};
@@ -224,24 +238,6 @@
             "Thank you for contacting support. Have a great day!"
         ];
 
-        // --- Presence Management (Realtime Database) ---
-        function managePresence(user) {
-            const userStatusDatabaseRef = ref(rtdb, '/status/' + user.uid);
-            const isOfflineForDatabase = { state: 'offline', last_changed: dbServerTimestamp(), name: user.displayName };
-            const isOnlineForDatabase = { state: 'online', last_changed: dbServerTimestamp(), name: user.displayName };
-
-            onValue(ref(rtdb, '.info/connected'), (snapshot) => {
-                if (snapshot.val() === false) return;
-                onDisconnect(userStatusDatabaseRef).set(isOfflineForDatabase).then(() => {
-                    set(userStatusDatabaseRef, isOnlineForDatabase);
-                });
-            });
-
-            onValue(ref(rtdb, '/status'), (snapshot) => {
-                onlineAdmins = snapshot.val() || {};
-            });
-        }
-
         // --- Authentication Logic ---
         onAuthStateChanged(auth, user => {
             if (user) {
@@ -249,10 +245,12 @@
                 loginScreen.classList.add('hidden');
                 dashboardScreen.classList.remove('hidden');
                 dashboardScreen.classList.add('flex');
+                
                 managePresence(user);
                 loadChatQueue();
                 listenForTransfers(user.uid);
                 populateSuggestedReplies();
+                setupNotifications(user); // Initialize notifications
             } else {
                 currentAdmin = null;
                 loginScreen.classList.remove('hidden');
@@ -263,7 +261,7 @@
             }
         });
 
-        loginForm.addEventListener('submit', async (e) => {
+        loginForm.addEventListener('submit', async (e) => { 
             e.preventDefault();
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
@@ -281,6 +279,32 @@
             signOut(auth);
         });
 
+        // --- Mobile View Logic ---
+        backToListBtn.addEventListener('click', () => {
+            chatListAside.classList.remove('hidden');
+            mainChatView.classList.add('hidden');
+            activeChatIdState = null;
+            document.querySelectorAll('[id^="chat-item-"]').forEach(el => el.classList.remove('bg-blue-50'));
+        });
+
+        // --- Presence Management ---
+        function managePresence(user) {
+            const userStatusDatabaseRef = ref(rtdb, '/status/' + user.uid);
+            const isOfflineForDatabase = { state: 'offline', last_changed: dbServerTimestamp(), name: user.displayName };
+            const isOnlineForDatabase = { state: 'online', last_changed: dbServerTimestamp(), name: user.displayName };
+
+            onValue(ref(rtdb, '.info/connected'), (snapshot) => {
+                if (snapshot.val() === false) return;
+                onDisconnect(userStatusDatabaseRef).set(isOfflineForDatabase).then(() => {
+                    set(userStatusDatabaseRef, isOnlineForDatabase);
+                });
+            });
+
+            onValue(ref(rtdb, '/status'), (snapshot) => {
+                onlineAdmins = snapshot.val() || {};
+            });
+        }
+        
         // --- Main Chat Logic ---
         function getStatusFlag(chatData) {
             if (chatData.status === 'ended_by_agent' || chatData.status === 'ended_by_user') {
@@ -359,7 +383,6 @@
                 document.querySelectorAll('.chat-checkbox').forEach(cb => cb.addEventListener('change', updateMultiSelectActions));
             });
         }
-        
         async function deleteChat(chatId) {
             try {
                 const messagesRef = collection(db, `chats/${chatId}/messages`);
@@ -380,9 +403,16 @@
                 alert("Failed to delete chat.");
             }
         }
-
+        
         async function openChat(chatId, userId, isReadOnly = false) {
             if (activeChatIdState === chatId) return;
+            
+            // Mobile view switching
+            if (window.innerWidth < 768) { // Tailwind's 'md' breakpoint
+                chatListAside.classList.add('hidden');
+                mainChatView.classList.remove('hidden');
+                mainChatView.classList.add('flex');
+            }
 
             unsubscribeFromActiveChat();
             unsubscribeFromActiveMessages();
@@ -429,8 +459,8 @@
                 snapshot.forEach(doc => renderAdminMessage(doc.data()));
                 activeChatMessages.scrollTop = activeChatMessages.scrollHeight;
             });
-
-            const surveyRef = doc(db, `chats/${chatId}/survey/feedback`);
+            
+             const surveyRef = doc(db, `chats/${chatId}/survey/feedback`);
             unsubscribeFromSurvey = onSnapshot(surveyRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -466,7 +496,6 @@
                 showDetectedOrder(identifier);
             }
         }
-
         async function showDetectedOrder(identifier) {
             const order = await findOrderByIdentifier(identifier);
             if (order) {
@@ -483,11 +512,7 @@
         }
 
         // --- Event Listeners & Helpers ---
-        replyForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            sendReply();
-        });
-
+        replyForm.addEventListener('submit', (e) => { e.preventDefault(); sendReply(); });
         async function sendReply(textOverride = null) {
             const text = textOverride || replyInput.value.trim();
             if (text === '' || !activeChatIdState) return;
@@ -505,7 +530,6 @@
                 lastMessageTimestamp: serverTimestamp()
             });
         }
-
         replyInput.addEventListener('keyup', () => {
             if (!activeChatIdState) return;
             const chatRef = doc(db, "chats", activeChatIdState);
@@ -515,7 +539,6 @@
                 updateDoc(chatRef, { isAgentTyping: false });
             }, 2000);
         });
-
         endChatBtn.addEventListener('click', async () => {
             if (!activeChatIdState) return;
             const chatRef = doc(db, "chats", activeChatIdState);
@@ -524,7 +547,6 @@
             noChatSelected.classList.remove('hidden');
             activeChatIdState = null;
         });
-
         function populateSuggestedReplies() {
             suggestedRepliesContainer.innerHTML = '';
             suggestedReplies.forEach(text => {
@@ -551,7 +573,6 @@
                 return null;
             }
         }
-
         function showOrderDetails(order) {
             orderDetailsContainer.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -587,7 +608,6 @@
                 closeOrderModal();
             };
         }
-
         viewOrdersBtn.addEventListener('click', async () => {
             const userId = viewOrdersBtn.dataset.userId;
             if (!userId) {
@@ -596,14 +616,13 @@
             }
             alert(`Functionality to view all orders for user ${userId} is not yet implemented.`);
         });
-
         function closeOrderModal() {
             orderModal.classList.add('invisible', 'opacity-0');
             orderModalContent.classList.add('scale-95');
         }
         closeOrderModalBtn.addEventListener('click', closeOrderModal);
 
-        // --- Tab Switching Logic ---
+        // --- Tab, Multi-Select, and Confirmation Modal Logic ---
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 const tab = btn.dataset.tab;
@@ -618,8 +637,6 @@
                 updateMultiSelectActions();
             });
         });
-
-        // --- Multi-Select Logic ---
         function getSelectedChatIds() {
             const selected = [];
             document.querySelectorAll('#open-chats-list .chat-checkbox:checked').forEach(cb => {
@@ -627,7 +644,6 @@
             });
             return selected;
         }
-
         function updateMultiSelectActions() {
             const selectedIds = getSelectedChatIds();
             const hasSelection = selectedIds.length > 0;
@@ -635,7 +651,6 @@
             assignSelectedBtn.disabled = !hasSelection;
             deleteSelectedBtn.disabled = !hasSelection;
         }
-
         assignSelectedBtn.addEventListener('click', async () => {
             const chatIds = getSelectedChatIds();
             if (chatIds.length === 0) return;
@@ -654,7 +669,6 @@
             });
             await batch.commit();
         });
-
         deleteSelectedBtn.addEventListener('click', () => {
             const chatIds = getSelectedChatIds();
             if (chatIds.length === 0) return;
@@ -675,8 +689,6 @@
                 }
             );
         });
-
-        // --- Custom Confirmation Modal Logic ---
         function showConfirmModal(title, text, onConfirm) {
             document.getElementById('confirm-modal-title').textContent = title;
             document.getElementById('confirm-modal-text').textContent = text;
@@ -701,21 +713,18 @@
             confirmBtn.addEventListener('click', confirmHandler);
             cancelBtn.addEventListener('click', cancelHandler);
         }
-
         function hideConfirmModal() {
             confirmModal.classList.add('invisible', 'opacity-0');
             confirmModal.querySelector('.modal-content').classList.add('scale-95');
         }
-
+        
         // --- Transfer Logic ---
         transferChatBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             populateTransferDropdown();
             transferDropdown.classList.toggle('hidden');
         });
-
         document.addEventListener('click', () => transferDropdown.classList.add('hidden'));
-
         function populateTransferDropdown() {
             transferDropdown.innerHTML = '';
             const availableAdmins = Object.entries(onlineAdmins)
@@ -737,7 +746,6 @@
                 transferDropdown.appendChild(adminItem);
             });
         }
-
         async function initiateTransfer(toAdminUid, toAdminName) {
             if (!activeChatIdState) return;
             const chatRef = doc(db, "chats", activeChatIdState);
@@ -753,7 +761,6 @@
             transferDropdown.classList.add('hidden');
             sendReply(`I am transferring you to ${toAdminName}, one moment please.`);
         }
-
         function listenForTransfers(adminUid) {
             const q = query(collection(db, "chats"), where("transferRequest.toUid", "==", adminUid), where("transferRequest.status", "==", "pending"));
             unsubscribeFromTransfers = onSnapshot(q, (snapshot) => {
@@ -792,6 +799,84 @@
             });
         }
 
+
+        // --- NOTIFICATION LOGIC ---
+
+        /**
+         * IMPORTANT: To make push notifications work, you need two more things:
+         * 1. A Service Worker File: 
+         * Create a file named `firebase-messaging-sw.js` in the root directory of your website.
+         * Firebase will automatically look for this file. Its content should be:
+         * ```javascript
+         * // /firebase-messaging-sw.js
+         * importScripts("[https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js)");
+         * importScripts("[https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js)");
+         * * const firebaseConfig = {
+         * // Your full firebaseConfig object here...
+         * };
+         *
+         * firebase.initializeApp(firebaseConfig);
+         * const messaging = firebase.messaging();
+         *
+         * messaging.onBackgroundMessage(function(payload) {
+         * const notificationTitle = payload.notification.title;
+         * const notificationOptions = {
+         * body: payload.notification.body,
+         * icon: '/your-icon.png' // Optional: path to an icon
+         * };
+         * return self.registration.showNotification(notificationTitle, notificationOptions);
+         * });
+         * ```
+         *
+         * 2. A Backend Trigger (Firebase Cloud Function):
+         * This client-side code only *receives* notifications. Something on the backend needs to *send* them.
+         * You'll need to deploy a Cloud Function that triggers, for example, when a new chat is created.
+         * The function would get the FCM tokens for all admins and send a message using the Firebase Admin SDK.
+         */
+
+        async function setupNotifications(user) {
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    console.log('Notification permission granted.');
+
+                    // VAPID key is now correctly placed here.
+                    const VAPID_KEY = 'BDZVvbv6VgxZsBCPYUQyAwUbnSRwYB8F20IzCDh5SpkhTnw4PywqjoWq1dHDsv_xywTBeq7_LL142dheHTWR8uU';
+                    
+                    const fcmToken = await getToken(messaging, { vapidKey: VAPID_KEY });
+                    
+                    if (fcmToken) {
+                        console.log('FCM Token:', fcmToken);
+                        // Save the token to Firestore for this admin
+                        const tokenRef = doc(db, `admins/${user.uid}/fcmTokens`, fcmToken);
+                        await setDoc(tokenRef, { timestamp: serverTimestamp() });
+                    } else {
+                        console.log('No registration token available. Request permission to generate one.');
+                    }
+                } else {
+                    console.log('Unable to get permission to notify.');
+                }
+            } catch (error) {
+                console.error('An error occurred while setting up notifications:', error);
+            }
+        }
+        
+        // Listen for messages when the app is in the foreground
+        onMessage(messaging, (payload) => {
+            console.log('Message received in foreground: ', payload);
+            
+            const notification = document.getElementById('in-app-notification');
+            document.getElementById('in-app-notification-title').textContent = payload.notification.title;
+            document.getElementById('in-app-notification-body').textContent = payload.notification.body;
+
+            notification.classList.remove('hidden', 'translate-x-full');
+            
+            // Hide the notification after 5 seconds
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+            }, 5000);
+        });
+        
     </script>
 </body>
 </html>
