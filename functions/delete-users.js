@@ -1,7 +1,7 @@
 const admin = require('firebase-admin');
 
 // Replace with the path to your service account key file
-const serviceAccount = require('/workspaces/BuyBacking/swiftbuyback-backend/serviceAccountKey.json');
+const serviceAccount = require('/workspaces/BuyBacking/admin/serviceAccountKey.json');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
