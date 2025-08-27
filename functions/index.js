@@ -24,7 +24,7 @@
  app.use(cors({
      origin: allowedOrigins,
      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-     allowedHeaders: ["Content-Type"], // Explicitly allow Content-Type header
+     allowedHeaders: ["Content-Type", "Authorization"], // Allow Authorization header
  }));
  app.use(express.json()); // Middleware to parse JSON request bodies
 
@@ -44,7 +44,69 @@
      console.warn("Nodemailer transporter not configured. Email notifications will fail.");
  }
 
- // --- NEW: AI Chat Summary Function ---
+ // --- Admin Verification Middleware ---
+ const verifyAdmin = async (req, res, next) => {
+     const idToken = req.headers.authorization?.split('Bearer ')[1];
+     if (!idToken) {
+         return res.status(403).json({ error: 'Unauthorized: No token provided.' });
+     }
+     try {
+         const decodedToken = await admin.auth().verifyIdToken(idToken);
+         if (decodedToken.admin === true) {
+             req.user = decodedToken; // Add user info to the request object
+             return next();
+         }
+         return res.status(403).json({ error: 'Forbidden: User is not an admin.' });
+     } catch (error) {
+         console.error('Error verifying admin token:', error);
+         return res.status(403).json({ error: 'Forbidden: Invalid token.' });
+     }
+ };
+ 
+ // --- Route to create an admin user ---
+ // The FIRST admin must be created manually by setting custom claims in the Firebase console.
+ // Subsequent admins can be created using this endpoint by an already authenticated admin.
+ app.post("/create-admin", verifyAdmin, async (req, res) => {
+     try {
+         const { email, password, displayName } = req.body;
+
+         if (!email || !password || !displayName) {
+             return res.status(400).json({ error: "Email, password, and display name are required." });
+         }
+
+         // Create the user in Firebase Auth
+         const userRecord = await admin.auth().createUser({
+             email: email,
+             password: password,
+             displayName: displayName,
+         });
+
+         // Set a custom claim to identify this user as an admin
+         await admin.auth().setCustomUserClaims(userRecord.uid, { admin: true });
+
+         console.log(`Successfully created new admin: ${email} with UID: ${userRecord.uid}`);
+         
+         // Also save admin info to Firestore for easy reference if needed
+         await usersCollection.doc(userRecord.uid).set({
+             uid: userRecord.uid,
+             email: userRecord.email,
+             displayName: userRecord.displayName,
+             isAdmin: true,
+             createdAt: admin.firestore.FieldValue.serverTimestamp()
+         });
+
+         res.status(201).json({ message: "Admin user created successfully.", email: userRecord.email });
+
+     } catch (error) {
+         console.error("Error creating admin user:", error);
+         if (error.code === 'auth/email-already-exists') {
+             return res.status(409).json({ error: "An account with this email already exists." });
+         }
+         res.status(500).json({ error: "Failed to create admin user." });
+     }
+ });
+
+ // --- AI Chat Summary Function ---
  /**
   * Generates a summary of a chat conversation using the Gemini API.
   * @param {string} chatTranscript - The full transcript of the chat.
@@ -96,7 +158,7 @@
      }
  }
 
- // --- NEW: Route to handle chat feedback submission ---
+ // --- Route to handle chat feedback submission ---
  app.post("/submit-chat-feedback", async (req, res) => {
      try {
          const { chatId, surveyData } = req.body;
@@ -1379,6 +1441,49 @@
          res.status(500).json({ error: "Failed to request return" });
      }
  });
+
+ // --- NEW: Find an order by ID or Tracking Number ---
+ app.get("/find-order/:identifier", async (req, res) => {
+    const { identifier } = req.params;
+    if (!identifier) {
+        return res.status(400).json({ error: "Order ID or tracking number is required." });
+    }
+
+    try {
+        let orderSnapshot;
+        // Check if it's an order ID
+        if (identifier.includes('-')) {
+            const orderRef = ordersCollection.doc(identifier);
+            const doc = await orderRef.get();
+            if (doc.exists) {
+                return res.status(200).json({ id: doc.id, ...doc.data() });
+            }
+        }
+        
+        // If not a direct ID match, query by tracking numbers
+        const trackingQueries = [
+            ordersCollection.where('trackingNumber', '==', identifier).get(),
+            ordersCollection.where('outboundTrackingNumber', '==', identifier).get(),
+            ordersCollection.where('inboundTrackingNumber', '==', identifier).get(),
+            ordersCollection.where('returnTrackingNumber', '==', identifier).get()
+        ];
+
+        const results = await Promise.all(trackingQueries);
+        for (const snapshot of results) {
+            if (!snapshot.empty) {
+                const doc = snapshot.docs[0];
+                return res.status(200).json({ id: doc.id, ...doc.data() });
+            }
+        }
+
+        return res.status(404).json({ error: "Order not found with the provided identifier." });
+
+    } catch (error) {
+        console.error("Error finding order:", error);
+        res.status(500).json({ error: "Failed to find order." });
+    }
+});
+
 
  // New Cloud Function to run every 24 hours to check for expired offers
  exports.autoAcceptOffers = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
