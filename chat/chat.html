@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Chat Dashboard - SecondHandCell</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .chat-bubble-user { background-color: #e2e8f0; }
+        .chat-bubble-admin { background-color: #dbeafe; }
+        .chat-bubble-system { background-color: #fefce8; }
+        .modal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-slate-100">
+
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" class="flex items-center justify-center min-h-screen">
+        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
+            <h2 class="text-3xl font-bold text-center text-slate-800">Admin Chat Login</h2>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label for="login-email" class="sr-only">Email</label>
+                    <input type="email" id="login-email" required class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Email Address">
+                </div>
+                <div>
+                    <label for="login-password" class="sr-only">Password</label>
+                    <input type="password" id="login-password" required class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Password">
+                </div>
+                <button type="submit" class="w-full px-4 py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Login</button>
+                <p id="login-error" class="text-sm text-center text-red-500"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD -->
+    <div id="dashboard-screen" class="hidden h-screen w-screen flex">
+        <!-- Left Sidebar: Chat Queue -->
+        <aside class="w-[380px] bg-white border-r border-slate-200 flex flex-col">
+            <div class="p-4 border-b border-slate-200 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-slate-800">Live Chats</h2>
+                <button id="logout-btn" class="text-sm text-slate-500 hover:text-blue-600 font-semibold flex items-center gap-2">Logout <i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+            <div id="chat-list" class="flex-1 overflow-y-auto custom-scrollbar">
+                <!-- Chat items will be dynamically inserted here -->
+            </div>
+        </aside>
+
+        <!-- Right Section: Active Chat View -->
+        <main id="chat-view" class="flex-1 flex flex-col bg-slate-50">
+            <div id="no-chat-selected" class="flex flex-col items-center justify-center h-full text-slate-500">
+                <i class="fa-solid fa-comments text-6xl mb-4"></i>
+                <p class="text-xl font-semibold">Select a chat to begin</p>
+                <p>New chats will appear in the queue.</p>
+            </div>
+
+            <div id="active-chat-container" class="hidden h-full flex flex-col">
+                <div class="p-4 bg-white border-b border-slate-200 flex justify-between items-center">
+                    <div>
+                        <h3 id="active-chat-user" class="font-bold text-slate-800"></h3>
+                        <p id="active-chat-id" class="text-xs text-slate-500"></p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <button id="view-orders-btn" class="px-4 py-2 text-sm font-semibold text-white bg-slate-600 rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-box"></i> View Orders</button>
+                        <button id="end-chat-btn" class="px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"><i class="fa-solid fa-flag-checkered"></i> End Chat</button>
+                    </div>
+                </div>
+
+                <div id="active-chat-messages" class="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4"></div>
+                
+                <div id="user-typing-indicator" class="px-6 pb-2 text-sm text-slate-500 italic hidden">User is typing...</div>
+
+                <div id="survey-results-container" class="p-4 bg-yellow-50 border-t-2 border-yellow-200 hidden mx-6 mb-4 rounded-lg"></div>
+
+                <div class="p-6 bg-white border-t border-slate-200">
+                    <div id="suggested-replies" class="flex flex-wrap gap-2 mb-4"></div>
+                    <form id="reply-form">
+                        <textarea id="reply-input" rows="3" class="w-full p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Type your reply..."></textarea>
+                        <button type="submit" class="mt-2 w-full px-4 py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Send Reply</button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Order Details Modal -->
+    <div id="order-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 opacity-0 invisible modal">
+        <div id="order-modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transform scale-95 modal-content">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800">Order Details</h3>
+                <button id="close-order-modal" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-2xl"></i></button>
+            </div>
+            <div id="order-details-container" class="p-6 overflow-y-auto custom-scrollbar">
+                <!-- Order details will be injected here -->
+            </div>
+        </div>
+    </div>
+
+
+    <!-- FIREBASE SCRIPT -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.appspot.com",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- DOM Elements ---
+        const loginScreen = document.getElementById('login-screen');
+        const dashboardScreen = document.getElementById('dashboard-screen');
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+        const logoutBtn = document.getElementById('logout-btn');
+        const chatList = document.getElementById('chat-list');
+        const noChatSelected = document.getElementById('no-chat-selected');
+        const activeChatContainer = document.getElementById('active-chat-container');
+        const activeChatUser = document.getElementById('active-chat-user');
+        const activeChatId = document.getElementById('active-chat-id');
+        const activeChatMessages = document.getElementById('active-chat-messages');
+        const replyForm = document.getElementById('reply-form');
+        const replyInput = document.getElementById('reply-input');
+        const endChatBtn = document.getElementById('end-chat-btn');
+        const userTypingIndicator = document.getElementById('user-typing-indicator');
+        const surveyResultsContainer = document.getElementById('survey-results-container');
+        const suggestedRepliesContainer = document.getElementById('suggested-replies');
+        const viewOrdersBtn = document.getElementById('view-orders-btn');
+        const orderModal = document.getElementById('order-modal');
+        const orderModalContent = document.getElementById('order-modal-content');
+        const closeOrderModalBtn = document.getElementById('close-order-modal');
+        const orderDetailsContainer = document.getElementById('order-details-container');
+
+        let currentAdmin = null;
+        let activeChatIdState = null;
+        let unsubscribeFromActiveChat = () => {};
+        let unsubscribeFromActiveMessages = () => {};
+        let unsubscribeFromSurvey = () => {};
+        let adminTypingTimeout = null;
+        
+        const suggestedReplies = [
+            "Hello! How can I help you today?",
+            "I can certainly help you with that.",
+            "Could you please provide your order number?",
+            "Is there anything else I can assist you with?",
+            "Thank you for contacting support. Have a great day!"
+        ];
+
+        // --- Authentication Logic ---
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                currentAdmin = user;
+                loginScreen.classList.add('hidden');
+                dashboardScreen.classList.add('flex');
+                loadChatQueue();
+                populateSuggestedReplies();
+            } else {
+                currentAdmin = null;
+                loginScreen.classList.remove('hidden');
+                dashboardScreen.classList.add('hidden');
+                dashboardScreen.classList.remove('flex');
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            loginError.textContent = '';
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                loginError.textContent = "Invalid credentials. Please try again.";
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => signOut(auth));
+
+        // --- Main Chat Logic ---
+        function getStatusFlag(chatData) {
+            if (chatData.status === 'ended_by_agent' || chatData.status === 'ended_by_user') {
+                return `<span class="px-2 py-1 text-xs font-medium text-slate-600 bg-slate-200 rounded-full">Closed</span>`;
+            }
+            if (chatData.agentName) {
+                return `<span class="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">Active</span>`;
+            }
+            return `<span class="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">Open</span>`;
+        }
+
+        function loadChatQueue() {
+            const q = query(collection(db, "chats"), orderBy("createdAt", "desc"));
+            onSnapshot(q, (snapshot) => {
+                chatList.innerHTML = ''; // Clear list to re-render with fresh data
+                snapshot.forEach(doc => {
+                    const chatData = doc.data();
+                    const chatId = doc.id;
+                    
+                    const newItem = document.createElement('div');
+                    newItem.id = `chat-item-${chatId}`;
+                    newItem.className = `p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors ${activeChatIdState === chatId ? 'bg-blue-50' : ''}`;
+                    newItem.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1 overflow-hidden">
+                                <p class="font-bold text-slate-700 truncate">${chatData.ownerUid || chatData.guestId}</p>
+                                <p class="text-sm text-slate-500 truncate mt-1">${chatData.lastMessage || '...'}</p>
+                            </div>
+                            <div class="flex flex-col items-end ml-2">
+                                ${getStatusFlag(chatData)}
+                                <button data-chat-id="${chatId}" class="delete-chat-btn text-slate-400 hover:text-red-500 mt-2"><i class="fa-solid fa-trash-can"></i></button>
+                            </div>
+                        </div>
+                    `;
+                    chatList.appendChild(newItem);
+                    newItem.addEventListener('click', () => openChat(chatId, chatData.ownerUid));
+                });
+
+                document.querySelectorAll('.delete-chat-btn').forEach(button => {
+                    button.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const chatIdToDelete = e.currentTarget.dataset.chatId;
+                        if (confirm(`Are you sure you want to delete chat ${chatIdToDelete}? This is permanent.`)) {
+                            await deleteChat(chatIdToDelete);
+                        }
+                    });
+                });
+            });
+        }
+        
+        async function deleteChat(chatId) {
+            try {
+                // Delete all messages in the subcollection first
+                const messagesRef = collection(db, `chats/${chatId}/messages`);
+                const messagesSnapshot = await getDocs(messagesRef);
+                const deletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+                await Promise.all(deletePromises);
+
+                // Delete the main chat document
+                await deleteDoc(doc(db, "chats", chatId));
+                console.log(`Chat ${chatId} deleted successfully.`);
+
+                // If the deleted chat was the active one, reset the view
+                if (activeChatIdState === chatId) {
+                    activeChatContainer.classList.add('hidden');
+                    noChatSelected.classList.remove('hidden');
+                    activeChatIdState = null;
+                }
+            } catch (error) {
+                console.error("Error deleting chat:", error);
+                alert("Failed to delete chat.");
+            }
+        }
+
+        async function openChat(chatId, userId) {
+            if (activeChatIdState === chatId) return;
+
+            unsubscribeFromActiveChat();
+            unsubscribeFromActiveMessages();
+            unsubscribeFromSurvey();
+
+            activeChatIdState = chatId;
+            viewOrdersBtn.dataset.userId = userId || ''; // Store userId for fetching orders
+            noChatSelected.classList.add('hidden');
+            activeChatContainer.classList.remove('hidden');
+            activeChatContainer.classList.add('flex');
+            activeChatMessages.innerHTML = '';
+            surveyResultsContainer.classList.add('hidden');
+            
+            document.querySelectorAll('#chat-list > div').forEach(el => el.classList.remove('bg-blue-50'));
+            document.getElementById(`chat-item-${chatId}`)?.classList.add('bg-blue-50');
+            
+            const agentName = currentAdmin.email.split('@')[0];
+            const chatRef = doc(db, "chats", chatId);
+            await updateDoc(chatRef, { agentName: agentName, status: 'active' });
+
+            unsubscribeFromActiveChat = onSnapshot(chatRef, (docSnap) => {
+                const data = docSnap.data();
+                if (!data) return;
+                activeChatUser.textContent = data.ownerUid || data.guestId;
+                activeChatId.textContent = `ID: ${chatId}`;
+                userTypingIndicator.classList.toggle('hidden', !data.userTypingText);
+            });
+
+            const messagesRef = collection(db, `chats/${chatId}/messages`);
+            const q = query(messagesRef, orderBy("timestamp"));
+            unsubscribeFromActiveMessages = onSnapshot(q, (snapshot) => {
+                activeChatMessages.innerHTML = '';
+                snapshot.forEach(doc => renderAdminMessage(doc.data()));
+                activeChatMessages.scrollTop = activeChatMessages.scrollHeight;
+            });
+
+            const surveyRef = doc(db, `chats/${chatId}/survey/feedback`);
+            unsubscribeFromSurvey = onSnapshot(surveyRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    surveyResultsContainer.innerHTML = `
+                        <h4 class="font-bold text-yellow-800 mb-2">User Feedback Received</h4>
+                        <p class="text-sm text-yellow-700"><strong>Rating:</strong> ${data.overallRating} / 5 stars</p>
+                        <p class="text-sm text-yellow-700"><strong>Friendliness:</strong> ${data.friendliness}/10</p>
+                        <p class="text-sm text-yellow-700"><strong>Resolved:</strong> ${data.resolved || 'N/A'}</p>
+                        ${data.comments ? `<p class="text-sm text-yellow-700"><strong>Comments:</strong> "<em>${data.comments}</em>"</p>` : ''}
+                    `;
+                    surveyResultsContainer.classList.remove('hidden');
+                }
+            });
+        }
+        
+        function renderAdminMessage(msg) {
+            const isAdminMessage = msg.sender === currentAdmin.uid;
+            const isSystemMessage = msg.type === 'system';
+            
+            let bubbleClass = isSystemMessage ? 'chat-bubble-system text-center text-sm italic' : (isAdminMessage ? 'chat-bubble-admin' : 'chat-bubble-user');
+            let alignment = isSystemMessage ? 'self-center' : (isAdminMessage ? 'self-end' : 'self-start');
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-3 rounded-lg max-w-[85%] break-words ${bubbleClass} ${alignment}`;
+            
+            if (!isSystemMessage) {
+                const senderPrefix = isAdminMessage ? 'You' : 'User';
+                const senderColor = isAdminMessage ? 'text-blue-700' : 'text-slate-600';
+                messageDiv.innerHTML = `<p class="text-xs font-bold mb-1 ${senderColor}">${senderPrefix}</p>`;
+            }
+            
+            messageDiv.innerHTML += `<p>${msg.text}</p>`;
+            activeChatMessages.appendChild(messageDiv);
+
+            // Check for order ID or tracking number
+            const orderRegex = /(\d{2}-\d{3})|(\d{26})/;
+            const match = msg.text.match(orderRegex);
+            if (match && !isAdminMessage) {
+                const identifier = match[0];
+                showDetectedOrder(identifier);
+            }
+        }
+
+        async function showDetectedOrder(identifier) {
+            const order = await findOrderByIdentifier(identifier);
+            if (order) {
+                const orderPill = document.createElement('div');
+                orderPill.className = 'p-3 mt-2 rounded-lg bg-indigo-100 text-indigo-800 self-start cursor-pointer hover:bg-indigo-200';
+                orderPill.innerHTML = `
+                    <p class="font-bold text-sm">Order Detected: #${order.id}</p>
+                    <p class="text-xs">${order.device} - Status: ${order.status}</p>
+                `;
+                orderPill.onclick = () => showOrderDetails(order);
+                activeChatMessages.appendChild(orderPill);
+                activeChatMessages.scrollTop = activeChatMessages.scrollHeight;
+            }
+        }
+
+        // --- Event Listeners & Helpers ---
+        replyForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            sendReply();
+        });
+
+        async function sendReply(textOverride = null) {
+            const text = textOverride || replyInput.value.trim();
+            if (text === '' || !activeChatIdState) return;
+
+            const messagesRef = collection(db, `chats/${activeChatIdState}/messages`);
+            await addDoc(messagesRef, { text, sender: currentAdmin.uid, timestamp: serverTimestamp() });
+            
+            if (!textOverride) replyInput.value = '';
+            
+            clearTimeout(adminTypingTimeout);
+            await updateDoc(doc(db, "chats", activeChatIdState), { isAgentTyping: false, lastMessage: text });
+        }
+
+        replyInput.addEventListener('keyup', () => {
+            if (!activeChatIdState) return;
+            const chatRef = doc(db, "chats", activeChatIdState);
+            updateDoc(chatRef, { isAgentTyping: true });
+            clearTimeout(adminTypingTimeout);
+            adminTypingTimeout = setTimeout(() => {
+                updateDoc(chatRef, { isAgentTyping: false });
+            }, 2000);
+        });
+
+        endChatBtn.addEventListener('click', async () => {
+            if (!activeChatIdState) return;
+            const chatRef = doc(db, "chats", activeChatIdState);
+            await updateDoc(chatRef, { status: 'ended_by_agent' });
+            activeChatContainer.classList.add('hidden');
+            noChatSelected.classList.remove('hidden');
+            activeChatIdState = null;
+        });
+
+        function populateSuggestedReplies() {
+            suggestedRepliesContainer.innerHTML = '';
+            suggestedReplies.forEach(text => {
+                const button = document.createElement('button');
+                button.className = 'px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors';
+                button.textContent = text;
+                button.onclick = () => {
+                    replyInput.value = text;
+                    replyInput.focus();
+                };
+                suggestedRepliesContainer.appendChild(button);
+            });
+        }
+
+        // --- Order Modal Logic ---
+        async function findOrderByIdentifier(identifier) {
+            // IMPORTANT: Replace with your actual Cloud Function URL
+            const url = `https://us-central1-buyback-a0f05.cloudfunctions.net/api/find-order/${identifier}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                console.error("Failed to fetch order:", error);
+                return null;
+            }
+        }
+
+        function showOrderDetails(order) {
+            orderDetailsContainer.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-50 p-4 rounded-lg">
+                        <h4 class="font-bold text-slate-600 mb-2">Order Info</h4>
+                        <p><strong>ID:</strong> ${order.id}</p>
+                        <p><strong>Status:</strong> <span class="font-semibold text-blue-600">${order.status}</span></p>
+                        <p><strong>Device:</strong> ${order.device} ${order.storage}</p>
+                        <p><strong>Quote:</strong> $${order.estimatedQuote.toFixed(2)}</p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-lg">
+                        <h4 class="font-bold text-slate-600 mb-2">Customer Info</h4>
+                        <p><strong>Name:</strong> ${order.shippingInfo.fullName}</p>
+                        <p><strong>Email:</strong> ${order.shippingInfo.email}</p>
+                        <p><strong>Address:</strong> ${order.shippingInfo.streetAddress}, ${order.shippingInfo.city}, ${order.shippingInfo.state} ${order.shippingInfo.zipCode}</p>
+                    </div>
+                    <div class="md:col-span-2 bg-slate-50 p-4 rounded-lg">
+                        <h4 class="font-bold text-slate-600 mb-2">Shipping</h4>
+                        <p><strong>Preference:</strong> ${order.shippingPreference}</p>
+                        <p><strong>Tracking #:</strong> ${order.trackingNumber || 'N/A'}</p>
+                    </div>
+                </div>
+                <div class="mt-6 text-center">
+                    <button id="send-order-to-user" class="px-6 py-2 font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition">Send to User for Confirmation</button>
+                </div>
+            `;
+            orderModal.classList.remove('invisible', 'opacity-0');
+            orderModalContent.classList.remove('scale-95');
+
+            document.getElementById('send-order-to-user').onclick = () => {
+                const confirmationText = `Are you referring to order #${order.id} for the ${order.device}?`;
+                sendReply(confirmationText);
+                closeOrderModal();
+            };
+        }
+
+        viewOrdersBtn.addEventListener('click', async () => {
+            const userId = viewOrdersBtn.dataset.userId;
+            if (!userId) {
+                alert("This is a guest user and has no associated orders.");
+                return;
+            }
+            // This is a placeholder. You'd need a backend endpoint to get all orders for a userId.
+            // For now, we'll just show a message.
+            alert(`Functionality to view all orders for user ${userId} is not yet implemented.`);
+        });
+
+        function closeOrderModal() {
+            orderModal.classList.add('invisible', 'opacity-0');
+            orderModalContent.classList.add('scale-95');
+        }
+        closeOrderModalBtn.addEventListener('click', closeOrderModal);
+
+    </script>
+</body>
+</html>

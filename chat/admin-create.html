@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Admin User - SecondHandCell</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+    </style>
+</head>
+<body class="bg-slate-100">
+
+    <div class="flex items-center justify-center min-h-screen">
+        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
+            <div>
+                <h2 class="text-3xl font-bold text-center text-slate-800">Create New Admin</h2>
+                <p class="mt-2 text-sm text-center text-slate-500">This user will have access to the admin chat dashboard.</p>
+            </div>
+            <form id="create-admin-form" class="space-y-4">
+                <div>
+                    <label for="admin-email" class="block text-sm font-medium text-slate-700">Email Address</label>
+                    <input type="email" id="admin-email" required class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="admin@example.com">
+                </div>
+                <div>
+                    <label for="admin-password" class="block text-sm font-medium text-slate-700">Password</label>
+                    <input type="password" id="admin-password" required minlength="6" class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                </div>
+                <div>
+                    <label for="admin-display-name" class="block text-sm font-medium text-slate-700">Display Name</label>
+                    <input type="text" id="admin-display-name" required class="mt-1 w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., John">
+                    <p class="mt-1 text-xs text-slate-500">This is the name customers will see (e.g., "John has joined the chat").</p>
+                </div>
+                <button type="submit" id="submit-btn" class="w-full px-4 py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span>Create Admin User</span>
+                </button>
+                <p id="form-message" class="text-sm text-center"></p>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        // NOTE: This page is for creating admin users. It requires a secure backend function
+        // to handle the actual user creation in Firebase Auth and set custom admin claims.
+        // Direct client-side creation of admins is not secure.
+
+        const createAdminForm = document.getElementById('create-admin-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const formMessage = document.getElementById('form-message');
+
+        createAdminForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('admin-email').value;
+            const password = document.getElementById('admin-password').value;
+            const displayName = document.getElementById('admin-display-name').value;
+
+            // Basic validation
+            if (!email || !password || !displayName) {
+                formMessage.textContent = "Please fill out all fields.";
+                formMessage.className = "text-sm text-center text-red-500";
+                return;
+            }
+
+            // Disable button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `
+                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Creating...</span>
+            `;
+            formMessage.textContent = '';
+
+            try {
+                // IMPORTANT: This URL should point to your secure Cloud Function endpoint.
+                const cloudFunctionUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/create-admin'; // Example URL
+
+                const response = await fetch(cloudFunctionUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, displayName })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'An unknown error occurred.');
+                }
+
+                formMessage.textContent = `Successfully created admin: ${result.email}`;
+                formMessage.className = "text-sm text-center text-green-600";
+                createAdminForm.reset();
+
+            } catch (error) {
+                formMessage.textContent = `Error: ${error.message}`;
+                formMessage.className = "text-sm text-center text-red-500";
+            } finally {
+                // Re-enable button and restore original text
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = `
+                    <i class="fa-solid fa-user-plus"></i>
+                    <span>Create Admin User</span>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
