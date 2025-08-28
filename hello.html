@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Permission</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- The main container for the card -->
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full text-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">Site Notifications</h1>
+        <p class="text-gray-600 mb-8">This button will ask for your permission to send system notifications.</p>
+
+        <!-- The button that requests notification permission -->
+        <button id="requestPermissionButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+            Request Notification Permission
+        </button>
+        
+        <!-- A button to show a test notification after permission is granted -->
+        <button id="showNotificationButton" class="mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-500 focus:ring-opacity-50 hidden">
+            Show Test Notification
+        </button>
+
+        <!-- A message box to display the current status -->
+        <div id="messageBox" class="mt-8 p-4 bg-gray-50 text-gray-700 rounded-lg hidden transition-opacity duration-300 ease-in-out">
+            <p id="messageText" class="font-medium"></p>
+        </div>
+    </div>
+
+    <script>
+        const requestPermissionButton = document.getElementById('requestPermissionButton');
+        const showNotificationButton = document.getElementById('showNotificationButton');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+
+        // Function to update the UI based on notification permission status
+        function updateUI(permission) {
+            switch (permission) {
+                case 'granted':
+                    messageText.textContent = "Notification permission granted! You can now show a test notification.";
+                    requestPermissionButton.classList.add('hidden');
+                    showNotificationButton.classList.remove('hidden');
+                    break;
+                case 'denied':
+                    messageText.textContent = "Notification permission denied. You cannot send notifications.";
+                    requestPermissionButton.classList.add('hidden');
+                    showNotificationButton.classList.add('hidden');
+                    break;
+                case 'default':
+                default:
+                    messageText.textContent = "Click the button to request notification permission.";
+                    requestPermissionButton.classList.remove('hidden');
+                    showNotificationButton.classList.add('hidden');
+                    break;
+            }
+            messageBox.classList.remove('hidden');
+        }
+
+        // Check the initial permission status when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            if ('Notification' in window) {
+                updateUI(Notification.permission);
+            } else {
+                messageText.textContent = "This browser does not support the Notifications API.";
+                messageBox.classList.remove('hidden');
+                requestPermissionButton.classList.add('hidden');
+                showNotificationButton.classList.add('hidden');
+            }
+        });
+
+        // Event listener for the "Request Permission" button
+        requestPermissionButton.addEventListener('click', () => {
+            if ('Notification' in window) {
+                Notification.requestPermission().then(permission => {
+                    updateUI(permission);
+                });
+            }
+        });
+
+        // Event listener for the "Show Test Notification" button
+        showNotificationButton.addEventListener('click', () => {
+            if (Notification.permission === 'granted') {
+                new Notification('Hello!', {
+                    body: 'This is a test notification from the website.',
+                    icon: 'https://placehold.co/64x64/083f2a/ffffff?text=Notify'
+                });
+                messageText.textContent = "Test notification sent! Check your system notification area.";
+                messageBox.classList.remove('hidden');
+            } else {
+                updateUI(Notification.permission);
+            }
+        });
+    </script>
+</body>
+</html>

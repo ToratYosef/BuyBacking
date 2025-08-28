@@ -69,182 +69,207 @@
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen">
-
-    <aside class="sidebar bg-gray-800 text-gray-200 p-6 flex flex-col rounded-r-lg shadow-lg">
-        <div class="mb-8">
-            <h1 class="text-3xl font-extrabold text-white">Admin Panel</h1>
-            <p class="text-gray-400 text-sm">Order Management</p>
-            <p class="text-xs text-gray-500 mt-2">User ID: <span id="display-user-id">Loading...</span></p>
+    
+    <!-- Admin Login Form -->
+    <div id="login-form-container" class="fixed inset-0 bg-gray-100 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-8 space-y-6">
+            <h2 class="text-3xl font-bold text-center text-gray-800">Admin Login</h2>
+            <p id="login-message" class="text-center text-sm text-red-500 hidden"></p>
+            <div>
+                <label for="email-input" class="sr-only">Email</label>
+                <input type="email" id="email-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Email">
+            </div>
+            <div>
+                <label for="password-input" class="sr-only">Password</label>
+                <input type="password" id="password-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Password">
+            </div>
+            <button id="login-btn" class="w-full p-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                Log In
+            </button>
         </div>
+    </div>
+    
+    <!-- Main Dashboard Content (Hidden by default) -->
+    <div id="dashboard-container" class="hidden flex flex-col md:flex-row min-h-screen w-full">
+        <aside class="sidebar bg-gray-800 text-gray-200 p-6 flex flex-col rounded-r-lg shadow-lg">
+            <div class="mb-8">
+                <h1 class="text-3xl font-extrabold text-white">Admin Panel</h1>
+                <p class="text-gray-400 text-sm">Order Management</p>
+                <div class="mt-2 flex items-center justify-between">
+                    <p class="text-xs text-gray-500">Logged in as: <span id="display-user-email">...</span></p>
+                    <button id="sign-out-btn" class="text-xs text-red-400 hover:text-red-300 transition-colors duration-200">Sign Out</button>
+                </div>
+            </div>
 
-        <div class="mb-6">
-            <label for="search-orders" class="block text-gray-400 text-sm mb-2">Search Orders</label>
-            <div class="relative">
-                <input type="text" id="search-orders" placeholder="Search by ID, Customer, or Tracking..."
-                       class="w-full pl-10 pr-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <i class="fas fa-search text-gray-400"></i>
+            <div class="mb-6">
+                <label for="search-orders" class="block text-gray-400 text-sm mb-2">Search Orders</label>
+                <div class="relative">
+                    <input type="text" id="search-orders" placeholder="Search by ID, Customer, or Tracking..."
+                           class="w-full pl-10 pr-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-search text-gray-400"></i>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <nav class="flex-grow">
-            <ul class="space-y-3">
-                <li>
-                    <a href="#" data-status="all" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200 active">
-                        <i class="fas fa-list mr-3"></i> All Orders
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-status="pending_shipment" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-box-open mr-3"></i> Awaiting Shipment
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-status="shipping_kit_requested" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-box mr-3"></i> Shipping Kit Requested
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-status="label_generated" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-file-invoice mr-3"></i> Label Generated
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-status="received" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-truck mr-3"></i> Received
-                    </a>
-                </li>
-                <li class="reoffer-menu-item">
-                    <a href="#" class="reoffer-parent block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-dollar-sign mr-3"></i> Reoffer
-                    </a>
-                    <ul class="submenu-container pl-6 space-y-2">
-                        <li>
-                            <a href="#" data-status="re-offered-pending" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                                <i class="fas fa-hourglass-half mr-3"></i> Reoffer Pending
-                            </a>
-                        </li>
-                        <li>
-                            <a href="#" data-status="re-offered-accepted" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                                <i class="fas fa-handshake mr-3"></i> Reoffer Accepted
-                            </a>
-                        </li>
-                        <li>
-                            <a href="#" data-status="re-offered-declined" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                                <i class="fas fa-times-circle mr-3"></i> Reoffer Declined
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                <li>
-                    <a href="#" data-status="return-label-generated" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-undo-alt mr-3"></i> Return Label Generated
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-status="completed" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-check-circle mr-3"></i> Completed
-                    </a>
-                </li>
-            </ul>
-        </nav>
-    </aside>
+            <nav class="flex-grow">
+                <ul class="space-y-3">
+                    <li>
+                        <a href="#" data-status="all" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200 active">
+                            <i class="fas fa-list mr-3"></i> All Orders
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-status="pending_shipment" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-box-open mr-3"></i> Awaiting Shipment
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-status="shipping_kit_requested" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-box mr-3"></i> Shipping Kit Requested
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-status="label_generated" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-file-invoice mr-3"></i> Label Generated
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-status="received" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-truck mr-3"></i> Received
+                        </a>
+                    </li>
+                    <li class="reoffer-menu-item">
+                        <a href="#" class="reoffer-parent block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-dollar-sign mr-3"></i> Reoffer
+                        </a>
+                        <ul class="submenu-container pl-6 space-y-2">
+                            <li>
+                                <a href="#" data-status="re-offered-pending" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                                    <i class="fas fa-hourglass-half mr-3"></i> Reoffer Pending
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" data-status="re-offered-accepted" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                                    <i class="fas fa-handshake mr-3"></i> Reoffer Accepted
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" data-status="re-offered-declined" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                                    <i class="fas fa-times-circle mr-3"></i> Reoffer Declined
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a href="#" data-status="return-label-generated" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-undo-alt mr-3"></i> Return Label Generated
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-status="completed" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-check-circle mr-3"></i> Completed
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
 
-    <main class="main-content flex-grow p-8">
-        <header class="mb-8">
-            <h2 class="text-4xl font-bold text-gray-800">Order Dashboard</h2>
-            <p class="text-gray-600">Overview of all current and past orders.</p>
-        </header>
+        <main class="main-content flex-grow p-8">
+            <header class="mb-8">
+                <h2 class="text-4xl font-bold text-gray-800">Order Dashboard</h2>
+                <p class="text-gray-600">Overview of all current and past orders.</p>
+            </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            <div id="card-pending_shipment" data-status="pending_shipment" class="dashboard-card bg-blue-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Awaiting Shipment</div>
-                    <div id="pending-shipment-count" class="text-4xl font-extrabold mt-1">0</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                <div id="card-pending_shipment" data-status="pending_shipment" class="dashboard-card bg-blue-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Awaiting Shipment</div>
+                        <div id="pending-shipment-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-box-open text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-box-open text-5xl opacity-40"></i>
-            </div>
-            <div id="card-shipping_kit_requested" data-status="shipping_kit_requested" class="dashboard-card bg-indigo-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Shipping Kit Requested</div>
-                    <div id="shipping-kit-requested-count" class="text-4xl font-extrabold mt-1">0</div>
+                <div id="card-shipping_kit_requested" data-status="shipping_kit_requested" class="dashboard-card bg-indigo-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Shipping Kit Requested</div>
+                        <div id="shipping-kit-requested-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-box text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-box text-5xl opacity-40"></i>
-            </div>
-            <div id="card-label_generated" data-status="label_generated" class="dashboard-card bg-yellow-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Label Generated</div>
-                    <div id="label-generated-count" class="text-4xl font-extrabold mt-1">0</div>
+                <div id="card-label_generated" data-status="label_generated" class="dashboard-card bg-yellow-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Label Generated</div>
+                        <div id="label-generated-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-file-invoice text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-file-invoice text-5xl opacity-40"></i>
-            </div>
-            <div id="card-received" data-status="received" class="dashboard-card bg-green-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Received</div>
-                    <div id="received-count" class="text-4xl font-extrabold mt-1">0</div>
+                <div id="card-received" data-status="received" class="dashboard-card bg-green-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Received</div>
+                        <div id="received-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-truck text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-truck text-5xl opacity-40"></i>
-            </div>
-            <div id="card-completed" data-status="completed" class="dashboard-card bg-purple-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Completed Orders</div>
-                    <div id="completed-count" class="text-4xl font-extrabold mt-1">0</div>
+                <div id="card-completed" data-status="completed" class="dashboard-card bg-purple-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Completed Orders</div>
+                        <div id="completed-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-check-circle text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-check-circle text-5xl opacity-40"></i>
-            </div>
-            <div id="card-re-offered-pending" data-status="re-offered-pending" class="dashboard-card bg-orange-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Reoffer Pending</div>
-                    <div id="re-offered-pending-count" class="text-4xl font-extrabold mt-1">0</div>
+                <div id="card-re-offered-pending" data-status="re-offered-pending" class="dashboard-card bg-orange-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Reoffer Pending</div>
+                        <div id="re-offered-pending-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-hourglass-half text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-hourglass-half text-5xl opacity-40"></i>
-            </div>
-            <div id="card-re-offered-accepted" data-status="re-offered-accepted" class="dashboard-card bg-teal-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Reoffer Accepted</div>
-                    <div id="re-offered-accepted-count" class="text-4xl font-extrabold mt-1">0</div>
+                <div id="card-re-offered-accepted" data-status="re-offered-accepted" class="dashboard-card bg-teal-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Reoffer Accepted</div>
+                        <div id="re-offered-accepted-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-handshake text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-handshake text-5xl opacity-40"></i>
-            </div>
-            <div id="card-re-offered-declined" data-status="re-offered-declined" class="dashboard-card bg-red-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Reoffer Declined</div>
-                    <div id="re-offered-declined-count" class="text-4xl font-extrabold mt-1">0</div>
+                <div id="card-re-offered-declined" data-status="re-offered-declined" class="dashboard-card bg-red-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Reoffer Declined</div>
+                        <div id="re-offered-declined-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-times-circle text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-times-circle text-5xl opacity-40"></i>
-            </div>
-            <div id="card-return-label-generated" data-status="return-label-generated" class="dashboard-card bg-gray-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                <div>
-                    <div class="text-sm font-semibold opacity-80">Return Label Generated</div>
-                    <div id="return-label-generated-count" class="text-4xl font-extrabold mt-1">0</div>
+                <div id="card-return-label-generated" data-status="return-label-generated" class="dashboard-card bg-gray-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">Return Label Generated</div>
+                        <div id="return-label-generated-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-undo-alt text-5xl opacity-40"></i>
                 </div>
-                <i class="fas fa-undo-alt text-5xl opacity-40"></i>
             </div>
-        </div>
 
-        <section class="bg-white p-6 rounded-lg shadow-lg">
-            <h3 class="text-2xl font-semibold text-gray-800 mb-4">Orders List</h3>
-            <div class="overflow-x-auto">
-                <table class="min-w-full table-auto divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Order ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Customer Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Item</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Tracking #</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="orders-table-body" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="6" class="text-center text-gray-500 py-8">Loading orders...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-            <div id="no-orders-message" class="text-center text-gray-500 py-8 hidden">No orders found for this status.</div>
-        </section>
-    </main>
+            <section class="bg-white p-6 rounded-lg shadow-lg">
+                <h3 class="text-2xl font-semibold text-gray-800 mb-4">Orders List</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table-auto divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Order ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Customer Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Item</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Tracking #</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orders-table-body" class="bg-white divide-y divide-gray-200">
+                            <tr><td colspan="6" class="text-center text-gray-500 py-8">Loading orders...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="no-orders-message" class="text-center text-gray-500 py-8 hidden">No orders found for this status.</div>
+            </section>
+        </main>
+    </div>
 
     <div id="order-details-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
@@ -344,19 +369,30 @@
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
         let firebaseApp;
         let db;
         let auth;
-        let currentUserId = 'anonymous_user';
+        let authToken = null; // Store the ID token here
         
+        // UI Elements for Login
+        const loginFormContainer = document.getElementById('login-form-container');
+        const dashboardContainer = document.getElementById('dashboard-container');
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const loginButton = document.getElementById('login-btn');
+        const loginMessage = document.getElementById('login-message');
+        const displayUserEmail = document.getElementById('display-user-email');
+        const signOutButton = document.getElementById('sign-out-btn');
+
+
         const ordersTableBody = document.getElementById('orders-table-body');
         const noOrdersMessage = document.getElementById('no-orders-message');
         const searchInput = document.getElementById('search-orders');
         const statusLinks = document.querySelectorAll('.status-link');
-        const displayUserId = document.getElementById('display-user-id');
+        // Removed displayUserId as we're using displayUserEmail now
         const dashboardCards = document.querySelectorAll('.dashboard-card');
 
         const pendingShipmentCount = document.getElementById('pending-shipment-count');
@@ -419,7 +455,7 @@
 
         let allOrders = [];
         let currentActiveStatus = 'all';
-        let refreshInterval = null;
+        // Removed refreshInterval as onSnapshot handles real-time updates
 
         orderDetailsModal.addEventListener('click', (event) => {
             if (event.target === orderDetailsModal) {
@@ -535,7 +571,11 @@
                 modalLoadingMessage.classList.remove('hidden');
                 const url = `${BACKEND_BASE_URL}/orders/${orderId}`; 
                 console.log("Fetching order details from:", url);
-                const response = await fetch(url);
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}` // Include token
+                    }
+                });
 
                 if (!response.ok) {
                     const errorText = await response.text();
@@ -688,7 +728,10 @@
                 console.log("Submitting re-offer to:", url);
                 const response = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}` // Include token
+                    },
                     body: JSON.stringify({ newPrice: parseFloat(newPrice), reasons, comments })
                 });
 
@@ -761,7 +804,10 @@
                 console.log(`Performing action ${actionType} to:`, url);
                 const response = await fetch(url, {
                     method: method,
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}` // Include token
+                    },
                     body: Object.keys(body).length > 0 ? JSON.stringify(body) : null
                 });
 
@@ -844,24 +890,78 @@
 
         closeModalButton.addEventListener('click', closeOrderDetailsModal);
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                firebaseApp = initializeApp(firebaseConfig);
-                db = getFirestore(firebaseApp);
-                auth = getAuth(firebaseApp);
-                await signInAnonymously(auth);
-                currentUserId = auth.currentUser.uid;
-                displayUserId.textContent = currentUserId;
-                fetchAndRenderOrders();
-            } catch (error) {
-                console.error("Error initializing Firebase:", error);
-                ordersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+        // --- Admin Login/Logout Functions ---
+        async function handleLogin() {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            loginMessage.classList.add('hidden'); // Hide previous messages
+
+            if (!email || !password) {
+                loginMessage.textContent = 'Please enter both email and password.';
+                loginMessage.classList.remove('hidden');
+                return;
             }
+
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                // The onAuthStateChanged listener will handle UI updates
+                console.log('Admin logged in:', userCredential.user.email);
+            } catch (error) {
+                console.error("Login error:", error);
+                let errorMessage = 'Login failed. Please check your credentials.';
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                    errorMessage = 'Invalid email or password.';
+                } else if (error.code === 'auth/too-many-requests') {
+                    errorMessage = 'Too many failed login attempts. Please try again later.';
+                }
+                loginMessage.textContent = errorMessage;
+                loginMessage.classList.remove('hidden');
+            }
+        }
+
+        async function handleSignOut() {
+            try {
+                await signOut(auth);
+                console.log('Admin signed out.');
+                // onAuthStateChanged will handle hiding the dashboard and showing login form
+            } catch (error) {
+                console.error("Error signing out:", error);
+                // Optionally display an error message
+            }
+        }
+
+        // Event Listeners for Login/Logout
+        loginButton.addEventListener('click', handleLogin);
+        signOutButton.addEventListener('click', handleSignOut);
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            firebaseApp = initializeApp(firebaseConfig);
+            db = getFirestore(firebaseApp);
+            auth = getAuth(firebaseApp);
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    // User is signed in.
+                    authToken = await user.getIdToken();
+                    displayUserEmail.textContent = user.email;
+                    loginFormContainer.classList.add('hidden');
+                    dashboardContainer.classList.remove('hidden');
+                    fetchAndRenderOrders();
+                } else {
+                    // User is signed out.
+                    authToken = null;
+                    displayUserEmail.textContent = '...';
+                    dashboardContainer.classList.add('hidden');
+                    loginFormContainer.classList.remove('hidden');
+                    ordersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-8">Please log in to view orders.</td></tr>`;
+                }
+            });
         });
 
         async function fetchAndRenderOrders() {
             try {
                 const ordersCollectionRef = collection(db, "orders");
+                // The onSnapshot listener will automatically re-render when data changes
                 onSnapshot(ordersCollectionRef, (snapshot) => {
                     allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     updateDashboardCounts(allOrders);
