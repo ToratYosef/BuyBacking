@@ -134,8 +134,6 @@
             pointer-events: none;
         }
         
-        /* Removed fixed system messages container styles as it's no longer needed */
-
         #chat-messages { 
             flex-grow: 1; /* Allows it to take up remaining vertical space */
             overflow-y: auto; /* Enables scrolling for messages */
@@ -145,36 +143,22 @@
             flex-direction: column;
         } 
 
-        /* Tooltips for chat header buttons */
-        .chat-header-button {
-            position: relative;
-            display: inline-block;
-        }
-
-        .chat-header-button .tooltip-text {
+        /* Global Tooltip for chat header buttons */
+        #globalTooltip {
             visibility: hidden;
             background-color: #334155; /* slate-700 */
             color: #fff;
             text-align: center;
             border-radius: 6px;
             padding: 5px 8px;
-            position: absolute;
-            z-index: 1;
-            /* Adjusted positioning to appear below the icon */
-            top: 125%; 
-            left: 50%;
-            transform: translateX(-50%); /* Center the tooltip horizontally */
+            position: fixed; /* Position fixed to appear over everything */
+            z-index: 99999; /* High z-index */
             opacity: 0;
             transition: opacity 0.3s;
             white-space: nowrap;
             font-size: 0.75rem; /* text-xs */
+            pointer-events: none; /* Allows clicks to pass through */
         }
-
-        .chat-header-button:hover .tooltip-text {
-            visibility: visible;
-            opacity: 1;
-        }
-
 
         .typing-indicator { display: flex; align-items: center; padding: 8px 12px; }
         .typing-indicator span {
@@ -223,9 +207,32 @@
             animation: slideIn 0.8s ease-out;
             border-bottom-left-radius: 0.75rem; /* rounded-xl for bottom corners */
             border-bottom-right-radius: 0.75rem;
-            /* Ensure it doesn't get cut off */
             width: 100%;
             box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+        .floating-banner-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative; /* For positioning the close button */
+            padding: 1rem 4rem 1rem 1rem; /* Adjust padding to make space for the close button */
+        }
+        .floating-banner-close {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.25rem; /* text-xl */
+            cursor: pointer;
+            padding: 0.5rem;
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+        .floating-banner-close:hover {
+            color: #fca5a5; /* red-300 */
         }
         @keyframes slideIn {
             from {
@@ -324,8 +331,11 @@
                 display: none; 
             }
 
-            header .h-20 { /* Logo height */
+            header .h-12 { /* Logo height on mobile */
                 height: 3rem; /* Smaller logo on mobile */
+            }
+            header .md\:h-20 { /* Override md:h-20 for mobile */
+                height: 3rem;
             }
 
             header nav {
@@ -336,6 +346,9 @@
             /* Adjust floating banner for mobile */
             .floating-banner {
                 top: 4rem; /* Adjusted top position for smaller mobile header */
+            }
+            .floating-banner-content {
+                padding-right: 3rem; /* Even less padding for close button on mobile */
             }
 
             /* Adjust hero section for mobile */
@@ -432,6 +445,13 @@
                 bottom: 1rem;
                 right: 1rem;
             }
+
+            /* Adjust login/signup button for mobile */
+            #loginNavBtn {
+                font-size: 0.75rem; /* text-xs */
+                padding: 0.375rem 0.625rem; /* px-2.5 py-1.5 */
+                white-space: nowrap; /* Prevent text from wrapping */
+            }
         }
     </style>
 </head>
@@ -439,15 +459,15 @@
 
     <!-- HEADER -->
     <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center md:py-5"> <!-- Adjusted vertical padding for mobile -->
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center md:py-5">
             <div class="flex-1">
-                <a href="#" class="h-12 inline-block md:h-20"> <!-- Adjusted logo height for mobile -->
+                <a href="#" class="h-12 inline-block md:h-20">
                     <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
                 </a>
             </div>
-            <div class="hidden md:flex flex-col items-center flex-1"> <!-- Hidden on mobile, visible on medium and larger screens -->
-                <div class="text-2xl font-extrabold text-slate-800 fancy-header-text">SecondHandCell</div> <!-- Applied fancy font -->
-                <p class="text-sm text-slate-500 -mt-1 fancy-header-text">Turn Your Old Phone into Cash!</p> <!-- Applied fancy font -->
+            <div class="hidden md:flex flex-col items-center flex-1">
+                <div class="text-2xl font-extrabold text-slate-800 fancy-header-text">SecondHandCell</div>
+                <p class="text-sm text-slate-500 -mt-1 fancy-header-text">Turn Your Old Phone into Cash!</p>
             </div>
             <nav class="flex items-center space-x-4 flex-1 justify-end">
                 <div id="authStatusContainer" class="relative inline-block">
@@ -478,11 +498,14 @@
         </section>
 
         <!-- FLOATING BANNER SECTION -->
-        <section class="floating-banner bg-red-600 text-white shadow-xl">
-            <div class="container mx-auto px-4 py-4 text-center">
+        <section id="floatingBanner" class="floating-banner bg-red-600 text-white shadow-xl">
+            <div class="container mx-auto px-4 py-4 text-center floating-banner-content">
                 <p class="font-bold md:text-lg">
                     <i class="fa-solid fa-triangle-exclamation mr-2"></i> IMPORTANT: We do not purchase blacklisted or lost/stolen devices. <a href="#" id="termsAndConditionsLink" class="underline hover:text-red-200">See terms for details.</a>
                 </p>
+                <button id="closeBannerBtn" class="floating-banner-close" aria-label="Close banner">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
         </section>
         
@@ -490,7 +513,7 @@
         <section class="bg-slate-100 py-20">
             <div class="container mx-auto px-4">
                 <div class="text-center mb-12">
-                    <h2 class="text-3xl md:text-4xl font-bold text-slate-800">Sell by Category</h2> <!-- Changed title -->
+                    <h2 class="text-3xl md:text-4xl font-bold text-slate-800">Sell by Category</h2>
                     <p class="mt-3 text-lg text-slate-600">Find the device you want to sell.</p>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -498,7 +521,7 @@
                     <a href="samsung/index.html" class="homepage-card-link group"><div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full"><img id="samsung_cat_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/samsung" alt="Samsung Category" class="mx-auto mb-4 h-24 object-contain"><h3 class="text-xl font-semibold mb-2 text-slate-800">Samsung</h3><span class="bg-blue-600 text-white px-6 py-2 rounded-full font-medium mt-auto w-full transition-colors duration-300">Sell Now</span></div></a>
                     <a href="tablet/models/" class="homepage-card-link group"><div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full"><img id="ipad_cat_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/ipad.svg" alt="iPad Category" class="mx-auto mb-4 h-24 object-contain"><h3 class="text-xl font-semibold mb-2 text-slate-800">iPad</h3><span class="bg-blue-600 text-white px-6 py-2 rounded-full font-medium mt-auto w-full transition-colors duration-300">Sell Now</span></div></a>
                     <a href="google/models/" class="homepage-card-link group"><div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full">
-                        <div id="google_cat_img_container"> <!-- Container for zoomed image -->
+                        <div id="google_cat_img_container">
                             <img id="google_cat_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/googlepixel" alt="Google Phones Category">
                         </div>
                         <h3 class="text-xl font-semibold mb-2 text-slate-800">Google Phones</h3>
@@ -530,7 +553,7 @@
                     <p class="mt-3 text-lg text-slate-600">From the latest models to older favorites, we buy them all.</p>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-                    <a href="#" class="homepage-card-link group"><div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full"><img id="i15pm_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/i15pm" alt="iPhone 15 Pro Max" class="mx-auto mb-4 h-40 object-contain"><h3 class="text-xl font-semibold mb-2 text-slate-800">iPhone 15 Pro Max</h3><p class="text-blue-600 font-bold mb-4">Up to $700</p><span class="bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium mt-auto w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span></div></a>
+                    <a href="#" class="homepage-card-link group"><div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full"><img id="i15pm_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/i15pm" alt="iPhone 15 Pro Max" class="mx-auto mb-4 h-40 object-contain"><h3 class="text-xl font-semibold mb-2 text-slate-800">iPhone 15 Pro Max</h3><p class="text-blue-600 font-bold mb-4">Up to $700</p><span class="bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium mt-auto w-full transition-colors duration-300">Get Offer</span></div></a>
                     <a href="#" class="homepage-card-link group"><div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full"><img id="i14p_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/i14p" alt="iPhone 14 Pro" class="mx-auto mb-4 h-40 object-contain"><h3 class="text-xl font-semibold mb-2 text-slate-800">iPhone 14 Pro</h3><p class="text-blue-600 font-bold mb-4">Up to $450</p><span class="bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium mt-auto w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span></div></a>
                     <a href="#" class="homepage-card-link group"><div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full"><img id="i13_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/i13" alt="iPhone 13" class="mx-auto mb-4 h-40 object-contain"><h3 class="text-xl font-semibold mb-2 text-slate-800">iPhone 13</h3><p class="text-blue-600 font-bold mb-4">Up to $400</p><span class="bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium mt-auto w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span></div></a>
                     <a href="#" class="homepage-card-link group"><div class="homepage-card-inner bg-white p-6 rounded-xl shadow-lg text-center flex flex-col h-full"><img id="s24u_pop_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/samsung/assets/s24u" alt="Samsung Galaxy S24 Ultra" class="mx-auto mb-4 h-40 object-contain"><h3 class="text-xl font-semibold mb-2 text-slate-800">Samsung Galaxy S24 Ultra</h3><p class="text-blue-600 font-bold mb-4">Up to $600</p><span class="bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium mt-auto w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span></div></a>
@@ -600,7 +623,7 @@
     <!-- Privacy Policy Modal -->
     <div id="privacyPolicyModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Privacy Policy</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p><h3>Information We Collect</h3><p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition.</p><h3>How We Use Your Information</h3><p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p<h3>Data Security and Wiping</h3><p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased.</p<h3>Disclosure of Your Information</h3><p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p<h3>Your Consent</h3><p>By using our site, you consent to our website's privacy policy.</p></div></div></div>
     <!-- Terms & Conditions Modal -->
-    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p<h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p>
+    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p><h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p>
             
             <hr class="my-6 border-t border-slate-300">
 
@@ -680,17 +703,14 @@
             <div class="bg-blue-700 text-white p-4 flex justify-between items-center">
                 <h3 class="font-bold text-lg">Customer Support</h3>
                 <div class="flex items-center space-x-2"> <!-- Grouping buttons -->
-                    <button id="chat-order-btn" class="chat-header-button text-white hover:text-blue-200" title="View My Orders">
+                    <button id="chat-order-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="View My Orders">
                         <i class="fa-solid fa-box-open text-xl"></i>
-                        <span class="tooltip-text">View My Orders</span>
                     </button>
-                    <button id="chat-minimize-btn" class="chat-header-button text-white hover:text-blue-200" title="Minimize Chat">
+                    <button id="chat-minimize-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="Minimize Chat">
                         <i class="fa-solid fa-minus text-xl"></i>
-                        <span class="tooltip-text">Minimize Chat</span>
                     </button>
-                    <button id="chat-close-btn" class="chat-header-button text-white hover:text-blue-200" title="End Chat">
+                    <button id="chat-close-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="End Chat">
                         <i class="fa-solid fa-xmark text-xl"></i>
-                        <span class="tooltip-text">End Chat</span>
                     </button>
                 </div>
             </div>
@@ -702,9 +722,8 @@
             <div id="order-selection-container" class="p-4 border-t border-slate-200 bg-white hidden">
                 <div class="flex justify-between items-center mb-3">
                     <p class="text-sm text-slate-600 font-semibold" id="order-selection-prompt">Please select your order:</p>
-                    <button id="close-order-selection-btn" class="chat-header-button text-slate-400 hover:text-slate-600 transition-colors duration-200" title="Close Order Selection">
+                    <button id="close-order-selection-btn" class="chat-header-button text-slate-400 hover:text-slate-600 transition-colors duration-200" data-tooltip-text="Close Order Selection">
                         <i class="fa-solid fa-xmark text-xl"></i>
-                        <span class="tooltip-text">Close Order Selection</span>
                     </button>
                 </div>
                 <div id="order-list" class="space-y-2 max-h-48 overflow-y-auto">
@@ -722,7 +741,7 @@
             <!-- Input Area -->
             <div id="chat-input-container" class="p-4 border-t border-slate-200 flex items-center">
                 <input type="text" id="chat-input" placeholder="Type your message..." class="flex-grow border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mr-2">
-                <button id="send-message-btn" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-sm" title="Send Message">
+                <button id="send-message-btn" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-sm" data-tooltip-text="Send Message">
                     <i class="fa-solid fa-paper-plane"></i>
                 </button>
             </div>
@@ -765,20 +784,25 @@
                     <button type="submit" class="btn-dark-slate">Submit Feedback</button>
                 </form>
             </div>
-
-            <!-- End Chat Confirmation -->
-            <div id="end-chat-confirm-modal" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-10">
-                <p class="text-lg font-semibold text-slate-800 mb-4 text-center">End this chat session?</p>
-                <div class="flex gap-4">
-                    <button id="end-chat-yes" class="px-6 py-2 font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition">Yes, End Chat</button>
-                    <button id="end-chat-no" class="px-6 py-2 font-semibold text-slate-800 bg-slate-200 rounded-lg hover:bg-slate-300 transition">No</button>
-                </div>
-            </div>
         </div>
         <button id="chat-open-btn">
             <i class="fa-solid fa-comments text-3xl"></i>
             <span id="unread-counter">0</span>
         </button>
+    </div>
+
+    <!-- Global Tooltip Container - positioned at the end of body -->
+    <div id="globalTooltip" class="tooltip-text"></div>
+
+    <!-- End Chat Confirmation - Now a direct child of body to appear outside the modal -->
+    <div id="end-chat-confirm-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-[10000]">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 text-center">
+            <p class="text-lg font-semibold text-slate-800 mb-4">End this chat session?</p>
+            <div class="flex gap-4 justify-center">
+                <button id="end-chat-yes" class="px-6 py-2 font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition">Yes, End Chat</button>
+                <button id="end-chat-no" class="px-6 py-2 font-semibold text-slate-800 bg-slate-200 rounded-lg hover:bg-slate-300 transition">No</button>
+            </div>
+        </div>
     </div>
 
     <!-- FIREBASE SCRIPT -->
@@ -1004,6 +1028,9 @@
             const closeOrderSelectionBtn = document.getElementById('close-order-selection-btn');
             const orderSelectionPrompt = document.getElementById('order-selection-prompt');
             const sendMessageBtn = document.getElementById('send-message-btn');
+            const floatingBanner = document.getElementById('floatingBanner'); // Get the banner element
+            const closeBannerBtn = document.getElementById('closeBannerBtn'); // Get the close banner button
+            const globalTooltip = document.getElementById('globalTooltip'); // Get the global tooltip element
 
             let currentChatId = null;
             let unsubscribeFromMessages = null;
@@ -1048,10 +1075,6 @@
                 localStorage.setItem('chatSessionId', chatId);
                 return chatId;
             };
-
-            // --- REMOVED: Dummy Order Creation for Demo ---
-            // The createDummyOrder function has been removed.
-            // --- END REMOVED ---
 
             // Modified renderMessage to always append to chatMessages, no more fixed system messages container
             const renderMessage = (msg) => {
@@ -1301,7 +1324,7 @@
                 surveyContainer.innerHTML = '<p class="text-center font-semibold text-green-600">Thank you for your feedback!</p>';
             });
 
-            // --- NEW: Order Selection Logic ---
+            // --- Order Selection Logic ---
             const fetchUserOrders = async () => {
                 const user = auth.currentUser;
                 if (!user) {
@@ -1356,7 +1379,6 @@
                 orderList.innerHTML = '<p class="text-center text-blue-500">Loading your orders...</p>';
                 const orders = await fetchUserOrders();
                 renderOrderSelection(orders);
-                // No need to scroll chatMessages here, as order selection is a separate overlay
             };
 
             const handleOrderSelection = async (order) => {
@@ -1378,16 +1400,53 @@
             // "Orders" button in chat header
             const chatOrderBtn = document.getElementById('chat-order-btn');
             chatOrderBtn.addEventListener('click', async () => {
-                // Removed the call to createDummyOrder(userId);
                 if (currentChatId) {
                     await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
                 } else {
-                    // For guest users or no active chat, directly show order selection
                     displayOrderSelectionUI();
                 }
             });
 
-            // --- END NEW: Order Selection Logic ---
+            // --- Floating Banner Close Logic ---
+            closeBannerBtn.addEventListener('click', () => {
+                floatingBanner.style.display = 'none'; // Hide the banner
+            });
+
+            // --- Global Tooltip Logic ---
+            const chatHeaderButtons = document.querySelectorAll('.chat-header-button');
+
+            chatHeaderButtons.forEach(button => {
+                let tooltipTimeout;
+
+                button.addEventListener('mouseover', (e) => {
+                    clearTimeout(tooltipTimeout);
+                    const tooltipText = button.dataset.tooltipText; // Get text from data-tooltip-text
+                    if (tooltipText) {
+                        globalTooltip.textContent = tooltipText;
+                        globalTooltip.style.visibility = 'visible';
+                        globalTooltip.style.opacity = '1';
+
+                        const rect = button.getBoundingClientRect();
+                        // Position below the button, centered
+                        globalTooltip.style.top = `${rect.bottom + 8}px`; // 8px padding from button
+                        globalTooltip.style.left = `${rect.left + rect.width / 2}px`;
+                        // Adjust left again after element is visible to truly center
+                        globalTooltip.style.transform = `translateX(-50%)`;
+                    }
+                });
+
+                button.addEventListener('mouseout', () => {
+                    tooltipTimeout = setTimeout(() => {
+                        globalTooltip.style.visibility = 'hidden';
+                        globalTooltip.style.opacity = '0';
+                    }, 100); // Small delay before hiding
+                });
+
+                // Clear timeout if mouse re-enters quickly
+                button.addEventListener('mouseenter', () => {
+                    clearTimeout(tooltipTimeout);
+                });
+            });
         });
     </script>
 </body>
