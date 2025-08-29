@@ -842,7 +842,7 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Sign in anonymously or with custom token
+        // Sign in only with custom token if provided, otherwise no automatic sign-in
         const authenticateFirebase = async () => {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 try {
@@ -850,13 +850,13 @@
                     console.log("Signed in with custom token.");
                 } catch (error) {
                     console.error("Error signing in with custom token:", error);
-                    // Fallback to anonymous sign-in if custom token fails
-                    await signInAnonymously(auth);
-                    console.log("Signed in anonymously due to custom token error.");
+                    // If custom token fails, do not fall back to anonymous sign-in.
+                    // User will need to explicitly log in via the UI.
                 }
             } else {
-                await signInAnonymously(auth);
-                console.log("Signed in anonymously.");
+                // No custom token provided, no automatic sign-in.
+                // User will need to explicitly log in via the UI.
+                console.log("No custom token provided. User must sign in via UI.");
             }
         };
 
@@ -1082,6 +1082,8 @@
             notificationSound.volume = 0.5;
 
             const getOrCreateGuestId = () => {
+                // Since anonymous sign-in is disabled, guest IDs are no longer relevant for chat sessions.
+                // This function can remain, but its usage in creating chat sessions will be updated.
                 let id = localStorage.getItem('guestChatId');
                 if (!id) {
                     id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -1092,23 +1094,55 @@
 
             const getOrCreateChatSession = async () => {
                 let chatId = localStorage.getItem('chatSessionId');
-                if (chatId) return chatId;
-                
                 const user = auth.currentUser;
-                const currentGuestId = getOrCreateGuestId();
-                const chatSessionData = {
-                    createdAt: serverTimestamp(),
-                    ownerUid: user ? user.uid : null,
-                    guestId: user ? null : currentGuestId,
-                    status: 'active',
-                    agentName: null,
-                    isAgentTyping: false,
-                    userTypingText: '',
-                    agentAskingForOrderId: false // Initialize this flag
-                };
-                const docRef = await addDoc(collection(db, "chats"), chatSessionData);
-                chatId = docRef.id;
-                localStorage.setItem('chatSessionId', chatId);
+
+                // If no authenticated user, and no existing chat ID, then force login prompt
+                if (!user && !chatId) {
+                    console.log("No authenticated user and no existing chat session. Prompting for login.");
+                    return null; // Indicate that a chat session cannot be created without login
+                }
+
+                // If there's an existing chat ID, try to use it
+                if (chatId) {
+                    // Check if the existing chat ID belongs to the current authenticated user
+                    // or if it's a guest chat and there's no authenticated user.
+                    const chatDoc = await getDoc(doc(db, "chats", chatId));
+                    if (chatDoc.exists()) {
+                        const chatData = chatDoc.data();
+                        if (user && chatData.ownerUid === user.uid) {
+                            return chatId; // Valid chat for authenticated user
+                        } else if (!user && chatData.guestId === localStorage.getItem('guestChatId')) {
+                            return chatId; // Valid guest chat for non-authenticated user
+                        } else {
+                            // Existing chat ID doesn't match current user/guest, clear it.
+                            localStorage.removeItem('chatSessionId');
+                            localStorage.removeItem(`agentJoined_${chatId}`);
+                            chatId = null;
+                        }
+                    } else {
+                        // Chat ID in local storage doesn't exist in Firestore, clear it.
+                        localStorage.removeItem('chatSessionId');
+                        localStorage.removeItem(`agentJoined_${chatId}`);
+                        chatId = null;
+                    }
+                }
+                
+                // If no valid existing chat ID, create a new one
+                if (!chatId) {
+                    const chatSessionData = {
+                        createdAt: serverTimestamp(),
+                        ownerUid: user ? user.uid : null,
+                        guestId: user ? null : getOrCreateGuestId(), // Still use guestId for unauthenticated users if they continue as guest
+                        status: 'active',
+                        agentName: null,
+                        isAgentTyping: false,
+                        userTypingText: '',
+                        agentAskingForOrderId: false
+                    };
+                    const docRef = await addDoc(collection(db, "chats"), chatSessionData);
+                    chatId = docRef.id;
+                    localStorage.setItem('chatSessionId', chatId);
+                }
                 return chatId;
             };
 
@@ -1226,6 +1260,15 @@
                 isChatMinimized = false;
                 unreadCount = 0;
                 unreadCounter.classList.remove('visible');
+
+                const user = auth.currentUser;
+                if (!user) {
+                    // If no user is logged in, show the guest prompt immediately
+                    chatInputContainer.classList.add('hidden');
+                    guestPromptContainer.classList.remove('hidden');
+                    return;
+                }
+
                 const chatId = await getOrCreateChatSession();
                 if (chatId) {
                     listenForMessages(chatId);
@@ -1274,13 +1317,15 @@
             const sendMessage = async (text) => {
                 if (text.trim() === '' || !currentChatId) return;
                 const user = auth.currentUser;
-                if (!user && !hasUserTypedFirstMessage) {
-                    hasUserTypedFirstMessage = true;
-                    chatInputContainer.classList.add('hidden'); // Hide input for guest prompt
+
+                // If not authenticated, force guest prompt (should already be shown by openChat)
+                if (!user) {
+                    chatInputContainer.classList.add('hidden');
                     guestPromptContainer.classList.remove('hidden');
                     return;
                 }
-                const currentGuestId = getOrCreateGuestId();
+
+                const currentGuestId = getOrCreateGuestId(); // This will still generate a guest ID, but it won't be used for `sender` if `user` exists
                 const messageData = { text, timestamp: serverTimestamp(), sender: user ? user.uid : currentGuestId };
                 await addDoc(collection(db, `chats/${currentChatId}/messages`), messageData);
                 chatInput.value = '';
@@ -1312,14 +1357,37 @@
                 }, 300); // Shortened delay for faster preview
             });
 
-            guestLoginBtn.addEventListener('click', () => openModal('loginModal'));
-            guestContinueBtn.addEventListener('click', () => {
+            guestLoginBtn.addEventListener('click', () => {
+                openModal('loginModal');
+                // After clicking login, hide the guest prompt and show the input container
+                // The onAuthStateChanged listener will handle closing the modal and updating UI
                 guestPromptContainer.classList.add('hidden');
                 chatInputContainer.classList.remove('hidden');
-                // The initial "An agent will be with you shortly..." message will be rendered via the Firestore listener
-                // once the first user message is sent.
-                chatInput.focus();
             });
+
+            // Removed guestContinueBtn functionality as anonymous sign-in is disabled.
+            // If the user is not logged in, they must log in to use the chat.
+            guestContinueBtn.addEventListener('click', () => {
+                // This button should now redirect to login or be removed/hidden.
+                // For now, it will simply open the login modal to reinforce real sign-in.
+                openModal('loginModal');
+                guestPromptContainer.classList.add('hidden');
+                chatInputContainer.classList.remove('hidden');
+            });
+            // Update the text and hide the guest continue button since anonymous sign-in is off
+            document.getElementById('guest-prompt-container').innerHTML = `
+                <p class="text-center text-sm text-slate-600 mb-3">Please log in to start a chat session.</p>
+                <div class="space-y-2">
+                    <button id="guest-login-btn" class="btn-dark-slate">Login / Sign Up</button>
+                </div>
+            `;
+            // Re-attach event listener for the new guest-login-btn
+            document.getElementById('guest-login-btn').addEventListener('click', () => {
+                openModal('loginModal');
+                guestPromptContainer.classList.add('hidden');
+                chatInputContainer.classList.remove('hidden');
+            });
+
 
             friendlinessRating.addEventListener('input', (e) => { friendlinessValue.textContent = e.target.value; });
             starRatingContainer.addEventListener('mouseover', e => {
@@ -1432,6 +1500,14 @@
             };
 
             const displayOrderSelectionUI = async () => {
+                const user = auth.currentUser;
+                if (!user) {
+                    // If not logged in, prompt for login instead of showing empty orders
+                    chatInputContainer.classList.add('hidden');
+                    guestPromptContainer.classList.remove('hidden');
+                    return;
+                }
+
                 guestPromptContainer.classList.add('hidden');
                 orderSelectionContainer.classList.remove('hidden');
                 orderList.innerHTML = '<p class="text-center text-blue-500">Loading your orders...</p>';
@@ -1458,6 +1534,14 @@
             // "Orders" button in chat header
             const chatOrderBtn = document.getElementById('chat-order-btn');
             chatOrderBtn.addEventListener('click', async () => {
+                const user = auth.currentUser;
+                if (!user) {
+                    // If not logged in, prompt for login
+                    chatInputContainer.classList.add('hidden');
+                    guestPromptContainer.classList.remove('hidden');
+                    return;
+                }
+
                 if (currentChatId) {
                     await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
                 } else {
