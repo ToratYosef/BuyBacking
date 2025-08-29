@@ -48,19 +48,21 @@
             opacity: 0; 
             visibility: hidden;
             pointer-events: none; /* Crucial: Prevent clicks when hidden */
-            display: flex; /* Always flex, visibility handles showing/hiding */
-            align-items: center;
-            justify-content: center;
+            display: none; /* Start hidden, will be changed to flex by JS */
+
             position: fixed;
             inset: 0;
             z-index: 1001;
             background-color: rgba(0, 0, 0, 0.6);
             padding: 1rem; /* Responsive padding */
+            align-items: center;
+            justify-content: center;
         }
         .modal.is-visible {
             opacity: 1; 
             visibility: visible;
             pointer-events: auto; /* Crucial: Allow clicks when visible */
+            display: flex; /* Only display flex when visible */
         }
         .modal-content {
             transform: translateY(-20px);
@@ -281,22 +283,34 @@
             #chat-open-btn {
                 bottom: 1rem;
                 right: 1rem;
+                width: 3.5rem; /* Slightly smaller button */
+                height: 3.5rem;
+                font-size: 1.5rem; /* Smaller icon */
             }
-            /* Adjust main content padding on small screens */
-            main.container {
-                padding-left: 1rem;
-                padding-right: 1rem;
+            #chat-open-btn i {
+                font-size: 1.5rem; /* Adjust icon size */
             }
-            /* Adjust padding for the main white card */
-            main .bg-white {
-                padding: 1rem; /* Smaller padding on mobile */
+            #unread-counter {
+                width: 1.2rem;
+                height: 1.2rem;
+                font-size: 0.65rem;
             }
-            /* Adjust font sizes within main content for mobile */
-            h1.text-4xl { font-size: 2.5rem; }
-            h2.text-2xl { font-size: 1.75rem; }
-            .tab-button { font-size: 1rem; padding: 0.75rem; }
-            .text-lg { font-size: 1rem; }
-            .text-sm { font-size: 0.875rem; }
+            /* Modal content adjustments for full screen on mobile */
+            .modal-content {
+                max-width: 100%;
+                max-height: 100%;
+                width: 100%;
+                height: 100%;
+                border-radius: 0;
+                padding: 1rem;
+            }
+            .modal-content .prose {
+                max-height: calc(100vh - 100px); /* Adjust based on header/footer in modal */
+                padding-right: 0.5rem;
+            }
+            .modal-content h2 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
@@ -950,18 +964,11 @@
         // --- General Modal Functions ---
         const openModal = (modalElement) => {
             console.log('Opening modal:', modalElement.id); // Debugging
-            modalElement.classList.remove('hidden'); // Ensure it's visible
-            // Force reflow to ensure transition plays
-            void modalElement.offsetWidth;
             modalElement.classList.add('is-visible');
         };
         const closeModal = (modalElement) => {
             console.log('Attempting to close modal:', modalElement.id); // Debugging
             modalElement.classList.remove('is-visible');
-            // Add hidden class after transition for accessibility/interaction blocking
-            setTimeout(() => {
-                modalElement.classList.add('hidden');
-            }, 300); // Match CSS transition duration
         };
 
         document.querySelectorAll('.close-modal-btn').forEach(button => {
@@ -1340,7 +1347,8 @@
                 
             } else {
                 // User is signed out, redirect to a non-authenticated page
-                window.location.href = '/index.html'; // Changed to root-relative path
+                // Using window.location.replace to prevent going back to my-account.html
+                window.location.replace(window.location.origin + '/index.html'); 
             }
         });
 

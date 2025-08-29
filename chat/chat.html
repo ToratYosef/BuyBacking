@@ -14,84 +14,79 @@
             -moz-osx-font-smoothing: grayscale;
         }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .chat-bubble-user { background-color: #e2e8f0; }
-        .chat-bubble-admin { background-color: #dbeafe; }
-        .chat-bubble-system { background-color: #fefce8; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #eef2f5; } /* Lighter track */
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .chat-bubble-user { background-color: #f1f5f9; color: #1e293b; } /* Lighter gray for user */
+        .chat-bubble-admin { background-color: #3b82f6; color: #ffffff; } /* Solid blue for admin */
+        .chat-bubble-system { background-color: #fef08a; color: #a16207; } /* Yellow for system */
         .modal { transition: opacity 0.3s ease, visibility 0.3s ease; }
         .modal-content { transition: transform 0.3s ease; }
-        .tab-btn.active { border-color: #2563eb; color: #2563eb; background-color: #eff6ff; }
-        /* Notification dropdown specific styles */
-        .notification-item {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .notification-item:hover {
-            background-color: #f0f4f8;
-        }
-        .notification-item.unread {
-            background-color: #e0f2fe; /* Light blue for unread */
-            font-weight: 500;
-        }
+        .tab-btn.active { border-color: #2563eb; color: #2563eb; font-weight: 600; }
+        .notification-item { padding: 12px; border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: background-color 0.2s; }
+        .notification-item:hover { background-color: #f8fafc; }
+        .notification-item.unread { background-color: #eff6ff; font-weight: 500; }
+        .notification-item p:first-child { font-weight: 600; } /* Bold title */
     </style>
 </head>
-<body class="bg-slate-100">
+<body class="bg-slate-50 text-slate-800">
 
     <!-- LOGIN SCREEN -->
     <div id="login-screen" class="flex items-center justify-center min-h-screen">
-        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
-            <h2 class="text-3xl font-bold text-center text-slate-800">Admin Chat Login</h2>
-            <form id="login-form" class="space-y-4">
+        <div class="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl shadow-xl">
+            <div class="text-center">
+                <h2 class="text-4xl font-extrabold text-slate-900">Admin Login</h2>
+                <p class="mt-2 text-sm text-slate-500">Access the SecondHandCell Dashboard</p>
+            </div>
+            <form id="login-form" class="space-y-6">
                 <div>
                     <label for="login-email" class="sr-only">Email</label>
-                    <input type="email" id="login-email" required class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Email Address">
+                    <input type="email" id="login-email" required class="w-full px-5 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" placeholder="Email Address">
                 </div>
                 <div>
                     <label for="login-password" class="sr-only">Password</label>
-                    <input type="password" id="login-password" required class="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Password">
+                    <input type="password" id="login-password" required class="w-full px-5 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" placeholder="Password">
                 </div>
-                <button type="submit" class="w-full px-4 py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Login</button>
-                <p id="login-error" class="text-sm text-center text-red-500"></p>
+                <button type="submit" class="w-full px-4 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-lg transform hover:scale-[1.01]">
+                    <i class="fa-solid fa-right-to-bracket mr-2"></i>Login
+                </button>
+                <p id="login-error" class="text-sm text-center text-red-500 h-4"></p>
             </form>
         </div>
     </div>
 
     <!-- MAIN DASHBOARD -->
-    <div id="dashboard-screen" class="hidden h-screen w-screen flex flex-col md:flex-row overflow-hidden">
+    <div id="dashboard-screen" class="hidden h-screen w-screen flex-col md:flex-row overflow-hidden">
         <!-- Left Sidebar: Chat Queue -->
-        <aside class="w-full md:w-[380px] bg-white border-r border-slate-200 flex flex-col h-full">
-            <div class="p-4 border-b border-slate-200 flex justify-between items-center">
-                <h2 class="text-xl font-bold text-slate-800">Live Chats</h2>
+        <aside class="w-full md:w-[400px] bg-white border-r border-slate-200 flex flex-col h-full shadow-lg">
+            <div class="p-5 border-b border-slate-200 flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-slate-900">Live Chats</h2>
                 <div class="flex items-center gap-4">
                     <!-- Notification Bell -->
                     <div class="relative">
-                        <button id="notification-bell" class="text-slate-500 hover:text-blue-600 relative">
+                        <button id="notification-bell" class="text-slate-500 hover:text-blue-600 relative transition-colors">
                             <i class="fa-solid fa-bell text-xl"></i>
-                            <span id="notification-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-4 w-4 flex items-center justify-center hidden">0</span>
+                            <span id="notification-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center hidden">0</span>
                         </button>
-                        <div id="notification-dropdown" class="absolute top-full right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border hidden z-20">
-                            <div class="p-3 font-semibold text-slate-700 border-b">Notifications</div>
-                            <div id="notification-list" class="max-h-60 overflow-y-auto custom-scrollbar">
-                                <div class="p-3 text-sm text-slate-500">No new notifications.</div>
+                        <div id="notification-dropdown" class="absolute top-full right-0 mt-3 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 hidden z-20 overflow-hidden">
+                            <div class="p-4 font-bold text-slate-800 border-b border-slate-200">Notifications</div>
+                            <div id="notification-list" class="max-h-72 overflow-y-auto custom-scrollbar">
+                                <div class="p-4 text-sm text-slate-500">No new notifications.</div>
                             </div>
-                            <div class="p-2 border-t text-center">
-                                <button id="mark-all-read-btn" class="text-sm text-blue-600 hover:underline disabled:text-slate-400" disabled>Mark all as read</button>
+                            <div class="p-3 border-t text-center bg-slate-50">
+                                <button id="mark-all-read-btn" class="text-sm font-semibold text-blue-600 hover:underline disabled:text-slate-400" disabled>Mark all as read</button>
                             </div>
                         </div>
                     </div>
-                    <button id="logout-btn" class="text-sm text-slate-500 hover:text-blue-600 font-semibold flex items-center gap-2">Logout <i class="fa-solid fa-right-from-bracket"></i></button>
+                    <button id="logout-btn" class="px-3 py-1 text-sm text-slate-600 hover:text-red-500 font-semibold flex items-center gap-2 transition-colors">Logout <i class="fa-solid fa-right-from-bracket"></i></button>
                 </div>
             </div>
             <!-- TABS -->
-            <div class="p-2 border-b border-slate-200 bg-slate-50">
+            <div class="p-3 border-b border-slate-200 bg-slate-100">
                 <div class="grid grid-cols-3 gap-2">
-                    <button class="tab-btn p-2 text-sm font-semibold text-slate-600 rounded-md border-b-2 border-transparent active" data-tab="open">Open</button>
-                    <button class="tab-btn p-2 text-sm font-semibold text-slate-600 rounded-md border-b-2 border-transparent" data-tab="my">My Chats</button>
-                    <button class="tab-btn p-2 text-sm font-semibold text-slate-600 rounded-md border-b-2 border-transparent" data-tab="closed">Closed</button>
+                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent transition-all active" data-tab="open">Open</button>
+                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent" data-tab="my">My Chats</button>
+                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent" data-tab="closed">Closed</button>
                 </div>
             </div>
             <!-- CHAT LISTS -->
@@ -101,38 +96,44 @@
                 <div id="closed-chats-list" class="absolute inset-0 overflow-y-auto custom-scrollbar hidden"></div>
             </div>
             <!-- MULTI-SELECT ACTIONS -->
-            <div id="multi-select-actions" class="p-2 border-t border-slate-200 bg-slate-50 hidden">
-                <div class="grid grid-cols-2 gap-2">
-                    <button id="assign-selected-btn" class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">Assign to Me</button>
-                    <button id="delete-selected-btn" class="px-3 py-2 text-sm font-semibold text-white bg-red-500 rounded-md hover:bg-red-600 disabled:bg-red-300 disabled:cursor-not-allowed">Delete Selected</button>
+            <div id="multi-select-actions" class="p-4 border-t border-slate-200 bg-slate-100 hidden">
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="assign-selected-btn" class="px-4 py-3 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors">Assign to Me</button>
+                    <button id="delete-selected-btn" class="px-4 py-3 text-sm font-bold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:bg-red-300 disabled:cursor-not-allowed transition-colors">Delete Selected</button>
                 </div>
             </div>
         </aside>
 
         <!-- Right Section: Active Chat View -->
         <main id="chat-view" class="flex-1 flex-col bg-slate-50 hidden md:flex h-full">
-            <div id="no-chat-selected" class="flex flex-col items-center justify-center h-full text-slate-500">
-                <i class="fa-solid fa-comments text-6xl mb-4"></i>
-                <p class="text-xl font-semibold">Select a chat to begin</p>
-                <p>New chats will appear in the queue.</p>
+            <div id="no-chat-selected" class="flex flex-col items-center justify-center h-full text-slate-400">
+                <i class="fa-solid fa-comment-dots text-8xl mb-6"></i>
+                <p class="text-2xl font-bold">Select a chat to begin</p>
+                <p class="mt-2 text-md">New chats will appear in the queue.</p>
             </div>
 
-            <div id="active-chat-container" class="hidden h-full flex flex-col">
-                <div class="p-4 bg-white border-b border-slate-200 flex justify-between items-center">
+            <div id="active-chat-container" class="hidden h-full flex-col">
+                <div class="p-5 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm">
                     <div class="flex items-center gap-3">
                          <button id="back-to-list-btn" class="text-slate-600 hover:text-blue-600 md:hidden"><i class="fa-solid fa-arrow-left text-xl"></i></button>
                          <div>
-                            <h3 id="active-chat-user" class="font-bold text-slate-800"></h3>
+                            <h3 id="active-chat-user" class="font-bold text-slate-900 text-lg"></h3>
                             <p id="active-chat-id" class="text-xs text-slate-500"></p>
                          </div>
                     </div>
-                    <div class="flex items-center gap-2 sm:gap-4">
+                    <div class="flex items-center gap-3 sm:gap-4">
                         <div class="relative">
-                            <button id="transfer-chat-btn" class="px-3 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-right-left"></i> <span class="hidden sm:inline">Transfer</span></button>
-                            <div id="transfer-dropdown" class="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-lg shadow-xl border hidden z-10"></div>
+                            <button id="transfer-chat-btn" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-full hover:bg-blue-700 transition-colors flex items-center gap-2">
+                                <i class="fa-solid fa-right-left"></i> <span class="hidden sm:inline">Transfer</span>
+                            </button>
+                            <div id="transfer-dropdown" class="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-xl shadow-2xl border hidden z-10 overflow-hidden"></div>
                         </div>
-                        <button id="view-orders-btn" class="px-3 py-2 text-sm font-semibold text-white bg-slate-600 rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-2"><i class="fa-solid fa-box"></i> <span class="hidden sm:inline">View Orders</span></button>
-                        <button id="end-chat-btn" class="px-3 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors flex items-center gap-2"><i class="fa-solid fa-flag-checkered"></i> <span class="hidden sm:inline">End Chat</span></button>
+                        <button id="view-orders-btn" class="px-4 py-2 text-sm font-semibold text-white bg-slate-600 rounded-full hover:bg-slate-700 transition-colors flex items-center gap-2">
+                            <i class="fa-solid fa-box-open"></i> <span class="hidden sm:inline">View Orders</span>
+                        </button>
+                        <button id="end-chat-btn" class="px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-full hover:bg-red-600 transition-colors flex items-center gap-2">
+                            <i class="fa-solid fa-flag-checkered"></i> <span class="hidden sm:inline">End Chat</span>
+                        </button>
                     </div>
                 </div>
 
@@ -140,13 +141,15 @@
                 
                 <div id="user-typing-indicator" class="px-6 pb-2 text-sm text-slate-500 italic hidden">User is typing: <span id="user-typing-text" class="font-semibold not-italic text-slate-700"></span></div>
 
-                <div id="survey-results-container" class="p-4 bg-yellow-50 border-t-2 border-yellow-200 hidden mx-6 mb-4 rounded-lg"></div>
+                <div id="survey-results-container" class="p-4 bg-yellow-50 border-t-2 border-yellow-200 hidden mx-6 mb-4 rounded-xl"></div>
 
-                <div class="p-6 bg-white border-t border-slate-200">
+                <div class="p-6 bg-white border-t border-slate-200 shadow-inner">
                     <div id="suggested-replies" class="flex flex-wrap gap-2 mb-4"></div>
-                    <form id="reply-form">
-                        <textarea id="reply-input" rows="3" class="w-full p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition" placeholder="Type your reply..."></textarea>
-                        <button type="submit" class="mt-2 w-full px-4 py-3 font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">Send Reply</button>
+                    <form id="reply-form" class="flex flex-col gap-3">
+                        <textarea id="reply-input" rows="3" class="w-full p-4 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none" placeholder="Type your reply..."></textarea>
+                        <button type="submit" class="w-full px-4 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-md">
+                            <i class="fa-solid fa-paper-plane mr-2"></i>Send Reply
+                        </button>
                     </form>
                 </div>
             </div>
@@ -154,40 +157,40 @@
     </div>
 
     <!-- Order Details Modal -->
-    <div id="order-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 opacity-0 invisible modal">
-        <div id="order-modal-content" class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transform scale-95 modal-content">
-            <div class="p-4 border-b flex justify-between items-center">
-                <h3 class="text-lg font-bold text-slate-800">Order Details</h3>
-                <button id="close-order-modal" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-2xl"></i></button>
+    <div id="order-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 opacity-0 invisible modal">
+        <div id="order-modal-content" class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col transform scale-95 modal-content overflow-hidden">
+            <div class="p-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <h3 class="text-xl font-bold text-slate-800">Order Details</h3>
+                <button id="close-order-modal" class="text-slate-400 hover:text-slate-600 transition-colors"><i class="fa-solid fa-xmark text-2xl"></i></button>
             </div>
-            <div id="order-details-container" class="p-6 overflow-y-auto custom-scrollbar"></div>
+            <div id="order-details-container" class="p-6 overflow-y-auto custom-scrollbar flex-1"></div>
         </div>
     </div>
     
     <!-- Transfer Notification -->
-    <div id="transfer-notification" class="fixed top-5 right-5 bg-white rounded-lg shadow-lg p-4 w-80 border-l-4 border-blue-500 hidden transform translate-x-full transition-transform duration-300 z-[1001]">
+    <div id="transfer-notification" class="fixed top-6 right-6 bg-white rounded-lg shadow-xl p-4 w-80 border-l-4 border-blue-500 hidden transform translate-x-full transition-transform duration-300 z-[1001]">
         <p class="font-semibold text-slate-800">Incoming Chat Transfer</p>
         <p class="text-sm text-slate-600 mt-1">From <strong id="transfer-from-admin"></strong> for chat with <strong id="transfer-chat-user"></strong>.</p>
         <div class="mt-4 flex gap-2">
-            <button id="accept-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600">Accept</button>
-            <button id="decline-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-slate-700 bg-slate-200 rounded-md hover:bg-slate-300">Decline</button>
+            <button id="accept-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600 transition-colors">Accept</button>
+            <button id="decline-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-slate-700 bg-slate-200 rounded-md hover:bg-slate-300 transition-colors">Decline</button>
         </div>
     </div>
     
     <!-- In-App Notification Toast for FCM -->
-    <div id="in-app-notification" class="fixed top-24 right-5 bg-white rounded-lg shadow-lg p-4 w-80 border-l-4 border-green-500 hidden transform translate-x-full transition-transform duration-300 z-[1001]">
+    <div id="in-app-notification" class="fixed top-24 right-6 bg-white rounded-lg shadow-xl p-4 w-80 border-l-4 border-green-500 hidden transform translate-x-full transition-transform duration-300 z-[1001]">
         <h4 id="in-app-notification-title" class="font-semibold text-slate-800"></h4>
         <p id="in-app-notification-body" class="text-sm text-slate-600 mt-1"></p>
     </div>
 
     <!-- Custom Confirmation Modal -->
-    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[1002] opacity-0 invisible modal">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 transform scale-95 modal-content">
-            <h3 id="confirm-modal-title" class="text-lg font-bold text-slate-800 text-center">Are you sure?</h3>
-            <p id="confirm-modal-text" class="text-sm text-slate-600 mt-2 text-center">This action cannot be undone.</p>
-            <div class="mt-6 flex justify-end gap-3">
-                <button id="confirm-modal-cancel" class="px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-200 rounded-lg hover:bg-slate-300">Cancel</button>
-                <button id="confirm-modal-confirm" class="px-4 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600">Confirm</button>
+    <div id="confirm-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-[1002] opacity-0 invisible modal">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 transform scale-95 modal-content text-center">
+            <h3 id="confirm-modal-title" class="text-xl font-bold text-slate-800">Are you sure?</h3>
+            <p id="confirm-modal-text" class="text-sm text-slate-600 mt-2">This action cannot be undone.</p>
+            <div class="mt-8 flex justify-center gap-3">
+                <button id="confirm-modal-cancel" class="px-5 py-2 text-sm font-semibold text-slate-700 bg-slate-200 rounded-lg hover:bg-slate-300 transition-colors">Cancel</button>
+                <button id="confirm-modal-confirm" class="px-5 py-2 text-sm font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors">Confirm</button>
             </div>
         </div>
     </div>
@@ -200,6 +203,7 @@
         import { getDatabase, ref, onValue, set, serverTimestamp as dbServerTimestamp, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
         import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
 
+        // IMPORTANT: REPLACE THIS WITH YOUR OWN FIREBASE CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
             authDomain: "buyback-a0f05.firebaseapp.com",
@@ -250,14 +254,13 @@
         const assignSelectedBtn = document.getElementById('assign-selected-btn');
         const deleteSelectedBtn = document.getElementById('delete-selected-btn');
         const confirmModal = document.getElementById('confirm-modal');
-
-        // NEW: Notification DOM Elements
         const notificationBell = document.getElementById('notification-bell');
         const notificationBadge = document.getElementById('notification-badge');
         const notificationDropdown = document.getElementById('notification-dropdown');
         const notificationList = document.getElementById('notification-list');
         const markAllReadBtn = document.getElementById('mark-all-read-btn');
-        
+        const inAppNotification = document.getElementById('in-app-notification');
+
         // --- State Variables ---
         let currentAdmin = null;
         let activeChatIdState = null;
@@ -270,6 +273,7 @@
         let adminTypingTimeout = null;
         let onlineAdmins = {};
         let unreadNotifications = [];
+        let activeUserId = null; // New state variable to hold the userId for the active chat
 
         const suggestedReplies = [
             "Hello! How can I help you today?",
@@ -291,15 +295,13 @@
                 loadChatQueue();
                 listenForTransfers(user.uid);
                 populateSuggestedReplies();
-                setupNotifications(user); // Initialize FCM notifications
-                listenForInAppNotifications(user.uid); // Listen for in-app notifications
+                setupNotifications(user);
+                listenForInAppNotifications(user.uid);
 
-                // NEW: Check for chatId in URL on login/load
                 const urlParams = new URLSearchParams(window.location.search);
                 const chatIdFromUrl = urlParams.get('chatId');
                 if (chatIdFromUrl) {
-                    openChat(chatIdFromUrl, 'unknown_user_id'); // Open the chat directly
-                    // Optionally, clear the URL parameter to prevent re-opening on refresh
+                    openChat(chatIdFromUrl, 'unknown_user_id');
                     history.replaceState({}, document.title, window.location.pathname);
                 }
 
@@ -334,7 +336,7 @@
 
         // --- Mobile View Logic ---
         backToListBtn.addEventListener('click', () => {
-            chatListAside.classList.remove('hidden');
+            chatListAside.classList.add('hidden');
             mainChatView.classList.add('hidden');
             activeChatIdState = null;
             document.querySelectorAll('[id^="chat-item-"]').forEach(el => el.classList.remove('bg-blue-50'));
@@ -361,12 +363,12 @@
         // --- Main Chat Logic ---
         function getStatusFlag(chatData) {
             if (chatData.status === 'ended_by_agent' || chatData.status === 'ended_by_user') {
-                return `<span class="px-2 py-1 text-xs font-medium text-slate-600 bg-slate-200 rounded-full">Closed</span>`;
+                return `<span class="px-3 py-1 text-xs font-semibold text-slate-600 bg-slate-200 rounded-full">Closed</span>`;
             }
             if (chatData.assignedAdminName) {
-                return `<span class="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-100 rounded-full">${chatData.assignedAdminName}</span>`;
+                return `<span class="px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-100 rounded-full">${chatData.assignedAdminName}</span>`;
             }
-            return `<span class="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">Open</span>`;
+            return `<span class="px-3 py-1 text-xs font-semibold text-green-700 bg-green-100 rounded-full">Open</span>`;
         }
 
         function formatTimestamp(timestamp) {
@@ -396,12 +398,12 @@
                     const chatId = doc.id;
                     
                     const lastMessageText = chatData.userTypingText ? `<em class="text-blue-500">Typing: ${chatData.userTypingText}</em>` : (chatData.lastMessage || 'New chat session started...');
-
                     const isClosed = chatData.status === 'ended_by_agent' || chatData.status === 'ended_by_user';
+                    const hasUnread = chatData.lastMessageSeenByAdmin === false && chatData.lastMessageSender !== currentAdmin?.uid;
 
                     const newItem = document.createElement('div');
                     newItem.id = `chat-item-${chatId}`;
-                    newItem.className = `p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors ${activeChatIdState === chatId ? 'bg-blue-50' : ''}`;
+                    newItem.className = `p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors ${activeChatIdState === chatId ? 'bg-blue-50' : ''} ${hasUnread ? 'font-semibold' : ''}`;
                     newItem.innerHTML = `
                         <div class="flex justify-between items-start">
                             ${!isClosed ? `<input type="checkbox" data-chat-id="${chatId}" class="chat-checkbox mt-1 mr-3">` : '<div class="w-7"></div>'}
@@ -436,32 +438,11 @@
                 document.querySelectorAll('.chat-checkbox').forEach(cb => cb.addEventListener('change', updateMultiSelectActions));
             });
         }
-        async function deleteChat(chatId) {
-            try {
-                const messagesRef = collection(db, `chats/${chatId}/messages`);
-                const messagesSnapshot = await getDocs(messagesRef);
-                const deletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
-                await Promise.all(deletePromises);
 
-                await deleteDoc(doc(db, "chats", chatId));
-                console.log(`Chat ${chatId} deleted successfully.`);
-
-                if (activeChatIdState === chatId) {
-                    activeChatContainer.classList.add('hidden');
-                    noChatSelected.classList.remove('hidden');
-                    activeChatIdState = null;
-                }
-            } catch (error) {
-                console.error("Error deleting chat:", error);
-                alert("Failed to delete chat.");
-            }
-        }
-        
         async function openChat(chatId, userId, isReadOnly = false) {
             if (activeChatIdState === chatId) return;
             
-            // Mobile view switching
-            if (window.innerWidth < 768) { // Tailwind's 'md' breakpoint
+            if (window.innerWidth < 768) {
                 chatListAside.classList.add('hidden');
                 mainChatView.classList.remove('hidden');
                 mainChatView.classList.add('flex');
@@ -472,14 +453,14 @@
             unsubscribeFromSurvey();
 
             activeChatIdState = chatId;
-            viewOrdersBtn.dataset.userId = userId || '';
+            activeUserId = userId; // Store the userId
             noChatSelected.classList.add('hidden');
             activeChatContainer.classList.remove('hidden');
             activeChatContainer.classList.add('flex');
             activeChatMessages.innerHTML = '';
             surveyResultsContainer.classList.add('hidden');
             
-            document.querySelectorAll('[id^="chat-item-"]').forEach(el => el.classList.remove('bg-blue-50'));
+            document.querySelectorAll('[id^="chat-item-"]').forEach(el => el.classList.remove('bg-blue-50', 'font-semibold'));
             document.getElementById(`chat-item-${chatId}`)?.classList.add('bg-blue-50');
             
             const agentName = currentAdmin.displayName || currentAdmin.email.split('@')[0];
@@ -509,21 +490,30 @@
             const q = query(messagesRef, orderBy("timestamp"));
             unsubscribeFromActiveMessages = onSnapshot(q, (snapshot) => {
                 activeChatMessages.innerHTML = '';
-                snapshot.forEach(doc => renderAdminMessage(doc.data()));
+                snapshot.forEach(doc => renderMessage(doc.data()));
                 activeChatMessages.scrollTop = activeChatMessages.scrollHeight;
+                
+                // Mark chat as seen when opened
+                updateDoc(chatRef, { lastMessageSeenByAdmin: true });
             });
             
              const surveyRef = doc(db, `chats/${chatId}/survey/feedback`);
             unsubscribeFromSurvey = onSnapshot(surveyRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    surveyResultsContainer.innerHTML = `...`; // Survey HTML
+                    surveyResultsContainer.innerHTML = `
+                        <h4 class="font-bold text-lg mb-2 text-center">Customer Survey Feedback</h4>
+                        <div class="text-sm space-y-2">
+                            <p><strong>Rating:</strong> ${'⭐'.repeat(data.rating)}</p>
+                            <p><strong>Feedback:</strong> ${data.feedback || 'No feedback provided.'}</p>
+                        </div>
+                    `;
                     surveyResultsContainer.classList.remove('hidden');
                 }
             });
         }
         
-        function renderAdminMessage(msg) {
+        function renderMessage(msg) {
             const isAdminMessage = msg.sender === currentAdmin.uid;
             const isSystemMessage = msg.type === 'system';
             
@@ -531,29 +521,33 @@
             let alignment = isSystemMessage ? 'self-center' : (isAdminMessage ? 'self-end' : 'self-start');
             
             const messageDiv = document.createElement('div');
-            messageDiv.className = `p-3 rounded-lg max-w-[85%] break-words ${bubbleClass} ${alignment}`;
+            messageDiv.className = `p-3 rounded-xl max-w-[85%] break-words ${bubbleClass} ${alignment}`;
             
             if (!isSystemMessage) {
                 const senderPrefix = isAdminMessage ? 'You' : 'User';
-                const senderColor = isAdminMessage ? 'text-blue-700' : 'text-slate-600';
+                const senderColor = isAdminMessage ? 'text-white' : 'text-slate-800'; // Adjusted color for contrast
                 messageDiv.innerHTML = `<p class="text-xs font-bold mb-1 ${senderColor}">${senderPrefix}</p>`;
             }
             
             messageDiv.innerHTML += `<p>${msg.text}</p>`;
             activeChatMessages.appendChild(messageDiv);
 
-            const orderRegex = /(\d{2}-\d{3})|(\d{26})/;
-            const match = msg.text.match(orderRegex);
-            if (match && !isAdminMessage) {
-                const identifier = match[0];
-                showDetectedOrder(identifier);
+            // Auto-detect order number and display a clickable pill
+            if (!isSystemMessage && !isAdminMessage) {
+                const orderRegex = /(\d{2}-\d{3})|(\d{26})/;
+                const match = msg.text.match(orderRegex);
+                if (match) {
+                    const identifier = match[0];
+                    showDetectedOrder(identifier);
+                }
             }
         }
+        
         async function showDetectedOrder(identifier) {
             const order = await findOrderByIdentifier(identifier);
             if (order) {
                 const orderPill = document.createElement('div');
-                orderPill.className = 'p-3 mt-2 rounded-lg bg-indigo-100 text-indigo-800 self-start cursor-pointer hover:bg-indigo-200';
+                orderPill.className = 'p-3 mt-2 rounded-xl bg-indigo-100 text-indigo-800 self-start cursor-pointer hover:bg-indigo-200 transition-colors shadow-sm';
                 orderPill.innerHTML = `
                     <p class="font-bold text-sm">Order Detected: #${order.id}</p>
                     <p class="text-xs">${order.device} - Status: ${order.status}</p>
@@ -571,16 +565,20 @@
             if (text === '' || !activeChatIdState) return;
             
             const agentName = currentAdmin.displayName || currentAdmin.email.split('@')[0];
+            const chatRef = doc(db, "chats", activeChatIdState);
             const messagesRef = collection(db, `chats/${activeChatIdState}/messages`);
+
             await addDoc(messagesRef, { text, sender: currentAdmin.uid, timestamp: serverTimestamp() });
             
             if (!textOverride) replyInput.value = '';
             
             clearTimeout(adminTypingTimeout);
-            await updateDoc(doc(db, "chats", activeChatIdState), { 
+            await updateDoc(chatRef, { 
                 isAgentTyping: false, 
                 lastMessage: `${agentName}: ${text}`,
-                lastMessageTimestamp: serverTimestamp()
+                lastMessageTimestamp: serverTimestamp(),
+                lastMessageSeenByAdmin: true,
+                lastMessageSender: currentAdmin.uid
             });
         }
         replyInput.addEventListener('keyup', () => {
@@ -594,17 +592,23 @@
         });
         endChatBtn.addEventListener('click', async () => {
             if (!activeChatIdState) return;
-            const chatRef = doc(db, "chats", activeChatIdState);
-            await updateDoc(chatRef, { status: 'ended_by_agent' });
-            activeChatContainer.classList.add('hidden');
-            noChatSelected.classList.remove('hidden');
-            activeChatIdState = null;
+            showConfirmModal(
+                'End Chat Session?',
+                'This will close the chat and it will no longer appear in the "Open" queue.',
+                async () => {
+                    const chatRef = doc(db, "chats", activeChatIdState);
+                    await updateDoc(chatRef, { status: 'ended_by_agent' });
+                    activeChatContainer.classList.add('hidden');
+                    noChatSelected.classList.remove('hidden');
+                    activeChatIdState = null;
+                }
+            );
         });
         function populateSuggestedReplies() {
             suggestedRepliesContainer.innerHTML = '';
             suggestedReplies.forEach(text => {
                 const button = document.createElement('button');
-                button.className = 'px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors';
+                button.className = 'px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors';
                 button.textContent = text;
                 button.onclick = () => {
                     replyInput.value = text;
@@ -616,9 +620,8 @@
 
         // --- Order Modal Logic ---
         async function findOrderByIdentifier(identifier) {
-            // Use the base URL for your Cloud Functions API
             const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
-            const url = `${baseUrl}/find-order/${identifier}`;
+            const url = `${baseUrl}/orders/find?identifier=${identifier}`; // Adjusted endpoint for clarity
             try {
                 const response = await fetch(url);
                 if (!response.ok) return null;
@@ -628,49 +631,97 @@
                 return null;
             }
         }
-        function showOrderDetails(order) {
+
+        async function fetchAllUserOrders(userId) {
+            const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+            const url = `${baseUrl}/orders/by-user/${userId}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) return [];
+                return await response.json();
+            } catch (error) {
+                console.error("Failed to fetch user's orders:", error);
+                return [];
+            }
+        }
+        
+        // This global function is needed because it's called from inline HTML (onclick)
+        window.showOrderDetails = function(order) {
             orderDetailsContainer.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-slate-50 p-4 rounded-lg">
-                        <h4 class="font-bold text-slate-600 mb-2">Order Info</h4>
-                        <p><strong>ID:</strong> ${order.id}</p>
-                        <p><strong>Status:</strong> <span class="font-semibold text-blue-600">${order.status}</span></p>
-                        <p><strong>Device:</strong> ${order.device} ${order.storage}</p>
-                        <p><strong>Quote:</strong> $${order.estimatedQuote.toFixed(2)}</p>
+                    <div class="bg-slate-100 p-5 rounded-xl border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-lg mb-3">Order Info</h4>
+                        <p class="text-sm"><strong>ID:</strong> <span class="font-mono">${order.id}</span></p>
+                        <p class="text-sm mt-1"><strong>Status:</strong> <span class="font-semibold text-blue-600">${order.status}</span></p>
+                        <p class="text-sm mt-1"><strong>Device:</strong> ${order.device} ${order.storage}</p>
+                        <p class="text-sm mt-1"><strong>Quote:</strong> $${order.estimatedQuote?.toFixed(2) || 'N/A'}</p>
                     </div>
-                    <div class="bg-slate-50 p-4 rounded-lg">
-                        <h4 class="font-bold text-slate-600 mb-2">Customer Info</h4>
-                        <p><strong>Name:</strong> ${order.shippingInfo.fullName}</p>
-                        <p><strong>Email:</strong> ${order.shippingInfo.email}</p>
-                        <p><strong>Address:</strong> ${order.shippingInfo.streetAddress}, ${order.shippingInfo.city}, ${order.shippingInfo.state} ${order.shippingInfo.zipCode}</p>
+                    <div class="bg-slate-100 p-5 rounded-xl border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-lg mb-3">Customer Info</h4>
+                        <p class="text-sm"><strong>Name:</strong> ${order.shippingInfo.fullName}</p>
+                        <p class="text-sm mt-1"><strong>Email:</strong> ${order.shippingInfo.email}</p>
+                        <p class="text-sm mt-1"><strong>Address:</strong> ${order.shippingInfo.streetAddress}, ${order.shippingInfo.city}, ${order.shippingInfo.state} ${order.shippingInfo.zipCode}</p>
                     </div>
-                    <div class="md:col-span-2 bg-slate-50 p-4 rounded-lg">
-                        <h4 class="font-bold text-slate-600 mb-2">Shipping</h4>
-                        <p><strong>Preference:</strong> ${order.shippingPreference}</p>
-                        <p><strong>Tracking #:</strong> ${order.trackingNumber || 'N/A'}</p>
+                    <div class="md:col-span-2 bg-slate-100 p-5 rounded-xl border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-lg mb-3">Shipping</h4>
+                        <p class="text-sm"><strong>Preference:</strong> ${order.shippingPreference}</p>
+                        <p class="text-sm mt-1"><strong>Tracking #:</strong> ${order.trackingNumber || 'N/A'}</p>
                     </div>
                 </div>
-                <div class="mt-6 text-center">
-                    <button id="send-order-to-user" class="px-6 py-2 font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700 transition">Send to User for Confirmation</button>
+                <div class="mt-8 text-center">
+                    <button id="send-order-to-user" class="px-6 py-3 font-bold text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors shadow-md">
+                        <i class="fa-solid fa-share-from-square mr-2"></i>Send Order Details to User
+                    </button>
                 </div>
             `;
             orderModal.classList.remove('invisible', 'opacity-0');
             orderModalContent.classList.remove('scale-95');
 
             document.getElementById('send-order-to-user').onclick = () => {
-                const confirmationText = `Are you referring to order #${order.id} for the ${order.device}?`;
+                const confirmationText = `Hello! Based on your query, here are the details for order #${order.id}:
+Device: ${order.device}
+Quote: $${order.estimatedQuote?.toFixed(2) || 'N/A'}
+Current Status: ${order.status}`;
                 sendReply(confirmationText);
                 closeOrderModal();
             };
         }
+        
         viewOrdersBtn.addEventListener('click', async () => {
-            const userId = viewOrdersBtn.dataset.userId;
-            if (!userId) {
-                alert("This is a guest user and has no associated orders.");
+            if (!activeUserId) {
+                // Modified from alert to a custom modal
+                showConfirmModal("Guest User", "This user is a guest and has no associated orders.", () => {});
                 return;
             }
-            alert(`Functionality to view all orders for user ${userId} is not yet implemented.`);
+            orderDetailsContainer.innerHTML = '<div class="text-center p-8 text-slate-500"><i class="fa-solid fa-spinner fa-spin text-4xl"></i><p class="mt-4">Loading orders...</p></div>';
+            orderModal.classList.remove('invisible', 'opacity-0');
+            orderModalContent.classList.remove('scale-95');
+
+            const orders = await fetchAllUserOrders(activeUserId);
+            if (orders.length === 0) {
+                orderDetailsContainer.innerHTML = `<div class="text-center p-8 text-slate-500">
+                    <i class="fa-solid fa-box-open text-4xl mb-4"></i>
+                    <p class="text-lg font-semibold">No orders found for this user.</p>
+                </div>`;
+                return;
+            }
+
+            let ordersHtml = `<h4 class="text-xl font-bold mb-6">All Orders for User</h4>`;
+            orders.forEach(order => {
+                ordersHtml += `
+                    <div class="bg-slate-100 p-5 rounded-xl mb-4 border border-slate-200 cursor-pointer hover:bg-slate-200 transition-colors" onclick="window.showOrderDetails(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(order))}')))">
+                        <div class="flex justify-between items-center">
+                            <p class="font-bold">Order ID: <span class="font-mono">${order.id}</span></p>
+                            <span class="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">${order.status}</span>
+                        </div>
+                        <p class="text-sm mt-2">Device: ${order.device}</p>
+                        <p class="text-sm">Quote: $${order.estimatedQuote?.toFixed(2) || 'N/A'}</p>
+                    </div>
+                `;
+            });
+            orderDetailsContainer.innerHTML = ordersHtml;
         });
+
         function closeOrderModal() {
             orderModal.classList.add('invisible', 'opacity-0');
             orderModalContent.classList.add('scale-95');
@@ -786,16 +837,16 @@
                 .filter(([uid, data]) => data.state === 'online' && uid !== currentAdmin.uid);
 
             if (availableAdmins.length === 0) {
-                transferDropdown.innerHTML = `<div class="p-3 text-sm text-slate-500">No other admins are online.</div>`;
+                transferDropdown.innerHTML = `<div class="p-4 text-sm text-slate-500">No other admins are online.</div>`;
                 return;
             }
 
             availableAdmins.forEach(([uid, data]) => {
-                const adminItem = document.createElement('div');
-                adminItem.className = 'p-3 hover:bg-slate-100 cursor-pointer flex items-center justify-between';
+                const adminItem = document.createElement('button');
+                adminItem.className = 'w-full p-4 text-left hover:bg-slate-100 transition-colors flex items-center justify-between';
                 adminItem.innerHTML = `
                     <span>${data.name}</span>
-                    <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                    <span class="w-2.5 h-2.5 bg-green-500 rounded-full"></span>
                 `;
                 adminItem.onclick = () => initiateTransfer(uid, data.name);
                 transferDropdown.appendChild(adminItem);
@@ -804,18 +855,26 @@
         async function initiateTransfer(toAdminUid, toAdminName) {
             if (!activeChatIdState) return;
             const chatRef = doc(db, "chats", activeChatIdState);
+            const userDisplayName = activeChatUser.textContent;
             await updateDoc(chatRef, {
                 transferRequest: {
                     fromUid: currentAdmin.uid,
                     fromName: currentAdmin.displayName || currentAdmin.email.split('@')[0],
                     toUid: toAdminUid,
                     toName: toAdminName,
-                    status: 'pending'
+                    status: 'pending',
+                    chatId: activeChatIdState,
+                    userDisplayName: userDisplayName
                 }
             });
             transferDropdown.classList.add('hidden');
             sendReply(`I am transferring you to ${toAdminName}, one moment please.`);
+            // Optionally, clear the active chat for the transferring admin
+            activeChatContainer.classList.add('hidden');
+            noChatSelected.classList.remove('hidden');
+            activeChatIdState = null;
         }
+        
         function listenForTransfers(adminUid) {
             const q = query(collection(db, "chats"), where("transferRequest.toUid", "==", adminUid), where("transferRequest.status", "==", "pending"));
             unsubscribeFromTransfers = onSnapshot(q, (snapshot) => {
@@ -829,7 +888,7 @@
                     const chatData = change.doc.data();
                     const chatId = change.doc.id;
                     document.getElementById('transfer-from-admin').textContent = chatData.transferRequest.fromName;
-                    document.getElementById('transfer-chat-user').textContent = chatData.ownerUid || chatData.guestId;
+                    document.getElementById('transfer-chat-user').textContent = chatData.transferRequest.userDisplayName || chatData.ownerUid || chatData.guestId;
                     transferNotification.classList.remove('hidden');
                     transferNotification.classList.remove('translate-x-full');
 
@@ -839,7 +898,8 @@
                             assignedAdminUid: currentAdmin.uid,
                             assignedAdminName: currentAdmin.displayName || currentAdmin.email.split('@')[0],
                             agentName: currentAdmin.displayName || currentAdmin.email.split('@')[0],
-                            'transferRequest.status': 'accepted'
+                            'transferRequest.status': 'accepted',
+                            status: 'active' // Ensure chat status is active upon acceptance
                         });
                         openChat(chatId, chatData.ownerUid);
                         transferNotification.classList.add('translate-x-full');
@@ -848,6 +908,8 @@
                     document.getElementById('decline-transfer-btn').onclick = async () => {
                         const chatRef = doc(db, "chats", chatId);
                         await updateDoc(chatRef, { 'transferRequest.status': 'declined' });
+                        // Optionally, notify the original sender that the transfer was declined
+                        // Or simply remove the notification
                         transferNotification.classList.add('translate-x-full');
                     };
                 }
@@ -856,125 +918,59 @@
 
 
         // --- NOTIFICATION LOGIC ---
-
-        /**
-         * IMPORTANT: To make push notifications work, you need two more things:
-         * 1. A Service Worker File: 
-         * Create a file named `firebase-messaging-sw.js` in the root directory of your website.
-         * Firebase will automatically look for this file. Its content should be:
-         * ```javascript
-         * // /firebase-messaging-sw.js
-         * importScripts("[https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js)");
-         * importScripts("[https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js](https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js)");
-         * * const firebaseConfig = {
-         * // Your full firebaseConfig object here...
-         * };
-         *
-         * firebase.initializeApp(firebaseConfig);
-         * const messaging = firebase.messaging();
-         *
-         * messaging.onBackgroundMessage(function(payload) {
-         * const notificationTitle = payload.notification.title;
-         * const notificationOptions = {
-         * body: payload.notification.body,
-         * icon: '/your-icon.png' // Optional: path to an icon
-         * };
-         * return self.registration.showNotification(notificationTitle, notificationOptions);
-         * });
-         * ```
-         *
-         * 2. A Backend Trigger (Firebase Cloud Function):
-         * This client-side code only *receives* notifications. Something on the backend needs to *send* them.
-         * You'll need to deploy a Cloud Function that triggers, for example, when a new chat is created.
-         * The function would get the FCM tokens for all admins and send a message using the Firebase Admin SDK.
-         */
-
+        const VAPID_KEY = 'BDZVvbv6VgxZsBCPYUQyAwUbnSRwYB8F20IzCDh5SpkhTnw4PywqjoWq1dHDsv_xywTBeq7_LL142dheHTWR8uU'; // Use your actual VAPID key
+        
         async function setupNotifications(user) {
             try {
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
-                    console.log('Notification permission granted.');
-
-                    // VAPID key is now correctly placed here.
-                    const VAPID_KEY = 'BDZVvbv6VgxZsBCPYUQyAwUbnSRwYB8F20IzCDh5SpkhTnw4PywqjoWq1dHDsv_xywTBeq7_LL142dheHTWR8uU';
-                    
                     const fcmToken = await getToken(messaging, { vapidKey: VAPID_KEY });
-                    
                     if (fcmToken) {
-                        console.log('FCM Token:', fcmToken);
-                        // Save the token to Firestore for this admin
-                        // Ensure 'admins' collection exists and has appropriate security rules
                         const tokenRef = doc(db, `admins/${user.uid}/fcmTokens`, fcmToken);
                         await setDoc(tokenRef, { timestamp: serverTimestamp() });
-                    } else {
-                        console.log('No registration token available. Request permission to generate one.');
                     }
-                } else {
-                    console.log('Unable to get permission to notify.');
                 }
             } catch (error) {
                 console.error('An error occurred while setting up notifications:', error);
             }
         }
         
-        // Listen for messages when the app is in the foreground
         onMessage(messaging, (payload) => {
-            console.log('Message received in foreground: ', payload);
-            
-            const notification = document.getElementById('in-app-notification');
+            const notification = inAppNotification;
             document.getElementById('in-app-notification-title').textContent = payload.notification.title;
             document.getElementById('in-app-notification-body').textContent = payload.notification.body;
 
             notification.classList.remove('hidden', 'translate-x-full');
             
-            // Auto-hide the notification after 5 seconds
             setTimeout(() => {
                 notification.classList.add('translate-x-full');
             }, 5000);
 
-            // NEW: Handle foreground notification click to open chat
-            if (payload.data && payload.data.chatId && payload.data.action === 'open_chat') {
+            if (payload.data && payload.data.chatId) {
                 notification.onclick = () => {
-                    openChat(payload.data.chatId, 'unknown_user_id'); // Open the chat
-                    notification.classList.add('translate-x-full'); // Hide the toast
+                    openChat(payload.data.chatId, payload.data.userId);
+                    notification.classList.add('translate-x-full');
                 };
             }
         });
 
-        // NEW: In-app notification logic
         async function fetchAndDisplayNotifications() {
             if (!currentAdmin) return;
-
-            const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api'; // Your backend API base URL
-            try {
-                const idToken = await currentAdmin.getIdToken();
-                const response = await fetch(`${baseUrl}/notifications`, {
-                    headers: {
-                        'Authorization': `Bearer ${idToken}`
-                    }
-                });
-
-                if (!response.ok) {
-                    console.error('Failed to fetch notifications:', response.statusText);
-                    notificationList.innerHTML = `<div class="p-3 text-sm text-red-500">Error loading notifications.</div>`;
-                    return;
-                }
-
-                const notifications = await response.json();
-                unreadNotifications = notifications.filter(n => !n.isRead); // Update global state
-                
+            // Notifications are stored per admin under a subcollection 'notifications'
+            // Each notification is a document in that subcollection
+            const notificationsCollectionRef = collection(db, `admins/${currentAdmin.uid}/notifications`);
+            const q = query(notificationsCollectionRef, where('isRead', '==', false), orderBy('createdAt', 'desc'));
+            
+            unsubscribeFromNotifications = onSnapshot(q, (snapshot) => {
+                unreadNotifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 updateNotificationUI();
-
-            } catch (error) {
-                console.error('Error fetching notifications:', error);
-                notificationList.innerHTML = `<div class="p-3 text-sm text-red-500">Error loading notifications.</div>`;
-            }
+            });
         }
 
-        function updateNotificationUI() {
-            notificationList.innerHTML = ''; // Clear previous notifications
+        async function updateNotificationUI() {
+            notificationList.innerHTML = '';
             if (unreadNotifications.length === 0) {
-                notificationList.innerHTML = `<div class="p-3 text-sm text-slate-500">No new notifications.</div>`;
+                notificationList.innerHTML = `<div class="p-4 text-sm text-slate-500 text-center">No new notifications.</div>`;
                 notificationBadge.classList.add('hidden');
                 markAllReadBtn.disabled = true;
             } else {
@@ -984,10 +980,10 @@
 
                 unreadNotifications.forEach(notification => {
                     const notificationItem = document.createElement('div');
-                    notificationItem.className = `notification-item text-sm text-slate-700 ${notification.isRead ? '' : 'unread'}`;
+                    notificationItem.className = `notification-item text-sm text-slate-700 unread`;
                     notificationItem.innerHTML = `
-                        <p class="font-semibold">${notification.message}</p>
-                        <p class="text-xs text-slate-500">${new Date(notification.createdAt._seconds * 1000).toLocaleString()}</p>
+                        <p>${notification.message}</p>
+                        <p class="text-xs text-slate-500 mt-1">${notification.createdAt.toDate().toLocaleString()}</p>
                     `;
                     notificationItem.addEventListener('click', () => handleNotificationClick(notification));
                     notificationList.appendChild(notificationItem);
@@ -996,40 +992,28 @@
         }
 
         async function handleNotificationClick(notification) {
-            // Mark as read in the backend
-            const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
-            try {
-                const idToken = await currentAdmin.getIdToken();
-                await fetch(`${baseUrl}/notifications/${notification.id}/read`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${idToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                console.log(`Notification ${notification.id} marked as read.`);
-                // Remove from local unread list and update UI
-                unreadNotifications = unreadNotifications.filter(n => n.id !== notification.id);
-                updateNotificationUI();
-            } catch (error) {
-                console.error('Error marking notification as read:', error);
-            }
+            // Mark as read in Firestore
+            const notificationDocRef = doc(db, `admins/${currentAdmin.uid}/notifications`, notification.id);
+            await updateDoc(notificationDocRef, { isRead: true });
+            
+            // Remove from local unread list and update UI
+            unreadNotifications = unreadNotifications.filter(n => n.id !== notification.id);
+            updateNotificationUI();
 
-            // Navigate to the related chat
             if (notification.relatedDocType === 'chat' && notification.relatedDocId) {
-                openChat(notification.relatedDocId, 'unknown_user_id');
-                notificationDropdown.classList.add('hidden'); // Hide dropdown after clicking
+                openChat(notification.relatedDocId, notification.relatedUserId || 'unknown_user_id'); // Pass userId if available
+                notificationDropdown.classList.add('hidden');
             }
         }
 
         notificationBell.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent document click from immediately closing it
+            e.stopPropagation();
             notificationDropdown.classList.toggle('hidden');
-            // When opening the dropdown, fetch latest notifications
-            fetchAndDisplayNotifications();
+            if (!notificationDropdown.classList.contains('hidden')) {
+                // No need to call fetchAndDisplayNotifications() here as onSnapshot will handle real-time updates
+            }
         });
 
-        // Close dropdown if clicked outside
         document.addEventListener('click', (e) => {
             if (!notificationDropdown.contains(e.target) && !notificationBell.contains(e.target)) {
                 notificationDropdown.classList.add('hidden');
@@ -1037,56 +1021,30 @@
         });
 
         markAllReadBtn.addEventListener('click', async () => {
-            const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
-            const idToken = await currentAdmin.getIdToken();
-            
-            // Use Promise.all to send all mark-as-read requests concurrently
-            const markAsReadPromises = unreadNotifications.map(notification => 
-                fetch(`${baseUrl}/notifications/${notification.id}/read`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `Bearer ${idToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                })
-            );
-
-            try {
-                await Promise.all(markAsReadPromises);
-                console.log('All notifications marked as read.');
-                unreadNotifications = []; // Clear local list
-                updateNotificationUI();
-            } catch (error) {
-                console.error('Error marking all notifications as read:', error);
-                // Optionally re-fetch to ensure UI is consistent with backend state
-                fetchAndDisplayNotifications(); 
-            }
+            const batch = writeBatch(db);
+            unreadNotifications.forEach(notification => {
+                const notificationDocRef = doc(db, `admins/${currentAdmin.uid}/notifications`, notification.id);
+                batch.update(notificationDocRef, { isRead: true });
+            });
+            await batch.commit();
+            unreadNotifications = [];
+            updateNotificationUI();
         });
 
-        // NEW: Listen for in-app notifications in realtime using onSnapshot
+        // This function sets up the real-time listener for notifications
         function listenForInAppNotifications(adminUid) {
             // Listen for notifications specifically for this admin
-            const qAdmin = query(
-                collection(db, "notifications"),
-                where('recipientId', '==', adminUid),
+            const notificationsCollectionRef = collection(db, `admins/${adminUid}/notifications`);
+            const q = query(
+                notificationsCollectionRef,
                 where('isRead', '==', false),
                 orderBy('createdAt', 'desc')
             );
-
-            // Listen for general admin notifications
-            const qGeneral = query(
-                collection(db, "notifications"),
-                where('recipientId', '==', 'admin'),
-                where('isRead', '==', false),
-                orderBy('createdAt', 'desc')
-            );
-
-            // Combine listeners (this is a simplified approach, a more robust solution might merge results)
-            unsubscribeFromNotifications = onSnapshot(qAdmin, (snapshot) => {
-                fetchAndDisplayNotifications(); // Re-fetch all unread notifications
-            });
-            onSnapshot(qGeneral, (snapshot) => { // Attach another listener for general notifications
-                fetchAndDisplayNotifications(); // Re-fetch all unread notifications
+            
+            // This onSnapshot will keep unreadNotifications state updated in real-time
+            unsubscribeFromNotifications = onSnapshot(q, (snapshot) => {
+                unreadNotifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                updateNotificationUI(); // Update UI whenever unread notifications change
             });
         }
         

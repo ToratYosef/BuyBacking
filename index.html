@@ -133,9 +133,49 @@
             transform: scale(0.8);
             pointer-events: none;
         }
-        #chat-messages { display: flex; flex-direction: column; }
-        .chat-bubble-user { background-color: rgba(229, 231, 235, 0.7); } /* light grey transparent */
-        .chat-bubble-agent { background-color: rgba(219, 234, 254, 0.7); } /* light blue transparent */
+        
+        /* Removed fixed system messages container styles as it's no longer needed */
+
+        #chat-messages { 
+            flex-grow: 1; /* Allows it to take up remaining vertical space */
+            overflow-y: auto; /* Enables scrolling for messages */
+            padding: 1rem;
+            background-color: #f8fafc; /* Tailwind slate-50 */
+            display: flex; /* Ensure messages stack correctly */
+            flex-direction: column;
+        } 
+
+        /* Tooltips for chat header buttons */
+        .chat-header-button {
+            position: relative;
+            display: inline-block;
+        }
+
+        .chat-header-button .tooltip-text {
+            visibility: hidden;
+            background-color: #334155; /* slate-700 */
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px 8px;
+            position: absolute;
+            z-index: 1;
+            /* Adjusted positioning to appear below the icon */
+            top: 125%; 
+            left: 50%;
+            transform: translateX(-50%); /* Center the tooltip horizontally */
+            opacity: 0;
+            transition: opacity 0.3s;
+            white-space: nowrap;
+            font-size: 0.75rem; /* text-xs */
+        }
+
+        .chat-header-button:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+
         .typing-indicator { display: flex; align-items: center; padding: 8px 12px; }
         .typing-indicator span {
             height: 8px; width: 8px; margin: 0 2px;
@@ -220,38 +260,82 @@
             font-family: 'Dancing Script', cursive;
         }
 
+        /* Order selection specific styles */
+        .order-card {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            background-color: #f1f5f9; /* slate-100 */
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .order-card:hover {
+            background-color: #e2e8f0; /* slate-200 */
+        }
+        .order-card img {
+            width: 3rem;
+            height: 3rem;
+            object-fit: contain;
+            margin-right: 0.75rem;
+            border-radius: 0.25rem;
+        }
+        .order-card-details {
+            flex-grow: 1;
+            font-size: 0.875rem; /* text-sm */
+        }
+        .order-card-details strong {
+            display: block;
+            font-weight: 600;
+            color: #1e293b; /* slate-800 */
+        }
+        .order-card-details span {
+            color: #475569; /* slate-600 */
+        }
+        .order-card-details .reoffer {
+            color: #ef4444; /* red-500 */
+            font-weight: 600;
+        }
+
         /* --- Mobile Styles --- */
         @media (max-width: 767px) {
             /* Adjust header for small screens */
             header .container {
-                flex-direction: column;
-                text-align: center;
-                padding-top: 0.5rem; /* Reduced padding for mobile */
-                padding-bottom: 0.5rem; /* Reduced padding for mobile */
+                flex-direction: row; /* Changed to row for horizontal layout */
+                justify-content: space-between; /* Space out logo and login */
+                align-items: center;
+                padding-top: 0.5rem; 
+                padding-bottom: 0.5rem; 
             }
 
-            header .flex-1:first-child,
-            header .flex-1:last-child {
-                width: 100%;
-                justify-content: center;
+            header .container > .flex-1:first-child { /* Logo container */
+                width: auto; /* Allow logo to size itself */
+                flex-grow: 0; /* Don't let it grow */
             }
 
-            header .flex-1:nth-child(2) {
-                display: none; /* Hide the main logo text and tagline on small screens */
+            header .container > .flex-1:last-child { /* Login/Sign Up container */
+                width: auto; /* Allow login button to size itself */
+                flex-grow: 0; /* Don't let it grow */
+                justify-content: flex-end; /* Align to the right */
             }
 
-            header .h-20 { /* Adjusted logo height for mobile as well */
-                height: 4rem; /* Smaller logo on mobile */
+            header .flex-col { /* Hide the main logo text and tagline on small screens */
+                display: none; 
+            }
+
+            header .h-20 { /* Logo height */
+                height: 3rem; /* Smaller logo on mobile */
             }
 
             header nav {
-                margin-top: 0.5rem; /* Reduced margin for mobile */
-                justify-content: center;
+                margin-top: 0; /* Remove top margin */
+                justify-content: flex-end; /* Align to the right */
             }
             
             /* Adjust floating banner for mobile */
             .floating-banner {
-                top: 5rem; /* Adjusted top position for smaller mobile header */
+                top: 4rem; /* Adjusted top position for smaller mobile header */
             }
 
             /* Adjust hero section for mobile */
@@ -332,10 +416,10 @@
             }
             /* Chat window for mobile */
             #chat-widget-container {
-                bottom: 1rem; /* Adjusted for mobile */
-                right: 1rem; /* Adjusted for mobile */
-                width: auto; /* Allow button to size itself */
-                height: auto; /* Allow button to size itself */
+                bottom: 1rem; 
+                right: 1rem; 
+                width: auto; 
+                height: auto; 
             }
 
             #chat-window {
@@ -355,13 +439,13 @@
 
     <!-- HEADER -->
     <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
-        <div class="container mx-auto px-4 py-5 flex justify-between items-center"> <!-- Increased vertical padding -->
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center md:py-5"> <!-- Adjusted vertical padding for mobile -->
             <div class="flex-1">
-                <a href="#" class="h-20 inline-block"> <!-- Increased logo height -->
+                <a href="#" class="h-12 inline-block md:h-20"> <!-- Adjusted logo height for mobile -->
                     <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
                 </a>
             </div>
-            <div class="hidden md:flex flex-col items-center flex-1">
+            <div class="hidden md:flex flex-col items-center flex-1"> <!-- Hidden on mobile, visible on medium and larger screens -->
                 <div class="text-2xl font-extrabold text-slate-800 fancy-header-text">SecondHandCell</div> <!-- Applied fancy font -->
                 <p class="text-sm text-slate-500 -mt-1 fancy-header-text">Turn Your Old Phone into Cash!</p> <!-- Applied fancy font -->
             </div>
@@ -490,7 +574,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
                     <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
-                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="#" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="#" id="termsAndConditionsLink" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="#" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="#" id="termsAndConditionsLinkFooter" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
                     <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p><p class="text-slate-400">Phone: (123) 456-7890</p></div>
                 </div>
                 <div class="bg-slate-700 p-6 rounded-lg">
@@ -514,9 +598,9 @@
     <!-- About Us Modal -->
     <div id="aboutUsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2><p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p></div></div>
     <!-- Privacy Policy Modal -->
-    <div id="privacyPolicyModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Privacy Policy</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p><h3>Information We Collect</h3><p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition.</p><h3>How We Use Your Information</h3><p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p><h3>Data Security and Wiping</h3><p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased.</p><h3>Disclosure of Your Information</h3><p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p><h3>Your Consent</h3><p>By using our site, you consent to our website's privacy policy.</p></div></div></div>
+    <div id="privacyPolicyModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Privacy Policy</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p><h3>Information We Collect</h3><p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition.</p><h3>How We Use Your Information</h3><p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p<h3>Data Security and Wiping</h3><p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased.</p<h3>Disclosure of Your Information</h3><p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p<h3>Your Consent</h3><p>By using our site, you consent to our website's privacy policy.</p></div></div></div>
     <!-- Terms & Conditions Modal -->
-    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p><h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p>
+    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p<h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p>
             
             <hr class="my-6 border-t border-slate-300">
 
@@ -595,23 +679,54 @@
             <!-- Chat Header -->
             <div class="bg-blue-700 text-white p-4 flex justify-between items-center">
                 <h3 class="font-bold text-lg">Customer Support</h3>
-                <div>
-                    <button id="chat-minimize-btn" class="text-white hover:text-blue-200 mr-2"><i class="fa-solid fa-minus text-xl"></i></button>
-                    <button id="chat-close-btn" class="text-white hover:text-blue-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+                <div class="flex items-center space-x-2"> <!-- Grouping buttons -->
+                    <button id="chat-order-btn" class="chat-header-button text-white hover:text-blue-200" title="View My Orders">
+                        <i class="fa-solid fa-box-open text-xl"></i>
+                        <span class="tooltip-text">View My Orders</span>
+                    </button>
+                    <button id="chat-minimize-btn" class="chat-header-button text-white hover:text-blue-200" title="Minimize Chat">
+                        <i class="fa-solid fa-minus text-xl"></i>
+                        <span class="tooltip-text">Minimize Chat</span>
+                    </button>
+                    <button id="chat-close-btn" class="chat-header-button text-white hover:text-blue-200" title="End Chat">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                        <span class="tooltip-text">End Chat</span>
+                    </button>
                 </div>
             </div>
-            <!-- Messages Area -->
-            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto bg-slate-50"></div>
+
+            <!-- Messages Area (scrolling) -->
+            <div id="chat-messages" class="bg-slate-50"></div>
+
+            <!-- Order Selection UI -->
+            <div id="order-selection-container" class="p-4 border-t border-slate-200 bg-white hidden">
+                <div class="flex justify-between items-center mb-3">
+                    <p class="text-sm text-slate-600 font-semibold" id="order-selection-prompt">Please select your order:</p>
+                    <button id="close-order-selection-btn" class="chat-header-button text-slate-400 hover:text-slate-600 transition-colors duration-200" title="Close Order Selection">
+                        <i class="fa-solid fa-xmark text-xl"></i>
+                        <span class="tooltip-text">Close Order Selection</span>
+                    </button>
+                </div>
+                <div id="order-list" class="space-y-2 max-h-48 overflow-y-auto">
+                    <!-- Orders or login prompt will be rendered here -->
+                </div>
+            </div>
+
             <!-- Typing Indicator -->
             <div id="typing-indicator-container" class="p-2 hidden">
                 <div class="p-3 rounded-lg max-w-[85%] mb-2 break-words chat-bubble-agent">
                     <div class="typing-indicator"><span></span><span></span><span></span></div>
                 </div>
             </div>
+
             <!-- Input Area -->
-            <div id="chat-input-container" class="p-4 border-t border-slate-200">
-                <input type="text" id="chat-input" placeholder="Type your message..." class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div id="chat-input-container" class="p-4 border-t border-slate-200 flex items-center">
+                <input type="text" id="chat-input" placeholder="Type your message..." class="flex-grow border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mr-2">
+                <button id="send-message-btn" class="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition-colors duration-300 shadow-sm" title="Send Message">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
             </div>
+
             <!-- Guest Prompt -->
             <div id="guest-prompt-container" class="p-4 border-t border-slate-200 hidden">
                 <p class="text-center text-sm text-slate-600 mb-3">To provide the best support, please log in or continue as a guest.</p>
@@ -620,6 +735,7 @@
                     <button id="guest-continue-btn" class="w-full bg-slate-200 text-slate-800 p-3 rounded-lg font-semibold hover:bg-slate-300 transition-colors">Ask a General Question</button>
                 </div>
             </div>
+
             <!-- Survey -->
             <div id="chat-survey-container" class="p-4 border-t border-slate-200 hidden overflow-y-auto">
                 <p class="text-center font-semibold mb-2">The agent has ended the chat.</p>
@@ -649,6 +765,7 @@
                     <button type="submit" class="btn-dark-slate">Submit Feedback</button>
                 </form>
             </div>
+
             <!-- End Chat Confirmation -->
             <div id="end-chat-confirm-modal" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-10">
                 <p class="text-lg font-semibold text-slate-800 mb-4 text-center">End this chat session?</p>
@@ -668,7 +785,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Your Firebase configuration
         const firebaseConfig = {
@@ -715,10 +832,19 @@
             const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
             const closeModal = (modal) => modal.classList.remove('is-visible');
 
+            // Event listener for the Terms & Conditions link in the floating banner and footer
+            document.getElementById('termsAndConditionsLink').addEventListener('click', (e) => { 
+                e.preventDefault(); 
+                openModal('termsAndConditionsModal'); 
+            });
+            document.getElementById('termsAndConditionsLinkFooter').addEventListener('click', (e) => { 
+                e.preventDefault(); 
+                openModal('termsAndConditionsModal'); 
+            });
+
             document.getElementById('loginNavBtn').addEventListener('click', (e) => { e.preventDefault(); openModal('loginModal'); });
             document.getElementById('aboutUsLink').addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
             document.getElementById('privacyPolicyLink').addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
-            document.getElementById('termsAndConditionsLink').addEventListener('click', (e) => { e.preventDefault(); openModal('termsAndConditionsModal'); });
 
             modals.forEach(modal => {
                 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
@@ -873,6 +999,11 @@
             const endChatConfirmModal = document.getElementById('end-chat-confirm-modal');
             const endChatYesBtn = document.getElementById('end-chat-yes');
             const endChatNoBtn = document.getElementById('end-chat-no');
+            const orderSelectionContainer = document.getElementById('order-selection-container');
+            const orderList = document.getElementById('order-list');
+            const closeOrderSelectionBtn = document.getElementById('close-order-selection-btn');
+            const orderSelectionPrompt = document.getElementById('order-selection-prompt');
+            const sendMessageBtn = document.getElementById('send-message-btn');
 
             let currentChatId = null;
             let unsubscribeFromMessages = null;
@@ -881,6 +1012,8 @@
             let unreadCount = 0;
             let hasUserTypedFirstMessage = false;
             let userTypingTimeout = null;
+            // Flag to track if the initial welcome message has been rendered for the current chat session
+            let initialWelcomeRendered = {}; 
 
             const notificationSound = new Audio('https://cdn.freesound.org/previews/253/253887_3900531-lq.mp3');
             notificationSound.volume = 0.5;
@@ -907,7 +1040,8 @@
                     status: 'active',
                     agentName: null,
                     isAgentTyping: false,
-                    userTypingText: ''
+                    userTypingText: '',
+                    agentAskingForOrderId: false // Initialize this flag
                 };
                 const docRef = await addDoc(collection(db, "chats"), chatSessionData);
                 chatId = docRef.id;
@@ -915,6 +1049,11 @@
                 return chatId;
             };
 
+            // --- REMOVED: Dummy Order Creation for Demo ---
+            // The createDummyOrder function has been removed.
+            // --- END REMOVED ---
+
+            // Modified renderMessage to always append to chatMessages, no more fixed system messages container
             const renderMessage = (msg) => {
                 const messageDiv = document.createElement('div');
                 const user = auth.currentUser;
@@ -929,32 +1068,53 @@
                     classes += isMyMessage ? ' bg-gray-200 text-slate-800 self-end' : ' bg-blue-100 text-blue-800 self-start';
                     messageDiv.textContent = msg.text;
                 }
+
                 messageDiv.className = classes;
+                // Add a unique ID for agent joined messages to prevent duplicates
+                if (msg.type === 'system' && msg.text.includes('has joined the chat.')) {
+                    messageDiv.id = `agent-joined-${currentChatId}`; 
+                }
                 chatMessages.appendChild(messageDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             };
-            
+
             const listenForChatSessionChanges = (chatId) => {
                 if (unsubscribeFromChatSession) unsubscribeFromChatSession();
-                unsubscribeFromChatSession = onSnapshot(doc(db, "chats", chatId), (docSnap) => {
+                unsubscribeFromChatSession = onSnapshot(doc(db, "chats", chatId), async (docSnap) => {
                     const data = docSnap.data();
                     if (!data) return;
-                    if (data.agentName && data.agentHasJoined && !document.getElementById(`agent-joined-${data.agentName}`)) {
-                        const joinMsg = { type: 'system', text: `<i class="fa-solid fa-headset mr-2"></i>${data.agentName} has joined the chat.` };
-                        const joinDiv = document.createElement('div');
-                        joinDiv.id = `agent-joined-${data.agentName}`;
-                        joinDiv.className = 'text-center text-sm text-slate-500 my-2';
-                        joinDiv.innerHTML = `<span class="bg-white px-2 py-1 rounded-full">${joinMsg.text}</span>`;
-                        chatMessages.appendChild(joinDiv);
+
+                    // Agent joined message logic
+                    const agentJoinedFlag = localStorage.getItem(`agentJoined_${chatId}`);
+                    if (data.agentName && data.agentHasJoined && !agentJoinedFlag) {
+                        const joinMsgText = `<i class="fa-solid fa-headset mr-2"></i>${data.agentName} has joined the chat.`;
+                        // Add this message to Firestore so it's persisted and appears in chat history
+                        await addDoc(collection(db, `chats/${chatId}/messages`), {
+                            text: joinMsgText,
+                            timestamp: serverTimestamp(),
+                            sender: 'system',
+                            type: 'system'
+                        });
+                        localStorage.setItem(`agentJoined_${chatId}`, 'true'); // Set flag in localStorage
                     }
+                    
                     typingIndicatorContainer.style.display = data.isAgentTyping ? 'block' : 'none';
                     if (data.isAgentTyping) chatMessages.scrollTop = chatMessages.scrollHeight;
                     if (data.status === 'ended_by_agent') {
                         chatInputContainer.classList.add('hidden');
                         guestPromptContainer.classList.add('hidden');
                         surveyContainer.classList.remove('hidden');
+                        orderSelectionContainer.classList.add('hidden'); // Hide order selection
                         localStorage.removeItem('chatSessionId');
+                        localStorage.removeItem(`agentJoined_${chatId}`); // Clear flag on chat end
                     }
+                    // --- NEW: Detect agent asking for order ID ---
+                    if (data.agentAskingForOrderId) {
+                        displayOrderSelectionUI();
+                    } else {
+                        orderSelectionContainer.classList.add('hidden');
+                    }
+                    // --- END NEW ---
                 });
             };
 
@@ -964,16 +1124,18 @@
                 const messagesRef = collection(db, `chats/${chatId}/messages`);
                 const q = query(messagesRef, orderBy("timestamp"));
                 unsubscribeFromMessages = onSnapshot(q, (snapshot) => {
-                    chatMessages.innerHTML = ''; // Clear messages to prevent duplication
-                    if (snapshot.empty && !hasUserTypedFirstMessage) {
+                    chatMessages.innerHTML = ''; // Clear existing messages
+                    if (!initialWelcomeRendered[chatId] && snapshot.empty) {
+                        // Render initial welcome if no messages exist yet
                         const user = auth.currentUser;
                         const userName = user?.displayName?.split(' ')[0] || 'there';
-                        chatMessages.innerHTML = `<div class="p-3 rounded-lg max-w-[85%] mb-2 break-words bg-blue-100 text-blue-800 self-start">Hi ${userName}, how can we help you today?</div>`;
-                        return;
+                        renderMessage({ type: 'system', text: `Hi ${userName}, how can we help you today?` });
+                        initialWelcomeRendered[chatId] = true; // Mark as rendered
                     }
+
                     snapshot.forEach(doc => {
                         const msgData = doc.data();
-                        renderMessage(msgData);
+                        renderMessage(msgData); // All messages now render to the scrollable area
                         const user = auth.currentUser;
                         const currentGuestId = localStorage.getItem('guestChatId');
                         const isMyMessage = (user && msgData.sender === user.uid) || (!user && msgData.sender === currentGuestId);
@@ -992,12 +1154,15 @@
                 endChatConfirmModal.classList.remove('flex'); // Ensure display:flex is removed
                 surveyContainer.classList.add('hidden');
                 guestPromptContainer.classList.add('hidden');
-                chatInputContainer.classList.remove('hidden');
+                chatInputContainer.classList.remove('hidden'); // Ensure input is visible
+                orderSelectionContainer.classList.add('hidden'); // Hide order selection
                 typingIndicatorContainer.style.display = 'none';
+                chatMessages.innerHTML = ''; // Clear all messages
+                initialWelcomeRendered = {}; // Reset the welcome message flag for all chats
             };
 
             const openChat = async () => {
-                resetChatUI();
+                resetChatUI(); // Reset UI before opening
                 chatWindow.classList.add('is-visible');
                 isChatMinimized = false;
                 unreadCount = 0;
@@ -1006,6 +1171,7 @@
                 if (chatId) {
                     listenForMessages(chatId);
                     listenForChatSessionChanges(chatId);
+                    // The initial welcome message is now handled by listenForMessages if chat is empty
                 }
             };
             chatOpenBtn.addEventListener('click', openChat);
@@ -1037,6 +1203,7 @@
                     await updateDoc(doc(db, "chats", currentChatId), { status: 'ended_by_user' });
                 }
                 localStorage.removeItem('chatSessionId');
+                localStorage.removeItem(`agentJoined_${currentChatId}`); // Clear flag on user end
                 currentChatId = null;
                 hasUserTypedFirstMessage = false;
                 chatMessages.innerHTML = '';
@@ -1050,7 +1217,7 @@
                 const user = auth.currentUser;
                 if (!user && !hasUserTypedFirstMessage) {
                     hasUserTypedFirstMessage = true;
-                    chatInputContainer.classList.add('hidden');
+                    chatInputContainer.classList.add('hidden'); // Hide input for guest prompt
                     guestPromptContainer.classList.remove('hidden');
                     return;
                 }
@@ -1065,7 +1232,18 @@
                 });
             };
 
-            chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(chatInput.value); } });
+            // Send message on Enter key press
+            chatInput.addEventListener('keypress', (e) => { 
+                if (e.key === 'Enter') { 
+                    e.preventDefault(); 
+                    sendMessage(chatInput.value); 
+                } 
+            });
+            // Send message on button click
+            sendMessageBtn.addEventListener('click', () => {
+                sendMessage(chatInput.value);
+            });
+
             chatInput.addEventListener('keyup', () => {
                 clearTimeout(userTypingTimeout);
                 userTypingTimeout = setTimeout(async () => {
@@ -1079,7 +1257,8 @@
             guestContinueBtn.addEventListener('click', () => {
                 guestPromptContainer.classList.add('hidden');
                 chatInputContainer.classList.remove('hidden');
-                renderMessage({ type: 'system', text: 'An agent will be with you shortly. Please provide any relevant details like order numbers.' });
+                // The initial "An agent will be with you shortly..." message will be rendered via the Firestore listener
+                // once the first user message is sent.
                 chatInput.focus();
             });
 
@@ -1121,6 +1300,94 @@
                 } catch (error) { console.error("Error sending feedback email:", error); }
                 surveyContainer.innerHTML = '<p class="text-center font-semibold text-green-600">Thank you for your feedback!</p>';
             });
+
+            // --- NEW: Order Selection Logic ---
+            const fetchUserOrders = async () => {
+                const user = auth.currentUser;
+                if (!user) {
+                    return { requiresLogin: true }; // Indicate that login is required
+                }
+                const userId = user.uid;
+                const ordersRef = collection(db, `users/${userId}/orders`);
+                const q = query(ordersRef, orderBy("timestamp", "desc"));
+                const snapshot = await getDocs(q);
+                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            };
+
+            const renderOrderSelection = (orders) => {
+                orderList.innerHTML = ''; // Clear previous orders
+                if (orders.requiresLogin) {
+                    orderList.innerHTML = '<p class="text-center text-slate-500">Please <a href="#" id="orderLoginPromptLink" class="text-blue-600 font-semibold hover:underline">log in</a> to view and select your orders.</p>';
+                    document.getElementById('orderLoginPromptLink').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        openModal('loginModal');
+                        orderSelectionContainer.classList.add('hidden'); // Hide order selection after clicking login
+                    });
+                    orderSelectionPrompt.textContent = 'Login to access your orders:';
+                    return;
+                }
+                
+                if (orders.length === 0) {
+                    orderList.innerHTML = '<p class="text-center text-slate-500">No recent orders found.</p>';
+                    orderSelectionPrompt.textContent = 'Please select your order:';
+                    return;
+                }
+                orderSelectionPrompt.textContent = 'Please select your order:'; // Reset prompt text
+                orders.forEach(order => {
+                    const orderCard = document.createElement('div');
+                    orderCard.className = 'order-card';
+                    orderCard.dataset.orderId = order.orderId;
+                    orderCard.innerHTML = `
+                        <img src="${order.imageUrl || 'https://placehold.co/48x48/e0e7ff/4338ca?text=📱'}" alt="${order.deviceName}" onerror="this.onerror=null;this.src='https://placehold.co/48x48/e0e7ff/4338ca?text=📱';">
+                        <div class="order-card-details">
+                            <strong>ID: ${order.orderId} - ${order.deviceName}</strong>
+                            <span>${order.storage} | $${order.price}</span>
+                            ${order.reoffer ? `<span class="reoffer">Reoffer: $${order.reoffer}</span>` : ''}
+                        </div>
+                    `;
+                    orderCard.addEventListener('click', () => handleOrderSelection(order));
+                    orderList.appendChild(orderCard);
+                });
+            };
+
+            const displayOrderSelectionUI = async () => {
+                guestPromptContainer.classList.add('hidden');
+                orderSelectionContainer.classList.remove('hidden');
+                orderList.innerHTML = '<p class="text-center text-blue-500">Loading your orders...</p>';
+                const orders = await fetchUserOrders();
+                renderOrderSelection(orders);
+                // No need to scroll chatMessages here, as order selection is a separate overlay
+            };
+
+            const handleOrderSelection = async (order) => {
+                const messageText = `Selected Order: ID: ${order.orderId}, Device: ${order.deviceName}, Storage: ${order.storage}, Price: $${order.price}${order.reoffer ? `, Reoffer: $${order.reoffer}` : ''}`;
+                await sendMessage(messageText);
+                orderSelectionContainer.classList.add('hidden');
+                if (currentChatId) {
+                    await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false });
+                }
+            };
+
+            closeOrderSelectionBtn.addEventListener('click', async () => {
+                orderSelectionContainer.classList.add('hidden');
+                if (currentChatId) {
+                    await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false });
+                }
+            });
+
+            // "Orders" button in chat header
+            const chatOrderBtn = document.getElementById('chat-order-btn');
+            chatOrderBtn.addEventListener('click', async () => {
+                // Removed the call to createDummyOrder(userId);
+                if (currentChatId) {
+                    await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
+                } else {
+                    // For guest users or no active chat, directly show order selection
+                    displayOrderSelectionUI();
+                }
+            });
+
+            // --- END NEW: Order Selection Logic ---
         });
     </script>
 </body>
