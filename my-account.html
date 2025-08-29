@@ -3,35 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwiftBuyBack - My Account</title>
+    <title>SecondHandCell - My Account</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8fafc; /* Tailwind slate-50 */
+            color: #1e293b; /* Tailwind slate-800 */
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
         .tab-button.active {
-            border-color: #4f46e5; /* Indigo-600 */
-            color: #4f46e5; /* Indigo-600 */
-            background-color: #eef2ff; /* Indigo-50 */
+            border-color: #2563eb; /* Blue-600 */
+            color: #2563eb; /* Blue-600 */
+            background-color: #eff6ff; /* Blue-50 */
         }
-        .initials-monogram {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: #ffffff;
-            font-size: 1rem;
-            transition: background-color 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            cursor: pointer;
+        /* Styles from the provided new page for consistency */
+        .user-monogram {
+            display: flex; align-items: center; justify-content: center;
+            width: 2.5rem; height: 2.5rem;
+            border-radius: 9999px;
+            background-color: #dbeafe; color: #1d4ed8; /* blue-100, blue-700 */
+            font-weight: 700; font-size: 1.125rem;
+            cursor: pointer; user-select: none;
         }
+        .auth-dropdown {
+            position: absolute; right: 0; margin-top: 0.5rem;
+            width: 12rem; background-color: white;
+            border-radius: 0.375rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding-top: 0.25rem; padding-bottom: 0.25rem;
+            z-index: 50;
+        }
+        .modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            opacity: 0; visibility: hidden;
+        }
+        .modal.is-visible {
+            opacity: 1; visibility: visible;
+        }
+        .modal-content {
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-out;
+        }
+        .modal.is-visible .modal-content {
+            transform: translateY(0);
+        }
+        .btn-red-logout {
+            display: block; width: 100%; text-align: left;
+            padding: 0.5rem 1rem; font-size: 0.875rem; color: #dc2626;
+            background-color: transparent; border: none;
+            transition: background-color 0.2s ease; cursor: pointer;
+        }
+        .btn-red-logout:hover { background-color: #fef2f2; }
+
         /* Status badge styling */
         .status-badge {
             @apply inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none rounded-full;
@@ -47,20 +74,207 @@
         .status-label_generated { @apply bg-yellow-200 text-yellow-800; }
         .status-received { @apply bg-gray-200 text-gray-800; }
         .status-return-label-generated { @apply bg-gray-400 text-gray-800; }
+
+        /* --- Chat Widget Styles --- */
+        #chat-widget-container {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 1000;
+        }
+        #chat-open-btn {
+            background-color: #2563eb; color: white;
+            width: 4rem; height: 4rem; border-radius: 9999px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.2);
+            cursor: pointer; transition: transform 0.2s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        #chat-open-btn:hover { transform: scale(1.1); }
+        #unread-counter {
+            position: absolute; top: -4px; right: -4px;
+            background-color: #ef4444; color: white;
+            border-radius: 9999px; font-size: 0.75rem; font-weight: bold;
+            width: 1.5rem; height: 1.5rem;
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid white;
+            transform: scale(0); transition: transform 0.2s ease-out;
+        }
+        #unread-counter.visible { transform: scale(1); }
+        #chat-window {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 24rem;
+            height: 32rem;
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            opacity: 0;
+            transform: translateY(20px);
+            pointer-events: none;
+        }
+        #chat-window.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        #chat-window.is-visible + #chat-open-btn {
+            opacity: 0;
+            transform: scale(0.8);
+            pointer-events: none;
+        }
+        #chat-messages { display: flex; flex-direction: column; }
+        .chat-bubble-user { background-color: rgba(229, 231, 235, 0.7); } /* light grey transparent */
+        .chat-bubble-agent { background-color: rgba(219, 234, 254, 0.7); } /* light blue transparent */
+        .typing-indicator { display: flex; align-items: center; padding: 8px 12px; }
+        .typing-indicator span {
+            height: 8px; width: 8px; margin: 0 2px;
+            background-color: #9ca3af; border-radius: 50%;
+            display: inline-block; animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+        .star-rating i { color: #d1d5db; cursor: pointer; transition: color 0.2s; }
+        .star-rating:hover i, .star-rating i.selected { color: #f59e0b; }
+        .star-rating i:hover ~ i { color: #d1d5db; }
+
+        .prose {
+            max-width: 65ch;
+            color: #334155; /* slate-700 */
+        }
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+        .prose p, .prose ul {
+            margin-bottom: 1em;
+        }
+        .prose ul {
+            list-style-position: inside;
+            padding-left: 1em;
+        }
+        .prose li {
+            margin-bottom: 0.5em;
+        }
+        .btn-google-style {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; background-color: white; color: #475569;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            border: 1px solid #cbd5e1; font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+        }
+        .btn-google-style:hover { background-color: #f8fafc; }
+        .btn-dark-slate {
+            width: 100%; background-color: #1e293b; color: white;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            font-weight: 600; transition: all 0.3s ease;
+            border: none; cursor: pointer;
+        }
+        .btn-dark-slate:hover { background-color: #0f172a; }
+
+        /* Mobile Styles */
+        @media (max-width: 767px) {
+            header .container {
+                flex-direction: column;
+                text-align: center;
+                padding-top: 0.5rem;
+                padding-bottom: 0.5rem;
+            }
+            header .flex-1:first-child,
+            header .flex-1:last-child {
+                width: 100%;
+                justify-content: center;
+            }
+            header .hidden.md\:flex { /* Target the hidden tagline on mobile */
+                display: none !important;
+            }
+            header .h-20 {
+                height: 4rem;
+            }
+            header nav {
+                margin-top: 0.5rem;
+                justify-content: center;
+            }
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            footer .grid {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+            footer .lg\:col-span-2 {
+                grid-template-columns: 1fr;
+            }
+            footer .bg-slate-700 {
+                margin-top: 1.5rem;
+            }
+            footer form {
+                flex-direction: column;
+            }
+            footer button {
+                width: 100%;
+            }
+            .modal-content {
+                padding: 1.5rem;
+            }
+            .modal-content h2 {
+                font-size: 1.5rem;
+            }
+            #chat-widget-container {
+                bottom: 0;
+                right: 0;
+                width: 100%;
+                height: 100%;
+                border-radius: 0;
+            }
+            #chat-window {
+                width: 100%;
+                height: 100%;
+                border-radius: 0;
+            }
+            #chat-open-btn {
+                bottom: 1rem;
+                right: 1rem;
+            }
+        }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
-    <header class="bg-white shadow-sm py-4">
-        <div class="container mx-auto px-4 flex justify-between items-center">
-            <a href="https://secondhandcell.com/index.html" class="text-2xl font-bold text-indigo-700 rounded-md p-2">SwiftBuyBack</a>
-            <nav class="space-x-4 flex items-center">
-                <a href="https://secondhandcell.com/sell-device.html" class="text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Sell Your Device</a>
-                <div id="authStatusContainer" class="flex items-center space-x-4">
-                    <a id="login-link" href="https://secondhandcell.com/login.html" class="hidden text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Login</a>
-                    <a id="account-link" href="https://secondhandcell.com/my-account.html" class="hidden text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">My Account</a>
-                    <div id="userMonogram" class="initials-monogram hidden"></div>
-                    <button id="logout-button" class="hidden text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Logout</button>
+    <!-- HEADER -->
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
+        <div class="container mx-auto px-4 py-5 flex justify-between items-center">
+            <div class="flex-1">
+                <a href="index.html" class="h-20 inline-block">
+                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+                </a>
+            </div>
+            <div class="hidden md:flex flex-col items-center flex-1">
+                <div class="text-2xl font-extrabold text-slate-800">SecondHandCell</div>
+                <p class="text-sm text-slate-500 -mt-1">Turn Your Old Phone into Cash!</p>
+            </div>
+            <nav class="flex items-center space-x-4 flex-1 justify-end">
+                <div id="authStatusContainer" class="relative inline-block">
+                    <a href="#" id="loginNavBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Login/Sign Up</a>
+                    <div id="userMonogram" class="user-monogram hidden"></div>
+                    <div id="authDropdown" class="auth-dropdown hidden">
+                        <a href="my-account.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
+                        <button id="logoutBtn" class="btn-red-logout">Logout</button>
+                    </div>
                 </div>
             </nav>
         </div>
@@ -68,51 +282,51 @@
 
     <main class="flex-grow container mx-auto px-4 py-12">
         <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl mx-auto">
-            <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">My Account</h1>
+            <h1 class="text-4xl font-bold text-center text-slate-800 mb-8">My Account</h1>
 
             <div id="message" class="mb-6 p-3 rounded-md text-sm text-center hidden"></div>
 
-            <div class="flex border-b border-gray-200 mb-8">
-                <button id="accountInfoTab" class="tab-button active flex-1 py-3 px-4 text-center text-lg font-medium text-gray-700 rounded-t-lg border-b-2 border-transparent hover:border-indigo-400 hover:text-indigo-600 transition duration-300">
+            <div class="flex border-b border-slate-200 mb-8">
+                <button id="accountInfoTab" class="tab-button active flex-1 py-3 px-4 text-center text-lg font-medium text-slate-700 rounded-t-lg border-b-2 border-transparent hover:border-blue-400 hover:text-blue-600 transition duration-300">
                     Account Information
                 </button>
-                <button id="orderHistoryTab" class="tab-button flex-1 py-3 px-4 text-center text-lg font-medium text-gray-700 rounded-t-lg border-b-2 border-transparent hover:border-indigo-400 hover:text-indigo-600 transition duration-300">
+                <button id="orderHistoryTab" class="tab-button flex-1 py-3 px-4 text-center text-lg font-medium text-slate-700 rounded-t-lg border-b-2 border-transparent hover:border-blue-400 hover:text-blue-600 transition duration-300">
                     Order History
                 </button>
             </div>
 
             <div id="accountInfoSection" class="tab-content">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-6">Your Details</h2>
+                <h2 class="text-2xl font-semibold text-slate-800 mb-6">Your Details</h2>
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Full Name:</label>
-                        <p id="userName" class="mt-1 text-lg text-gray-900 font-semibold">Loading...</p>
+                        <label class="block text-sm font-medium text-slate-700">Full Name:</label>
+                        <p id="userName" class="mt-1 text-lg text-slate-900 font-semibold">Loading...</p>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Email Address:</label>
-                        <p id="userEmail" class="mt-1 text-lg text-gray-900 font-semibold">Loading...</p>
+                        <label class="block text-sm font-medium text-slate-700">Email Address:</label>
+                        <p id="userEmail" class="mt-1 text-lg text-slate-900 font-semibold">Loading...</p>
                     </div>
                     <div>
-                        <label for="userPhone" class="block text-sm font-medium text-gray-700">Phone Number:</label>
+                        <label for="userPhone" class="block text-sm font-medium text-slate-700">Phone Number:</label>
                         <input type="tel" id="userPhone" name="userPhone"
-                               class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                               class="mt-1 block w-full px-4 py-2 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                placeholder="e.g., +15551234567">
                     </div>
                 </div>
 
                 <div class="mt-8 flex flex-col sm:flex-row gap-4">
-                    <button id="saveInfoBtn" class="w-full sm:w-auto bg-indigo-600 text-white py-2 px-6 rounded-md font-semibold hover:bg-indigo-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <button id="saveInfoBtn" class="w-full sm:w-auto bg-blue-600 text-white py-2 px-6 rounded-md font-semibold hover:bg-blue-700 transition duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                         Save Changes
                     </button>
                 </div>
             </div>
 
             <div id="orderHistorySection" class="tab-content hidden">
-                <h2 class="text-2xl font-semibold text-gray-800 mb-6">Your Past Orders</h2>
+                <h2 class="text-2xl font-semibold text-slate-800 mb-6">Your Past Orders</h2>
                 <div class="overflow-x-auto">
-                    <table class="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                    <table class="min-w-full bg-white border border-slate-200 rounded-lg shadow-sm">
                         <thead>
-                            <tr class="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
+                            <tr class="bg-slate-100 text-slate-600 uppercase text-sm leading-normal">
                                 <th class="py-3 px-6 text-left">Order ID</th>
                                 <th class="py-3 px-6 text-left">Date</th>
                                 <th class="py-3 px-6 text-left">Device</th>
@@ -121,49 +335,58 @@
                                 <th class="py-3 px-6 text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="ordersTableBody" class="text-gray-700 text-sm font-light">
-                            <tr><td colspan="6" class="text-center text-gray-500 py-4">Loading orders...</td></tr>
+                        <tbody id="ordersTableBody" class="text-slate-700 text-sm font-light">
+                            <tr><td colspan="6" class="text-center text-slate-500 py-4">Loading orders...</td></tr>
                         </tbody>
                     </table>
                 </div>
-                <p id="noOrdersMessage" class="text-gray-600 mt-4 text-center hidden">No orders found.</p>
+                <p id="noOrdersMessage" class="text-slate-600 mt-4 text-center hidden">No orders found.</p>
             </div>
         </div>
     </main>
 
-    <footer class="bg-gray-800 text-white py-12 mt-8 w-full">
-        <div class="container mx-auto px-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div>
-                <h3 class="text-xl font-bold mb-4">SwiftBuyBack</h3>
-                <p class="text-gray-400">Your trusted partner for selling used smartphones. Quick quotes, fair prices, and hassle-free service.</p>
+    <!-- FOOTER - Replaced with new footer from provided page -->
+    <footer class="bg-slate-800 text-white">
+        <div class="container mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
+                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="index.html" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="#" id="termsAndConditionsLink" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                    <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p><p class="text-slate-400">Phone: (123) 456-7890</p></div>
+                </div>
+                <div class="bg-slate-700 p-6 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
+                    <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                    <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
+                        <label for="footerPromoEmail" class="sr-only">Email Address</label>
+                        <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Sign Up</button>
+                    </form>
+                    <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
+                </div>
             </div>
-            <div>
-                <h3 class="text-xl font-bold mb-4">Quick Links</h3>
-                <ul class="space-y-2">
-                    <li><a href="https://secondhandcell.com/index.html" class="text-gray-400 hover:text-white transition duration-300">Home</a></li>
-                    <li><a href="https://secondhandcell.com/sell-device.html" class="text-gray-400 hover:text-white transition duration-300">Sell Your Phone</a></li>
-                    <li><a href="https://secondhandcell.com/my-account.html" class="text-gray-400 hover:text-white transition duration-300">My Account</a></li>
-                    <li><a href="https://secondhandcell.com/about-us.html" class="text-gray-400 hover:text-white transition duration-300">About Us</a></li>
-                    <li><a href="https://secondhandcell.com/contact.html" class="text-gray-400 hover:text-white transition duration-300">Contact</a></li>
-                </ul>
-            </div>
-            <div class="md:col-span-2 lg:col-span-1">
-                <h3 class="text-xl font-bold mb-4">Contact Us</h3>
-                <p class="text-gray-400">Email: info@swiftbuyback.com</p>
-                <p class="text-gray-400">Phone: (123) 456-7890</p>
-                <p class="text-gray-400 mt-4">&copy; 2025 SwiftBuyBack. All rights reserved.</p>
-            </div>
+            <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
         </div>
     </footer>
 
+    <!-- MODALS -->
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2><div class="flex border-b border-slate-200 mb-6"><button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Login</button><button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Sign Up</button></div><form id="loginForm" class="space-y-4"><p class="text-slate-600 text-center">Log in to continue with your order.</p><button type="button" id="googleLoginBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Login with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="loginEmail" class="sr-only">Email Address</label><input type="email" id="loginEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="loginPassword" class="sr-only">Password</label><input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="current-password"></div><button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button><p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-blue-600 font-semibold hover:underline">Reset it here</a></p></form><form id="signupForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Create an account to complete your order.</p><button type="button" id="googleSignupBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Sign Up with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="signupName" class="sr-only">Full Name</label><input type="text" id="signupName" placeholder="Full Name" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="signupEmail" class="sr-only">Email Address</label><input type="email" id="signupEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="signupPassword" class="sr-only">Password</label><input type="password" id="signupPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="new-password"></div><button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button><p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-blue-600 font-semibold hover:underline">Log in here</a></p></form><form id="forgotPasswordForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Enter your email to receive a password reset link.</p><div><label for="forgotEmail" class="sr-only">Email Address</label><input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button><p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-blue-600 font-semibold hover:underline">Return to Login</a></p></form><div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div></div></div>
+    <!-- About Us Modal -->
+    <div id="aboutUsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2><p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p></div></div>
+    <!-- Privacy Policy Modal -->
+    <div id="privacyPolicyModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Privacy Policy</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p><h3>Information We Collect</h3><p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition.</p><h3>How We Use Your Information</h3><p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p><h3>Data Security and Wiping</h3><p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased.</p><h3>Disclosure of Your Information</h3><p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p><h3>Your Consent</h3><p>By using our site, you consent to our website's privacy policy.</p></div></div></div>
+    <!-- Terms & Conditions Modal -->
+    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p><h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p></div></div></div>
+
     <!-- Order Details Modal -->
-    <div id="orderDetailsModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
-            <button id="closeModal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">
+    <div id="orderDetailsModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto modal-content">
+            <button id="closeModal" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-2xl transition-colors duration-200">
                 <i class="fas fa-times"></i>
             </button>
-            <h3 class="text-2xl font-bold text-gray-800 mb-4">Order Details <span id="modalOrderId" class="text-indigo-600"></span></h3>
-            <div class="space-y-3 text-gray-700">
+            <h3 class="text-2xl font-bold text-slate-800 mb-4">Order Details <span id="modalOrderId" class="text-blue-600"></span></h3>
+            <div class="space-y-3 text-slate-700">
                 <p><strong>Customer:</strong> <span id="modalCustomerName"></span></p>
                 <p><strong>Email:</strong> <span id="modalCustomerEmail"></span></p>
                 <p><strong>Item:</strong> <span id="modalItem"></span></p>
@@ -189,7 +412,7 @@
                     <p><strong>New Offer Price:</strong> $<span id="reOfferNewPrice" class="font-bold text-yellow-700"></span></p>
                     <p><strong>Reasons:</strong> <span id="reOfferReasons"></span></p>
                     <p id="reOfferCommentsRow" class="hidden"><strong>Comments:</strong> <span id="reOfferComments"></span></p>
-                    <p id="reOfferAutoAcceptDateRow" class="text-sm text-gray-600">This offer will be automatically accepted on: <span id="reOfferAutoAcceptDate"></span></p>
+                    <p id="reOfferAutoAcceptDateRow" class="text-sm text-slate-600">This offer will be automatically accepted on: <span id="reOfferAutoAcceptDate"></span></p>
                 </div>
                 
                 <!-- Shipping Label / Tracking Info -->
@@ -201,7 +424,7 @@
                     <p id="returnLabelRow" class="hidden"><strong>Return Label:</strong> <a id="returnLabelLink" href="#" target="_blank" class="text-red-600 hover:underline">View Label</a> (<span id="returnTrackingNumber"></span>)</p>
                 </div>
 
-                <p id="modalLoadingMessage" class="text-center text-indigo-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
+                <p id="modalLoadingMessage" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
             </div>
 
             <div id="modalActionButtons" class="mt-6 flex flex-col sm:flex-row gap-3">
@@ -212,10 +435,85 @@
     </div>
 
 
+    <!-- CHAT WIDGET -->
+    <div id="chat-widget-container">
+        <div id="chat-window">
+            <!-- Chat Header -->
+            <div class="bg-blue-700 text-white p-4 flex justify-between items-center">
+                <h3 class="font-bold text-lg">Customer Support</h3>
+                <div>
+                    <button id="chat-minimize-btn" class="text-white hover:text-blue-200 mr-2"><i class="fa-solid fa-minus text-xl"></i></button>
+                    <button id="chat-close-btn" class="text-white hover:text-blue-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+            </div>
+            <!-- Messages Area -->
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto bg-slate-50"></div>
+            <!-- Typing Indicator -->
+            <div id="typing-indicator-container" class="p-2 hidden">
+                <div class="p-3 rounded-lg max-w-[85%] mb-2 break-words chat-bubble-agent">
+                    <div class="typing-indicator"><span></span><span></span><span></span></div>
+                </div>
+            </div>
+            <!-- Input Area -->
+            <div id="chat-input-container" class="p-4 border-t border-slate-200">
+                <input type="text" id="chat-input" placeholder="Type your message..." class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <!-- Guest Prompt -->
+            <div id="guest-prompt-container" class="p-4 border-t border-slate-200 hidden">
+                <p class="text-center text-sm text-slate-600 mb-3">To provide the best support, please log in or continue as a guest.</p>
+                <div class="space-y-2">
+                    <button id="guest-login-btn" class="btn-dark-slate">Login / Sign Up</button>
+                    <button id="guest-continue-btn" class="w-full bg-slate-200 text-slate-800 p-3 rounded-lg font-semibold hover:bg-slate-300 transition-colors">Ask a General Question</button>
+                </div>
+            </div>
+            <!-- Survey -->
+            <div id="chat-survey-container" class="p-4 border-t border-slate-200 hidden overflow-y-auto">
+                <p class="text-center font-semibold mb-2">The agent has ended the chat.</p>
+                <p class="text-center text-sm text-slate-600 mb-4">Please rate your experience.</p>
+                <form id="chat-survey-form">
+                    <div class="mb-4">
+                        <label class="font-semibold text-slate-700 block mb-2">Overall Rating:</label>
+                        <div id="star-rating" class="star-rating text-3xl flex justify-center" data-rating="0">
+                            <i class="fa-solid fa-star" data-value="1"></i><i class="fa-solid fa-star" data-value="2"></i><i class="fa-solid fa-star" data-value="3"></i><i class="fa-solid fa-star" data-value="4"></i><i class="fa-solid fa-star" data-value="5"></i>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="friendliness-rating" class="font-semibold text-slate-700 block mb-2">Agent Friendliness: <span id="friendliness-value" class="font-bold text-blue-600">5</span>/10</label>
+                        <input type="range" id="friendliness-rating" min="1" max="10" value="5" class="w-full">
+                    </div>
+                    <div class="mb-4">
+                        <label class="font-semibold text-slate-700 block mb-2">Was your issue resolved?</label>
+                        <div class="flex justify-center gap-4">
+                            <label><input type="radio" name="issue-resolved" value="yes" class="mr-1"> Yes</label>
+                            <label><input type="radio" name="issue-resolved" value="no" class="mr-1"> No</label>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                            <label for="survey-comments" class="font-semibold text-slate-700 block mb-2">Additional Comments (optional):</label>
+                            <textarea id="survey-comments" rows="2" class="w-full border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <button type="submit" class="btn-dark-slate">Submit Feedback</button>
+                </form>
+            </div>
+            <!-- End Chat Confirmation -->
+            <div id="end-chat-confirm-modal" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-10">
+                <p class="text-lg font-semibold text-slate-800 mb-4 text-center">End this chat session?</p>
+                <div class="flex gap-4">
+                    <button id="end-chat-yes" class="px-6 py-2 font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition">Yes, End Chat</button>
+                    <button id="end-chat-no" class="px-6 py-2 font-semibold text-slate-800 bg-slate-200 rounded-lg hover:bg-slate-300 transition">No</button>
+                </div>
+            </div>
+        </div>
+        <button id="chat-open-btn">
+            <i class="fa-solid fa-comments text-3xl"></i>
+            <span id="unread-counter">0</span>
+        </button>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signOut, onAuthStateChanged, updateProfile, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, where, addDoc, serverTimestamp, updateDoc, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Your Firebase configuration
         const firebaseConfig = {
@@ -237,10 +535,11 @@
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 
         // Get elements
-        const loginLink = document.getElementById('login-link');
-        const accountLink = document.getElementById('account-link');
-        const logoutButton = document.getElementById('logout-button');
+        const loginNavBtn = document.getElementById('loginNavBtn'); // Login/Sign Up button in header
         const userMonogram = document.getElementById('userMonogram');
+        const authDropdown = document.getElementById('authDropdown');
+        const logoutButton = document.getElementById('logoutBtn');
+
         const accountInfoTab = document.getElementById('accountInfoTab');
         const orderHistoryTab = document.getElementById('orderHistoryTab');
         const accountInfoSection = document.getElementById('accountInfoSection');
@@ -253,7 +552,14 @@
         const ordersTableBody = document.getElementById('ordersTableBody');
         const noOrdersMessage = document.getElementById('noOrdersMessage');
 
-        // Modal elements
+        // Modals and their buttons
+        const modals = document.querySelectorAll('.modal'); // All modals
+        const loginModal = document.getElementById('loginModal');
+        const aboutUsModal = document.getElementById('aboutUsModal');
+        const privacyPolicyModal = document.getElementById('privacyPolicyModal');
+        const termsAndConditionsModal = document.getElementById('termsAndConditionsModal');
+
+        // Modal elements for Order Details
         const orderDetailsModal = document.getElementById('orderDetailsModal');
         const closeModalBtn = document.getElementById('closeModal');
         const modalOrderId = document.getElementById('modalOrderId');
@@ -296,6 +602,26 @@
         const modalActionButtons = document.getElementById('modalActionButtons');
         const modalMessage = document.getElementById('modalMessage');
 
+        // Footer elements for signup form
+        const footerEmailSignupForm = document.getElementById('footerEmailSignupForm');
+        const footerSignupMessage = document.getElementById('footerSignupMessage');
+
+        // Login/Signup Modal specific elements
+        const loginTabBtn = document.getElementById('loginTabBtn');
+        const signupTabBtn = document.getElementById('signupTabBtn');
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+        const authMessage = document.getElementById('authMessage');
+        const googleLoginBtn = document.getElementById('googleLoginBtn');
+        const googleSignupBtn = document.getElementById('googleSignupBtn');
+        const emailLoginBtn = document.getElementById('emailLoginBtn');
+        const emailSignupBtn = document.getElementById('emailSignupBtn');
+        const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+        const returnToLoginLink = document.getElementById('returnToLogin');
+        const switchToLoginLink = document.getElementById('switchToLogin');
+        const sendResetEmailBtn = document.getElementById('sendResetEmailBtn');
+
         let currentUserId = null;
 
         // --- Helper Functions ---
@@ -319,7 +645,7 @@
                 case 're-offered-pending': return 'status-re-offered-pending';
                 case 're-offered-declined': return 'status-re-offered-declined';
                 case 'order_pending': return 'status-order_pending';
-                case 'shipping_kit_requested': return 'status-shipping_kit-requested';
+                case 'shipping_kit_requested': return 'status-shipping_kit_requested';
                 case 'label_generated': return 'status-label_generated';
                 case 'received': return 'status-received';
                 case 'return-label-generated': return 'status-return-label-generated';
@@ -413,7 +739,7 @@
                         }
 
                         const row = document.createElement('tr');
-                        row.className = 'border-b border-gray-200 hover:bg-gray-50 cursor-pointer';
+                        row.className = 'border-b border-slate-200 hover:bg-slate-50 cursor-pointer'; // Updated border and hover colors
                         row.dataset.orderId = doc.id; // Add data attribute for click handler
 
                         row.innerHTML = `
@@ -425,7 +751,7 @@
                                     <span class="status-badge ${getStatusBadgeClass(order.status)}">${formatStatus(order.status)}</span>
                                 </td>
                                 <td class="py-3 px-6 text-center">
-                                    <button data-order-id="${doc.id}" class="view-details-btn text-indigo-600 hover:text-indigo-800 font-medium text-xs px-2 py-1 rounded-md bg-indigo-100 hover:bg-indigo-200 transition duration-200">View Details</button>
+                                    <button data-order-id="${doc.id}" class="view-details-btn text-blue-600 hover:text-blue-800 font-medium text-xs px-2 py-1 rounded-md bg-blue-100 hover:bg-blue-200 transition duration-200">View Details</button>
                                 </td>
                             `;
                         ordersTableBody.appendChild(row);
@@ -486,7 +812,41 @@
             }
         }
 
-        // --- Modal Functions ---
+        // --- General Modal Functions ---
+        const openModal = (modalElement) => {
+            modalElement.classList.remove('hidden'); // Ensure it's visible
+            // Force reflow to ensure transition plays
+            void modalElement.offsetWidth;
+            modalElement.classList.add('is-visible');
+        };
+        const closeModal = (modalElement) => {
+            modalElement.classList.remove('is-visible');
+            // Add hidden class after transition for accessibility/interaction blocking
+            setTimeout(() => {
+                modalElement.classList.add('hidden');
+            }, 300); // Match CSS transition duration
+        };
+
+        document.querySelectorAll('.close-modal-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const modal = e.target.closest('.modal');
+                if (modal) closeModal(modal);
+            });
+        });
+
+        modals.forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal(modal);
+            });
+        });
+
+        // --- Specific Modal Triggers ---
+        loginNavBtn.addEventListener('click', (e) => { e.preventDefault(); openModal(loginModal); });
+        document.getElementById('aboutUsLink').addEventListener('click', (e) => { e.preventDefault(); openModal(aboutUsModal); });
+        document.getElementById('privacyPolicyLink').addEventListener('click', (e) => { e.preventDefault(); openModal(privacyPolicyModal); });
+        document.getElementById('termsAndConditionsLink').addEventListener('click', (e) => { e.preventDefault(); openModal(termsAndConditionsModal); });
+
+        // --- Order Details Modal Functions ---
 
         async function openOrderDetailsModal(orderId) {
             // Reset modal state
@@ -502,13 +862,15 @@
             uspsLabelRow.classList.add('hidden');
             returnLabelRow.classList.add('hidden');
 
-            orderDetailsModal.classList.remove('hidden');
+            openModal(orderDetailsModal); // Use the general openModal function
             modalLoadingMessage.classList.remove('hidden');
 
             try {
+                console.log(`Attempting to fetch order details for ID: ${orderId} from URL: ${BACKEND_BASE_URL}/orders/${orderId}`); // Added logging
                 const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}`);
                 if (!response.ok) {
                     const errorText = await response.text();
+                    console.error(`Backend responded with status ${response.status}: ${errorText}`); // More detailed error logging
                     throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
                 }
                 const order = await response.json();
@@ -585,20 +947,16 @@
                 renderModalActionButtons(order);
 
             } catch (error) {
-                console.error('Error fetching order details:', error);
-                displayModalMessage(`Error fetching order details: ${error.message}. Please try again.`, 'error');
+                console.error('Caught error fetching order details:', error); // More detailed error logging
+                displayModalMessage(`Error fetching order details: ${error.message}. Please check your network and try again.`, 'error'); // More user-friendly message
             } finally {
                 modalLoadingMessage.classList.add('hidden');
             }
         }
 
-        function closeOrderDetailsModal() {
-            orderDetailsModal.classList.add('hidden');
-        }
-
         function renderModalActionButtons(order) {
             modalActionButtons.innerHTML = '';
-            const createButton = (text, onClick, className = 'bg-indigo-600 hover:bg-indigo-700') => {
+            const createButton = (text, onClick, className = 'bg-blue-600 hover:bg-blue-700') => {
                 const button = document.createElement('button');
                 button.textContent = text;
                 button.className = `${className} text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 shadow`;
@@ -676,24 +1034,123 @@
             modalMessage.classList.remove('hidden');
         }
 
-        closeModalBtn.addEventListener('click', closeOrderDetailsModal);
-        orderDetailsModal.addEventListener('click', (event) => {
-            if (event.target === orderDetailsModal) {
-                closeOrderDetailsModal();
-            }
+        // --- Event Listeners for Auth Modals ---
+        loginTabBtn.addEventListener('click', () => showAuthTab('login'));
+        signupTabBtn.addEventListener('click', () => showAuthTab('signup'));
+        forgotPasswordLink.addEventListener('click', (e) => { e.preventDefault(); showAuthTab('forgotPassword'); });
+        returnToLoginLink.addEventListener('click', (e) => { e.preventDefault(); showAuthTab('login'); });
+        switchToLoginLink.addEventListener('click', (e) => { e.preventDefault(); showAuthTab('login'); });
+
+        const googleProvider = new GoogleAuthProvider();
+        const signInWithGoogle = async () => {
+            try {
+                authMessage.classList.add('hidden');
+                await signInWithPopup(auth, googleProvider);
+            } catch (error) { showAuthMessage(`Google sign-in failed: ${error.message}`, 'error'); }
+        };
+        googleLoginBtn.addEventListener('click', signInWithGoogle);
+        googleSignupBtn.addEventListener('click', signInWithGoogle);
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            try {
+                showAuthMessage('Logging in...', 'info');
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) { showAuthMessage(`Login failed: ${error.message}`, 'error'); }
+        });
+
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            if (password.length < 6) { showAuthMessage('Password must be at least 6 characters.', 'error'); return; }
+            try {
+                showAuthMessage('Creating account...', 'info');
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                await updateProfile(userCredential.user, { displayName: name });
+            } catch (error) { showAuthMessage(`Sign up failed: ${error.message}`, 'error'); }
         });
         
+        forgotPasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('forgotEmail').value;
+            try {
+                showAuthMessage('Sending reset email...', 'info');
+                await sendPasswordResetEmail(auth, email);
+                showAuthMessage('Password reset email sent! Check your inbox.', 'success');
+            } catch (error) { showAuthMessage(`Failed to send email: ${error.message}`, 'error'); }
+        });
+
+        const showAuthTab = (tabName) => {
+            authMessage.classList.add('hidden');
+            [loginForm, signupForm, forgotPasswordForm].forEach(form => form.classList.add('hidden'));
+            [loginTabBtn, signupTabBtn].forEach(btn => {
+                btn.classList.remove('border-blue-600', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-slate-500');
+            });
+            if (tabName === 'login') { loginForm.classList.remove('hidden'); loginTabBtn.classList.add('border-blue-600', 'text-blue-600'); }
+            else if (tabName === 'signup') { signupForm.classList.remove('hidden'); signupTabBtn.classList.add('border-blue-600', 'text-blue-600'); }
+            else if (tabName === 'forgotPassword') { forgotPasswordForm.classList.remove('hidden'); }
+        };
+
+        const showAuthMessage = (msg, type) => {
+            authMessage.textContent = msg;
+            authMessage.className = 'mt-4 p-3 rounded-lg text-sm text-center w-full';
+            if (type === 'error') authMessage.classList.add('bg-red-100', 'text-red-700');
+            else if (type === 'success') authMessage.classList.add('bg-green-100', 'text-green-700');
+            else authMessage.classList.add('bg-blue-100', 'text-blue-700');
+            authMessage.classList.remove('hidden');
+        };
+
         // --- Event Listeners ---
         
+        // Handle dropdown for user monogram
+        userMonogram.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent document click from closing it immediately
+            authDropdown.classList.toggle('hidden');
+        });
+
+        // Close dropdown if clicking outside
+        document.addEventListener('click', (e) => {
+            const authStatusContainer = document.getElementById('authStatusContainer');
+            if (authStatusContainer && !authStatusContainer.contains(e.target)) {
+                authDropdown.classList.add('hidden');
+            }
+        });
+
         logoutButton.addEventListener('click', handleLogout);
         
         saveInfoBtn.addEventListener('click', () => {
             if (currentUserId) {
-                // Get the current displayed name from the UI, as it might have been updated by Firebase Auth
                 const newName = userName.textContent; 
                 saveAccountInfo(currentUserId, newName, userPhoneInput.value);
             } else {
                 showMessage('Please log in to save your information.', 'error');
+            }
+        });
+
+        // Footer email signup form submission
+        footerEmailSignupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('footerPromoEmail').value;
+            footerSignupMessage.textContent = 'Submitting...';
+            footerSignupMessage.className = 'mt-3 text-sm text-center text-blue-300';
+            
+            try {
+                await addDoc(collection(db, "signed_up_emails"), {
+                    email: email,
+                    timestamp: new Date()
+                });
+                footerSignupMessage.textContent = 'Success! Thanks for signing up.';
+                footerSignupMessage.className = 'mt-3 text-sm text-center text-green-300';
+                footerEmailSignupForm.reset();
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                footerSignupMessage.textContent = 'Error: Could not sign up.';
+                footerSignupMessage.className = 'mt-3 text-sm text-center text-red-300';
             }
         });
         
@@ -704,10 +1161,8 @@
                 currentUserId = user.uid;
                 
                 // Update header UI for logged-in state
-                loginLink.classList.add('hidden');
-                accountLink.classList.remove('hidden');
-                logoutButton.classList.remove('hidden');
-                userMonogram.classList.remove('hidden');
+                loginNavBtn.classList.add('hidden'); // Hide the login/signup button
+                userMonogram.classList.remove('hidden'); // Show user monogram
                 
                 // Get and set user initials for monogram
                 const name = user.displayName || user.email;
@@ -735,11 +1190,285 @@
                 
                 // Show account info by default
                 showTab('accountInfo');
+                closeModal(loginModal); // Close login modal if open after successful auth
                 
             } else {
                 // User is signed out, redirect to a non-authenticated page
                 window.location.href = 'index.html';
             }
+        });
+
+        // --- ADVANCED LIVE CHAT LOGIC ---
+        const chatWindow = document.getElementById('chat-window');
+        const chatOpenBtn = document.getElementById('chat-open-btn');
+        const chatCloseBtn = document.getElementById('chat-close-btn');
+        const chatMinimizeBtn = document.getElementById('chat-minimize-btn');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const chatInputContainer = document.getElementById('chat-input-container');
+        const guestPromptContainer = document.getElementById('guest-prompt-container');
+        const guestLoginBtn = document.getElementById('guest-login-btn');
+        const guestContinueBtn = document.getElementById('guest-continue-btn');
+        const unreadCounter = document.getElementById('unread-counter');
+        const typingIndicatorContainer = document.getElementById('typing-indicator-container');
+        const surveyContainer = document.getElementById('chat-survey-container');
+        const surveyForm = document.getElementById('chat-survey-form');
+        const starRatingContainer = document.getElementById('star-rating');
+        const friendlinessRating = document.getElementById('friendliness-rating');
+        const friendlinessValue = document.getElementById('friendliness-value');
+        const endChatConfirmModal = document.getElementById('end-chat-confirm-modal');
+        const endChatYesBtn = document.getElementById('end-chat-yes');
+        const endChatNoBtn = document.getElementById('end-chat-no');
+
+        let currentChatId = null;
+        let unsubscribeFromMessages = null;
+        let unsubscribeFromChatSession = null;
+        let isChatMinimized = true;
+        let unreadCount = 0;
+        let hasUserTypedFirstMessage = false;
+        let userTypingTimeout = null;
+
+        const notificationSound = new Audio('https://cdn.freesound.org/previews/253/253887_3900531-lq.mp3');
+        notificationSound.volume = 0.5;
+
+        const getOrCreateGuestId = () => {
+            let id = localStorage.getItem('guestChatId');
+            if (!id) {
+                id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                localStorage.setItem('guestChatId', id);
+            }
+            return id;
+        };
+
+        const getOrCreateChatSession = async () => {
+            let chatId = localStorage.getItem('chatSessionId');
+            if (chatId) return chatId;
+            
+            const user = auth.currentUser;
+            const currentGuestId = getOrCreateGuestId();
+            const chatSessionData = {
+                createdAt: serverTimestamp(),
+                ownerUid: user ? user.uid : null,
+                guestId: user ? null : currentGuestId,
+                status: 'active',
+                agentName: null,
+                isAgentTyping: false,
+                userTypingText: ''
+            };
+            const docRef = await addDoc(collection(db, "chats"), chatSessionData);
+            chatId = docRef.id;
+            localStorage.setItem('chatSessionId', chatId);
+            return chatId;
+        };
+
+        const renderChatMessage = (msg) => {
+            const messageDiv = document.createElement('div');
+            const user = auth.currentUser;
+            const currentGuestId = localStorage.getItem('guestChatId');
+            const isMyMessage = (user && msg.sender === user.uid) || (!user && msg.sender === currentGuestId);
+            
+            let classes = 'p-3 rounded-lg max-w-[85%] mb-2 break-words';
+            if (msg.type === 'system') {
+                classes = 'text-center text-sm text-slate-500 my-2';
+                messageDiv.innerHTML = `<span class="bg-white px-2 py-1 rounded-full">${msg.text}</span>`;
+            } else {
+                classes += isMyMessage ? ' bg-gray-200 text-slate-800 self-end' : ' bg-blue-100 text-blue-800 self-start';
+                messageDiv.textContent = msg.text;
+            }
+            messageDiv.className = classes;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        };
+        
+        const listenForChatSessionChanges = (chatId) => {
+            if (unsubscribeFromChatSession) unsubscribeFromChatSession();
+            unsubscribeFromChatSession = onSnapshot(doc(db, "chats", chatId), (docSnap) => {
+                const data = docSnap.data();
+                if (!data) return;
+                if (data.agentName && data.agentHasJoined && !document.getElementById(`agent-joined-${data.agentName}`)) {
+                    const joinMsg = { type: 'system', text: `<i class="fa-solid fa-headset mr-2"></i>${data.agentName} has joined the chat.` };
+                    const joinDiv = document.createElement('div');
+                    joinDiv.id = `agent-joined-${data.agentName}`;
+                    joinDiv.className = 'text-center text-sm text-slate-500 my-2';
+                    joinDiv.innerHTML = `<span class="bg-white px-2 py-1 rounded-full">${joinMsg.text}</span>`;
+                    chatMessages.appendChild(joinDiv);
+                }
+                typingIndicatorContainer.style.display = data.isAgentTyping ? 'block' : 'none';
+                if (data.isAgentTyping) chatMessages.scrollTop = chatMessages.scrollHeight;
+                if (data.status === 'ended_by_agent') {
+                    chatInputContainer.classList.add('hidden');
+                    guestPromptContainer.classList.add('hidden');
+                    surveyContainer.classList.remove('hidden');
+                    localStorage.removeItem('chatSessionId');
+                }
+            });
+        };
+
+        const listenForMessages = (chatId) => {
+            if (unsubscribeFromMessages) unsubscribeFromMessages();
+            currentChatId = chatId;
+            const messagesRef = collection(db, `chats/${chatId}/messages`);
+            const q = query(messagesRef, orderBy("timestamp"));
+            unsubscribeFromMessages = onSnapshot(q, (snapshot) => {
+                chatMessages.innerHTML = ''; // Clear messages to prevent duplication
+                if (snapshot.empty && !hasUserTypedFirstMessage) {
+                    const user = auth.currentUser;
+                    const userName = user?.displayName?.split(' ')[0] || 'there';
+                    chatMessages.innerHTML = `<div class="p-3 rounded-lg max-w-[85%] mb-2 break-words bg-blue-100 text-blue-800 self-start">Hi ${userName}, how can we help you today?</div>`;
+                    return;
+                }
+                snapshot.forEach(doc => {
+                    const msgData = doc.data();
+                    renderChatMessage(msgData);
+                    const user = auth.currentUser;
+                    const currentGuestId = localStorage.getItem('guestChatId');
+                    const isMyMessage = (user && msgData.sender === user.uid) || (!user && msgData.sender === currentGuestId);
+                    if (!isMyMessage && isChatMinimized) {
+                        unreadCount++;
+                        unreadCounter.textContent = unreadCount;
+                        unreadCounter.classList.add('visible');
+                        notificationSound.play().catch(e => console.log("Audio play failed:", e));
+                    }
+                });
+            });
+        };
+
+        const resetChatUI = () => {
+            endChatConfirmModal.classList.add('hidden');
+            endChatConfirmModal.classList.remove('flex');
+            surveyContainer.classList.add('hidden');
+            guestPromptContainer.classList.add('hidden');
+            chatInputContainer.classList.remove('hidden');
+            typingIndicatorContainer.style.display = 'none';
+        };
+
+        const openChat = async () => {
+            resetChatUI();
+            chatWindow.classList.add('is-visible');
+            isChatMinimized = false;
+            unreadCount = 0;
+            unreadCounter.classList.remove('visible');
+            const chatId = await getOrCreateChatSession();
+            if (chatId) {
+                listenForMessages(chatId);
+                listenForChatSessionChanges(chatId);
+            }
+        };
+        chatOpenBtn.addEventListener('click', openChat);
+
+        const minimizeChat = () => {
+            chatWindow.classList.remove('is-visible');
+            isChatMinimized = true;
+        };
+        chatMinimizeBtn.addEventListener('click', minimizeChat);
+
+        chatCloseBtn.addEventListener('click', () => {
+            endChatConfirmModal.classList.remove('hidden');
+            endChatConfirmModal.classList.add('flex');
+        });
+
+        endChatNoBtn.addEventListener('click', () => {
+            endChatConfirmModal.classList.add('hidden');
+            endChatConfirmModal.classList.remove('flex');
+        });
+
+        endChatYesBtn.addEventListener('click', async () => {
+            if (currentChatId) {
+                await addDoc(collection(db, `chats/${currentChatId}/messages`), {
+                    text: "Chat ended by user.",
+                    timestamp: serverTimestamp(),
+                    sender: 'system',
+                    type: 'system'
+                });
+                await updateDoc(doc(db, "chats", currentChatId), { status: 'ended_by_user' });
+            }
+            localStorage.removeItem('chatSessionId');
+            currentChatId = null;
+            hasUserTypedFirstMessage = false;
+            chatMessages.innerHTML = '';
+            endChatConfirmModal.classList.add('hidden');
+            endChatConfirmModal.classList.remove('flex');
+            minimizeChat();
+        });
+
+        const sendMessage = async (text) => {
+            if (text.trim() === '' || !currentChatId) return;
+            const user = auth.currentUser;
+            if (!user && !hasUserTypedFirstMessage) {
+                hasUserTypedFirstMessage = true;
+                chatInputContainer.classList.add('hidden');
+                guestPromptContainer.classList.remove('hidden');
+                return;
+            }
+            const currentGuestId = getOrCreateGuestId();
+            const messageData = { text, timestamp: serverTimestamp(), sender: user ? user.uid : currentGuestId };
+            await addDoc(collection(db, `chats/${currentChatId}/messages`), messageData);
+            chatInput.value = '';
+            await updateDoc(doc(db, "chats", currentChatId), {
+                userTypingText: '',
+                lastMessage: `User: ${text}`,
+                lastMessageTimestamp: serverTimestamp()
+            });
+        };
+
+        chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(chatInput.value); } });
+        chatInput.addEventListener('keyup', () => {
+            clearTimeout(userTypingTimeout);
+            userTypingTimeout = setTimeout(async () => {
+                if (currentChatId) {
+                    await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
+                }
+            }, 300);
+        });
+
+        guestLoginBtn.addEventListener('click', () => {
+            openModal(loginModal); // Open the login modal
+            minimizeChat(); // Minimize chat window when opening login modal
+        });
+        guestContinueBtn.addEventListener('click', () => {
+            guestPromptContainer.classList.add('hidden');
+            chatInputContainer.classList.remove('hidden');
+            renderChatMessage({ type: 'system', text: 'An agent will be with you shortly. Please provide any relevant details like order numbers.' });
+            chatInput.focus();
+        });
+
+        friendlinessRating.addEventListener('input', (e) => { friendlinessValue.textContent = e.target.value; });
+        starRatingContainer.addEventListener('mouseover', e => {
+            if (e.target.tagName === 'I') {
+                const rating = e.target.dataset.value;
+                Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= rating));
+            }
+        });
+        starRatingContainer.addEventListener('mouseout', () => {
+            const currentRating = starRatingContainer.dataset.rating;
+            Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= currentRating));
+        });
+        starRatingContainer.addEventListener('click', e => {
+            if (e.target.tagName === 'I') {
+                starRatingContainer.dataset.rating = e.target.dataset.value;
+            }
+        });
+
+        surveyForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const surveyData = {
+                overallRating: parseInt(starRatingContainer.dataset.rating, 10),
+                friendliness: friendlinessRating.value,
+                resolved: document.querySelector('input[name="issue-resolved"]:checked')?.value || null,
+                comments: document.getElementById('survey-comments').value
+            };
+            await setDoc(doc(db, `chats/${currentChatId}/survey/feedback`), { ...surveyData, submittedAt: serverTimestamp() });
+            try {
+                const cloudFunctionUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-chat-feedback';
+                const response = await fetch(cloudFunctionUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatId: currentChatId, surveyData: surveyData })
+                });
+                if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
+                console.log('Feedback email sent successfully:', await response.json());
+            } catch (error) { console.error("Error sending feedback email:", error); }
+            surveyContainer.innerHTML = '<p class="text-center font-semibold text-green-600">Thank you for your feedback!</p>';
         });
     </script>
 </body>
