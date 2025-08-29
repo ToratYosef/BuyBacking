@@ -71,7 +71,7 @@
 <body class="flex flex-col md:flex-row min-h-screen">
     
     <!-- Admin Login Form -->
-    <div id="login-form-container" class="fixed inset-0 bg-gray-100 flex items-center justify-center p-4 z-50">
+    <div id="login-form-container" class="fixed inset-0 bg-gray-100 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-8 space-y-6">
             <h2 class="text-3xl font-bold text-center text-gray-800">Admin Login</h2>
             <p id="login-message" class="text-center text-sm text-red-500 hidden"></p>
@@ -786,7 +786,7 @@
                         if (paymentLink) {
                             window.open(paymentLink, '_blank');
                             displayModalMessage('Payment link generated and opened in a new tab.', 'success');
-                            await handleAction(orderId, 'markCompleted');
+                            await handleAction(order.id, 'markCompleted');
                         } else {
                             throw new Error('Could not generate payment link.');
                         }
@@ -939,16 +939,33 @@
             db = getFirestore(firebaseApp);
             auth = getAuth(firebaseApp);
 
+            // Force sign out any existing user (including anonymous) to ensure a clean state and prompt login
+            try {
+                await signOut(auth); // This will clear any persisted session
+                console.log("Forced sign out of any previous session on load to ensure login prompt.");
+            } catch (error) {
+                console.warn("Error during forced sign out on load:", error);
+                // Even if sign out fails, proceed to onAuthStateChanged, which should still show login if no valid user.
+            }
+
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    // User is signed in.
+                    // This block should ideally only be reached after a successful email/password login
+                    // If it's still an anonymous user (due to some persistence bug), sign them out again.
+                    if (user.isAnonymous) {
+                        console.warn("Anonymous user unexpectedly detected. Signing out to enforce login.");
+                        await signOut(auth);
+                        return; // Exit to re-trigger onAuthStateChanged for signed out state
+                    }
+
+                    // Proceed with authenticated user
                     authToken = await user.getIdToken();
                     displayUserEmail.textContent = user.email;
                     loginFormContainer.classList.add('hidden');
                     dashboardContainer.classList.remove('hidden');
                     fetchAndRenderOrders();
                 } else {
-                    // User is signed out.
+                    // User is signed out. Display login form.
                     authToken = null;
                     displayUserEmail.textContent = '...';
                     dashboardContainer.classList.add('hidden');

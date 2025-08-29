@@ -96,8 +96,8 @@
                     </a>
                 </li>
                 <li>
-                    <a href="#" data-status="pending_shipment" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-box-open mr-3"></i> Awaiting Shipment
+                    <a href="#" data-status="order_pending" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-box-open mr-3"></i> Order Pending
                     </a>
                 </li>
                 <li>
@@ -158,10 +158,10 @@
         </header>
 
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            <div id="card-pending_shipment" data-status="pending_shipment" class="dashboard-card bg-blue-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+            <div id="card-order_pending" data-status="order_pending" class="dashboard-card bg-blue-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
                 <div>
-                    <div class="text-sm font-semibold opacity-80">Awaiting Shipment</div>
-                    <div id="pending-shipment-count" class="text-4xl font-extrabold mt-1">0</div>
+                    <div class="text-sm font-semibold opacity-80">Order Pending</div>
+                    <div id="order-pending-count" class="text-4xl font-extrabold mt-1">0</div>
                 </div>
                 <i class="fas fa-box-open text-5xl opacity-40"></i>
             </div>
@@ -359,8 +359,9 @@
         const displayUserId = document.getElementById('display-user-id');
         const dashboardCards = document.querySelectorAll('.dashboard-card');
 
-        const pendingShipmentCount = document.getElementById('pending-shipment-count');
-        const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count'); // New count element
+        // Updated count elements
+        const orderPendingCount = document.getElementById('order-pending-count');
+        const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count');
         const labelGeneratedCount = document.getElementById('label-generated-count');
         const receivedCount = document.getElementById('received-count');
         const completedCount = document.getElementById('completed-count');
@@ -428,8 +429,9 @@
         });
 
         function updateDashboardCounts(ordersData) {
-            pendingShipmentCount.textContent = ordersData.filter(o => o.status === 'pending_shipment').length;
-            shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length; // New count update
+            // Updated to 'order_pending'
+            orderPendingCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
+            shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length;
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
             receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
             completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
@@ -494,6 +496,15 @@
         }
 
         function formatStatus(status) {
+            if (status === 'order_pending') { // Custom text for order_pending
+                return 'Order Pending';
+            }
+            if (status === 'shipping_kit_requested') { // Custom text for shipping_kit_requested
+                return 'Shipping Kit Requested';
+            }
+            if (status === 'label_generated') { // Custom text for label_generated
+                return 'Shipping Kit on the Way';
+            }
             return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
 
@@ -503,8 +514,8 @@
 
         function getStatusClass(status) {
             switch (status) {
-                case 'pending_shipment': return 'bg-blue-100 text-blue-800 status-bubble';
-                case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble'; // New status class
+                case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble'; // Updated status class
+                case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble';
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
@@ -628,8 +639,8 @@
 
             const currentStatus = order.status;
             switch (currentStatus) {
-                case 'pending_shipment':
-                case 'shipping_kit_requested': // Added new status here
+                case 'order_pending': // Updated status
+                case 'shipping_kit_requested':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     break;
                 case 'label_generated':
