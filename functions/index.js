@@ -477,29 +477,36 @@ const DEVICE_RECEIVED_EMAIL_HTML = `
 
 
 /**
- * Generates a unique five-digit order number in the XX-XXX format.
- * It retries if the generated number already exists as a document ID in the database to ensure uniqueness.
- * @returns {Promise<string>} A unique order number string (e.g., "12-345").
+ * --- NEW ---
+ * Generates the next sequential order number in SHC-XXXXX format using a Firestore transaction.
+ * This ensures each order ID is unique and increments from the last one.
+ * @returns {Promise<string>} The next unique, sequential order number (e.g., "SHC-00001").
  */
-async function generateUniqueFiveDigitOrderNumber() {
-    let unique = false;
-    let orderNumber;
-    while (!unique) {
-        // Generate a random 5-digit number between 10000 and 99999
-        const num = Math.floor(10000 + Math.random() * 90000);
-        // Format it as XX-XXX
-        const firstPart = String(num).substring(0, 2);
-        const secondPart = String(num).substring(2, 5);
-        orderNumber = `${firstPart}-${secondPart}`;
+async function generateNextOrderNumber() {
+    const counterRef = db.collection('counters').doc('orders');
 
-        // Check if an order with this custom ID already exists as a document ID
-        const docRef = ordersCollection.doc(orderNumber);
-        const doc = await docRef.get();
-        if (!doc.exists) {
-            unique = true; // Found a unique number
-        }
+    try {
+        const newOrderNumber = await db.runTransaction(async (transaction) => {
+            const counterDoc = await transaction.get(counterRef);
+            
+            // Start with 1 if the counter document doesn't exist yet
+            const currentNumber = counterDoc.exists ? counterDoc.data().currentNumber : 0;
+            const nextNumber = currentNumber + 1;
+
+            // Update the counter in the database for the next order
+            transaction.set(counterRef, { currentNumber: nextNumber });
+
+            // Format the number to be 5 digits, padded with leading zeros (e.g., 1 -> 00001)
+            const paddedNumber = String(nextNumber).padStart(5, '0');
+            return `SHC-${paddedNumber}`;
+        });
+        
+        return newOrderNumber;
+
+    } catch (e) {
+        console.error("Transaction to generate order number failed:", e);
+        throw new Error("Failed to generate a unique order number. Please try again.");
     }
-    return orderNumber;
 }
 
 /**
@@ -749,8 +756,8 @@ app.get("/orders/find", async (req, res) => {
         }
 
         let orderDoc;
-        // Check if it's a 5-digit order ID (XX-XXX)
-        if (identifier.match(/^\d{2}-\d{3}$/)) {
+        // Check if it's our SHC-XXXXX format
+        if (identifier.match(/^SHC-\d{5}$/)) {
             orderDoc = await ordersCollection.doc(identifier).get();
         } else if (identifier.length === 26 && identifier.match(/^\d+$/)) { // Check for 26-digit identifier
             // This assumes the 26-digit identifier is stored in a field within the order document,
@@ -802,8 +809,9 @@ app.post("/submit-order", async (req, res) => {
             return res.status(400).json({ error: "Invalid order data" });
         }
 
-        // Generate a unique five-digit order number, which will be the document ID
-        const orderId = await generateUniqueFiveDigitOrderNumber();
+        // --- MODIFIED ---
+        // Use the new sequential order number generator.
+        const orderId = await generateNextOrderNumber();
 
         let shippingInstructions = '';
         // Changed default status to 'order_pending'
@@ -883,7 +891,7 @@ app.post("/submit-order", async (req, res) => {
             // userId will be stored if it exists in orderData (from frontend)
         });
 
-        // Return the new document ID (which is the XX-XXX format)
+        // Return the new document ID
         res.status(201).json({ message: "Order submitted", orderId: orderId });
     } catch (err) {
         console.error("Error submitting order:", err);
@@ -996,9 +1004,17 @@ app.post("/generate-label/:id", async (req, res) => {
             // Scenario: Customer chose to print their own label.
             customerLabelData = await createShipEngineLabel(buyerAddress, swiftBuyBackAddress, `${orderIdForLabel}-INBOUND-DEVICE`);
 
+            // --- BUG FIX ---
+            const labelDownloadLink = customerLabelData.label_download?.pdf;
+            if (!labelDownloadLink) {
+                console.error("ShipEngine did not return a downloadable label PDF for order:", order.id, customerLabelData);
+                throw new Error("Label PDF link not available from ShipEngine.");
+            }
+            // --- END BUG FIX ---
+
             updateData = {
                 ...updateData,
-                uspsLabelUrl: customerLabelData.label_download?.pdf,
+                uspsLabelUrl: labelDownloadLink,
                 trackingNumber: customerLabelData.tracking_number
             };
 
@@ -1007,7 +1023,7 @@ app.post("/generate-label/:id", async (req, res) => {
                 .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
                 .replace(/\*\*ORDER_ID\*\*/g, order.id)
                 .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || 'N/A')
-                .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, customerLabelData.label_download?.pdf);
+                .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
 
             customerMailOptions = {
                from: functions.config().email.user,
@@ -1039,7 +1055,7 @@ app.post("/generate-label/:id", async (req, res) => {
             ...updateData
         });
     } catch (err) {
-        console.error("Error generating label:", err.response?.data || err);
+        console.error("Error generating label:", err.response?.data || err.message || err);
         res.status(500).json({ error: "Failed to generate label" });
     }
 });
