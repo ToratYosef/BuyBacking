@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Pricing Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
+
+        let currentUser = null;
+        // IMPORTANT: REPLACE with your admin email(s) to grant access to the panel.
+        const authorizedAdmins = ["your-email@example.com"]; 
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const pricingTableBody = document.getElementById('pricingTableBody');
+            const addNewModelBtn = document.getElementById('addNewModelBtn');
+            const addEditModal = document.getElementById('addEditModal');
+            const addEditForm = document.getElementById('addEditForm');
+            const closeModalBtns = document.querySelectorAll('.close-modal-btn');
+            const statusMessage = document.getElementById('statusMessage');
+            const loginSection = document.getElementById('loginSection');
+            const adminPanel = document.getElementById('adminPanel');
+            const loginEmailInput = document.getElementById('loginEmail');
+            const loginPasswordInput = document.getElementById('loginPassword');
+            const loginGoogleBtn = document.getElementById('loginGoogleBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const userEmailDisplay = document.getElementById('userEmailDisplay');
+            const loginForm = document.getElementById('loginForm');
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user && authorizedAdmins.includes(user.email)) {
+                    currentUser = user;
+                    userEmailDisplay.textContent = user.email;
+                    loginSection.classList.add('hidden');
+                    adminPanel.classList.remove('hidden');
+                    console.log("Admin user authenticated.");
+                    await fetchAndRenderPricing();
+                } else {
+                    currentUser = null;
+                    loginSection.classList.remove('hidden');
+                    adminPanel.classList.add('hidden');
+                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Please sign in with an authorized account.</td></tr>';
+                    console.log("User not authenticated or not an authorized admin.");
+                }
+            });
+
+            loginGoogleBtn.addEventListener('click', async () => {
+                try {
+                    await signInWithPopup(auth, provider);
+                } catch (error) {
+                    console.error("Google login error:", error);
+                    displayStatusMessage(`Google login failed: ${error.message}`, 'error');
+                }
+            });
+
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = loginEmailInput.value;
+                const password = loginPasswordInput.value;
+                if (email && password) {
+                    try {
+                        await signInWithEmailAndPassword(auth, email, password);
+                    } catch (error) {
+                        console.error("Email login error:", error);
+                        displayStatusMessage(`Login failed: ${error.message}`, 'error');
+                    }
+                } else {
+                    displayStatusMessage('Please enter both email and password.', 'error');
+                }
+            });
+
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    await signOut(auth);
+                } catch (error) {
+                    console.error("Logout error:", error);
+                }
+            });
+            
+            const fetchAndRenderPricing = async () => {
+                pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Loading pricing data...</td></tr>';
+                const iphoneCollection = collection(db, "devices/iphones/models");
+                const samsungCollection = collection(db, "devices/samsung/models");
+
+                const [iphoneSnapshot, samsungSnapshot] = await Promise.all([getDocs(iphoneCollection), getDocs(samsungCollection)]);
+                
+                const allDevices = [];
+                iphoneSnapshot.forEach(doc => allDevices.push({ id: doc.id, ...doc.data() }));
+                samsungSnapshot.forEach(doc => allDevices.push({ id: doc.id, ...doc.data() }));
+                
+                renderPricingTable(allDevices);
+            };
+
+            const renderPricingTable = (devices) => {
+                pricingTableBody.innerHTML = '';
+                if (devices.length === 0) {
+                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No pricing data found.</td></tr>';
+                    return;
+                }
+                
+                devices.forEach(device => {
+                    for (const storage in device.prices) {
+                        const priceData = device.prices[storage];
+                        const row = document.createElement('tr');
+                        row.className = 'border-b border-gray-200 hover:bg-gray-50';
+                        
+                        const lockedPrices = priceData.locked || {};
+                        const unlockedPrices = priceData.unlocked || {};
+
+                        row.innerHTML = `
+                            <td class="py-3 px-4 flex items-center gap-2">
+                                <img src="${device.imageUrl}" alt="${device.name}" class="w-10 h-10 object-contain rounded-md border">
+                                <span>${device.name}</span>
+                            </td>
+                            <td class="py-3 px-4">${storage}</td>
+                            <td class="py-3 px-4 font-semibold text-blue-600">Unlocked</td>
+                            <td class="py-3 px-4">$${unlockedPrices.flawless ? unlockedPrices.flawless.toFixed(2) : 'N/A'}</td>
+                            <td class="py-3 px-4">$${unlockedPrices.good ? unlockedPrices.good.toFixed(2) : 'N/A'}</td>
+                            <td class="py-3 px-4">$${unlockedPrices.fair ? unlockedPrices.fair.toFixed(2) : 'N/A'}</td>
+                            <td class="py-3 px-4">$${unlockedPrices.damaged ? unlockedPrices.damaged.toFixed(2) : 'N/A'}</td>
+                            <td class="py-3 px-4">$${unlockedPrices.broken ? unlockedPrices.broken.toFixed(2) : 'N/A'}</td>
+                            <td class="py-3 px-4">$${unlockedPrices.noPower ? unlockedPrices.noPower.toFixed(2) : 'N/A'}</td>
+                            <td class="py-3 px-4 text-center">
+                                <button class="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-600 edit-btn" data-id="${device.id}" data-brand="${device.brand}" data-storage="${storage}">Edit</button>
+                                <button class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${device.id}" data-brand="${device.brand}">Delete</button>
+                            </td>
+                        `;
+                        pricingTableBody.appendChild(row);
+
+                        if (Object.keys(lockedPrices).length > 0) {
+                            const lockedRow = document.createElement('tr');
+                            lockedRow.className = 'border-b border-gray-200 hover:bg-gray-50';
+                            lockedRow.innerHTML = `
+                                <td class="py-3 px-4 flex items-center gap-2">
+                                    <img src="${device.imageUrl}" alt="${device.name}" class="w-10 h-10 object-contain rounded-md border opacity-50">
+                                    <span class="opacity-50">${device.name}</span>
+                                </td>
+                                <td class="py-3 px-4 opacity-50">${storage}</td>
+                                <td class="py-3 px-4 font-semibold text-orange-600">Locked</td>
+                                <td class="py-3 px-4">$${lockedPrices.flawless ? lockedPrices.flawless.toFixed(2) : 'N/A'}</td>
+                                <td class="py-3 px-4">$${lockedPrices.good ? lockedPrices.good.toFixed(2) : 'N/A'}</td>
+                                <td class="py-3 px-4">$${lockedPrices.fair ? lockedPrices.fair.toFixed(2) : 'N/A'}</td>
+                                <td class="py-3 px-4">$${lockedPrices.damaged ? lockedPrices.damaged.toFixed(2) : 'N/A'}</td>
+                                <td class="py-3 px-4">$${lockedPrices.broken ? lockedPrices.broken.toFixed(2) : 'N/A'}</td>
+                                <td class="py-3 px-4">$${lockedPrices.noPower ? lockedPrices.noPower.toFixed(2) : 'N/A'}</td>
+                                <td class="py-3 px-4 text-center">
+                                    <button class="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-600 edit-btn" data-id="${device.id}" data-brand="${device.brand}" data-storage="${storage}" data-lock="locked">Edit</button>
+                                    <button class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${device.id}" data-brand="${device.brand}">Delete</button>
+                                </td>
+                            `;
+                            pricingTableBody.appendChild(lockedRow);
+                        }
+                    }
+                });
+                
+                document.querySelectorAll('.delete-btn').forEach(button => {
+                    button.addEventListener('click', async (e) => {
+                        const id = e.target.dataset.id;
+                        const brand = e.target.dataset.brand;
+                        if (confirm(`Are you sure you want to delete this device? This action is irreversible.`)) {
+                            await deleteDoc(doc(db, `devices/${brand}/models`, id));
+                            fetchAndRenderPricing();
+                        }
+                    });
+                });
+            };
+
+            addNewModelBtn.addEventListener('click', () => {
+                addEditForm.reset();
+                addEditModal.classList.remove('hidden');
+            });
+            
+            closeModalBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    addEditModal.classList.add('hidden');
+                });
+            });
+
+            addEditForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const deviceName = document.getElementById('deviceName').value;
+                const deviceBrand = document.getElementById('deviceBrand').value;
+                const deviceSlug = document.getElementById('deviceSlug').value;
+                const imageUrl = document.getElementById('imageUrl').value;
+                const storageOptions = document.querySelectorAll('.storage-option');
+
+                const prices = {};
+                storageOptions.forEach(option => {
+                    const storage = option.querySelector('.storage-size').value;
+                    if (!storage) return;
+                    
+                    const unlockedPrices = {
+                        flawless: parseFloat(option.querySelector('.unlocked-flawless').value),
+                        good: parseFloat(option.querySelector('.unlocked-good').value),
+                        fair: parseFloat(option.querySelector('.unlocked-fair').value),
+                        damaged: parseFloat(option.querySelector('.unlocked-damaged').value),
+                        broken: parseFloat(option.querySelector('.unlocked-broken').value),
+                        noPower: parseFloat(option.querySelector('.unlocked-no-power').value)
+                    };
+                    
+                    const lockedPrices = {
+                        flawless: parseFloat(option.querySelector('.locked-flawless').value),
+                        good: parseFloat(option.querySelector('.locked-good').value),
+                        fair: parseFloat(option.querySelector('.locked-fair').value),
+                        damaged: parseFloat(option.querySelector('.locked-damaged').value),
+                        broken: parseFloat(option.querySelector('.locked-broken').value),
+                        noPower: parseFloat(option.querySelector('.locked-no-power').value)
+                    };
+
+                    prices[storage] = { unlocked: unlockedPrices, locked: lockedPrices };
+                });
+
+                const newDeviceData = {
+                    name: deviceName,
+                    brand: deviceBrand,
+                    slug: deviceSlug,
+                    imageUrl: imageUrl,
+                    prices: prices
+                };
+
+                try {
+                    await setDoc(doc(db, `devices/${deviceBrand}/models`, deviceSlug), newDeviceData);
+                    addEditModal.classList.add('hidden');
+                    addEditForm.reset();
+                    fetchAndRenderPricing();
+                    displayStatusMessage('Model added/updated successfully!', 'success');
+                } catch (error) {
+                    console.error("Error adding document: ", error);
+                    displayStatusMessage('Error adding/updating model.', 'error');
+                }
+            });
+
+            document.getElementById('addStorageOptionBtn').addEventListener('click', () => {
+                const container = document.getElementById('storageOptionsContainer');
+                const newOption = document.createElement('div');
+                newOption.className = 'storage-option grid grid-cols-10 gap-4 mb-4';
+                newOption.innerHTML = `
+                    <div class="col-span-1">
+                        <label class="block text-sm font-medium text-gray-700">Storage</label>
+                        <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    </div>
+                    <div class="col-span-3">
+                        <label class="block text-sm font-medium text-gray-700">Unlocked Prices (Flawless, Good, Fair)</label>
+                        <div class="flex gap-2 mt-1">
+                            <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="Good" class="unlocked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                        </div>
+                    </div>
+                    <div class="col-span-3">
+                        <label class="block text-sm font-medium text-gray-700">Locked Prices (Flawless, Good, Fair)</label>
+                        <div class="flex gap-2 mt-1">
+                            <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="Good" class="locked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="Fair" class="locked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                        </div>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-sm font-medium text-gray-700">Broken (Damaged, Broken, No Power)</label>
+                        <div class="flex gap-2 mt-1">
+                             <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                             <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                             <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                        </div>
+                    </div>
+                    <div class="col-span-1 flex items-end">
+                        <button type="button" class="bg-red-500 text-white px-3 py-2 rounded-md delete-storage-option">Delete</button>
+                    </div>
+                `;
+                container.appendChild(newOption);
+                
+                newOption.querySelector('.delete-storage-option').addEventListener('click', () => {
+                    newOption.remove();
+                });
+            });
+
+            function displayStatusMessage(message, type) {
+                statusMessage.textContent = message;
+                statusMessage.className = `p-3 rounded-md mt-4 text-center ${type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
+            }
+
+            // Initial fetch
+            if (auth.currentUser) {
+                fetchAndRenderPricing();
+            }
+        });
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        input[type="text"], input[type="number"], select {
+            border-color: #d1d5db;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- Header -->
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto p-6 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-900">Pricing Management</h1>
+            <div id="adminPanelControls" class="flex items-center gap-4 hidden">
+                <span id="userEmailDisplay" class="text-sm font-medium"></span>
+                <button id="logoutBtn" class="text-red-500 font-semibold hover:text-red-700">Logout</button>
+                <button id="addNewModelBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-plus mr-2"></i>Add New Model
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-6">
+        <div id="loginSection" class="text-center py-20">
+            <div class="bg-white p-8 rounded-lg shadow-md max-w-sm mx-auto">
+                <h2 class="text-2xl font-bold mb-4">Admin Login</h2>
+                <p class="text-gray-600 mb-6">Please sign in to manage device pricing.</p>
+                <form id="loginForm" class="space-y-4">
+                    <input type="email" id="loginEmail" placeholder="Email" class="w-full rounded-lg border-gray-300 p-3" autocomplete="email">
+                    <input type="password" id="loginPassword" placeholder="Password" class="w-full rounded-lg border-gray-300 p-3" autocomplete="current-password">
+                    <button type="submit" id="loginEmailBtn" class="bg-gray-800 text-white w-full px-6 py-3 rounded-lg font-semibold hover:bg-gray-900 transition-colors">
+                        Sign In with Email
+                    </button>
+                </form>
+                <p class="my-4 text-gray-500">or</p>
+                <button id="loginGoogleBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors w-full">
+                    <i class="fab fa-google mr-2"></i>Sign In with Google
+                </button>
+            </div>
+        </div>
+        <div id="adminPanel" class="hidden">
+            <div class="bg-white shadow-lg rounded-lg overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Storage</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lock Status</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flawless</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Good</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fair</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Damaged</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Broken</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No Power</th>
+                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="statusMessage" class="hidden"></div>
+        </div>
+    </main>
+
+    <!-- Add/Edit Model Modal -->
+    <div id="addEditModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
+        <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full mx-4 my-8">
+            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900">Add/Edit Pricing Model</h3>
+            <form id="addEditForm" class="space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="deviceName" class="block text-sm font-medium text-gray-700">Device Name</label>
+                        <input type="text" id="deviceName" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    </div>
+                    <div>
+                        <label for="deviceBrand" class="block text-sm font-medium text-gray-700">Brand</label>
+                        <select id="deviceBrand" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                            <option value="">Select Brand</option>
+                            <option value="iphones">iPhones</option>
+                            <option value="samsung">Samsung</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="deviceSlug" class="block text-sm font-medium text-gray-700">Slug (e.g., galaxy-s24-ultra)</label>
+                        <input type="text" id="deviceSlug" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    </div>
+                    <div>
+                        <label for="imageUrl" class="block text-sm font-medium text-gray-700">Image URL</label>
+                        <input type="text" id="imageUrl" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    </div>
+                </div>
+                
+                <hr class="my-6">
+                <h4 class="text-xl font-bold text-gray-900 mb-4">Pricing by Storage and Condition</h4>
+                <div id="storageOptionsContainer" class="space-y-4">
+                    <!-- Initial storage option row -->
+                    <div class="storage-option grid grid-cols-10 gap-4 mb-4">
+                        <div class="col-span-1">
+                            <label class="block text-sm font-medium text-gray-700">Storage</label>
+                            <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        </div>
+                        <div class="col-span-3">
+                            <label class="block text-sm font-medium text-gray-700">Unlocked Prices (Flawless, Good, Fair)</label>
+                            <div class="flex gap-2 mt-1">
+                                <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="Good" class="unlocked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            </div>
+                        </div>
+                        <div class="col-span-3">
+                            <label class="block text-sm font-medium text-gray-700">Locked Prices (Flawless, Good, Fair)</label>
+                            <div class="flex gap-2 mt-1">
+                                <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="Good" class="locked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="Fair" class="locked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            </div>
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700">Broken (Damaged, Broken, No Power)</label>
+                            <div class="flex gap-2 mt-1">
+                                 <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                 <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                 <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            </div>
+                        </div>
+                        <div class="col-span-1 flex items-end">
+                            <button type="button" class="bg-red-500 text-white px-3 py-2 rounded-md delete-storage-option">Delete</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" id="addStorageOptionBtn" class="mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                    Add Storage Option
+                </button>
+                
+                <div class="mt-8 flex justify-end gap-4">
+                    <button type="button" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold close-modal-btn">Cancel</button>
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Save Pricing</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>
