@@ -291,7 +291,7 @@
         const db = getFirestore(app);
 
         document.addEventListener('DOMContentLoaded', function() {
-             const phones = [
+            const phones = [
                 { name: 'iPhone 16 Pro Max', price: 800, id: 'i16pm' }, { name: 'iPhone 16 Pro', price: 750, id: 'i16p' }, { name: 'iPhone 16', price: 650, id: 'i16' }, { name: 'iPhone 16 Plus', price: 600, id: 'i16pl' }, { name: 'iPhone 16 SE', price: 450, id: 'i16e' }, { name: 'iPhone 15 Pro Max', price: 700, id: 'i15pm' }, { name: 'iPhone 15 Pro', price: 650, id: 'i15p' }, { name: 'iPhone 15', price: 550, id: 'i15' }, { name: 'iPhone 15 Plus', price: 500, id: 'i15pl' }, { name: 'iPhone 14 Pro Max', price: 500, id: 'i14pm' }, { name: 'iPhone 14 Pro', price: 450, id: 'i14p' }, { name: 'iPhone 14', price: 380, id: 'i14' }, { name: 'iPhone 14 Plus', price: 350, id: 'i14pl' }, { name: 'iPhone 13 Pro Max', price: 400, id: 'i13pm' }, { name: 'iPhone 13 Pro', price: 350, id: 'i13p' }, { name: 'iPhone 13', price: 300, id: 'i13' }, { name: 'iPhone 13 mini', price: 280, id: 'i13m' }, { name: 'iPhone 12 Pro Max', price: 350, id: 'i12pm' }, { name: 'iPhone 12 Pro', price: 300, id: 'i12p' }, { name: 'iPhone 12', price: 250, id: 'i12' }, { name: 'iPhone 12 mini', price: 230, id: 'i12m' }, { name: 'iPhone 11 Pro Max', price: 300, id: 'i11pm' }, { name: 'iPhone 11 Pro', price: 280, id: 'i11p' }, { name: 'iPhone 11', price: 220, id: 'i11' }, { name: 'iPhone SE (3rd Gen)', price: 300, id: 'ise3' }, { name: 'iPhone SE (2nd Gen)', price: 200, id: 'ise2' },
             ];
 
@@ -299,6 +299,16 @@
             const searchInput = document.getElementById('searchInput');
             const noResultsMessage = document.getElementById('noResultsMessage');
             const searchTermSpan = document.getElementById('searchTerm');
+
+            // Function to create a URL slug from the phone name
+            const createUrlSlug = (name) => {
+                return name
+                    .toLowerCase()
+                    .replace(/iphone\s/g, '') // Remove 'iphone '
+                    .replace(/\s+/g, '-')    // Replace spaces with hyphens
+                    .replace(/[()]/g, '')    // Remove parentheses
+                    .replace(/[^a-z0-9-]/g, '') // Remove any other non-alphanumeric chars
+            };
 
             const renderPhones = (phoneList) => {
                 phoneGrid.innerHTML = '';
@@ -310,7 +320,9 @@
                     phoneGrid.classList.remove('hidden');
                     noResultsMessage.classList.add('hidden');
                     phoneList.forEach(phone => {
-                        const phoneCardHTML = `<a href="#" class="phone-card-link group" data-name="${phone.name.toLowerCase()}"><div class="phone-card-inner bg-white p-6 rounded-xl shadow-md text-center flex flex-col h-full"><img id="${phone.id}_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/${phone.id}" alt="${phone.name}" class="mx-auto mb-4 h-48 object-contain"><h3 class="text-lg font-semibold text-slate-800">${phone.name}</h3><p class="text-blue-600 font-bold my-2">Up to $${phone.price}</p><span class="mt-auto bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span></div></a>`;
+                        const slug = createUrlSlug(phone.name);
+                        const modelUrl = `/iphone/models/iphone-${slug}.html`;
+                        const phoneCardHTML = `<a href="${modelUrl}" class="phone-card-link group" data-name="${phone.name.toLowerCase()}"><div class="phone-card-inner bg-white p-6 rounded-xl shadow-md text-center flex flex-col h-full"><img id="${phone.id}_img" src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/iphone/assets/${phone.id}" alt="${phone.name}" class="mx-auto mb-4 h-48 object-contain"><h3 class="text-lg font-semibold text-slate-800">${phone.name}</h3><p class="text-blue-600 font-bold my-2">Up to $${phone.price}</p><span class="mt-auto bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span></div></a>`;
                         phoneGrid.insertAdjacentHTML('beforeend', phoneCardHTML);
                     });
                     document.querySelectorAll('#phoneGrid img[data-base-src]').forEach(loadImageWithFallback);
@@ -917,4 +929,3 @@
     </script>
 </body>
 </html>
-
