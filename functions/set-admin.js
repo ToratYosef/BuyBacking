@@ -8,7 +8,7 @@ const admin = require('firebase-admin');
 const serviceAccount = require('/workspaces/BuyBacking/admin/serviceAccountKey.json');
 
 // --- PASTE THE USER UID HERE ---
-const uidToMakeAdmin = 'tZiXcH5pB5dvBM6QTxjdI4VkR2p2';
+const uidToMakeAdmin = 'IAq7dIQVREYUwo9udfX338Aqbwj1';
 
 // Initialize the app
 admin.initializeApp({
