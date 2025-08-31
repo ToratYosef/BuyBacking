@@ -8,11 +8,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
+        
+        // This is a placeholder for your Firebase config. Do not store sensitive info here.
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
             authDomain: "buyback-a0f05.firebaseapp.com",
@@ -23,32 +26,40 @@
             appId: "1:876430429098:web:f6dd64b1960d90461979d3",
             measurementId: "G-6WWQN44JHT"
         };
+        
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
         const provider = new GoogleAuthProvider();
 
-        let currentUser = null;
+        let allDevices = [];
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const pricingTableBody = document.getElementById('pricingTableBody');
+        document.addEventListener('DOMContentLoaded', () => {
+            const pricingTableBodyUnlocked = document.getElementById('pricingTableBody-unlocked');
+            const pricingTableBodyLocked = document.getElementById('pricingTableBody-locked');
             const addNewModelBtn = document.getElementById('addNewModelBtn');
             const addEditModal = document.getElementById('addEditModal');
             const addEditForm = document.getElementById('addEditForm');
+            const bulkEditModal = document.getElementById('bulkEditModal');
+            const bulkEditForm = document.getElementById('bulkEditForm');
             const closeModalBtns = document.querySelectorAll('.close-modal-btn');
             const statusMessage = document.getElementById('statusMessage');
             const loginSection = document.getElementById('loginSection');
             const adminPanel = document.getElementById('adminPanel');
-            const loginEmailInput = document.getElementById('loginEmail');
-            const loginPasswordInput = document.getElementById('loginPassword');
-            const loginGoogleBtn = document.getElementById('loginGoogleBtn');
-            const logoutBtn = document.getElementById('logoutBtn');
             const userEmailDisplay = document.getElementById('userEmailDisplay');
             const loginForm = document.getElementById('loginForm');
-
+            const logoutBtn = document.getElementById('logoutBtn');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const exportXLSXBtn = document.getElementById('exportXLSXBtn');
+            const bulkEditBtn = document.getElementById('bulkEditBtn');
+            const searchInput = document.getElementById('searchInput');
+            const brandFilter = document.getElementById('brandFilter');
+            
             // Function to check if the user is an admin by querying Firestore
             const checkAdminStatus = async (user) => {
-                if (!user) return false;
+                if (!user) {
+                    return false;
+                }
                 try {
                     const adminDocRef = doc(db, 'admins', user.uid);
                     const adminDoc = await getDoc(adminDocRef);
@@ -58,56 +69,58 @@
                     return false;
                 }
             };
-
+            
+            // The core fix: use onAuthStateChanged as the single source of truth
             onAuthStateChanged(auth, async (user) => {
+                loadingIndicator.classList.remove('hidden');
+                
                 if (user) {
                     const isAdmin = await checkAdminStatus(user);
                     if (isAdmin) {
-                        currentUser = user;
                         userEmailDisplay.textContent = user.email;
                         loginSection.classList.add('hidden');
                         adminPanel.classList.remove('hidden');
-                        console.log("Admin user authenticated.");
+                        loadingIndicator.classList.add('hidden');
+                        console.log("Admin user authenticated and authorized.");
                         await fetchAndRenderPricing();
                     } else {
-                        currentUser = null;
+                        // User is signed in but not an admin. Sign them out and show login.
+                        console.log("User signed in but not an authorized admin. Signing out...");
+                        await signOut(auth);
+                        loadingIndicator.classList.add('hidden');
                         loginSection.classList.remove('hidden');
                         adminPanel.classList.add('hidden');
-                        pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">You are signed in but not authorized.</td></tr>';
-                        console.log("User signed in but not an authorized admin.");
-                        await signOut(auth); // Sign out unauthorized users
+                        displayStatusMessage("You are not authorized to view this page. Please sign in with an admin account.", 'error');
                     }
                 } else {
-                    currentUser = null;
+                    // User is not signed in.
+                    loadingIndicator.classList.add('hidden');
                     loginSection.classList.remove('hidden');
                     adminPanel.classList.add('hidden');
-                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Please sign in to view this content.</td></tr>';
                     console.log("User not authenticated.");
-                }
-            });
-
-            loginGoogleBtn.addEventListener('click', async () => {
-                try {
-                    await signInWithPopup(auth, provider);
-                } catch (error) {
-                    console.error("Google login error:", error);
-                    displayStatusMessage(`Google login failed: ${error.message}`, 'error');
                 }
             });
 
             loginForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const email = loginEmailInput.value;
-                const password = loginPasswordInput.value;
-                if (email && password) {
-                    try {
-                        await signInWithEmailAndPassword(auth, email, password);
-                    } catch (error) {
-                        console.error("Email login error:", error);
-                        displayStatusMessage(`Login failed: ${error.message}`, 'error');
-                    }
-                } else {
-                    displayStatusMessage('Please enter both email and password.', 'error');
+                const email = document.getElementById('loginEmail').value;
+                const password = document.getElementById('loginPassword').value;
+                displayStatusMessage('Signing in...', 'info');
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                    console.error("Email login error:", error);
+                    displayStatusMessage(`Login failed: ${error.message}`, 'error');
+                }
+            });
+            
+            document.getElementById('loginGoogleBtn').addEventListener('click', async () => {
+                displayStatusMessage('Signing in with Google...', 'info');
+                try {
+                    await signInWithPopup(auth, provider);
+                } catch (error) {
+                    console.error("Google login error:", error);
+                    displayStatusMessage(`Google login failed: ${error.message}`, 'error');
                 }
             });
 
@@ -118,106 +131,298 @@
                     console.error("Logout error:", error);
                 }
             });
-            
-            const fetchAndRenderPricing = async () => {
-                pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Loading pricing data...</td></tr>';
+
+            const fetchAndRenderPricing = async (filters = {}) => {
+                pricingTableBodyUnlocked.innerHTML = '<tr><td colspan="10" class="text-center py-4">Loading pricing data...</td></tr>';
+                pricingTableBodyLocked.innerHTML = '';
                 const iphoneCollection = collection(db, "devices/iphones/models");
                 const samsungCollection = collection(db, "devices/samsung/models");
 
-                const [iphoneSnapshot, samsungSnapshot] = await Promise.all([getDocs(iphoneCollection), getDocs(samsungCollection)]);
-                
-                const allDevices = [];
-                iphoneSnapshot.forEach(doc => allDevices.push({ id: doc.id, ...doc.data() }));
-                samsungSnapshot.forEach(doc => allDevices.push({ id: doc.id, ...doc.data() }));
-                
-                renderPricingTable(allDevices);
+                try {
+                    const [iphoneSnapshot, samsungSnapshot] = await Promise.all([getDocs(iphoneCollection), getDocs(samsungCollection)]);
+                    
+                    allDevices = [];
+                    iphoneSnapshot.forEach(doc => allDevices.push({ id: doc.id, ...doc.data() }));
+                    samsungSnapshot.forEach(doc => allDevices.push({ id: doc.id, ...doc.data() }));
+                    
+                    renderPricingTable(allDevices, filters);
+                } catch (error) {
+                    console.error("Error fetching pricing data: ", error);
+                    pricingTableBodyUnlocked.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-red-500">Error loading data. Please check your permissions.</td></tr>';
+                }
             };
 
-            const renderPricingTable = (devices) => {
-                pricingTableBody.innerHTML = '';
-                if (devices.length === 0) {
-                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No pricing data found.</td></tr>';
+            const renderPricingTable = (devices, filters) => {
+                pricingTableBodyUnlocked.innerHTML = '';
+                pricingTableBodyLocked.innerHTML = '';
+                
+                const filteredDevices = devices.filter(device => {
+                    const matchesSearch = filters.search ? device.name.toLowerCase().includes(filters.search.toLowerCase()) : true;
+                    const matchesBrand = filters.brand ? device.brand.toLowerCase() === filters.brand.toLowerCase() : true;
+                    return matchesSearch && matchesBrand;
+                });
+
+                if (filteredDevices.length === 0) {
+                    pricingTableBodyUnlocked.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
                     return;
                 }
                 
-                devices.forEach(device => {
-                    for (const storage in device.prices) {
+                // Sort devices to group them by name and storage
+                filteredDevices.sort((a, b) => a.name.localeCompare(b.name));
+
+                filteredDevices.forEach(device => {
+                    // Collect all storage options for this device
+                    const storageOptions = Object.keys(device.prices);
+                    
+                    // Render Unlocked Prices
+                    storageOptions.forEach(storage => {
                         const priceData = device.prices[storage];
-                        const row = document.createElement('tr');
-                        row.className = 'border-b border-gray-200 hover:bg-gray-50';
-                        
-                        const lockedPrices = priceData.locked || {};
                         const unlockedPrices = priceData.unlocked || {};
+                        
+                        const row = createPriceRow(device, storage, 'unlocked', unlockedPrices);
+                        pricingTableBodyUnlocked.appendChild(row);
+                    });
 
-                        row.innerHTML = `
-                            <td class="py-3 px-4 flex items-center gap-2">
-                                <img src="${device.imageUrl}" alt="${device.name}" class="w-10 h-10 object-contain rounded-md border">
-                                <span>${device.name}</span>
-                            </td>
-                            <td class="py-3 px-4">${storage}</td>
-                            <td class="py-3 px-4 font-semibold text-blue-600">Unlocked</td>
-                            <td class="py-3 px-4">$${unlockedPrices.flawless ? unlockedPrices.flawless.toFixed(2) : 'N/A'}</td>
-                            <td class="py-3 px-4">$${unlockedPrices.good ? unlockedPrices.good.toFixed(2) : 'N/A'}</td>
-                            <td class="py-3 px-4">$${unlockedPrices.fair ? unlockedPrices.fair.toFixed(2) : 'N/A'}</td>
-                            <td class="py-3 px-4">$${unlockedPrices.damaged ? unlockedPrices.damaged.toFixed(2) : 'N/A'}</td>
-                            <td class="py-3 px-4">$${unlockedPrices.broken ? unlockedPrices.broken.toFixed(2) : 'N/A'}</td>
-                            <td class="py-3 px-4">$${unlockedPrices.noPower ? unlockedPrices.noPower.toFixed(2) : 'N/A'}</td>
-                            <td class="py-3 px-4 text-center">
-                                <button class="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-600 edit-btn" data-id="${device.id}" data-brand="${device.brand}" data-storage="${storage}">Edit</button>
-                                <button class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${device.id}" data-brand="${device.brand}">Delete</button>
-                            </td>
-                        `;
-                        pricingTableBody.appendChild(row);
-
+                    // Render Locked Prices (only if they exist)
+                    storageOptions.forEach(storage => {
+                        const priceData = device.prices[storage];
+                        const lockedPrices = priceData.locked || {};
                         if (Object.keys(lockedPrices).length > 0) {
-                            const lockedRow = document.createElement('tr');
-                            lockedRow.className = 'border-b border-gray-200 hover:bg-gray-50';
-                            lockedRow.innerHTML = `
-                                <td class="py-3 px-4 flex items-center gap-2">
-                                    <img src="${device.imageUrl}" alt="${device.name}" class="w-10 h-10 object-contain rounded-md border opacity-50">
-                                    <span class="opacity-50">${device.name}</span>
-                                </td>
-                                <td class="py-3 px-4 opacity-50">${storage}</td>
-                                <td class="py-3 px-4 font-semibold text-orange-600">Locked</td>
-                                <td class="py-3 px-4">$${lockedPrices.flawless ? lockedPrices.flawless.toFixed(2) : 'N/A'}</td>
-                                <td class="py-3 px-4">$${lockedPrices.good ? lockedPrices.good.toFixed(2) : 'N/A'}</td>
-                                <td class="py-3 px-4">$${lockedPrices.fair ? lockedPrices.fair.toFixed(2) : 'N/A'}</td>
-                                <td class="py-3 px-4">$${lockedPrices.damaged ? lockedPrices.damaged.toFixed(2) : 'N/A'}</td>
-                                <td class="py-3 px-4">$${lockedPrices.broken ? lockedPrices.broken.toFixed(2) : 'N/A'}</td>
-                                <td class="py-3 px-4">$${lockedPrices.noPower ? lockedPrices.noPower.toFixed(2) : 'N/A'}</td>
-                                <td class="py-3 px-4 text-center">
-                                    <button class="bg-blue-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-600 edit-btn" data-id="${device.id}" data-brand="${device.brand}" data-storage="${storage}" data-lock="locked">Edit</button>
-                                    <button class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${device.id}" data-brand="${device.brand}">Delete</button>
-                                </td>
-                            `;
-                            pricingTableBody.appendChild(lockedRow);
+                            const row = createPriceRow(device, storage, 'locked', lockedPrices);
+                            pricingTableBodyLocked.appendChild(row);
                         }
-                    }
+                    });
+                });
+
+                // Add event listeners for inline editing and bulk actions
+                document.querySelectorAll('.price-input').forEach(input => {
+                    input.addEventListener('click', (e) => e.target.select());
+                    input.addEventListener('blur', handleEditPrice);
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.target.blur();
+                        }
+                    });
                 });
                 
                 document.querySelectorAll('.delete-btn').forEach(button => {
                     button.addEventListener('click', async (e) => {
-                        const id = e.target.dataset.id;
                         const brand = e.target.dataset.brand;
-                        if (confirm(`Are you sure you want to delete this device? This action is irreversible.`)) {
-                            await deleteDoc(doc(db, `devices/${brand}/models`, id));
-                            fetchAndRenderPricing();
+                        const id = e.target.dataset.id;
+                        const deviceName = e.target.dataset.name;
+
+                        // Use a custom modal or an elegant message instead of `confirm`
+                        if (window.confirm(`Are you sure you want to delete ${deviceName}? This action is irreversible.`)) {
+                           // Use a `try/catch` block for error handling
+                           try {
+                               await deleteDoc(doc(db, `devices/${brand}/models`, id));
+                               displayStatusMessage(`${deviceName} deleted successfully!`, 'success');
+                               fetchAndRenderPricing({ search: searchInput.value, brand: brandFilter.value });
+                           } catch (error) {
+                               console.error("Error deleting document:", error);
+                               displayStatusMessage(`Error deleting ${deviceName}.`, 'error');
+                           }
                         }
                     });
                 });
             };
+
+            const createPriceRow = (device, storage, status, prices) => {
+                const row = document.createElement('tr');
+                row.className = 'border-b border-gray-200 hover:bg-gray-50';
+                
+                const deleteBtnHtml = `<button class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${device.id}" data-brand="${device.brand}" data-name="${device.name}">Delete</button>`;
+                
+                row.innerHTML = `
+                    <td class="py-3 px-4 flex items-center gap-2">
+                        <img src="${device.imageUrl}" onerror="this.onerror=null;this.src='https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';" alt="${device.name}" class="w-10 h-10 object-contain rounded-md border">
+                        <span>${device.name}</span>
+                    </td>
+                    <td class="py-3 px-4">${storage}</td>
+                    <td class="py-3 px-4 font-semibold text-sm ${status === 'unlocked' ? 'text-blue-600' : 'text-orange-600'}">${status}</td>
+                    ${renderEditablePriceCell(prices.flawless, device, storage, status, 'flawless')}
+                    ${renderEditablePriceCell(prices.good, device, storage, status, 'good')}
+                    ${renderEditablePriceCell(prices.fair, device, storage, status, 'fair')}
+                    ${renderEditablePriceCell(prices.damaged, device, storage, status, 'damaged')}
+                    ${renderEditablePriceCell(prices.broken, device, storage, status, 'broken')}
+                    ${renderEditablePriceCell(prices.noPower, device, storage, status, 'noPower')}
+                    <td class="py-3 px-4 text-center">${deleteBtnHtml}</td>
+                `;
+                return row;
+            };
+
+            const renderEditablePriceCell = (price, device, storage, status, condition) => {
+                const value = price !== undefined && price !== null ? price.toFixed(2) : 'N/A';
+                return `
+                    <td class="py-3 px-2">
+                        <div class="relative flex items-center bg-gray-100 rounded-lg p-2 border border-gray-200 hover:border-blue-500 transition-colors">
+                            <span class="text-gray-500 text-xs mr-1">$</span>
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                value="${value === 'N/A' ? '' : value}" 
+                                placeholder="N/A"
+                                class="price-input w-full bg-transparent text-gray-900 font-medium text-center focus:outline-none"
+                                data-id="${device.id}"
+                                data-brand="${device.brand}"
+                                data-storage="${storage}"
+                                data-status="${status}"
+                                data-condition="${condition}"
+                            />
+                        </div>
+                    </td>
+                `;
+            };
+
+            const handleEditPrice = async (e) => {
+                const input = e.target;
+                const newValue = parseFloat(input.value);
+                
+                if (isNaN(newValue)) {
+                    // Optionally revert to old value or show error
+                    input.value = input.dataset.originalValue;
+                    return;
+                }
+                
+                const docId = input.dataset.id;
+                const brand = input.dataset.brand;
+                const storage = input.dataset.storage;
+                const status = input.dataset.status;
+                const condition = input.dataset.condition;
+
+                const docRef = doc(db, `devices/${brand}/models`, docId);
+                const updatePath = `prices.${storage}.${status}.${condition}`;
+                
+                const updateObject = {
+                    [updatePath]: newValue
+                };
+
+                try {
+                    await setDoc(docRef, updateObject, { merge: true });
+                    displayStatusMessage('Price updated successfully!', 'success');
+                } catch (error) {
+                    console.error("Error updating price:", error);
+                    displayStatusMessage('Error updating price.', 'error');
+                }
+            };
+            
+            // Filters
+            searchInput.addEventListener('input', () => renderPricingTable(allDevices, { search: searchInput.value, brand: brandFilter.value }));
+            brandFilter.addEventListener('change', () => renderPricingTable(allDevices, { search: searchInput.value, brand: brandFilter.value }));
+            
+            // Export to XLSX
+            exportXLSXBtn.addEventListener('click', () => {
+                const table = document.getElementById('pricingTable');
+                if (!table) {
+                    displayStatusMessage('No data to export.', 'error');
+                    return;
+                }
+
+                const wb = XLSX.utils.table_to_book(table);
+                XLSX.writeFile(wb, "pricing_data.xlsx");
+                displayStatusMessage('Export successful!', 'success');
+            });
+
+            // Bulk Edit Modal
+            bulkEditBtn.addEventListener('click', () => {
+                bulkEditModal.classList.remove('hidden');
+            });
+            
+            closeModalBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    addEditModal.classList.add('hidden');
+                    bulkEditModal.classList.add('hidden');
+                });
+            });
+
+            bulkEditForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const bulkBrand = document.getElementById('bulkBrand').value;
+                const bulkModel = document.getElementById('bulkModel').value;
+                const bulkQuality = document.getElementById('bulkQuality').value;
+                const bulkAction = document.getElementById('bulkAction').value;
+                const bulkValue = parseFloat(document.getElementById('bulkValue').value);
+                const bulkStatus = document.getElementById('bulkStatus').value;
+
+                if (isNaN(bulkValue)) {
+                    displayStatusMessage('Please enter a valid number for the bulk value.', 'error');
+                    return;
+                }
+
+                const updates = {};
+                const matchingDevices = allDevices.filter(device => {
+                    let matches = true;
+                    if (bulkBrand && device.brand !== bulkBrand) matches = false;
+                    if (bulkModel && device.slug !== bulkModel) matches = false;
+                    return matches;
+                });
+                
+                const batch = writeBatch(db);
+
+                matchingDevices.forEach(device => {
+                    const docRef = doc(db, `devices/${device.brand}/models`, device.id);
+                    let shouldUpdate = false;
+                    
+                    const newPrices = JSON.parse(JSON.stringify(device.prices));
+
+                    for (const storage in newPrices) {
+                        const priceData = newPrices[storage];
+                        
+                        // Check locked/unlocked status
+                        const statusToUpdate = bulkStatus === 'all' ? ['unlocked', 'locked'] : [bulkStatus];
+
+                        statusToUpdate.forEach(status => {
+                            if (priceData[status]) {
+                                for (const condition in priceData[status]) {
+                                    if (bulkQuality === 'all' || condition === bulkQuality) {
+                                        let currentPrice = priceData[status][condition];
+                                        if (currentPrice !== null && currentPrice !== undefined) {
+                                            if (bulkAction === 'percent') {
+                                                currentPrice += currentPrice * (bulkValue / 100);
+                                            } else if (bulkAction === 'add') {
+                                                currentPrice += bulkValue;
+                                            } else if (bulkAction === 'subtract') {
+                                                currentPrice -= bulkValue;
+                                            }
+                                            priceData[status][condition] = parseFloat(currentPrice.toFixed(2));
+                                            shouldUpdate = true;
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    if (shouldUpdate) {
+                         batch.set(docRef, { prices: newPrices }, { merge: true });
+                    }
+                });
+                
+                try {
+                    await batch.commit();
+                    displayStatusMessage('Bulk edit successful!', 'success');
+                    bulkEditModal.classList.add('hidden');
+                    fetchAndRenderPricing({ search: searchInput.value, brand: brandFilter.value });
+                } catch (error) {
+                    console.error("Error with bulk update:", error);
+                    displayStatusMessage('Bulk update failed. Please try again.', 'error');
+                }
+            });
+
+            // Populate bulk edit models dropdown
+            const bulkModelSelect = document.getElementById('bulkModel');
+            allDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.slug;
+                option.textContent = device.name;
+                bulkModelSelect.appendChild(option);
+            });
+
 
             addNewModelBtn.addEventListener('click', () => {
                 addEditForm.reset();
                 addEditModal.classList.remove('hidden');
             });
             
-            closeModalBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    addEditModal.classList.add('hidden');
-                });
-            });
-
             addEditForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
@@ -233,21 +438,21 @@
                     if (!storage) return;
                     
                     const unlockedPrices = {
-                        flawless: parseFloat(option.querySelector('.unlocked-flawless').value),
-                        good: parseFloat(option.querySelector('.unlocked-good').value),
-                        fair: parseFloat(option.querySelector('.unlocked-fair').value),
-                        damaged: parseFloat(option.querySelector('.unlocked-damaged').value),
-                        broken: parseFloat(option.querySelector('.unlocked-broken').value),
-                        noPower: parseFloat(option.querySelector('.unlocked-no-power').value)
+                        flawless: parseFloat(option.querySelector('.unlocked-flawless').value) || null,
+                        good: parseFloat(option.querySelector('.unlocked-good').value) || null,
+                        fair: parseFloat(option.querySelector('.unlocked-fair').value) || null,
+                        damaged: parseFloat(option.querySelector('.unlocked-damaged').value) || null,
+                        broken: parseFloat(option.querySelector('.unlocked-broken').value) || null,
+                        noPower: parseFloat(option.querySelector('.unlocked-no-power').value) || null
                     };
                     
                     const lockedPrices = {
-                        flawless: parseFloat(option.querySelector('.locked-flawless').value),
-                        good: parseFloat(option.querySelector('.locked-good').value),
-                        fair: parseFloat(option.querySelector('.locked-fair').value),
-                        damaged: parseFloat(option.querySelector('.locked-damaged').value),
-                        broken: parseFloat(option.querySelector('.locked-broken').value),
-                        noPower: parseFloat(option.querySelector('.locked-no-power').value)
+                        flawless: parseFloat(option.querySelector('.locked-flawless').value) || null,
+                        good: parseFloat(option.querySelector('.locked-good').value) || null,
+                        fair: parseFloat(option.querySelector('.locked-fair').value) || null,
+                        damaged: parseFloat(option.querySelector('.locked-damaged').value) || null,
+                        broken: parseFloat(option.querySelector('.locked-broken').value) || null,
+                        noPower: parseFloat(option.querySelector('.locked-no-power').value) || null
                     };
 
                     prices[storage] = { unlocked: unlockedPrices, locked: lockedPrices };
@@ -319,12 +524,7 @@
 
             function displayStatusMessage(message, type) {
                 statusMessage.textContent = message;
-                statusMessage.className = `p-3 rounded-md mt-4 text-center ${type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
-            }
-
-            // Initial fetch
-            if (auth.currentUser) {
-                fetchAndRenderPricing();
+                statusMessage.className = `p-3 rounded-md mt-4 text-center ${type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} ${type === 'info' ? 'bg-blue-100 text-blue-700' : ''}`;
             }
         });
     </script>
@@ -358,7 +558,11 @@
 
     <!-- Main Content -->
     <main class="container mx-auto p-6">
-        <div id="loginSection" class="text-center py-20">
+        <div id="loadingIndicator" class="flex justify-center items-center py-20">
+            <i class="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
+        </div>
+        
+        <div id="loginSection" class="text-center py-20 hidden">
             <div class="bg-white p-8 rounded-lg shadow-md max-w-sm mx-auto">
                 <h2 class="text-2xl font-bold mb-4">Admin Login</h2>
                 <p class="text-gray-600 mb-6">Please sign in to manage device pricing.</p>
@@ -375,9 +579,36 @@
                 </button>
             </div>
         </div>
+
         <div id="adminPanel" class="hidden">
+            <!-- New controls section for filtering and bulk actions -->
+            <div class="bg-white shadow-md p-6 mb-6 rounded-lg flex items-center justify-between flex-wrap gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="relative flex items-center">
+                        <i class="fas fa-search absolute left-3 text-gray-400"></i>
+                        <input type="text" id="searchInput" placeholder="Search by model..." class="pl-10 p-2 border rounded-full w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <select id="brandFilter" class="p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">All Brands</option>
+                            <option value="iphones">iPhones</option>
+                            <option value="samsung">Samsung</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button id="exportXLSXBtn" class="bg-green-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-600 transition-colors">
+                        <i class="fas fa-file-excel mr-2"></i>Export to XLSX
+                    </button>
+                    <button id="bulkEditBtn" class="bg-orange-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-600 transition-colors">
+                        <i class="fas fa-edit mr-2"></i>Bulk Edit
+                    </button>
+                </div>
+            </div>
+
+            <!-- Main pricing table -->
             <div class="bg-white shadow-lg rounded-lg overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
+                <table id="pricingTable" class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
@@ -392,8 +623,11 @@
                             <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200">
-                        <!-- Data will be inserted here by JavaScript -->
+                    <tbody id="pricingTableBody-unlocked" class="bg-white divide-y divide-gray-200">
+                        <!-- Unlocked devices will be rendered here -->
+                    </tbody>
+                    <tbody id="pricingTableBody-locked" class="bg-white divide-y divide-gray-200 mt-4">
+                        <!-- Locked devices will be rendered here -->
                     </tbody>
                 </table>
             </div>
@@ -478,6 +712,70 @@
                 <div class="mt-8 flex justify-end gap-4">
                     <button type="button" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold close-modal-btn">Cancel</button>
                     <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Save Pricing</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Bulk Edit Modal -->
+    <div id="bulkEditModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
+        <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4 my-8">
+            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900">Bulk Edit Prices</h3>
+            <form id="bulkEditForm" class="space-y-6">
+                <div>
+                    <label for="bulkBrand" class="block text-sm font-medium text-gray-700">Brand</label>
+                    <select id="bulkBrand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        <option value="">All Brands</option>
+                        <option value="iphones">iPhones</option>
+                        <option value="samsung">Samsung</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="bulkModel" class="block text-sm font-medium text-gray-700">Model</label>
+                    <select id="bulkModel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        <option value="">All Models</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="bulkStatus" class="block text-sm font-medium text-gray-700">Lock Status</label>
+                    <select id="bulkStatus" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        <option value="all">All</option>
+                        <option value="unlocked">Unlocked</option>
+                        <option value="locked">Locked</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="bulkQuality" class="block text-sm font-medium text-gray-700">Quality/Condition</label>
+                    <select id="bulkQuality" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        <option value="all">All</option>
+                        <option value="flawless">Flawless</option>
+                        <option value="good">Good</option>
+                        <option value="fair">Fair</option>
+                        <option value="damaged">Damaged</option>
+                        <option value="broken">Broken</option>
+                        <option value="noPower">No Power</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="bulkAction" class="block text-sm font-medium text-gray-700">Action</label>
+                        <select id="bulkAction" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                            <option value="add">Add ($)</option>
+                            <option value="subtract">Subtract ($)</option>
+                            <option value="percent">Add (%)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="bulkValue" class="block text-sm font-medium text-gray-700">Value</label>
+                        <input type="number" step="0.01" id="bulkValue" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    </div>
+                </div>
+                <div class="mt-8 flex justify-end gap-4">
+                    <button type="button" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold close-modal-btn">Cancel</button>
+                    <button type="submit" class="bg-orange-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-orange-600">Apply Bulk Edit</button>
                 </div>
             </form>
         </div>
