@@ -16,701 +16,310 @@ const app = express();
 
 // Configure CORS for all routes.
 const allowedOrigins = [
-    "https://toratyosef.github.io",
-    "https://buyback-a0f05.web.app",
-    "https://secondhandcell.com",
-    "https://www.secondhandcell.com"
+  "https://toratyosef.github.io",
+  "https://buyback-a0f05.web.app",
+  "https://secondhandcell.com",
+  "https://www.secondhandcell.com",
 ];
 
-app.use(cors({
+app.use(
+  cors({
     origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-}));
+  })
+);
 app.use(express.json()); // Middleware to parse JSON request bodies
 
 // Set up Nodemailer transporter using the Firebase Functions config
 // IMPORTANT: Ensure you have configured these environment variables:
 // firebase functions:config:set email.user="your_email@gmail.com" email.pass="your_app_password"
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: functions.config().email.user,
-        pass: functions.config().email.pass
-    }
+  service: "gmail",
+  auth: {
+    user: functions.config().email.user,
+    pass: functions.config().email.pass,
+  },
 });
 
-// --- Email HTML Templates (Unchanged for brevity, assumed to be correct) ---
+// --- Email HTML Templates (unchanged from your version) ---
+const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SwiftBuyBack Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Please click the button below to download and print your label. Affix it to your package and drop it off at any USPS location.</p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SwiftBuyBack.</p></div></div></body></html>`;
 
-const SHIPPING_LABEL_EMAIL_HTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your SwiftBuyBack Shipping Label is Ready!</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-            -webkit-text-size-adjust: 100%;
-            -ms-text-size-adjust: 100%;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 20px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            border: 1px solid #e0e0e0;
-        }
-        .header {
-            background-color: #ffffff;
-            padding: 24px;
-            text-align: center;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        .header h1 {
-            font-size: 24px;
-            color: #333333;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        .header img {
-            width: 32px;
-            height: 32px;
-        }
-        .content {
-            padding: 24px;
-            color: #555555;
-            font-size: 16px;
-            line-height: 1.6;
-        }
-        .content p {
-            margin: 0 0 16px;
-        }
-        .content p strong {
-            color: #333333;
-        }
-        .order-id {
-            color: #007bff;
-            font-weight: bold;
-        }
-        .tracking-number {
-            color: #007bff;
-            font-weight: bold;
-        }
-        .button-container {
-            text-align: center;
-            margin: 24px 0;
-        }
-        .button {
-            display: inline-block;
-            background-color: #4CAF50;
-            color: #ffffff;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 16px;
-            -webkit-transition: background-color 0.3s ease;
-            transition: background-color 0.3s ease;
-        }
-        .button:hover {
-            background-color: #45a049;
-        }
-        .footer {
-            padding: 24px;
-            text-align: center;
-            color: #999999;
-            font-size: 14px;
-            border-top: 1px solid #e0e0e0;
-        }
-    </style>
-</head>
-<body>
-    <div class="email-container">
-        <div class="header">
-            <h1>
-                <img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">
-                Your Shipping Label is Ready!
-            </h1>
-        </div>
-        <div class="content">
-            <p>Hello **CUSTOMER_NAME**,</p>
-            <p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p>
-            <p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p>
-            <p>Please click the button below to download and print your label. Affix it to your package and drop it off at any USPS location.</p>
-            <div class="button-container">
-                <a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a>
-            </div>
-            <p style="text-align: center;">We're excited to receive your device!</p>
-        </div>
-        <div class="footer">
-            <p>Thank you for choosing SwiftBuyBack.</p>
-        </div>
-    </div>
-</body>
-</html>
-`;
+const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SwiftBuyBack Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SwiftBuyBack.</p></div></div></body></html>`;
 
-const SHIPPING_KIT_EMAIL_HTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your SwiftBuyBack Shipping Kit is on its Way!</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-            -webkit-text-size-adjust: 100%;
-            -ms-text-size-adjust: 100%;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 20px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            border: 1px solid #e0e0e0;
-        }
-        .header {
-            background-color: #ffffff;
-            padding: 24px;
-            text-align: center;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        .header h1 {
-            font-size: 24px;
-            color: #333333;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        .header img {
-            width: 32px;
-            height: 32px;
-        }
-        .content {
-            padding: 24px;
-            color: #555555;
-            font-size: 16px;
-            line-height: 1.6;
-        }
-        .content p {
-            margin: 0 0 16px;
-        }
-        .content p strong {
-            color: #333333;
-        }
-        .order-id {
-            color: #007bff;
-            font-weight: bold;
-        }
-        .tracking-number {
-            color: #007bff;
-            font-weight: bold;
-        }
-        .button-container {
-            text-align: center;
-            margin: 24px 0;
-        }
-        .button {
-            display: inline-block;
-            background-color: #4CAF50;
-            color: #ffffff;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 16px;
-            -webkit-transition: background-color 0.3s ease;
-            transition: background-color 0.3s ease;
-        }
-        .button:hover {
-            background-color: #45a049;
-        }
-        .footer {
-            padding: 24px;
-            text-align: center;
-            color: #999999;
-            font-size: 14px;
-            border-top: 1px solid #e0e0e0;
-        }
-    </style>
-</head>
-<body>
-    <div class="email-container">
-        <div class="header">
-            <h1>
-                <img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">
-                Your Shipping Kit is on its Way!
-            </h1>
-        </div>
-        <div class="content">
-            <p>Hello **CUSTOMER_NAME**,</p>
-            <p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p>
-            <p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p>
-            <p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p>
-            <p>We're excited to receive your device!</p>
-        </div>
-        <div class="footer">
-            <p>Thank you for choosing SwiftBuyBack.</p>
-        </div>
-    </div>
-</body>
-</html>
-`;
+const ORDER_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SwiftBuyBack Order Has Been Received!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content h2{color:#333333;font-size:20px;margin-top:24px;margin-bottom:8px}.order-id{color:#007bff;font-weight:bold}ul{list-style-type:disc;padding-left:20px;margin:0 0 16px}ul li{margin-bottom:8px}.important-note{background-color:#fff3cd;border-left:4px solid #ffc107;padding:16px;margin-top:24px;font-size:14px;color:#856404}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1>Your SwiftBuyBack Order #**ORDER_ID** Has Been Received!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for choosing SwiftBuyBack! We've successfully received your order request for your **DEVICE_NAME**.</p><p>Your Order ID is <strong class="order-id">#**ORDER_ID**</strong>.</p><h2>Next Steps: Preparing Your Device for Shipment</h2><p>Before you send us your device, it's crucial to prepare it correctly. Please follow these steps:</p><ul><li><strong>Backup Your Data:</strong> Ensure all important photos, contacts, and files are backed up to a cloud service or another device.</li><li><strong>Factory Reset:</strong> Perform a full factory reset on your device to erase all personal data. This is vital for your privacy and security.</li><li><strong>Remove Accounts:</strong> Sign out of all accounts (e.g., Apple ID/iCloud, Google Account, Samsung Account).<ul><li>For Apple devices, turn off "Find My iPhone" (FMI).</li><li>For Android devices, ensure Factory Reset Protection (FRP) is disabled.</li></ul></li><li><strong>Remove SIM Card:</strong> Take out any physical SIM cards from the device.</li><li><strong>Remove Accessories:</strong> Do not include cases, screen protectors, or chargers unless specifically instructed.</li></ul><div class="important-note"><p><strong>Important:</strong> We cannot process devices with <strong>Find My iPhone (FMI)</strong>, <strong>Factory Reset Protection (FRP)</strong>, <strong>stolen/lost status</strong>, <strong>outstanding balance due</strong>, or <strong>blacklisted IMEI</strong>. Please ensure your device meets these conditions to avoid delays or rejection.</p></div>**SHIPPING_INSTRUCTION**</div><div class="footer"><p>The SwiftBuyBack Team</p></div></div></body></html>`;
 
-const ORDER_RECEIVED_EMAIL_HTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your SwiftBuyBack Order Has Been Received!</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-            -webkit-text-size-adjust: 100%;
-            -ms-text-size-adjust: 100%;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 20px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            border: 1px solid #e0e0e0;
-        }
-        .header {
-            background-color: #ffffff;
-            padding: 24px;
-            text-align: center;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        .header h1 {
-            font-size: 24px;
-            color: #333333;
-            margin: 0;
-        }
-        .content {
-            padding: 24px;
-            color: #555555;
-            font-size: 16px;
-            line-height: 1.6;
-        }
-        .content p {
-            margin: 0 0 16px;
-        }
-        .content h2 {
-            color: #333333;
-            font-size: 20px;
-            margin-top: 24px;
-            margin-bottom: 8px;
-        }
-        .order-id {
-            color: #007bff;
-            font-weight: bold;
-        }
-        ul {
-            list-style-type: disc;
-            padding-left: 20px;
-            margin: 0 0 16px;
-        }
-        ul li {
-            margin-bottom: 8px;
-        }
-        .important-note {
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 16px;
-            margin-top: 24px;
-            font-size: 14px;
-            color: #856404;
-        }
-        .footer {
-            padding: 24px;
-            text-align: center;
-            color: #999999;
-            font-size: 14px;
-            border-top: 1px solid #e0e0e0;
-        }
-    </style>
-</head>
-<body>
-    <div class="email-container">
-        <div class="header">
-            <h1>Your SwiftBuyBack Order #**ORDER_ID** Has Been Received!</h1>
-        </div>
-        <div class="content">
-            <p>Hello **CUSTOMER_NAME**,</p>
-            <p>Thank you for choosing SwiftBuyBack! We've successfully received your order request for your **DEVICE_NAME**.</p>
-            <p>Your Order ID is <strong class="order-id">#**ORDER_ID**</strong>.</p>
-             
-            <h2>Next Steps: Preparing Your Device for Shipment</h2>
-            <p>Before you send us your device, it's crucial to prepare it correctly. Please follow these steps:</p>
-            <ul>
-                <li><strong>Backup Your Data:</strong> Ensure all important photos, contacts, and files are backed up to a cloud service or another device.</li>
-                <li><strong>Factory Reset:</strong> Perform a full factory reset on your device to erase all personal data. This is vital for your privacy and security.</li>
-                <li><strong>Remove Accounts:</strong> Sign out of all accounts (e.g., Apple ID/iCloud, Google Account, Samsung Account).
-                    <ul>
-                        <li>For Apple devices, turn off "Find My iPhone" (FMI).</li>
-                        <li>For Android devices, ensure Factory Reset Protection (FRP) is disabled.</li>
-                    </ul>
-                </li>
-                <li><strong>Remove SIM Card:</strong> Take out any physical SIM cards from the device.</li>
-                <li><strong>Remove Accessories:</strong> Do not include cases, screen protectors, or chargers unless specifically instructed.</li>
-            </ul>
-
-            <div class="important-note">
-                <p><strong>Important:</strong> We cannot process devices with <strong>Find My iPhone (FMI)</strong>, <strong>Factory Reset Protection (FRP)</strong>, <strong>stolen/lost status</strong>, <strong>outstanding balance due</strong>, or <strong>blacklisted IMEI</strong>. Please ensure your device meets these conditions to avoid delays or rejection.</p>
-            </div>
-
-            **SHIPPING_INSTRUCTION**
-        </div>
-        <div class="footer">
-            <p>The SwiftBuyBack Team</p>
-        </div>
-    </div>
-</body>
-</html>
-`;
-
-const DEVICE_RECEIVED_EMAIL_HTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your Device Has Arrived!</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 0;
-            -webkit-text-size-adjust: 100%;
-            -ms-text-size-adjust: 100%;
-        }
-        .email-container {
-            max-width: 600px;
-            margin: 20px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            border: 1px solid #e0e0e0;
-        }
-        .header {
-            background-color: #ffffff;
-            padding: 24px;
-            text-align: center;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        .header h1 {
-            font-size: 24px;
-            color: #333333;
-            margin: 0;
-        }
-        .content {
-            padding: 24px;
-            color: #555555;
-            font-size: 16px;
-            line-height: 1.6;
-        }
-        .content p {
-            margin: 0 0 16px;
-        }
-        .content p strong {
-            color: #333333;
-        }
-        .footer {
-            padding: 24px;
-            text-align: center;
-            color: #999999;
-            font-size: 14px;
-            border-top: 1px solid #e0e0e0;
-        }
-        .order-id {
-            color: #007bff;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div class="email-container">
-        <div class="header">
-            <h1>Your Device Has Arrived!</h1>
-        </div>
-        <div class="content">
-            <p>Hello **CUSTOMER_NAME**,</p>
-            <p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p>
-            <p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p>
-            <p>Thank you,</p>
-            <p>The SwiftBuyBack Team</p>
-        </div>
-        <div class="footer">
-            <p>Thank thank you for choosing SwiftBuyBack.</p>
-        </div>
-    </div>
-</body>
-</html>
-`;
-
+const DEVICE_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Device Has Arrived!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}.order-id{color:#007bff;font-weight:bold}</style></head><body><div class="email-container"><div class="header"><h1>Your Device Has Arrived!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p><p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p><p>Thank you,</p><p>The SwiftBuyBack Team</p></div><div class="footer"><p>Thank thank you for choosing SwiftBuyBack.</p></div></div></body></html>`;
 
 /**
  * --- NEW ---
  * Generates the next sequential order number in SHC-XXXXX format using a Firestore transaction.
- * This ensures each order ID is unique and increments from the last one.
- * @returns {Promise<string>} The next unique, sequential order number (e.g., "SHC-00001").
+ * Starts at SHC-00000 and increments by 1 per order.
+ * @returns {Promise<string>} The next unique, sequential order number (e.g., "SHC-00000", then "SHC-00001").
  */
 async function generateNextOrderNumber() {
-    const counterRef = db.collection('counters').doc('orders');
+  const counterRef = db.collection("counters").doc("orders");
 
-    try {
-        const newOrderNumber = await db.runTransaction(async (transaction) => {
-            const counterDoc = await transaction.get(counterRef);
-            
-            // Start with 1 if the counter document doesn't exist yet
-            const currentNumber = counterDoc.exists ? counterDoc.data().currentNumber : 0;
-            const nextNumber = currentNumber + 1;
+  try {
+    const newOrderNumber = await db.runTransaction(async (transaction) => {
+      const counterDoc = await transaction.get(counterRef);
 
-            // Update the counter in the database for the next order
-            transaction.set(counterRef, { currentNumber: nextNumber });
+      // Assign currentNumber (default 0) to THIS order, then increment for next time
+      const currentNumber = counterDoc.exists
+        ? counterDoc.data().currentNumber ?? 0
+        : 0;
 
-            // Format the number to be 5 digits, padded with leading zeros (e.g., 1 -> 00001)
-            const paddedNumber = String(nextNumber).padStart(5, '0');
-            return `SHC-${paddedNumber}`;
-        });
-        
-        return newOrderNumber;
+      // Advance counter for the next order
+      transaction.set(
+        counterRef,
+        { currentNumber: currentNumber + 1 },
+        { merge: true }
+      );
 
-    } catch (e) {
-        console.error("Transaction to generate order number failed:", e);
-        throw new Error("Failed to generate a unique order number. Please try again.");
-    }
+      const paddedNumber = String(currentNumber).padStart(5, "0");
+      return `SHC-${paddedNumber}`;
+    });
+
+    return newOrderNumber;
+  } catch (e) {
+    console.error("Transaction to generate order number failed:", e);
+    throw new Error("Failed to generate a unique order number. Please try again.");
+  }
+}
+
+/**
+ * --- NEW HELPERS ---
+ * Write & update in BOTH locations:
+ *   1) Top-level /orders/{orderId}
+ *   2) If userId present: /users/{userId}/orders/{orderId}
+ */
+async function writeOrderBoth(orderId, data) {
+  // Hard write (no merge) for initial creation
+  await ordersCollection.doc(orderId).set(data);
+  if (data.userId) {
+    await usersCollection
+      .doc(data.userId)
+      .collection("orders")
+      .doc(orderId)
+      .set(data);
+  }
+}
+
+async function updateOrderBoth(orderId, partialData) {
+  // Merge update and return updated order snapshot
+  const orderRef = ordersCollection.doc(orderId);
+  await orderRef.set(partialData, { merge: true });
+
+  const snap = await orderRef.get();
+  const base = snap.data() || {};
+  const userId = base.userId;
+
+  if (userId) {
+    await usersCollection
+      .doc(userId)
+      .collection("orders")
+      .doc(orderId)
+      .set(partialData, { merge: true });
+  }
+
+  return { order: { id: orderId, ...base, ...partialData }, userId };
 }
 
 /**
  * Sends a Zendesk comment (public or private) for a given order.
- * If the ticket already exists, it adds a comment. If not, it creates a new ticket.
- * @param {object} orderData - The order data object.
- * @param {string} subject - The subject for the Zendesk ticket (used for new tickets).
- * @param {string} html_body - The HTML content of the comment.
- * @param {boolean} isPublic - Whether the comment should be public (visible to the user) or private.
  */
 async function sendZendeskComment(orderData, subject, html_body, isPublic) {
-    try {
-        const zendeskUrl = functions.config().zendesk.url;
-        const zendeskToken = functions.config().zendesk.token;
-        if (!zendeskUrl || !zendeskToken) {
-            console.warn("Zendesk configuration not complete. Cannot send notification.");
-            return;
-        }
-
-        // Search for an existing ticket by subject
-        const searchResponse = await axios.get(
-            `${zendeskUrl}/search.json?query=type:ticket subject:"${subject}"`,
-            {
-                headers: { 'Authorization': `Basic ${zendeskToken}` }
-            }
-        );
-
-        let ticketId = null;
-        if (searchResponse.data.results.length > 0) {
-            ticketId = searchResponse.data.results[0].id;
-        }
-
-        let payload;
-        if (ticketId) {
-            // Add a comment to an existing ticket
-            payload = {
-                ticket: {
-                    comment: {
-                        html_body: html_body,
-                        public: isPublic
-                    }
-                }
-            };
-            await axios.put(
-                `${zendeskUrl}/tickets/${ticketId}.json`,
-                payload,
-                {
-                    headers: {
-                        'Authorization': `Basic ${zendeskToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            console.log(`Zendesk comment added to existing ticket ${ticketId}.`);
-        } else {
-            // Create a new ticket
-            payload = {
-                ticket: {
-                    subject: subject,
-                    comment: {
-                        html_body: html_body,
-                        public: isPublic
-                    },
-                    requester: { name: orderData.shippingInfo.fullName, email: orderData.shippingInfo.email },
-                    tags: [`order_${orderData.id}`],
-                    priority: 'normal'
-                }
-            };
-            await axios.post(
-                `${zendeskUrl}/tickets.json`,
-                payload,
-                {
-                    headers: {
-                        'Authorization': `Basic ${zendeskToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-            console.log('New Zendesk ticket created.');
-        }
-
-    } catch (err) {
-        console.error('Failed to send Zendesk notification:', err.response?.data || err.message);
+  try {
+    const zendeskUrl = functions.config().zendesk.url;
+    const zendeskToken = functions.config().zendesk.token;
+    if (!zendeskUrl || !zendeskToken) {
+      console.warn("Zendesk configuration not complete. Cannot send notification.");
+      return;
     }
+
+    // Search for an existing ticket by subject
+    const searchResponse = await axios.get(
+      `${zendeskUrl}/search.json?query=type:ticket subject:"${subject}"`,
+      {
+        headers: { Authorization: `Basic ${zendeskToken}` },
+      }
+    );
+
+    let ticketId = null;
+    if (searchResponse.data.results.length > 0) {
+      ticketId = searchResponse.data.results[0].id;
+    }
+
+    let payload;
+    if (ticketId) {
+      // Add a comment to an existing ticket
+      payload = {
+        ticket: {
+          comment: {
+            html_body: html_body,
+            public: isPublic,
+          },
+        },
+      };
+      await axios.put(`${zendeskUrl}/tickets/${ticketId}.json`, payload, {
+        headers: {
+          Authorization: `Basic ${zendeskToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      console.log(`Zendesk comment added to existing ticket ${ticketId}.`);
+    } else {
+      // Create a new ticket
+      payload = {
+        ticket: {
+          subject: subject,
+          comment: {
+            html_body: html_body,
+            public: isPublic,
+          },
+          requester: {
+            name: orderData.shippingInfo.fullName,
+            email: orderData.shippingInfo.email,
+          },
+          tags: [`order_${orderData.id}`],
+          priority: "normal",
+        },
+      };
+      await axios.post(`${zendeskUrl}/tickets.json`, payload, {
+        headers: {
+          Authorization: `Basic ${zendeskToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      console.log("New Zendesk ticket created.");
+    }
+  } catch (err) {
+    console.error(
+      "Failed to send Zendesk notification:",
+      err.response?.data || err.message
+    );
+  }
 }
 
 /**
  * Helper function to create a shipping label using ShipEngine API.
- *
- * @param {object} fromAddress - The sender's address object.
- * @param {object} toAddress - The recipient's address object.
- * @param {string} labelReference - A reference string to include in the label messages.
- * @returns {Promise<object>} The label data from ShipEngine.
  */
 async function createShipEngineLabel(fromAddress, toAddress, labelReference) {
-    const isSandbox = true; // Set to false for production
-    const payload = {
-        shipment: {
-            service_code: "usps_priority_mail",
-            ship_to: toAddress,
-            ship_from: fromAddress,
-            packages: [{
-                weight: { value: 1, unit: "ounce" }, // Default weight, adjust if needed
-                label_messages: {
-                    reference1: labelReference
-                }
-            }]
-        }
-    };
-    if (isSandbox) payload.testLabel = true;
+  const isSandbox = true; // Set to false for production
+  const payload = {
+    shipment: {
+      service_code: "usps_priority_mail",
+      ship_to: toAddress,
+      ship_from: fromAddress,
+      packages: [
+        {
+          weight: { value: 1, unit: "ounce" }, // Default weight, adjust if needed
+          label_messages: {
+            reference1: labelReference,
+          },
+        },
+      ],
+    },
+  };
+  if (isSandbox) payload.testLabel = true;
 
-    const shipEngineApiKey = functions.config().shipengine.key;
-    if (!shipEngineApiKey) {
-        throw new Error("ShipEngine API key not configured. Please set 'shipengine.key' environment variable.");
-    }
-
-    const response = await axios.post(
-        "https://api.shipengine.com/v1/labels",
-        payload, {
-            headers: {
-                "API-Key": shipEngineApiKey,
-                "Content-Type": "application/json"
-            }
-        }
+  const shipEngineApiKey = functions.config().shipengine.key;
+  if (!shipEngineApiKey) {
+    throw new Error(
+      "ShipEngine API key not configured. Please set 'shipengine.key' environment variable."
     );
-    return response.data;
+  }
+
+  const response = await axios.post("https://api.shipengine.com/v1/labels", payload, {
+    headers: {
+      "API-Key": shipEngineApiKey,
+      "Content-Type": "application/json",
+    },
+  });
+  return response.data;
 }
 
-// --- NEW: Notification Helper Functions ---
-
-/**
- * Sends an FCM push notification to all online administrators.
- * This utilizes the FCM tokens stored by the frontend.
- * @param {string} title - The title of the notification.
- * @param {string} body - The body/message of the notification.
- * @param {object} [data={}] - Optional data payload (e.g., { chatId: 'abc' }).
- */
+// --- Notification Helper Functions ---
 async function sendAdminPushNotification(title, body, data = {}) {
-    try {
-        const adminsSnapshot = await adminsCollection.get();
-        let allTokens = [];
+  try {
+    const adminsSnapshot = await adminsCollection.get();
+    let allTokens = [];
 
-        for (const adminDoc of adminsSnapshot.docs) {
-            const adminUid = adminDoc.id;
-            const fcmTokensRef = adminsCollection.doc(adminUid).collection('fcmTokens');
-            const tokensSnapshot = await fcmTokensRef.get();
-            tokensSnapshot.forEach(doc => {
-                allTokens.push(doc.id); // doc.id is the FCM token itself
-            });
-        }
-
-        if (allTokens.length === 0) {
-            console.log("No FCM tokens found for any admin. Cannot send push notification.");
-            return;
-        }
-
-        const message = {
-            notification: {
-                title: title,
-                body: body
-            },
-            data: data, // Custom data payload
-            tokens: allTokens,
-        };
-
-        const response = await admin.messaging().sendEachForMulticast(message);
-        console.log('Successfully sent FCM messages:', response.successCount, 'failures:', response.failureCount);
-        if (response.failureCount > 0) {
-            response.responses.forEach((resp, idx) => {
-                if (!resp.success) {
-                    console.error(`Failed to send FCM to token ${allTokens[idx]}: ${resp.error}`);
-                    // Optionally, remove invalid tokens from Firestore here
-                }
-            });
-        }
-    } catch (error) {
-        console.error("Error sending FCM push notification:", error);
+    for (const adminDoc of adminsSnapshot.docs) {
+      const adminUid = adminDoc.id;
+      const fcmTokensRef = adminsCollection.doc(adminUid).collection("fcmTokens");
+      const tokensSnapshot = await fcmTokensRef.get();
+      tokensSnapshot.forEach((doc) => {
+        allTokens.push(doc.id); // doc.id is the FCM token itself
+      });
     }
+
+    if (allTokens.length === 0) {
+      console.log(
+        "No FCM tokens found for any admin. Cannot send push notification."
+      );
+      return;
+    }
+
+    const message = {
+      notification: {
+        title: title,
+        body: body,
+      },
+      data: data, // Custom data payload
+      tokens: allTokens,
+    };
+
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(
+      "Successfully sent FCM messages:",
+      response.successCount,
+      "failures:",
+      response.failureCount
+    );
+    if (response.failureCount > 0) {
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          console.error(
+            `Failed to send FCM to token ${allTokens[idx]}: ${resp.error}`
+          );
+          // Optionally, remove invalid tokens from Firestore here
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error sending FCM push notification:", error);
+  }
 }
 
-/**
- * Adds a new notification document to an admin's notifications subcollection in Firestore.
- * This is used for the in-app notification dropdown on the frontend.
- * @param {string} adminUid - The UID of the admin to notify.
- * @param {string} message - The notification message.
- * @param {string} [relatedDocType] - e.g., 'chat', 'order'.
- * @param {string} [relatedDocId] - The ID of the related document.
- * @param {string} [relatedUserId] - The user ID related to the notification.
- */
-async function addAdminFirestoreNotification(adminUid, message, relatedDocType = null, relatedDocId = null, relatedUserId = null) {
-    try {
-        const notificationsCollectionRef = db.collection(`admins/${adminUid}/notifications`);
-        await notificationsCollectionRef.add({
-            message: message,
-            isRead: false,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            relatedDocType: relatedDocType,
-            relatedDocId: relatedDocId,
-            relatedUserId: relatedUserId,
-        });
-        console.log(`Firestore notification added for admin ${adminUid}: ${message}`);
-    } catch (error) {
-        console.error(`Error adding Firestore notification for admin ${adminUid}:`, error);
-    }
+async function addAdminFirestoreNotification(
+  adminUid,
+  message,
+  relatedDocType = null,
+  relatedDocId = null,
+  relatedUserId = null
+) {
+  try {
+    const notificationsCollectionRef = db.collection(
+      `admins/${adminUid}/notifications`
+    );
+    await notificationsCollectionRef.add({
+      message: message,
+      isRead: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      relatedDocType: relatedDocType,
+      relatedDocId: relatedDocId,
+      relatedUserId: relatedUserId,
+    });
+    console.log(
+      `Firestore notification added for admin ${adminUid}: ${message}`
+    );
+  } catch (error) {
+    console.error(
+      `Error adding Firestore notification for admin ${adminUid}:`,
+      error
+    );
+  }
 }
 
 // ------------------------------
@@ -718,808 +327,851 @@ async function addAdminFirestoreNotification(adminUid, message, relatedDocType =
 // ------------------------------
 
 // Get all orders
-// Frontend should call: GET https://<cloud-function-url>/api/orders
 app.get("/orders", async (req, res) => {
-    try {
-        const snapshot = await ordersCollection.get();
-        // Map doc.id (which is now the XX-XXX order ID) and data
-        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        res.json(orders);
-    } catch (err) {
-        console.error("Error fetching orders:", err);
-        res.status(500).json({ error: "Failed to fetch orders" });
-    }
+  try {
+    const snapshot = await ordersCollection.get();
+    const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    res.json(orders);
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    res.status(500).json({ error: "Failed to fetch orders" });
+  }
 });
 
-// Get a single order by its five-digit order ID (XX-XXX format)
-// Frontend should call: GET https://<cloud-function-url>/api/orders/:id (where :id is the XX-XXX format)
+// Get a single order by its SHC-XXXXX order ID
 app.get("/orders/:id", async (req, res) => {
-    try {
-        const docRef = ordersCollection.doc(req.params.id); // req.params.id is now the XX-XXX order ID
-        const doc = await docRef.get();
-        if (!doc.exists) {
-            return res.status(404).json({ error: "Order not found" });
-        }
-        res.json({ id: doc.id, ...doc.data() });
-    } catch (err) {
-        console.error("Error fetching single order:", err);
-        res.status(500).json({ error: "Failed to fetch order" });
+  try {
+    const docRef = ordersCollection.doc(req.params.id);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Order not found" });
     }
+    res.json({ id: doc.id, ...doc.data() });
+  } catch (err) {
+    console.error("Error fetching single order:", err);
+    res.status(500).json({ error: "Failed to fetch order" });
+  }
 });
 
-// New endpoint to find an order by order ID or 26-digit identifier
+// Find by identifier (SHC-XXXXX or 26-digit external)
 app.get("/orders/find", async (req, res) => {
-    try {
-        const { identifier } = req.query;
-        if (!identifier) {
-            return res.status(400).json({ error: "Identifier query parameter is required." });
-        }
-
-        let orderDoc;
-        // Check if it's our SHC-XXXXX format
-        if (identifier.match(/^SHC-\d{5}$/)) {
-            orderDoc = await ordersCollection.doc(identifier).get();
-        } else if (identifier.length === 26 && identifier.match(/^\d+$/)) { // Check for 26-digit identifier
-            // This assumes the 26-digit identifier is stored in a field within the order document,
-            // for example, 'shipEngineOrderId' or 'externalId'. You'll need to adjust this
-            // to match where you actually store the 26-digit ID.
-            const snapshot = await ordersCollection.where('externalId', '==', identifier).limit(1).get();
-            if (!snapshot.empty) {
-                orderDoc = snapshot.docs[0];
-            }
-        }
-
-        if (!orderDoc || !orderDoc.exists) {
-            return res.status(404).json({ error: "Order not found with provided identifier." });
-        }
-
-        res.json({ id: orderDoc.id, ...orderDoc.data() });
-    } catch (err) {
-        console.error("Error finding order:", err);
-        res.status(500).json({ error: "Failed to find order" });
+  try {
+    const { identifier } = req.query;
+    if (!identifier) {
+      return res
+        .status(400)
+        .json({ error: "Identifier query parameter is required." });
     }
+
+    let orderDoc;
+    if (identifier.match(/^SHC-\d{5}$/)) {
+      orderDoc = await ordersCollection.doc(identifier).get();
+    } else if (identifier.length === 26 && identifier.match(/^\d+$/)) {
+      const snapshot = await ordersCollection
+        .where("externalId", "==", identifier)
+        .limit(1)
+        .get();
+      if (!snapshot.empty) {
+        orderDoc = snapshot.docs[0];
+      }
+    }
+
+    if (!orderDoc || !orderDoc.exists) {
+      return res
+        .status(404)
+        .json({ error: "Order not found with provided identifier." });
+    }
+
+    res.json({ id: orderDoc.id, ...orderDoc.data() });
+  } catch (err) {
+    console.error("Error finding order:", err);
+    res.status(500).json({ error: "Failed to find order" });
+  }
 });
 
-
-// New endpoint to get all orders for a specific user ID
+// Get all orders for a specific user ID (from top-level collection)
 app.get("/orders/by-user/:userId", async (req, res) => {
-    try {
-        const { userId } = req.params;
-        if (!userId) {
-            return res.status(400).json({ error: "User ID is required." });
-        }
-
-        const snapshot = await ordersCollection.where('userId', '==', userId).orderBy('createdAt', 'desc').get();
-        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        res.json(orders);
-    } catch (err) {
-        console.error("Error fetching user's orders:", err);
-        res.status(500).json({ error: "Failed to fetch user orders" });
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required." });
     }
-});
 
+    const snapshot = await ordersCollection
+      .where("userId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .get();
+    const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    res.json(orders);
+  } catch (err) {
+    console.error("Error fetching user's orders:", err);
+    res.status(500).json({ error: "Failed to fetch user orders" });
+  }
+});
 
 // Submit a new order
-// Frontend should call: POST https://<cloud-function-url>/api/submit-order
 app.post("/submit-order", async (req, res) => {
-    try {
-        const orderData = req.body;
-        if (!orderData?.shippingInfo || !orderData?.estimatedQuote) {
-            return res.status(400).json({ error: "Invalid order data" });
-        }
-
-        // --- MODIFIED ---
-        // Use the new sequential order number generator.
-        const orderId = await generateNextOrderNumber();
-
-        let shippingInstructions = '';
-        // Changed default status to 'order_pending'
-        let newOrderStatus = "order_pending";
-
-        if (orderData.shippingPreference === 'Shipping Kit Requested') {
-            shippingInstructions = `
-                <p style="margin-top: 24px;">Please note: You requested a shipping kit, which will be sent to you shortly. When it arrives, you'll find a return label inside to send us your device.</p>
-                <p>If you have any questions, please reply to this email.</p>
-            `;
-            newOrderStatus = "shipping_kit_requested";
-        } else {
-            shippingInstructions = `
-                <p style="margin-top: 24px;">We will send your shipping label shortly.</p>
-                <p>If you have any questions, please reply to this email.</p>
-            `;
-        }
-
-        // Customer-Facing Email: Order Received
-        const customerEmailHtml = ORDER_RECEIVED_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, orderId)
-            .replace(/\*\*DEVICE_NAME\*\*/g, `${orderData.device} ${orderData.storage}`)
-            .replace(/\*\*SHIPPING_INSTRUCTION\*\*/g, shippingInstructions);
-
-        const customerMailOptions = {
-            from: functions.config().email.user,
-            to: orderData.shippingInfo.email, // Use the email from shippingInfo
-            subject: `Your SwiftBuyBack Order #${orderId} Has Been Received!`,
-            html: customerEmailHtml
-        };
-
-        // Internal Admin Notification: New Order Placed
-        const internalSubject = `New Order Placed: #${orderId}`;
-        const internalHtmlBody = `
-            <p>A new order has been placed by <strong>${orderData.shippingInfo.fullName}</strong> (Email: ${orderData.shippingInfo.email}).</p>
-            <p>Order ID: <strong>${orderId}</strong></p>
-            <p>Estimated Quote: <strong>$${orderData.estimatedQuote.toFixed(2)}</strong></p>
-            ${orderData.userId ? `<p>Associated User ID: <strong>${orderData.userId}</strong></p>` : '<p>Not associated with a logged-in user.</p>'}
-            <p><strong>Shipping Preference:</strong> ${orderData.shippingPreference}</p>
-            <p>The current status is: <strong>${formatStatusForEmail(newOrderStatus)}</strong></p>
-            <p>Please generate and send the shipping label from the admin dashboard.</p>
-        `;
-
-        // Attempt to send the email and Zendesk comment first.
-        const notificationPromises = [
-            transporter.sendMail(customerMailOptions),
-            sendZendeskComment(orderData, internalSubject, internalHtmlBody, false), // isPublic: false for internal comment
-            sendAdminPushNotification(
-                "⚡ New Order Placed!",
-                `Order #${orderId} for ${orderData.device} from ${orderData.shippingInfo.fullName}.`,
-                { orderId: orderId, userId: orderData.userId || 'guest', relatedDocType: 'order', relatedDocId: orderId, relatedUserId: orderData.userId }
-            ).catch(e => console.error("FCM Send Error (New Order):", e)),
-        ];
-
-        // Fetch all admin UIDs to add Firestore in-app notifications for each
-        const adminsSnapshot = await adminsCollection.get();
-        adminsSnapshot.docs.forEach(adminDoc => {
-            notificationPromises.push(addAdminFirestoreNotification(
-                adminDoc.id,
-                `New Order: #${orderId} from ${orderData.shippingInfo.fullName}.`,
-                'order',
-                orderId,
-                orderData.userId
-            ).catch(e => console.error("Firestore Notification Error (New Order):", e)));
-        });
-
-        await Promise.all(notificationPromises);
-
-        console.log('Order received email and internal notifications sent successfully.');
-
-        // If the notifications succeed, then submit the order to Firestore.
-        await ordersCollection.doc(orderId).set({
-            ...orderData,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            status: newOrderStatus,
-            // userId will be stored if it exists in orderData (from frontend)
-        });
-
-        // Return the new document ID
-        res.status(201).json({ message: "Order submitted", orderId: orderId });
-    } catch (err) {
-        console.error("Error submitting order:", err);
-        res.status(500).json({ error: "Failed to submit order" });
+  try {
+    const orderData = req.body;
+    if (!orderData?.shippingInfo || !orderData?.estimatedQuote) {
+      return res.status(400).json({ error: "Invalid order data" });
     }
+
+    // Generate sequential SHC-XXXXX order id starting at SHC-00000
+    const orderId = await generateNextOrderNumber();
+
+    let shippingInstructions = "";
+    let newOrderStatus = "order_pending";
+
+    if (orderData.shippingPreference === "Shipping Kit Requested") {
+      shippingInstructions = `
+        <p style="margin-top: 24px;">Please note: You requested a shipping kit, which will be sent to you shortly. When it arrives, you'll find a return label inside to send us your device.</p>
+        <p>If you have any questions, please reply to this email.</p>
+      `;
+      newOrderStatus = "shipping_kit_requested";
+    } else {
+      shippingInstructions = `
+        <p style="margin-top: 24px;">We will send your shipping label shortly.</p>
+        <p>If you have any questions, please reply to this email.</p>
+      `;
+    }
+
+    // Customer-Facing Email: Order Received
+    const customerEmailHtml = ORDER_RECEIVED_EMAIL_HTML
+      .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
+      .replace(/\*\*ORDER_ID\*\*/g, orderId)
+      .replace(/\*\*DEVICE_NAME\*\*/g, `${orderData.device} ${orderData.storage}`)
+      .replace(/\*\*SHIPPING_INSTRUCTION\*\*/g, shippingInstructions);
+
+    const customerMailOptions = {
+      from: functions.config().email.user,
+      to: orderData.shippingInfo.email,
+      subject: `Your SwiftBuyBack Order #${orderId} Has Been Received!`,
+      html: customerEmailHtml,
+    };
+
+    // Internal Admin Notification: New Order Placed
+    const internalSubject = `New Order Placed: #${orderId}`;
+    const internalHtmlBody = `
+      <p>A new order has been placed by <strong>${orderData.shippingInfo.fullName}</strong> (Email: ${orderData.shippingInfo.email}).</p>
+      <p>Order ID: <strong>${orderId}</strong></p>
+      <p>Estimated Quote: <strong>$${orderData.estimatedQuote.toFixed(2)}</strong></p>
+      ${
+        orderData.userId
+          ? `<p>Associated User ID: <strong>${orderData.userId}</strong></p>`
+          : "<p>Not associated with a logged-in user.</p>"
+      }
+      <p><strong>Shipping Preference:</strong> ${orderData.shippingPreference}</p>
+      <p>The current status is: <strong>${formatStatusForEmail(
+        newOrderStatus
+      )}</strong></p>
+      <p>Please generate and send the shipping label from the admin dashboard.</p>
+    `;
+
+    const notificationPromises = [
+      transporter.sendMail(customerMailOptions),
+      sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
+      sendAdminPushNotification(
+        "⚡ New Order Placed!",
+        `Order #${orderId} for ${orderData.device} from ${orderData.shippingInfo.fullName}.`,
+        {
+          orderId: orderId,
+          userId: orderData.userId || "guest",
+          relatedDocType: "order",
+          relatedDocId: orderId,
+          relatedUserId: orderData.userId,
+        }
+      ).catch((e) => console.error("FCM Send Error (New Order):", e)),
+    ];
+
+    const adminsSnapshot = await adminsCollection.get();
+    adminsSnapshot.docs.forEach((adminDoc) => {
+      notificationPromises.push(
+        addAdminFirestoreNotification(
+          adminDoc.id,
+          `New Order: #${orderId} from ${orderData.shippingInfo.fullName}.`,
+          "order",
+          orderId,
+          orderData.userId
+        ).catch((e) =>
+          console.error("Firestore Notification Error (New Order):", e)
+        )
+      );
+    });
+
+    await Promise.all(notificationPromises);
+
+    // CREATE in BOTH locations
+    const toSave = {
+      ...orderData,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: newOrderStatus,
+      id: orderId, // helpful to store within doc too
+    };
+    await writeOrderBoth(orderId, toSave);
+
+    res.status(201).json({ message: "Order submitted", orderId: orderId });
+  } catch (err) {
+    console.error("Error submitting order:", err);
+    res.status(500).json({ error: "Failed to submit order" });
+  }
 });
 
-// Helper function to format status for emails
+// Helper to format status
 function formatStatusForEmail(status) {
-    if (status === 'order_pending') {
-        return 'Order Pending';
-    } else if (status === 'shipping_kit_requested') {
-        return 'Shipping Kit Requested';
-    }
-    // Add more specific formats if needed, otherwise use generic formatting
-    return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  if (status === "order_pending") return "Order Pending";
+  if (status === "shipping_kit_requested") return "Shipping Kit Requested";
+  return status
+    .replace(/_/g, " ")
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
-
 // Generate initial shipping label(s) and send email to buyer
-// Frontend should call: POST https://<cloud-function-url>/api/generate-label/:id
 app.post("/generate-label/:id", async (req, res) => {
-    try {
-        const doc = await ordersCollection.doc(req.params.id).get();
-        if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+  try {
+    const doc = await ordersCollection.doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Order not found" });
 
-        const order = { id: doc.id, ...doc.data() };
-        const buyerShippingInfo = order.shippingInfo;
-        const orderIdForLabel = order.id || 'N/A';
+    const order = { id: doc.id, ...doc.data() };
+    const buyerShippingInfo = order.shippingInfo;
+    const orderIdForLabel = order.id || "N/A";
 
-        // Define SwiftBuyBack's fixed address
-        const swiftBuyBackAddress = {
-            name: "SwiftBuyBack Returns",
-            company_name: "SwiftBuyBack",
-            phone: "555-555-5555", // Placeholder phone number
-            address_line1: "1795 West 3rd St",
-            city_locality: "Brooklyn",
-            state_province: "NY",
-            postal_code: "11223",
-            country_code: "US"
-        };
+    const swiftBuyBackAddress = {
+      name: "SwiftBuyBack Returns",
+      company_name: "SwiftBuyBack",
+      phone: "555-555-5555",
+      address_line1: "1795 West 3rd St",
+      city_locality: "Brooklyn",
+      state_province: "NY",
+      postal_code: "11223",
+      country_code: "US",
+    };
 
-        // Construct the buyer's address from order data
-        const buyerAddress = {
-            name: buyerShippingInfo.fullName,
-            phone: "555-555-5555", // Placeholder phone number, consider using actual buyer phone if available
-            address_line1: buyerShippingInfo.streetAddress,
-            city_locality: buyerShippingInfo.city,
-            state_province: buyerShippingInfo.state,
-            postal_code: buyerShippingInfo.zipCode,
-            country_code: "US"
-        };
+    const buyerAddress = {
+      name: buyerShippingInfo.fullName,
+      phone: "555-555-5555",
+      address_line1: buyerShippingInfo.streetAddress,
+      city_locality: buyerShippingInfo.city,
+      state_province: buyerShippingInfo.state,
+      postal_code: buyerShippingInfo.zipCode,
+      country_code: "US",
+    };
 
-        let customerLabelData;
-        let updateData = { status: "label_generated" }; // This status remains for 'label_generated'
-        let internalHtmlBody = '';
-        let customerEmailSubject = '';
-        let customerEmailHtml = '';
-        let customerMailOptions;
+    let customerLabelData;
+    let updateData = { status: "label_generated" };
+    let internalHtmlBody = "";
+    let customerEmailSubject = "";
+    let customerEmailHtml = "";
+    let customerMailOptions;
 
-        if (order.shippingPreference === 'Shipping Kit Requested') {
-            // Scenario: Customer requested a shipping kit.
-            // 1. Generate the outbound label for the empty kit (SwiftBuyBack -> Buyer)
-            const outboundLabelData = await createShipEngineLabel(swiftBuyBackAddress, buyerAddress, `${orderIdForLabel}-OUTBOUND-KIT`);
+    if (order.shippingPreference === "Shipping Kit Requested") {
+      const outboundLabelData = await createShipEngineLabel(
+        swiftBuyBackAddress,
+        buyerAddress,
+        `${orderIdForLabel}-OUTBOUND-KIT`
+      );
 
-            // 2. Generate the inbound label for the device (Buyer -> SwiftBuyBack)
-            const inboundLabelData = await createShipEngineLabel(buyerAddress, swiftBuyBackAddress, `${orderIdForLabel}-INBOUND-DEVICE`);
+      const inboundLabelData = await createShipEngineLabel(
+        buyerAddress,
+        swiftBuyBackAddress,
+        `${orderIdForLabel}-INBOUND-DEVICE`
+      );
 
-            customerLabelData = outboundLabelData; // Customer receives tracking for the outbound kit
-             
-            updateData = {
-                ...updateData,
-                outboundLabelUrl: outboundLabelData.label_download?.pdf,
-                outboundTrackingNumber: outboundLabelData.tracking_number,
-                inboundLabelUrl: inboundLabelData.label_download?.pdf,
-                inboundTrackingNumber: inboundLabelData.tracking_number,
-                uspsLabelUrl: inboundLabelData.label_download?.pdf,
-                trackingNumber: inboundLabelData.tracking_number // Keep for general tracking reference
-            };
+      customerLabelData = outboundLabelData; // customer sees outbound kit tracking
 
-            customerEmailSubject = `Your SwiftBuyBack Shipping Kit for Order #${order.id} is on its Way!`;
-            customerEmailHtml = SHIPPING_KIT_EMAIL_HTML
-                .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-                .replace(/\*\*ORDER_ID\*\*/g, order.id)
-                .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || 'N/A');
+      updateData = {
+        ...updateData,
+        outboundLabelUrl: outboundLabelData.label_download?.pdf,
+        outboundTrackingNumber: outboundLabelData.tracking_number,
+        inboundLabelUrl: inboundLabelData.label_download?.pdf,
+        inboundTrackingNumber: inboundLabelData.tracking_number,
+        uspsLabelUrl: inboundLabelData.label_download?.pdf,
+        trackingNumber: inboundLabelData.tracking_number,
+      };
 
-            customerMailOptions = {
-               from: functions.config().email.user,
-               to: order.shippingInfo.email,
-               subject: customerEmailSubject,
-               html: customerEmailHtml
-            };
+      customerEmailSubject = `Your SwiftBuyBack Shipping Kit for Order #${order.id} is on its Way!`;
+      customerEmailHtml = SHIPPING_KIT_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
+        .replace(/\*\*ORDER_ID\*\*/g, order.id)
+        .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || "N/A");
 
-            internalHtmlBody = `
-                <p><strong>Shipping Kit Order:</strong> Labels generated for Order <strong>#${order.id}</strong>.</p>
-                <p><strong>Outbound Kit Label (SwiftBuyBack -> Customer):</strong></p>
-                <ul>
-                    <li>Tracking: <strong>${outboundLabelData.tracking_number || 'N/A'}</strong></li>
-                    <li>Download: <a href="${outboundLabelData.label_download?.pdf}" target="_blank">PDF</a></li>
-                </ul>
-                <p><strong>Inbound Device Label (Customer -> SwiftBuyBack - sent to customer later):</strong></p>
-                <ul>
-                    <li>Tracking: <strong>${inboundLabelData.tracking_number || 'N/A'}</strong></li>
-                    <li>Download: <a href="${inboundLabelData.label_download?.pdf}" target="_blank">PDF</a></li>
-                </ul>
-                <p>The outbound kit tracking has been sent to the customer.</p>
-            `;
+      customerMailOptions = {
+        from: functions.config().email.user,
+        to: order.shippingInfo.email,
+        subject: customerEmailSubject,
+        html: customerEmailHtml,
+      };
 
-        } else if (order.shippingPreference === 'Email Label Requested') {
-            // Scenario: Customer chose to print their own label.
-            customerLabelData = await createShipEngineLabel(buyerAddress, swiftBuyBackAddress, `${orderIdForLabel}-INBOUND-DEVICE`);
+      internalHtmlBody = `
+        <p><strong>Shipping Kit Order:</strong> Labels generated for Order <strong>#${order.id}</strong>.</p>
+        <p><strong>Outbound Kit Label (SwiftBuyBack -> Customer):</strong></p>
+        <ul>
+          <li>Tracking: <strong>${
+            outboundLabelData.tracking_number || "N/A"
+          }</strong></li>
+          <li>Download: <a href="${
+            outboundLabelData.label_download?.pdf
+          }" target="_blank">PDF</a></li>
+        </ul>
+        <p><strong>Inbound Device Label (Customer -> SwiftBuyBack - sent to customer later):</strong></p>
+        <ul>
+          <li>Tracking: <strong>${
+            inboundLabelData.tracking_number || "N/A"
+          }</strong></li>
+          <li>Download: <a href="${
+            inboundLabelData.label_download?.pdf
+          }" target="_blank">PDF</a></li>
+        </ul>
+        <p>The outbound kit tracking has been sent to the customer.</p>
+      `;
+    } else if (order.shippingPreference === "Email Label Requested") {
+      customerLabelData = await createShipEngineLabel(
+        buyerAddress,
+        swiftBuyBackAddress,
+        `${orderIdForLabel}-INBOUND-DEVICE`
+      );
 
-            // --- BUG FIX ---
-            const labelDownloadLink = customerLabelData.label_download?.pdf;
-            if (!labelDownloadLink) {
-                console.error("ShipEngine did not return a downloadable label PDF for order:", order.id, customerLabelData);
-                throw new Error("Label PDF link not available from ShipEngine.");
-            }
-            // --- END BUG FIX ---
+      const labelDownloadLink = customerLabelData.label_download?.pdf;
+      if (!labelDownloadLink) {
+        console.error(
+          "ShipEngine did not return a downloadable label PDF for order:",
+          order.id,
+          customerLabelData
+        );
+        throw new Error("Label PDF link not available from ShipEngine.");
+      }
 
-            updateData = {
-                ...updateData,
-                uspsLabelUrl: labelDownloadLink,
-                trackingNumber: customerLabelData.tracking_number
-            };
+      updateData = {
+        ...updateData,
+        uspsLabelUrl: labelDownloadLink,
+        trackingNumber: customerLabelData.tracking_number,
+      };
 
-            customerEmailSubject = `Your SwiftBuyBack Shipping Label for Order #${order.id}`;
-            customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
-                .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-                .replace(/\*\*ORDER_ID\*\*/g, order.id)
-                .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || 'N/A')
-                .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
+      customerEmailSubject = `Your SwiftBuyBack Shipping Label for Order #${order.id}`;
+      customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
+        .replace(/\*\*ORDER_ID\*\*/g, order.id)
+        .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || "N/A")
+        .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
 
-            customerMailOptions = {
-               from: functions.config().email.user,
-               to: order.shippingInfo.email,
-               subject: customerEmailSubject,
-               html: customerEmailHtml
-            };
+      customerMailOptions = {
+        from: functions.config().email.user,
+        to: order.shippingInfo.email,
+        subject: customerEmailSubject,
+        html: customerEmailHtml,
+      };
 
-            internalHtmlBody = `
-                <p>The shipping label for Order <strong>#${order.id}</strong> (email label option) has been successfully generated and sent to the customer.</p>
-                <p>Tracking Number: <strong>${customerLabelData.tracking_number || 'N/A'}</strong></p>
-            `;
-        } else {
-            throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
-        }
-
-        await ordersCollection.doc(req.params.id).update(updateData);
-
-        await Promise.all([
-            transporter.sendMail(customerMailOptions),
-            sendZendeskComment(order, `Shipping Label Generated for Order #${order.id}`, internalHtmlBody, false)
-        ]);
-
-        console.log('Shipping label email and internal notification sent successfully.');
-
-        res.json({
-            message: "Label(s) generated successfully",
-            orderId: order.id,
-            ...updateData
-        });
-    } catch (err) {
-        console.error("Error generating label:", err.response?.data || err.message || err);
-        res.status(500).json({ error: "Failed to generate label" });
+      internalHtmlBody = `
+        <p>The shipping label for Order <strong>#${order.id}</strong> (email label option) has been successfully generated and sent to the customer.</p>
+        <p>Tracking Number: <strong>${
+          customerLabelData.tracking_number || "N/A"
+        }</strong></p>
+      `;
+    } else {
+      throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
     }
+
+    await updateOrderBoth(req.params.id, updateData);
+
+    await Promise.all([
+      transporter.sendMail(customerMailOptions),
+      sendZendeskComment(
+        order,
+        `Shipping Label Generated for Order #${order.id}`,
+        internalHtmlBody,
+        false
+      ),
+    ]);
+
+    res.json({ message: "Label(s) generated successfully", orderId: order.id, ...updateData });
+  } catch (err) {
+    console.error("Error generating label:", err.response?.data || err.message || err);
+    res.status(500).json({ error: "Failed to generate label" });
+  }
 });
 
 // Update order status
-// Frontend should call: PUT https://<cloud-function-url>/api/orders/:id/status
 app.put("/orders/:id/status", async (req, res) => {
-    try {
-        const { status } = req.body;
-        const orderId = req.params.id;
-        if (!status) return res.status(400).json({ error: "Status is required" });
+  try {
+    const { status } = req.body;
+    const orderId = req.params.id;
+    if (!status) return res.status(400).json({ error: "Status is required" });
 
-        const docRef = ordersCollection.doc(orderId);
-        await docRef.update({ status });
+    const { order } = await updateOrderBoth(orderId, { status });
 
-        // Get updated order data for notifications
-        const doc = await docRef.get();
-        const order = { id: doc.id, ...doc.data() };
+    let customerNotificationPromise = Promise.resolve();
+    let internalNotificationPromise = Promise.resolve();
+    let internalSubject;
+    let internalHtmlBody;
 
-        let customerNotificationPromise;
-        let internalNotificationPromise;
-        let internalSubject;
-        let internalHtmlBody;
+    switch (status) {
+      case "received": {
+        const deviceReceivedHtml = DEVICE_RECEIVED_EMAIL_HTML
+          .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
+          .replace(/\*\*ORDER_ID\*\*/g, order.id);
 
-        switch (status) {
-            case "received":
-                // Customer-Facing Email: Device Received
-                const deviceReceivedHtml = DEVICE_RECEIVED_EMAIL_HTML
-                    .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-                    .replace(/\*\*ORDER_ID\*\*/g, order.id);
-
-                customerNotificationPromise = transporter.sendMail({
-                    from: functions.config().email.user,
-                    to: order.shippingInfo.email,
-                    subject: 'Your SwiftBuyBack Device Has Arrived',
-                    html: deviceReceivedHtml
-                });
-                // Internal Admin Notification: Device Received
-                internalSubject = `Device Received for Order #${order.id}`;
-                internalHtmlBody = `
-                    <p>The device for Order <strong>#${order.id}</strong> has been received.</p>
-                    <p>It is now awaiting inspection.</p>
-                `;
-                internalNotificationPromise = sendZendeskComment(order, internalSubject, internalHtmlBody, false);
-                break;
-            case "completed":
-                // Customer-Facing Email: Order Completed
-                customerNotificationPromise = transporter.sendMail({
-                    from: functions.config().email.user,
-                    to: order.shippingInfo.email,
-                    subject: 'Your SwiftBuyBack Order is Complete',
-                    html: `
-                        <p>Hello ${order.shippingInfo.fullName},</p>
-                        <p>Great news! Your order <strong>#${order.id}</strong> has been completed and payment has been processed.</p>
-                        <p>If you have any questions about your payment, please let us know.</p>
-                        <p>Thank you for choosing SwiftBuyBack!</p>
-                    `
-                });
-                // Internal Admin Notification: Order Completed
-                internalSubject = `Order Completed: #${order.id}`;
-                internalHtmlBody = `
-                    <p>Order <strong>#${order.id}</strong> has been marked as completed.</p>
-                    <p>Payment has been processed for this order.</p>
-                `;
-                internalNotificationPromise = sendZendeskComment(order, internalSubject, internalHtmlBody, false);
-                break;
-            // No specific email needed for 'order_pending' here as it's the initial state handled in submit-order
-            default:
-                customerNotificationPromise = Promise.resolve();
-                internalNotificationPromise = Promise.resolve();
-        }
-
-        await Promise.all([customerNotificationPromise, internalNotificationPromise]);
-        console.log(`Status update notifications sent for order ${orderId}.`);
-
-        res.json({ message: `Order marked as ${status}` });
-    } catch (err) {
-        console.error("Error updating status:", err);
-        res.status(500).json({ error: "Failed to update status" });
-    }
-});
-
-// Submit a re-offer (Updated to send email to customer via Zendesk)
-// Frontend should call: POST https://<cloud-function-url>/api/orders/:id/re-offer
-app.post("/orders/:id/re-offer", async (req, res) => {
-    try {
-        const { newPrice, reasons, comments } = req.body;
-        const orderId = req.params.id; // This is now the XX-XXX document ID
-
-        if (!newPrice || !reasons || !Array.isArray(reasons) || reasons.length === 0) {
-            return res.status(400).json({ error: "New price and at least one reason are required" });
-        }
-        const orderRef = ordersCollection.doc(orderId);
-        const orderDoc = await orderRef.get();
-        if (!orderDoc.exists) {
-            return res.status(404).json({ error: "Order not found" });
-        }
-        const order = { id: orderDoc.id, ...orderDoc.data() }; // Include id in order object for consistency
-        await orderRef.update({
-            reOffer: {
-                newPrice,
-                reasons,
-                comments,
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                // Set auto-acceptance date 7 days from now
-                autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + (7 * 24 * 60 * 60 * 1000))
-            },
-            status: "re-offered-pending"
+        customerNotificationPromise = transporter.sendMail({
+          from: functions.config().email.user,
+          to: order.shippingInfo.email,
+          subject: "Your SwiftBuyBack Device Has Arrived",
+          html: deviceReceivedHtml,
         });
 
-        // Customer-Facing Notification: Re-offer Sent (via Zendesk Public Comment)
-        let reasonString = reasons.join(', ');
-        if (comments) {
-            reasonString += `; ${comments}`;
-        }
-        const zendeskHtmlContent = `
-          <div style="font-family: 'system-ui','-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Oxygen-Sans','Ubuntu','Cantarell','Helvetica Neue','Arial','sans-serif'; font-size: 14px; line-height: 1.5; color: #444444;">
-            <h2 style="color: #0056b3; font-weight: bold; text-transform: none; font-size: 20px; line-height: 26px; margin: 5px 0 10px;">Hello ${order.shippingInfo.fullName},</h2>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${order.id} and after inspection, we have a revised offer for you.</p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${order.estimatedQuote.toFixed(2)}</p>
-            <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;">
-              <strong>New Offer Price:</strong> $${newPrice.toFixed(2)}
-            </p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Reason for New Offer:</strong></p>
-            <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;">
-              <em>"${reasonString}"</em>
-            </p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
-            <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
-              <tbody>
-                <tr>
-                  <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
-                    <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
-                      <tbody>
-                        <tr>
-                          <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
-                            <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderId}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
-                              Accept Offer ($${newPrice.toFixed(2)})
-                            </a>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                  <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
-                    <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
-                      <tbody>
-                        <tr>
-                          <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
-                            <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderId}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
-                              Return Phone Now
-                            </a>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SwiftBuyBack Team</p>
-          </div>
-          `;
-        const zendeskSubject = `Re-offer for Order #${order.id}`;
+        internalSubject = `Device Received for Order #${order.id}`;
+        internalHtmlBody = `
+          <p>The device for Order <strong>#${order.id}</strong> has been received.</p>
+          <p>It is now awaiting inspection.</p>
+        `;
+        internalNotificationPromise = sendZendeskComment(
+          order,
+          internalSubject,
+          internalHtmlBody,
+          false
+        );
+        break;
+      }
+      case "completed": {
+        customerNotificationPromise = transporter.sendMail({
+          from: functions.config().email.user,
+          to: order.shippingInfo.email,
+          subject: "Your SwiftBuyBack Order is Complete",
+          html: `
+            <p>Hello ${order.shippingInfo.fullName},</p>
+            <p>Great news! Your order <strong>#${order.id}</strong> has been completed and payment has been processed.</p>
+            <p>If you have any questions about your payment, please let us know.</p>
+            <p>Thank you for choosing SwiftBuyBack!</p>
+          `,
+        });
 
-        await sendZendeskComment(order, zendeskSubject, zendeskHtmlContent, true); // isPublic: true
-
-        res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
-    } catch (err) {
-        console.error("Error submitting re-offer:", err);
-        res.status(500).json({ error: "Failed to submit re-offer" });
+        internalSubject = `Order Completed: #${order.id}`;
+        internalHtmlBody = `
+          <p>Order <strong>#${order.id}</strong> has been marked as completed.</p>
+          <p>Payment has been processed for this order.</p>
+        `;
+        internalNotificationPromise = sendZendeskComment(
+          order,
+          internalSubject,
+          internalHtmlBody,
+          false
+        );
+        break;
+      }
+      default: {
+        // No specific emails
+        break;
+      }
     }
+
+    await Promise.all([customerNotificationPromise, internalNotificationPromise]);
+
+    res.json({ message: `Order marked as ${status}` });
+  } catch (err) {
+    console.error("Error updating status:", err);
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+// Submit a re-offer (send to customer via Zendesk public comment)
+app.post("/orders/:id/re-offer", async (req, res) => {
+  try {
+    const { newPrice, reasons, comments } = req.body;
+    const orderId = req.params.id;
+
+    if (!newPrice || !reasons || !Array.isArray(reasons) || reasons.length === 0) {
+      return res.status(400).json({ error: "New price and at least one reason are required" });
+    }
+
+    const orderRef = ordersCollection.doc(orderId);
+    const orderDoc = await orderRef.get();
+    if (!orderDoc.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = { id: orderDoc.id, ...orderDoc.data() };
+
+    await updateOrderBoth(orderId, {
+      reOffer: {
+        newPrice,
+        reasons,
+        comments,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+      status: "re-offered-pending",
+    });
+
+    let reasonString = reasons.join(", ");
+    if (comments) reasonString += `; ${comments}`;
+
+    const zendeskHtmlContent = `
+      <div style="font-family: 'system-ui','-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Oxygen-Sans','Ubuntu','Cantarell','Helvetica Neue','Arial','sans-serif'; font-size: 14px; line-height: 1.5; color: #444444;">
+        <h2 style="color: #0056b3; font-weight: bold; text-transform: none; font-size: 20px; line-height: 26px; margin: 5px 0 10px;">Hello ${order.shippingInfo.fullName},</h2>
+        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${order.id} and after inspection, we have a revised offer for you.</p>
+        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${order.estimatedQuote.toFixed(2)}</p>
+        <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;"><strong>New Offer Price:</strong> $${Number(newPrice).toFixed(2)}</p>
+        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Reason for New Offer:</strong></p>
+        <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;"><em>"${reasonString}"</em></p>
+        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
+        <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
+          <tbody>
+            <tr>
+              <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
+                  <tbody>
+                    <tr>
+                      <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
+                        <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderId}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
+                          Accept Offer ($${Number(newPrice).toFixed(2)})
+                        </a>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+              <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
+                  <tbody>
+                    <tr>
+                      <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
+                        <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderId}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
+                          Return Phone Now
+                        </a>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
+        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SwiftBuyBack Team</p>
+      </div>
+    `;
+
+    const zendeskSubject = `Re-offer for Order #${order.id}`;
+    await sendZendeskComment(order, zendeskSubject, zendeskHtmlContent, true);
+
+    res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
+  } catch (err) {
+    console.error("Error submitting re-offer:", err);
+    res.status(500).json({ error: "Failed to submit re-offer" });
+  }
 });
 
 // Generate return shipping label and send email to buyer
-// Frontend should call: POST https://<cloud-function-url>/api/orders/:id/return-label
 app.post("/orders/:id/return-label", async (req, res) => {
-    try {
-        const doc = await ordersCollection.doc(req.params.id).get();
-        if (!doc.exists) return res.status(404).json({ error: "Order not found" });
-        const order = { id: doc.id, ...doc.data() };
+  try {
+    const doc = await ordersCollection.doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+    const order = { id: doc.id, ...doc.data() };
 
-        const buyerShippingInfo = order.shippingInfo;
-        const orderIdForLabel = order.id || 'N/A';
+    const buyerShippingInfo = order.shippingInfo;
+    const orderIdForLabel = order.id || "N/A";
 
-        // Define SwiftBuyBack's fixed address for consistent use
-        const swiftBuyBackAddress = {
-            name: "SwiftBuyBack Returns",
-            company_name: "SwiftBuyBack",
-            phone: "555-555-5555", // Placeholder phone number
-            address_line1: "1795 West 3rd St",
-            city_locality: "Brooklyn",
-            state_province: "NY",
-            postal_code: "11223",
-            country_code: "US"
-        };
+    const swiftBuyBackAddress = {
+      name: "SwiftBuyBack Returns",
+      company_name: "SwiftBuyBack",
+      phone: "555-555-5555",
+      address_line1: "1795 West 3rd St",
+      city_locality: "Brooklyn",
+      state_province: "NY",
+      postal_code: "11223",
+      country_code: "US",
+    };
 
-        // Construct the buyer's address from order data
-        const buyerAddress = {
-            name: buyerShippingInfo.fullName,
-            phone: "555-555-5555", // Placeholder phone number, consider using actual buyer phone if available
-            address_line1: buyerShippingInfo.streetAddress,
-            city_locality: buyerShippingInfo.city,
-            state_province: buyerShippingInfo.state,
-            postal_code: buyerShippingInfo.zipCode,
-            country_code: "US"
-        };
+    const buyerAddress = {
+      name: buyerShippingInfo.fullName,
+      phone: "555-555-5555",
+      address_line1: buyerShippingInfo.streetAddress,
+      city_locality: buyerShippingInfo.city,
+      state_province: buyerShippingInfo.state,
+      postal_code: buyerShippingInfo.zipCode,
+      country_code: "US",
+    };
 
-        // Generate the return label (SwiftBuyBack -> buyer)
-        const returnLabelData = await createShipEngineLabel(swiftBuyBackAddress, buyerAddress, `${orderIdForLabel}-RETURN`);
+    const returnLabelData = await createShipEngineLabel(
+      swiftBuyBackAddress,
+      buyerAddress,
+      `${orderIdForLabel}-RETURN`
+    );
 
-        const returnTrackingNumber = returnLabelData.tracking_number;
+    const returnTrackingNumber = returnLabelData.tracking_number;
 
-        await ordersCollection.doc(req.params.id).update({
-            status: "return-label-generated",
-            returnLabelUrl: returnLabelData.label_download?.pdf,
-            returnTrackingNumber: returnTrackingNumber
-        });
+    await updateOrderBoth(req.params.id, {
+      status: "return-label-generated",
+      returnLabelUrl: returnLabelData.label_download?.pdf,
+      returnTrackingNumber: returnTrackingNumber,
+    });
 
-        // Customer-Facing Email: Return Label Sent
-        const customerMailOptions = {
-            from: functions.config().email.user,
-            to: order.shippingInfo.email, // Use the email from shippingInfo
-            subject: 'Your SwiftBuyBack Return Label',
-            html: `
-                <p>Hello ${order.shippingInfo.fullName},</p>
-                <p>As requested, here is your return shipping label for your device (Order ID: ${order.id}):</p>
-                <p>Return Tracking Number: <strong>${returnTrackingNumber || 'N/A'}</strong></p>
-                <a href="${returnLabelData.label_download?.pdf}">Download Return Label</a>
-                <p>Thank you,</p>
-                <p>The SwiftBuyBack Team</p>
-            `
-        };
+    const customerMailOptions = {
+      from: functions.config().email.user,
+      to: order.shippingInfo.email,
+      subject: "Your SwiftBuyBack Return Label",
+      html: `
+        <p>Hello ${order.shippingInfo.fullName},</p>
+        <p>As requested, here is your return shipping label for your device (Order ID: ${order.id}):</p>
+        <p>Return Tracking Number: <strong>${returnTrackingNumber || "N/A"}</strong></p>
+        <a href="${returnLabelData.label_download?.pdf}">Download Return Label</a>
+        <p>Thank you,</p>
+        <p>The SwiftBuyBack Team</p>
+      `,
+    };
 
-        // Internal Admin Notification: Return Label Sent
-        const internalSubject = `Return Label Sent for Order #${order.id}`;
-        const internalHtmlBody = `
-            <p>A return label for Order <strong>#${order.id}</strong> has been generated and sent to the customer.</p>
-            <p>Return Tracking Number: <strong>${returnTrackingNumber || 'N/A'}</strong></p>
-        `;
+    const internalSubject = `Return Label Sent for Order #${order.id}`;
+    const internalHtmlBody = `
+      <p>A return label for Order <strong>#${order.id}</strong> has been generated and sent to the customer.</p>
+      <p>Return Tracking Number: <strong>${returnTrackingNumber || "N/A"}</strong></p>
+    `;
 
-        await Promise.all([
-            transporter.sendMail(customerMailOptions),
-            sendZendeskComment(order, internalSubject, internalHtmlBody, false)
-        ]);
+    await Promise.all([
+      transporter.sendMail(customerMailOptions),
+      sendZendeskComment(order, internalSubject, internalHtmlBody, false),
+    ]);
 
-        res.json({
-            message: "Return label generated successfully.",
-            returnLabelUrl: returnLabelData.label_download?.pdf,
-            returnTrackingNumber: returnTrackingNumber,
-            orderId: order.id
-        });
-    } catch (err) {
-        console.error("Error generating return label:", err.response?.data || err);
-        res.status(500).json({ error: "Failed to generate return label" });
-    }
+    res.json({
+      message: "Return label generated successfully.",
+      returnLabelUrl: returnLabelData.label_download?.pdf,
+      returnTrackingNumber: returnTrackingNumber,
+      orderId: order.id,
+    });
+  } catch (err) {
+    console.error("Error generating return label:", err.response?.data || err);
+    res.status(500).json({ error: "Failed to generate return label" });
+  }
 });
 
-// New endpoint to handle offer acceptance
-// Frontend should call: POST https://<cloud-function-url>/api/accept-offer-action
+// Accept-offer action
 app.post("/accept-offer-action", async (req, res) => {
-    try {
-        const { orderId } = req.body;
-        if (!orderId) {
-            return res.status(400).json({ error: "Order ID is required" });
-        }
-        const docRef = ordersCollection.doc(orderId);
-        const doc = await docRef.get();
-        if (!doc.exists) {
-            return res.status(404).json({ error: "Order not found" });
-        }
-
-        const orderData = { id: doc.id, ...doc.data() };
-        if (orderData.status !== "re-offered-pending") {
-            return res.status(409).json({ error: "This offer has already been accepted or declined." });
-        }
-
-        await docRef.update({
-            status: "re-offered-accepted",
-            acceptedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        // Customer-Facing Notification: Offer Accepted (via Zendesk Public Comment)
-        const customerHtmlBody = `
-             <p>Thank you for accepting the revised offer for Order <strong>#${orderData.id}</strong>.</p>
-             <p>We've received your confirmation, and payment processing will now begin.</p>
-         `;
-
-        // Internal Admin Notification: Offer Accepted (via Zendesk Private Comment)
-        const internalSubject = `Re-offer Accepted for Order #${orderData.id}`;
-        const internalHtmlBody = `
-            <p>The customer has <strong>accepted</strong> the revised offer of <strong>$${orderData.reOffer.newPrice.toFixed(2)}</strong> for Order #${orderData.id}.</p>
-            <p>Please proceed with payment processing.</p>
-        `;
-
-        await Promise.all([
-            sendZendeskComment(orderData, `Offer Accepted for Order #${orderData.id}`, customerHtmlBody, true),
-            sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
-        ]);
-
-        res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
-    } catch (err) {
-        console.error("Error accepting offer:", err);
-        res.status(500).json({ error: "Failed to accept offer" });
+  try {
+    const { orderId } = req.body;
+    if (!orderId) {
+      return res.status(400).json({ error: "Order ID is required" });
     }
+    const docRef = ordersCollection.doc(orderId);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const orderData = { id: doc.id, ...doc.data() };
+    if (orderData.status !== "re-offered-pending") {
+      return res
+        .status(409)
+        .json({ error: "This offer has already been accepted or declined." });
+    }
+
+    await updateOrderBoth(orderId, {
+      status: "re-offered-accepted",
+      acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const customerHtmlBody = `
+      <p>Thank you for accepting the revised offer for Order <strong>#${orderData.id}</strong>.</p>
+      <p>We've received your confirmation, and payment processing will now begin.</p>
+    `;
+
+    const internalSubject = `Re-offer Accepted for Order #${orderData.id}`;
+    const internalHtmlBody = `
+      <p>The customer has <strong>accepted</strong> the revised offer of <strong>$${orderData.reOffer.newPrice.toFixed(
+        2
+      )}</strong> for Order #${orderData.id}.</p>
+      <p>Please proceed with payment processing.</p>
+    `;
+
+    await Promise.all([
+      sendZendeskComment(
+        orderData,
+        `Offer Accepted for Order #${orderData.id}`,
+        customerHtmlBody,
+        true
+      ),
+      sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
+    ]);
+
+    res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
+  } catch (err) {
+    console.error("Error accepting offer:", err);
+    res.status(500).json({ error: "Failed to accept offer" });
+  }
 });
 
-// New endpoint to handle return requests
-// Frontend should call: POST https://<cloud-function-url>/api/return-phone-action
+// Return-phone action
 app.post("/return-phone-action", async (req, res) => {
-    try {
-        const { orderId } = req.body;
-        if (!orderId) {
-            return res.status(400).json({ error: "Order ID is required" });
-        }
-        const docRef = ordersCollection.doc(orderId);
-        const doc = await docRef.get();
-        if (!doc.exists) {
-            return res.status(404).json({ error: "Order not found" });
-        }
-
-        const orderData = { id: doc.id, ...doc.data() };
-        if (orderData.status !== "re-offered-pending") {
-            return res.status(409).json({ error: "This offer has already been accepted or declined." });
-        }
-
-        // Renamed status to 're-offered-declined'
-        await docRef.update({
-            status: "re-offered-declined",
-            declinedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        // Customer-Facing Notification: Return Requested (via Zendesk Public Comment)
-        const customerHtmlBody = `
-            <p>We have received your request to decline the revised offer and have your device returned. We are now processing your request and will send a return shipping label to your email shortly.</p>
-        `;
-
-        // Internal Admin Notification: Return Requested (via Zendesk Private Comment)
-        const internalSubject = `Return Requested for Order #${orderData.id}`;
-        const internalHtmlBody = `
-            <p>The customer has <strong>declined</strong> the revised offer for Order #${orderData.id} and has requested that their phone be returned.</p>
-            <p>Please initiate the return process and send a return shipping label.</p>
-        `;
-
-        await Promise.all([
-            sendZendeskComment(orderData, `Return Requested for Order #${orderData.id}`, customerHtmlBody, true),
-            sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
-        ]);
-
-        res.json({ message: "Return requested successfully.", orderId: orderData.id });
-    } catch (err) {
-        console.error("Error requesting return:", err);
-        res.status(500).json({ error: "Failed to request return" });
+  try {
+    const { orderId } = req.body;
+    if (!orderId) {
+      return res.status(400).json({ error: "Order ID is required" });
     }
+    const docRef = ordersCollection.doc(orderId);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const orderData = { id: doc.id, ...doc.data() };
+    if (orderData.status !== "re-offered-pending") {
+      return res
+        .status(409)
+        .json({ error: "This offer has already been accepted or declined." });
+    }
+
+    await updateOrderBoth(orderId, {
+      status: "re-offered-declined",
+      declinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const customerHtmlBody = `
+      <p>We have received your request to decline the revised offer and have your device returned. We are now processing your request and will send a return shipping label to your email shortly.</p>
+    `;
+
+    const internalSubject = `Return Requested for Order #${orderData.id}`;
+    const internalHtmlBody = `
+      <p>The customer has <strong>declined</strong> the revised offer for Order #${orderData.id} and has requested that their phone be returned.</p>
+      <p>Please initiate the return process and send a return shipping label.</p>
+    `;
+
+    await Promise.all([
+      sendZendeskComment(
+        orderData,
+        `Return Requested for Order #${orderData.id}`,
+        customerHtmlBody,
+        true
+      ),
+      sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
+    ]);
+
+    res.json({ message: "Return requested successfully.", orderId: orderData.id });
+  } catch (err) {
+    console.error("Error requesting return:", err);
+    res.status(500).json({ error: "Failed to request return" });
+  }
 });
 
-// New Cloud Function to run every 24 hours to check for expired offers
-exports.autoAcceptOffers = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
+// Scheduled function: auto-accept expired offers
+exports.autoAcceptOffers = functions.pubsub
+  .schedule("every 24 hours")
+  .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
     const expiredOffers = await ordersCollection
-        .where('status', '==', 're-offered-pending')
-        .where('reOffer.autoAcceptDate', '<=', now)
-        .get();
+      .where("status", "==", "re-offered-pending")
+      .where("reOffer.autoAcceptDate", "<=", now)
+      .get();
 
-    const updates = expiredOffers.docs.map(async doc => {
-        const orderRef = ordersCollection.doc(doc.id);
-        const orderData = { id: doc.id, ...doc.data() };
+    const updates = expiredOffers.docs.map(async (doc) => {
+      const orderRef = ordersCollection.doc(doc.id);
+      const orderData = { id: doc.id, ...doc.data() };
 
-        // Customer-Facing Notification: Offer Auto-Accepted (via Zendesk Public Comment)
-        const customerHtmlBody = `
-            <p>Hello ${orderData.shippingInfo.fullName},</p>
-            <p>As we have not heard back from you regarding your revised offer, it has been automatically accepted as per our terms and conditions.</p>
-            <p>Payment processing for the revised amount of <strong>$${orderData.reOffer.newPrice.toFixed(2)}</strong> will now begin.</p>
-            <p>Thank you,</p>
-            <p>The SwiftBuyBack Team</p>
-        `;
+      const customerHtmlBody = `
+        <p>Hello ${orderData.shippingInfo.fullName},</p>
+        <p>As we have not heard back from you regarding your revised offer, it has been automatically accepted as per our terms and conditions.</p>
+        <p>Payment processing for the revised amount of <strong>$${orderData.reOffer.newPrice.toFixed(
+          2
+        )}</strong> will now begin.</p>
+        <p>Thank you,</p>
+        <p>The SwiftBuyBack Team</p>
+      `;
 
-        // Internal Admin Notification: Offer Auto-Accepted (via Zendesk Private Comment)
-        const internalSubject = `Order #${orderData.id} Auto-Accepted`;
-        const internalHtmlBody = `
-            <p>The revised offer of <strong>$${orderData.reOffer.newPrice.toFixed(2)}</strong> for Order #${orderData.id} has been <strong>auto-accepted</strong> due to no response from the customer within the 7-day period.</p>
-            <p>Please proceed with payment processing.</p>
-        `;
+      const internalSubject = `Order #${orderData.id} Auto-Accepted`;
+      const internalHtmlBody = `
+        <p>The revised offer of <strong>$${orderData.reOffer.newPrice.toFixed(
+          2
+        )}</strong> for Order #${orderData.id} has been <strong>auto-accepted</strong> due to no response from the customer within the 7-day period.</p>
+        <p>Please proceed with payment processing.</p>
+      `;
 
-        await Promise.all([
-            sendZendeskComment(orderData, `Revised Offer Auto-Accepted for Order #${orderData.id}`, customerHtmlBody, true),
-            sendZendeskComment(orderData, internalSubject, internalHtmlBody, false)
-        ]);
+      await Promise.all([
+        sendZendeskComment(
+          orderData,
+          `Revised Offer Auto-Accepted for Order #${orderData.id}`,
+          customerHtmlBody,
+          true
+        ),
+        sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
+      ]);
 
-        console.log(`Auto-accepting expired offer for order ID: ${orderData.id}`);
-        return orderRef.update({
-            status: 're-offered-auto-accepted',
-            acceptedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+      await updateOrderBoth(doc.id, {
+        status: "re-offered-auto-accepted",
+        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     });
 
     await Promise.all(updates);
     console.log(`Auto-accepted ${updates.length} expired offers.`);
     return null;
-});
+  });
 
-// New Cloud Function to run when a user is created
+// Create user record on auth create
 exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
-    try {
-        console.log(`New user created: ${user.uid}`);
-        const userData = {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || null,
-            phoneNumber: user.phoneNumber || null,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        };
+  try {
+    console.log(`New user created: ${user.uid}`);
+    const userData = {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || null,
+      phoneNumber: user.phoneNumber || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
-        await usersCollection.doc(user.uid).set(userData);
-        console.log(`User data for ${user.uid} saved to Firestore.`);
-    } catch (error) {
-        console.error("Error saving user data to Firestore:", error);
-    }
+    await usersCollection.doc(user.uid).set(userData);
+    console.log(`User data for ${user.uid} saved to Firestore.`);
+  } catch (error) {
+    console.error("Error saving user data to Firestore:", error);
+  }
 });
 
-
-// --- NEW Cloud Function: Triggered on Chat Document Updates ---
-// This function listens for changes to 'chats' documents, specifically for transfer requests.
+// Chat transfer notifier
 exports.onChatTransferUpdate = functions.firestore
-    .document('chats/{chatId}')
-    .onUpdate(async (change, context) => {
-        const newChatData = change.after.data();
-        const oldChatData = change.before.data();
+  .document("chats/{chatId}")
+  .onUpdate(async (change, context) => {
+    const newChatData = change.after.data();
+    const oldChatData = change.before.data();
 
-        const newTransferRequest = newChatData.transferRequest;
-        const oldTransferRequest = oldChatData.transferRequest;
+    const newTransferRequest = newChatData.transferRequest;
+    const oldTransferRequest = oldChatData.transferRequest;
 
-        // Check if a transfer request has just become pending
-        if (newTransferRequest && newTransferRequest.status === 'pending' &&
-            (!oldTransferRequest || oldTransferRequest.status !== 'pending')) {
-            const targetAdminUid = newTransferRequest.toUid;
-            const fromAdminName = newTransferRequest.fromName;
-            const chatUser = newTransferRequest.userDisplayName || newChatData.ownerUid || newChatData.guestId;
+    if (
+      newTransferRequest &&
+      newTransferRequest.status === "pending" &&
+      (!oldTransferRequest || oldTransferRequest.status !== "pending")
+    ) {
+      const targetAdminUid = newTransferRequest.toUid;
+      const fromAdminName = newTransferRequest.fromName;
+      const chatUser =
+        newTransferRequest.userDisplayName ||
+        newChatData.ownerUid ||
+        newChatData.guestId;
 
-            const notificationMessage = `Chat transfer from ${fromAdminName} for ${chatUser}.`;
+      const notificationMessage = `Chat transfer from ${fromAdminName} for ${chatUser}.`;
 
-            // Send FCM push notification to the target admin
-            await sendAdminPushNotification(
-                "Incoming Chat Transfer!",
-                notificationMessage,
-                { chatId: context.params.chatId, userId: newChatData.ownerUid, action: 'open_chat', relatedDocType: 'chat', relatedDocId: context.params.chatId }
-            ).catch(e => console.error("FCM Send Error (Chat Transfer):", e));
+      await sendAdminPushNotification("Incoming Chat Transfer!", notificationMessage, {
+        chatId: context.params.chatId,
+        userId: newChatData.ownerUid,
+        action: "open_chat",
+        relatedDocType: "chat",
+        relatedDocId: context.params.chatId,
+      }).catch((e) => console.error("FCM Send Error (Chat Transfer):", e));
 
-            // Add to Firestore in-app notifications for the target admin
-            await addAdminFirestoreNotification(
-                targetAdminUid,
-                notificationMessage,
-                'chat',
-                context.params.chatId,
-                newChatData.ownerUid
-            ).catch(e => console.error("Firestore Notification Error (Chat Transfer):", e));
+      await addAdminFirestoreNotification(
+        targetAdminUid,
+        notificationMessage,
+        "chat",
+        context.params.chatId,
+        newChatData.ownerUid
+      ).catch((e) =>
+        console.error("Firestore Notification Error (Chat Transfer):", e)
+      );
 
-            console.log(`Notification sent for chat transfer to admin ${targetAdminUid} for chat ${context.params.chatId}.`);
-        }
+      console.log(
+        `Notification sent for chat transfer to admin ${targetAdminUid} for chat ${context.params.chatId}.`
+      );
+    }
 
-        return null; // Important: Cloud Functions must return a promise or null
-    });
-
+    return null;
+  });
 
 // Expose the Express app as a single Cloud Function
 exports.api = functions.https.onRequest(app);
