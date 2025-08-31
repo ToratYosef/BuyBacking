@@ -43,7 +43,6 @@
             const bulkEditForm = document.getElementById('bulkEditForm');
             const importModal = document.getElementById('importModal');
             const importForm = document.getElementById('importForm');
-            const importFileBtn = document.getElementById('importFileBtn');
             const overwriteWarningSection = document.getElementById('overwriteWarningSection');
             const confirmOverwriteBtn = document.getElementById('confirmOverwriteBtn');
             const closeModalBtns = document.querySelectorAll('.close-modal-btn');
@@ -165,8 +164,21 @@
                     return matchesSearch && matchesBrand;
                 });
                 
-                return filtered.sort((a, b) => {
-                    // Group by model series (e.g., iPhone 11)
+                // Flatten the device data to create a single list of rows for sorting
+                const allRows = [];
+                filtered.forEach(device => {
+                    Object.keys(device.prices).forEach(storage => {
+                        if (device.prices[storage].locked) {
+                            allRows.push({ ...device, storage, status: 'locked', prices: device.prices[storage].locked });
+                        }
+                        if (device.prices[storage].unlocked) {
+                            allRows.push({ ...device, storage, status: 'unlocked', prices: device.prices[storage].unlocked });
+                        }
+                    });
+                });
+                
+                return allRows.sort((a, b) => {
+                    // 1. Sort by Model Series (e.g., 11 before 12)
                     const getModelSeries = (name) => {
                         const match = name.match(/(\d+)/);
                         return match ? parseInt(match[1]) : 0;
@@ -177,47 +189,40 @@
                         return seriesA - seriesB;
                     }
 
-                    // Then group by model name (e.g., iPhone 11 Pro Max)
+                    // 2. Then group by Model Name (e.g., iPhone 11 Pro Max)
                     if (a.name !== b.name) {
                         return a.name.localeCompare(b.name);
                     }
 
-                    // Finally, sort by storage size
-                    const storageA = parseInt(Object.keys(a.prices)[0]);
-                    const storageB = parseInt(Object.keys(b.prices)[0]);
-                    return storageOrder[storageA] - storageOrder[storageB] || storageA - storageB;
+                    // 3. Then sort by storage size (e.g., 64gb before 128gb)
+                    const storageA = parseInt(a.storage);
+                    const storageB = parseInt(b.storage);
+                    if (storageA !== storageB) {
+                        return storageA - storageB;
+                    }
+                    
+                    // 4. Finally, sort by lock status (locked before unlocked)
+                    if (a.status !== b.status) {
+                        return a.status === 'locked' ? -1 : 1;
+                    }
+
+                    return 0;
                 });
             };
 
             const renderPricingTable = (devices, filters) => {
                 pricingTableBody.innerHTML = '';
                 
-                const sortedDevices = sortAndFilterDevices(devices, filters);
+                const sortedRows = sortAndFilterDevices(devices, filters);
 
-                if (sortedDevices.length === 0) {
+                if (sortedRows.length === 0) {
                     pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
                     return;
                 }
                 
-                sortedDevices.forEach(device => {
-                    // Collect all storage options for this device
-                    const storageOptions = Object.keys(device.prices).sort((a,b) => (a.match(/\d+/) || [0])[0] - (b.match(/\d+/) || [0])[0]);
-                    
-                    storageOptions.forEach(storage => {
-                        const priceData = device.prices[storage];
-                        const unlockedPrices = priceData.unlocked || {};
-                        const lockedPrices = priceData.locked || {};
-
-                        // Render Unlocked row
-                        const unlockedRow = createPriceRow(device, storage, 'unlocked', unlockedPrices);
-                        pricingTableBody.appendChild(unlockedRow);
-
-                        // Render Locked row (if it exists)
-                        if (Object.keys(lockedPrices).length > 0) {
-                            const lockedRow = createPriceRow(device, storage, 'locked', lockedPrices);
-                            pricingTableBody.appendChild(lockedRow);
-                        }
-                    });
+                sortedRows.forEach(row => {
+                    const tableRow = createPriceRow(row, row.storage, row.status, row.prices);
+                    pricingTableBody.appendChild(tableRow);
                 });
 
                 // Add event listeners for inline editing and bulk actions
