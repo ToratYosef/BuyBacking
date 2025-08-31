@@ -29,8 +29,6 @@
         const provider = new GoogleAuthProvider();
 
         let currentUser = null;
-        // IMPORTANT: REPLACE with your admin email(s) to grant access to the panel.
-        const authorizedAdmins = ["your-email@example.com"]; 
 
         document.addEventListener('DOMContentLoaded', async () => {
             const pricingTableBody = document.getElementById('pricingTableBody');
@@ -48,20 +46,43 @@
             const userEmailDisplay = document.getElementById('userEmailDisplay');
             const loginForm = document.getElementById('loginForm');
 
+            // Function to check if the user is an admin by querying Firestore
+            const checkAdminStatus = async (user) => {
+                if (!user) return false;
+                try {
+                    const adminDocRef = doc(db, 'admins', user.uid);
+                    const adminDoc = await getDoc(adminDocRef);
+                    return adminDoc.exists();
+                } catch (error) {
+                    console.error("Error checking admin status:", error);
+                    return false;
+                }
+            };
+
             onAuthStateChanged(auth, async (user) => {
-                if (user && authorizedAdmins.includes(user.email)) {
-                    currentUser = user;
-                    userEmailDisplay.textContent = user.email;
-                    loginSection.classList.add('hidden');
-                    adminPanel.classList.remove('hidden');
-                    console.log("Admin user authenticated.");
-                    await fetchAndRenderPricing();
+                if (user) {
+                    const isAdmin = await checkAdminStatus(user);
+                    if (isAdmin) {
+                        currentUser = user;
+                        userEmailDisplay.textContent = user.email;
+                        loginSection.classList.add('hidden');
+                        adminPanel.classList.remove('hidden');
+                        console.log("Admin user authenticated.");
+                        await fetchAndRenderPricing();
+                    } else {
+                        currentUser = null;
+                        loginSection.classList.remove('hidden');
+                        adminPanel.classList.add('hidden');
+                        pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">You are signed in but not authorized.</td></tr>';
+                        console.log("User signed in but not an authorized admin.");
+                        await signOut(auth); // Sign out unauthorized users
+                    }
                 } else {
                     currentUser = null;
                     loginSection.classList.remove('hidden');
                     adminPanel.classList.add('hidden');
-                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Please sign in with an authorized account.</td></tr>';
-                    console.log("User not authenticated or not an authorized admin.");
+                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Please sign in to view this content.</td></tr>';
+                    console.log("User not authenticated.");
                 }
             });
 
