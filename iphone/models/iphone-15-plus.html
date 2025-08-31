@@ -3,11 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>SwiftBuyBack - Sell Your iPhone</title>
+    <title>SecondHandCell - Sell Your Samsung Device</title>
+    <link rel="icon" href="/favicon/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SLRRJRXHHE"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+    
+      gtag('config', 'G-SLRRJRXHHE');
+    </script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvU0S58N4TVxJ5Ag4l7B-r534hng4BxVw&libraries=places&callback=initAutocomplete" async defer></script>
     
     <script type="module">
@@ -31,7 +41,8 @@
             doc,
             getDoc,
             updateDoc,
-            setDoc
+            setDoc,
+            getDocs
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -419,7 +430,7 @@
         <div class="bg-white p-8 rounded-3xl shadow-xl flex flex-col lg:flex-row items-center justify-center gap-12 main-content-layout">
             <div class="w-full lg:w-2/5 text-center quote-display-mobile-first">
                 <div class="relative w-full max-w-sm mx-auto mb-6 rounded-3xl shadow-lg overflow-hidden transform transition-transform duration-500 hover:scale-105">
-                    <img id="deviceImage" src="" alt="" class="w-full h-full object-cover">
+                    <img id="deviceImage" src="https://placehold.co/400x600/E5E7EB/4B5563?text=Loading..." alt="" class="w-full h-full object-cover">
                 </div>
                 <div class="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg hidden" id="mainQuoteDisplay">
                     <h2 class="text-3xl font-extrabold mb-2">Your Instant Quote</h2>
@@ -435,8 +446,11 @@
                     We offer a quick, transparent, and hassle-free process with free shipping and certified inspection.
                 </p>
                 
-                <div class="space-y-6">
-
+                <div id="loadingQuestions" class="text-center py-10 text-gray-500 font-semibold text-lg">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading device information...
+                </div>
+                
+                <div id="questionsContainer" class="space-y-6 hidden">
                     <div class="mb-8" id="storageSection">
                         <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">1. Select Storage Amount</label>
                         <div class="flex justify-center lg:justify-start">
@@ -450,35 +464,35 @@
                         <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">2. Select Your Carrier</label>
                         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4" id="carrierOptions">
                             <div class="carrier-option">
-                                <input type="radio" id="att" name="carrier" value="ATT">
+                                <input type="radio" id="att" name="carrier" value="att">
                                 <label for="att" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
                                     <i class="fa-solid fa-signal text-3xl text-indigo-600 mb-2 sm:text-2xl"></i>
                                     <span class="block text-slate-700 font-medium sm:text-sm">AT&T</span>
                                 </label>
                             </div>
                             <div class="carrier-option">
-                                <input type="radio" id="tmobile" name="carrier" value="TMobile">
+                                <input type="radio" id="tmobile" name="carrier" value="tmobile">
                                 <label for="tmobile" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
                                     <i class="fa-solid fa-mobile-screen-button text-3xl text-pink-600 mb-2 sm:text-2xl"></i>
                                     <span class="block text-slate-700 font-medium sm:text-sm">T-Mobile</span>
                                 </label>
                             </div>
                             <div class="carrier-option">
-                                <input type="radio" id="verizon" name="carrier" value="Verizon">
+                                <input type="radio" id="verizon" name="carrier" value="verizon">
                                 <label for="verizon" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
                                     <i class="fa-solid fa-wifi text-3xl text-red-600 mb-2 sm:text-2xl"></i>
                                     <span class="block text-slate-700 font-medium sm:text-sm">Verizon</span>
                                 </label>
                             </div>
                             <div class="carrier-option">
-                                <input type="radio" id="unlocked" name="carrier" value="Unlocked">
+                                <input type="radio" id="unlocked" name="carrier" value="unlocked">
                                 <label for="unlocked" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
                                     <i class="fa-solid fa-lock-open text-3xl text-teal-600 mb-2 sm:text-2xl"></i>
                                     <span class="block text-slate-700 font-medium sm:text-sm">Unlocked</span>
                                 </label>
                             </div>
                             <div class="carrier-option">
-                                <input type="radio" id="other-carrier" name="carrier" value="Other">
+                                <input type="radio" id="other-carrier" name="carrier" value="other">
                                 <label for="other-carrier" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
                                     <i class="fa-solid fa-globe text-3xl text-yellow-600 mb-2 sm:text-2xl"></i>
                                     <span class="block text-slate-700 font-medium sm:text-sm">Other</span>
@@ -506,9 +520,10 @@
                             4. Is the screen fully functional and free of defects?
                         </p>
                         <div id="functionalDetails" class="mt-2 p-3 bg-blue-50 rounded-md text-sm text-blue-800 text-left sm:text-xs">
-                            <p class="font-semibold mb-2">For "Fully Functional", all of these must work correctly:</p>
+                            <p class="font-semibold mb-2">For **"Fully Functional"**, all of these must work correctly:</p>
                             <ul class="list-disc list-inside ml-4 space-y-1">
                                 <li>Screen works and fully lights up (no dead pixels, discoloration, <strong>image burn or black dot/LCD dead pixels</strong>)</li>
+                                <li><strong>The device must contain all original parts.</strong> If a device is received with third-party or non-original parts, it will be considered not fully functional/damaged.</li>
                                 <li>All exterior buttons (power, volume, mute)</li>
                                 <li>Front/back camera and flashes</li>
                                 <li>Speakers and microphones</li>
@@ -597,7 +612,7 @@
                                 <input type="radio" id="zelle" name="payment_method" value="zelle">
                                 <label for="zelle" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
                                     <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48" class="h-10 w-10 mb-2 mx-auto sm:h-8 sm:w-8">
-                                        <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22 C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5    C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5    C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5    h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5    h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298    C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
+                                        <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22 C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5  C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5  C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5  h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5  h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298  C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
                                     </svg>
                                     <span class="font-semibold block sm:text-sm">Zelle</span>
                                 </label>
@@ -626,11 +641,15 @@
                         </div>
 
                         <div id="zelleFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
-                            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Zelle Details </h3>
+                            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Zelle Details</h3>
                             <div class="space-y-4">
                                 <div>
                                     <label for="zelleIdentifier" class="block text-sm font-medium text-slate-700">Zelle Email or Phone Number</label>
                                     <input type="text" id="zelleIdentifier" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label for="zelleIdentifierConfirm" class="block text-sm font-medium text-slate-700">Verify Zelle Email or Phone Number</label>
+                                    <input type="text" id="zelleIdentifierConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                 </div>
                             </div>
                         </div>
@@ -641,6 +660,10 @@
                                 <div>
                                     <label for="paypalEmail" class="block text-sm font-medium text-slate-700">PayPal Email Address</label>
                                     <input type="email" id="paypalEmail" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label for="paypalEmailConfirm" class="block text-sm font-medium text-slate-700">Verify PayPal Email Address</label>
+                                    <input type="email" id="paypalEmailConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                                 </div>
                             </div>
                         </div>
@@ -718,6 +741,13 @@
                         </div>
                     </div>
                 </div>
+                
+                <div class="prose max-w-full text-left mt-12">
+                    <hr class="my-6 border-t border-slate-300">
+                    <h2 class="text-2xl font-bold text-slate-800 mb-4">Important Policy Updates</h2>
+                    <p>To be considered <strong>"fully functional"</strong>, the device must contain all original parts. If a device is received with third-party or non-original parts, it will be considered not fully functional or damaged and the quote will be adjusted accordingly.</p>
+                    <p>Additionally, for a device to be eligible for our buyback program, it must be fully intact and not broken into multiple pieces. We do not accept devices that are disassembled or in multiple fragments.</p>
+                </div>
             </div>
         </div>
     </main>
@@ -736,21 +766,37 @@
         </div>
     </div>
 
+
     <div id="loginModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2><div class="flex border-b border-slate-200 mb-6"><button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Login</button><button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Sign Up</button></div><form id="loginForm" class="space-y-4"><p class="text-slate-600 text-center">Log in to continue with your order.</p><button type="button" id="googleLoginBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Login with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="loginEmail" class="sr-only">Email Address</label><input type="email" id="loginEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="loginPassword" class="sr-only">Password</label><input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="current-password"></div><button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button><p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-blue-600 font-semibold hover:underline">Reset it here</a></p></form><form id="signupForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Create an account to complete your order.</p><button type="button" id="googleSignupBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Sign Up with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="signupName" class="sr-only">Full Name</label><input type="text" id="signupName" placeholder="Full Name" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="signupEmail" class="sr-only">Email Address</label><input type="email" id="signupEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="signupPassword" class="sr-only">Password</label><input type="password" id="signupPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="new-password"></div><button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button><p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-blue-600 font-semibold hover:underline">Log in here</a></p></form><form id="forgotPasswordForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Enter your email to receive a password reset link.</p><div><label for="forgotEmail" class="sr-only">Email Address</label><input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button><p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-blue-600 font-semibold hover:underline">Return to Login</a></p></form><div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div></div></div>
 
     <div id="aboutUsModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2><p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p></div></div>
 
     <div id="privacyPolicyModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Privacy Policy</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p><h3>Information We Collect</h3><p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition.</p><h3>How We Use Your Information</h3><p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p><h3>Data Security and Wiping</h3><p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased.</p><h3>Disclosure of Your Information</h3><p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p><h3>Your Consent</h3><p>By using our site, you consent to our website's privacy policy.</p></div></div></div>
 
-    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p><h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p></div></div></div>
+    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p><h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p><hr class="my-6 border-t border-slate-300"><h3>5. Policy on Lost/Stolen Devices & Legal Compliance (New York State & NYC)</h3><p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This section outlines our strict policy and the legal framework governing such transactions in New York State and New York City.</p><h4>Laws That May Apply (NY State + NYC)</h4><ul><li>**New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property:** If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.</li><li>**New York Penal Law § 165.40 – Criminal possession of stolen property in the 5th degree:** Knowingly possessing stolen property (or should reasonably know it’s stolen) is a misdemeanor.</li><li>**New York Penal Law § 165.45–165.54 – Criminal possession of stolen property (4th–1st degree):** Felonies based on the value of the stolen property. Smartphones can easily push this into felony territory if valuable.</li><li>**New York City Administrative Code § 20-272 et seq. (Secondhand Dealer Law):** Dealers in secondhand goods must:<ul><li>Keep records of all items received (including seller ID).</li><li>Provide daily reports to the NYPD of transactions (often through electronic reporting).</li><li>If police suspect an item is lost/stolen, you must hold and exhibit it to them.</li></ul></li><li>**New York City Administrative Code § 20-273:** It is unlawful to conceal, withhold, or refuse inspection of such goods.</li><li>**General Business Law (NY) GBL § 89-g and following – Regulation of pawnbrokers and secondhand dealers:** Requires keeping detailed records and prohibits resale of items flagged as stolen/lost until cleared.</li><li>**Federal Considerations (18 U.S.C. § 2315 – Possession or sale of stolen property):** If stolen goods (like phones) cross state lines or involve interstate commerce, federal law applies.</li></ul><h4>Process to Handle Lost/Stolen Phones in Your Buyback</h4><p>Here’s our step-by-step written policy to handle devices suspected of being lost or stolen:</p><h5>Intake & Verification</h5><ul><li>Every device received must be checked against:<ul><li>IMEI/serial number databases (e.g., GSMA, carrier blacklists).</li><li>Customer’s government-issued ID at time of transaction.</li></ul></li><li>Record the transaction in compliance with NYC Secondhand Dealer laws.</li></ul><h5>If a Device is Flagged as Lost or Stolen</h5><ul><li>Immediately set the device aside and do not refurbish, resell, or dispose of it.</li><li>Clearly label it as “On Hold – Suspected Lost/Stolen.”</li></ul><h5>Customer Communication</h5><ul><li>If the customer requests the item back:<ul><li>Explain: “Under New York law, we cannot return or release devices suspected to be lost or stolen. These items must be reported and may only be released by law enforcement.”</li></ul></li></ul><h5>Law Enforcement Notification</h5><ul><li>Report the device to the NYPD Property Clerk’s Office (or local precinct if outside NYC).</li><li>Provide transaction records, customer ID, and the device itself if requested.</li></ul><h5>Outcome</h5><ul><li>If police confirm the device is stolen:<ul><li>It will be seized and returned to the rightful owner or carrier.</li></ul></li><li>If cleared:<ul><li>You may proceed with processing the device as normal.</li></ul></li></ul><h5>Recordkeeping</h5><ul><li>Keep all paperwork of the transaction, report, and police correspondence for at least 5 years (per NYC dealer rules).</li></ul></div></div></div>
 
     <footer class="bg-slate-800 text-white">
         <div class="container mx-auto px-4 py-12">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
-                    <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
-                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="#" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="#" id="termsAndConditionsLink" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
-                    <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p><p class="text-slate-400">Phone: (123) 456-7890</p></div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-4">SecondHandCell</h3>
+                        <p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-4">Quick Links</h3>
+                        <ul class="space-y-2">
+                            <li><a href="#" class="text-slate-400 hover:text-white transition duration-300">Home</a></li>
+                            <li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li>
+                            <li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li>
+                            <li><a href="#" id="termsAndConditionsLink" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-4">Contact Us</h3>
+                        <p class="text-slate-400">Email: support@secondhandcell.com</p>
+                        <p class="text-slate-400">Phone: (123) 456-7890</p>
+                    </div>
                 </div>
                 <div class="bg-slate-700 p-6 rounded-lg">
                     <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
@@ -855,46 +901,45 @@
             const db = window.firebaseDb;
             const serverTimestamp = window.firebaseServerTimestamp;
 
-            // --- DYNAMIC CONTENT SETUP ---
-            const pathSegments = window.location.pathname.split('/');
-            const deviceSlug = pathSegments.pop().replace('.html', '');
+            let allDevices = [];
+            let device = null;
 
-            const phoneData = {
-                'iphone-16-pro-max': { name: 'iPhone 16 Pro Max', id: 'i16pm', prices: { '256GB': 800, '512GB': 900, '1TB': 1100 } },
-                'iphone-16-pro': { name: 'iPhone 16 Pro', id: 'i16p', prices: { '128GB': 750, '256GB': 850, '512GB': 950, '1TB': 1050 } },
-                'iphone-16': { name: 'iPhone 16', id: 'i16', prices: { '128GB': 650, '256GB': 750, '512GB': 850 } },
-                'iphone-16-plus': { name: 'iPhone 16 Plus', id: 'i16pl', prices: { '128GB': 600, '256GB': 700, '512GB': 800 } },
-                'iphone-16-se': { name: 'iPhone 16 SE', id: 'i16e', prices: { '64GB': 400, '128GB': 500, '256GB': 600 } },
-                'iphone-15-pro-max': { name: 'iPhone 15 Pro Max', id: 'i15pm', prices: { '128GB': 700, '256GB': 800, '512GB': 900, '1TB': 1000 } },
-                'iphone-15-pro': { name: 'iPhone 15 Pro', id: 'i15p', prices: { '128GB': 650, '256GB': 750, '512GB': 850, '1TB': 950 } },
-                'iphone-15': { name: 'iPhone 15', id: 'i15', prices: { '128GB': 550, '256GB': 650, '512GB': 750 } },
-                'iphone-15-plus': { name: 'iPhone 15 Plus', id: 'i15pl', prices: { '128GB': 500, '256GB': 600, '512GB': 700 } },
-                'iphone-14-pro-max': { name: 'iPhone 14 Pro Max', id: 'i14pm', prices: { '128GB': 500, '256GB': 600, '512GB': 700, '1TB': 800 } },
-                'iphone-14-pro': { name: 'iPhone 14 Pro', id: 'i14p', prices: { '128GB': 450, '256GB': 550, '512GB': 650, '1TB': 750 } },
-                'iphone-14': { name: 'iPhone 14', id: 'i14', prices: { '128GB': 380, '256GB': 480, '512GB': 580 } },
-                'iphone-14-plus': { name: 'iPhone 14 Plus', id: 'i14pl', prices: { '128GB': 350, '256GB': 450, '512GB': 550 } },
-                'iphone-13-pro-max': { name: 'iPhone 13 Pro Max', id: 'i13pm', prices: { '128GB': 400, '256GB': 500, '512GB': 600, '1TB': 700 } },
-                'iphone-13-pro': { name: 'iPhone 13 Pro', id: 'i13p', prices: { '128GB': 350, '256GB': 450, '512GB': 550, '1TB': 650 } },
-                'iphone-13': { name: 'iPhone 13', id: 'i13', prices: { '128GB': 300, '256GB': 400, '512GB': 500 } },
-                'iphone-13-mini': { name: 'iPhone 13 mini', id: 'i13m', prices: { '128GB': 280, '256GB': 380, '512GB': 480 } },
-                'iphone-12-pro-max': { name: 'iPhone 12 Pro Max', id: 'i12pm', prices: { '128GB': 350, '256GB': 450, '512GB': 550 } },
-                'iphone-12-pro': { name: 'iPhone 12 Pro', id: 'i12p', prices: { '128GB': 300, '256GB': 400, '512GB': 500 } },
-                'iphone-12': { name: 'iPhone 12', id: 'i12', prices: { '64GB': 250, '128GB': 350, '256GB': 450 } },
-                'iphone-12-mini': { name: 'iPhone 12 mini', id: 'i12m', prices: { '64GB': 230, '128GB': 330, '256GB': 430 } },
-                'iphone-11-pro-max': { name: 'iPhone 11 Pro Max', id: 'i11pm', prices: { '64GB': 300, '256GB': 400, '512GB': 500 } },
-                'iphone-11-pro': { name: 'iPhone 11 Pro', id: 'i11p', prices: { '64GB': 280, '256GB': 380, '512GB': 480 } },
-                'iphone-11': { name: 'iPhone 11', id: 'i11', prices: { '64GB': 220, '128GB': 320, '256GB': 420 } },
-                'iphone-se-3rd-gen': { name: 'iPhone SE (3rd Gen)', id: 'ise3', prices: { '64GB': 300, '128GB': 400, '256GB': 500 } },
-                'iphone-se-2nd-gen': { name: 'iPhone SE (2nd Gen)', id: 'ise2', prices: { '64GB': 200, '128GB': 300, '256GB': 400 } }
+            const fetchPricingData = async () => {
+                const brand = 'samsung'; // This is a Samsung-specific page
+                const devicesCollection = collection(db, `devices/${brand}/models`);
+                const snapshot = await getDocs(devicesCollection);
+                
+                const loadedDevices = {};
+                snapshot.forEach(doc => {
+                    loadedDevices[doc.id] = { id: doc.id, ...doc.data() };
+                });
+                
+                allDevices = Object.values(loadedDevices);
+                return loadedDevices;
             };
 
-            const device = phoneData[deviceSlug];
-            
-            if (!device) {
-                console.error(`Device data for slug "${deviceSlug}" not found. Displaying default.`);
-            } else {
+            const initializePage = async () => {
+                const loadingQuestions = document.getElementById('loadingQuestions');
+                const questionsContainer = document.getElementById('questionsContainer');
+                
+                // Show loading state
+                loadingQuestions.classList.remove('hidden');
+                questionsContainer.classList.add('hidden');
+
+                const pricingData = await fetchPricingData();
+                const pathSegments = window.location.pathname.split('/');
+                const deviceSlug = pathSegments.pop().replace('.html', '');
+                
+                device = pricingData[deviceSlug];
+
+                if (!device) {
+                    console.error(`Device data for slug "${deviceSlug}" not found. Displaying default.`);
+                    loadingQuestions.innerHTML = '<p class="text-red-500">Device data not found. Please try again later.</p>';
+                    return;
+                }
+                
                 document.title = `SwiftBuyBack - Sell ${device.name}`;
-                document.getElementById('deviceImage').src = `https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/iphone/assets/${device.id}.webp`;
+                document.getElementById('deviceImage').src = device.imageUrl || 'https://placehold.co/400x600/E5E7EB/4B5563?text=NO+IMG';
                 document.getElementById('deviceImage').alt = device.name;
                 document.getElementById('deviceDisplayName').textContent = device.name;
                 document.getElementById('deviceDisplayNameText').textContent = device.name;
@@ -910,7 +955,13 @@
                 }
                 storageSelect.innerHTML = '<option value="">Select Storage</option>';
                 storageSelect.appendChild(fragment);
-            }
+
+                loadingQuestions.classList.add('hidden');
+                questionsContainer.classList.remove('hidden');
+                loadFormState();
+            };
+
+            initializePage();
 
             // --- REST OF THE CODE ---
             const getQuoteBtn = document.getElementById('getQuoteBtn');
@@ -932,7 +983,7 @@
             const sendPhoneBtn = document.getElementById('sendPhoneBtn');
             const loginModal = document.getElementById('loginModal');
             // Using a more specific selector for the close button to avoid conflicts
-            const closeModalBtn = loginModal.querySelector('.close-modal-btn');  
+            const closeLoginModalBtn = loginModal.querySelector('.close-modal-btn');
             const loginTabBtn = document.getElementById('loginTabBtn');
             const signupTabBtn = document.getElementById('signupTabBtn');
             const loginNavBtn = document.getElementById('loginNavBtn');
@@ -954,7 +1005,7 @@
             const signupEmailInput = document.getElementById('signupEmail');
             const signupPasswordInput = document.getElementById('signupPassword');
             // Assuming signupPhone is not in the new modal, this will be null and should be handled.
-            const signupPhoneInput = document.getElementById('signupPhone');  
+            const signupPhoneInput = document.getElementById('signupPhone');
             const authMessage = document.getElementById('authMessage');
             const loginForm = document.getElementById('loginForm');
             const signupForm = document.getElementById('signupForm');
@@ -965,6 +1016,10 @@
             const forgotEmailInput = document.getElementById('forgotEmail');
             const sendResetEmailBtn = document.getElementById('sendResetEmailBtn');
             const returnToLoginLink = document.getElementById('returnToLogin');
+            
+            const footerEmailSignupForm = document.getElementById('footerEmailSignupForm');
+            const footerPromoEmailInput = document.getElementById('footerPromoEmail');
+            const footerSignupMessage = document.getElementById('footerSignupMessage');
 
             const shippingInfoEmailInput = document.getElementById('email');
 
@@ -1134,7 +1189,7 @@
                 quoteModal.classList.remove('is-visible');
             }
 
-            if(closeModalBtn) closeModalBtn.addEventListener('click', hideLoginModal);
+            if(closeLoginModalBtn) closeLoginModalBtn.addEventListener('click', hideLoginModal);
             
             loginTabBtn.addEventListener('click', () => {
                 showTab('login');
@@ -1419,50 +1474,39 @@
                 const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
                 const q4Cosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
 
-                if (!selectedStorage || !selectedCarrier || !q1PowerOn) {
+                // Validation
+                if (!selectedStorage || !selectedCarrier) {
                     showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
                     return;
                 }
-
-                if (q1PowerOn === 'yes' && !q2Functional) {
-                    showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
-                    return;
-                }
-
-                if (q1PowerOn === 'yes' && q2Functional === 'yes' && !q3NoCracks) {
-                    showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
-                    return;
-                }
-
-                if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes' && !q4Cosmetic) {
-                    showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
-                    return;
-                }
-
-                let basePrice = device.prices[selectedStorage] || 0;
-                let currentQuote = basePrice;
                 
-                if (selectedCarrier !== 'Unlocked') { currentQuote -= 25; }
+                let condition = null;
+                if (q1PowerOn === 'no') {
+                    condition = 'noPower';
+                } else if (q2Functional === 'no') {
+                    condition = 'broken';
+                } else if (q3NoCracks === 'no') {
+                    condition = 'damaged';
+                } else if (q4Cosmetic) {
+                    condition = q4Cosmetic;
+                }
                 
-                if (q1PowerOn === 'no') { 
-                    currentQuote *= 0.50; 
+                if (!condition) {
+                     showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
+                    return;
+                }
+                
+                const status = selectedCarrier === 'unlocked' ? 'unlocked' : 'locked';
+                
+                const price = device.prices?.[selectedStorage]?.[status]?.[condition];
+                
+                if (price === undefined || price === null) {
+                    showQuoteMessage(`Pricing data not available for this combination.`, 'error');
+                    finalQuote = 0;
                 } else {
-                    if (q2Functional === 'no') { 
-                        currentQuote *= 0.75; 
-                    } else {
-                        if (q3NoCracks === 'no') { 
-                            currentQuote -= 50; 
-                        } else if (q3NoCracks === 'yes') {
-                            switch (q4Cosmetic) {
-                                case 'damaged': currentQuote -= 45; break;
-                                case 'fair': currentQuote -= 25; break;
-                                case 'good': currentQuote -= 15; break;
-                            }
-                        }
-                    }
+                    finalQuote = price;
                 }
-
-                finalQuote = Math.max(0, currentQuote);
+                
                 finalQuoteAmountMainText.textContent = `$${finalQuote.toFixed(2)}`;
                 finalQuoteAmountPopup.textContent = `$${finalQuote.toFixed(2)}`;
 
@@ -1669,6 +1713,8 @@
             }
 
             function loadFormState() {
+                const pathSegments = window.location.pathname.split('/');
+                const deviceSlug = pathSegments.pop().replace('.html', '');
                 const savedState = localStorage.getItem(`${deviceSlug}FormState`);
                 if (savedState) {
                     const formState = JSON.parse(savedState);
@@ -1733,8 +1779,37 @@
                     }
                 }
             }
-
-            loadFormState();
+            // Add event listener to footer email signup form
+            if (footerEmailSignupForm) {
+                footerEmailSignupForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const email = footerPromoEmailInput.value;
+                    const messageContainer = footerSignupMessage;
+                    if (!email) {
+                        messageContainer.textContent = 'Please enter a valid email address.';
+                        messageContainer.className = 'mt-3 text-sm text-center text-red-500';
+                        return;
+                    }
+                    try {
+                        const response = await fetch(`${BACKEND_URL}/subscribe-to-newsletter`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: email })
+                        });
+                        const result = await response.json();
+                        if (response.ok) {
+                            messageContainer.textContent = 'Thank you for subscribing!';
+                            messageContainer.className = 'mt-3 text-sm text-center text-green-500';
+                            footerPromoEmailInput.value = '';
+                        } else {
+                            throw new Error(result.error || 'Failed to subscribe.');
+                        }
+                    } catch (error) {
+                        messageContainer.textContent = `Error: ${error.message}`;
+                        messageContainer.className = 'mt-3 text-sm text-center text-red-500';
+                    }
+                });
+            }
         });
     </script>
 </body>
