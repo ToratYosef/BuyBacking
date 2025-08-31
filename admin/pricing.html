@@ -156,9 +156,8 @@
                 }
             };
             
+            // Updated sorting logic to match the user's request
             const sortAndFilterDevices = (devices, filters) => {
-                const storageOrder = { '64gb': 1, '128gb': 2, '256gb': 3, '512gb': 4, '1tb': 5 };
-                
                 const filtered = devices.filter(device => {
                     const matchesSearch = filters.search ? device.name.toLowerCase().includes(filters.search.toLowerCase()) : true;
                     const matchesBrand = filters.brand ? device.brand.toLowerCase() === filters.brand.toLowerCase() : true;
@@ -195,16 +194,16 @@
                         return a.name.localeCompare(b.name);
                     }
 
-                    // 3. Then sort by storage size (e.g., 64gb before 128gb)
+                    // 3. Then sort by lock status (unlocked before locked)
+                    if (a.status !== b.status) {
+                        return a.status === 'unlocked' ? -1 : 1;
+                    }
+                    
+                    // 4. Finally, sort by storage size (e.g., 64gb before 128gb)
                     const storageA = parseInt(a.storage);
                     const storageB = parseInt(b.storage);
                     if (storageA !== storageB) {
                         return storageA - storageB;
-                    }
-                    
-                    // 4. Finally, sort by lock status (unlocked before locked)
-                    if (a.status !== b.status) {
-                        return a.status === 'unlocked' ? -1 : 1;
                     }
 
                     return 0;
@@ -451,6 +450,9 @@
                 importModal.classList.remove('hidden');
             });
             
+            let changesToCommit = [];
+            
+            // Event listener for the file input change
             importForm.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) {
@@ -458,45 +460,60 @@
                 }
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    const data = new Uint8Array(event.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const sheet = workbook.Sheets[sheetName];
-                    const json = XLSX.utils.sheet_to_json(sheet);
-                    
-                    processImportData(json);
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0];
+                        const sheet = workbook.Sheets[sheetName];
+                        const json = XLSX.utils.sheet_to_json(sheet);
+                        
+                        processImportData(json);
+                    } catch (error) {
+                        console.error("Error reading XLSX file:", error);
+                        displayStatusMessage("Failed to read the XLSX file. Please ensure it's a valid format.", 'error');
+                        importForm.reset();
+                    }
                 };
                 reader.readAsArrayBuffer(file);
             });
             
-            let changesToCommit = [];
-            
+            // This function processes the imported data and finds changes.
             const processImportData = (importedData) => {
                 changesToCommit = [];
                 overwriteWarningSection.innerHTML = '';
                 
-                const currentDataMap = allDevices.reduce((acc, device) => {
-                    acc[device.id] = device;
-                    return acc;
-                }, {});
+                const currentDataMap = {};
+                allDevices.forEach(device => {
+                    currentDataMap[device.id] = device;
+                });
                 
                 importedData.forEach(row => {
-                    // Assuming the imported spreadsheet has columns that match the schema
-                    const storage = row['Storage'];
-                    const status = row['Lock Status'].toLowerCase();
                     const slug = row['Slug'];
-                    const brand = row['Brand'].toLowerCase();
-
+                    const brand = row['Brand'] ? row['Brand'].toLowerCase() : null;
+                    
+                    if (!slug || !brand) {
+                        console.warn('Skipping row due to missing Slug or Brand:', row);
+                        return;
+                    }
+                    
                     const existingDevice = currentDataMap[slug];
-
+                    
                     if (existingDevice) {
-                        const existingPriceData = existingDevice.prices?.[storage]?.[status];
+                        const storage = row['Storage'] ? row['Storage'].toLowerCase() : null;
+                        const status = row['Lock Status'] ? row['Lock Status'].toLowerCase() : null;
                         
+                        if (!storage || !status) {
+                             console.warn('Skipping row due to missing Storage or Lock Status:', row);
+                             return;
+                        }
+
+                        const existingPriceData = existingDevice.prices?.[storage]?.[status];
+
                         ['Flawless', 'Good', 'Fair', 'Damaged', 'Broken', 'No Power'].forEach(quality => {
                             const newPrice = row[quality];
                             const conditionKey = quality.replace(/\s/g, '').toLowerCase();
                             
-                            if (newPrice !== undefined && newPrice !== null) {
+                            if (newPrice !== undefined && newPrice !== null && typeof newPrice === 'number') {
                                 if (existingPriceData && existingPriceData[conditionKey] !== newPrice) {
                                     changesToCommit.push({
                                         id: slug,
@@ -536,30 +553,42 @@
                                 <td class="py-4 px-6">${change.storage}</td>
                                 <td class="py-4 px-6">${change.status}</td>
                                 <td class="py-4 px-6">${change.condition}</td>
-                                <td class="py-4 px-6 text-red-500">$${change.oldPrice}</td>
-                                <td class="py-4 px-6 text-green-500">$${change.newPrice}</td>
+                                <td class="py-4 px-6 text-red-500">$${change.oldPrice !== 'N/A' ? change.oldPrice.toFixed(2) : 'N/A'}</td>
+                                <td class="py-4 px-6 text-green-500">$${change.newPrice.toFixed(2)}</td>
                             </tr>
                         `;
                     });
                     tableHTML += `</tbody></table>`;
                     overwriteWarningSection.innerHTML = tableHTML;
+                    overwriteWarningSection.classList.remove('hidden');
                     document.getElementById('overwriteActions').classList.remove('hidden');
                 } else {
                     displayStatusMessage('No changes detected. Data is up to date.', 'info');
+                    overwriteWarningSection.classList.add('hidden');
                     document.getElementById('overwriteActions').classList.add('hidden');
                 }
             };
             
             confirmOverwriteBtn.addEventListener('click', async () => {
+                displayStatusMessage('Updating prices...', 'info');
+                confirmOverwriteBtn.disabled = true;
                 const batch = writeBatch(db);
-                changesToCommit.forEach(change => {
-                    const docRef = doc(db, `devices/${change.brand}/models`, change.id);
+                
+                // Group changes by document ID to make a single update call per document
+                const updatesByDoc = changesToCommit.reduce((acc, change) => {
+                    if (!acc[change.id]) {
+                        acc[change.id] = { brand: change.brand, updates: {} };
+                    }
                     const updatePath = `prices.${change.storage}.${change.status}.${change.condition}`;
-                    const updateObject = {
-                        [updatePath]: change.newPrice
-                    };
-                    batch.set(docRef, updateObject, { merge: true });
-                });
+                    acc[change.id].updates[updatePath] = change.newPrice;
+                    return acc;
+                }, {});
+
+                for (const id in updatesByDoc) {
+                    const { brand, updates } = updatesByDoc[id];
+                    const docRef = doc(db, `devices/${brand}/models`, id);
+                    batch.update(docRef, updates);
+                }
                 
                 try {
                     await batch.commit();
@@ -569,6 +598,8 @@
                 } catch (error) {
                     console.error("Error committing batch:", error);
                     displayStatusMessage('Error updating prices. Please try again.', 'error');
+                } finally {
+                    confirmOverwriteBtn.disabled = false;
                 }
             });
 
@@ -585,6 +616,7 @@
                     importModal.classList.add('hidden');
                     importForm.reset();
                     overwriteWarningSection.innerHTML = '';
+                    overwriteWarningSection.classList.add('hidden');
                     document.getElementById('overwriteActions').classList.add('hidden');
                 });
             });
