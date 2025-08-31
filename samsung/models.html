@@ -20,7 +20,6 @@
       gtag('config', 'G-SLRRJRXHHE');
     </script>
 
-
     <style>
         body {
             font-family: 'Poppins', sans-serif;
@@ -479,6 +478,15 @@
             const noResultsMessage = document.getElementById('noResultsMessage');
             const searchTermSpan = document.getElementById('searchTerm');
 
+            const createUrlSlug = (name) => {
+                return name
+                    .toLowerCase()
+                    .replace('galaxy ', '')
+                    .replace(/\s+/g, '-')
+                    .replace(/\+/g, '-plus')
+                    .replace(/[^a-z0-9-]/g, '');
+            };
+
             const renderPhones = (phoneList) => {
                 phoneGrid.innerHTML = '';
                 if (phoneList.length === 0) {
@@ -489,8 +497,10 @@
                     phoneGrid.classList.remove('hidden');
                     noResultsMessage.classList.add('hidden');
                     phoneList.forEach(phone => {
+                        const slug = createUrlSlug(phone.name);
+                        const modelUrl = `samsung/models/${slug}.html`;
                         const phoneCardHTML = `
-                            <a href="#" class="phone-card-link group" data-name="${phone.name.toLowerCase()}">
+                            <a href="${modelUrl}" class="phone-card-link group" data-name="${phone.name.toLowerCase()}">
                                 <div class="phone-card-inner bg-white p-6 rounded-xl shadow-md text-center flex flex-col h-full">
                                     <img src="" data-base-src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/samsung/assets/${phone.id}" alt="${phone.name}" class="mx-auto mb-4 h-48 object-contain">
                                     <h3 class="text-lg font-semibold text-slate-800">${phone.name}</h3>
@@ -807,5 +817,3 @@
 
 </body>
 </html>
-
-
