@@ -35,13 +35,17 @@
         let allDevices = [];
 
         document.addEventListener('DOMContentLoaded', () => {
-            const pricingTableBodyUnlocked = document.getElementById('pricingTableBody-unlocked');
-            const pricingTableBodyLocked = document.getElementById('pricingTableBody-locked');
+            const pricingTableBody = document.getElementById('pricingTableBody');
             const addNewModelBtn = document.getElementById('addNewModelBtn');
             const addEditModal = document.getElementById('addEditModal');
             const addEditForm = document.getElementById('addEditForm');
             const bulkEditModal = document.getElementById('bulkEditModal');
             const bulkEditForm = document.getElementById('bulkEditForm');
+            const importModal = document.getElementById('importModal');
+            const importForm = document.getElementById('importForm');
+            const importFileBtn = document.getElementById('importFileBtn');
+            const overwriteWarningSection = document.getElementById('overwriteWarningSection');
+            const confirmOverwriteBtn = document.getElementById('confirmOverwriteBtn');
             const closeModalBtns = document.querySelectorAll('.close-modal-btn');
             const statusMessage = document.getElementById('statusMessage');
             const loginSection = document.getElementById('loginSection');
@@ -52,6 +56,7 @@
             const loadingIndicator = document.getElementById('loadingIndicator');
             const exportXLSXBtn = document.getElementById('exportXLSXBtn');
             const bulkEditBtn = document.getElementById('bulkEditBtn');
+            const importXLSXBtn = document.getElementById('importXLSXBtn');
             const searchInput = document.getElementById('searchInput');
             const brandFilter = document.getElementById('brandFilter');
             
@@ -133,8 +138,7 @@
             });
 
             const fetchAndRenderPricing = async (filters = {}) => {
-                pricingTableBodyUnlocked.innerHTML = '<tr><td colspan="10" class="text-center py-4">Loading pricing data...</td></tr>';
-                pricingTableBodyLocked.innerHTML = '';
+                pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Loading pricing data...</td></tr>';
                 const iphoneCollection = collection(db, "devices/iphones/models");
                 const samsungCollection = collection(db, "devices/samsung/models");
 
@@ -148,48 +152,70 @@
                     renderPricingTable(allDevices, filters);
                 } catch (error) {
                     console.error("Error fetching pricing data: ", error);
-                    pricingTableBodyUnlocked.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-red-500">Error loading data. Please check your permissions.</td></tr>';
+                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-red-500">Error loading data. Please check your permissions.</td></tr>';
                 }
             };
-
-            const renderPricingTable = (devices, filters) => {
-                pricingTableBodyUnlocked.innerHTML = '';
-                pricingTableBodyLocked.innerHTML = '';
+            
+            const sortAndFilterDevices = (devices, filters) => {
+                const storageOrder = { '64gb': 1, '128gb': 2, '256gb': 3, '512gb': 4, '1tb': 5 };
                 
-                const filteredDevices = devices.filter(device => {
+                const filtered = devices.filter(device => {
                     const matchesSearch = filters.search ? device.name.toLowerCase().includes(filters.search.toLowerCase()) : true;
                     const matchesBrand = filters.brand ? device.brand.toLowerCase() === filters.brand.toLowerCase() : true;
                     return matchesSearch && matchesBrand;
                 });
+                
+                return filtered.sort((a, b) => {
+                    // Group by model series (e.g., iPhone 11)
+                    const getModelSeries = (name) => {
+                        const match = name.match(/(\d+)/);
+                        return match ? parseInt(match[1]) : 0;
+                    };
+                    const seriesA = getModelSeries(a.name);
+                    const seriesB = getModelSeries(b.name);
+                    if (seriesA !== seriesB) {
+                        return seriesA - seriesB;
+                    }
 
-                if (filteredDevices.length === 0) {
-                    pricingTableBodyUnlocked.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
+                    // Then group by model name (e.g., iPhone 11 Pro Max)
+                    if (a.name !== b.name) {
+                        return a.name.localeCompare(b.name);
+                    }
+
+                    // Finally, sort by storage size
+                    const storageA = parseInt(Object.keys(a.prices)[0]);
+                    const storageB = parseInt(Object.keys(b.prices)[0]);
+                    return storageOrder[storageA] - storageOrder[storageB] || storageA - storageB;
+                });
+            };
+
+            const renderPricingTable = (devices, filters) => {
+                pricingTableBody.innerHTML = '';
+                
+                const sortedDevices = sortAndFilterDevices(devices, filters);
+
+                if (sortedDevices.length === 0) {
+                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
                     return;
                 }
                 
-                // Sort devices to group them by name and storage
-                filteredDevices.sort((a, b) => a.name.localeCompare(b.name));
-
-                filteredDevices.forEach(device => {
+                sortedDevices.forEach(device => {
                     // Collect all storage options for this device
-                    const storageOptions = Object.keys(device.prices);
+                    const storageOptions = Object.keys(device.prices).sort((a,b) => (a.match(/\d+/) || [0])[0] - (b.match(/\d+/) || [0])[0]);
                     
-                    // Render Unlocked Prices
                     storageOptions.forEach(storage => {
                         const priceData = device.prices[storage];
                         const unlockedPrices = priceData.unlocked || {};
-                        
-                        const row = createPriceRow(device, storage, 'unlocked', unlockedPrices);
-                        pricingTableBodyUnlocked.appendChild(row);
-                    });
-
-                    // Render Locked Prices (only if they exist)
-                    storageOptions.forEach(storage => {
-                        const priceData = device.prices[storage];
                         const lockedPrices = priceData.locked || {};
+
+                        // Render Unlocked row
+                        const unlockedRow = createPriceRow(device, storage, 'unlocked', unlockedPrices);
+                        pricingTableBody.appendChild(unlockedRow);
+
+                        // Render Locked row (if it exists)
                         if (Object.keys(lockedPrices).length > 0) {
-                            const row = createPriceRow(device, storage, 'locked', lockedPrices);
-                            pricingTableBodyLocked.appendChild(row);
+                            const lockedRow = createPriceRow(device, storage, 'locked', lockedPrices);
+                            pricingTableBody.appendChild(lockedRow);
                         }
                     });
                 });
@@ -210,7 +236,7 @@
                         const brand = e.target.dataset.brand;
                         const id = e.target.dataset.id;
                         const deviceName = e.target.dataset.name;
-
+                        
                         // Use a custom modal or an elegant message instead of `confirm`
                         if (window.confirm(`Are you sure you want to delete ${deviceName}? This action is irreversible.`)) {
                            // Use a `try/catch` block for error handling
@@ -252,7 +278,7 @@
             };
 
             const renderEditablePriceCell = (price, device, storage, status, condition) => {
-                const value = price !== undefined && price !== null ? price.toFixed(2) : 'N/A';
+                const value = price !== undefined && price !== null ? price.toFixed(2) : '';
                 return `
                     <td class="py-3 px-2">
                         <div class="relative flex items-center bg-gray-100 rounded-lg p-2 border border-gray-200 hover:border-blue-500 transition-colors">
@@ -260,7 +286,7 @@
                             <input 
                                 type="number" 
                                 step="0.01" 
-                                value="${value === 'N/A' ? '' : value}" 
+                                value="${value}" 
                                 placeholder="N/A"
                                 class="price-input w-full bg-transparent text-gray-900 font-medium text-center focus:outline-none"
                                 data-id="${device.id}"
@@ -279,7 +305,7 @@
                 const newValue = parseFloat(input.value);
                 
                 if (isNaN(newValue)) {
-                    // Optionally revert to old value or show error
+                    // Revert to old value or show error
                     input.value = input.dataset.originalValue;
                     return;
                 }
@@ -322,6 +348,140 @@
                 XLSX.writeFile(wb, "pricing_data.xlsx");
                 displayStatusMessage('Export successful!', 'success');
             });
+            
+            // Import from XLSX logic
+            importXLSXBtn.addEventListener('click', () => {
+                importModal.classList.remove('hidden');
+            });
+            
+            importForm.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) {
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const sheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(sheet);
+                    
+                    processImportData(json);
+                };
+                reader.readAsArrayBuffer(file);
+            });
+            
+            let changesToCommit = [];
+            
+            const processImportData = (importedData) => {
+                changesToCommit = [];
+                overwriteWarningSection.innerHTML = '';
+                
+                const currentDataMap = allDevices.reduce((acc, device) => {
+                    acc[device.id] = device;
+                    return acc;
+                }, {});
+                
+                importedData.forEach(row => {
+                    // Assuming the imported spreadsheet has columns that match the schema
+                    const deviceName = row['Device'];
+                    const storage = row['Storage'];
+                    const status = row['Lock Status'].toLowerCase();
+                    const slug = row['Slug'];
+                    const brand = row['Brand'].toLowerCase();
+
+                    const existingDevice = currentDataMap[slug];
+
+                    if (existingDevice) {
+                        const existingPrice = existingDevice.prices?.[storage]?.[status];
+                        const newPrices = {};
+                        
+                        // Map the quality columns to the correct keys
+                        ['Flawless', 'Good', 'Fair', 'Damaged', 'Broken', 'No Power'].forEach(quality => {
+                            const newPrice = row[quality];
+                            const conditionKey = quality.replace(/\s/g, '').replace('no', 'noPower').toLowerCase();
+                            
+                            if (newPrice !== undefined && newPrice !== null) {
+                                // Check if a price has changed
+                                if (existingPrice && existingPrice[conditionKey] !== newPrice) {
+                                    changesToCommit.push({
+                                        id: slug,
+                                        brand: brand,
+                                        storage: storage,
+                                        status: status,
+                                        condition: conditionKey,
+                                        oldPrice: existingPrice[conditionKey] || 'N/A',
+                                        newPrice: newPrice
+                                    });
+                                }
+                                
+                                if (!newPrices[status]) newPrices[status] = {};
+                                newPrices[status][conditionKey] = newPrice;
+                            }
+                        });
+                    }
+                });
+
+                if (changesToCommit.length > 0) {
+                    let tableHTML = `
+                        <h4 class="text-lg font-semibold text-red-600 mb-4">Warning: The following prices will be overwritten.</h4>
+                        <table class="w-full text-sm text-left text-gray-500 rounded-lg overflow-hidden">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="py-3 px-6">Device</th>
+                                    <th scope="col" class="py-3 px-6">Storage</th>
+                                    <th scope="col" class="py-3 px-6">Status</th>
+                                    <th scope="col" class="py-3 px-6">Condition</th>
+                                    <th scope="col" class="py-3 px-6">Old Price</th>
+                                    <th scope="col" class="py-3 px-6">New Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    changesToCommit.forEach(change => {
+                        tableHTML += `
+                            <tr class="bg-white border-b hover:bg-gray-50">
+                                <td class="py-4 px-6 font-medium text-gray-900">${change.id}</td>
+                                <td class="py-4 px-6">${change.storage}</td>
+                                <td class="py-4 px-6">${change.status}</td>
+                                <td class="py-4 px-6">${change.condition}</td>
+                                <td class="py-4 px-6 text-red-500">$${change.oldPrice}</td>
+                                <td class="py-4 px-6 text-green-500">$${change.newPrice}</td>
+                            </tr>
+                        `;
+                    });
+                    tableHTML += `</tbody></table>`;
+                    overwriteWarningSection.innerHTML = tableHTML;
+                    document.getElementById('overwriteActions').classList.remove('hidden');
+                } else {
+                    displayStatusMessage('No changes detected. Data is up to date.', 'info');
+                    document.getElementById('overwriteActions').classList.add('hidden');
+                }
+            };
+            
+            confirmOverwriteBtn.addEventListener('click', async () => {
+                const batch = writeBatch(db);
+                changesToCommit.forEach(change => {
+                    const docRef = doc(db, `devices/${change.brand}/models`, change.id);
+                    const updatePath = `prices.${change.storage}.${change.status}.${change.condition}`;
+                    const updateObject = {
+                        [updatePath]: change.newPrice
+                    };
+                    batch.set(docRef, updateObject, { merge: true });
+                });
+                
+                try {
+                    await batch.commit();
+                    displayStatusMessage('All prices updated successfully!', 'success');
+                    importModal.classList.add('hidden');
+                    fetchAndRenderPricing({ search: searchInput.value, brand: brandFilter.value });
+                } catch (error) {
+                    console.error("Error committing batch:", error);
+                    displayStatusMessage('Error updating prices. Please try again.', 'error');
+                }
+            });
+
 
             // Bulk Edit Modal
             bulkEditBtn.addEventListener('click', () => {
@@ -332,6 +492,10 @@
                 btn.addEventListener('click', () => {
                     addEditModal.classList.add('hidden');
                     bulkEditModal.classList.add('hidden');
+                    importModal.classList.add('hidden');
+                    importForm.reset();
+                    overwriteWarningSection.innerHTML = '';
+                    document.getElementById('overwriteActions').classList.add('hidden');
                 });
             });
 
@@ -600,6 +764,9 @@
                     <button id="exportXLSXBtn" class="bg-green-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-600 transition-colors">
                         <i class="fas fa-file-excel mr-2"></i>Export to XLSX
                     </button>
+                    <button id="importXLSXBtn" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-purple-700 transition-colors">
+                        <i class="fas fa-file-import mr-2"></i>Import from XLSX
+                    </button>
                     <button id="bulkEditBtn" class="bg-orange-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-600 transition-colors">
                         <i class="fas fa-edit mr-2"></i>Bulk Edit
                     </button>
@@ -623,11 +790,8 @@
                             <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="pricingTableBody-unlocked" class="bg-white divide-y divide-gray-200">
-                        <!-- Unlocked devices will be rendered here -->
-                    </tbody>
-                    <tbody id="pricingTableBody-locked" class="bg-white divide-y divide-gray-200 mt-4">
-                        <!-- Locked devices will be rendered here -->
+                    <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Devices will be rendered here -->
                     </tbody>
                 </table>
             </div>
@@ -780,6 +944,24 @@
             </form>
         </div>
     </div>
-
+    
+    <!-- Import Modal -->
+    <div id="importModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
+        <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4 my-8">
+            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900">Import Prices from XLSX</h3>
+            <form id="importForm" class="space-y-6">
+                <p class="text-gray-600">Select an XLSX file to import pricing data. The file must contain columns: "Device", "Storage", "Lock Status", "Flawless", "Good", "Fair", "Damaged", "Broken", "No Power", "Slug", "Brand".</p>
+                <input type="file" id="importFile" accept=".xlsx" class="w-full text-gray-700">
+            </form>
+            <div id="overwriteWarningSection" class="mt-6 hidden"></div>
+            <div id="overwriteActions" class="mt-8 flex justify-end gap-4 hidden">
+                <button type="button" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold close-modal-btn">Cancel</button>
+                <button type="button" id="confirmOverwriteBtn" class="bg-red-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-600">Confirm Overwrite</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
