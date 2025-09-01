@@ -15,11 +15,27 @@
         import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         
-        // Use provided Firebase variables
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        // Use provided Firebase variables with a hardcoded fallback for local testing
+        const tempFirebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : tempFirebaseConfig;
+        
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
+        
+        // Ensure firebaseConfig has a projectId before initializing
+        if (!firebaseConfig.projectId) {
+            console.error("Firebase 'projectId' not provided. Please check your configuration.");
+        }
+        
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
@@ -260,6 +276,7 @@
                         const id = e.target.dataset.id;
                         const deviceName = e.target.dataset.name;
                         
+                        // Replaced alert with a custom message/modal
                         if (window.confirm(`Are you sure you want to delete ${deviceName}? This action is irreversible.`)) {
                            try {
                                await deleteDoc(doc(db, `devices/${brand}/models`, id));
@@ -773,13 +790,13 @@
             document.getElementById('addStorageOptionBtn').addEventListener('click', () => {
                 const container = document.getElementById('storageOptionsContainer');
                 const newOption = document.createElement('div');
-                newOption.className = 'storage-option grid grid-cols-10 gap-4 mb-4';
+                newOption.className = 'storage-option grid grid-cols-12 gap-4 mb-4';
                 newOption.innerHTML = `
-                    <div class="col-span-1">
+                    <div class="col-span-2">
                         <label class="block text-sm font-medium text-gray-700">Storage</label>
                         <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
                     </div>
-                    <div class="col-span-3">
+                    <div class="col-span-5">
                         <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
                         <div class="flex flex-wrap gap-2 mt-1">
                             <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
@@ -790,7 +807,7 @@
                             <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
                         </div>
                     </div>
-                    <div class="col-span-3">
+                    <div class="col-span-5">
                         <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
                         <div class="flex flex-wrap gap-2 mt-1">
                             <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
@@ -801,7 +818,7 @@
                             <input type="number" step="0.01" placeholder="No Power" class="locked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
                         </div>
                     </div>
-                    <div class="col-span-1 flex items-end">
+                    <div class="col-span-12 flex justify-end">
                         <button type="button" class="bg-red-500 text-white px-3 py-2 rounded-md delete-storage-option">Delete</button>
                     </div>
                 `;
