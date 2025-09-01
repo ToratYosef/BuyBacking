@@ -1268,8 +1268,7 @@
 
         // Event Listeners for Login/Logout
         loginButton.addEventListener('click', handleLogin);
-        // The sign-out button listener is now removed to prevent automatic sign-outs
-        // signOutButton.addEventListener('click', handleSignOut);
+        signOutButton.addEventListener('click', handleSignOut);
 
         document.addEventListener('DOMContentLoaded', async () => {
             firebaseApp = initializeApp(firebaseConfig);
@@ -1278,14 +1277,14 @@
 
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    // Proceed with authenticated user
+                    console.log('onAuthStateChanged: User is signed in. Email:', user.email);
                     authToken = await user.getIdToken();
                     displayUserEmail.textContent = user.email;
                     loginFormContainer.classList.add('hidden');
                     dashboardContainer.classList.remove('hidden');
                     fetchAndRenderOrders();
                 } else {
-                    // User is signed out. Display login form.
+                    console.log('onAuthStateChanged: User is signed out.');
                     authToken = null;
                     displayUserEmail.textContent = '...';
                     dashboardContainer.classList.add('hidden');
