@@ -199,7 +199,7 @@ const deviceData = {
             prices: {
                 '64GB':  { unlocked: { flawless: 280, good: 265, fair: 255, damaged: 235, broken: 80, noPower: 0 }, locked: { flawless: 255, good: 240, fair: 230, damaged: 210, broken: 55, noPower: 0 } },
                 '256GB': { unlocked: { flawless: 380, good: 365, fair: 355, damaged: 335, broken: 180, noPower: 0 }, locked: { flawless: 355, good: 340, fair: 330, damaged: 310, broken: 155, noPower: 0 } },
-                '512GB': { unlocked: { flawless: 480, good: 465, fair: 455, damaged: 435, broken: 280, noPower: 80 }, locked: { flawless: 455, good: 440, fair: 430, damaged: 410, broken: 255, noPower: 55 } }
+                '512GB': { unlocked: { flawless: 480, good: 465, fair: 475, damaged: 435, broken: 280, noPower: 80 }, locked: { flawless: 455, good: 440, fair: 430, damaged: 410, broken: 255, noPower: 55 } }
             }
         },
         {
@@ -371,6 +371,43 @@ const deviceData = {
             name: 'Galaxy A34', slug: 'galaxy-a34', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/samsung/assets/a34.webp',
             prices: {
                 '128GB': { unlocked: { flawless: 150, good: 135, fair: 125, damaged: 105, broken: 0, noPower: 0 }, locked: { flawless: 125, good: 110, fair: 100, damaged: 80, broken: 0, noPower: 0 } }
+            }
+        },
+        {
+            name: 'Galaxy S25 Ultra', slug: 'galaxy-s25-ultra', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/samsung/assets/s25u.webp',
+            prices: {
+                '256GB': { unlocked: { flawless: 900, good: 885, fair: 875, damaged: 855, broken: 700, noPower: 500 }, locked: { flawless: 875, good: 860, fair: 850, damaged: 830, broken: 675, noPower: 475 } },
+                '512GB': { unlocked: { flawless: 1000, good: 985, fair: 975, damaged: 955, broken: 800, noPower: 600 }, locked: { flawless: 975, good: 960, fair: 950, damaged: 930, broken: 775, noPower: 575 } },
+                '1TB':   { unlocked: { flawless: 1200, good: 1185, fair: 1175, damaged: 1155, broken: 1000, noPower: 800 }, locked: { flawless: 1175, good: 1160, fair: 1150, damaged: 1130, broken: 975, noPower: 775 } }
+            }
+        },
+        {
+            name: 'Galaxy S25+', slug: 'galaxy-s25-plus', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/samsung/assets/s25p.webp',
+            prices: {
+                '256GB': { unlocked: { flawless: 800, good: 785, fair: 775, damaged: 755, broken: 600, noPower: 400 }, locked: { flawless: 775, good: 760, fair: 750, damaged: 730, broken: 575, noPower: 375 } },
+                '512GB': { unlocked: { flawless: 900, good: 885, fair: 875, damaged: 855, broken: 700, noPower: 500 }, locked: { flawless: 875, good: 860, fair: 850, damaged: 830, broken: 675, noPower: 475 } }
+            }
+        },
+        {
+            name: 'Galaxy S25', slug: 'galaxy-s25', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/samsung/assets/s25.webp',
+            prices: {
+                '128GB': { unlocked: { flawless: 700, good: 685, fair: 675, damaged: 655, broken: 500, noPower: 300 }, locked: { flawless: 675, good: 660, fair: 650, damaged: 630, broken: 475, noPower: 275 } },
+                '256GB': { unlocked: { flawless: 800, good: 785, fair: 775, damaged: 755, broken: 600, noPower: 400 }, locked: { flawless: 775, good: 760, fair: 750, damaged: 730, broken: 575, noPower: 375 } }
+            }
+        },
+        {
+            name: 'Galaxy Z Fold 6', slug: 'galaxy-z-fold-6', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/samsung/assets/zfold6.webp',
+            prices: {
+                '256GB': { unlocked: { flawless: 1200, good: 1185, fair: 1175, damaged: 1155, broken: 1000, noPower: 800 }, locked: { flawless: 1175, good: 1160, fair: 1150, damaged: 1130, broken: 975, noPower: 775 } },
+                '512GB': { unlocked: { flawless: 1300, good: 1285, fair: 1275, damaged: 1255, broken: 1100, noPower: 900 }, locked: { flawless: 1275, good: 1260, fair: 1250, damaged: 1230, broken: 1075, noPower: 875 } },
+                '1TB':   { unlocked: { flawless: 1500, good: 1485, fair: 1475, damaged: 1455, broken: 1300, noPower: 1100 }, locked: { flawless: 1475, good: 1460, fair: 1450, damaged: 1430, broken: 1275, noPower: 1075 } }
+            }
+        },
+        {
+            name: 'Galaxy Z Flip 6', slug: 'galaxy-z-flip-6', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/samsung/assets/zflip6.webp',
+            prices: {
+                '254GB': { unlocked: { flawless: 750, good: 735, fair: 725, damaged: 705, broken: 550, noPower: 350 }, locked: { flawless: 725, good: 710, fair: 700, damaged: 680, broken: 525, noPower: 325 } },
+                '512GB': { unlocked: { flawless: 850, good: 835, fair: 825, damaged: 805, broken: 650, noPower: 450 }, locked: { flawless: 825, good: 810, fair: 800, damaged: 780, broken: 625, noPower: 425 } }
             }
         }
     ]

@@ -13,20 +13,13 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         
-        // This is a placeholder for your Firebase config. Do not store sensitive info here.
-        const firebaseConfig = {
-            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
-            authDomain: "buyback-a0f05.firebaseapp.com",
-            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com",
-            projectId: "buyback-a0f05",
-            storageBucket: "buyback-a0f05.firebasestorage.app",
-            messagingSenderId: "876430429098",
-            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
-            measurementId: "G-6WWQN44JHT"
-        };
-        
+        // Use provided Firebase variables
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
@@ -35,7 +28,7 @@
         let allDevices = [];
         let pendingChanges = {};
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const pricingTableBody = document.getElementById('pricingTableBody');
             const addNewModelBtn = document.getElementById('addNewModelBtn');
             const addEditModal = document.getElementById('addEditModal');
@@ -59,6 +52,18 @@
             const bulkEditBtn = document.getElementById('bulkEditBtn');
             const searchInput = document.getElementById('searchInput');
             const brandFilter = document.getElementById('brandFilter');
+
+            // Initial authentication check
+            if (initialAuthToken) {
+                try {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } catch (error) {
+                    console.error("Error signing in with custom token:", error);
+                    await signInAnonymously(auth);
+                }
+            } else {
+                await signInAnonymously(auth);
+            }
             
             // Function to check if the user is an admin by querying Firestore
             const checkAdminStatus = async (user) => {
@@ -138,7 +143,7 @@
             });
 
             const fetchAndRenderPricing = async (filters = {}) => {
-                pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Loading pricing data...</td></tr>';
+                pricingTableBody.innerHTML = '<tr><td colspan="11" class="text-center py-4">Loading pricing data...</td></tr>';
                 const iphoneCollection = collection(db, "devices/iphones/models");
                 const samsungCollection = collection(db, "devices/samsung/models");
 
@@ -146,13 +151,13 @@
                     const [iphoneSnapshot, samsungSnapshot] = await Promise.all([getDocs(iphoneCollection), getDocs(samsungCollection)]);
                     
                     allDevices = [];
-                    iphoneSnapshot.forEach(doc => allDevices.push({ id: doc.id, ...doc.data() }));
-                    samsungSnapshot.forEach(doc => allDevices.push({ id: doc.id, ...doc.data() }));
+                    iphoneSnapshot.forEach(doc => allDevices.push({ id: doc.id, brand: 'iphones', ...doc.data() }));
+                    samsungSnapshot.forEach(doc => allDevices.push({ id: doc.id, brand: 'samsung', ...doc.data() }));
                     
                     renderPricingTable(allDevices, filters);
                 } catch (error) {
                     console.error("Error fetching pricing data: ", error);
-                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-red-500">Error loading data. Please check your permissions.</td></tr>';
+                    pricingTableBody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-red-500">Error loading data. Please check your permissions.</td></tr>';
                 }
             };
             
@@ -216,7 +221,7 @@
                 const sortedRows = sortAndFilterDevices(devices, filters);
 
                 if (sortedRows.length === 0) {
-                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
+                    pricingTableBody.innerHTML = '<tr><td colspan="11" class="text-center py-4">No matching devices found.</td></tr>';
                     return;
                 }
                 
@@ -290,6 +295,7 @@
                         <img src="${device.imageUrl}" onerror="this.onerror=null;this.src='https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';" alt="${device.name}" class="w-10 h-10 object-contain rounded-md border">
                         <span>${device.name}</span>
                     </td>
+                    <td class="py-3 px-4">${device.brand.replace('s', 'S').replace('i', 'i').toUpperCase()}</td>
                     <td class="py-3 px-4">${storage}</td>
                     <td class="py-3 px-4 font-semibold text-sm ${status === 'unlocked' ? 'text-blue-600' : 'text-orange-600'}">${status}</td>
                     ${renderEditablePriceCell(prices.flawless, device, storage, status, 'flawless')}
@@ -774,27 +780,25 @@
                         <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
                     </div>
                     <div class="col-span-3">
-                        <label class="block text-sm font-medium text-gray-700">Unlocked Prices (Flawless, Good, Fair)</label>
-                        <div class="flex gap-2 mt-1">
+                        <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
+                        <div class="flex flex-wrap gap-2 mt-1">
                             <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
                             <input type="number" step="0.01" placeholder="Good" class="unlocked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
                             <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
                         </div>
                     </div>
                     <div class="col-span-3">
-                        <label class="block text-sm font-medium text-gray-700">Locked Prices (Flawless, Good, Fair)</label>
-                        <div class="flex gap-2 mt-1">
+                        <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
+                        <div class="flex flex-wrap gap-2 mt-1">
                             <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
                             <input type="number" step="0.01" placeholder="Good" class="locked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
                             <input type="number" step="0.01" placeholder="Fair" class="locked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                        </div>
-                    </div>
-                    <div class="col-span-2">
-                        <label class="block text-sm font-medium text-gray-700">Broken (Damaged, Broken, No Power)</label>
-                        <div class="flex gap-2 mt-1">
-                             <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                             <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                             <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="Damaged" class="locked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="Broken" class="locked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                            <input type="number" step="0.01" placeholder="No Power" class="locked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
                         </div>
                     </div>
                     <div class="col-span-1 flex items-end">
@@ -901,6 +905,7 @@
                     <thead class="bg-gray-50">
                         <tr>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand</th>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Storage</th>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lock Status</th>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flawless</th>
@@ -956,36 +961,34 @@
                 <h4 class="text-xl font-bold text-gray-900 mb-4">Pricing by Storage and Condition</h4>
                 <div id="storageOptionsContainer" class="space-y-4">
                     <!-- Initial storage option row -->
-                    <div class="storage-option grid grid-cols-10 gap-4 mb-4">
-                        <div class="col-span-1">
+                    <div class="storage-option grid grid-cols-12 gap-4 mb-4">
+                        <div class="col-span-2">
                             <label class="block text-sm font-medium text-gray-700">Storage</label>
                             <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
                         </div>
-                        <div class="col-span-3">
-                            <label class="block text-sm font-medium text-gray-700">Unlocked Prices (Flawless, Good, Fair)</label>
-                            <div class="flex gap-2 mt-1">
+                        <div class="col-span-5">
+                            <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
+                            <div class="flex flex-wrap gap-2 mt-1">
                                 <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
                                 <input type="number" step="0.01" placeholder="Good" class="unlocked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
                                 <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
                             </div>
                         </div>
-                        <div class="col-span-3">
-                            <label class="block text-sm font-medium text-gray-700">Locked Prices (Flawless, Good, Fair)</label>
-                            <div class="flex gap-2 mt-1">
+                        <div class="col-span-5">
+                            <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
+                            <div class="flex flex-wrap gap-2 mt-1">
                                 <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
                                 <input type="number" step="0.01" placeholder="Good" class="locked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
                                 <input type="number" step="0.01" placeholder="Fair" class="locked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="Damaged" class="locked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="Broken" class="locked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                                <input type="number" step="0.01" placeholder="No Power" class="locked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
                             </div>
                         </div>
-                        <div class="col-span-2">
-                            <label class="block text-sm font-medium text-gray-700">Broken (Damaged, Broken, No Power)</label>
-                            <div class="flex gap-2 mt-1">
-                                 <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                 <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                 <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            </div>
-                        </div>
-                        <div class="col-span-1 flex items-end">
+                        <div class="col-span-12 flex justify-end">
                             <button type="button" class="bg-red-500 text-white px-3 py-2 rounded-md delete-storage-option">Delete</button>
                         </div>
                     </div>
