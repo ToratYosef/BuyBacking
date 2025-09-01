@@ -463,6 +463,27 @@
             <div id="modal-message" class="mt-4 p-3 text-sm rounded-md hidden"></div>
         </div>
     </div>
+    
+    <!-- New Price Confirmation Modal -->
+    <div id="price-confirm-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 relative">
+            <h4 class="text-2xl font-bold text-gray-800 mb-4 text-center">New Price Calculated</h4>
+            <div class="space-y-4 text-gray-700 text-center">
+                <p><strong>Customer's Original Price:</strong> $<span id="original-price" class="font-bold"></span></p>
+                <p><strong>New Calculated Price:</strong> $<span id="new-price" class="font-bold"></span></p>
+                <p><strong>Difference:</strong> <span id="price-difference" class="font-bold text-xl"></span></p>
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button id="cancel-reoffer-confirm-btn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                    Cancel
+                </button>
+                <button id="proceed-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                    Proceed with Re-offer
+                </button>
+            </div>
+        </div>
+    </div>
+
 
     <script type="module">
         const firebaseConfig = {
@@ -585,6 +606,14 @@
         const reofferParentLink = document.querySelector('.reoffer-parent');
         const reofferSubmenu = document.querySelector('.submenu-container');
 
+        // New price confirmation modal elements
+        const priceConfirmModal = document.getElementById('price-confirm-modal');
+        const originalPriceSpan = document.getElementById('original-price');
+        const newPriceSpan = document.getElementById('new-price');
+        const priceDifferenceSpan = document.getElementById('price-difference');
+        const proceedReofferBtn = document.getElementById('proceed-reoffer-btn');
+        const cancelReofferConfirmBtn = document.getElementById('cancel-reoffer-confirm-btn');
+
         let allOrders = [];
         let currentActiveStatus = 'all';
         let currentOrderData = null; // Store the currently viewed order data
@@ -592,6 +621,13 @@
         orderDetailsModal.addEventListener('click', (event) => {
             if (event.target === orderDetailsModal) {
                 closeOrderDetailsModal();
+            }
+        });
+
+        priceConfirmModal.addEventListener('click', (event) => {
+            if (event.target === priceConfirmModal) {
+                priceConfirmModal.classList.add('hidden');
+                orderDetailsModal.classList.remove('hidden');
             }
         });
         
@@ -627,11 +663,18 @@
         checkFunctional.addEventListener('change', (event) => {
             if (event.target.value === 'yes') {
                 cracksContainer.classList.remove('hidden');
-                cosmeticContainer.classList.remove('hidden');
             } else {
                 cracksContainer.classList.add('hidden');
                 cosmeticContainer.classList.add('hidden');
             }
+        });
+
+        checkCracks.addEventListener('change', (event) => {
+             if (event.target.value === 'yes') {
+                cosmeticContainer.classList.remove('hidden');
+             } else {
+                cosmeticContainer.classList.add('hidden');
+             }
         });
 
         function updateDashboardCounts(ordersData) {
@@ -927,14 +970,14 @@
             };
 
             // Basic form validation
-            const requiredFields = [checkGb, checkImei, checkLockStatus, checkPowerOn];
             let isValid = true;
-
+            
             // Clear previous required highlights
             const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
             allFormFields.forEach(field => field.classList.remove('required-field'));
             
             // Re-validate based on new flow
+            const requiredFields = [checkGb, checkImei, checkLockStatus, checkPowerOn];
             requiredFields.forEach(field => {
                  if (!field.value) {
                      field.classList.add('required-field');
@@ -948,15 +991,19 @@
                     isValid = false;
                  }
 
-                 if (receivedConditions.functional === 'yes') {
-                     const conditionalFields = [checkCracks, checkCosmetic];
-                     conditionalFields.forEach(field => {
-                         if (!field.value) {
-                             field.classList.add('required-field');
-                             isValid = false;
-                         }
-                     });
+                 if (receivedConditions.functional === 'yes' && receivedConditions.cracks === 'yes') {
+                      if (!receivedConditions.cosmetic) {
+                          checkCosmetic.classList.add('required-field');
+                          isValid = false;
+                      }
                  }
+                 else if(receivedConditions.functional === 'yes' && receivedConditions.cracks === 'no') {
+                     if (!receivedConditions.cosmetic) {
+                        checkCosmetic.classList.add('required-field');
+                        isValid = false;
+                     }
+                 }
+
             }
 
             if (!isValid) {
@@ -981,7 +1028,8 @@
                     functional: order.condition_functional,
                     cracks: order.condition_cracks,
                     cosmetic: order.condition_cosmetic,
-                    gb: order.storage
+                    gb: order.storage,
+                    lockStatus: order.lockStatus
                 };
                 
                 let reasons = [];
@@ -1014,12 +1062,20 @@
                          comments += ` Reason: ${receivedConditions.imeiProblemReason}.`;
                     }
                 }
+                if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
+                     reasons.push('Carrier Lock Status mismatch');
+                     comments += `Customer listed lock status as ${customerConditions.lockStatus}, but it is ${receivedConditions.lockStatus}.`;
+                }
+
 
                 const newPrice = await calculateNewPrice(order.device, receivedConditions.gb, receivedConditions);
                 
-                if (reasons.length > 0) {
+                const oldPrice = parseFloat(order.estimatedQuote);
+                const newPriceFloat = parseFloat(newPrice);
+                
+                if (oldPrice !== newPriceFloat) {
                     // A discrepancy was found, show re-offer form
-                    showReofferFormWithData(orderId, newPrice, reasons, comments);
+                    showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
                 } else {
                     // No discrepancy, proceed to mark as completed
                     displayModalMessage('All conditions match the customer description. Proceeding to mark as completed.', 'success');
@@ -1034,6 +1090,35 @@
             }
         }
         
+        function showPriceConfirmationModal(orderId, oldPrice, newPrice, reasons, comments) {
+            originalPriceSpan.textContent = oldPrice.toFixed(2);
+            newPriceSpan.textContent = newPrice.toFixed(2);
+            
+            const difference = newPrice - oldPrice;
+            priceDifferenceSpan.textContent = `${difference > 0 ? '+' : ''}$${difference.toFixed(2)}`;
+            
+            priceDifferenceSpan.classList.remove('text-green-600', 'text-red-600');
+            if (difference > 0) {
+                priceDifferenceSpan.classList.add('text-green-600');
+            } else if (difference < 0) {
+                priceDifferenceSpan.classList.add('text-red-600');
+            }
+
+            // Set up button actions for the confirmation modal
+            proceedReofferBtn.onclick = () => {
+                priceConfirmModal.classList.add('hidden');
+                showReofferFormWithData(orderId, newPrice, reasons, comments);
+            };
+
+            cancelReofferConfirmBtn.onclick = () => {
+                priceConfirmModal.classList.add('hidden');
+                orderDetailsModal.classList.remove('hidden');
+            };
+
+            orderDetailsModal.classList.add('hidden');
+            priceConfirmModal.classList.remove('hidden');
+        }
+
         async function updateOrderWithCheckResults(orderId, checks) {
             const orderDocRef = doc(db, 'orders', orderId);
             const updateData = {
@@ -1042,6 +1127,7 @@
                     imei: checks.imei,
                     imeiStatus: checks.imeiStatus,
                     imeiProblemReason: checks.imeiProblemReason,
+                    lockStatus: checks.lockStatus,
                     conditions: {
                         power_on: checks.power_on,
                         functional: checks.functional,
@@ -1105,33 +1191,30 @@
             
             let newPrice;
             let cosmeticKey = receivedConditions.cosmetic;
+            let finalCondition = cosmeticKey;
 
             // Handle the "excellent" cosmetic condition by mapping it to "good"
             if (cosmeticKey === 'excellent') {
-                cosmeticKey = 'good';
+                finalCondition = 'good';
             }
             
-            // Log the keys to be used for pricing lookup
-            console.log(`Pricing lookup keys: lockStatus='${lockStatus}', cosmeticKey='${cosmeticKey}'`);
-
             if (receivedConditions.power_on === 'no') {
                 newPrice = pricingByStorage[lockStatus]['noPower'];
+            } else if (receivedConditions.functional === 'no') {
+                newPrice = pricingByStorage[lockStatus]['broken'];
+            } else if (receivedConditions.cracks === 'no') {
+                 newPrice = pricingByStorage[lockStatus][finalCondition];
             } else {
-                newPrice = pricingByStorage[lockStatus][cosmeticKey];
+                 // The case where there ARE cracks but it powers on and is functional
+                 newPrice = pricingByStorage[lockStatus]['broken'];
             }
             
             // Check if the price is a valid number
             if (isNaN(newPrice) || newPrice === undefined) {
-                 throw new Error(`Invalid price found for condition: ${cosmeticKey}.`);
+                 throw new Error(`Invalid price found for cosmetic condition: ${finalCondition}.`);
             }
             
-            // Apply deductions based on conditions
-            if (receivedConditions.functional === 'no') {
-                newPrice = newPrice * 0.50; // 50% deduction for non-functional
-            }
-            if (receivedConditions.cracks === 'yes') {
-                newPrice = newPrice * 0.80; // 20% deduction for cracks
-            }
+            // Apply deductions based on IMEI status
             switch (receivedConditions.imeiStatus) {
                 case 'blacklisted':
                     newPrice = newPrice * 0.30;
@@ -1147,7 +1230,7 @@
             }
             
             console.log("Calculated new price:", newPrice);
-            return newPrice.toFixed(2);
+            return newPrice;
         }
 
         function showReofferFormWithData(orderId, newPrice, reasons, comments) {
