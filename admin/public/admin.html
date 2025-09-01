@@ -971,14 +971,14 @@
             }
         }
 
-        async function getDevicePricing(deviceBrand) {
-            // Assume deviceBrand is normalized to 'iphone', 'samsung', etc.
-            const docRef = doc(db, 'devices', deviceBrand.toLowerCase().replace(/\s/g, ''));
+        async function getDevicePricing(brand, model) {
+            const docRef = doc(db, 'devices', brand, 'models', model);
+            console.log("Fetching pricing data from path:", docRef.path);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 return docSnap.data();
             } else {
-                console.warn(`Pricing data not found for ${deviceBrand}.`);
+                console.warn(`Pricing data not found for brand: ${brand}, model: ${model}.`);
                 return null;
             }
         }
@@ -986,16 +986,23 @@
         async function calculateNewPrice(device, storage, receivedConditions) {
             // Check if the device is an iPhone and remove the word from the model string
             let deviceModel = device.toLowerCase();
+            let brand = '';
+            
             if (deviceModel.startsWith('iphone')) {
-                // Remove 'iphone' and trim leading/trailing spaces
+                brand = 'iphone';
                 deviceModel = deviceModel.substring('iphone'.length).trim();
+            } else {
+                // Assuming the first word is the brand for other devices
+                const parts = deviceModel.split(' ');
+                brand = parts[0];
+                deviceModel = parts.slice(1).join(' ');
             }
             
             // Construct the Firestore document ID by replacing spaces with hyphens
             const firestoreDeviceID = deviceModel.replace(/\s/g, '-');
             
             // Fetch pricing data using the corrected device ID
-            const pricingData = await getDevicePricing(firestoreDeviceID);
+            const pricingData = await getDevicePricing(brand, firestoreDeviceID);
             if (!pricingData) {
                 throw new Error(`Pricing data not found for ${device}.`);
             }
@@ -1006,6 +1013,7 @@
                 throw new Error(`Pricing data not found for storage size ${storageKey}.`);
             }
 
+            // Pricing logic
             let newPrice = pricingByStorage[receivedConditions.cosmetic];
 
             if (receivedConditions.power_on === 'no') {
