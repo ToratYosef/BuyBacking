@@ -78,6 +78,9 @@
         .status-bubble-subtext {
             @apply block text-xs mt-0.5;
         }
+        .required-field {
+            border: 2px solid red;
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen">
@@ -359,30 +362,41 @@
                         <label for="imei-problem-reason" class="block text-sm font-medium text-gray-700">Reason for problem</label>
                         <input type="text" id="imei-problem-reason" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., Blacklisted due to balance">
                     </div>
-                    <div>
+                    <div id="lock-status-container">
+                        <label for="check-lock-status" class="block text-sm font-medium text-gray-700">Carrier Lock Status</label>
+                        <select id="check-lock-status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                            <option value="unlocked">Unlocked</option>
+                            <option value="locked">Locked</option>
+                        </select>
+                    </div>
+                    <div id="power-on-container">
                         <label for="check-power-on" class="block text-sm font-medium text-gray-700">Powers On</label>
                         <select id="check-power-on" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                            <option value="">Select...</option>
                             <option value="yes">Yes</option>
                             <option value="no">No</option>
                         </select>
                     </div>
-                    <div>
+                    <div id="functional-container" class="hidden">
                         <label for="check-functional" class="block text-sm font-medium text-gray-700">Fully Functional</label>
                         <select id="check-functional" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                             <option value="">Select...</option>
                             <option value="yes">Yes</option>
                             <option value="no">No</option>
                         </select>
                     </div>
-                    <div>
+                    <div id="cracks-container" class="hidden">
                         <label for="check-cracks" class="block text-sm font-medium text-gray-700">No Cracks</label>
                         <select id="check-cracks" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                             <option value="">Select...</option>
                             <option value="yes">Yes</option>
                             <option value="no">No</option>
                         </select>
                     </div>
-                    <div>
+                     <div id="cosmetic-container" class="hidden">
                         <label for="check-cosmetic" class="block text-sm font-medium text-gray-700">Cosmetic Condition</label>
                         <select id="check-cosmetic" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                             <option value="">Select...</option>
                             <option value="flawless">Flawless</option>
                             <option value="excellent">Excellent</option>
                             <option value="good">Good</option>
@@ -558,6 +572,13 @@
         const checkFunctional = document.getElementById('check-functional');
         const checkCracks = document.getElementById('check-cracks');
         const checkCosmetic = document.getElementById('check-cosmetic');
+        const checkLockStatus = document.getElementById('check-lock-status');
+
+        const powerOnContainer = document.getElementById('power-on-container');
+        const functionalContainer = document.getElementById('functional-container');
+        const cracksContainer = document.getElementById('cracks-container');
+        const cosmeticContainer = document.getElementById('cosmetic-container');
+
         const submitConditionCheckBtn = document.getElementById('submit-condition-check-btn');
         const cancelConditionCheckBtn = document.getElementById('cancel-condition-check-btn');
         
@@ -589,6 +610,28 @@
         checkImei.addEventListener('input', (event) => {
             const imei = event.target.value;
             imeiCheckLink.href = imei ? `https://www.imei.info/?imei=${imei}` : '#';
+        });
+
+        // Listen for changes on power-on to dynamically show/hide fields
+        checkPowerOn.addEventListener('change', (event) => {
+            if (event.target.value === 'yes') {
+                functionalContainer.classList.remove('hidden');
+            } else {
+                functionalContainer.classList.add('hidden');
+                cracksContainer.classList.add('hidden');
+                cosmeticContainer.classList.add('hidden');
+            }
+        });
+        
+        // Listen for changes on functional to dynamically show/hide fields
+        checkFunctional.addEventListener('change', (event) => {
+            if (event.target.value === 'yes') {
+                cracksContainer.classList.remove('hidden');
+                cosmeticContainer.classList.remove('hidden');
+            } else {
+                cracksContainer.classList.add('hidden');
+                cosmeticContainer.classList.add('hidden');
+            }
         });
 
         function updateDashboardCounts(ordersData) {
@@ -836,10 +879,12 @@
             }
 
             // Populate the dropdowns with customer's claimed conditions for quick reference
-            checkPowerOn.value = order.condition_power_on || 'yes';
-            checkFunctional.value = order.condition_functional || 'yes';
-            checkCracks.value = order.condition_cracks || 'no';
-            checkCosmetic.value = order.condition_cosmetic || 'good';
+            checkPowerOn.value = order.condition_power_on || '';
+            checkFunctional.value = order.condition_functional || '';
+            checkCracks.value = order.condition_cracks || '';
+            checkCosmetic.value = order.condition_cosmetic || '';
+            checkLockStatus.value = order.lockStatus || 'unlocked';
+
 
             // Pre-fill GB and IMEI if they exist in the order
             checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
@@ -848,6 +893,16 @@
             // Set up IMEI checker link
             const imei = checkImei.value;
             imeiCheckLink.href = imei ? `https://www.imei.info/?imei=${imei}` : '#';
+
+            // Reset dynamic fields and their required status
+            functionalContainer.classList.add('hidden');
+            cracksContainer.classList.add('hidden');
+            cosmeticContainer.classList.add('hidden');
+            imeiProblemReasonContainer.classList.add('hidden');
+
+            checkFunctional.removeAttribute('required');
+            checkCracks.removeAttribute('required');
+            checkCosmetic.removeAttribute('required');
 
             modalActionButtons.classList.add('hidden');
             conditionCheckFormContainer.classList.remove('hidden');
@@ -867,13 +922,46 @@
                 gb: checkGb.value,
                 imei: checkImei.value,
                 imeiStatus: document.querySelector('input[name="imei-status"]:checked')?.value || 'unknown',
-                imeiProblemReason: imeiProblemReasonContainer.classList.contains('hidden') ? '' : imeiProblemReasonInput.value
+                imeiProblemReason: imeiProblemReasonContainer.classList.contains('hidden') ? '' : imeiProblemReasonInput.value,
+                lockStatus: checkLockStatus.value
             };
 
             // Basic form validation
-            if (!receivedConditions.gb || !receivedConditions.imei || !receivedConditions.imeiStatus || !receivedConditions.power_on || !receivedConditions.functional || !receivedConditions.cracks || !receivedConditions.cosmetic) {
-                displayModalMessage('Please fill out all required fields.', 'error');
-                return;
+            const requiredFields = [checkGb, checkImei, checkLockStatus, checkPowerOn];
+            let isValid = true;
+
+            // Clear previous required highlights
+            const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
+            allFormFields.forEach(field => field.classList.remove('required-field'));
+            
+            // Re-validate based on new flow
+            requiredFields.forEach(field => {
+                 if (!field.value) {
+                     field.classList.add('required-field');
+                     isValid = false;
+                 }
+            });
+
+            if (receivedConditions.power_on === 'yes') {
+                 if (!receivedConditions.functional) {
+                    checkFunctional.classList.add('required-field');
+                    isValid = false;
+                 }
+
+                 if (receivedConditions.functional === 'yes') {
+                     const conditionalFields = [checkCracks, checkCosmetic];
+                     conditionalFields.forEach(field => {
+                         if (!field.value) {
+                             field.classList.add('required-field');
+                             isValid = false;
+                         }
+                     });
+                 }
+            }
+
+            if (!isValid) {
+                 displayModalMessage('Please fill out all required fields.', 'error');
+                 return;
             }
             
             modalLoadingMessage.classList.remove('hidden');
@@ -949,7 +1037,7 @@
         async function updateOrderWithCheckResults(orderId, checks) {
             const orderDocRef = doc(db, 'orders', orderId);
             const updateData = {
-                receivedChecks: {
+                fulfilledOrders: { // New section to save fulfilled orders
                     gb: checks.gb,
                     imei: checks.imei,
                     imeiStatus: checks.imeiStatus,
@@ -1013,16 +1101,28 @@
                 throw new Error(`Pricing data not found for storage size ${storageKey}.`);
             }
 
-            // Determine lock status from the order data. Assuming it's in the order object.
-            // Default to 'unlocked' if not specified.
-            const lockStatus = currentOrderData.lockStatus || 'unlocked';
+            const lockStatus = receivedConditions.lockStatus || 'unlocked';
             
             let newPrice;
+            let cosmeticKey = receivedConditions.cosmetic;
+
+            // Handle the "excellent" cosmetic condition by mapping it to "good"
+            if (cosmeticKey === 'excellent') {
+                cosmeticKey = 'good';
+            }
+            
+            // Log the keys to be used for pricing lookup
+            console.log(`Pricing lookup keys: lockStatus='${lockStatus}', cosmeticKey='${cosmeticKey}'`);
 
             if (receivedConditions.power_on === 'no') {
                 newPrice = pricingByStorage[lockStatus]['noPower'];
             } else {
-                newPrice = pricingByStorage[lockStatus][receivedConditions.cosmetic];
+                newPrice = pricingByStorage[lockStatus][cosmeticKey];
+            }
+            
+            // Check if the price is a valid number
+            if (isNaN(newPrice) || newPrice === undefined) {
+                 throw new Error(`Invalid price found for condition: ${cosmeticKey}.`);
             }
             
             // Apply deductions based on conditions
