@@ -441,7 +441,7 @@
         <div class="bg-white p-8 rounded-3xl shadow-xl flex flex-col lg:flex-row items-center justify-center gap-12 main-content-layout">
             <div class="w-full lg:w-2/5 text-center quote-display-mobile-first">
                 <div class="relative w-full max-w-sm mx-auto mb-6 rounded-3xl shadow-lg overflow-hidden transform transition-transform duration-500 hover:scale-105">
-                    <img id="deviceImage" src="" alt="" class="w-full h-full object-cover">
+                    <img id="deviceImage" data-base-src="" alt="" class="w-full h-full object-cover">
                 </div>
                 <div class="bg-indigo-600 text-white p-6 rounded-2xl shadow-lg hidden" id="mainQuoteDisplay">
                     <h2 class="text-3xl font-extrabold mb-2">Your Instant Quote</h2>
@@ -947,7 +947,38 @@
             questionContainer.classList.remove('hidden');
 
             document.title = `SecondHandCell - Sell ${device.name}`;
-            document.getElementById('deviceImage').src = device.imageUrl;
+            
+            // --- IMAGE LOADING LOGIC ---
+            function loadImageWithFallback(imgElement) {
+                const baseSrc = imgElement.dataset.baseSrc;
+                if (!baseSrc) return;
+                const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+                let current = 0;
+                function tryLoad() {
+                    if (current >= extensions.length) {
+                        imgElement.src = 'https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';
+                        return;
+                    }
+                    const testSrc = baseSrc + extensions[current];
+                    const img = new Image();
+                    img.onload = () => { imgElement.src = testSrc; };
+                    img.onerror = () => { current++; tryLoad(); };
+                    img.src = testSrc;
+                }
+                tryLoad();
+            }
+
+            // Find the device image element
+            const deviceImageElement = document.getElementById('deviceImage');
+            if (deviceImageElement && device.imagePath) {
+                // Set the data-base-src attribute to the image path from Firestore
+                deviceImageElement.dataset.baseSrc = device.imagePath;
+                // Call the loading function
+                loadImageWithFallback(deviceImageElement);
+            } else {
+                console.error("Device image element not found or device.imagePath is missing.");
+            }
+            
             document.getElementById('deviceImage').alt = device.name;
             document.getElementById('deviceDisplayName').textContent = device.name;
             document.getElementById('deviceDisplayNameText').textContent = device.name;
