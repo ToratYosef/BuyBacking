@@ -214,14 +214,30 @@
         </div>
 
         <!-- Brand Filters -->
-        <div id="brandFilterContainer" class="flex flex-wrap justify-center gap-2 mb-8">
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-transparent bg-blue-600 text-white transition-colors duration-300" data-brand="all">All</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="Apple">Apple</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="Samsung">Samsung</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="Google">Google</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="iPad">iPad</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="MacBook">MacBook</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="other">Other</button>
+        <div id="filterSortContainer" class="flex flex-col sm:flex-row flex-wrap justify-center gap-2 mb-8 items-center">
+            <div id="brandFilterContainer" class="flex flex-wrap justify-center gap-2 mb-2 sm:mb-0">
+                <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-transparent bg-blue-600 text-white transition-colors duration-300" data-brand="all">All</button>
+                <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="iPhone">iPhone</button>
+                <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="Samsung">Samsung</button>
+                <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="Google">Google</button>
+                <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="iPad">iPad</button>
+                <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="MacBook">MacBook</button>
+                <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="other">Other</button>
+            </div>
+            <div class="relative inline-block text-left ml-0 sm:ml-4">
+                <label for="sortDropdown" class="sr-only">Sort By</label>
+                <select id="sortDropdown" class="w-full md:w-auto px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300 appearance-none bg-white pr-8 cursor-pointer">
+                    <option value="highest-price">Highest Price</option>
+                    <option value="lowest-price">Lowest Price</option>
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-700">
+                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            </div>
         </div>
 
         <div id="phoneGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
@@ -508,6 +524,7 @@
             const searchTermSpan = document.getElementById('searchTerm');
             const loadingIndicator = document.getElementById('loadingIndicator');
             const brandFilterButtons = document.querySelectorAll('.brand-filter-btn');
+            const sortDropdown = document.getElementById('sortDropdown');
 
             let allDevices = []; // A global variable to store all fetched devices
             let activeFilter = 'all';
@@ -555,7 +572,7 @@
                     return;
                 }
 
-                renderDevices(allDevices);
+                applyFilters();
                 loadingIndicator.classList.add('hidden');
             };
 
@@ -593,18 +610,44 @@
                 }
             };
             
-            // Search functionality
+            // Function to sort devices based on the selected option
+            const sortDevices = (devices, sortBy) => {
+                switch (sortBy) {
+                    case 'highest-price':
+                        return devices.sort((a, b) => b.highestPrice - a.highestPrice);
+                    case 'lowest-price':
+                        return devices.sort((a, b) => a.highestPrice - b.highestPrice);
+                    case 'name-asc':
+                        return devices.sort((a, b) => a.name.localeCompare(b.name));
+                    case 'name-desc':
+                        return devices.sort((a, b) => b.name.localeCompare(a.name));
+                    default:
+                        return devices;
+                }
+            };
+
+            // Search and filter functionality
             const applyFilters = () => {
                 const query = searchInput.value.toLowerCase().trim();
+                const sortBy = sortDropdown.value;
+
+                // First, apply the brand filter
                 const filteredDevices = allDevices.filter(device => {
-                    const matchesBrand = activeFilter === 'all' || device.brand === activeFilter;
+                    // FIX: Make the comparison case-insensitive
+                    const matchesBrand = activeFilter === 'all' || device.brand.toLowerCase() === activeFilter.toLowerCase();
                     const matchesSearch = device.name.toLowerCase().includes(query) || device.brand.toLowerCase().includes(query);
                     return matchesBrand && matchesSearch;
                 });
-                renderDevices(filteredDevices);
+
+                // Then, sort the filtered devices
+                const sortedDevices = sortDevices(filteredDevices, sortBy);
+
+                // Finally, render the sorted and filtered results
+                renderDevices(sortedDevices);
             };
 
             searchInput.addEventListener('input', applyFilters);
+            sortDropdown.addEventListener('change', applyFilters);
 
             // Brand filter functionality
             brandFilterButtons.forEach(button => {
