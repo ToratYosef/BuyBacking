@@ -8,78 +8,85 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// Device data for iPad models.
+// Device data for Google Pixel models.
 const deviceData = {
-    ipads: [
+    pixels: [
         {
-            name: 'iPad Pro M4 13-inch', slug: 'ipad-pro-m4-13-inch', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-pro-m4-13-inch',
+            name: 'Google Pixel 7 Pro', slug: 'pixel-7-pro', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp7pro',
             prices: {
-                '256GB': { 'lte': { flawless: 1000, good: 980, fair: 960, damaged: 920, broken: 750, noPower: 500 }, 'wifi': { flawless: 950, good: 930, fair: 910, damaged: 870, broken: 700, noPower: 450 } },
-                '512GB': { 'lte': { flawless: 1200, good: 1180, fair: 1160, damaged: 1120, broken: 950, noPower: 700 }, 'wifi': { flawless: 1150, good: 1130, fair: 1110, damaged: 1070, broken: 900, noPower: 650 } },
-                '1TB': { 'lte': { flawless: 1600, good: 1580, fair: 1560, damaged: 1520, broken: 1350, noPower: 1100 }, 'wifi': { flawless: 1550, good: 1530, fair: 1510, damaged: 1470, broken: 1300, noPower: 1050 } },
-                '2TB': { 'lte': { flawless: 1900, good: 1880, fair: 1860, damaged: 1820, broken: 1650, noPower: 1400 }, 'wifi': { flawless: 1850, good: 1830, fair: 1810, damaged: 1770, broken: 1600, noPower: 1350 } }
+                '128GB': { 'unlocked': { flawless: 450, good: 430, fair: 410, damaged: 370, broken: 200, noPower: 100 }, 'locked': { flawless: 360, good: 344, fair: 328, damaged: 296, broken: 160, noPower: 80 } },
+                '256GB': { 'unlocked': { flawless: 500, good: 480, fair: 460, damaged: 420, broken: 250, noPower: 120 }, 'locked': { flawless: 400, good: 384, fair: 368, damaged: 336, broken: 200, noPower: 96 } },
+                '512GB': { 'unlocked': { flawless: 550, good: 530, fair: 510, damaged: 470, broken: 300, noPower: 150 }, 'locked': { flawless: 440, good: 424, fair: 408, damaged: 376, broken: 240, noPower: 120 } }
             }
         },
         {
-            name: 'iPad Pro M4 11-inch', slug: 'ipad-pro-m4-11-inch', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-pro-m4-11-inch',
+            name: 'Google Pixel 8', slug: 'pixel-8', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp8',
             prices: {
-                '256GB': { 'lte': { flawless: 850, good: 830, fair: 810, damaged: 770, broken: 600, noPower: 350 }, 'wifi': { flawless: 800, good: 780, fair: 760, damaged: 720, broken: 550, noPower: 300 } },
-                '512GB': { 'lte': { flawless: 1050, good: 1030, fair: 1010, damaged: 970, broken: 800, noPower: 550 }, 'wifi': { flawless: 1000, good: 980, fair: 960, damaged: 920, broken: 750, noPower: 500 } },
-                '1TB': { 'lte': { flawless: 1450, good: 1430, fair: 1410, damaged: 1370, broken: 1200, noPower: 950 }, 'wifi': { flawless: 1400, good: 1380, fair: 1360, damaged: 1320, broken: 1150, noPower: 900 } },
-                '2TB': { 'lte': { flawless: 1750, good: 1730, fair: 1710, damaged: 1670, broken: 1500, noPower: 1250 }, 'wifi': { flawless: 1700, good: 1680, fair: 1660, damaged: 1620, broken: 1450, noPower: 1200 } }
+                '128GB': { 'unlocked': { flawless: 500, good: 480, fair: 460, damaged: 420, broken: 250, noPower: 120 }, 'locked': { flawless: 400, good: 384, fair: 368, damaged: 336, broken: 200, noPower: 96 } },
+                '256GB': { 'unlocked': { flawless: 550, good: 530, fair: 510, damaged: 470, broken: 300, noPower: 150 }, 'locked': { flawless: 440, good: 424, fair: 408, damaged: 376, broken: 240, noPower: 120 } }
             }
         },
         {
-            name: 'iPad Air M3 13-inch', slug: 'ipad-air-m3-13-inch', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-air-m3-13-inch',
+            name: 'Google Pixel 8a', slug: 'pixel-8a', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp8a',
             prices: {
-                '128GB': { 'lte': { flawless: 650, good: 630, fair: 610, damaged: 570, broken: 400, noPower: 200 }, 'wifi': { flawless: 600, good: 580, fair: 560, damaged: 520, broken: 350, noPower: 150 } },
-                '256GB': { 'lte': { flawless: 750, good: 730, fair: 710, damaged: 670, broken: 500, noPower: 300 }, 'wifi': { flawless: 700, good: 680, fair: 660, damaged: 620, broken: 450, noPower: 250 } },
-                '512GB': { 'lte': { flawless: 900, good: 880, fair: 860, damaged: 820, broken: 650, noPower: 450 }, 'wifi': { flawless: 850, good: 830, fair: 810, damaged: 770, broken: 600, noPower: 400 } },
-                '1TB': { 'lte': { flawless: 1050, good: 1030, fair: 1010, damaged: 970, broken: 800, noPower: 600 }, 'wifi': { flawless: 1000, good: 980, fair: 960, damaged: 920, broken: 750, noPower: 550 } }
+                '128GB': { 'unlocked': { flawless: 350, good: 330, fair: 310, damaged: 270, broken: 100, noPower: 50 }, 'locked': { flawless: 280, good: 264, fair: 248, damaged: 216, broken: 80, noPower: 40 } },
+                '256GB': { 'unlocked': { flawless: 400, good: 380, fair: 360, damaged: 320, broken: 150, noPower: 75 }, 'locked': { flawless: 320, good: 304, fair: 288, damaged: 256, broken: 120, noPower: 60 } }
             }
         },
         {
-            name: 'iPad Air M3 11-inch', slug: 'ipad-air-m3-11-inch', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-air-m3-11-inch',
+            name: 'Google Pixel 9', slug: 'pixel-9', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp9',
             prices: {
-                '128GB': { 'lte': { flawless: 550, good: 530, fair: 510, damaged: 470, broken: 300, noPower: 100 }, 'wifi': { flawless: 500, good: 480, fair: 460, damaged: 420, broken: 250, noPower: 50 } },
-                '256GB': { 'lte': { flawless: 650, good: 630, fair: 610, damaged: 570, broken: 400, noPower: 200 }, 'wifi': { flawless: 600, good: 580, fair: 560, damaged: 520, broken: 350, noPower: 150 } },
-                '512GB': { 'lte': { flawless: 800, good: 780, fair: 760, damaged: 720, broken: 550, noPower: 350 }, 'wifi': { flawless: 750, good: 730, fair: 710, damaged: 670, broken: 500, noPower: 300 } },
-                '1TB': { 'lte': { flawless: 950, good: 930, fair: 910, damaged: 870, broken: 700, noPower: 500 }, 'wifi': { flawless: 900, good: 880, fair: 860, damaged: 820, broken: 650, noPower: 450 } }
+                '128GB': { 'unlocked': { flawless: 600, good: 580, fair: 560, damaged: 520, broken: 350, noPower: 180 }, 'locked': { flawless: 480, good: 464, fair: 448, damaged: 416, broken: 280, noPower: 144 } },
+                '256GB': { 'unlocked': { flawless: 650, good: 630, fair: 610, damaged: 570, broken: 400, noPower: 200 }, 'locked': { flawless: 520, good: 504, fair: 488, damaged: 456, broken: 320, noPower: 160 } }
             }
         },
         {
-            name: 'iPad 11th Gen', slug: 'ipad-11th-gen', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-11th-gen',
+            name: 'Google Pixel 9 Pro', slug: 'pixel-9-pro', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp9p',
             prices: {
-                '64GB': { 'lte': { flawless: 400, good: 380, fair: 360, damaged: 320, broken: 150, noPower: 50 }, 'wifi': { flawless: 350, good: 330, fair: 310, damaged: 270, broken: 100, noPower: 25 } },
-                '256GB': { 'lte': { flawless: 500, good: 480, fair: 460, damaged: 420, broken: 250, noPower: 100 }, 'wifi': { flawless: 450, good: 430, fair: 410, damaged: 370, broken: 200, noPower: 75 } }
+                '128GB': { 'unlocked': { flawless: 800, good: 780, fair: 760, damaged: 720, broken: 550, noPower: 300 }, 'locked': { flawless: 640, good: 624, fair: 608, damaged: 576, broken: 440, noPower: 240 } },
+                '256GB': { 'unlocked': { flawless: 850, good: 830, fair: 810, damaged: 770, broken: 600, noPower: 320 }, 'locked': { flawless: 680, good: 664, fair: 648, damaged: 616, broken: 480, noPower: 256 } },
+                '512GB': { 'unlocked': { flawless: 900, good: 880, fair: 860, damaged: 820, broken: 650, noPower: 350 }, 'locked': { flawless: 720, good: 704, fair: 688, damaged: 656, broken: 520, noPower: 280 } },
+                '1TB': { 'unlocked': { flawless: 1000, good: 980, fair: 960, damaged: 920, broken: 750, noPower: 400 }, 'locked': { flawless: 800, good: 784, fair: 768, damaged: 736, broken: 600, noPower: 320 } }
             }
         },
         {
-            name: 'iPad 10th Gen', slug: 'ipad-10th-gen', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-10th-gen',
+            name: 'Google Pixel 9 Pro XL', slug: 'pixel-9-pro-xl', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp9pxl',
             prices: {
-                '64GB': { 'lte': { flawless: 300, good: 280, fair: 260, damaged: 220, broken: 100, noPower: 0 }, 'wifi': { flawless: 250, good: 230, fair: 210, damaged: 170, broken: 50, noPower: 0 } },
-                '256GB': { 'lte': { flawless: 400, good: 380, fair: 360, damaged: 320, broken: 200, noPower: 50 }, 'wifi': { flawless: 350, good: 330, fair: 310, damaged: 270, broken: 150, noPower: 25 } }
+                '256GB': { 'unlocked': { flawless: 900, good: 880, fair: 860, damaged: 820, broken: 650, noPower: 350 }, 'locked': { flawless: 720, good: 704, fair: 688, damaged: 656, broken: 520, noPower: 280 } },
+                '512GB': { 'unlocked': { flawless: 1000, good: 980, fair: 960, damaged: 920, broken: 750, noPower: 400 }, 'locked': { flawless: 800, good: 784, fair: 768, damaged: 736, broken: 600, noPower: 320 } },
+                '1TB': { 'unlocked': { flawless: 1200, good: 1180, fair: 1160, damaged: 1120, broken: 950, noPower: 500 }, 'locked': { flawless: 960, good: 944, fair: 928, damaged: 896, broken: 760, noPower: 400 } }
             }
         },
         {
-            name: 'iPad 9th Gen', slug: 'ipad-9th-gen', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-9th-gen',
+            name: 'Google Pixel 10', slug: 'pixel-10', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp10',
             prices: {
-                '64GB': { 'lte': { flawless: 250, good: 230, fair: 210, damaged: 170, broken: 50, noPower: 0 }, 'wifi': { flawless: 200, good: 180, fair: 160, damaged: 120, broken: 0, noPower: 0 } },
-                '256GB': { 'lte': { flawless: 350, good: 330, fair: 310, damaged: 270, broken: 150, noPower: 25 }, 'wifi': { flawless: 300, good: 280, fair: 260, damaged: 220, broken: 100, noPower: 0 } }
+                '128GB': { 'unlocked': { flawless: 700, good: 680, fair: 660, damaged: 620, broken: 450, noPower: 220 }, 'locked': { flawless: 560, good: 544, fair: 528, damaged: 496, broken: 360, noPower: 176 } },
+                '256GB': { 'unlocked': { flawless: 750, good: 730, fair: 710, damaged: 670, broken: 500, noPower: 250 }, 'locked': { flawless: 600, good: 584, fair: 568, damaged: 536, broken: 400, noPower: 200 } }
             }
         },
         {
-            name: 'iPad mini 7th Gen', slug: 'ipad-mini-7th-gen', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-mini-7th-gen',
+            name: 'Google Pixel 10 Pro', slug: 'pixel-10-pro', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp10p',
             prices: {
-                '128GB': { 'lte': { flawless: 500, good: 480, fair: 460, damaged: 420, broken: 250, noPower: 100 }, 'wifi': { flawless: 450, good: 430, fair: 410, damaged: 370, broken: 200, noPower: 75 } },
-                '256GB': { 'lte': { flawless: 600, good: 580, fair: 560, damaged: 520, broken: 350, noPower: 150 }, 'wifi': { flawless: 550, good: 530, fair: 510, damaged: 470, broken: 300, noPower: 125 } }
+                '128GB': { 'unlocked': { flawless: 900, good: 880, fair: 860, damaged: 820, broken: 650, noPower: 350 }, 'locked': { flawless: 720, good: 704, fair: 688, damaged: 656, broken: 520, noPower: 280 } },
+                '256GB': { 'unlocked': { flawless: 1000, good: 980, fair: 960, damaged: 920, broken: 750, noPower: 400 }, 'locked': { flawless: 800, good: 784, fair: 768, damaged: 736, broken: 600, noPower: 320 } },
+                '512GB': { 'unlocked': { flawless: 1100, good: 1080, fair: 1060, damaged: 1020, broken: 850, noPower: 450 }, 'locked': { flawless: 880, good: 864, fair: 848, damaged: 816, broken: 680, noPower: 360 } },
+                '1TB': { 'unlocked': { flawless: 1300, good: 1280, fair: 1260, damaged: 1220, broken: 1050, noPower: 550 }, 'locked': { flawless: 1040, good: 1024, fair: 1008, damaged: 976, broken: 840, noPower: 440 } }
             }
         },
         {
-            name: 'iPad mini 6th Gen', slug: 'ipad-mini-6th-gen', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/ipad/assets/ipad-mini-6th-gen',
+            name: 'Google Pixel 10 Pro XL', slug: 'pixel-10-pro-xl', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp10pxl',
             prices: {
-                '64GB': { 'lte': { flawless: 400, good: 380, fair: 360, damaged: 320, broken: 150, noPower: 25 }, 'wifi': { flawless: 350, good: 330, fair: 310, damaged: 270, broken: 100, noPower: 0 } },
-                '256GB': { 'lte': { flawless: 500, good: 480, fair: 460, damaged: 420, broken: 250, noPower: 100 }, 'wifi': { flawless: 450, good: 430, fair: 410, damaged: 370, broken: 200, noPower: 75 } }
+                '256GB': { 'unlocked': { flawless: 1100, good: 1080, fair: 1060, damaged: 1020, broken: 850, noPower: 450 }, 'locked': { flawless: 880, good: 864, fair: 848, damaged: 816, broken: 680, noPower: 360 } },
+                '512GB': { 'unlocked': { flawless: 1200, good: 1180, fair: 1160, damaged: 1120, broken: 950, noPower: 500 }, 'locked': { flawless: 960, good: 944, fair: 928, damaged: 896, broken: 760, noPower: 400 } },
+                '1TB': { 'unlocked': { flawless: 1450, good: 1430, fair: 1410, damaged: 1370, broken: 1200, noPower: 600 }, 'locked': { flawless: 1160, good: 1144, fair: 1128, damaged: 1096, broken: 960, noPower: 480 } }
+            }
+        },
+        {
+            name: 'Google Pixel 10 Pro Fold', slug: 'pixel-10-pro-fold', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp10pfold',
+            prices: {
+                '256GB': { 'unlocked': { flawless: 1700, good: 1680, fair: 1660, damaged: 1620, broken: 1450, noPower: 800 }, 'locked': { flawless: 1360, good: 1344, fair: 1328, damaged: 1296, broken: 1160, noPower: 640 } },
+                '512GB': { 'unlocked': { flawless: 1800, good: 1780, fair: 1760, damaged: 1720, broken: 1550, noPower: 850 }, 'locked': { flawless: 1440, good: 1424, fair: 1408, damaged: 1376, broken: 1240, noPower: 680 } },
+                '1TB': { 'unlocked': { flawless: 2000, good: 1980, fair: 1960, damaged: 1920, broken: 1750, noPower: 900 }, 'locked': { flawless: 1600, good: 1584, fair: 1568, damaged: 1536, broken: 1400, noPower: 720 } }
             }
         }
     ]
@@ -88,14 +95,11 @@ const deviceData = {
 const populateDatabase = async () => {
     console.log("Starting to populate Firestore with device data...");
     
-    // Do not clean the Samsung and Apple devices, only the iPad collection
-    const allBrands = ['iphone', 'samsung', 'ipad'];
-    
-    // Clearing only the iPad models
-    const ipadModelsRef = db.collection('devices').doc('ipad').collection('models');
-    const modelsSnapshot = await ipadModelsRef.get();
+    // Clearing only the Google Pixel models
+    const pixelModelsRef = db.collection('devices').doc('google_pixel').collection('models');
+    const modelsSnapshot = await pixelModelsRef.get();
     if (!modelsSnapshot.empty) {
-        console.log(`Clearing existing models for brand: ipad`);
+        console.log(`Clearing existing models for brand: google_pixel`);
         const batch = db.batch();
         modelsSnapshot.docs.forEach(doc => {
             batch.delete(doc.ref);
@@ -103,20 +107,20 @@ const populateDatabase = async () => {
         await batch.commit();
     }
     
-    // Iterate through iPad data and add to Firestore
-    for (const device of deviceData.ipads) {
-        const docRef = db.collection('devices').doc('ipad').collection('models').doc(device.slug);
+    // Iterate through Pixel data and add to Firestore
+    for (const device of deviceData.pixels) {
+        const docRef = db.collection('devices').doc('google_pixel').collection('models').doc(device.slug);
         await docRef.set({
             name: device.name,
-            brand: 'ipad',
+            brand: 'google_pixel',
             slug: device.slug,
             imageUrl: device.imageUrl,
             prices: device.prices
         });
-        console.log(`Successfully added/updated iPad: ${device.name}`);
+        console.log(`Successfully added/updated Google Pixel: ${device.name}`);
     }
 
-    console.log("All device data has been added to Firestore.");
+    console.log("All Google Pixel device data has been added to Firestore.");
 };
 
 populateDatabase().catch(console.error);
