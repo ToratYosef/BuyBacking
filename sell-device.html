@@ -293,7 +293,6 @@
         // --- Firebase Config & Initialization ---
         // These are global variables provided by the platform.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
             authDomain: "buyback-a0f05.firebaseapp.com",
@@ -325,13 +324,10 @@
             let userId = null;
             if (auth) {
                 try {
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
+                    // Start by signing in anonymously.
+                    await signInAnonymously(auth);
                 } catch (error) {
-                    console.error("Auth failed:", error);
+                    console.error("Anonymous auth failed:", error);
                 }
                 userId = auth.currentUser?.uid || 'anonymous';
                 
