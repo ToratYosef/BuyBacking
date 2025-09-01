@@ -1013,12 +1013,19 @@
                 throw new Error(`Pricing data not found for storage size ${storageKey}.`);
             }
 
-            // Pricing logic
-            let newPrice = pricingByStorage[receivedConditions.cosmetic];
+            // Determine lock status from the order data. Assuming it's in the order object.
+            // Default to 'unlocked' if not specified.
+            const lockStatus = currentOrderData.lockStatus || 'unlocked';
+            
+            let newPrice;
 
             if (receivedConditions.power_on === 'no') {
-                return 0; // Device doesn't turn on, value is 0
+                newPrice = pricingByStorage[lockStatus]['noPower'];
+            } else {
+                newPrice = pricingByStorage[lockStatus][receivedConditions.cosmetic];
             }
+            
+            // Apply deductions based on conditions
             if (receivedConditions.functional === 'no') {
                 newPrice = newPrice * 0.50; // 50% deduction for non-functional
             }
@@ -1039,6 +1046,7 @@
                     break;
             }
             
+            console.log("Calculated new price:", newPrice);
             return newPrice.toFixed(2);
         }
 
