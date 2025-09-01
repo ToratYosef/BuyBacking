@@ -8,9 +8,7 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// Device data, including prices for different storage options and conditions
-// Note: Locked pricing fields are set to placeholder values as they were not defined in the original pricing rules.
-// You can adjust these values before running the script.
+// Device data for iPhone and Samsung devices.
 const deviceData = {
     iphones: [
         { 
@@ -381,12 +379,12 @@ const deviceData = {
 const populateDatabase = async () => {
     console.log("Starting to populate Firestore with device data...");
 
-    // Iterate through iPhone data
+    // Iterate through iPhone data and add to Firestore
     for (const device of deviceData.iphones) {
-        const docRef = db.collection('devices').doc('iphones').collection('models').doc(device.slug);
+        const docRef = db.collection('devices').doc('iphone').collection('models').doc(device.slug);
         await docRef.set({
             name: device.name,
-            brand: 'iphones',
+            brand: 'iphone',
             slug: device.slug,
             imageUrl: device.imageUrl,
             prices: device.prices
@@ -394,7 +392,7 @@ const populateDatabase = async () => {
         console.log(`Successfully added/updated iPhone: ${device.name}`);
     }
 
-    // Iterate through Samsung data
+    // Iterate through Samsung data and add to Firestore
     for (const device of deviceData.samsung) {
         const docRef = db.collection('devices').doc('samsung').collection('models').doc(device.slug);
         await docRef.set({
