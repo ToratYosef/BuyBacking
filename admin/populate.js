@@ -112,7 +112,7 @@ const populateDatabase = async () => {
         const docRef = db.collection('devices').doc('google_pixel').collection('models').doc(device.slug);
         await docRef.set({
             name: device.name,
-            brand: 'google_pixel',
+            brand: 'google',
             slug: device.slug,
             imageUrl: device.imageUrl,
             prices: device.prices
