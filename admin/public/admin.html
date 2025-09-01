@@ -312,7 +312,7 @@
                 <!-- Updated label display for flexibility -->
                 <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
                 <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
-                <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
+                <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
 
                 <p id="modal-loading-message" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
             </div>
@@ -465,7 +465,7 @@
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, collection, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
         let firebaseApp;
@@ -984,7 +984,18 @@
         }
 
         async function calculateNewPrice(device, storage, receivedConditions) {
-            const pricingData = await getDevicePricing(device.split(' ')[0]); // Get brand
+            // Check if the device is an iPhone and remove the word from the model string
+            let deviceModel = device.toLowerCase();
+            if (deviceModel.startsWith('iphone')) {
+                // Remove 'iphone' and trim leading/trailing spaces
+                deviceModel = deviceModel.substring('iphone'.length).trim();
+            }
+            
+            // Construct the Firestore document ID by replacing spaces with hyphens
+            const firestoreDeviceID = deviceModel.replace(/\s/g, '-');
+            
+            // Fetch pricing data using the corrected device ID
+            const pricingData = await getDevicePricing(firestoreDeviceID);
             if (!pricingData) {
                 throw new Error(`Pricing data not found for ${device}.`);
             }
@@ -1239,8 +1250,9 @@
             }
 
             try {
+                // Ensure persistence is set before attempting login
+                await setPersistence(auth, browserLocalPersistence);
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                // The onAuthStateChanged listener will handle UI updates
                 console.log('Admin logged in:', userCredential.user.email);
             } catch (error) {
                 console.error("Login error:", error);
@@ -1259,10 +1271,8 @@
             try {
                 await signOut(auth);
                 console.log('Admin signed out.');
-                // onAuthStateChanged will handle hiding the dashboard and showing login form
             } catch (error) {
                 console.error("Error signing out:", error);
-                // Optionally display an error message
             }
         }
 
