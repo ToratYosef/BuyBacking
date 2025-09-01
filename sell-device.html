@@ -3,462 +3,1007 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SwiftBuyBack - Sell Your Device</title>
-    <!-- Tailwind CSS CDN -->
+    <title>SecondHandCell - Sell Your Devices</title>
+    <link rel="icon" href="/favicon/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9evSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SLRRJRXHHE"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+    
+      gtag('config', 'G-SLRRJRXHHE');
+    </script>
+
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
-        /* Styles for the circular monogram */
-        .initials-monogram {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            color: #ffffff; /* White text for contrast */
-            font-size: 1rem;
-            transition: background-color 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        .fancy-header-text {
+            font-family: 'Dancing Script', cursive;
+        }
+        .phone-card-link:hover .phone-card-inner,
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .phone-card-inner, .feature-card {
+            transition: all 0.3s ease-in-out;
+        }
+        .user-monogram {
+            display: flex; align-items: center; justify-content: center;
+            width: 2.5rem; height: 2.5rem;
+            border-radius: 9999px;
+            background-color: #dbeafe; color: #1d4ed8;
+            font-weight: 700; font-size: 1.125rem;
+            cursor: pointer; user-select: none;
+        }
+        .auth-dropdown {
+            position: absolute; right: 0; margin-top: 0.5rem;
+            width: 12rem; background-color: white;
+            border-radius: 0.375rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding-top: 0.25rem; padding-bottom: 0.25rem;
+            z-index: 50;
+        }
+        .modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            opacity: 0; visibility: hidden;
+        }
+        .modal.is-visible {
+            opacity: 1; visibility: visible;
+        }
+        .modal-content {
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-out;
+        }
+        .modal.is-visible .modal-content {
+            transform: translateY(0);
+        }
+        .btn-google-style {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; background-color: white; color: #475569;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            border: 1px solid #cbd5e1; font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+        }
+        .btn-google-style:hover { background-color: #f8fafc; }
+        .btn-dark-slate {
+            width: 100%; background-color: #1e293b; color: white;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            font-weight: 600; transition: all 0.3s ease;
+            border: none; cursor: pointer;
+        }
+        .btn-dark-slate:hover { background-color: #0f172a; }
+        .btn-red-logout {
+            display: block; width: 100%; text-align: left;
+            padding: 0.5rem 1rem; font-size: 0.875rem; color: #dc2626;
+            background-color: transparent; border: none;
+            transition: background-color 0.2s ease; cursor: pointer;
+        }
+        .btn-red-logout:hover { background-color: #fef2f2; }
+        .floating-banner {
+            position: sticky; top: 5rem; z-index: 30;
+            animation: slideIn 0.8s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .prose { max-width: 65ch; color: #334155; }
+        .prose h2 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; }
+        .prose h3 { font-size: 1.25rem; font-weight: 600; margin-top: 1.5em; margin-bottom: 0.5em; }
+        .prose p, .prose ul { margin-bottom: 1em; }
+        .prose ul { list-style-position: inside; padding-left: 1em; }
+        .prose li { margin-bottom: 0.5em; }
+
+        /* --- Full Chat Widget Styles --- */
+        #chat-widget-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 1000; }
+        #chat-open-btn {
+            background-color: #2563eb; color: white;
+            width: 4rem; height: 4rem; border-radius: 9999px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.2);
+            cursor: pointer; transition: transform 0.2s ease-in-out, opacity 0.3s ease-in-out;
+        }
+        #chat-open-btn:hover { transform: scale(1.1); }
+        #unread-counter {
+            position: absolute; top: -4px; right: -4px;
+            background-color: #ef4444; color: white;
+            border-radius: 9999px; font-size: 0.75rem; font-weight: bold;
+            width: 1.5rem; height: 1.5rem;
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid white;
+            transform: scale(0); transition: transform 0.2s ease-out;
+        }
+        #unread-counter.visible { transform: scale(1); }
+        #chat-window {
+            position: absolute; bottom: 0; right: 0;
+            width: 24rem; height: 32rem; background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            display: flex; flex-direction: column; overflow: hidden;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            opacity: 0; transform: translateY(20px); pointer-events: none;
+        }
+        #chat-window.is-visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+        #chat-window.is-visible + #chat-open-btn { opacity: 0; transform: scale(0.8); pointer-events: none; }
+        #chat-messages { flex-grow: 1; overflow-y: auto; padding: 1rem; background-color: #f8fafc; display: flex; flex-direction: column; }
+        #globalTooltip {
+            visibility: hidden; background-color: #334155; color: #fff; text-align: center;
+            border-radius: 6px; padding: 5px 8px; position: fixed; z-index: 99999;
+            opacity: 0; transition: opacity 0.3s; white-space: nowrap; font-size: 0.75rem; pointer-events: none;
+        }
+        .typing-indicator { display: flex; align-items: center; padding: 8px 12px; }
+        .typing-indicator span { height: 8px; width: 8px; margin: 0 2px; background-color: #9ca3af; border-radius: 50%; display: inline-block; animation: bounce 1.4s infinite ease-in-out both; }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+        .star-rating i { color: #d1d5db; cursor: pointer; transition: color 0.2s; }
+        .star-rating:hover i, .star-rating i.selected { color: #f59e0b; }
+        .star-rating i:hover ~ i { color: #d1d5db; }
+        .order-card { display: flex; align-items: center; padding: 0.75rem; background-color: #f1f5f9; border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer; transition: background-color 0.2s ease; }
+        .order-card:hover { background-color: #e2e8f0; }
+        .order-card-details { flex-grow: 1; font-size: 0.875rem; }
+        .order-card-details strong { display: block; font-weight: 600; color: #1e293b; }
+        .order-card-details span { color: #475569; }
+        .order-card-details .reoffer { color: #ef4444; font-weight: 600; }
+        @media (max-width: 767px) {
+            #chat-window { width: 100vw; height: 100vh; border-radius: 0; right: 0; bottom: 0; }
+            #chat-widget-container { bottom: 1rem; right: 1rem; }
         }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+<body class="bg-slate-50 flex flex-col min-h-screen">
 
-    <!-- Header -->
-    <header class="bg-white shadow-sm py-4">
-        <div class="container mx-auto px-4 flex justify-between items-center">
-            <a href="https://secondhandcell.com/index.html" class="text-2xl font-bold text-indigo-700 rounded-md p-2">SwiftBuyBack</a>
-            <nav class="space-x-4 flex items-center">
-                <a href="https://secondhandcell.com/sell-device.html" class="text-indigo-700 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Sell Your Device</a>
-                <!-- Login Link (shown when not logged in) -->
-                <a href="https://secondhandcell.com/login.html" id="loginHeaderLink" class="text-gray-600 hover:text-indigo-700 font-medium rounded-md px-3 py-2 transition duration-300">Login</a>
-                <!-- Monogram (shown when logged in) -->
-                <a href="https://secondhandcell.com/my-account.html" id="userMonogramLink" class="initials-monogram hidden cursor-pointer">
-                    <div id="userMonogram" class="initials-monogram"></div>
+    <!-- HEADER -->
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex-1">
+                <a href="index.html" class="h-12 inline-block">
+                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
                 </a>
+            </div>
+            <div class="hidden md:flex flex-col items-center flex-1">
+                <div class="text-2xl font-extrabold text-slate-800 fancy-header-text">SecondHandCell</div>
+                <p class="text-sm text-slate-500 -mt-1 fancy-header-text">Sell Your Device</p>
+            </div>
+            <nav class="flex items-center space-x-4 flex-1 justify-end">
+                <div id="authStatusContainer" class="relative inline-block">
+                    <a href="#" id="loginNavBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Login/Sign Up</a>
+                    <div id="userMonogram" class="user-monogram hidden"></div>
+                    <div id="authDropdown" class="auth-dropdown hidden">
+                        <a href="my-account.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
+                        <button id="logoutBtn" class="btn-red-logout">Logout</button>
+                    </div>
+                </div>
             </nav>
         </div>
     </header>
 
-    <!-- Main Content - Device Selection -->
+    <!-- FLOATING BANNER -->
+    <section id="floatingBanner" class="floating-banner bg-red-600 text-white shadow-xl">
+        <div class="container mx-auto px-4 py-3 text-center relative">
+            <p class="font-bold">
+                <i class="fa-solid fa-triangle-exclamation mr-2"></i> IMPORTANT: We do not purchase blacklisted or lost/stolen devices.
+            </p>
+            <button id="closeBannerBtn" class="absolute top-1/2 right-4 -translate-y-1/2 text-2xl hover:text-red-200" aria-label="Close banner">&times;</button>
+        </div>
+    </section>
+
+    <!-- Main Content -->
     <main class="flex-grow container mx-auto px-4 py-12">
-        <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-2xl mx-auto">
-            <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">Sell Your Device</h1>
-
-            <!-- Message Display Area -->
-            <div id="message" class="mb-6 p-3 rounded-md text-sm text-center hidden"></div>
-
-            <div class="space-y-6">
-                <!-- Company Selection -->
-                <div>
-                    <label for="selectCompany" class="block text-lg font-medium text-gray-700 mb-2">1. Select Company:</label>
-                    <select id="selectCompany" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-base">
-                        <option value="">-- Select a Company --</option>
-                        <option value="iphone">Apple iPhone</option>
-                        <option value="samsung">Samsung Galaxy</option>
-                        <option value="google">Google Pixel</option>
-                        <option value="tablet">Tablets</option>
-                    </select>
-                </div>
-
-                <!-- Device Selection -->
-                <div>
-                    <label for="selectDevice" class="block text-lg font-medium text-gray-700 mb-2">2. Select Device Model:</label>
-                    <select id="selectDevice" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-base" disabled>
-                        <option value="">-- Select a Device --</option>
-                    </select>
-                </div>
-
-                <!-- Storage Selection -->
-                <div>
-                    <label for="selectStorage" class="block text-lg font-medium text-gray-700 mb-2">3. Select Storage Amount:</label>
-                    <select id="selectStorage" class="mt-1 block w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-base" disabled>
-                        <option value="">-- Select Storage --</option>
-                    </select>
-                </div>
-
-                <button id="proceedToQuoteBtn" class="w-full bg-indigo-600 text-white px-8 py-4 rounded-full font-bold text-lg shadow-xl hover:bg-indigo-700 transition duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50 mt-8" disabled>
-                    Proceed to Get Quote
-                </button>
+        <div class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-slate-800">Sell Your Device</h1>
+            <p class="mt-3 text-lg text-slate-600 max-w-2xl mx-auto">Select your device to get an instant quote and turn it into cash!</p>
+            <div class="mt-8 relative w-full max-w-xl mx-auto">
+                <input type="search" id="searchInput" placeholder="Search for your device (e.g., iPhone 15 Pro, Pixel 8)" class="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
+                <i class="fa-solid fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
             </div>
+        </div>
+
+        <!-- Brand Filters -->
+        <div id="brandFilterContainer" class="flex flex-wrap justify-center gap-2 mb-8">
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-transparent bg-blue-600 text-white transition-colors duration-300" data-brand="all">All</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="Apple">Apple</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="Samsung">Samsung</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="Google">Google</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="iPad">iPad</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="MacBook">MacBook</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="other">Other</button>
+        </div>
+
+        <div id="phoneGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
+            <!-- All devices will be dynamically inserted here by JavaScript -->
+        </div>
+        <div id="loadingIndicator" class="text-center py-12">
+            <i class="fa-solid fa-spinner fa-spin text-4xl text-blue-600"></i>
+            <p class="text-slate-500 mt-2">Loading devices...</p>
+        </div>
+        <div id="noResultsMessage" class="hidden text-center py-12">
+            <i class="fa-solid fa-mobile-screen-button fa-3x text-slate-400 mb-4"></i>
+            <h2 class="text-2xl font-semibold text-slate-700">No Devices Found</h2>
+            <p class="text-slate-500 mt-2">Your search for "<span id="searchTerm" class="font-bold"></span>" did not match any devices. Try a different search.</p>
         </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-gray-800 text-white py-12 mt-8 w-full">
-        <div class="container mx-auto px-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div>
-                <h3 class="text-xl font-bold mb-4">SwiftBuyBack</h3>
-                <p class="text-gray-400">Your trusted partner for selling used smartphones. Quick quotes, fair prices, and hassle-free service.</p>
+    <!-- FOOTER -->
+    <footer class="bg-slate-800 text-white">
+        <div class="container mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
+                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="index.html" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="#" id="termsAndConditionsLinkFooter" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                    <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p><p class="text-slate-400">Phone: (123) 456-7890</p></div>
+                </div>
+                <div class="bg-slate-700 p-6 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
+                    <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                    <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
+                        <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Sign Up</button>
+                    </form>
+                    <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
+                </div>
             </div>
-            <div>
-                <h3 class="text-xl font-bold mb-4">Quick Links</h3>
-                <ul class="space-y-2">
-                    <li><a href="https://secondhandcell.com/index.html" class="text-gray-400 hover:text-white transition duration-300">Home</a></li>
-                    <li><a href="https://secondhandcell.com/sell-device.html" class="text-gray-400 hover:text-white transition duration-300">Sell Your Phone</a></li>
-                    <li><a href="https://secondhandcell.com/my-account.html" class="text-gray-400 hover:text-white transition duration-300">My Account</a></li>
-                    <li><a href="https://secondhandcell.com/about-us.html" class="text-gray-400 hover:text-white transition duration-300">About Us</a></li>
-                    <li><a href="https://secondhandcell.com/contact.html" class="text-gray-400 hover:text-white transition duration-300">Contact</a></li>
-                </ul>
-            </div>
-            <div class="md:col-span-2 lg:col-span-1">
-                <h3 class="text-xl font-bold mb-4">Contact Us</h3>
-                <p class="text-gray-400">Email: info@swiftbuyback.com</p>
-                <p class="text-gray-400">Phone: (123) 456-7890</p>
-                <p class="text-gray-400 mt-4">&copy; 2025 SwiftBuyBack. All rights reserved.</p>
-            </div>
+            <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
         </div>
     </footer>
+    
+    <!-- MODALS -->
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2><div class="flex border-b border-slate-200 mb-6"><button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2">Login</button><button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2">Sign Up</button></div><form id="loginForm" class="space-y-4"><p class="text-slate-600 text-center">Log in to continue.</p><button type="button" id="googleLoginBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Login with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t"></div><input type="email" id="loginEmail" placeholder="Email Address" class="w-full border p-3 rounded-lg"><input type="password" id="loginPassword" placeholder="Password" class="w-full border p-3 rounded-lg" autocomplete="current-password"><button type="submit" class="btn-dark-slate">Login</button></form><form id="signupForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Create an account.</p><button type="button" id="googleSignupBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Sign Up with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t"></div><input type="text" id="signupName" placeholder="Full Name" class="w-full border p-3 rounded-lg"><input type="email" id="signupEmail" placeholder="Email Address" class="w-full border p-3 rounded-lg"><input type="password" id="signupPassword" placeholder="Password" class="w-full border p-3 rounded-lg" autocomplete="new-password"><button type="submit" class="btn-dark-slate">Sign Up</button></form><div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden"></div></div></div>
+    <!-- About Us, Privacy, T&C Modals -->
+    <div id="aboutUsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2><p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p></div></div>
+    <div id="privacyPolicyModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Privacy Policy</h2><p><strong>Last Updated: August 31, 2025</strong></p><p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p><h3>Information We Collect</h3><p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition.</p><h3>How We Use Your Information</h3><p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p><h3>Data Security and Wiping</h3><p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased.</p><h3>Disclosure of Your Information</h3><p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p><h3>Your Consent</h3><p>By using our site, you consent to our website's privacy policy.</p></div></div></div>
+    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4"><div class="modal-content bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 31, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p><h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p><hr class="my-6 border-t border-slate-300"><h3>5. Policy on Lost/Stolen Devices & Legal Compliance (New York State & NYC)</h3><p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This section outlines our strict policy and the legal framework governing such transactions in New York State and New York City.</p><h4>Laws That May Apply (NY State + NYC)</h4><ul><li>**New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property:** If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.</li><li>**New York Penal Law § 165.40 – Criminal possession of stolen property in the 5th degree:** Knowingly possessing stolen property (or should reasonably know it’s stolen) is a misdemeanor.</li><li>**New York City Administrative Code § 20-272 et seq. (Secondhand Dealer Law):** Dealers in secondhand goods must:<ul><li>Keep records of all items received (including seller ID).</li><li>Provide daily reports to the NYPD of transactions (often through electronic reporting).</li><li>If police suspect an item is lost/stolen, you must hold and exhibit it to them.</li></ul></li><li>**New York City Administrative Code § 20-273:** It is unlawful to conceal, withhold, or refuse inspection of such goods.</li><li>**General Business Law (NY) GBL § 89-g and following – Regulation of pawnbrokers and secondhand dealers:** Requires keeping detailed records and prohibits resale of items flagged as stolen/lost until cleared.</li><li>**Federal Considerations (18 U.S.C. § 2315 – Possession or sale of stolen property):** If stolen goods (like phones) cross state lines or involve interstate commerce, federal law applies.</li></ul><h4>Process to Handle Lost/Stolen Phones in Your Buyback</h4><p>Here’s our step-by-step written policy to handle devices suspected of being lost or stolen:</p><h5>Intake & Verification</h5><ul><li>Every device received must be checked against:<ul><li>IMEI/serial number databases (e.g., GSMA, carrier blacklists).</li><li>Customer’s government-issued ID at time of transaction.</li></ul></li><li>Record the transaction in compliance with NYC Secondhand Dealer laws.</li></ul><h5>If a Device is Flagged as Lost or Stolen</h5><ul><li>Immediately set the device aside and do not refurbish, resell, or dispose of it.</li><li>Clearly label it as “On Hold – Suspected Lost/Stolen.”</li></ul><h5>Customer Communication</h5><ul><li>If the customer requests the item back:<ul><li>Explain: “Under New York law, we cannot return or release devices suspected to be lost or stolen. These items must be reported and may only be released by law enforcement.”</li></ul></li></ul><h5>Law Enforcement Notification</h5><ul><li>Report the device to the NYPD Property Clerk’s Office (or local precinct if outside NYC).</li><li>Provide transaction records, customer ID, and the device itself if requested.</li></ul><h5>Outcome</h5><ul><li>If police confirm the device is stolen:<ul><li>It will be seized and returned to the rightful owner or carrier.</li></ul></li><li>If cleared:<ul><li>You may proceed with processing the device as normal.</li></ul></li></ul><h5>Recordkeeping</h5><ul><li>Keep all paperwork of the transaction, report, and police correspondence for at least 5 years (per NYC dealer rules).</li></ul></div></div></div>
+    
+    <!-- FULL CHAT WIDGET -->
+    <div id="chat-widget-container">
+        <div id="chat-window">
+            <div class="bg-blue-700 text-white p-4 flex justify-between items-center"><h3 class="font-bold text-lg">Customer Support</h3><div class="flex items-center space-x-2"><button id="chat-order-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="View My Orders"><i class="fa-solid fa-box-open text-xl"></i></button><button id="chat-minimize-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="Minimize Chat"><i class="fa-solid fa-minus text-xl"></i></button><button id="chat-close-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="End Chat"><i class="fa-solid fa-xmark text-xl"></i></button></div></div>
+            <div id="chat-messages"></div>
+            <div id="order-selection-container" class="p-4 border-t hidden"><div class="flex justify-between items-center mb-3"><p class="text-sm font-semibold">Please select your order:</p><button id="close-order-selection-btn" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div><div id="order-list" class="space-y-2 max-h-48 overflow-y-auto"></div></div>
+            <div id="typing-indicator-container" class="p-2 hidden"><div class="p-3 rounded-lg"><div class="typing-indicator"><span></span><span></span><span></span></div></div></div>
+            <div id="chat-input-container" class="p-4 border-t flex items-center"><input type="text" id="chat-input" placeholder="Type your message..." class="flex-grow border p-3 rounded-lg mr-2"><button id="send-message-btn" class="bg-blue-600 text-white p-3 rounded-lg"><i class="fa-solid fa-paper-plane"></i></button></div>
+            <div id="guest-prompt-container" class="p-4 border-t hidden"><p class="text-center text-sm mb-3">Please log in or continue as a guest.</p><div class="space-y-2"><button id="guest-login-btn" class="btn-dark-slate">Login / Sign Up</button><button id="guest-continue-btn" class="w-full bg-slate-200 p-3 rounded-lg font-semibold">Ask a General Question</button></div></div>
+            <div id="chat-survey-container" class="p-4 border-t hidden overflow-y-auto"><p class="text-center font-semibold mb-4">Please rate your experience.</p><form id="chat-survey-form"><div class="mb-4"><label class="font-semibold block mb-2 text-center">Overall Rating:</label><div id="star-rating" class="star-rating text-3xl flex justify-center" data-rating="0"><i class="fa-solid fa-star" data-value="1"></i><i class="fa-solid fa-star" data-value="2"></i><i class="fa-solid fa-star" data-value="3"></i><i class="fa-solid fa-star" data-value="4"></i><i class="fa-solid fa-star" data-value="5"></i></div></div><button type="submit" class="btn-dark-slate">Submit Feedback</button></form></div>
+            <div id="end-chat-confirm-modal" class="hidden absolute inset-0 bg-white/90 flex flex-col items-center justify-center p-4 z-10"><div class="bg-white rounded-lg shadow-2xl p-6 text-center"><p class="text-lg font-semibold mb-4">End this chat session?</p><div class="flex gap-4 justify-center"><button id="end-chat-yes" class="px-6 py-2 font-semibold text-white bg-red-500 rounded-lg">Yes</button><button id="end-chat-no" class="px-6 py-2 font-semibold bg-slate-200 rounded-lg">No</button></div></div></div>
+        </div>
+        <button id="chat-open-btn"><i class="fa-solid fa-comments text-3xl"></i><span id="unread-counter">0</span></button>
+    </div>
+    <div id="globalTooltip"></div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Firebase configuration from the environment
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        // --- Firebase Config & Initialization ---
+        // These are global variables provided by the platform.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
+        
         // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-
-        // Get elements for header login/monogram
-        const loginHeaderLink = document.getElementById('loginHeaderLink');
-        const userMonogramLink = document.getElementById('userMonogramLink');
-        const userMonogram = document.getElementById('userMonogram');
-
-        /**
-         * Generates a random light background color in HSL format.
-         * @returns {string} HSL color string.
-         */
-        function getRandomLightColor() {
-            const hue = Math.floor(Math.random() * 360); // 0-359
-            const saturation = Math.floor(Math.random() * 30) + 70; // 70-100% saturation
-            const lightness = Math.floor(Math.random() * 20) + 70; // 70-90% lightness
-            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        let app, auth, db;
+        try {
+            if (Object.keys(firebaseConfig).length > 0) {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+            } else {
+                console.error("Firebase config not available. App will run in mock mode.");
+                // Fallback or handle appropriately in your app logic
+            }
+        } catch (error) {
+            console.error("Firebase initialization failed:", error);
+            // Gracefully handle the error, maybe show a message to the user
         }
 
-        // Firebase Auth State Listener for header monogram
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                // User is signed in, show monogram, hide login link
-                loginHeaderLink.classList.add('hidden');
-                userMonogramLink.classList.remove('hidden');
-
-                // Generate initials
-                let initials = '??';
-                if (user.displayName) {
-                    const nameParts = user.displayName.split(' ').filter(part => part.length > 0);
-                    if (nameParts.length > 1) {
-                        initials = nameParts[0][0] + nameParts[nameParts.length - 1][0];
-                    } else if (nameParts.length === 1) {
-                        initials = nameParts[0][0];
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Authenticate the user
+            let userId = null;
+            if (auth) {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
                     }
-                } else if (user.email) {
-                    initials = user.email[0];
+                } catch (error) {
+                    console.error("Auth failed:", error);
                 }
-                userMonogram.textContent = initials.toUpperCase();
-                userMonogram.style.backgroundColor = getRandomLightColor();
+                userId = auth.currentUser?.uid || 'anonymous';
             } else {
-                // User is signed out, show login link, hide monogram
-                loginHeaderLink.classList.remove('hidden');
-                userMonogramLink.classList.add('hidden');
+                userId = 'anonymous'; // Fallback for mock mode
             }
-        });
 
-        // Add a click listener to the monogram link to check authentication
-        userMonogramLink.addEventListener('click', (event) => {
-            if (!auth.currentUser) {
-                // If user is not authenticated, prevent default navigation and redirect to login
-                event.preventDefault(); // Stop the link from navigating
-                window.location.href = 'login.html'; // Redirect to login page
+            // --- BANNER LOGIC ---
+            document.getElementById('closeBannerBtn').addEventListener('click', () => {
+                document.getElementById('floatingBanner').style.display = 'none';
+            });
+            
+            // --- FULL AUTH & MODAL LOGIC ---
+            const modals = document.querySelectorAll('.modal');
+            const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
+            const closeModal = (modal) => modal.classList.remove('is-visible');
+
+            document.getElementById('loginNavBtn').addEventListener('click', (e) => { e.preventDefault(); openModal('loginModal'); showTab('login'); });
+            document.getElementById('aboutUsLink').addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
+            document.getElementById('privacyPolicyLink').addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
+            document.getElementById('termsAndConditionsLinkFooter').addEventListener('click', (e) => { e.preventDefault(); openModal('termsAndConditionsModal'); });
+
+            modals.forEach(modal => {
+                modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+                modal.querySelector('.close-modal-btn')?.addEventListener('click', () => closeModal(modal));
+            });
+
+            const loginTabBtn = document.getElementById('loginTabBtn');
+            const signupTabBtn = document.getElementById('signupTabBtn');
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+            const authMessage = document.getElementById('authMessage');
+
+            const showTab = (tabName) => {
+                authMessage.classList.add('hidden');
+                [loginForm, signupForm].forEach(form => form.classList.add('hidden'));
+                [loginTabBtn, signupTabBtn].forEach(btn => btn.classList.remove('border-blue-600', 'text-blue-600', 'border-b-2'));
+                
+                if (tabName === 'login') {
+                    loginForm.classList.remove('hidden');
+                    loginTabBtn.classList.add('border-blue-600', 'text-blue-600', 'border-b-2');
+                } else {
+                    signupForm.classList.remove('hidden');
+                    signupTabBtn.classList.add('border-blue-600', 'text-blue-600', 'border-b-2');
+                }
+            };
+            
+            loginTabBtn.addEventListener('click', () => showTab('login'));
+            signupTabBtn.addEventListener('click', () => showTab('signup'));
+
+            const authStatusContainer = document.getElementById('authStatusContainer');
+            const loginNavBtn = document.getElementById('loginNavBtn');
+            const userMonogram = document.getElementById('userMonogram');
+            const authDropdown = document.getElementById('authDropdown');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const googleLoginBtn = document.getElementById('googleLoginBtn');
+            const googleSignupBtn = document.getElementById('googleSignupBtn');
+            const loginEmailInput = document.getElementById('loginEmail');
+            const loginPasswordInput = document.getElementById('loginPassword');
+            const signupNameInput = document.getElementById('signupName');
+            const signupEmailInput = document.getElementById('signupEmail');
+            const signupPasswordInput = document.getElementById('signupPassword');
+            
+            function showAuthMessage(msg, type = 'error') {
+                authMessage.textContent = msg;
+                authMessage.className = 'mt-4 p-3 rounded-lg text-sm text-center'; // Reset classes
+                if (type === 'error') {
+                    authMessage.classList.add('bg-red-100', 'text-red-700');
+                } else if (type === 'success') {
+                    authMessage.classList.add('bg-green-100', 'text-green-700');
+                }
             }
-            // If user is authenticated, the link will proceed normally to my-account.html
-        });
 
-        // Initial sign-in with custom token if available, otherwise anonymously
-        if (initialAuthToken) {
-            signInWithCustomToken(auth, initialAuthToken).catch((error) => {
-                console.error("Error signing in with custom token:", error);
-                signInAnonymously(auth).catch((anonError) => {
-                    console.error("Error signing in anonymously:", anonError);
+            // Google Login/Signup
+            const googleProvider = new GoogleAuthProvider();
+            const signInWithGoogle = async () => {
+                try {
+                    await signInWithPopup(auth, googleProvider);
+                    closeModal(document.getElementById('loginModal'));
+                } catch (error) {
+                    showAuthMessage(error.message);
+                }
+            };
+            googleLoginBtn.addEventListener('click', signInWithGoogle);
+            googleSignupBtn.addEventListener('click', signInWithGoogle);
+
+            // Email/Password Login
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    await signInWithEmailAndPassword(auth, loginEmailInput.value, loginPasswordInput.value);
+                    closeModal(document.getElementById('loginModal'));
+                } catch (error) {
+                    showAuthMessage(error.message);
+                }
+            });
+
+            // Email/Password Signup
+            signupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (signupPasswordInput.value.length < 6) {
+                    showAuthMessage('Password must be at least 6 characters long.');
+                    return;
+                }
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, signupEmailInput.value, signupPasswordInput.value);
+                    await updateProfile(userCredential.user, { displayName: signupNameInput.value });
+                    closeModal(document.getElementById('loginModal'));
+                } catch (error) {
+                    showAuthMessage(error.message);
+                }
+            });
+
+            // Auth State Change Listener
+            onAuthStateChanged(auth, user => {
+                if (user) {
+                    loginNavBtn.classList.add('hidden');
+                    userMonogram.classList.remove('hidden');
+                    const initials = (user.displayName || user.email).split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                    userMonogram.textContent = initials;
+                } else {
+                    loginNavBtn.classList.remove('hidden');
+                    userMonogram.classList.add('hidden');
+                    authDropdown.classList.add('hidden');
+                }
+            });
+            
+            // Monogram Dropdown Toggle
+            userMonogram.addEventListener('click', (e) => {
+                e.stopPropagation();
+                authDropdown.classList.toggle('hidden');
+            });
+            
+            // Close dropdown if clicking outside
+            document.addEventListener('click', () => {
+                if (!authDropdown.classList.contains('hidden')) {
+                    authDropdown.classList.add('hidden');
+                }
+            });
+
+            // Logout
+            logoutBtn.addEventListener('click', () => {
+                signOut(auth);
+            });
+            
+            // --- IMAGE LOADING LOGIC ---
+            function loadImageWithFallback(imgElement) {
+                const baseSrc = imgElement.dataset.baseSrc;
+                if (!baseSrc) return;
+                const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+                let current = 0;
+                function tryLoad() {
+                    if (current >= extensions.length) {
+                        imgElement.src = 'https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';
+                        return;
+                    }
+                    const testSrc = baseSrc + extensions[current];
+                    const img = new Image();
+                    img.onload = () => { imgElement.src = testSrc; };
+                    img.onerror = () => { current++; tryLoad(); };
+                    img.src = testSrc;
+                }
+                tryLoad();
+            }
+
+            // --- DYNAMIC DEVICE DATA & RENDERING ---
+            const phoneGrid = document.getElementById('phoneGrid');
+            const searchInput = document.getElementById('searchInput');
+            const noResultsMessage = document.getElementById('noResultsMessage');
+            const searchTermSpan = document.getElementById('searchTerm');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const brandFilterButtons = document.querySelectorAll('.brand-filter-btn');
+
+            let allDevices = []; // A global variable to store all fetched devices
+            let activeFilter = 'all';
+
+            // Function to fetch all devices from Firestore
+            const fetchAllDevices = async () => {
+                loadingIndicator.classList.remove('hidden');
+                allDevices = [];
+                if (!db) {
+                    console.error("Firestore is not initialized.");
+                    phoneGrid.innerHTML = '<p class="text-center text-red-500">Failed to load device data. Firestore is not initialized.</p>';
+                    loadingIndicator.classList.add('hidden');
+                    return;
+                }
+
+                try {
+                    const devicesCollectionRef = collection(db, `artifacts/${appId}/public/data/devices`);
+                    const querySnapshot = await getDocs(devicesCollectionRef);
+                    
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        let maxPrice = 0;
+                        if (data.prices) {
+                            Object.values(data.prices).forEach(storageOption => {
+                                if (storageOption.unlocked) {
+                                    Object.values(storageOption.unlocked).forEach(price => {
+                                        if (typeof price === 'number') maxPrice = Math.max(maxPrice, price);
+                                    });
+                                }
+                                if (storageOption.locked) {
+                                    Object.values(storageOption.locked).forEach(price => {
+                                        if (typeof price === 'number') maxPrice = Math.max(maxPrice, price);
+                                    });
+                                }
+                            });
+                        }
+                        allDevices.push({ ...data, highestPrice: maxPrice, docId: doc.id });
+                    });
+                    
+                } catch (error) {
+                    console.error("Error fetching devices from Firestore:", error);
+                    phoneGrid.innerHTML = '<p class="text-center text-red-500">Failed to load device data from Firestore. Please ensure the Firestore collection is set up correctly.</p>';
+                    loadingIndicator.classList.add('hidden');
+                    return;
+                }
+
+                renderDevices(allDevices);
+                loadingIndicator.classList.add('hidden');
+            };
+
+            const renderDevices = (deviceList) => {
+                phoneGrid.innerHTML = '';
+                if (deviceList.length === 0) {
+                    phoneGrid.classList.add('hidden');
+                    noResultsMessage.classList.remove('hidden');
+                    searchTermSpan.textContent = searchInput.value;
+                } else {
+                    phoneGrid.classList.remove('hidden');
+                    noResultsMessage.classList.add('hidden');
+                    deviceList.forEach(device => {
+                        const modelUrl = `/offer.html?slug=${device.slug}&brand=${device.brand}`;
+                        const deviceCardHTML = `
+                            <a href="${modelUrl}" class="phone-card-link group" data-name="${device.name.toLowerCase()}" data-brand="${device.brand}">
+                                <div class="phone-card-inner bg-white p-6 rounded-xl shadow-md text-center flex flex-col h-full">
+                                    <img src="${device.imageUrl}" alt="${device.name}" class="mx-auto mb-4 h-48 object-contain">
+                                    <h3 class="text-lg font-semibold text-slate-800">${device.name}</h3>
+                                    <p class="text-blue-600 font-bold my-2">Up to $${device.highestPrice.toFixed(2)}</p>
+                                    <span class="mt-auto bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span>
+                                </div>
+                            </a>`;
+                        phoneGrid.insertAdjacentHTML('beforeend', deviceCardHTML);
+                    });
+                }
+            };
+            
+            // Search functionality
+            const applyFilters = () => {
+                const query = searchInput.value.toLowerCase().trim();
+                const filteredDevices = allDevices.filter(device => {
+                    const matchesBrand = activeFilter === 'all' || device.brand === activeFilter;
+                    const matchesSearch = device.name.toLowerCase().includes(query) || device.brand.toLowerCase().includes(query);
+                    return matchesBrand && matchesSearch;
+                });
+                renderDevices(filteredDevices);
+            };
+
+            searchInput.addEventListener('input', applyFilters);
+
+            // Brand filter functionality
+            brandFilterButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    activeFilter = button.dataset.brand;
+                    // Update button styling to show active state
+                    brandFilterButtons.forEach(btn => {
+                        if (btn.dataset.brand === activeFilter) {
+                            btn.classList.add('bg-blue-600', 'text-white', 'border-transparent');
+                            btn.classList.remove('bg-slate-50', 'text-slate-800', 'border-slate-300', 'hover:bg-slate-100');
+                        } else {
+                            btn.classList.remove('bg-blue-600', 'text-white', 'border-transparent');
+                            btn.classList.add('bg-slate-50', 'text-slate-800', 'border-slate-300', 'hover:bg-slate-100');
+                        }
+                    });
+                    applyFilters();
                 });
             });
-        } else {
-            signInAnonymously(auth).catch((anonError) => {
-                console.error("Error signing in anonymously:", anonError);
-            });
-        }
+            
+            fetchAllDevices();
 
+            // --- ADVANCED LIVE CHAT LOGIC ---
+            const chatWindow = document.getElementById('chat-window');
+            const chatOpenBtn = document.getElementById('chat-open-btn');
+            const chatCloseBtn = document.getElementById('chat-close-btn');
+            const chatMinimizeBtn = document.getElementById('chat-minimize-btn');
+            const chatMessages = document.getElementById('chat-messages');
+            const chatInput = document.getElementById('chat-input');
+            const chatInputContainer = document.getElementById('chat-input-container');
+            const guestPromptContainer = document.getElementById('guest-prompt-container');
+            const guestLoginBtn = document.getElementById('guest-login-btn');
+            const guestContinueBtn = document.getElementById('guest-continue-btn');
+            const unreadCounter = document.getElementById('unread-counter');
+            const typingIndicatorContainer = document.getElementById('typing-indicator-container');
+            const surveyContainer = document.getElementById('chat-survey-container');
+            const surveyForm = document.getElementById('chat-survey-form');
+            const starRatingContainer = document.getElementById('star-rating');
+            const endChatConfirmModal = document.getElementById('end-chat-confirm-modal');
+            const endChatYesBtn = document.getElementById('end-chat-yes');
+            const endChatNoBtn = document.getElementById('end-chat-no');
+            const orderSelectionContainer = document.getElementById('order-selection-container');
+            const orderList = document.getElementById('order-list');
+            const closeOrderSelectionBtn = document.getElementById('close-order-selection-btn');
+            const sendMessageBtn = document.getElementById('send-message-btn');
+            const globalTooltip = document.getElementById('globalTooltip');
 
-        // --- Device Selection Logic ---
-        const selectCompany = document.getElementById('selectCompany');
-        const selectDevice = document.getElementById('selectDevice');
-        const selectStorage = document.getElementById('selectStorage');
-        const proceedToQuoteBtn = document.getElementById('proceedToQuoteBtn');
-        const messageDiv = document.getElementById('message');
+            let currentChatId = null;
+            let unsubscribeFromMessages = null;
+            let unsubscribeFromChatSession = null;
+            let isChatMinimized = true;
+            let unreadCount = 0;
+            let hasUserTypedFirstMessage = false;
+            let userTypingTimeout = null;
+            let initialWelcomeRendered = {};
 
-        /**
-         * Displays a message to the user (success or error).
-         * @param {string} msg - The message to display.
-         * @param {string} type - 'success', 'error', or 'info'.
-         */
-        function showMessage(msg, type) {
-            messageDiv.textContent = msg;
-            messageDiv.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-yellow-100', 'text-yellow-700');
-            if (type === 'error') {
-                messageDiv.classList.add('bg-red-100', 'text-red-700');
-            } else if (type === 'success') {
-                messageDiv.classList.add('bg-green-100', 'text-green-700');
-            } else if (type === 'info') {
-                messageDiv.classList.add('bg-yellow-100', 'text-yellow-700');
-            }
-            messageDiv.classList.remove('hidden');
-        }
+            const notificationSound = new Audio('https://cdn.freesound.org/previews/253/253887_3900531-lq.mp3');
+            notificationSound.volume = 0.5;
 
-        /**
-         * Clears any displayed messages.
-         */
-        function clearMessage() {
-            messageDiv.classList.add('hidden');
-            messageDiv.textContent = '';
-        }
-
-        // Define available devices, their storage options, and their corresponding URLs
-        const devicesData = {
-            iphone: {
-                "iPhone 16 Pro Max": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-16-pro-max.html"
-                },
-                "iPhone 16 Pro": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-16-pro.html"
-                },
-                "iPhone 16 Plus": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-16-plus.html"
-                },
-                "iPhone 16": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-16.html"
-                },
-                "iPhone 16e": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-16e.html"
-                },
-                "iPhone 15 Pro Max": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-15-pro-max.html"
-                },
-                "iPhone 15 Pro": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-15-pro.html"
-                },
-                "iPhone 15 Plus": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-15-plus.html"
-                },
-                "iPhone 15": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-15.html"
-                },
-                "iPhone 14 Pro Max": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-14-pro-max.html"
-                },
-                "iPhone 14 Pro": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-14-pro.html"
-                },
-                "iPhone 14 Plus": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-14-plus.html"
-                },
-                "iPhone 14": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-14.html"
-                },
-                "iPhone 13 Pro Max": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-13-pro-max.html"
-                },
-                "iPhone 13 Pro": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-13-pro.html"
-                },
-                "iPhone 13": {
-                    storages: ["128GB", "256GB", "512GB", "1TB"],
-                    url: "iphone/iphone-13.html"
-                },
-                "iPhone 13 mini": {
-                    storages: ["64GB", "128GB", "256GB", "512GB"],
-                    url: "iphone/iphone-13-mini.html"
-                },
-                "iPhone 12 Pro Max": {
-                    storages: ["128GB", "256GB", "512GB"],
-                    url: "iphone/iphone-12-pro-max.html"
-                },
-                "iPhone 12 Pro": {
-                    storages: ["128GB", "256GB", "512GB"],
-                    url: "iphone/iphone-12-pro.html"
-                },
-                "iPhone 12": {
-                    storages: ["64GB", "128GB", "256GB"],
-                    url: "iphone/iphone-12.html"
-                },
-                "iPhone 12 mini": {
-                    storages: ["64GB", "128GB", "256GB"],
-                    url: "iphone/iphone-12-mini.html"
-                },
-                "iPhone 11 Pro Max": {
-                    storages: ["64GB", "256GB", "512GB"],
-                    url: "iphone/iphone-11-pro-max.html"
-                },
-                "iPhone 11 Pro": {
-                    storages: ["64GB", "256GB", "512GB"],
-                    url: "iphone/iphone-11-pro.html"
-                },
-                "iPhone 11": {
-                    storages: ["64GB", "128GB", "256GB"],
-                    url: "iphone/iphone-11.html"
-                },
-                "iPhone SE (3rd Gen)": {
-                    storages: ["64GB", "128GB", "256GB"],
-                    url: "iphone/iphone-se-3rd-gen.html"
+            const getOrCreateGuestId = () => {
+                let id = localStorage.getItem('guestChatId');
+                if (!id) {
+                    id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                    localStorage.setItem('guestChatId', id);
                 }
-            },
-            samsung: {
-                "Galaxy S24 Ultra": {
-                    storages: ["256GB", "512GB", "1TB"],
-                    url: "samsung/samsung-galaxy-s24-ultra.html"
-                },
-                "Galaxy S22": {
-                    storages: ["128GB", "256GB"],
-                    url: "samsung/samsung-galaxy-s22.html"
-                }
-            },
-            google: {
-                "Pixel 8": {
-                    storages: ["128GB", "256GB"],
-                    url: "google/google-pixel-8.html"
-                }
-            },
-            tablet: {
-                "iPad Pro (M2)": {
-                    storages: ["128GB", "256GB", "512GB", "1TB", "2TB"],
-                    url: "tablet/ipad-pro-m2.html"
-                },
-                "Galaxy Tab S9 Ultra": {
-                    storages: ["256GB", "512GB", "1TB"],
-                    url: "tablet/samsung-galaxy-tab-s9-ultra.html"
-                }
-            }
-        };
+                return id;
+            };
 
-        /**
-         * Populates a select element with options.
-         * @param {HTMLSelectElement} selectElement - The select element to populate.
-         * @param {Array<string>} options - An array of option values.
-         * @param {string} defaultText - The default text for the first option.
-         */
-        function populateSelect(selectElement, options, defaultText) {
-            selectElement.innerHTML = `<option value="">-- ${defaultText} --</option>`;
-            options.forEach(option => {
-                const opt = document.createElement('option');
-                opt.value = option;
-                opt.textContent = option;
-                selectElement.appendChild(opt);
-            });
-            selectElement.disabled = false;
-        }
-
-        /**
-         * Resets a select element to its default state.
-         * @param {HTMLSelectElement} selectElement - The select element to reset.
-         * @param {string} defaultText - The default text for the first option.
-         */
-        function resetSelect(selectElement, defaultText) {
-            selectElement.innerHTML = `<option value="">-- ${defaultText} --</option>`;
-            selectElement.disabled = true;
-        }
-
-        // Event listener for Company selection
-        selectCompany.addEventListener('change', () => {
-            const company = selectCompany.value;
-            resetSelect(selectDevice, 'Select a Device');
-            resetSelect(selectStorage, 'Select Storage');
-            proceedToQuoteBtn.disabled = true;
-            clearMessage();
-
-            if (company && devicesData[company]) {
-                const deviceModels = Object.keys(devicesData[company]);
-                populateSelect(selectDevice, deviceModels, 'Select a Device');
-            }
-        });
-
-        // Event listener for Device selection
-        selectDevice.addEventListener('change', () => {
-            const company = selectCompany.value;
-            const deviceModel = selectDevice.value;
-            resetSelect(selectStorage, 'Select Storage');
-            proceedToQuoteBtn.disabled = true;
-            clearMessage();
-
-            if (company && deviceModel && devicesData[company] && devicesData[company][deviceModel]) {
-                const storageOptions = devicesData[company][deviceModel].storages;
-                populateSelect(selectStorage, storageOptions, 'Select Storage');
-            }
-        });
-
-        // Event listener for Storage selection
-        selectStorage.addEventListener('change', () => {
-            const company = selectCompany.value;
-            const deviceModel = selectDevice.value;
-            const storage = selectStorage.value;
-            clearMessage();
-
-            if (company && deviceModel && storage) {
-                proceedToQuoteBtn.disabled = false;
-            } else {
-                proceedToQuoteBtn.disabled = true;
-            }
-        });
-
-        // Event listener for Proceed to Quote button
-        proceedToQuoteBtn.addEventListener('click', () => {
-            const company = selectCompany.value;
-            const deviceModel = selectDevice.value;
-            const selectedStorageValue = selectStorage.value; // Get the selected storage value
-
-            if (company && deviceModel && selectedStorageValue) {
-                const deviceUrl = devicesData[company][deviceModel].url;
-                if (deviceUrl) {
-                    // Append storage as a query parameter
-                    window.location.href = `${deviceUrl}?storage=${encodeURIComponent(selectedStorageValue)}`;
+            const getOrCreateChatSession = async () => {
+                let chatId = localStorage.getItem('chatSessionId');
+                if (chatId) return chatId;
+                
+                const user = auth.currentUser;
+                const currentGuestId = getOrCreateGuestId();
+                const chatSessionData = {
+                    createdAt: serverTimestamp(),
+                    ownerUid: user ? user.uid : null,
+                    guestId: user ? null : currentGuestId,
+                    status: 'active',
+                    agentName: null,
+                    isAgentTyping: false,
+                    userTypingText: '',
+                    agentAskingForOrderId: false
+                };
+                const docRef = await addDoc(collection(db, "chats"), chatSessionData);
+                chatId = docRef.id;
+                localStorage.setItem('chatSessionId', chatId);
+                return chatId;
+            };
+            
+            const renderMessage = (msg) => {
+                const messageDiv = document.createElement('div');
+                const user = auth.currentUser;
+                const currentGuestId = localStorage.getItem('guestChatId');
+                const isMyMessage = (user && msg.sender === user.uid) || (!user && msg.sender === currentGuestId);
+                
+                let classes = 'p-3 rounded-lg max-w-[85%] mb-2 break-words';
+                if (msg.type === 'system') {
+                    classes = 'text-center text-sm text-slate-500 my-2';
+                    messageDiv.innerHTML = `<span class="bg-white px-2 py-1 rounded-full">${msg.text}</span>`;
                 } else {
-                    showMessage('Selected device page not found. Please try again.', 'error');
+                    classes += isMyMessage ? ' bg-gray-200 text-slate-800 self-end' : ' bg-blue-100 text-blue-800 self-start';
+                    messageDiv.textContent = msg.text;
                 }
-            } else {
-                showMessage('Please make all selections to proceed.', 'error');
-            }
-        });
 
-        // Initial state setup (disable device and storage dropdowns)
-        document.addEventListener('DOMContentLoaded', () => {
-            resetSelect(selectDevice, 'Select a Device');
-            resetSelect(selectStorage, 'Select Storage');
-            proceedToQuoteBtn.disabled = true;
-        });
+                messageDiv.className = classes;
+                if (msg.type === 'system' && msg.text.includes('has joined the chat.')) {
+                    messageDiv.id = `agent-joined-${currentChatId}`; 
+                }
+                chatMessages.appendChild(messageDiv);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            };
 
+            const listenForChatSessionChanges = (chatId) => {
+                if (unsubscribeFromChatSession) unsubscribeFromChatSession();
+                unsubscribeFromChatSession = onSnapshot(doc(db, "chats", chatId), async (docSnap) => {
+                    const data = docSnap.data();
+                    if (!data) return;
+
+                    const agentJoinedFlag = localStorage.getItem(`agentJoined_${chatId}`);
+                    if (data.agentName && data.agentHasJoined && !agentJoinedFlag) {
+                        const joinMsgText = `<i class="fa-solid fa-headset mr-2"></i>${data.agentName} has joined the chat.`;
+                        await addDoc(collection(db, `chats/${chatId}/messages`), {
+                            text: joinMsgText,
+                            timestamp: serverTimestamp(),
+                            sender: 'system',
+                            type: 'system'
+                        });
+                        localStorage.setItem(`agentJoined_${chatId}`, 'true');
+                    }
+                    
+                    typingIndicatorContainer.style.display = data.isAgentTyping ? 'block' : 'none';
+                    if (data.isAgentTyping) chatMessages.scrollTop = chatMessages.scrollHeight;
+                    if (data.status === 'ended_by_agent') {
+                        chatInputContainer.classList.add('hidden');
+                        guestPromptContainer.classList.add('hidden');
+                        surveyContainer.classList.remove('hidden');
+                        orderSelectionContainer.classList.add('hidden');
+                        localStorage.removeItem('chatSessionId');
+                        localStorage.removeItem(`agentJoined_${chatId}`);
+                    }
+                    if (data.agentAskingForOrderId) {
+                        displayOrderSelectionUI();
+                    } else {
+                        orderSelectionContainer.classList.add('hidden');
+                    }
+                });
+            };
+
+            const listenForMessages = (chatId) => {
+                if (unsubscribeFromMessages) unsubscribeFromMessages();
+                currentChatId = chatId;
+                const messagesRef = collection(db, `chats/${chatId}/messages`);
+                const q = query(messagesRef, orderBy("timestamp"));
+                unsubscribeFromMessages = onSnapshot(q, (snapshot) => {
+                    chatMessages.innerHTML = '';
+                    if (!initialWelcomeRendered[chatId] && snapshot.empty) {
+                        const user = auth.currentUser;
+                        const userName = user?.displayName?.split(' ')[0] || 'there';
+                        renderMessage({ type: 'system', text: `Hi ${userName}, how can we help you today?` });
+                        initialWelcomeRendered[chatId] = true;
+                    }
+
+                    snapshot.forEach(doc => {
+                        const msgData = doc.data();
+                        renderMessage(msgData);
+                        const user = auth.currentUser;
+                        const currentGuestId = localStorage.getItem('guestChatId');
+                        const isMyMessage = (user && msgData.sender === user.uid) || (!user && msgData.sender === currentGuestId);
+                        if (!isMyMessage && isChatMinimized) {
+                            unreadCount++;
+                            unreadCounter.textContent = unreadCount;
+                            unreadCounter.classList.add('visible');
+                            notificationSound.play().catch(e => console.log("Audio play failed:", e));
+                        }
+                    });
+                });
+            };
+            
+            const resetChatUI = () => {
+                endChatConfirmModal.classList.add('hidden');
+                endChatConfirmModal.classList.remove('flex');
+                surveyContainer.classList.add('hidden');
+                guestPromptContainer.classList.add('hidden');
+                chatInputContainer.classList.remove('hidden');
+                orderSelectionContainer.classList.add('hidden');
+                typingIndicatorContainer.style.display = 'none';
+                chatMessages.innerHTML = '';
+                initialWelcomeRendered = {};
+            };
+
+            const openChat = async () => {
+                resetChatUI();
+                chatWindow.classList.add('is-visible');
+                isChatMinimized = false;
+                unreadCount = 0;
+                unreadCounter.classList.remove('visible');
+                const chatId = await getOrCreateChatSession();
+                if (chatId) {
+                    listenForMessages(chatId);
+                    listenForChatSessionChanges(chatId);
+                }
+            };
+            chatOpenBtn.addEventListener('click', openChat);
+
+            const minimizeChat = () => {
+                chatWindow.classList.remove('is-visible');
+                isChatMinimized = true;
+            };
+            chatMinimizeBtn.addEventListener('click', minimizeChat);
+
+            chatCloseBtn.addEventListener('click', () => {
+                endChatConfirmModal.classList.remove('hidden');
+                endChatConfirmModal.classList.add('flex');
+            });
+
+            endChatNoBtn.addEventListener('click', () => {
+                endChatConfirmModal.classList.add('hidden');
+                endChatConfirmModal.classList.remove('flex');
+            });
+
+            endChatYesBtn.addEventListener('click', async () => {
+                if (currentChatId) {
+                    await addDoc(collection(db, `chats/${currentChatId}/messages`), {
+                        text: "Chat ended by user.",
+                        timestamp: serverTimestamp(),
+                        sender: 'system',
+                        type: 'system'
+                    });
+                    await updateDoc(doc(db, "chats", currentChatId), { status: 'ended_by_user' });
+                }
+                localStorage.removeItem('chatSessionId');
+                localStorage.removeItem(`agentJoined_${currentChatId}`);
+                currentChatId = null;
+                hasUserTypedFirstMessage = false;
+                chatMessages.innerHTML = '';
+                endChatConfirmModal.classList.add('hidden');
+                endChatConfirmModal.classList.remove('flex');
+                minimizeChat();
+            });
+
+            const sendMessage = async (text) => {
+                if (text.trim() === '' || !currentChatId) return;
+                const user = auth.currentUser;
+                if (!user && !hasUserTypedFirstMessage) {
+                    hasUserTypedFirstMessage = true;
+                    chatInputContainer.classList.add('hidden');
+                    guestPromptContainer.classList.remove('hidden');
+                    return;
+                }
+                const currentGuestId = getOrCreateGuestId();
+                const messageData = { text, timestamp: serverTimestamp(), sender: user ? user.uid : currentGuestId };
+                await addDoc(collection(db, `chats/${currentChatId}/messages`), messageData);
+                chatInput.value = '';
+                await updateDoc(doc(db, "chats", currentChatId), { 
+                    userTypingText: chatInput.value, 
+                    lastMessage: `User: ${text}`,
+                    lastMessageTimestamp: serverTimestamp() 
+                });
+            };
+
+            chatInput.addEventListener('keypress', (e) => { 
+                if (e.key === 'Enter') { 
+                    e.preventDefault(); 
+                    sendMessage(chatInput.value); 
+                } 
+            });
+            sendMessageBtn.addEventListener('click', () => {
+                sendMessage(chatInput.value);
+            });
+
+            chatInput.addEventListener('keyup', () => {
+                clearTimeout(userTypingTimeout);
+                userTypingTimeout = setTimeout(async () => {
+                    if (currentChatId) {
+                        await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
+                    }
+                }, 300);
+            });
+
+            guestLoginBtn.addEventListener('click', () => openModal('loginModal'));
+            guestContinueBtn.addEventListener('click', () => {
+                guestPromptContainer.classList.add('hidden');
+                chatInputContainer.classList.remove('hidden');
+                chatInput.focus();
+            });
+
+            starRatingContainer.addEventListener('mouseover', e => {
+                if (e.target.tagName === 'I') {
+                    const rating = e.target.dataset.value;
+                    Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= rating));
+                }
+            });
+            starRatingContainer.addEventListener('mouseout', () => {
+                const currentRating = starRatingContainer.dataset.rating;
+                Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= currentRating));
+            });
+            starRatingContainer.addEventListener('click', e => {
+                if (e.target.tagName === 'I') {
+                    starRatingContainer.dataset.rating = e.target.dataset.value;
+                }
+            });
+            surveyForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const surveyData = {
+                    overallRating: parseInt(starRatingContainer.dataset.rating, 10)
+                };
+                await setDoc(doc(db, `chats/${currentChatId}/survey/feedback`), { ...surveyData, submittedAt: serverTimestamp() });
+                surveyContainer.innerHTML = '<p class="text-center font-semibold text-green-600">Thank you for your feedback!</p>';
+            });
+
+            // --- USER ORDERS LOGIC ---
+            const fetchUserOrders = async () => {
+                return new Promise((resolve) => {
+                    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                        unsubscribe();
+                        if (!user) {
+                            resolve({ requiresLogin: true });
+                            return;
+                        }
+                        const userId = user.uid;
+                        const ordersRef = collection(db, "orders");
+                        const q = query(ordersRef, where("userId", "==", userId), orderBy("createdAt", "desc"));
+                        try {
+                            const snapshot = await getDocs(q);
+                            const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            resolve(orders);
+                        } catch (error) {
+                            console.error("Error fetching user orders:", error);
+                            resolve({ error: error.message });
+                        }
+                    });
+                });
+            };
+            
+            const renderOrderSelection = (orders) => {
+                orderList.innerHTML = '';
+                if (orders.requiresLogin) {
+                    orderList.innerHTML = '<p class="text-center text-slate-500">Please <a href="#" id="orderLoginPromptLink" class="text-blue-600 font-semibold hover:underline">log in</a> to view orders.</p>';
+                    document.getElementById('orderLoginPromptLink').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        openModal('loginModal');
+                        orderSelectionContainer.classList.add('hidden');
+                    });
+                    return;
+                }
+                
+                if (!orders || orders.length === 0) {
+                    orderList.innerHTML = '<p class="text-center text-slate-500">No recent orders found.</p>';
+                    return;
+                }
+                orders.forEach(order => {
+                    const orderCard = document.createElement('div');
+                    orderCard.className = 'order-card';
+                    orderCard.dataset.orderId = order.orderId;
+                    orderCard.innerHTML = `
+                        <img src="${order.imageUrl || 'https://placehold.co/48x48/e0e7ff/4338ca?text=📱'}" alt="${order.device}" onerror="this.onerror=null;this.src='https://placehold.co/48x48/e0e7ff/4338ca?text=📱';">
+                        <div class="order-card-details">
+                            <strong>ID: ${order.orderId} - ${order.device}</strong>
+                            <span>${order.storage} | $${order.estimatedQuote}</span>
+                        </div>`;
+                    orderCard.addEventListener('click', () => handleOrderSelection(order));
+                    orderList.appendChild(orderCard);
+                });
+            };
+
+            const displayOrderSelectionUI = async () => {
+                guestPromptContainer.classList.add('hidden');
+                orderSelectionContainer.classList.remove('hidden');
+                orderList.innerHTML = '<p class="text-center text-blue-500">Loading your orders...</p>';
+                const orders = await fetchUserOrders();
+                renderOrderSelection(orders);
+            };
+
+            const handleOrderSelection = async (order) => {
+                const messageText = `Selected Order: ID: ${order.orderId}, Device: ${order.device}`;
+                await sendMessage(messageText);
+                orderSelectionContainer.classList.add('hidden');
+                if (currentChatId) {
+                    await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false });
+                }
+            };
+
+            closeOrderSelectionBtn.addEventListener('click', async () => {
+                orderSelectionContainer.classList.add('hidden');
+                if (currentChatId) {
+                    await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false });
+                }
+            });
+
+            const chatOrderBtn = document.getElementById('chat-order-btn');
+            chatOrderBtn.addEventListener('click', async () => {
+                if (currentChatId) {
+                    await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
+                } else {
+                    displayOrderSelectionUI();
+                }
+            });
+
+            const chatHeaderButtons = document.querySelectorAll('.chat-header-button');
+            chatHeaderButtons.forEach(button => {
+                let tooltipTimeout;
+                button.addEventListener('mouseover', (e) => {
+                    clearTimeout(tooltipTimeout);
+                    const tooltipText = button.dataset.tooltipText;
+                    if (tooltipText) {
+                        globalTooltip.textContent = tooltipText;
+                        globalTooltip.style.visibility = 'visible';
+                        globalTooltip.style.opacity = '1';
+                        const rect = button.getBoundingClientRect();
+                        globalTooltip.style.top = `${rect.bottom + 8}px`;
+                        globalTooltip.style.left = `${rect.left + rect.width / 2}px`;
+                        globalTooltip.style.transform = `translateX(-50%)`;
+                    }
+                });
+                button.addEventListener('mouseout', () => {
+                    tooltipTimeout = setTimeout(() => {
+                        globalTooltip.style.visibility = 'hidden';
+                        globalTooltip.style.opacity = '0';
+                    }, 100);
+                });
+            });
+        });
     </script>
 </body>
 </html>
