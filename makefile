@@ -11,32 +11,32 @@
 
 # Define the iPhone models (slugs)
 IPHONES = \
-    iphone-16-pro-max \
-    iphone-16-pro \
-    iphone-16 \
-    iphone-16-plus \
-    iphone-16-se \
-    iphone-15-pro-max \
-    iphone-15-pro \
-    iphone-15 \
-    iphone-15-plus \
-    iphone-14-pro-max \
-    iphone-14-pro \
-    iphone-14 \
-    iphone-14-plus \
-    iphone-13-pro-max \
-    iphone-13-pro \
-    iphone-13 \
-    iphone-13-mini \
-    iphone-12-pro-max \
-    iphone-12-pro \
-    iphone-12 \
-    iphone-12-mini \
-    iphone-11-pro-max \
-    iphone-11-pro \
-    iphone-11 \
-    iphone-se-3rd-gen \
-    iphone-se-2nd-gen
+    16-pro-max \
+    16-pro \
+    16 \
+    16-plus \
+    16-se \
+    15-pro-max \
+    15-pro \
+    15 \
+    15-plus \
+    14-pro-max \
+    14-pro \
+    14 \
+    14-plus \
+    13-pro-max \
+    13-pro \
+    13 \
+    13-mini \
+    12-pro-max \
+    12-pro \
+    12 \
+    12-mini \
+    11-pro-max \
+    11-pro \
+    11 \
+    se-3rd-gen \
+    se-2nd-gen
 
 # Define the Samsung models (slugs)
 SAMSUNGS = \
