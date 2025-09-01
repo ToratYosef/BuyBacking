@@ -12,7 +12,7 @@ const db = admin.firestore();
 const deviceData = {
     pixels: [
         {
-            name: 'Google Pixel 7 Pro', slug: 'pixel-7-pro', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp7pro',
+            name: 'Google Pixel 7 Pro', slug: 'pixel-7-pro', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/google/assets/gp7',
             prices: {
                 '128GB': { 'unlocked': { flawless: 450, good: 430, fair: 410, damaged: 370, broken: 200, noPower: 100 }, 'locked': { flawless: 360, good: 344, fair: 328, damaged: 296, broken: 160, noPower: 80 } },
                 '256GB': { 'unlocked': { flawless: 500, good: 480, fair: 460, damaged: 420, broken: 250, noPower: 120 }, 'locked': { flawless: 400, good: 384, fair: 368, damaged: 336, broken: 200, noPower: 96 } },
