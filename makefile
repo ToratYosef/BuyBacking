@@ -10,16 +10,16 @@
 
 # Define the Google Pixel models (slugs) from Pixel 7 Pro to the newest models
 PIXELS = \
-    pixel-7-pro \
-    pixel-8 \
-    pixel-8a \
-    pixel-9 \
-    pixel-9-pro \
-    pixel-9-pro-xl \
-    pixel-10 \
-    pixel-10-pro \
-    pixel-10-pro-xl \
-    pixel-10-pro-fold
+    7-pro \
+    8 \
+    8a \
+    9 \
+    9-pro \
+    9-pro-xl \
+    10 \
+    10-pro \
+    10-pro-xl \
+    10-pro-fold
 
 # Define output directories and template files
 PIXEL_DIR = google/models
