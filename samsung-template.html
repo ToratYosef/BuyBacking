@@ -41,7 +41,8 @@
             doc,
             getDoc,
             updateDoc,
-            setDoc
+            setDoc,
+            getDocs
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -439,301 +440,306 @@
             </div>
 
             <div class="w-full lg:w-3/5 text-center lg:text-left">
-                <h1 class="text-4xl font-extrabold text-slate-900 mb-4 sm:text-3xl">Sell Your <span id="deviceDisplayName"></span></h1>
-                <p class="text-lg text-slate-600 mb-8 max-w-xl mx-auto lg:mx-0 sm:text-base">
-                    Ready to sell your <span id="deviceDisplayNameText"></span>? Get an instant, competitive quote for your device today.
-                    We offer a quick, transparent, and hassle-free process with free shipping and certified inspection.
-                </p>
-                
-                <div class="space-y-6">
-
-                    <div class="mb-8" id="storageSection">
-                        <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">1. Select Storage Amount</label>
-                        <div class="flex justify-center lg:justify-start">
-                            <select id="storage" class="mt-1 block w-full md:w-1/2 px-4 py-3 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="">Select Storage</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-8 hidden" id="carrierSection">
-                        <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">2. Select Your Carrier</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4" id="carrierOptions">
-                            <div class="carrier-option">
-                                <input type="radio" id="att" name="carrier" value="ATT">
-                                <label for="att" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
-                                    <i class="fa-solid fa-signal text-3xl text-indigo-600 mb-2 sm:text-2xl"></i>
-                                    <span class="block text-slate-700 font-medium sm:text-sm">AT&T</span>
-                                </label>
-                            </div>
-                            <div class="carrier-option">
-                                <input type="radio" id="tmobile" name="carrier" value="TMobile">
-                                <label for="tmobile" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
-                                    <i class="fa-solid fa-mobile-screen-button text-3xl text-pink-600 mb-2 sm:text-2xl"></i>
-                                    <span class="block text-slate-700 font-medium sm:text-sm">T-Mobile</span>
-                                </label>
-                            </div>
-                            <div class="carrier-option">
-                                <input type="radio" id="verizon" name="carrier" value="Verizon">
-                                <label for="verizon" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
-                                    <i class="fa-solid fa-wifi text-3xl text-red-600 mb-2 sm:text-2xl"></i>
-                                    <span class="block text-slate-700 font-medium sm:text-sm">Verizon</span>
-                                </label>
-                            </div>
-                            <div class="carrier-option">
-                                <input type="radio" id="unlocked" name="carrier" value="Unlocked">
-                                <label for="unlocked" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
-                                    <i class="fa-solid fa-lock-open text-3xl text-teal-600 mb-2 sm:text-2xl"></i>
-                                    <span class="block text-slate-700 font-medium sm:text-sm">Unlocked</span>
-                                </label>
-                            </div>
-                            <div class="carrier-option">
-                                <input type="radio" id="other-carrier" name="carrier" value="Other">
-                                <label for="other-carrier" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
-                                    <i class="fa-solid fa-globe text-3xl text-yellow-600 mb-2 sm:text-2xl"></i>
-                                    <span class="block text-slate-700 font-medium sm:text-sm">Other</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="powerOnSection">
-                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">3. Does the device power on?</p>
-                        <div class="flex space-x-6 justify-center lg:justify-start" id="q1Options">
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="radio" name="q1_power_on" value="yes" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">Yes</span>
-                            </label>
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="radio" name="q1_power_on" value="no" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">No</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="functionalSection">
-                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left flex items-center justify-center lg:justify-start sm:text-base">
-                            4. Is the screen fully functional and free of defects?
-                        </p>
-                        <div id="functionalDetails" class="mt-2 p-3 bg-blue-50 rounded-md text-sm text-blue-800 text-left sm:text-xs">
-                            <p class="font-semibold mb-2">For **"Fully Functional"**, all of these must work correctly:</p>
-                            <ul class="list-disc list-inside ml-4 space-y-1">
-                                <li>Screen works and fully lights up (no dead pixels, discoloration, <strong>image burn or black dot/LCD dead pixels</strong>)</li>
-                                <li><strong>The device must contain all original parts.</strong> If a device is received with third-party or non-original parts, it will be considered not fully functional/damaged.</li>
-                                <li>All exterior buttons (power, volume, mute)</li>
-                                <li>Front/back camera and flashes</li>
-                                <li>Speakers and microphones</li>
-                                <li>Headphone jack and charging port</li>
-                                <li>Cellular, Wi-Fi, Bluetooth and GPS</li>
-                                <li>Touchscreen and voice commands</li>
-                                <li>Facial recognition and fingerprint sensor</li>
-                                <li>The battery health is sufficient, and the device can hold a charge</li>
-                            </ul>
-                        </div>
-                        <div class="flex space-x-6 justify-center lg:justify-start" id="q2Options">
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="radio" name="q2_fully_functional" value="yes" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">Yes</span>
-                            </label>
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="radio" name="q2_fully_functional" value="no" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">No</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cracksSection">
-                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">5. Are the front and back free of cracks?</p>
-                        <div class="flex space-x-6 justify-center lg:justify-start" id="q3Options">
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="radio" name="q3_no_cracks" value="yes" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">Yes</span>
-                            </label>
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="radio" name="q3_no_cracks" value="no" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">No</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cosmeticSection">
-                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">6. What’s the overall cosmetic condition?</p>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="q4Options">
-                            <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
-                                <input type="radio" name="q4_cosmetic_condition" value="flawless" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">Flawless</span>
-                            </label>
-                            <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
-                                <input type="radio" name="q4_cosmetic_condition" value="good" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">Good</span>
-                            </label>
-                            <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
-                                <input type="radio" name="q4_cosmetic_condition" value="fair" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">Fair</span>
-                            </label>
-                            <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
-                                <input type="radio" name="q4_cosmetic_condition" value="damaged" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">Damaged</span>
-                            </label>
-                        </div>
-                        <div id="cosmeticConditionDescription" class="mt-4 p-3 bg-slate-100 rounded-md text-sm text-slate-700 text-left hidden sm:text-xs">
-                        </div>
-                    </div>
+                <div id="loadingIndicator" class="flex justify-center items-center py-20 hidden">
+                    <i class="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
                 </div>
-
-                <div id="cta-section" class="flex flex-col items-center">
-                    <button id="getQuoteBtn" class="btn-primary-blue w-full max-w-sm hidden">
-                        Get My Instant Quote!
-                    </button>
-                    <div id="quoteMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full max-w-sm"></div>
-                </div>
-
-                <div id="nextSteps" class="mt-12 hidden flex flex-col items-center gap-8">
-                    <div id="paymentAndShipping" class="hidden w-full">
-                        <hr class="my-10 border-slate-200">
-                        <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">4. How would you like to get paid?</h2>
-
-                        <div class="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4" id="paymentOptions">
-                            <div class="payment-option">
-                                <input type="radio" id="venmo" name="payment_method" value="venmo">
-                                <label for="venmo" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
-                                    <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 512 512" class="h-10 w-10 mb-2 mx-auto sm:h-8 sm:w-8" aria-label="Venmo" role="img">
-                                        <rect width="512" height="512" rx="15%" fill="#3396cd"/>
-                                        <path d="m381.4 105.3c11 18.1 15.9 36.7 15.9 60.3 0 75.1-64.1 172.7-116.2 241.2h-118.8l-47.6-285 104.1-9.9 25.3 202.8c23.5-38.4 52.6-98.7 52.6-139.7 0-22.5-3.9-37.8-9.9-50.4z" fill="#fff"/>
-                                    </svg>
-                                    <span class="font-semibold block sm:text-sm">Venmo</span>
-                                </label>
-                            </div>
-                            <div class="payment-option">
-                                <input type="radio" id="zelle" name="payment_method" value="zelle">
-                                <label for="zelle" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
-                                    <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48" class="h-10 w-10 mb-2 mx-auto sm:h-8 sm:w-8">
-                                        <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22 C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5    C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5    C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5    h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5    h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298    C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
-                                    </svg>
-                                    <span class="font-semibold block sm:text-sm">Zelle</span>
-                                </label>
-                            </div>
-                            <div class="payment-option">
-                                <input type="radio" id="paypal" name="payment_method" value="paypal">
-                                <label for="paypal" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
-                                    <i class="fa-brands fa-paypal text-4xl text-blue-600 mb-2 sm:text-2xl"></i>
-                                    <span class="font-semibold block sm:text-sm">PayPal</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div id="venmoFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
-                            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Venmo Details</h3>
-                            <div class="space-y-4">
-                                <div>
-                                    <label for="venmoUsername" class="block text-sm font-medium text-slate-700">Venmo Username</label>
-                                    <input type="text" id="venmoUsername" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                </div>
-                                <div>
-                                    <label for="venmoUsernameConfirm" class="block text-sm font-medium text-slate-700">Verify Venmo Username</label>
-                                    <input type="text" id="venmoUsernameConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="zelleFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
-                            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Zelle Details</h3>
-                            <div class="space-y-4">
-                                <div>
-                                    <label for="zelleIdentifier" class="block text-sm font-medium text-slate-700">Zelle Email or Phone Number</label>
-                                    <input type="text" id="zelleIdentifier" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                </div>
-                                <div>
-                                    <label for="zelleIdentifierConfirm" class="block text-sm font-medium text-slate-700">Verify Zelle Email or Phone Number</label>
-                                    <input type="text" id="zelleIdentifierConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="paypalFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
-                            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">PayPal Details</h3>
-                            <div class="space-y-4">
-                                <div>
-                                    <label for="paypalEmail" class="block text-sm font-medium text-slate-700">PayPal Email Address</label>
-                                    <input type="email" id="paypalEmail" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                </div>
-                                <div>
-                                    <label for="paypalEmailConfirm" class="block text-sm font-medium text-slate-700">Verify PayPal Email Address</label>
-                                    <input type="email" id="paypalEmailConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                                </div>
+                <div id="deviceForm" class="hidden">
+                    <h1 class="text-4xl font-extrabold text-slate-900 mb-4 sm:text-3xl">Sell Your <span id="deviceDisplayName"></span></h1>
+                    <p class="text-lg text-slate-600 mb-8 max-w-xl mx-auto lg:mx-0 sm:text-base">
+                        Ready to sell your <span id="deviceDisplayNameText"></span>? Get an instant, competitive quote for your device today.
+                        We offer a quick, transparent, and hassle-free process with free shipping and certified inspection.
+                    </p>
+                    
+                    <div class="space-y-6">
+    
+                        <div class="mb-8" id="storageSection">
+                            <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">1. Select Storage Amount</label>
+                            <div class="flex justify-center lg:justify-start">
+                                <select id="storage" class="mt-1 block w-full md:w-1/2 px-4 py-3 border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="">Select Storage</option>
+                                </select>
                             </div>
                         </div>
                         
-                        <hr class="my-10 border-slate-200">
-                        <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">5. How would you like to ship your device?</h2>
-                        <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4" id="shippingOptions">
-                            <div class="shipping-option">
-                                <input type="radio" id="ship_kit" name="shipping_preference" value="ship_kit">
-                                <label for="ship_kit" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
-                                    <i class="fa-solid fa-box text-4xl text-indigo-600 mb-2 sm:text-2xl"></i>
-                                    <span class="font-semibold block sm:text-sm">Ship Me a Box (Shipping Kit)</span>
-                                    <p class="text-xs text-slate-500 mt-1">Receive a grey bag with a prepaid label and another grey bag inside to send your device to us.</p>
-                                </label>
+                        <div class="mb-8 hidden" id="carrierSection">
+                            <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">2. Select Your Carrier</label>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4" id="carrierOptions">
+                                <div class="carrier-option">
+                                    <input type="radio" id="att" name="carrier" value="ATT">
+                                    <label for="att" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
+                                        <i class="fa-solid fa-signal text-3xl text-indigo-600 mb-2 sm:text-2xl"></i>
+                                        <span class="block text-slate-700 font-medium sm:text-sm">AT&T</span>
+                                    </label>
+                                </div>
+                                <div class="carrier-option">
+                                    <input type="radio" id="tmobile" name="carrier" value="TMobile">
+                                    <label for="tmobile" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
+                                        <i class="fa-solid fa-mobile-screen-button text-3xl text-pink-600 mb-2 sm:text-2xl"></i>
+                                        <span class="block text-slate-700 font-medium sm:text-sm">T-Mobile</span>
+                                    </label>
+                                </div>
+                                <div class="carrier-option">
+                                    <input type="radio" id="verizon" name="carrier" value="Verizon">
+                                    <label for="verizon" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
+                                        <i class="fa-solid fa-wifi text-3xl text-red-600 mb-2 sm:text-2xl"></i>
+                                        <span class="block text-slate-700 font-medium sm:text-sm">Verizon</span>
+                                    </label>
+                                </div>
+                                <div class="carrier-option">
+                                    <input type="radio" id="unlocked" name="carrier" value="Unlocked">
+                                    <label for="unlocked" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
+                                        <i class="fa-solid fa-lock-open text-3xl text-teal-600 mb-2 sm:text-2xl"></i>
+                                        <span class="block text-slate-700 font-medium sm:text-sm">Unlocked</span>
+                                    </label>
+                                </div>
+                                <div class="carrier-option">
+                                    <input type="radio" id="other-carrier" name="carrier" value="Other">
+                                    <label for="other-carrier" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
+                                        <i class="fa-solid fa-globe text-3xl text-yellow-600 mb-2 sm:text-2xl"></i>
+                                        <span class="block text-slate-700 font-medium sm:text-sm">Other</span>
+                                    </label>
+                                </div>
                             </div>
-                            <div class="shipping-option">
-                                <input type="radio" id="email_label" name="shipping_preference" value="email_label">
-                                <label for="email_label" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
-                                    <i class="fa-solid fa-envelope text-4xl text-green-600 mb-2 sm:text-2xl"></i>
-                                    <span class="font-semibold block sm:text-sm">Email Me a Label (I have a box)</span>
-                                    <p class="text-xs text-slate-500 mt-1">Receive a prepaid shipping label via email to print and use with your own packaging.</p>
+                        </div>
+    
+                        <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="powerOnSection">
+                            <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">3. Does the device power on?</p>
+                            <div class="flex space-x-6 justify-center lg:justify-start" id="q1Options">
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" name="q1_power_on" value="yes" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">Yes</span>
+                                </label>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" name="q1_power_on" value="no" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">No</span>
                                 </label>
                             </div>
                         </div>
-
-                        <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">6. Shipping Information</h2>
-                        <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="fullName" class="block text-sm font-medium text-slate-700">Full Name</label>
-                                <input type="text" id="fullName" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
+                        
+                        <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="functionalSection">
+                            <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left flex items-center justify-center lg:justify-start sm:text-base">
+                                4. Is the screen fully functional and free of defects?
+                            </p>
+                            <div id="functionalDetails" class="mt-2 p-3 bg-blue-50 rounded-md text-sm text-blue-800 text-left sm:text-xs">
+                                <p class="font-semibold mb-2">For **"Fully Functional"**, all of these must work correctly:</p>
+                                <ul class="list-disc list-inside ml-4 space-y-1">
+                                    <li>Screen works and fully lights up (no dead pixels, discoloration, <strong>image burn or black dot/LCD dead pixels</strong>)</li>
+                                    <li><strong>The device must contain all original parts.</strong> If a device is received with third-party or non-original parts, it will be considered not fully functional/damaged.</li>
+                                    <li>All exterior buttons (power, volume, mute)</li>
+                                    <li>Front/back camera and flashes</li>
+                                    <li>Speakers and microphones</li>
+                                    <li>Headphone jack and charging port</li>
+                                    <li>Cellular, Wi-Fi, Bluetooth and GPS</li>
+                                    <li>Touchscreen and voice commands</li>
+                                    <li>Facial recognition and fingerprint sensor</li>
+                                    <li>The battery health is sufficient, and the device can hold a charge</li>
+                                </ul>
                             </div>
-                            <div>
-                                <label for="email" class="block text-sm font-medium text-slate-700">Email Address</label>
-                                <input type="email" id="email" autocomplete="email" placeholder="Email Address" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
-                            </div>
-                            <div class="md:col-span-2">
-                                <label for="street-address" class="block text-sm font-medium text-slate-700">Street Address</label>
-                                <input type="text" id="street-address" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="Start typing your address...">
-                            </div>
-                            <div>
-                                <label for="city" class="block text-sm font-medium text-slate-700">City</label>
-                                <input type="text" id="city" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
-                            </div>
-                            <div>
-                                <label for="state" class="block text-sm font-medium text-slate-700">State</label>
-                                <input type="text" id="state" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
-                            </div>
-                            <div>
-                                <label for="zip-code" class="block text-sm font-medium text-slate-700">ZIP Code</label>
-                                <input type="text" id="zip-code" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
-                            </div>
-                        </div>
-
-                        <div id="orderOverview" class="mt-8 p-6 bg-indigo-50 rounded-xl shadow-inner sm:p-4">
-                            <h3 class="text-2xl font-bold text-indigo-800 mb-4 sm:text-xl">Order Overview</h3>
-                            <div class="space-y-2 text-lg text-slate-700 sm:text-base">
-                                <p><span class="font-semibold">Device:</span> <span id="overviewDevice"></span></p>
-                                <p><span class="font-semibold">Estimated Payout:</span> <span id="overviewQuote" class="text-indigo-600 font-bold">$0</span></p>
-                                <p><span class="font-semibold">Payment Method:</span> <span id="overviewPayment">Not Selected</span></p>
-                                <p><span class="font-semibold">Shipping Preference:</span> <span id="overviewShippingPreference">Not Selected</span></p>
-                                <p><span class="font-semibold">Shipping Address:</span> <span id="overviewAddress">Not Entered</span></p>
-                            </div>
-
-                            <div class="mt-6 p-4 rounded-lg bg-white shadow-sm sm:p-3">
-                                <label class="custom-checkbox flex items-start cursor-pointer">
-                                    <input type="checkbox" id="termsAccepted">
-                                    <span class="checkmark mt-1"></span>
-                                    <span class="ml-4 text-sm text-slate-700 sm:text-xs">I accept the terms and conditions and certify that this device is not lost or stolen.</span>
+                            <div class="flex space-x-6 justify-center lg:justify-start" id="q2Options">
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" name="q2_fully_functional" value="yes" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">Yes</span>
+                                </label>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" name="q2_fully_functional" value="no" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">No</span>
                                 </label>
                             </div>
-
-                            <button id="sendPhoneBtn" class="btn-primary-indigo w-full mt-6">
-                                Send Phone In Now
-                            </button>
+                        </div>
+                        
+                        <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cracksSection">
+                            <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">5. Are the front and back free of cracks?</p>
+                            <div class="flex space-x-6 justify-center lg:justify-start" id="q3Options">
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" name="q3_no_cracks" value="yes" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">Yes</span>
+                                </label>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="radio" name="q3_no_cracks" value="no" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">No</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cosmeticSection">
+                            <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">6. What’s the overall cosmetic condition?</p>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="q4Options">
+                                <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
+                                    <input type="radio" name="q4_cosmetic_condition" value="flawless" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">Flawless</span>
+                                </label>
+                                <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
+                                    <input type="radio" name="q4_cosmetic_condition" value="good" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">Good</span>
+                                </label>
+                                <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
+                                    <input type="radio" name="q4_cosmetic_condition" value="fair" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">Fair</span>
+                                </label>
+                                <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
+                                    <input type="radio" name="q4_cosmetic_condition" value="damaged" class="form-radio text-indigo-600 h-5 w-5">
+                                    <span class="ml-2 text-slate-700 sm:text-sm">Damaged</span>
+                                </label>
+                            </div>
+                            <div id="cosmeticConditionDescription" class="mt-4 p-3 bg-slate-100 rounded-md text-sm text-slate-700 text-left hidden sm:text-xs">
+                            </div>
+                        </div>
+                    </div>
+    
+                    <div id="cta-section" class="flex flex-col items-center">
+                        <button id="getQuoteBtn" class="btn-primary-blue w-full max-w-sm hidden">
+                            Get My Instant Quote!
+                        </button>
+                        <div id="quoteMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full max-w-sm"></div>
+                    </div>
+    
+                    <div id="nextSteps" class="mt-12 hidden flex flex-col items-center gap-8">
+                        <div id="paymentAndShipping" class="hidden w-full">
+                            <hr class="my-10 border-slate-200">
+                            <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">4. How would you like to get paid?</h2>
+    
+                            <div class="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4" id="paymentOptions">
+                                <div class="payment-option">
+                                    <input type="radio" id="venmo" name="payment_method" value="venmo">
+                                    <label for="venmo" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 512 512" class="h-10 w-10 mb-2 mx-auto sm:h-8 sm:w-8" aria-label="Venmo" role="img">
+                                            <rect width="512" height="512" rx="15%" fill="#3396cd"/>
+                                            <path d="m381.4 105.3c11 18.1 15.9 36.7 15.9 60.3 0 75.1-64.1 172.7-116.2 241.2h-118.8l-47.6-285 104.1-9.9 25.3 202.8c23.5-38.4 52.6-98.7 52.6-139.7 0-22.5-3.9-37.8-9.9-50.4z" fill="#fff"/>
+                                        </svg>
+                                        <span class="font-semibold block sm:text-sm">Venmo</span>
+                                    </label>
+                                </div>
+                                <div class="payment-option">
+                                    <input type="radio" id="zelle" name="payment_method" value="zelle">
+                                    <label for="zelle" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48" class="h-10 w-10 mb-2 mx-auto sm:h-8 sm:w-8">
+                                            <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22 C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5    C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5    C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5    h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5    h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298    C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
+                                        </svg>
+                                        <span class="font-semibold block sm:text-sm">Zelle</span>
+                                    </label>
+                                </div>
+                                <div class="payment-option">
+                                    <input type="radio" id="paypal" name="payment_method" value="paypal">
+                                    <label for="paypal" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                                        <i class="fa-brands fa-paypal text-4xl text-blue-600 mb-2 sm:text-2xl"></i>
+                                        <span class="font-semibold block sm:text-sm">PayPal</span>
+                                    </label>
+                                </div>
+                            </div>
+    
+                            <div id="venmoFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
+                                <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Venmo Details</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="venmoUsername" class="block text-sm font-medium text-slate-700">Venmo Username</label>
+                                        <input type="text" id="venmoUsername" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label for="venmoUsernameConfirm" class="block text-sm font-medium text-slate-700">Verify Venmo Username</label>
+                                        <input type="text" id="venmoUsernameConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                </div>
+                            </div>
+    
+                            <div id="zelleFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
+                                <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Zelle Details</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="zelleIdentifier" class="block text-sm font-medium text-slate-700">Zelle Email or Phone Number</label>
+                                        <input type="text" id="zelleIdentifier" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label for="zelleIdentifierConfirm" class="block text-sm font-medium text-slate-700">Verify Zelle Email or Phone Number</label>
+                                        <input type="text" id="zelleIdentifierConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                </div>
+                            </div>
+    
+                            <div id="paypalFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
+                                <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">PayPal Details</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label for="paypalEmail" class="block text-sm font-medium text-slate-700">PayPal Email Address</label>
+                                        <input type="email" id="paypalEmail" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                    <div>
+                                        <label for="paypalEmailConfirm" class="block text-sm font-medium text-slate-700">Verify PayPal Email Address</label>
+                                        <input type="email" id="paypalEmailConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr class="my-10 border-slate-200">
+                            <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">5. How would you like to ship your device?</h2>
+                            <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4" id="shippingOptions">
+                                <div class="shipping-option">
+                                    <input type="radio" id="ship_kit" name="shipping_preference" value="ship_kit">
+                                    <label for="ship_kit" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                                        <i class="fa-solid fa-box text-4xl text-indigo-600 mb-2 sm:text-2xl"></i>
+                                        <span class="font-semibold block sm:text-sm">Ship Me a Box (Shipping Kit)</span>
+                                        <p class="text-xs text-slate-500 mt-1">Receive a grey bag with a prepaid label and another grey bag inside to send your device to us.</p>
+                                    </label>
+                                </div>
+                                <div class="shipping-option">
+                                    <input type="radio" id="email_label" name="shipping_preference" value="email_label">
+                                    <label for="email_label" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                                        <i class="fa-solid fa-envelope text-4xl text-green-600 mb-2 sm:text-2xl"></i>
+                                        <span class="font-semibold block sm:text-sm">Email Me a Label (I have a box)</span>
+                                        <p class="text-xs text-slate-500 mt-1">Receive a prepaid shipping label via email to print and use with your own packaging.</p>
+                                    </label>
+                                </div>
+                            </div>
+    
+                            <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">6. Shipping Information</h2>
+                            <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="fullName" class="block text-sm font-medium text-slate-700">Full Name</label>
+                                    <input type="text" id="fullName" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label for="email" class="block text-sm font-medium text-slate-700">Email Address</label>
+                                    <input type="email" id="email" autocomplete="email" placeholder="Email Address" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label for="street-address" class="block text-sm font-medium text-slate-700">Street Address</label>
+                                    <input type="text" id="street-address" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="Start typing your address...">
+                                </div>
+                                <div>
+                                    <label for="city" class="block text-sm font-medium text-slate-700">City</label>
+                                    <input type="text" id="city" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label for="state" class="block text-sm font-medium text-slate-700">State</label>
+                                    <input type="text" id="state" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
+                                </div>
+                                <div>
+                                    <label for="zip-code" class="block text-sm font-medium text-slate-700">ZIP Code</label>
+                                    <input type="text" id="zip-code" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm">
+                                </div>
+                            </div>
+    
+                            <div id="orderOverview" class="mt-8 p-6 bg-indigo-50 rounded-xl shadow-inner sm:p-4">
+                                <h3 class="text-2xl font-bold text-indigo-800 mb-4 sm:text-xl">Order Overview</h3>
+                                <div class="space-y-2 text-lg text-slate-700 sm:text-base">
+                                    <p><span class="font-semibold">Device:</span> <span id="overviewDevice"></span></p>
+                                    <p><span class="font-semibold">Estimated Payout:</span> <span id="overviewQuote" class="text-indigo-600 font-bold">$0</span></p>
+                                    <p><span class="font-semibold">Payment Method:</span> <span id="overviewPayment">Not Selected</span></p>
+                                    <p><span class="font-semibold">Shipping Preference:</span> <span id="overviewShippingPreference">Not Selected</span></p>
+                                    <p><span class="font-semibold">Shipping Address:</span> <span id="overviewAddress">Not Entered</span></p>
+                                </div>
+    
+                                <div class="mt-6 p-4 rounded-lg bg-white shadow-sm sm:p-3">
+                                    <label class="custom-checkbox flex items-start cursor-pointer">
+                                        <input type="checkbox" id="termsAccepted">
+                                        <span class="checkmark mt-1"></span>
+                                        <span class="ml-4 text-sm text-slate-700 sm:text-xs">I accept the terms and conditions and certify that this device is not lost or stolen.</span>
+                                    </label>
+                                </div>
+    
+                                <button id="sendPhoneBtn" class="btn-primary-indigo w-full mt-6">
+                                    Send Phone In Now
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -805,6 +811,9 @@
     <script>
         // Global variable to hold the autocomplete instance
         let autocomplete;
+        let allSamsungDevices = {};
+        let currentDevice = null;
+        let finalQuote = 0;
 
         // This function is called by the Google Maps script when it has loaded.
         function initAutocomplete() {
@@ -877,7 +886,7 @@
             zipCodeInput.dispatchEvent(event);
         }
         
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             const auth = window.firebaseAuth;
             const GoogleAuthProvider = window.GoogleAuthProvider;
             const signInWithPopup = window.signInWithPopup;
@@ -890,49 +899,7 @@
             const db = window.firebaseDb;
             const serverTimestamp = window.firebaseServerTimestamp;
 
-            // --- DYNAMIC CONTENT SETUP ---
-            const pathSegments = window.location.pathname.split('/');
-            const deviceSlug = pathSegments.pop().replace('.html', '');
-
-            const phoneData = {
-                'galaxy-s24-ultra': { name: 'Samsung Galaxy S24 Ultra', id: 's24u', prices: { '256GB': 700, '512GB': 800, '1TB': 950 } },
-                'galaxy-s24-plus': { name: 'Samsung Galaxy S24 Plus', id: 's24p', prices: { '256GB': 550, '512GB': 650 } },
-                'galaxy-s24': { name: 'Samsung Galaxy S24', id: 's24', prices: { '128GB': 450, '256GB': 550 } },
-                'galaxy-s23-ultra': { name: 'Samsung Galaxy S23 Ultra', id: 's23u', prices: { '256GB': 600, '512GB': 700, '1TB': 850 } },
-                'galaxy-s23-plus': { name: 'Samsung Galaxy S23 Plus', id: 's23p', prices: { '256GB': 480, '512GB': 580 } },
-                'galaxy-s23': { name: 'Samsung Galaxy S23', id: 's23', prices: { '128GB': 380, '256GB': 480 } },
-                'galaxy-s22-ultra': { name: 'Samsung Galaxy S22 Ultra', id: 's22u', prices: { '128GB': 450, '256GB': 550, '512GB': 650, '1TB': 750 } },
-                'galaxy-s22-plus': { name: 'Samsung Galaxy S22 Plus', id: 's22p', prices: { '128GB': 350, '256GB': 450 } },
-                'galaxy-s22': { name: 'Samsung Galaxy S22', id: 's22', prices: { '128GB': 280, '256GB': 380 } },
-                'galaxy-z-fold5': { name: 'Samsung Galaxy Z Fold5', id: 'zfold5', prices: { '256GB': 900, '512GB': 1050, '1TB': 1200 } },
-                'galaxy-z-flip5': { name: 'Samsung Galaxy Z Flip5', id: 'zflip5', prices: { '256GB': 550, '512GB': 650 } }
-            };
-
-            const device = phoneData[deviceSlug];
-            
-            if (!device) {
-                console.error(`Device data for slug "${deviceSlug}" not found. Displaying default.`);
-            } else {
-                document.title = `SecondHandCell - Sell ${device.name}`;
-                document.getElementById('deviceImage').src = `https://placehold.co/400x600/1E40AF/ffffff?text=Samsung+Phone`;
-                document.getElementById('deviceImage').alt = device.name;
-                document.getElementById('deviceDisplayName').textContent = device.name;
-                document.getElementById('deviceDisplayNameText').textContent = device.name;
-                document.getElementById('overviewDevice').textContent = device.name;
-
-                const storageSelect = document.getElementById('storage');
-                const fragment = document.createDocumentFragment();
-                for (const storage in device.prices) {
-                    const option = document.createElement('option');
-                    option.value = storage;
-                    option.textContent = storage;
-                    fragment.appendChild(option);
-                }
-                storageSelect.innerHTML = '<option value="">Select Storage</option>';
-                storageSelect.appendChild(fragment);
-            }
-
-            // --- REST OF THE CODE ---
+            // --- UI Elements ---
             const getQuoteBtn = document.getElementById('getQuoteBtn');
             const quoteMessage = document.getElementById('quoteMessage');
             const nextSteps = document.getElementById('nextSteps');
@@ -951,7 +918,6 @@
             const overviewAddress = document.getElementById('overviewAddress');
             const sendPhoneBtn = document.getElementById('sendPhoneBtn');
             const loginModal = document.getElementById('loginModal');
-            // Using a more specific selector for the close button to avoid conflicts
             const closeLoginModalBtn = loginModal.querySelector('.close-modal-btn');
             const loginTabBtn = document.getElementById('loginTabBtn');
             const signupTabBtn = document.getElementById('signupTabBtn');
@@ -966,62 +932,82 @@
             const cosmeticConditionDescription = document.getElementById('cosmeticConditionDescription');
             const googleLoginBtn = document.getElementById('googleLoginBtn');
             const emailLoginBtn = document.getElementById('emailLoginBtn');
-            const loginEmailInput = document.getElementById('loginEmail');
-            const loginPasswordInput = document.getElementById('loginPassword');
-            const googleSignupBtn = document.getElementById('googleSignupBtn');
-            const emailSignupBtn = document.getElementById('emailSignupBtn');
-            const signupNameInput = document.getElementById('signupName');
-            const signupEmailInput = document.getElementById('signupEmail');
-            const signupPasswordInput = document.getElementById('signupPassword');
-            // Assuming signupPhone is not in the new modal, this will be null and should be handled.
-            const signupPhoneInput = document.getElementById('signupPhone');
-            const authMessage = document.getElementById('authMessage');
             const loginForm = document.getElementById('loginForm');
             const signupForm = document.getElementById('signupForm');
             const switchToLogin = document.getElementById('switchToLogin');
-            
-            const forgotPasswordLink = document.getElementById('forgotPasswordLink');
             const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-            const forgotEmailInput = document.getElementById('forgotEmail');
-            const sendResetEmailBtn = document.getElementById('sendResetEmailBtn');
+            const forgotPasswordLink = document.getElementById('forgotPasswordLink');
             const returnToLoginLink = document.getElementById('returnToLogin');
-            
             const footerEmailSignupForm = document.getElementById('footerEmailSignupForm');
             const footerPromoEmailInput = document.getElementById('footerPromoEmail');
             const footerSignupMessage = document.getElementById('footerSignupMessage');
-
             const shippingInfoEmailInput = document.getElementById('email');
-
             const streetAddressInput = document.getElementById('street-address');
             const cityInput = document.getElementById('city');
             const stateInput = document.getElementById('state');
             const zipCodeInput = document.getElementById('zip-code');
-            
-            // New modal links
             const aboutUsLink = document.getElementById('aboutUsLink');
             const privacyPolicyLink = document.getElementById('privacyPolicyLink');
             const termsAndConditionsLink = document.getElementById('termsAndConditionsLink');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const deviceForm = document.getElementById('deviceForm');
 
             let isUserLoggedIn = false;
             let currentUserId = null;
-            let finalQuote = 0;
             
-            // Basic modal controls for the new modals
-            const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
-            const closeModal = (modal) => modal?.classList.remove('is-visible');
+            const pathSegments = window.location.pathname.split('/');
+            const deviceSlug = pathSegments.pop().replace('.html', '');
+            
+            // --- DYNAMIC CONTENT SETUP ---
+            const fetchDeviceData = async () => {
+                loadingIndicator.classList.remove('hidden');
+                deviceForm.classList.add('hidden');
+                try {
+                    const devicesCollection = collection(db, "devices/samsung/models");
+                    const deviceSnapshot = await getDocs(devicesCollection);
+                    deviceSnapshot.forEach(doc => {
+                        allSamsungDevices[doc.data().slug] = doc.data();
+                    });
+                    
+                    currentDevice = allSamsungDevices[deviceSlug];
+                    if (!currentDevice) {
+                        console.error(`Device data for slug "${deviceSlug}" not found.`);
+                        document.title = "SecondHandCell - Device Not Found";
+                        document.getElementById('deviceDisplayName').textContent = 'Device Not Found';
+                        return;
+                    }
 
-            document.querySelectorAll('.modal').forEach(modal => {
-                modal.addEventListener('click', (e) => {
-                    if (e.target === modal) closeModal(modal);
-                });
-                modal.querySelector('.close-modal-btn')?.addEventListener('click', () => closeModal(modal));
-            });
+                    document.title = `SecondHandCell - Sell ${currentDevice.name}`;
+                    document.getElementById('deviceImage').src = currentDevice.imageUrl || `https://placehold.co/400x600/1E40AF/ffffff?text=Samsung+Phone`;
+                    document.getElementById('deviceImage').alt = currentDevice.name;
+                    document.getElementById('deviceDisplayName').textContent = currentDevice.name;
+                    document.getElementById('deviceDisplayNameText').textContent = currentDevice.name;
+                    document.getElementById('overviewDevice').textContent = currentDevice.name;
 
-            if(aboutUsLink) aboutUsLink.addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
-            if(privacyPolicyLink) privacyPolicyLink.addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
-            if(termsAndConditionsLink) termsAndConditionsLink.addEventListener('click', (e) => { e.preventDefault(); openModal('termsAndConditionsModal'); });
+                    const storageSelect = document.getElementById('storage');
+                    storageSelect.innerHTML = '<option value="">Select Storage</option>';
+                    const fragment = document.createDocumentFragment();
+                    for (const storage in currentDevice.prices) {
+                        const option = document.createElement('option');
+                        option.value = storage;
+                        option.textContent = storage;
+                        fragment.appendChild(option);
+                    }
+                    storageSelect.appendChild(fragment);
+                    deviceForm.classList.remove('hidden');
 
+                } catch (error) {
+                    console.error("Error fetching device data:", error);
+                    document.getElementById('deviceDisplayName').textContent = 'Error loading device data.';
+                    deviceForm.classList.remove('hidden');
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                }
+            };
+            
+            fetchDeviceData();
 
+            // --- REST OF THE CODE ---
             function getRandomLightColor() {
                 const hue = Math.floor(Math.random() * 360);
                 const saturation = Math.floor(Math.random() * 30) + 70;
@@ -1098,6 +1084,7 @@
             const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 
             function showAuthMessage(msg, type) {
+                const authMessage = document.getElementById('authMessage');
                 authMessage.textContent = msg;
                 authMessage.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700');
                 if (type === 'error') {
@@ -1111,6 +1098,7 @@
             }
 
             function clearAuthMessage() {
+                const authMessage = document.getElementById('authMessage');
                 authMessage.classList.add('hidden');
                 authMessage.textContent = '';
             }
@@ -1131,6 +1119,10 @@
                 signupTabBtn.classList.remove('border-blue-600', 'text-blue-600');
                 loginTabBtn.classList.add('border-transparent', 'text-slate-500');
                 signupTabBtn.classList.add('border-transparent', 'text-slate-500');
+
+                const loginForm = document.getElementById('loginForm');
+                const signupForm = document.getElementById('signupForm');
+                const forgotPasswordForm = document.getElementById('forgotPasswordForm');
 
                 if (tabName === 'login') {
                     loginForm.classList.remove('hidden');
@@ -1186,6 +1178,7 @@
 
             forgotPasswordForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                const forgotEmailInput = document.getElementById('forgotEmail');
                 const email = forgotEmailInput.value;
                 if (!email) {
                     showAuthMessage('Please enter your email address.', 'error');
@@ -1217,6 +1210,12 @@
             });
 
             const googleProvider = new GoogleAuthProvider();
+            const loginEmailInput = document.getElementById('loginEmail');
+            const loginPasswordInput = document.getElementById('loginPassword');
+            const signupNameInput = document.getElementById('signupName');
+            const signupEmailInput = document.getElementById('signupEmail');
+            const signupPasswordInput = document.getElementById('signupPassword');
+            const authMessage = document.getElementById('authMessage');
 
             googleLoginBtn.addEventListener('click', async () => {
                 try {
@@ -1296,7 +1295,7 @@
                 } else if (type === 'success') {
                     quoteMessage.classList.add('bg-green-100', 'text-green-700');
                 } else if (type === 'info') {
-                    authMessage.classList.add('bg-blue-100', 'text-blue-700');
+                    quoteMessage.classList.add('bg-blue-100', 'text-blue-700');
                 }
                 quoteMessage.classList.remove('hidden');
             }
@@ -1435,6 +1434,11 @@
             
             function calculateQuoteAndDisplay() {
                 clearQuoteMessage();
+
+                if (!currentDevice) {
+                    showQuoteMessage('Device data not found. Please refresh the page.', 'error');
+                    return;
+                }
                 
                 const selectedStorage = document.getElementById('storage').value;
                 const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
@@ -1462,31 +1466,22 @@
                     showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
                     return;
                 }
-
-                let basePrice = device.prices[selectedStorage] || 0;
-                let currentQuote = basePrice;
                 
-                if (selectedCarrier !== 'Unlocked') { currentQuote -= 25; }
-                
-                if (q1PowerOn === 'no') { 
-                    currentQuote *= 0.50; 
+                let selectedCondition = '';
+                if (q1PowerOn === 'no') {
+                    selectedCondition = 'noPower';
+                } else if (q2Functional === 'no') {
+                    selectedCondition = 'broken';
+                } else if (q3NoCracks === 'no' || q4Cosmetic === 'damaged') {
+                    selectedCondition = 'damaged';
                 } else {
-                    if (q2Functional === 'no') { 
-                        currentQuote *= 0.75; 
-                    } else {
-                        if (q3NoCracks === 'no') { 
-                            currentQuote -= 50; 
-                        } else if (q3NoCracks === 'yes') {
-                            switch (q4Cosmetic) {
-                                case 'damaged': currentQuote -= 45; break;
-                                case 'fair': currentQuote -= 25; break;
-                                case 'good': currentQuote -= 15; break;
-                            }
-                        }
-                    }
+                    selectedCondition = q4Cosmetic;
                 }
-
-                finalQuote = Math.max(0, currentQuote);
+                
+                const lockStatus = selectedCarrier === 'Unlocked' ? 'unlocked' : 'locked';
+                let price = currentDevice.prices?.[selectedStorage]?.[lockStatus]?.[selectedCondition];
+                
+                finalQuote = price || 0;
                 finalQuoteAmountMainText.textContent = `$${finalQuote.toFixed(2)}`;
                 finalQuoteAmountPopup.textContent = `$${finalQuote.toFixed(2)}`;
 
@@ -1617,7 +1612,7 @@
                 sendPhoneBtn.classList.add('btn-disabled');
 
                 const orderData = {
-                    device: device.name,
+                    device: currentDevice.name,
                     carrier: document.querySelector('input[name="carrier"]:checked').value,
                     storage: document.getElementById('storage').value,
                     condition_power_on: document.querySelector('input[name="q1_power_on"]:checked').value,
@@ -1681,6 +1676,7 @@
             });
 
             function saveFormState() {
+                if (!currentDevice) return;
                 const formState = {
                     storage: document.getElementById('storage').value,
                     carrier: document.querySelector('input[name="carrier"]:checked')?.value,
@@ -1689,11 +1685,12 @@
                     q3_no_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value,
                     q4_cosmetic_condition: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value,
                 };
-                localStorage.setItem(`${deviceSlug}FormState`, JSON.stringify(formState));
+                localStorage.setItem(`${currentDevice.slug}FormState`, JSON.stringify(formState));
             }
 
             function loadFormState() {
-                const savedState = localStorage.getItem(`${deviceSlug}FormState`);
+                if (!currentDevice) return;
+                const savedState = localStorage.getItem(`${currentDevice.slug}FormState`);
                 if (savedState) {
                     const formState = JSON.parse(savedState);
 
@@ -1789,7 +1786,6 @@
                 });
             }
 
-            loadFormState();
         });
     </script>
 </body>
