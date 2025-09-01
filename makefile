@@ -1,40 +1,41 @@
 # =========================================================================
-# Makefile to generate static HTML pages for iPad models.
-# This script uses templates to create individual pages for each device.
+# Makefile to generate static HTML pages for Google Pixel models.
+# This script uses a template to create individual pages for each device.
 #
 # USAGE:
-#   make ipads     - Generates all iPad pages from the iPad template.
-#   make all       - Generates all pages.
+#   make pixels    - Generates all Google Pixel pages from the template.
+#   make all       - Generates all pages (including pixels).
 #   make clean     - Removes all generated pages and directories.
 # =========================================================================
 
-# Define the iPad models (slugs)
-IPADS = \
-    ipad-pro-m4-13-inch \
-    ipad-pro-m4-11-inch \
-    ipad-air-m3-13-inch \
-    ipad-air-m3-11-inch \
-    ipad-11th-gen \
-    ipad-10th-gen \
-    ipad-9th-gen \
-    ipad-mini-7th-gen \
-    ipad-mini-6th-gen
+# Define the Google Pixel models (slugs) from Pixel 7 Pro to the newest models
+PIXELS = \
+    pixel-7-pro \
+    pixel-8 \
+    pixel-8a \
+    pixel-9 \
+    pixel-9-pro \
+    pixel-9-pro-xl \
+    pixel-10 \
+    pixel-10-pro \
+    pixel-10-pro-xl \
+    pixel-10-pro-fold
 
 # Define output directories and template files
-IPAD_DIR = ipad/models
-IPAD_TEMPLATE = ipad-template.html
+PIXEL_DIR = google/models
+PIXEL_TEMPLATE = google-template.html
 
-.PHONY: ipads all clean
+.PHONY: pixels all clean
 
-ipads:
-	@mkdir -p $(IPAD_DIR)
-	@for slug in $(IPADS); do \
+pixels:
+	@mkdir -p $(PIXEL_DIR)
+	@for slug in $(PIXELS); do \
 		echo "Generating page for $$slug.html..."; \
-		sed "s|__DEVICE_SLUG__|$$slug|g" $(IPAD_TEMPLATE) > $(IPAD_DIR)/$$slug.html; \
+		sed "s|__DEVICE_SLUG__|$$slug|g" $(PIXEL_TEMPLATE) > $(PIXEL_DIR)/$$slug.html; \
 	done
 
-all: ipads
+all: pixels
 
 clean:
 	@echo "Cleaning up generated HTML files..."
-	rm -rf $(IPAD_DIR)
+	rm -rf $(PIXEL_DIR)
