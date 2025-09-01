@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SecondHandCell - Sell Your iPhone</title>
     <link rel="icon" href="/favicon/favicon.ico">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -293,6 +293,25 @@
         const db = getFirestore(app);
 
         document.addEventListener('DOMContentLoaded', function() {
+            // --- IMAGE LOADING LOGIC ---
+            function loadImageWithFallback(imgElement) {
+                const baseSrc = imgElement.dataset.baseSrc;
+                if (!baseSrc) return;
+                const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+                let current = 0;
+                function tryLoad() {
+                    if (current >= extensions.length) {
+                        imgElement.src = 'https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';
+                        return;
+                    }
+                    const testSrc = baseSrc + extensions[current];
+                    const img = new Image();
+                    img.onload = () => { imgElement.src = testSrc; };
+                    img.onerror = () => { current++; tryLoad(); };
+                    img.src = testSrc;
+                }
+                tryLoad();
+            }
             // --- BANNER LOGIC ---
             document.getElementById('closeBannerBtn').addEventListener('click', () => {
                 document.getElementById('floatingBanner').style.display = 'none';
@@ -525,17 +544,19 @@
                     noResultsMessage.classList.add('hidden');
                     phoneList.forEach(phone => {
                         const slug = createUrlSlug(phone.name);
-                        const modelUrl = `/iphone/models/iphone-${slug}.html`;
+                        const modelUrl = `/iphone/models/${slug}.html`;
                         const phoneCardHTML = `
                             <a href="${modelUrl}" class="phone-card-link group" data-name="${phone.name.toLowerCase()}">
                                 <div class="phone-card-inner bg-white p-6 rounded-xl shadow-md text-center flex flex-col h-full">
-                                    <img src="${phone.imageUrl}" alt="${phone.name}" class="mx-auto mb-4 h-48 object-contain">
+                                    <img src="https://placehold.co/200x200/e0e7ff/4338ca?text=Loading..." alt="${phone.name}" class="mx-auto mb-4 h-48 object-contain" data-base-src="${phone.imageUrl}">
                                     <h3 class="text-lg font-semibold text-slate-800">${phone.name}</h3>
                                     <p class="text-blue-600 font-bold my-2">Up to $${phone.highestPrice.toFixed(2)}</p>
                                     <span class="mt-auto bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span>
                                 </div>
                             </a>`;
                         phoneGrid.insertAdjacentHTML('beforeend', phoneCardHTML);
+                        const newImg = phoneGrid.lastElementChild.querySelector('img');
+                        loadImageWithFallback(newImg);
                     });
                 }
             };
