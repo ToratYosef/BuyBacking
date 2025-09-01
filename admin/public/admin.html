@@ -365,6 +365,7 @@
                     <div id="lock-status-container">
                         <label for="check-lock-status" class="block text-sm font-medium text-gray-700">Carrier Lock Status</label>
                         <select id="check-lock-status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                            <option value="">Select...</option>
                             <option value="unlocked">Unlocked</option>
                             <option value="locked">Locked</option>
                         </select>
@@ -630,6 +631,13 @@
                 orderDetailsModal.classList.remove('hidden');
             }
         });
+
+        reofferFormContainer.addEventListener('click', (event) => {
+             if (event.target === reofferFormContainer) {
+                 reofferFormContainer.classList.add('hidden');
+                 orderDetailsModal.classList.remove('hidden');
+             }
+         });
         
         // Listen for changes on IMEI status radios
         imeiStatusRadios.forEach(radio => {
@@ -652,10 +660,14 @@
         checkPowerOn.addEventListener('change', (event) => {
             if (event.target.value === 'yes') {
                 functionalContainer.classList.remove('hidden');
+                checkFunctional.setAttribute('required', 'required');
             } else {
                 functionalContainer.classList.add('hidden');
                 cracksContainer.classList.add('hidden');
                 cosmeticContainer.classList.add('hidden');
+                checkFunctional.removeAttribute('required');
+                checkCracks.removeAttribute('required');
+                checkCosmetic.removeAttribute('required');
             }
         });
         
@@ -663,18 +675,26 @@
         checkFunctional.addEventListener('change', (event) => {
             if (event.target.value === 'yes') {
                 cracksContainer.classList.remove('hidden');
+                checkCracks.setAttribute('required', 'required');
+                cosmeticContainer.classList.remove('hidden');
+                checkCosmetic.setAttribute('required', 'required');
             } else {
                 cracksContainer.classList.add('hidden');
                 cosmeticContainer.classList.add('hidden');
+                checkCracks.removeAttribute('required');
+                checkCosmetic.removeAttribute('required');
             }
         });
-
+        
+        // This is a new listener for the "no cracks" field
         checkCracks.addEventListener('change', (event) => {
-             if (event.target.value === 'yes') {
+            if (event.target.value === 'yes') {
                 cosmeticContainer.classList.remove('hidden');
-             } else {
+                checkCosmetic.setAttribute('required', 'required');
+            } else {
                 cosmeticContainer.classList.add('hidden');
-             }
+                checkCosmetic.removeAttribute('required');
+            }
         });
 
         function updateDashboardCounts(ordersData) {
@@ -920,14 +940,18 @@
                 displayModalMessage('Order not found for condition check.', 'error');
                 return;
             }
-
-            // Populate the dropdowns with customer's claimed conditions for quick reference
-            checkPowerOn.value = order.condition_power_on || '';
-            checkFunctional.value = order.condition_functional || '';
-            checkCracks.value = order.condition_cracks || '';
-            checkCosmetic.value = order.condition_cosmetic || '';
-            checkLockStatus.value = order.lockStatus || 'unlocked';
-
+            
+            // Clear all dropdowns
+            checkPowerOn.value = '';
+            checkFunctional.value = '';
+            checkCracks.value = '';
+            checkCosmetic.value = '';
+            checkLockStatus.value = '';
+            checkImei.value = '';
+            checkGb.value = '';
+            
+            // Uncheck IMEI status radios
+            imeiStatusRadios.forEach(radio => radio.checked = false);
 
             // Pre-fill GB and IMEI if they exist in the order
             checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
@@ -1098,9 +1122,9 @@
             priceDifferenceSpan.textContent = `${difference > 0 ? '+' : ''}$${difference.toFixed(2)}`;
             
             priceDifferenceSpan.classList.remove('text-green-600', 'text-red-600');
-            if (difference > 0) {
+            if (difference < 0) { // New price is lower, which is a good thing for us
                 priceDifferenceSpan.classList.add('text-green-600');
-            } else if (difference < 0) {
+            } else if (difference > 0) { // New price is higher, which is bad for us
                 priceDifferenceSpan.classList.add('text-red-600');
             }
 
@@ -1190,23 +1214,25 @@
             const lockStatus = receivedConditions.lockStatus || 'unlocked';
             
             let newPrice;
-            let cosmeticKey = receivedConditions.cosmetic;
-            let finalCondition = cosmeticKey;
-
-            // Handle the "excellent" cosmetic condition by mapping it to "good"
-            if (cosmeticKey === 'excellent') {
-                finalCondition = 'good';
-            }
+            let finalCondition;
             
             if (receivedConditions.power_on === 'no') {
                 newPrice = pricingByStorage[lockStatus]['noPower'];
             } else if (receivedConditions.functional === 'no') {
                 newPrice = pricingByStorage[lockStatus]['broken'];
-            } else if (receivedConditions.cracks === 'no') {
-                 newPrice = pricingByStorage[lockStatus][finalCondition];
             } else {
-                 // The case where there ARE cracks but it powers on and is functional
-                 newPrice = pricingByStorage[lockStatus]['broken'];
+                // Device powers on and is functional
+                if (receivedConditions.cracks === 'yes') {
+                     // Has cracks, but is functional
+                    newPrice = pricingByStorage[lockStatus]['broken'];
+                } else {
+                    // Powers on, is functional, and has no cracks. Use cosmetic condition.
+                    finalCondition = receivedConditions.cosmetic;
+                    if (finalCondition === 'excellent') {
+                        finalCondition = 'good';
+                    }
+                    newPrice = pricingByStorage[lockStatus][finalCondition];
+                }
             }
             
             // Check if the price is a valid number
@@ -1260,14 +1286,22 @@
             const comments = reofferComments.value;
             const reasons = Array.from(document.querySelectorAll('input[name="reoffer-reasons"]:checked')).map(cb => cb.value);
 
-            if (!newPrice || isNaN(parseFloat(newPrice)) || reasons.length === 0) {
-                displayModalMessage('Please enter a valid price and select at least one reason.', 'error');
+            // Hide previous messages and clear required fields highlighting
+            modalMessage.classList.add('hidden');
+            reofferNewPrice.classList.remove('required-field');
+            
+            if (!newPrice || isNaN(parseFloat(newPrice))) {
+                reofferNewPrice.classList.add('required-field');
+                displayModalMessage('Please enter a valid price.', 'error');
+                return;
+            }
+            if (reasons.length === 0) {
+                displayModalMessage('Please select at least one reason.', 'error');
                 return;
             }
 
             modalLoadingMessage.classList.remove('hidden');
             reofferFormContainer.classList.add('hidden');
-            modalMessage.classList.add('hidden');
 
             try {
                 const url = `${BACKEND_BASE_URL}/orders/${orderId}/re-offer`;
@@ -1294,6 +1328,7 @@
             } catch (error) {
                 console.error("Action error:", error);
                 displayModalMessage(`Error: ${error.message}`, 'error');
+                reofferFormContainer.classList.remove('hidden'); // Re-open the form on error
             } finally {
                 modalLoadingMessage.classList.add('hidden');
             }

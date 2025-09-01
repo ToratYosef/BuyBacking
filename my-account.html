@@ -6,6 +6,7 @@
     <title>SecondHandCell - My Account</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
         
     <!-- Google tag (gtag.js) -->
@@ -17,7 +18,6 @@
     
       gtag('config', 'G-SLRRJRXHHE');
     </script>
-
 
     <style>
         body {
@@ -38,7 +38,6 @@
             color: #2563eb; /* Blue-600 */
             background-color: #eff6ff; /* Blue-50 */
         }
-        /* Styles from the provided new page for consistency */
         .user-monogram {
             display: flex; align-items: center; justify-content: center;
             width: 2.5rem; height: 2.5rem;
@@ -59,43 +58,38 @@
             transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
             opacity: 0; 
             visibility: hidden;
-            pointer-events: none; /* Crucial: Prevent clicks when hidden */
-            display: none; /* Start hidden, will be changed to flex by JS */
-
+            pointer-events: none;
+            display: none;
             position: fixed;
             inset: 0;
             z-index: 1001;
             background-color: rgba(0, 0, 0, 0.6);
-            padding: 1rem; /* Responsive padding */
+            padding: 1rem;
             align-items: center;
             justify-content: center;
         }
         .modal.is-visible {
             opacity: 1; 
             visibility: visible;
-            pointer-events: auto; /* Crucial: Allow clicks when visible */
-            display: flex; /* Only display flex when visible */
+            pointer-events: auto;
+            display: flex;
         }
         .modal-content {
             transform: translateY(-20px);
             transition: transform 0.3s ease-out;
             background-color: white;
-            border-radius: 0.5rem; /* rounded-lg */
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); /* shadow-2xl */
+            border-radius: 0.5rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             width: 100%;
-            max-width: 32rem; /* max-w-md for login, max-w-2xl/3xl for others */
+            max-width: 32rem;
             position: relative;
             max-height: 90vh;
             overflow-y: auto;
-            padding: 1.5rem; /* p-6 */
+            padding: 1.5rem;
         }
-        /* Specific modal content sizes */
-        #loginModal .modal-content { max-width: 28rem; } /* max-w-md */
-        #aboutUsModal .modal-content { max-width: 32rem; } /* max-w-2xl */
-        #privacyPolicyModal .modal-content, #termsAndConditionsModal .modal-content { max-width: 48rem; padding: 2rem; } /* max-w-3xl, p-8 */
-        #orderDetailsModal .modal-content { max-width: 32rem; } /* max-w-lg */
-
-
+        .modal.is-visible .modal-content {
+            transform: translateY(0);
+        }
         .btn-red-logout {
             display: block; width: 100%; text-align: left;
             padding: 0.5rem 1rem; font-size: 0.875rem; color: #dc2626;
@@ -103,91 +97,26 @@
             transition: background-color 0.2s ease; cursor: pointer;
         }
         .btn-red-logout:hover { background-color: #fef2f2; }
-
-        /* Status badge styling */
         .status-badge {
-            @apply inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none rounded-full;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem 0.5rem; /* px-2 py-1 */
+            font-size: 0.75rem; /* text-xs */
+            font-weight: 700;
+            line-height: 1;
+            border-radius: 9999px; /* rounded-full */
         }
-        /* Specific status colors */
-        .status-completed { @apply bg-green-200 text-green-800; }
-        .status-re-offered-accepted { @apply bg-teal-200 text-teal-800; }
-        .status-re-offered-auto-accepted { @apply bg-teal-200 text-teal-800; }
-        .status-re-offered-pending { @apply bg-orange-200 text-orange-800; }
-        .status-re-offered-declined { @apply bg-red-200 text-red-800; }
-        .status-order_pending { @apply bg-blue-200 text-blue-800; }
-        .status-shipping_kit_requested { @apply bg-indigo-200 text-indigo-800; }
-        .status-label_generated { @apply bg-yellow-200 text-yellow-800; }
-        .status-received { @apply bg-gray-200 text-gray-800; }
-        .status-return-label-generated { @apply bg-gray-400 text-gray-800; }
-
-        /* --- Chat Widget Styles --- */
-        #chat-widget-container {
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            z-index: 1000;
-        }
-        #chat-open-btn {
-            background-color: #2563eb; color: white;
-            width: 4rem; height: 4rem; border-radius: 9999px;
-            display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.2);
-            cursor: pointer; transition: transform 0.2s ease-in-out, opacity 0.3s ease-in-out;
-        }
-        #chat-open-btn:hover { transform: scale(1.1); }
-        #unread-counter {
-            position: absolute; top: -4px; right: -4px;
-            background-color: #ef4444; color: white;
-            border-radius: 9999px; font-size: 0.75rem; font-weight: bold;
-            width: 1.5rem; height: 1.5rem;
-            display: flex; align-items: center; justify-content: center;
-            border: 2px solid white;
-            transform: scale(0); transition: transform 0.2s ease-out;
-        }
-        #unread-counter.visible { transform: scale(1); }
-        #chat-window {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 24rem;
-            height: 32rem;
-            background-color: white;
-            border-radius: 0.75rem;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
-            opacity: 0;
-            transform: translateY(20px);
-            pointer-events: none;
-        }
-        #chat-window.is-visible {
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: auto;
-        }
-        #chat-window.is-visible + #chat-open-btn {
-            opacity: 0;
-            transform: scale(0.8);
-            pointer-events: none;
-        }
-        #chat-messages { display: flex; flex-direction: column; }
-        .chat-bubble-user { background-color: rgba(229, 231, 235, 0.7); } /* light grey transparent */
-        .chat-bubble-agent { background-color: rgba(219, 234, 254, 0.7); } /* light blue transparent */
-        .typing-indicator { display: flex; align-items: center; padding: 8px 12px; }
-        .typing-indicator span {
-            height: 8px; width: 8px; margin: 0 2px;
-            background-color: #9ca3af; border-radius: 50%;
-            display: inline-block; animation: bounce 1.4s infinite ease-in-out both;
-        }
-        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
-        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
-        .star-rating i { color: #d1d5db; cursor: pointer; transition: color 0.2s; }
-        .star-rating:hover i, .star-rating i.selected { color: #f59e0b; }
-        .star-rating i:hover ~ i { color: #d1d5db; }
-
+        .status-completed { background-color: #dcfce7; color: #166534; } /* green-100, green-800 */
+        .status-re-offered-accepted { background-color: #ccfbf1; color: #0f766e; } /* teal-100, teal-800 */
+        .status-re-offered-auto-accepted { background-color: #ccfbf1; color: #0f766e; } /* teal-100, teal-800 */
+        .status-re-offered-pending { background-color: #ffedd5; color: #9a3412; } /* orange-100, orange-800 */
+        .status-re-offered-declined { background-color: #fee2e2; color: #991b1b; } /* red-100, red-800 */
+        .status-order_pending { background-color: #dbeafe; color: #1e40af; } /* blue-100, blue-800 */
+        .status-shipping_kit_requested { background-color: #e0e7ff; color: #3730a3; } /* indigo-100, indigo-800 */
+        .status-label_generated { background-color: #fef9c3; color: #854d0e; } /* yellow-100, yellow-800 */
+        .status-received { background-color: #e5e7eb; color: #374151; } /* gray-200, gray-800 */
+        .status-return-label-generated { background-color: #e5e7eb; color: #374151; } /* gray-200, gray-800 */
         .prose {
             max-width: 65ch;
             color: #334155; /* slate-700 */
@@ -234,25 +163,33 @@
         /* Mobile Styles */
         @media (max-width: 767px) {
             header .container {
-                flex-direction: column;
-                text-align: center;
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
                 padding-top: 0.5rem;
                 padding-bottom: 0.5rem;
             }
-            header .flex-1:first-child,
-            header .flex-1:last-child {
-                width: 100%;
-                justify-content: center;
+            header .container > .flex-1:first-child {
+                width: auto;
+                flex-grow: 0;
             }
-            header .hidden.md\:flex { /* Target the hidden tagline on mobile */
-                display: none !important;
+            header .container > .flex-1:last-child {
+                width: auto;
+                flex-grow: 0;
+                justify-content: flex-end;
             }
-            header .h-20 {
-                height: 4rem;
+            header .flex-col {
+                display: none;
+            }
+            header .h-12 {
+                height: 3rem;
+            }
+            header .md\:h-20 {
+                height: 3rem;
             }
             header nav {
-                margin-top: 0.5rem;
-                justify-content: center;
+                margin-top: 0;
+                justify-content: flex-end;
             }
             .grid {
                 grid-template-columns: 1fr;
@@ -279,66 +216,67 @@
             .modal-content h2 {
                 font-size: 1.5rem;
             }
-            /* Chat window for mobile */
-            #chat-widget-container {
-                bottom: 0;
-                right: 0;
-                width: 100%;
-                height: 100%;
-                border-radius: 0;
+            #loginNavBtn {
+                font-size: 0.75rem;
+                padding: 0.375rem 0.625rem;
+                white-space: nowrap;
             }
-            #chat-window {
-                width: 100%;
-                height: 100%;
-                border-radius: 0;
+            /* New table-specific mobile styles to prevent horizontal scroll */
+            table, thead, tbody, th, td, tr {
+                display: block;
             }
-            #chat-open-btn {
-                bottom: 1rem;
-                right: 1rem;
-                width: 3.5rem; /* Slightly smaller button */
-                height: 3.5rem;
-                font-size: 1.5rem; /* Smaller icon */
+            thead tr {
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
             }
-            #chat-open-btn i {
-                font-size: 1.5rem; /* Adjust icon size */
-            }
-            #unread-counter {
-                width: 1.2rem;
-                height: 1.2rem;
-                font-size: 0.65rem;
-            }
-            /* Modal content adjustments for full screen on mobile */
-            .modal-content {
-                max-width: 100%;
-                max-height: 100%;
-                width: 100%;
-                height: 100%;
-                border-radius: 0;
+            tr {
+                border: 1px solid #e2e8f0;
+                margin-bottom: 1rem;
+                border-radius: 0.5rem;
                 padding: 1rem;
             }
-            .modal-content .prose {
-                max-height: calc(100vh - 100px); /* Adjust based on header/footer in modal */
-                padding-right: 0.5rem;
+            td {
+                border: none;
+                position: relative;
+                padding: 0.25rem 0;
+                text-align: left;
+                word-wrap: break-word; /* Ensure long words wrap */
             }
-            .modal-content h2 {
-                font-size: 1.5rem;
+            td:before {
+                content: attr(data-label);
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.625rem;
+                color: #475569;
+                display: block;
+                margin-bottom: 0.25rem;
+            }
+            #ordersTableBody td:last-child {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                padding-top: 1rem;
+            }
+            #ordersTableBody td:last-child button {
+                width: auto;
+                align-self: flex-start;
             }
         }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
 
-    <!-- HEADER -->
     <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
-        <div class="container mx-auto px-4 py-5 flex justify-between items-center">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center md:py-5">
             <div class="flex-1">
-                <a href="index.html" class="h-20 inline-block">
+                <a href="index.html" class="h-12 inline-block md:h-20">
                     <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
                 </a>
             </div>
             <div class="hidden md:flex flex-col items-center flex-1">
-                <div class="text-2xl font-extrabold text-slate-800">SecondHandCell</div>
-                <p class="text-sm text-slate-500 -mt-1">Turn Your Old Phone into Cash!</p>
+                <div class="text-2xl font-extrabold text-slate-800 fancy-header-text">SecondHandCell</div>
+                <p class="text-sm text-slate-500 -mt-1 fancy-header-text">Turn Your Old Phone into Cash!</p>
             </div>
             <nav class="flex items-center space-x-4 flex-1 justify-end">
                 <div id="authStatusContainer" class="relative inline-block">
@@ -356,14 +294,12 @@
     <main class="flex-grow container mx-auto px-4 py-12">
         <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-4xl mx-auto">
             <h1 class="text-4xl font-bold text-center text-slate-800 mb-8">My Account</h1>
-
             <div id="message" class="mb-6 p-3 rounded-md text-sm text-center hidden"></div>
-
-            <div class="flex border-b border-slate-200 mb-8">
-                <button id="accountInfoTab" class="tab-button active flex-1 py-3 px-4 text-center text-lg font-medium text-slate-700 rounded-t-lg border-b-2 border-transparent hover:border-blue-400 hover:text-blue-600 transition duration-300">
+            <div class="flex border-b border-slate-200 mb-8 overflow-x-auto">
+                <button id="accountInfoTab" class="tab-button active flex-1 py-3 px-4 text-center text-lg font-medium text-slate-700 rounded-t-lg border-b-2 border-transparent hover:border-blue-400 hover:text-blue-600 transition duration-300 whitespace-nowrap">
                     Account Information
                 </button>
-                <button id="orderHistoryTab" class="tab-button flex-1 py-3 px-4 text-center text-lg font-medium text-slate-700 rounded-t-lg border-b-2 border-transparent hover:border-blue-400 hover:text-blue-600 transition duration-300">
+                <button id="orderHistoryTab" class="tab-button flex-1 py-3 px-4 text-center text-lg font-medium text-slate-700 rounded-t-lg border-b-2 border-transparent hover:border-blue-400 hover:text-blue-600 transition duration-300 whitespace-nowrap">
                     Order History
                 </button>
             </div>
@@ -382,7 +318,7 @@
                     <div>
                         <label for="userPhone" class="block text-sm font-medium text-slate-700">Phone Number:</label>
                         <input type="tel" id="userPhone" name="userPhone"
-                               class="mt-1 block w-full px-4 py-2 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                               class="mt-1 block w-full px-4 py-2 border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                placeholder="e.g., +15551234567">
                     </div>
                 </div>
@@ -396,7 +332,7 @@
 
             <div id="orderHistorySection" class="tab-content hidden">
                 <h2 class="text-2xl font-semibold text-slate-800 mb-6">Your Past Orders</h2>
-                <div class="overflow-x-auto">
+                <div>
                     <table class="min-w-full bg-white border border-slate-200 rounded-lg shadow-sm">
                         <thead>
                             <tr class="bg-slate-100 text-slate-600 uppercase text-sm leading-normal">
@@ -418,7 +354,6 @@
         </div>
     </main>
 
-    <!-- FOOTER - Replaced with new footer from provided page -->
     <footer class="bg-slate-800 text-white">
         <div class="container mx-auto px-4 py-12">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -442,8 +377,6 @@
         </div>
     </footer>
 
-    <!-- MODALS -->
-    <!-- Login Modal -->
     <div id="loginModal" class="modal">
         <div class="modal-content">
             <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
@@ -480,17 +413,15 @@
             <div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div>
         </div>
     </div>
-    <!-- About Us Modal -->
     <div id="aboutUsModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content max-w-2xl">
             <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
             <h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2>
             <p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p>
         </div>
     </div>
-    <!-- Privacy Policy Modal -->
     <div id="privacyPolicyModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content max-w-3xl p-8">
             <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
             <div class="prose max-h-[80vh] overflow-y-auto pr-4">
                 <h2 class="text-2xl font-bold text-slate-800 mb-4">Privacy Policy</h2>
@@ -509,9 +440,8 @@
             </div>
         </div>
     </div>
-    <!-- Terms & Conditions Modal -->
     <div id="termsAndConditionsModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content max-w-3xl p-8">
             <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
             <div class="prose max-h-[80vh] overflow-y-auto pr-4">
                 <h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2>
@@ -540,9 +470,8 @@
         </div>
     </div>
 
-    <!-- Order Details Modal -->
     <div id="orderDetailsModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content max-w-lg">
             <button id="closeModal" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-2xl transition-colors duration-200">
                 <i class="fas fa-times"></i>
             </button>
@@ -567,7 +496,6 @@
                 </p>
                 <p><strong>Current Status:</strong> <span id="modalStatus" class="font-semibold px-2 py-1 rounded-full text-xs"></span></p>
 
-                <!-- Re-offer details -->
                 <div id="reOfferDetails" class="hidden bg-yellow-50 p-4 rounded-md border border-yellow-200 mt-4 space-y-2">
                     <h4 class="text-lg font-semibold text-yellow-800">Revised Offer Details</h4>
                     <p><strong>New Offer Price:</strong> $<span id="reOfferNewPrice" class="font-bold text-yellow-700"></span></p>
@@ -576,7 +504,6 @@
                     <p id="reOfferAutoAcceptDateRow" class="text-sm text-slate-600">This offer will be automatically accepted on: <span id="reOfferAutoAcceptDate"></span></p>
                 </div>
                 
-                <!-- Shipping Label / Tracking Info -->
                 <div id="labelInfoSection" class="hidden bg-blue-50 p-4 rounded-md border border-blue-200 mt-4 space-y-2">
                     <h4 class="text-lg font-semibold text-blue-800">Shipping Information</h4>
                     <p id="outboundLabelRow" class="hidden"><strong>Outbound Kit Tracking:</strong> <a id="outboundTrackingLink" href="#" target="_blank" class="text-blue-600 hover:underline"></a></p>
@@ -589,87 +516,11 @@
             </div>
 
             <div id="modalActionButtons" class="mt-6 flex flex-col sm:flex-row gap-3">
-                <!-- Action buttons will be rendered here dynamically -->
             </div>
             <div id="modalMessage" class="mt-4 p-3 text-sm rounded-md hidden"></div>
         </div>
     </div>
 
-
-    <!-- CHAT WIDGET -->
-    <div id="chat-widget-container">
-        <div id="chat-window">
-            <!-- Chat Header -->
-            <div class="bg-blue-700 text-white p-4 flex justify-between items-center">
-                <h3 class="font-bold text-lg">Customer Support</h3>
-                <div>
-                    <button id="chat-minimize-btn" class="text-white hover:text-blue-200 mr-2"><i class="fa-solid fa-minus text-xl"></i></button>
-                    <button id="chat-close-btn" class="text-white hover:text-blue-200"><i class="fa-solid fa-xmark text-xl"></i></button>
-                </div>
-            </div>
-            <!-- Messages Area -->
-            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto bg-slate-50"></div>
-            <!-- Typing Indicator -->
-            <div id="typing-indicator-container" class="p-2 hidden">
-                <div class="p-3 rounded-lg max-w-[85%] mb-2 break-words chat-bubble-agent">
-                    <div class="typing-indicator"><span></span><span></span><span></span></div>
-                </div>
-            </div>
-            <!-- Input Area -->
-            <div id="chat-input-container" class="p-4 border-t border-slate-200">
-                <input type="text" id="chat-input" placeholder="Type your message..." class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-            <!-- Guest Prompt -->
-            <div id="guest-prompt-container" class="p-4 border-t border-slate-200 hidden">
-                <p class="text-center text-sm text-slate-600 mb-3">To provide the best support, please log in or continue as a guest.</p>
-                <div class="space-y-2">
-                    <button id="guest-login-btn" class="btn-dark-slate">Login / Sign Up</button>
-                    <button id="guest-continue-btn" class="w-full bg-slate-200 text-slate-800 p-3 rounded-lg font-semibold hover:bg-slate-300 transition-colors">Ask a General Question</button>
-                </div>
-            </div>
-            <!-- Survey -->
-            <div id="chat-survey-container" class="p-4 border-t border-slate-200 hidden overflow-y-auto">
-                <p class="text-center font-semibold mb-2">The agent has ended the chat.</p>
-                <p class="text-center text-sm text-slate-600 mb-4">Please rate your experience.</p>
-                <form id="chat-survey-form">
-                    <div class="mb-4">
-                        <label class="font-semibold text-slate-700 block mb-2">Overall Rating:</label>
-                        <div id="star-rating" class="star-rating text-3xl flex justify-center" data-rating="0">
-                            <i class="fa-solid fa-star" data-value="1"></i><i class="fa-solid fa-star" data-value="2"></i><i class="fa-solid fa-star" data-value="3"></i><i class="fa-solid fa-star" data-value="4"></i><i class="fa-solid fa-star" data-value="5"></i>
-                        </div>
-                    </div>
-                    <div class="mb-4">
-                        <label for="friendliness-rating" class="font-semibold text-slate-700 block mb-2">Agent Friendliness: <span id="friendliness-value" class="font-bold text-blue-600">5</span>/10</label>
-                        <input type="range" id="friendliness-rating" min="1" max="10" value="5" class="w-full">
-                    </div>
-                    <div class="mb-4">
-                        <label class="font-semibold text-slate-700 block mb-2">Was your issue resolved?</label>
-                        <div class="flex justify-center gap-4">
-                            <label><input type="radio" name="issue-resolved" value="yes" class="mr-1"> Yes</label>
-                            <label><input type="radio" name="issue-resolved" value="no" class="mr-1"> No</label>
-                        </div>
-                    </div>
-                    <div class="mb-4">
-                            <label for="survey-comments" class="font-semibold text-slate-700 block mb-2">Additional Comments (optional):</label>
-                            <textarea id="survey-comments" rows="2" class="w-full border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                    </div>
-                    <button type="submit" class="btn-dark-slate">Submit Feedback</button>
-                </form>
-            </div>
-            <!-- End Chat Confirmation -->
-            <div id="end-chat-confirm-modal" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-10">
-                <p class="text-lg font-semibold text-slate-800 mb-4 text-center">End this chat session?</p>
-                <div class="flex gap-4">
-                    <button id="end-chat-yes" class="px-6 py-2 font-semibold text-white bg-red-500 rounded-lg hover:bg-red-600 transition">Yes, End Chat</button>
-                    <button id="end-chat-no" class="px-6 py-2 font-semibold text-slate-800 bg-slate-200 rounded-lg hover:bg-slate-300 transition">No</button>
-                </div>
-            </div>
-        </div>
-        <button id="chat-open-btn">
-            <i class="fa-solid fa-comments text-3xl"></i>
-            <span id="unread-counter">0</span>
-        </button>
-    </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -696,7 +547,7 @@
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 
         // Get elements
-        const loginNavBtn = document.getElementById('loginNavBtn'); // Login/Sign Up button in header
+        const loginNavBtn = document.getElementById('loginNavBtn');
         const userMonogram = document.getElementById('userMonogram');
         const authDropdown = document.getElementById('authDropdown');
         const logoutButton = document.getElementById('logoutBtn');
@@ -714,7 +565,7 @@
         const noOrdersMessage = document.getElementById('noOrdersMessage');
 
         // Modals and their buttons
-        const modals = document.querySelectorAll('.modal'); // All modals
+        const modals = document.querySelectorAll('.modal');
         const loginModal = document.getElementById('loginModal');
         const aboutUsModal = document.getElementById('aboutUsModal');
         const privacyPolicyModal = document.getElementById('privacyPolicyModal');
@@ -758,7 +609,6 @@
         const returnLabelRow = document.getElementById('returnLabelRow');
         const returnLabelLink = document.getElementById('returnLabelLink');
         const returnTrackingNumber = document.getElementById('returnTrackingNumber');
-
         const modalLoadingMessage = document.getElementById('modalLoadingMessage');
         const modalActionButtons = document.getElementById('modalActionButtons');
         const modalMessage = document.getElementById('modalMessage');
@@ -822,15 +672,14 @@
                 return 'Shipping Kit Requested';
             }
             if (status === 'label_generated') {
-                return 'Shipping Kit on the Way'; // Custom text for this status
+                return 'Shipping Kit on the Way';
             }
             return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
         
         function formatDate(timestamp) {
             if (!timestamp) return 'N/A';
-            // Firestore Timestamps have a toDate() method
-            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000); // Handle Firestore Timestamp format
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000);
             return date.toLocaleDateString();
         }
 
@@ -880,13 +729,11 @@
                 return;
             }
             
-            // Query the 'orders' collection for documents where 'userId' matches the current user's ID
             const ordersCollectionRef = collection(db, 'orders');
             const userOrdersQuery = query(ordersCollectionRef, where('userId', '==', userId));
             
-            // Listen for real-time updates to the user's orders
             onSnapshot(userOrdersQuery, (snapshot) => {
-                ordersTableBody.innerHTML = ''; // Clear existing rows
+                ordersTableBody.innerHTML = '';
                 if (snapshot.empty) {
                     noOrdersMessage.classList.remove('hidden');
                 } else {
@@ -900,38 +747,36 @@
                         }
 
                         const row = document.createElement('tr');
-                        row.className = 'border-b border-slate-200 hover:bg-slate-50 cursor-pointer'; // Updated border and hover colors
-                        row.dataset.orderId = doc.id; // Add data attribute for click handler
+                        row.className = 'border-b border-slate-200 hover:bg-slate-50 cursor-pointer';
+                        row.dataset.orderId = doc.id;
 
                         row.innerHTML = `
-                                <td class="py-3 px-6 text-left whitespace-nowrap">${doc.id}</td>
-                                <td class="py-3 px-6 text-left">${formatDate(order.createdAt)}</td>
-                                <td class="py-3 px-6 text-left">${order.device || 'N/A'}</td>
-                                <td class="py-3 px-6 text-left">$${displayQuote.toFixed(2)}</td>
-                                <td class="py-3 px-6 text-center">
+                                <td class="py-3 px-6 text-left" data-label="Order ID">${doc.id}</td>
+                                <td class="py-3 px-6 text-left" data-label="Date">${formatDate(order.createdAt)}</td>
+                                <td class="py-3 px-6 text-left" data-label="Device">${order.device || 'N/A'}</td>
+                                <td class="py-3 px-6 text-left" data-label="Quote">$${displayQuote.toFixed(2)}</td>
+                                <td class="py-3 px-6 text-center" data-label="Status">
                                     <span class="status-badge ${getStatusBadgeClass(order.status)}">${formatStatus(order.status)}</span>
                                 </td>
-                                <td class="py-3 px-6 text-center">
+                                <td class="py-3 px-6 text-center" data-label="Actions">
                                     <button data-order-id="${doc.id}" class="view-details-btn text-blue-600 hover:text-blue-800 font-medium text-xs px-2 py-1 rounded-md bg-blue-100 hover:bg-blue-200 transition duration-200">View Details</button>
                                 </td>
                             `;
                         ordersTableBody.appendChild(row);
                     });
-                     // Add event listeners after all rows are added
                     document.querySelectorAll('.view-details-btn').forEach(button => {
                         button.addEventListener('click', (event) => {
-                            event.stopPropagation(); // Prevent row click from firing
+                            event.stopPropagation();
                             openOrderDetailsModal(event.target.dataset.orderId);
                         });
                     });
                     document.querySelectorAll('#ordersTableBody tr').forEach(row => {
                         row.addEventListener('click', (event) => {
-                            if (!event.target.closest('.view-details-btn')) { // Only open if not clicking the specific button
+                            if (!event.target.closest('.view-details-btn')) {
                                 openOrderDetailsModal(row.dataset.orderId);
                             }
                         });
                     });
-
                 }
             }, (error) => {
                 console.error("Error fetching orders:", error);
@@ -951,15 +796,11 @@
             clearMessage();
         
             try {
-                // Update Firebase Auth display name
                 if (auth.currentUser && newName !== auth.currentUser.displayName) {
                     await updateProfile(auth.currentUser, { displayName: newName });
-                    userName.textContent = newName; // Update UI immediately
+                    userName.textContent = newName;
                 }
 
-                // Update Firestore for phone number (and potentially other fields)
-                // We're storing user-specific data in a 'users' collection,
-                // with the document ID being the user's UID.
                 const userDocRef = doc(db, `users/${userId}`);
                 await setDoc(userDocRef, { phoneNumber: phoneNumber }, { merge: true });
 
@@ -975,30 +816,23 @@
 
         // --- General Modal Functions ---
         const openModal = (modalElement) => {
-            console.log('Opening modal:', modalElement.id); // Debugging
             modalElement.classList.add('is-visible');
         };
         const closeModal = (modalElement) => {
-            console.log('Attempting to close modal:', modalElement.id); // Debugging
             modalElement.classList.remove('is-visible');
         };
 
         document.querySelectorAll('.close-modal-btn').forEach(button => {
             button.addEventListener('click', (e) => {
-                console.log('Close button clicked.'); // Debugging
                 const modal = e.target.closest('.modal');
                 if (modal) {
                     closeModal(modal);
-                } else {
-                    console.error('Close button clicked, but no parent modal found.');
                 }
             });
         });
 
         modals.forEach(modal => {
             modal.addEventListener('click', (e) => {
-                console.log('Modal background clicked for:', modal.id); // Debugging
-                // Check if the click occurred directly on the modal overlay, not on its content
                 if (e.target === modal) {
                     closeModal(modal);
                 }
@@ -1014,7 +848,6 @@
         // --- Order Details Modal Functions ---
 
         async function openOrderDetailsModal(orderId) {
-            // Reset modal state
             modalActionButtons.innerHTML = '';
             modalLoadingMessage.classList.add('hidden');
             modalMessage.classList.add('hidden');
@@ -1027,20 +860,17 @@
             uspsLabelRow.classList.add('hidden');
             returnLabelRow.classList.add('hidden');
 
-            openModal(orderDetailsModal); // Use the general openModal function
+            openModal(orderDetailsModal);
             modalLoadingMessage.classList.remove('hidden');
 
             try {
-                console.log(`Attempting to fetch order details for ID: ${orderId} from URL: ${BACKEND_BASE_URL}/orders/${orderId}`); // Added logging
                 const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}`);
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error(`Backend responded with status ${response.status}: ${errorText}`); // More detailed error logging
                     throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
                 }
                 const order = await response.json();
 
-                // Populate general order details
                 modalOrderId.textContent = order.id;
                 modalCustomerName.textContent = order.shippingInfo?.fullName || 'N/A';
                 modalCustomerEmail.textContent = order.shippingInfo?.email || 'N/A';
@@ -1062,7 +892,6 @@
                 modalStatus.textContent = formatStatus(order.status);
                 modalStatus.className = `status-badge ${getStatusBadgeClass(order.status)}`;
 
-                // Populate re-offer details if available
                 if (order.reOffer && (order.status === 're-offered-pending' || order.status === 're-offered-accepted' || order.status === 're-offered-auto-accepted' || order.status === 're-offered-declined')) {
                     reOfferDetails.classList.remove('hidden');
                     reOfferNewPrice.textContent = order.reOffer.newPrice ? order.reOffer.newPrice.toFixed(2) : 'N/A';
@@ -1081,7 +910,6 @@
                     }
                 }
 
-                // Populate shipping label/tracking info
                 if (order.shippingPreference === 'Shipping Kit Requested') {
                     labelInfoSection.classList.remove('hidden');
                     if (order.outboundTrackingNumber) {
@@ -1101,7 +929,6 @@
                     uspsLabelRow.classList.remove('hidden');
                 }
 
-                // Populate return label info if exists
                 if (order.returnLabelUrl) {
                     labelInfoSection.classList.remove('hidden');
                     returnLabelLink.href = order.returnLabelUrl;
@@ -1112,8 +939,8 @@
                 renderModalActionButtons(order);
 
             } catch (error) {
-                console.error('Caught error fetching order details:', error); // More detailed error logging
-                displayModalMessage(`Error fetching order details: ${error.message}. Please check your network and try again.`, 'error'); // More user-friendly message
+                console.error("Action error:", error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
             } finally {
                 modalLoadingMessage.classList.add('hidden');
             }
@@ -1176,7 +1003,6 @@
                 const result = await response.json();
                 
                 displayModalMessage(result.message, 'success');
-                // Re-open modal to refresh details with new status
                 openOrderDetailsModal(orderId);
 
             } catch (error) {
@@ -1184,7 +1010,6 @@
                 displayModalMessage(`Error: ${error.message}`, 'error');
             } finally {
                 modalLoadingMessage.classList.add('hidden');
-                modalActionButtons.classList.remove('hidden');
             }
         }
 
@@ -1272,13 +1097,11 @@
 
         // --- Event Listeners ---
         
-        // Handle dropdown for user monogram
         userMonogram.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent document click from closing it immediately
+            e.stopPropagation();
             authDropdown.classList.toggle('hidden');
         });
 
-        // Close dropdown if clicking outside
         document.addEventListener('click', (e) => {
             const authStatusContainer = document.getElementById('authStatusContainer');
             if (authStatusContainer && !authStatusContainer.contains(e.target)) {
@@ -1297,7 +1120,6 @@
             }
         });
 
-        // Footer email signup form submission
         footerEmailSignupForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('footerPromoEmail').value;
@@ -1325,21 +1147,18 @@
             if (user) {
                 currentUserId = user.uid;
                 
-                // Update header UI for logged-in state
-                loginNavBtn.classList.add('hidden'); // Hide the login/signup button
-                userMonogram.classList.remove('hidden'); // Show user monogram
+                loginNavBtn.classList.add('hidden');
+                userMonogram.classList.remove('hidden');
                 
-                // Get and set user initials for monogram
                 const name = user.displayName || user.email;
                 const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                 userMonogram.textContent = initials;
-                userMonogram.style.backgroundColor = `hsl(${Math.random() * 360}, 70%, 70%)`;
+                
+                // The monogram color is now handled by CSS.
 
-                // Update account details
                 userName.textContent = user.displayName || 'N/A';
                 userEmail.textContent = user.email || 'N/A';
 
-                // Fetch phone number from Firestore and populate input field
                 const userDocRef = doc(db, `users/${currentUserId}`);
                 try {
                     const docSnap = await getDoc(userDocRef);
@@ -1353,293 +1172,12 @@
                     showMessage('Could not load phone number.', 'error');
                 }
                 
-                // Show account info by default
                 showTab('accountInfo');
-                closeModal(loginModal); // Close login modal if open after successful auth
+                closeModal(loginModal);
                 
             } else {
-                // User is signed out, redirect to a non-authenticated page
-                // Using window.location.replace to prevent going back to my-account.html
                 window.location.replace(window.location.origin + '/index.html'); 
             }
-        });
-
-        // --- ADVANCED LIVE CHAT LOGIC ---
-        const chatWindow = document.getElementById('chat-window');
-        const chatOpenBtn = document.getElementById('chat-open-btn');
-        const chatCloseBtn = document.getElementById('chat-close-btn');
-        const chatMinimizeBtn = document.getElementById('chat-minimize-btn');
-        const chatMessages = document.getElementById('chat-messages');
-        const chatInput = document.getElementById('chat-input');
-        const chatInputContainer = document.getElementById('chat-input-container');
-        const guestPromptContainer = document.getElementById('guest-prompt-container');
-        const guestLoginBtn = document.getElementById('guest-login-btn');
-        const guestContinueBtn = document.getElementById('guest-continue-btn');
-        const unreadCounter = document.getElementById('unread-counter');
-        const typingIndicatorContainer = document.getElementById('typing-indicator-container');
-        const surveyContainer = document.getElementById('chat-survey-container');
-        const surveyForm = document.getElementById('chat-survey-form');
-        const starRatingContainer = document.getElementById('star-rating');
-        const friendlinessRating = document.getElementById('friendliness-rating');
-        const friendlinessValue = document.getElementById('friendliness-value');
-        const endChatConfirmModal = document.getElementById('end-chat-confirm-modal');
-        const endChatYesBtn = document.getElementById('end-chat-yes');
-        const endChatNoBtn = document.getElementById('end-chat-no');
-
-        let currentChatId = null;
-        let unsubscribeFromMessages = null;
-        let unsubscribeFromChatSession = null;
-        let isChatMinimized = true;
-        let unreadCount = 0;
-        let hasUserTypedFirstMessage = false;
-        let userTypingTimeout = null;
-
-        const notificationSound = new Audio('https://cdn.freesound.org/previews/253/253887_3900531-lq.mp3');
-        notificationSound.volume = 0.5;
-
-        const getOrCreateGuestId = () => {
-            let id = localStorage.getItem('guestChatId');
-            if (!id) {
-                id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-                localStorage.setItem('guestChatId', id);
-            }
-            return id;
-        };
-
-        const getOrCreateChatSession = async () => {
-            let chatId = localStorage.getItem('chatSessionId');
-            if (chatId) return chatId;
-            
-            const user = auth.currentUser;
-            const currentGuestId = getOrCreateGuestId();
-            const chatSessionData = {
-                createdAt: serverTimestamp(),
-                ownerUid: user ? user.uid : null,
-                guestId: user ? null : currentGuestId,
-                status: 'active',
-                agentName: null,
-                isAgentTyping: false,
-                userTypingText: ''
-            };
-            const docRef = await addDoc(collection(db, "chats"), chatSessionData);
-            chatId = docRef.id;
-            localStorage.setItem('chatSessionId', chatId);
-            return chatId;
-        };
-
-        const renderChatMessage = (msg) => {
-            const messageDiv = document.createElement('div');
-            const user = auth.currentUser;
-            const currentGuestId = localStorage.getItem('guestChatId');
-            const isMyMessage = (user && msg.sender === user.uid) || (!user && msg.sender === currentGuestId);
-            
-            let classes = 'p-3 rounded-lg max-w-[85%] mb-2 break-words';
-            if (msg.type === 'system') {
-                classes = 'text-center text-sm text-slate-500 my-2';
-                messageDiv.innerHTML = `<span class="bg-white px-2 py-1 rounded-full">${msg.text}</span>`;
-            } else {
-                classes += isMyMessage ? ' bg-gray-200 text-slate-800 self-end' : ' bg-blue-100 text-blue-800 self-start';
-                messageDiv.textContent = msg.text;
-            }
-            messageDiv.className = classes;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        };
-        
-        const listenForChatSessionChanges = (chatId) => {
-            if (unsubscribeFromChatSession) unsubscribeFromChatSession();
-            unsubscribeFromChatSession = onSnapshot(doc(db, "chats", chatId), (docSnap) => {
-                const data = docSnap.data();
-                if (!data) return;
-                if (data.agentName && data.agentHasJoined && !document.getElementById(`agent-joined-${data.agentName}`)) {
-                    const joinMsg = { type: 'system', text: `<i class="fa-solid fa-headset mr-2"></i>${data.agentName} has joined the chat.` };
-                    const joinDiv = document.createElement('div');
-                    joinDiv.id = `agent-joined-${data.agentName}`;
-                    joinDiv.className = 'text-center text-sm text-slate-500 my-2';
-                    joinDiv.innerHTML = `<span class="bg-white px-2 py-1 rounded-full">${joinMsg.text}</span>`;
-                    chatMessages.appendChild(joinDiv);
-                }
-                typingIndicatorContainer.style.display = data.isAgentTyping ? 'block' : 'none';
-                if (data.isAgentTyping) chatMessages.scrollTop = chatMessages.scrollHeight;
-                if (data.status === 'ended_by_agent') {
-                    chatInputContainer.classList.add('hidden');
-                    guestPromptContainer.classList.add('hidden');
-                    surveyContainer.classList.remove('hidden');
-                    localStorage.removeItem('chatSessionId');
-                }
-            });
-        };
-
-        const listenForMessages = (chatId) => {
-            if (unsubscribeFromMessages) unsubscribeFromMessages();
-            currentChatId = chatId;
-            const messagesRef = collection(db, `chats/${chatId}/messages`);
-            const q = query(messagesRef, orderBy("timestamp"));
-            unsubscribeFromMessages = onSnapshot(q, (snapshot) => {
-                chatMessages.innerHTML = ''; // Clear messages to prevent duplication
-                if (snapshot.empty && !hasUserTypedFirstMessage) {
-                    const user = auth.currentUser;
-                    const userName = user?.displayName?.split(' ')[0] || 'there';
-                    chatMessages.innerHTML = `<div class="p-3 rounded-lg max-w-[85%] mb-2 break-words bg-blue-100 text-blue-800 self-start">Hi ${userName}, how can we help you today?</div>`;
-                    return;
-                }
-                snapshot.forEach(doc => {
-                    const msgData = doc.data();
-                    renderChatMessage(msgData);
-                    const user = auth.currentUser;
-                    const currentGuestId = localStorage.getItem('guestChatId');
-                    const isMyMessage = (user && msgData.sender === user.uid) || (!user && msgData.sender === currentGuestId);
-                    if (!isMyMessage && isChatMinimized) {
-                        unreadCount++;
-                        unreadCounter.textContent = unreadCount;
-                        unreadCounter.classList.add('visible');
-                        notificationSound.play().catch(e => console.log("Audio play failed:", e));
-                    }
-                });
-            });
-        };
-
-        const resetChatUI = () => {
-            endChatConfirmModal.classList.add('hidden');
-            endChatConfirmModal.classList.remove('flex');
-            surveyContainer.classList.add('hidden');
-            guestPromptContainer.classList.add('hidden');
-            chatInputContainer.classList.remove('hidden');
-            typingIndicatorContainer.style.display = 'none';
-        };
-
-        const openChat = async () => {
-            console.log('Chat open button clicked.'); // Debugging
-            resetChatUI();
-            chatWindow.classList.add('is-visible');
-            isChatMinimized = false;
-            unreadCount = 0;
-            unreadCounter.classList.remove('visible');
-            const chatId = await getOrCreateChatSession();
-            if (chatId) {
-                listenForMessages(chatId);
-                listenForChatSessionChanges(chatId);
-            }
-        };
-        chatOpenBtn.addEventListener('click', openChat);
-
-        const minimizeChat = () => {
-            console.log('Chat minimize button clicked.'); // Debugging
-            chatWindow.classList.remove('is-visible');
-            isChatMinimized = true;
-        };
-        chatMinimizeBtn.addEventListener('click', minimizeChat);
-
-        chatCloseBtn.addEventListener('click', () => {
-            console.log('Chat close button clicked.'); // Debugging
-            endChatConfirmModal.classList.remove('hidden');
-            endChatConfirmModal.classList.add('flex');
-        });
-
-        endChatNoBtn.addEventListener('click', () => {
-            console.log('Chat end (No) button clicked.'); // Debugging
-            endChatConfirmModal.classList.add('hidden');
-            endChatConfirmModal.classList.remove('flex');
-        });
-
-        endChatYesBtn.addEventListener('click', async () => {
-            console.log('Chat end (Yes) button clicked.'); // Debugging
-            if (currentChatId) {
-                await addDoc(collection(db, `chats/${currentChatId}/messages`), {
-                    text: "Chat ended by user.",
-                    timestamp: serverTimestamp(),
-                    sender: 'system',
-                    type: 'system'
-                });
-                await updateDoc(doc(db, "chats", currentChatId), { status: 'ended_by_user' });
-            }
-            localStorage.removeItem('chatSessionId');
-            currentChatId = null;
-            hasUserTypedFirstMessage = false;
-            chatMessages.innerHTML = '';
-            endChatConfirmModal.classList.add('hidden');
-            endChatConfirmModal.classList.remove('flex');
-            minimizeChat();
-        });
-
-        const sendMessage = async (text) => {
-            if (text.trim() === '' || !currentChatId) return;
-            const user = auth.currentUser;
-            if (!user && !hasUserTypedFirstMessage) {
-                hasUserTypedFirstMessage = true;
-                chatInputContainer.classList.add('hidden');
-                guestPromptContainer.classList.remove('hidden');
-                return;
-            }
-            const currentGuestId = getOrCreateGuestId();
-            const messageData = { text, timestamp: serverTimestamp(), sender: user ? user.uid : currentGuestId };
-            await addDoc(collection(db, `chats/${currentChatId}/messages`), messageData);
-            chatInput.value = '';
-            await updateDoc(doc(db, "chats", currentChatId), {
-                userTypingText: '',
-                lastMessage: `User: ${text}`,
-                lastMessageTimestamp: serverTimestamp()
-            });
-        };
-
-        chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(chatInput.value); } });
-        chatInput.addEventListener('keyup', () => {
-            clearTimeout(userTypingTimeout);
-            userTypingTimeout = setTimeout(async () => {
-                if (currentChatId) {
-                    await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
-                }
-            }, 300);
-        });
-
-        guestLoginBtn.addEventListener('click', () => {
-            openModal(loginModal); // Open the login modal
-            minimizeChat(); // Minimize chat window when opening login modal
-        });
-        guestContinueBtn.addEventListener('click', () => {
-            guestPromptContainer.classList.add('hidden');
-            chatInputContainer.classList.remove('hidden');
-            renderChatMessage({ type: 'system', text: 'An agent will be with you shortly. Please provide any relevant details like order numbers.' });
-            chatInput.focus();
-        });
-
-        friendlinessRating.addEventListener('input', (e) => { friendlinessValue.textContent = e.target.value; });
-        starRatingContainer.addEventListener('mouseover', e => {
-            if (e.target.tagName === 'I') {
-                const rating = e.target.dataset.value;
-                Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= rating));
-            }
-        });
-        starRatingContainer.addEventListener('mouseout', () => {
-            const currentRating = starRatingContainer.dataset.rating;
-            Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= currentRating));
-        });
-        starRatingContainer.addEventListener('click', e => {
-            if (e.target.tagName === 'I') {
-                starRatingContainer.dataset.rating = e.target.dataset.value;
-            }
-        });
-
-        surveyForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const surveyData = {
-                overallRating: parseInt(starRatingContainer.dataset.rating, 10),
-                friendliness: friendlinessRating.value,
-                resolved: document.querySelector('input[name="issue-resolved"]:checked')?.value || null,
-                comments: document.getElementById('survey-comments').value
-            };
-            await setDoc(doc(db, `chats/${currentChatId}/survey/feedback`), { ...surveyData, submittedAt: serverTimestamp() });
-            try {
-                const cloudFunctionUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-chat-feedback';
-                const response = await fetch(cloudFunctionUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chatId: currentChatId, surveyData: surveyData })
-                });
-                if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
-                console.log('Feedback email sent successfully:', await response.json());
-            } catch (error) { console.error("Error sending feedback email:", error); }
-            surveyContainer.innerHTML = '<p class="text-center font-semibold text-green-600">Thank you for your feedback!</p>';
         });
     </script>
 </body>
