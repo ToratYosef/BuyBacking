@@ -44,9 +44,15 @@
         let allDevices = [];
         let pendingChanges = {};
         
+        // Custom confirmation modal variables
+        const customConfirmModal = document.createElement('div');
+        customConfirmModal.id = 'customConfirmModal';
+        
         // --- IMAGE LOADING LOGIC ---
+        // I've added a console.log here to help with debugging any issues with the imageUrl.
         function loadImageWithFallback(imgElement, imageUrl) {
             if (!imageUrl) {
+                console.warn("No imageUrl provided for device. Showing fallback image.");
                 imgElement.src = 'https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';
                 return;
             }
@@ -56,6 +62,8 @@
             
             function tryLoad() {
                 if (current >= extensions.length) {
+                    // This is the fallback that will show if all attempts fail
+                    console.error(`Failed to load image from all attempts for URL: ${imageUrl}.`);
                     imgElement.src = 'https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';
                     return;
                 }
@@ -95,7 +103,7 @@
             const searchInput = document.getElementById('searchInput');
             const brandFilter = document.getElementById('brandFilter');
             const pricingTableHeader = document.getElementById('pricingTableHeader');
-
+            
             // Initial authentication check
             if (initialAuthToken) {
                 try {
@@ -222,24 +230,24 @@
                 const allRows = [];
                 filtered.forEach(device => {
                     Object.keys(device.prices).forEach(storage => {
-                         // Check for iPhone/Samsung/Pixel pricing structure
-                         if (device.brand === 'iphone' || device.brand === 'samsung' || device.brand === 'google_pixel') {
-                             if (device.prices[storage].unlocked) {
-                                allRows.push({ ...device, storage, status: 'unlocked', prices: device.prices[storage].unlocked });
-                             }
-                             if (device.prices[storage].locked) {
-                                allRows.push({ ...device, storage, status: 'locked', prices: device.prices[storage].locked });
-                             }
-                         }
-                         // Check for iPad pricing structure
-                         if (device.brand === 'ipad') {
-                             if (device.prices[storage].wifi) {
-                                 allRows.push({ ...device, storage, status: 'wifi', prices: device.prices[storage].wifi });
-                             }
-                             if (device.prices[storage].lte) {
-                                 allRows.push({ ...device, storage, status: 'lte', prices: device.prices[storage].lte });
-                             }
-                         }
+                            // Check for iPhone/Samsung/Pixel pricing structure
+                            if (device.brand === 'iphone' || device.brand === 'samsung' || device.brand === 'google_pixel') {
+                                if (device.prices[storage].unlocked) {
+                                    allRows.push({ ...device, storage, status: 'unlocked', prices: device.prices[storage].unlocked });
+                                }
+                                if (device.prices[storage].locked) {
+                                    allRows.push({ ...device, storage, status: 'locked', prices: device.prices[storage].locked });
+                                }
+                            }
+                            // Check for iPad pricing structure
+                            if (device.brand === 'ipad') {
+                                if (device.prices[storage].wifi) {
+                                    allRows.push({ ...device, storage, status: 'wifi', prices: device.prices[storage].wifi });
+                                }
+                                if (device.prices[storage].lte) {
+                                    allRows.push({ ...device, storage, status: 'lte', prices: device.prices[storage].lte });
+                                }
+                            }
                     });
                 });
                 
@@ -321,7 +329,7 @@
                         </tr>
                     `;
                 }
-            
+                
                 if (sortedRows.length === 0) {
                     pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
                     return;
@@ -362,16 +370,19 @@
                         const id = e.target.dataset.id;
                         const deviceName = e.target.dataset.name;
                         
-                        if (window.confirm(`Are you sure you want to delete ${deviceName}? This action is irreversible.`)) {
-                           try {
-                               await deleteDoc(doc(db, `devices/${brand}/models`, id));
-                               displayStatusMessage(`${deviceName} deleted successfully!`, 'success');
-                               fetchAndRenderPricing({ search: searchInput.value, brand: brandFilter.value });
-                           } catch (error) {
-                               console.error("Error deleting document:", error);
-                               displayStatusMessage(`Error deleting ${deviceName}.`, 'error');
-                           }
-                        }
+                        // Use custom modal instead of window.confirm
+                        showCustomConfirm(`Are you sure you want to delete ${deviceName}? This action is irreversible.`, async (confirmed) => {
+                            if (confirmed) {
+                                try {
+                                    await deleteDoc(doc(db, `devices/${brand}/models`, id));
+                                    displayStatusMessage(`${deviceName} deleted successfully!`, 'success');
+                                    fetchAndRenderPricing({ search: searchInput.value, brand: brandFilter.value });
+                                } catch (error) {
+                                    console.error("Error deleting document:", error);
+                                    displayStatusMessage(`Error deleting ${deviceName}.`, 'error');
+                                }
+                            }
+                        });
                     });
                 });
 
@@ -379,6 +390,33 @@
                     button.addEventListener('click', saveRowChanges);
                 });
             };
+            
+            // Function to show the custom confirmation modal
+            const showCustomConfirm = (message, callback) => {
+                const modalHtml = `
+                    <div class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center">
+                        <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-sm w-full mx-4 my-8">
+                            <h3 class="text-xl font-bold mb-4 text-gray-900">Confirm Action</h3>
+                            <p class="text-gray-600 mb-6">${message}</p>
+                            <div class="flex justify-end gap-4">
+                                <button id="cancel-confirm" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold">Cancel</button>
+                                <button id="ok-confirm" class="bg-red-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-600">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(customConfirmModal);
+                customConfirmModal.innerHTML = modalHtml;
+                document.getElementById('cancel-confirm').addEventListener('click', () => {
+                    customConfirmModal.remove();
+                    callback(false);
+                });
+                document.getElementById('ok-confirm').addEventListener('click', () => {
+                    customConfirmModal.remove();
+                    callback(true);
+                });
+            };
+
 
             const createPriceRow = (device, storage, status, prices) => {
                 const row = document.createElement('tr');
