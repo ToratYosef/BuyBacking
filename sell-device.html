@@ -569,7 +569,11 @@
                     phoneGrid.classList.remove('hidden');
                     noResultsMessage.classList.add('hidden');
                     deviceList.forEach(device => {
-                        const modelUrl = `/offer.html?slug=${device.slug}&brand=${device.brand}`;
+                        // FIX: Changed the modelUrl to a clean, descriptive route
+                        const brandSlug = device.brand.toLowerCase().replace(/\s/g, '-');
+                        const deviceSlug = device.slug.toLowerCase().replace(/\s/g, '-');
+                        const modelUrl = `/${brandSlug}/models/${deviceSlug}`;
+                        
                         const deviceCardHTML = `
                             <a href="${modelUrl}" class="phone-card-link group" data-name="${device.name.toLowerCase()}" data-brand="${device.brand}">
                                 <div class="phone-card-inner bg-white p-6 rounded-xl shadow-md text-center flex flex-col h-full">
@@ -670,8 +674,8 @@
 
             const getOrCreateChatSession = async () => {
                 if (!db || !auth) {
-                     console.error("Firebase not initialized. Cannot create chat session.");
-                     return null;
+                    console.error("Firebase not initialized. Cannot create chat session.");
+                    return null;
                 }
                 let chatId = localStorage.getItem('chatSessionId');
                 if (chatId) return chatId;
