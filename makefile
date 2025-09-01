@@ -40,6 +40,10 @@ IPHONES = \
 
 # Define the Samsung models (slugs)
 SAMSUNGS = \
+    galaxy-s25 \
+    galaxy-s25-plus \
+    galaxy-s25-ultra \
+    galaxy-s25-fe \
     galaxy-s24-ultra \
     galaxy-s24-plus \
     galaxy-s24 \
