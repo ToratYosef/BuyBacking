@@ -43,6 +43,32 @@
 
         let allDevices = [];
         let pendingChanges = {};
+        
+        // --- IMAGE LOADING LOGIC ---
+        function loadImageWithFallback(imgElement, imageUrl) {
+            if (!imageUrl) {
+                imgElement.src = 'https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';
+                return;
+            }
+            
+            const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+            let current = 0;
+            
+            function tryLoad() {
+                if (current >= extensions.length) {
+                    imgElement.src = 'https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';
+                    return;
+                }
+                
+                const testSrc = imageUrl + extensions[current];
+                const img = new Image();
+                img.onload = () => { imgElement.src = testSrc; };
+                img.onerror = () => { current++; tryLoad(); };
+                img.src = testSrc;
+            }
+            
+            tryLoad();
+        }
 
         document.addEventListener('DOMContentLoaded', async () => {
             const pricingTableBody = document.getElementById('pricingTableBody');
@@ -156,7 +182,7 @@
             });
 
             const fetchAndRenderPricing = async (filters = {}) => {
-                pricingTableBody.innerHTML = '<tr><td colspan="11" class="text-center py-4">Loading pricing data...</td></tr>';
+                pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Loading pricing data...</td></tr>';
                 const iphoneCollection = collection(db, "devices/iphone/models");
                 const samsungCollection = collection(db, "devices/samsung/models");
 
@@ -170,7 +196,7 @@
                     renderPricingTable(allDevices, filters);
                 } catch (error) {
                     console.error("Error fetching pricing data: ", error);
-                    pricingTableBody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-red-500">Error loading data. Please check your permissions.</td></tr>';
+                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-red-500">Error loading data. Please check your permissions.</td></tr>';
                 }
             };
             
@@ -234,7 +260,7 @@
                 const sortedRows = sortAndFilterDevices(devices, filters);
 
                 if (sortedRows.length === 0) {
-                    pricingTableBody.innerHTML = '<tr><td colspan="11" class="text-center py-4">No matching devices found.</td></tr>';
+                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
                     return;
                 }
                 
@@ -306,10 +332,9 @@
                 
                 row.innerHTML = `
                     <td class="py-3 px-4 flex items-center gap-2">
-                        <img src="${device.imageUrl}" onerror="this.onerror=null;this.src='https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';" alt="${device.name}" class="w-10 h-10 object-contain rounded-md border">
+                        <img class="w-10 h-10 object-contain rounded-md border" data-base-src="${device.imageUrl}" alt="${device.name}">
                         <span>${device.name}</span>
                     </td>
-                    <td class="py-3 px-4">${device.brand.replace('s', 'S').replace('i', 'i').toUpperCase()}</td>
                     <td class="py-3 px-4">${storage}</td>
                     <td class="py-3 px-4 font-semibold text-sm ${status === 'unlocked' ? 'text-blue-600' : 'text-orange-600'}">${status}</td>
                     ${renderEditablePriceCell(prices.flawless, device, storage, status, 'flawless')}
@@ -323,6 +348,11 @@
                         ${deleteBtnHtml}
                     </td>
                 `;
+                
+                // Call the image loading function after the element is in the DOM
+                const imgElement = row.querySelector('img');
+                loadImageWithFallback(imgElement, device.imageUrl);
+                
                 return row;
             };
 
@@ -853,9 +883,6 @@
             <div id="adminPanelControls" class="flex items-center gap-4 hidden">
                 <span id="userEmailDisplay" class="text-sm font-medium"></span>
                 <button id="logoutBtn" class="text-red-500 font-semibold hover:text-red-700">Logout</button>
-                <button id="addNewModelBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                    <i class="fas fa-plus mr-2"></i>Add New Model
-                </button>
             </div>
         </div>
     </header>
@@ -901,6 +928,9 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
+                    <button id="addNewModelBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-plus mr-2"></i>Add New Model
+                    </button>
                     <button id="exportXLSXBtn" class="bg-green-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-600 transition-colors">
                         <i class="fas fa-file-excel mr-2"></i>Export to XLSX
                     </button>
@@ -919,7 +949,6 @@
                     <thead class="bg-gray-50">
                         <tr>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Device</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Brand</th>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Storage</th>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lock Status</th>
                             <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Flawless</th>
