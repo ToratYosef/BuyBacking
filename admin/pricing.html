@@ -13,7 +13,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         
         // Use provided Firebase variables with a hardcoded fallback for local testing
         const tempFirebaseConfig = {
@@ -94,6 +94,7 @@
             const bulkEditBtn = document.getElementById('bulkEditBtn');
             const searchInput = document.getElementById('searchInput');
             const brandFilter = document.getElementById('brandFilter');
+            const pricingTableHeader = document.getElementById('pricingTableHeader');
 
             // Initial authentication check
             if (initialAuthToken) {
@@ -221,12 +222,20 @@
                 const allRows = [];
                 filtered.forEach(device => {
                     Object.keys(device.prices).forEach(storage => {
+                         // Check for iPhone/Samsung/Pixel pricing structure
                          if (device.prices[storage].unlocked) {
                             allRows.push({ ...device, storage, status: 'unlocked', prices: device.prices[storage].unlocked });
-                        }
-                        if (device.prices[storage].locked) {
+                         }
+                         if (device.prices[storage].locked) {
                             allRows.push({ ...device, storage, status: 'locked', prices: device.prices[storage].locked });
-                        }
+                         }
+                         // Check for iPad pricing structure
+                         if (device.prices[storage].wifi) {
+                             allRows.push({ ...device, storage, status: 'wifi', prices: device.prices[storage].wifi });
+                         }
+                         if (device.prices[storage].lte) {
+                             allRows.push({ ...device, storage, status: 'lte', prices: device.prices[storage].lte });
+                         }
                     });
                 });
                 
@@ -254,9 +263,10 @@
                         return a.name.localeCompare(b.name);
                     }
 
-                    // 4. Then sort by lock status (unlocked before locked)
+                    // 4. Then sort by lock status (unlocked before locked) or connectivity (LTE before Wifi)
                     if (a.status !== b.status) {
-                        return a.status === 'unlocked' ? -1 : 1;
+                         const statusOrder = a.brand === 'ipad' ? ['lte', 'wifi'] : ['unlocked', 'locked'];
+                         return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
                     }
                     
                     // 5. Finally, sort by storage size (e.g., 64gb before 128gb)
@@ -274,7 +284,40 @@
                 pricingTableBody.innerHTML = '';
                 
                 const sortedRows = sortAndFilterDevices(devices, filters);
-
+                
+                // Update table header based on brand filter
+                if (filters.brand === 'ipad') {
+                    pricingTableHeader.innerHTML = `
+                        <tr>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Device</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Storage</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Connectivity</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Flawless</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Good</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Fair</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Damaged</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Broken</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">No Power</th>
+                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Actions</th>
+                        </tr>
+                    `;
+                } else {
+                    pricingTableHeader.innerHTML = `
+                        <tr>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Device</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Storage</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Lock Status</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Flawless</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Good</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Fair</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Damaged</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Broken</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">No Power</th>
+                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Actions</th>
+                        </tr>
+                    `;
+                }
+            
                 if (sortedRows.length === 0) {
                     pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
                     return;
@@ -315,8 +358,6 @@
                         const id = e.target.dataset.id;
                         const deviceName = e.target.dataset.name;
                         
-                        // Replaced alert with a custom message/modal
-                        // Using a simple window.confirm() for now, as custom modal is complex
                         if (window.confirm(`Are you sure you want to delete ${deviceName}? This action is irreversible.`)) {
                            try {
                                await deleteDoc(doc(db, `devices/${brand}/models`, id));
@@ -347,13 +388,24 @@
                 `;
                 const deleteBtnHtml = `<button class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${device.id}" data-brand="${device.brand}" data-name="${device.name}">Delete</button>`;
                 
+                // Dynamically determine the status display text and class
+                let statusText = status;
+                let statusClass = '';
+                if (device.brand === 'ipad') {
+                    statusText = status === 'lte' ? 'LTE' : 'Wi-Fi';
+                    statusClass = status === 'lte' ? 'text-blue-600' : 'text-indigo-600';
+                } else {
+                    statusText = status.charAt(0).toUpperCase() + status.slice(1);
+                    statusClass = status === 'unlocked' ? 'text-green-600' : 'text-red-600';
+                }
+                
                 row.innerHTML = `
                     <td class="py-3 px-4 flex items-center gap-2">
                         <img class="w-10 h-10 object-contain rounded-md border" data-base-src="${device.imageUrl}" alt="${device.name}">
                         <span>${device.name}</span>
                     </td>
                     <td class="py-3 px-4">${storage}</td>
-                    <td class="py-3 px-4 font-semibold text-sm ${status === 'unlocked' ? 'text-blue-600' : 'text-orange-600'}">${status}</td>
+                    <td class="py-3 px-4 font-semibold text-sm ${statusClass}">${statusText}</td>
                     ${renderEditablePriceCell(prices.flawless, device, storage, status, 'flawless')}
                     ${renderEditablePriceCell(prices.good, device, storage, status, 'good')}
                     ${renderEditablePriceCell(prices.fair, device, storage, status, 'fair')}
@@ -479,7 +531,6 @@
                         });
                     }
                     
-                    // Re-render the table with the new data
                     renderPricingTable(allDevices, { search: searchInput.value, brand: brandFilter.value });
                     
                 } catch (error) {
@@ -665,7 +716,6 @@
                 }
             });
 
-
             // Bulk Edit Modal
             bulkEditBtn.addEventListener('click', () => {
                 bulkEditModal.classList.remove('hidden');
@@ -716,10 +766,23 @@
                     for (const storage in newPrices) {
                         const priceData = newPrices[storage];
                         
-                        // Check locked/unlocked status
-                        const statusToUpdate = bulkStatus === 'all' ? ['unlocked', 'locked'] : [bulkStatus];
+                        // Handle 'locked' or 'unlocked' for phones, or 'lte' or 'wifi' for iPads
+                        const statusesToUpdate = [];
+                        if (device.brand === 'ipad') {
+                            if (bulkStatus === 'all') {
+                                statusesToUpdate.push('lte', 'wifi');
+                            } else if (priceData[bulkStatus]) {
+                                statusesToUpdate.push(bulkStatus);
+                            }
+                        } else { // iPhone, Samsung, Pixel
+                            if (bulkStatus === 'all') {
+                                statusesToUpdate.push('unlocked', 'locked');
+                            } else if (priceData[bulkStatus]) {
+                                statusesToUpdate.push(bulkStatus);
+                            }
+                        }
 
-                        statusToUpdate.forEach(status => {
+                        statusesToUpdate.forEach(status => {
                             if (priceData[status]) {
                                 for (const condition in priceData[status]) {
                                     if (bulkQuality === 'all' || condition === bulkQuality) {
@@ -785,25 +848,29 @@
                     const storage = option.querySelector('.storage-size').value;
                     if (!storage) return;
                     
-                    const unlockedPrices = {
-                        flawless: parseFloat(option.querySelector('.unlocked-flawless').value) || null,
-                        good: parseFloat(option.querySelector('.unlocked-good').value) || null,
-                        fair: parseFloat(option.querySelector('.unlocked-fair').value) || null,
-                        damaged: parseFloat(option.querySelector('.unlocked-damaged').value) || null,
-                        broken: parseFloat(option.querySelector('.unlocked-broken').value) || null,
-                        noPower: parseFloat(option.querySelector('.unlocked-no-power').value) || null
-                    };
+                    const unlockedPrices = {};
+                    const lockedPrices = {};
                     
-                    const lockedPrices = {
-                        flawless: parseFloat(option.querySelector('.locked-flawless').value) || null,
-                        good: parseFloat(option.querySelector('.locked-good').value) || null,
-                        fair: parseFloat(option.querySelector('.locked-fair').value) || null,
-                        damaged: parseFloat(option.querySelector('.locked-damaged').value) || null,
-                        broken: parseFloat(option.querySelector('.locked-broken').value) || null,
-                        noPower: parseFloat(option.querySelector('.locked-no-power').value) || null
-                    };
+                    // Check if the device is an iPad to handle the different pricing keys
+                    const isIpad = deviceBrand === 'ipad';
+                    const statusKey1 = isIpad ? 'lte' : 'unlocked';
+                    const statusKey2 = isIpad ? 'wifi' : 'locked';
 
-                    prices[storage] = { unlocked: unlockedPrices, locked: lockedPrices };
+                    unlockedPrices.flawless = parseFloat(option.querySelector('.unlocked-flawless').value) || null;
+                    unlockedPrices.good = parseFloat(option.querySelector('.unlocked-good').value) || null;
+                    unlockedPrices.fair = parseFloat(option.querySelector('.unlocked-fair').value) || null;
+                    unlockedPrices.damaged = parseFloat(option.querySelector('.unlocked-damaged').value) || null;
+                    unlockedPrices.broken = parseFloat(option.querySelector('.unlocked-broken').value) || null;
+                    unlockedPrices.noPower = parseFloat(option.querySelector('.unlocked-no-power').value) || null;
+
+                    lockedPrices.flawless = parseFloat(option.querySelector('.locked-flawless').value) || null;
+                    lockedPrices.good = parseFloat(option.querySelector('.locked-good').value) || null;
+                    lockedPrices.fair = parseFloat(option.querySelector('.locked-fair').value) || null;
+                    lockedPrices.damaged = parseFloat(option.querySelector('.locked-damaged').value) || null;
+                    lockedPrices.broken = parseFloat(option.querySelector('.locked-broken').value) || null;
+                    lockedPrices.noPower = parseFloat(option.querySelector('.locked-no-power').value) || null;
+
+                    prices[storage] = { [statusKey1]: unlockedPrices, [statusKey2]: lockedPrices };
                 });
 
                 const newDeviceData = {
@@ -881,7 +948,7 @@
         .sticky-header {
             position: sticky;
             top: 0;
-            z-index: 50; 
+            z-index: 50;  
         }
 
         input[type="text"], input[type="number"], select {
@@ -896,7 +963,6 @@
 </head>
 <body class="bg-gray-100 text-gray-800">
 
-    <!-- Header -->
     <header class="bg-white shadow-md">
         <div class="container mx-auto p-6 flex justify-between items-center">
             <h1 class="text-3xl font-bold text-gray-900">Pricing Management</h1>
@@ -907,7 +973,6 @@
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="container mx-auto p-6">
         <div id="loadingIndicator" class="flex justify-center items-center py-20">
             <i class="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
@@ -932,7 +997,6 @@
         </div>
 
         <div id="adminPanel" class="hidden">
-            <!-- New controls section for filtering and bulk actions -->
             <div class="bg-white shadow-md p-6 mb-6 rounded-lg flex items-center justify-between flex-wrap gap-4">
                 <div class="flex items-center gap-4">
                     <div class="relative flex items-center">
@@ -965,33 +1029,20 @@
                 </div>
             </div>
 
-            <!-- Main pricing table -->
             <div class="bg-white shadow-lg rounded-lg overflow-x-auto">
                 <table id="pricingTable" class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50 sticky-header">
-                        <tr>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Device</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Storage</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Lock Status</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Flawless</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Good</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Fair</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Damaged</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Broken</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">No Power</th>
-                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Actions</th>
-                        </tr>
+                        <tr id="pricingTableHeader">
+                            </tr>
                     </thead>
                     <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200">
-                        <!-- Devices will be rendered here -->
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
             <div id="statusMessage" class="hidden"></div>
         </div>
     </main>
 
-    <!-- Add/Edit Model Modal -->
     <div id="addEditModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
         <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full mx-4 my-8">
             <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
@@ -1027,7 +1078,6 @@
                 <hr class="my-6">
                 <h4 class="text-xl font-bold text-gray-900 mb-4">Pricing by Storage and Condition</h4>
                 <div id="storageOptionsContainer" class="space-y-4">
-                    <!-- Initial storage option row -->
                     <div class="storage-option grid grid-cols-12 gap-4 mb-4">
                         <div class="col-span-2">
                             <label class="block text-sm font-medium text-gray-700">Storage</label>
@@ -1073,7 +1123,6 @@
         </div>
     </div>
     
-    <!-- Bulk Edit Modal -->
     <div id="bulkEditModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
         <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4 my-8">
             <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
@@ -1098,11 +1147,13 @@
                     </select>
                 </div>
                 <div>
-                    <label for="bulkStatus" class="block text-sm font-medium text-gray-700">Lock Status</label>
+                    <label for="bulkStatus" class="block text-sm font-medium text-gray-700">Lock Status / Connectivity</label>
                     <select id="bulkStatus" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
                         <option value="all">All</option>
                         <option value="unlocked">Unlocked</option>
                         <option value="locked">Locked</option>
+                        <option value="lte">LTE</option>
+                        <option value="wifi">Wi-Fi</option>
                     </select>
                 </div>
                 <div>
@@ -1139,7 +1190,6 @@
         </div>
     </div>
     
-    <!-- Import Modal -->
     <div id="importModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
         <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4 my-8">
             <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
