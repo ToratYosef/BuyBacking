@@ -573,13 +573,18 @@
                         const deviceCardHTML = `
                             <a href="${modelUrl}" class="phone-card-link group" data-name="${device.name.toLowerCase()}" data-brand="${device.brand}">
                                 <div class="phone-card-inner bg-white p-6 rounded-xl shadow-md text-center flex flex-col h-full">
-                                    <img src="${device.imageUrl}" alt="${device.name}" class="mx-auto mb-4 h-48 object-contain">
+                                    <img data-base-src="${device.imageUrl}" alt="${device.name}" class="mx-auto mb-4 h-48 object-contain">
                                     <h3 class="text-lg font-semibold text-slate-800">${device.name}</h3>
                                     <p class="text-blue-600 font-bold my-2">Up to $${device.highestPrice.toFixed(2)}</p>
                                     <span class="mt-auto bg-slate-200 text-slate-800 px-6 py-2 rounded-full font-medium w-full group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">Get Offer</span>
                                 </div>
                             </a>`;
                         phoneGrid.insertAdjacentHTML('beforeend', deviceCardHTML);
+                        // After inserting, find the image and apply the loading logic
+                        const newImageElement = phoneGrid.lastElementChild.querySelector('img');
+                        if (newImageElement) {
+                            loadImageWithFallback(newImageElement);
+                        }
                     });
                 }
             };
@@ -706,7 +711,7 @@
 
                 messageDiv.className = classes;
                 if (msg.type === 'system' && msg.text.includes('has joined the chat.')) {
-                    messageDiv.id = `agent-joined-${currentChatId}`; 
+                    messageDiv.id = `agent-joined-${currentChatId}`;  
                 }
                 chatMessages.appendChild(messageDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
