@@ -216,12 +216,12 @@
         <!-- Brand Filters -->
         <div id="brandFilterContainer" class="flex flex-wrap justify-center gap-2 mb-8">
             <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-transparent bg-blue-600 text-white transition-colors duration-300" data-brand="all">All</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="Apple">Apple</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="Samsung">Samsung</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="Google">Google</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="iPad">iPad</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="MacBook">MacBook</button>
-            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 hover:bg-slate-100 transition-colors duration-300" data-brand="other">Other</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="Apple">Apple</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="Samsung">Samsung</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="Google">Google</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="iPad">iPad</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="MacBook">MacBook</button>
+            <button class="brand-filter-btn px-4 py-2 rounded-full font-semibold border border-slate-300 text-slate-800 hover:bg-slate-100 transition-colors duration-300" data-brand="other">Other</button>
         </div>
 
         <div id="phoneGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
@@ -288,7 +288,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithCustomToken, signInAnonymously, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, collectionGroup, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Config & Initialization ---
         // These are global variables provided by the platform.
@@ -441,7 +441,8 @@
                 if (user) {
                     loginNavBtn.classList.add('hidden');
                     userMonogram.classList.remove('hidden');
-                    const initials = (user.displayName || user.email).split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                    // Safely get initials, handling null cases
+                    const initials = (user.displayName || user.email || 'N/A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                     userMonogram.textContent = initials;
                 } else {
                     loginNavBtn.classList.remove('hidden');
@@ -511,8 +512,9 @@
                 }
 
                 try {
-                    const devicesCollectionRef = collection(db, `artifacts/${appId}/public/data/devices`);
-                    const querySnapshot = await getDocs(devicesCollectionRef);
+                    // Use collectionGroup to query all 'models' sub-collections
+                    const modelsCollectionGroup = collectionGroup(db, 'models');
+                    const querySnapshot = await getDocs(modelsCollectionGroup);
                     
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
@@ -536,7 +538,7 @@
                     
                 } catch (error) {
                     console.error("Error fetching devices from Firestore:", error);
-                    phoneGrid.innerHTML = '<p class="text-center text-red-500">Failed to load device data from Firestore. Please ensure the Firestore collection is set up correctly.</p>';
+                    phoneGrid.innerHTML = '<p class="text-center text-red-500">Failed to load device data from Firestore. Please ensure the Firestore collection group index is set up correctly.</p>';
                     loadingIndicator.classList.add('hidden');
                     return;
                 }
