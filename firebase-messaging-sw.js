@@ -9,7 +9,7 @@ importScripts("https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-comp
 // as your web app.
 const firebaseConfig = {
     apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
-    authDomain: "buyback-a0f05.firebaseapp.com",
+    authDomain: "secondhandcell.com",
     projectId: "buyback-a0f05",
     storageBucket: "buyback-a0f05.appspot.com",
     messagingSenderId: "876430429098",
