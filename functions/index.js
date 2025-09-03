@@ -90,8 +90,8 @@ async function generateNextOrderNumber() {
 /**
  * --- NEW HELPERS ---
  * Write & update in BOTH locations:
- *   1) Top-level /orders/{orderId}
- *   2) If userId present: /users/{userId}/orders/{orderId}
+ * 1) Top-level /orders/{orderId}
+ * 2) If userId present: /users/{userId}/orders/{orderId}
  */
 async function writeOrderBoth(orderId, data) {
   // Hard write (no merge) for initial creation
@@ -1175,3 +1175,35 @@ exports.onChatTransferUpdate = functions.firestore
 
 // Expose the Express app as a single Cloud Function
 exports.api = functions.https.onRequest(app);
+
+// New endpoint for PhoneChecks ESN API
+app.post("/check-esn", async (req, res) => {
+  try {
+    const { imei, carrier, devicetype } = req.body;
+
+    if (!imei || !carrier || !devicetype) {
+      return res.status(400).json({ error: "Missing required fields: imei, carrier, and devicetype are all required." });
+    }
+
+    const apiUrl = "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+    const requestPayload = {
+      ApiKey: "5fed1416-159a-4c37-b9e4-49053fc9a399",
+      Username: "aecells1",
+      IMEI: imei,
+      carrier: carrier,
+      devicetype: devicetype
+    };
+
+    const response = await axios.post(apiUrl, requestPayload, {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    res.status(200).json(response.data);
+
+  } catch (error) {
+    console.error("Error calling PhoneChecks API:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
+  }
+});

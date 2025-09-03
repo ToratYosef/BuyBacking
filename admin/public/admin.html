@@ -329,12 +329,20 @@
                         <input type="number" id="check-gb" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 256" required>
                     </div>
                     <div>
+                        <label for="check-device-type" class="block text-sm font-medium text-gray-700">Device Type</label>
+                        <select id="check-device-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                            <option value="">Select...</option>
+                            <option value="iphone">iOS</option>
+                            <option value="android">Android</option>
+                        </select>
+                    </div>
+                    <div>
                         <label for="check-imei" class="block text-sm font-medium text-gray-700">IMEI</label>
                         <div class="flex items-center space-x-2 mt-1">
                             <input type="text" id="check-imei" class="flex-grow rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter IMEI number" required>
-                            <a id="imei-checker-link" href="#" target="_blank" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">
+                            <button type="button" id="check-imei-btn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">
                                 Check
-                            </a>
+                            </button>
                         </div>
                     </div>
                     <div>
@@ -416,55 +424,32 @@
                 </div>
             </div>
 
-            <div id="reoffer-form-container" class="mt-6 p-4 border border-gray-200 rounded-lg hidden">
-                <h4 class="text-lg font-semibold text-gray-800 mb-4">Propose New Offer</h4>
-                <div class="space-y-4">
-                    <div>
-                        <label for="reoffer-new-price" class="block text-sm font-medium text-gray-700">New Offer Price ($)</label>
-                        <input type="number" id="reoffer-new-price" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 150.00">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Reasons</label>
-                        <div class="mt-1 space-y-2">
-                            <div class="flex items-center">
-                                <input id="reason-cracked" name="reoffer-reasons" type="checkbox" value="cracked" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-cracked" class="ml-2 block text-sm text-gray-900">Cracked</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input id="reason-deep-scratches" name="reoffer-reasons" type="checkbox" value="deep-scratches" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-deep-scratches" class="ml-2 block text-sm text-gray-900">Deep Scratches</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input id="reason-non-functional" name="reoffer-reasons" type="checkbox" value="non-functional" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-non-functional" class="ml-2 block text-sm text-gray-900">Non-Functional Component</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input id="reason-other" name="reoffer-reasons" type="checkbox" value="other" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-other" class="ml-2 block text-sm text-gray-900">Other</label>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <label for="reoffer-comments" class="block text-sm font-medium text-gray-700">Additional Comments</label>
-                        <textarea id="reoffer-comments" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter additional details here..."></textarea>
-                    </div>
-                </div>
-                <div class="mt-4 flex justify-end gap-3">
-                    <button id="cancel-reoffer-btn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
-                        Cancel
-                    </button>
-                    <button id="submit-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
-                        Send Re-offer
-                    </button>
-                </div>
-            </div>
-
             <div id="modal-action-buttons" class="mt-6 flex flex-col sm:flex-row gap-3">
             </div>
             <div id="modal-message" class="mt-4 p-3 text-sm rounded-md hidden"></div>
         </div>
     </div>
     
+    <!-- ESN/IMEI Check Results Modal -->
+    <div id="esn-check-results-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-xl w-full p-6 relative">
+            <button id="close-esn-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">IMEI Check Results</h3>
+            <div id="esn-loading-indicator" class="hidden flex justify-center py-8">
+                <svg class="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+            <div id="esn-results-container" class="bg-gray-100 p-4 rounded-lg overflow-x-auto">
+                <pre id="esn-results-pre" class="text-sm text-gray-800 whitespace-pre-wrap break-words"></pre>
+            </div>
+        </div>
+    </div>
+
+
     <!-- New Price Confirmation Modal -->
     <div id="price-confirm-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 relative">
@@ -480,6 +465,55 @@
                 </button>
                 <button id="proceed-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
                     Proceed with Re-offer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reoffer Form Modal (Moved here to be a separate modal) -->
+    <div id="reoffer-form-container" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-8 relative max-h-[90vh] overflow-y-auto">
+            <button id="close-reoffer-form-btn" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+            <h4 class="text-2xl font-bold text-gray-800 mb-4">Propose New Offer</h4>
+            <div class="space-y-4">
+                <div>
+                    <label for="reoffer-new-price" class="block text-sm font-medium text-gray-700">New Offer Price ($)</label>
+                    <input type="number" id="reoffer-new-price" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 150.00">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Reasons</label>
+                    <div class="mt-1 space-y-2">
+                        <div class="flex items-center">
+                            <input id="reason-cracked" name="reoffer-reasons" type="checkbox" value="cracked" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="reason-cracked" class="ml-2 block text-sm text-gray-900">Cracked</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="reason-deep-scratches" name="reoffer-reasons" type="checkbox" value="deep-scratches" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="reason-deep-scratches" class="ml-2 block text-sm text-gray-900">Deep Scratches</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="reason-non-functional" name="reoffer-reasons" type="checkbox" value="non-functional" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="reason-non-functional" class="ml-2 block text-sm text-gray-900">Non-Functional Component</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="reason-other" name="reoffer-reasons" type="checkbox" value="other" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="reason-other" class="ml-2 block text-sm text-gray-900">Other</label>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label for="reoffer-comments" class="block text-sm font-medium text-gray-700">Additional Comments</label>
+                    <textarea id="reoffer-comments" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter additional details here..."></textarea>
+                </div>
+            </div>
+            <div class="mt-4 flex justify-end gap-3">
+                <button id="cancel-reoffer-btn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                    Cancel
+                </button>
+                <button id="submit-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                    Send Re-offer
                 </button>
             </div>
         </div>
@@ -577,6 +611,7 @@
         const modalMessage = document.getElementById('modal-message');
 
         const reofferFormContainer = document.getElementById('reoffer-form-container');
+        const closeReofferFormBtn = document.getElementById('close-reoffer-form-btn');
         const reofferNewPrice = document.getElementById('reoffer-new-price');
         const reofferComments = document.getElementById('reoffer-comments');
         const submitReofferBtn = document.getElementById('submit-reoffer-btn');
@@ -585,8 +620,9 @@
         // New condition check form elements
         const conditionCheckFormContainer = document.getElementById('condition-check-form-container');
         const checkGb = document.getElementById('check-gb');
+        const checkDeviceType = document.getElementById('check-device-type');
         const checkImei = document.getElementById('check-imei');
-        const imeiCheckLink = document.getElementById('imei-checker-link');
+        const checkImeiBtn = document.getElementById('check-imei-btn');
         const imeiStatusRadios = document.querySelectorAll('input[name="imei-status"]');
         const imeiProblemReasonContainer = document.getElementById('imei-problem-reason-container');
         const imeiProblemReasonInput = document.getElementById('imei-problem-reason');
@@ -615,6 +651,12 @@
         const proceedReofferBtn = document.getElementById('proceed-reoffer-btn');
         const cancelReofferConfirmBtn = document.getElementById('cancel-reoffer-confirm-btn');
 
+        // ESN check results modal elements
+        const esnCheckResultsModal = document.getElementById('esn-check-results-modal');
+        const closeEsnModal = document.getElementById('close-esn-modal');
+        const esnLoadingIndicator = document.getElementById('esn-loading-indicator');
+        const esnResultsPre = document.getElementById('esn-results-pre');
+
         let allOrders = [];
         let currentActiveStatus = 'all';
         let currentOrderData = null; // Store the currently viewed order data
@@ -625,6 +667,14 @@
             }
         });
 
+        esnCheckResultsModal.addEventListener('click', (event) => {
+            if (event.target === esnCheckResultsModal) {
+                closeEsnCheckModal();
+            }
+        });
+        closeEsnModal.addEventListener('click', closeEsnCheckModal);
+
+
         priceConfirmModal.addEventListener('click', (event) => {
             if (event.target === priceConfirmModal) {
                 priceConfirmModal.classList.add('hidden');
@@ -633,11 +683,16 @@
         });
 
         reofferFormContainer.addEventListener('click', (event) => {
-             if (event.target === reofferFormContainer) {
-                 reofferFormContainer.classList.add('hidden');
-                 orderDetailsModal.classList.remove('hidden');
-             }
-         });
+            if (event.target === reofferFormContainer) {
+                reofferFormContainer.classList.add('hidden');
+                orderDetailsModal.classList.remove('hidden');
+            }
+        });
+
+        closeReofferFormBtn.addEventListener('click', () => {
+             reofferFormContainer.classList.add('hidden');
+             orderDetailsModal.classList.remove('hidden');
+        });
         
         // Listen for changes on IMEI status radios
         imeiStatusRadios.forEach(radio => {
@@ -650,12 +705,60 @@
             });
         });
 
-        // Listen for changes on IMEI input to update the check link
-        checkImei.addEventListener('input', (event) => {
-            const imei = event.target.value;
-            imeiCheckLink.href = imei ? `https://www.imei.info/?imei=${imei}` : '#';
-        });
+        // Handle IMEI Check Button click
+        checkImeiBtn.addEventListener('click', async () => {
+            const imei = checkImei.value;
+            const carrier = currentOrderData.carrier;
+            const devicetype = checkDeviceType.value;
 
+            if (!imei || !carrier || !devicetype) {
+                alert('Please fill out the IMEI, Device Type, and ensure the order has a carrier listed.');
+                return;
+            }
+            
+            // Show the ESN check results modal and loading indicator
+            esnCheckResultsModal.classList.remove('hidden');
+            esnLoadingIndicator.classList.remove('hidden');
+            esnResultsPre.textContent = '';
+            
+            try {
+                const url = `${BACKEND_BASE_URL}/check-esn`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ imei, carrier, devicetype }),
+                });
+                
+                const data = await response.json();
+                esnResultsPre.textContent = JSON.stringify(data, null, 2);
+
+                // If the check returns a bad status, pre-select the radio button
+                const status = data.checkStatus || data.error?.toLowerCase();
+                if (status === 'blacklisted') {
+                    document.querySelector('input[name="imei-status"][value="blacklisted"]').checked = true;
+                    imeiProblemReasonContainer.classList.remove('hidden');
+                } else if (status === 'lost/stolen') {
+                    document.querySelector('input[name="imei-status"][value="lost/stolen"]').checked = true;
+                    imeiProblemReasonContainer.classList.remove('hidden');
+                } else if (status === 'financed') {
+                    document.querySelector('input[name="imei-status"][value="financed"]').checked = true;
+                    imeiProblemReasonContainer.classList.remove('hidden');
+                } else {
+                    document.querySelector('input[name="imei-status"][value="clean"]').checked = true;
+                    imeiProblemReasonContainer.classList.add('hidden');
+                }
+
+            } catch (error) {
+                console.error("Error during IMEI check:", error);
+                esnResultsPre.textContent = `Error: ${error.message}`;
+            } finally {
+                esnLoadingIndicator.classList.add('hidden');
+            }
+        });
+        
         // Listen for changes on power-on to dynamically show/hide fields
         checkPowerOn.addEventListener('change', (event) => {
             if (event.target.value === 'yes') {
@@ -792,7 +895,6 @@
             modalMessage.classList.add('hidden');
             modalMessage.textContent = '';
             modalVenmoUsernameRow.classList.add('hidden');
-            reofferFormContainer.classList.add('hidden');
             conditionCheckFormContainer.classList.add('hidden'); // Hide condition check form
             
             // Hide all label rows initially
@@ -949,6 +1051,7 @@
             checkLockStatus.value = '';
             checkImei.value = '';
             checkGb.value = '';
+            checkDeviceType.value = ''; // Clear new field
             
             // Uncheck IMEI status radios
             imeiStatusRadios.forEach(radio => radio.checked = false);
@@ -956,10 +1059,6 @@
             // Pre-fill GB and IMEI if they exist in the order
             checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
             checkImei.value = order.imei || '';
-
-            // Set up IMEI checker link
-            const imei = checkImei.value;
-            imeiCheckLink.href = imei ? `https://www.imei.info/?imei=${imei}` : '#';
 
             // Reset dynamic fields and their required status
             functionalContainer.classList.add('hidden');
@@ -990,7 +1089,8 @@
                 imei: checkImei.value,
                 imeiStatus: document.querySelector('input[name="imei-status"]:checked')?.value || 'unknown',
                 imeiProblemReason: imeiProblemReasonContainer.classList.contains('hidden') ? '' : imeiProblemReasonInput.value,
-                lockStatus: checkLockStatus.value
+                lockStatus: checkLockStatus.value,
+                deviceType: checkDeviceType.value // Add new field
             };
 
             // Basic form validation
@@ -1001,7 +1101,7 @@
             allFormFields.forEach(field => field.classList.remove('required-field'));
             
             // Re-validate based on new flow
-            const requiredFields = [checkGb, checkImei, checkLockStatus, checkPowerOn];
+            const requiredFields = [checkGb, checkImei, checkLockStatus, checkPowerOn, checkDeviceType];
             requiredFields.forEach(field => {
                  if (!field.value) {
                      field.classList.add('required-field');
@@ -1011,20 +1111,20 @@
 
             if (receivedConditions.power_on === 'yes') {
                  if (!receivedConditions.functional) {
-                    checkFunctional.classList.add('required-field');
-                    isValid = false;
+                     checkFunctional.classList.add('required-field');
+                     isValid = false;
                  }
 
                  if (receivedConditions.functional === 'yes' && receivedConditions.cracks === 'yes') {
-                      if (!receivedConditions.cosmetic) {
-                          checkCosmetic.classList.add('required-field');
-                          isValid = false;
-                      }
+                     if (!receivedConditions.cosmetic) {
+                         checkCosmetic.classList.add('required-field');
+                         isValid = false;
+                     }
                  }
                  else if(receivedConditions.functional === 'yes' && receivedConditions.cracks === 'no') {
                      if (!receivedConditions.cosmetic) {
-                        checkCosmetic.classList.add('required-field');
-                        isValid = false;
+                         checkCosmetic.classList.add('required-field');
+                         isValid = false;
                      }
                  }
 
@@ -1099,6 +1199,7 @@
                 
                 if (oldPrice !== newPriceFloat) {
                     // A discrepancy was found, show re-offer form
+                    console.log('Price discrepancy found. Opening price confirmation modal.');
                     showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
                 } else {
                     // No discrepancy, proceed to mark as completed
@@ -1115,6 +1216,7 @@
         }
         
         function showPriceConfirmationModal(orderId, oldPrice, newPrice, reasons, comments) {
+            console.log(`Opening price confirmation modal for order ${orderId}. Old price: $${oldPrice.toFixed(2)}, New price: $${newPrice.toFixed(2)}`);
             originalPriceSpan.textContent = oldPrice.toFixed(2);
             newPriceSpan.textContent = newPrice.toFixed(2);
             
@@ -1130,11 +1232,13 @@
 
             // Set up button actions for the confirmation modal
             proceedReofferBtn.onclick = () => {
+                console.log('Proceeding with re-offer. Closing price confirmation modal and opening re-offer form.');
                 priceConfirmModal.classList.add('hidden');
                 showReofferFormWithData(orderId, newPrice, reasons, comments);
             };
 
             cancelReofferConfirmBtn.onclick = () => {
+                console.log('Canceling re-offer. Closing price confirmation modal and returning to order details.');
                 priceConfirmModal.classList.add('hidden');
                 orderDetailsModal.classList.remove('hidden');
             };
@@ -1260,8 +1364,10 @@
         }
 
         function showReofferFormWithData(orderId, newPrice, reasons, comments) {
+            console.log(`Opening re-offer form modal for order ${orderId}. New price: $${newPrice.toFixed(2)}`);
+            orderDetailsModal.classList.add('hidden');
             reofferFormContainer.classList.remove('hidden');
-            reofferNewPrice.value = newPrice;
+            reofferNewPrice.value = newPrice.toFixed(2);
             reofferComments.value = comments;
             
             document.querySelectorAll('input[name="reoffer-reasons"]').forEach(cb => {
@@ -1331,6 +1437,7 @@
                 reofferFormContainer.classList.remove('hidden'); // Re-open the form on error
             } finally {
                 modalLoadingMessage.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
             }
         }
 
@@ -1438,6 +1545,10 @@
 
         function closeOrderDetailsModal() {
             orderDetailsModal.classList.add('hidden');
+        }
+
+        function closeEsnCheckModal() {
+            esnCheckResultsModal.classList.add('hidden');
         }
         
         reofferParentLink.addEventListener('click', (event) => {
