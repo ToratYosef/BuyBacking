@@ -154,6 +154,11 @@
                             <i class="fas fa-truck mr-3"></i> Received
                         </a>
                     </li>
+                    <li>
+                        <a href="#" data-status="imei_checked" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-mobile-alt mr-3"></i> IMEI Checked
+                        </a>
+                    </li>
                     <li class="reoffer-menu-item">
                         <a href="#" class="reoffer-parent block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
                             <i class="fas fa-dollar-sign mr-3"></i> Reoffer
@@ -224,6 +229,13 @@
                         <div id="received-count" class="text-4xl font-extrabold mt-1">0</div>
                     </div>
                     <i class="fas fa-truck text-5xl opacity-40"></i>
+                </div>
+                <div id="card-imei_checked" data-status="imei_checked" class="dashboard-card bg-blue-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">IMEI Checked</div>
+                        <div id="imei-checked-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-mobile-alt text-5xl opacity-40"></i>
                 </div>
                 <div id="card-completed" data-status="completed" class="dashboard-card bg-purple-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
                     <div>
@@ -322,12 +334,11 @@
             
             <!-- New Section for Condition Check -->
             <div id="condition-check-form-container" class="mt-6 p-4 border border-gray-200 rounded-lg hidden">
-                <h4 class="text-lg font-semibold text-gray-800 mb-4">Check Received Device Conditions</h4>
+                <h4 class="text-lg font-semibold text-gray-800 mb-4" id="condition-form-title">Check Received Device Conditions</h4>
                 <div class="space-y-4">
                     <div>
                         <label for="check-imei" class="block text-sm font-medium text-gray-700">IMEI</label>
                         <div class="flex items-center space-x-2 mt-1">
-                            <!-- Removed `disabled` from IMEI input so it can be manually entered -->
                             <input type="text" id="check-imei" class="flex-grow rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter IMEI number" required>
                             <button type="button" id="check-imei-btn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">
                                 Check
@@ -556,6 +567,7 @@
         const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count'); // New count element
         const labelGeneratedCount = document.getElementById('label-generated-count');
         const receivedCount = document.getElementById('received-count');
+        const imeiCheckedCount = document.getElementById('imei-checked-count');
         const completedCount = document.getElementById('completed-count');
         const reofferedPendingCount = document.getElementById('re-offered-pending-count');
         const reofferedAcceptedCount = document.getElementById('re-offered-accepted-count');
@@ -610,6 +622,7 @@
 
         // New condition check form elements
         const conditionCheckFormContainer = document.getElementById('condition-check-form-container');
+        const conditionFormTitle = document.getElementById('condition-form-title');
         const checkGb = document.getElementById('check-gb');
         const checkCarrierType = document.getElementById('check-carrier-type');
         const checkDeviceType = document.getElementById('check-device-type');
@@ -725,7 +738,7 @@
                 checkCosmetic.removeAttribute('required');
             }
         });
-
+        
         // Handle IMEI Check Button click
         checkImeiBtn.addEventListener('click', async () => {
             const imei = checkImei.value;
@@ -771,7 +784,6 @@
                     checkGb.value = storageFromApi;
                 }
                 
-                // --- Start of new code to auto-populate fields ---
                 // Populates the "Check Received Device Conditions" form using the API response.
                 const rawResponse = data.RawResponse;
                 if (rawResponse) {
@@ -797,9 +809,13 @@
                         }
                     }
                 }
-                // --- End of new code ---
                 
                 displayModalMessage('IMEI check completed. The customer has been notified if action is required.', 'success');
+
+                // On successful IMEI check, update the order status to 'imei_checked'
+                await updateDoc(doc(db, 'orders', orderId), { status: 'imei_checked' });
+                
+                openOrderDetailsModal(orderId);
 
             } catch (error) {
                 console.error("Error during IMEI check:", error);
@@ -815,6 +831,7 @@
             shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length; // New count update
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
             receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
+            imeiCheckedCount.textContent = ordersData.filter(o => o.status === 'imei_checked').length;
             completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
             reofferedPendingCount.textContent = ordersData.filter(o => o.status === 're-offered-pending').length;
             reofferedAcceptedCount.textContent = ordersData.filter(o => o.status === 're-offered-accepted').length;
@@ -908,6 +925,7 @@
                 case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble'; // New status class
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
+                case 'imei_checked': return 'bg-yellow-400 text-white status-bubble';
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
                 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
                 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
@@ -1051,7 +1069,10 @@
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;
                 case 'received':
-                    modalActionButtons.appendChild(createButton('Check Conditions', () => showConditionCheckForm(order.id), 'bg-green-600 hover:bg-green-700'));
+                    modalActionButtons.appendChild(createButton('Check Conditions', () => showConditionCheckForm(order), 'bg-green-600 hover:bg-green-700'));
+                    break;
+                case 'imei_checked':
+                    modalActionButtons.appendChild(createButton('Finalize Conditions', () => showFinalConditionForm(order), 'bg-green-600 hover:bg-green-700'));
                     break;
                 case 're-offered-pending':
                     if (order.reOffer && order.reOffer.newPrice) {
@@ -1073,59 +1094,93 @@
             }
         }
         
-        function showConditionCheckForm(orderId) {
-            const order = allOrders.find(o => o.id === orderId);
-            if (!order) {
-                displayModalMessage('Order not found for condition check.', 'error');
-                return;
-            }
-            
-            // Clear all dropdowns
-            checkPowerOn.value = '';
-            checkFunctional.value = '';
-            checkCracks.value = '';
-            checkCosmetic.value = '';
-            checkLockStatus.value = '';
-            checkImei.value = '';
-            checkGb.value = '';
-            checkDeviceType.value = '';
-            checkCarrierType.value = '';
-            
-            // Pre-fill fields from order data
-            checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
-            checkImei.value = order.imei || '';
-            
-            const orderCarrier = order.carrier?.toLowerCase();
-            if (orderCarrier) {
-              const carrierOption = document.querySelector(`#check-carrier-type option[value="${orderCarrier}"]`);
-              if (carrierOption) {
-                checkCarrierType.value = orderCarrier;
-              } else {
-                checkCarrierType.value = 'other';
-                console.warn(`Carrier "${order.carrier}" from order data is not a pre-defined option.`);
-              }
-            }
+        function showConditionCheckForm(order) {
+            // Set title for the IMEI check
+            conditionFormTitle.textContent = 'Check Received Device IMEI';
 
-            const deviceName = order.device.toLowerCase();
-            if (deviceName.includes('iphone')) {
-                checkDeviceType.value = 'iphone';
-            } else if (deviceName.includes('samsung') || deviceName.includes('pixel')) {
-                checkDeviceType.value = 'android';
-            }
+            // Clear previous required highlights
+            const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
+            allFormFields.forEach(field => field.classList.remove('required-field'));
             
-            // Hide dynamic fields
+            // Enable all fields and show the IMEI check button
+            checkImei.disabled = false;
+            checkGb.disabled = false;
+            checkCarrierType.disabled = false;
+            checkDeviceType.disabled = false;
+            checkImeiBtn.classList.remove('hidden');
+
+            // Reset all values
+            checkImei.value = order.imei || '';
+            checkGb.value = '';
+            checkCarrierType.value = '';
+            checkDeviceType.value = '';
+
+            // Hide the conditional fields for now
+            powerOnContainer.classList.add('hidden');
             functionalContainer.classList.add('hidden');
             cracksContainer.classList.add('hidden');
             cosmeticContainer.classList.add('hidden');
-
-            // Reset dynamic fields and their required status
-            checkFunctional.removeAttribute('required');
-            checkCracks.removeAttribute('required');
-            checkCosmetic.removeAttribute('required');
+            checkLockStatus.disabled = false;
+            checkLockStatus.value = '';
 
             modalActionButtons.classList.add('hidden');
             conditionCheckFormContainer.classList.remove('hidden');
-            submitConditionCheckBtn.onclick = () => submitConditionCheck(orderId);
+            submitConditionCheckBtn.onclick = () => submitConditionCheck(order.id);
+            cancelConditionCheckBtn.onclick = () => {
+                conditionCheckFormContainer.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
+            };
+        }
+
+        function showFinalConditionForm(order) {
+            // Set title for the final check
+            conditionFormTitle.textContent = 'Finalize Device Conditions';
+
+            // Clear previous required highlights
+            const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
+            allFormFields.forEach(field => field.classList.remove('required-field'));
+
+            // Pre-populate and disable fields that were set during the IMEI check
+            const fulfilledData = order.fulfilledOrders;
+            checkImei.value = fulfilledData.imei;
+            checkImei.disabled = true;
+            checkGb.value = fulfilledData.gb;
+            checkGb.disabled = true;
+            checkCarrierType.value = order.carrier.toLowerCase();
+            checkCarrierType.disabled = true;
+            checkDeviceType.value = fulfilledData.deviceType;
+            checkDeviceType.disabled = true;
+            checkImeiBtn.classList.add('hidden');
+            esnCheckResultsContainer.classList.add('hidden');
+            
+            // Enable and pre-populate the manual condition fields
+            powerOnContainer.classList.remove('hidden');
+            functionalContainer.classList.remove('hidden');
+            cracksContainer.classList.remove('hidden');
+            cosmeticContainer.classList.remove('hidden');
+
+            // Pre-fill user-submitted conditions if available
+            checkPowerOn.value = order.condition_power_on || '';
+            checkFunctional.value = order.condition_functional || '';
+            checkCracks.value = order.condition_cracks || '';
+            checkCosmetic.value = order.condition_cosmetic || '';
+            checkLockStatus.value = order.lockStatus || '';
+            
+            checkPowerOn.disabled = false;
+            checkFunctional.disabled = false;
+            checkCracks.disabled = false;
+            checkCosmetic.disabled = false;
+            checkLockStatus.disabled = false;
+
+            // Set required attributes
+            checkPowerOn.setAttribute('required', 'required');
+            checkFunctional.setAttribute('required', 'required');
+            checkCracks.setAttribute('required', 'required');
+            checkCosmetic.setAttribute('required', 'required');
+
+            modalActionButtons.classList.add('hidden');
+            conditionCheckFormContainer.classList.remove('hidden');
+            submitConditionCheckBtn.onclick = () => submitFinalConditionCheck(order.id);
             cancelConditionCheckBtn.onclick = () => {
                 conditionCheckFormContainer.classList.add('hidden');
                 modalActionButtons.classList.remove('hidden');
@@ -1144,39 +1199,15 @@
                 deviceType: checkDeviceType.value
             };
 
-            // Basic form validation
+            // Basic form validation for the IMEI check stage
             let isValid = true;
-            
-            // Clear previous required highlights
-            const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
-            allFormFields.forEach(field => field.classList.remove('required-field'));
-            
-            const requiredFields = [checkGb, checkCarrierType, checkDeviceType, checkImei, checkLockStatus, checkPowerOn];
+            const requiredFields = [checkImei, checkGb, checkCarrierType, checkDeviceType];
             requiredFields.forEach(field => {
                  if (!field.value) {
                      field.classList.add('required-field');
                      isValid = false;
                  }
             });
-
-            if (receivedConditions.power_on === 'yes') {
-                 if (!receivedConditions.functional) {
-                     checkFunctional.classList.add('required-field');
-                     isValid = false;
-                 }
-                 if (receivedConditions.functional === 'yes') {
-                     if (!receivedConditions.cracks) {
-                       checkCracks.classList.add('required-field');
-                       isValid = false;
-                     }
-                     if (receivedConditions.cracks === 'yes' || receivedConditions.cracks === 'no') {
-                         if (!receivedConditions.cosmetic) {
-                            checkCosmetic.classList.add('required-field');
-                            isValid = false;
-                         }
-                     }
-                 }
-            }
 
             if (!isValid) {
                  displayModalMessage('Please fill out all required fields.', 'error');
@@ -1251,6 +1282,97 @@
             } catch (error) {
                 console.error("Condition check error:", error);
                 displayModalMessage(`Error during condition check: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
+        }
+
+        async function submitFinalConditionCheck(orderId) {
+             const receivedConditions = {
+                power_on: checkPowerOn.value,
+                functional: checkFunctional.value,
+                cracks: checkCracks.value,
+                cosmetic: checkCosmetic.value,
+                gb: checkGb.value,
+                imei: checkImei.value,
+                lockStatus: checkLockStatus.value,
+                deviceType: checkDeviceType.value
+            };
+            
+            // Basic form validation for the final check stage
+            let isValid = true;
+            if (!receivedConditions.power_on || !receivedConditions.functional || !receivedConditions.cracks || !receivedConditions.cosmetic || !receivedConditions.lockStatus) {
+                isValid = false;
+            }
+
+            if (!isValid) {
+                 displayModalMessage('Please fill out all required fields.', 'error');
+                 return;
+            }
+
+            modalLoadingMessage.classList.remove('hidden');
+            conditionCheckFormContainer.classList.add('hidden');
+
+            try {
+                const order = allOrders.find(o => o.id === orderId);
+                if (!order) {
+                    throw new Error('Order data not found locally.');
+                }
+                
+                // Logic to compare received conditions with customer submitted conditions
+                const customerConditions = {
+                    power_on: order.condition_power_on,
+                    functional: order.condition_functional,
+                    cracks: order.condition_cracks,
+                    cosmetic: order.condition_cosmetic,
+                    gb: order.storage,
+                    lockStatus: order.lockStatus
+                };
+
+                let reasons = [];
+                let comments = '';
+
+                if (receivedConditions.power_on !== customerConditions.power_on) {
+                    reasons.push('Powers On condition mismatch');
+                    comments += `Customer said it powered on, but it does not. `;
+                }
+                if (receivedConditions.functional !== customerConditions.functional) {
+                    reasons.push('Functional condition mismatch');
+                    comments += `Customer said it was functional, but it is not. `;
+                }
+                if (receivedConditions.cracks !== customerConditions.cracks) {
+                    reasons.push('Cracks condition mismatch');
+                    comments += `Customer said there were no cracks, but there are. `;
+                }
+                if (receivedConditions.cosmetic !== customerConditions.cosmetic) {
+                    reasons.push('Cosmetic condition mismatch');
+                    comments += `Customer listed cosmetic condition as ${customerConditions.cosmetic}, but it is ${receivedConditions.cosmetic}. `;
+                }
+                if (receivedConditions.gb && receivedConditions.gb !== customerConditions.gb.replace('GB','')) {
+                    reasons.push('Storage size mismatch');
+                    comments += `Customer listed storage as ${customerConditions.gb}, but it is ${receivedConditions.gb}GB. `;
+                }
+                if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
+                     reasons.push('Carrier Lock Status mismatch');
+                     comments += `Customer listed lock status as ${customerConditions.lockStatus}, but it is ${receivedConditions.lockStatus}.`;
+                }
+
+                const newPrice = await calculateNewPrice(order.device, receivedConditions.gb, receivedConditions);
+                const oldPrice = parseFloat(order.estimatedQuote);
+                const newPriceFloat = parseFloat(newPrice);
+                
+                if (oldPrice !== newPriceFloat) {
+                    // A discrepancy was found, show re-offer form
+                    console.log('Price discrepancy found. Opening price confirmation modal.');
+                    showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
+                } else {
+                    // No discrepancy, proceed to mark as completed
+                    displayModalMessage('All conditions match the customer description. Proceeding to mark as completed.', 'success');
+                    await handleAction(orderId, 'markCompleted');
+                }
+            } catch (error) {
+                console.error("Final condition check error:", error);
+                displayModalMessage(`Error during final condition check: ${error.message}`, 'error');
             } finally {
                 modalLoadingMessage.classList.add('hidden');
             }
