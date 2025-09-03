@@ -154,6 +154,11 @@
                             <i class="fas fa-truck mr-3"></i> Received
                         </a>
                     </li>
+                    <li>
+                        <a href="#" data-status="imei_checked" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-search-plus mr-3"></i> IMEI Checked
+                        </a>
+                    </li>
                     <li class="reoffer-menu-item">
                         <a href="#" class="reoffer-parent block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
                             <i class="fas fa-dollar-sign mr-3"></i> Reoffer
@@ -224,6 +229,13 @@
                         <div id="received-count" class="text-4xl font-extrabold mt-1">0</div>
                     </div>
                     <i class="fas fa-truck text-5xl opacity-40"></i>
+                </div>
+                <div id="card-imei_checked" data-status="imei_checked" class="dashboard-card bg-sky-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">IMEI Checked</div>
+                        <div id="imei-checked-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-search-plus text-5xl opacity-40"></i>
                 </div>
                 <div id="card-completed" data-status="completed" class="dashboard-card bg-purple-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
                     <div>
@@ -551,6 +563,7 @@
         const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count'); // New count element
         const labelGeneratedCount = document.getElementById('label-generated-count');
         const receivedCount = document.getElementById('received-count');
+        const imeiCheckedCount = document.getElementById('imei-checked-count');
         const completedCount = document.getElementById('completed-count');
         const reofferedPendingCount = document.getElementById('re-offered-pending-count');
         const reofferedAcceptedCount = document.getElementById('re-offered-accepted-count');
@@ -609,7 +622,6 @@
         const checkCarrierType = document.getElementById('check-carrier-type');
         const checkDeviceType = document.getElementById('check-device-type');
         const checkImei = document.getElementById('check-imei');
-        const checkImeiBtn = document.getElementById('check-imei-btn');
         const imeiStatusDisplayContainer = document.getElementById('imei-status-display-container');
         const imeiStatusText = document.getElementById('imei-status-text');
         const imeiStatusReasonText = document.getElementById('imei-status-reason-text');
@@ -641,11 +653,6 @@
         const proceedReofferBtn = document.getElementById('proceed-reoffer-btn');
         const cancelReofferConfirmBtn = document.getElementById('cancel-reoffer-confirm-btn');
 
-        // ESN check results modal elements
-        const esnCheckResultsModal = document.getElementById('esn-check-results-modal');
-        const closeEsnModal = document.getElementById('close-esn-modal');
-        const esnLoadingIndicator = document.getElementById('esn-loading-indicator');
-        
         let allOrders = [];
         let currentActiveStatus = 'all';
         let currentOrderData = null; // Store the currently viewed order data
@@ -655,14 +662,6 @@
                 closeOrderDetailsModal();
             }
         });
-
-        esnCheckResultsModal.addEventListener('click', (event) => {
-            if (event.target === esnCheckResultsModal) {
-                closeEsnCheckModal();
-            }
-        });
-        closeEsnModal.addEventListener('click', closeEsnCheckModal);
-
 
         priceConfirmModal.addEventListener('click', (event) => {
             if (event.target === priceConfirmModal) {
@@ -724,67 +723,12 @@
             }
         });
 
-        // Handle IMEI Check Button click
-        checkImeiBtn.addEventListener('click', async () => {
-            const imei = checkImei.value;
-            const carrier = checkCarrierType.value;
-            const devicetype = checkDeviceType.value;
-            const orderId = currentOrderData.id;
-            const customerName = currentOrderData.shippingInfo.fullName;
-            const customerEmail = currentOrderData.shippingInfo.email;
-        
-            if (!imei || !carrier || !devicetype || !orderId) {
-                displayModalMessage('Please fill out IMEI, Carrier, and Device Type.', 'error');
-                return;
-            }
-            
-            esnCheckResultsContainer.classList.remove('hidden');
-            esnResultsPre.textContent = 'Checking IMEI status...';
-            
-            modalLoadingMessage.classList.remove('hidden');
-            checkImeiBtn.disabled = true;
-
-            try {
-                const url = `${BACKEND_BASE_URL}/check-esn`;
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({ imei, carrier, devicetype, orderId, customerName, customerEmail }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    console.error("Backend error response:", response.status, errorData);
-                    throw new Error(errorData.error || `Failed to check ESN: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                esnResultsPre.textContent = JSON.stringify(data, null, 2);
-
-                const storageFromApi = data.Storage || null;
-                if (storageFromApi) {
-                    checkGb.value = storageFromApi;
-                }
-                
-                displayModalMessage('IMEI check completed. The customer has been notified if action is required.', 'success');
-
-            } catch (error) {
-                console.error("Error during IMEI check:", error);
-                displayModalMessage(`Error: ${error.message}`, 'error');
-            } finally {
-                modalLoadingMessage.classList.add('hidden');
-                checkImeiBtn.disabled = false;
-            }
-        });
-
         function updateDashboardCounts(ordersData) {
             pendingShipmentCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
             shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length; // New count update
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
             receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
+            imeiCheckedCount.textContent = ordersData.filter(o => o.status === 'imei_checked').length;
             completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
             reofferedPendingCount.textContent = ordersData.filter(o => o.status === 're-offered-pending').length;
             reofferedAcceptedCount.textContent = ordersData.filter(o => o.status === 're-offered-accepted').length;
@@ -878,6 +822,7 @@
                 case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble'; // New status class
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
+                case 'imei_checked': return 'bg-sky-100 text-sky-800 status-bubble';
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
                 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
                 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
@@ -902,9 +847,6 @@
             modalLabelRow.classList.add('hidden');
             modalSecondaryLabelRow.classList.add('hidden');
             modalReturnLabelRow.classList.add('hidden');
-            
-            // Hide ESN check results initially
-            esnCheckResultsContainer.classList.add('hidden');
 
             orderDetailsModal.classList.remove('hidden');
 
@@ -1021,6 +963,7 @@
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;
                 case 'received':
+                case 'imei_checked':
                     modalActionButtons.appendChild(createButton('Check Conditions', () => showConditionCheckForm(order.id), 'bg-green-600 hover:bg-green-700'));
                     break;
                 case 're-offered-pending':
@@ -1547,10 +1490,6 @@
 
         function closeOrderDetailsModal() {
             orderDetailsModal.classList.add('hidden');
-        }
-
-        function closeEsnCheckModal() {
-            esnCheckResultsModal.classList.add('hidden');
         }
         
         reofferParentLink.addEventListener('click', (event) => {
