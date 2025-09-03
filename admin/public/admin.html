@@ -327,6 +327,7 @@
                     <div>
                         <label for="check-imei" class="block text-sm font-medium text-gray-700">IMEI</label>
                         <div class="flex items-center space-x-2 mt-1">
+                            <!-- Removed `disabled` from IMEI input so it can be manually entered -->
                             <input type="text" id="check-imei" class="flex-grow rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter IMEI number" required>
                             <button type="button" id="check-imei-btn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">
                                 Check
@@ -371,7 +372,7 @@
                     <div id="functional-container" class="hidden">
                         <label for="check-functional" class="block text-sm font-medium text-gray-700">Fully Functional</label>
                         <select id="check-functional" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
-                             <option value="">Select...</option>
+                               <option value="">Select...</option>
                             <option value="yes">Yes</option>
                             <option value="no">No</option>
                         </select>
@@ -379,7 +380,7 @@
                     <div id="cracks-container" class="hidden">
                         <label for="check-cracks" class="block text-sm font-medium text-gray-700">No Cracks</label>
                         <select id="check-cracks" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
-                             <option value="">Select...</option>
+                               <option value="">Select...</option>
                             <option value="yes">Yes</option>
                             <option value="no">No</option>
                         </select>
@@ -387,7 +388,7 @@
                      <div id="cosmetic-container" class="hidden">
                         <label for="check-cosmetic" class="block text-sm font-medium text-gray-700">Cosmetic Condition</label>
                         <select id="check-cosmetic" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
-                             <option value="">Select...</option>
+                               <option value="">Select...</option>
                             <option value="flawless">Flawless</option>
                             <option value="excellent">Excellent</option>
                             <option value="good">Good</option>
@@ -770,6 +771,34 @@
                     checkGb.value = storageFromApi;
                 }
                 
+                // --- Start of new code to auto-populate fields ---
+                // Populates the "Check Received Device Conditions" form using the API response.
+                const rawResponse = data.RawResponse;
+                if (rawResponse) {
+                    // Populate IMEI field
+                    checkImei.value = data.deviceid;
+                    
+                    // Populate Device Type field
+                    const deviceType = rawResponse.operatingsys?.toLowerCase();
+                    if (deviceType) {
+                        checkDeviceType.value = deviceType;
+                    }
+
+                    // Populate Cosmetic Condition based on Remarks
+                    const remarks = rawResponse.Remarks?.toLowerCase();
+                    if (remarks) {
+                        const cosmeticOptions = ['flawless', 'excellent', 'good', 'fair', 'broken'];
+                        if (cosmeticOptions.includes(remarks)) {
+                            checkCosmetic.value = remarks;
+                        } else {
+                             // Handle cases where API returns a value not directly in the dropdown
+                             console.warn(`API remarks value "${remarks}" is not a recognized cosmetic condition.`);
+                             checkCosmetic.value = 'good';
+                        }
+                    }
+                }
+                // --- End of new code ---
+                
                 displayModalMessage('IMEI check completed. The customer has been notified if action is required.', 'success');
 
             } catch (error) {
@@ -1136,16 +1165,16 @@
                      isValid = false;
                  }
                  if (receivedConditions.functional === 'yes') {
-                    if (!receivedConditions.cracks) {
-                      checkCracks.classList.add('required-field');
-                      isValid = false;
-                    }
-                    if (receivedConditions.cracks === 'yes' || receivedConditions.cracks === 'no') {
-                        if (!receivedConditions.cosmetic) {
-                           checkCosmetic.classList.add('required-field');
-                           isValid = false;
-                        }
-                    }
+                     if (!receivedConditions.cracks) {
+                       checkCracks.classList.add('required-field');
+                       isValid = false;
+                     }
+                     if (receivedConditions.cracks === 'yes' || receivedConditions.cracks === 'no') {
+                         if (!receivedConditions.cosmetic) {
+                            checkCosmetic.classList.add('required-field');
+                            isValid = false;
+                         }
+                     }
                  }
             }
 
@@ -1515,8 +1544,8 @@
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                                    ? order.reOffer.newPrice.toFixed(2)
-                                    : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                         ? order.reOffer.newPrice.toFixed(2)
+                                         : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
