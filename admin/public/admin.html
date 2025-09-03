@@ -324,17 +324,13 @@
             <div id="condition-check-form-container" class="mt-6 p-4 border border-gray-200 rounded-lg hidden">
                 <h4 class="text-lg font-semibold text-gray-800 mb-4">Check Received Device Conditions</h4>
                 <div class="space-y-4">
+                    <div id="imei-status-display-container" class="hidden">
+                        <p class="text-sm font-medium text-gray-700"><strong>IMEI Status:</strong> <span id="imei-status-text" class="font-semibold"></span></p>
+                        <p id="imei-status-reason-text" class="text-xs text-gray-500 mt-1"></p>
+                    </div>
                     <div>
                         <label for="check-imei" class="block text-sm font-medium text-gray-700">IMEI</label>
-                        <div class="flex items-center space-x-2 mt-1">
-                            <input type="text" id="check-imei" class="flex-grow rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter IMEI number" required>
-                            <button type="button" id="check-imei-btn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">
-                                Check
-                            </button>
-                        </div>
-                    </div>
-                    <div id="esn-check-results-container" class="bg-gray-100 p-4 rounded-lg hidden">
-                        <pre id="esn-results-pre" class="text-sm text-gray-800 whitespace-pre-wrap break-words"></pre>
+                        <input type="text" id="check-imei" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed sm:text-sm p-2" placeholder="IMEI will be displayed here" disabled>
                     </div>
                     <div>
                         <label for="check-gb" class="block text-sm font-medium text-gray-700">Storage (GB)</label>
@@ -614,6 +610,9 @@
         const checkDeviceType = document.getElementById('check-device-type');
         const checkImei = document.getElementById('check-imei');
         const checkImeiBtn = document.getElementById('check-imei-btn');
+        const imeiStatusDisplayContainer = document.getElementById('imei-status-display-container');
+        const imeiStatusText = document.getElementById('imei-status-text');
+        const imeiStatusReasonText = document.getElementById('imei-status-reason-text');
         const esnCheckResultsContainer = document.getElementById('esn-check-results-container');
         const esnResultsPre = document.getElementById('esn-results-pre');
 
@@ -1057,18 +1056,23 @@
             checkCracks.value = '';
             checkCosmetic.value = '';
             checkLockStatus.value = '';
-            checkImei.value = '';
-            
-            // Un-autofill the GB field and disable it
-            checkGb.value = '';
-            checkGb.disabled = true;
 
-            checkDeviceType.value = '';
-            checkCarrierType.value = '';
-            
             // Pre-fill fields from order data
             checkImei.value = order.imei || '';
-            
+            checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
+
+            // Display IMEI status if available
+            if (order.imeiStatus) {
+                imeiStatusDisplayContainer.classList.remove('hidden');
+                imeiStatusText.textContent = formatStatus(order.imeiStatus);
+                imeiStatusReasonText.textContent = order.imeiProblemReason || '';
+                esnResultsPre.textContent = JSON.stringify(order.imeiCheckRawResponse, null, 2);
+                esnCheckResultsContainer.classList.remove('hidden');
+            } else {
+                imeiStatusDisplayContainer.classList.add('hidden');
+                esnCheckResultsContainer.classList.add('hidden');
+            }
+
             const orderCarrier = order.carrier?.toLowerCase();
             if (orderCarrier) {
               const carrierOption = document.querySelector(`#check-carrier-type option[value="${orderCarrier}"]`);
