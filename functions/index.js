@@ -4,6 +4,7 @@ const cors = require("cors");
 const admin = require("firebase-admin"); // Firebase Admin SDK
 const axios = require("axios");
 const nodemailer = require("nodemailer");
+const { URLSearchParams } = require('url');
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -51,6 +52,176 @@ const ORDER_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta ch
 
 const DEVICE_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Device Has Arrived!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}.order-id{color:#007bff;font-weight:bold}</style></head><body><div class="email-container"><div class="header"><h1>Your Device Has Arrived!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p><p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p><p>Thank you,</p><p>The SecondHandCell Team</p></div><div class="footer"><p>Thank thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 
+// --- NEW EMAIL TEMPLATES ---
+const BLACKLISTED_EMAIL_HTML = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Important Notice Regarding Your Device - Order #**ORDER_ID**</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
+      .header { background-color: #d9534f; color: #ffffff; padding: 24px; text-align: center; }
+      .header h1 { font-size: 24px; margin: 0; }
+      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
+      .content h2 { color: #d9534f; font-size: 20px; margin-top: 24px; margin-bottom: 8px; }
+      .content p { margin: 0 0 16px; }
+      .order-id { color: #d9534f; font-weight: bold; }
+      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="header">
+        <h1>Important Notice Regarding Your Device</h1>
+      </div>
+      <div class="content">
+        <p>Hello **CUSTOMER_NAME**, </p>
+        <p>This email is in reference to your device for order <strong class="order-id">#**ORDER_ID**</strong>.</p>
+        <p>Upon verification, your device's IMEI has been flagged in the national database as **STATUS_REASON**.</p>
+        <h2>Policy on Lost/Stolen Devices & Legal Compliance</h2>
+        <p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This is a matter of legal and ethical compliance.</p>
+        <p>Because the device is flagged, we cannot proceed with this transaction. Under New York law, we are required to report and hold any device suspected of being lost or stolen. The device cannot be returned to you. We must cooperate with law enforcement to ensure the device is handled in accordance with legal requirements.</p>
+        <p>We advise you to contact your cellular carrier or the original owner of the device to resolve the status issue directly with them.</p>
+        <p>For more details on the laws and our policy, please review the information below:</p>
+        <p>**LEGAL_TEXT**</p>
+      </div>
+      <div class="footer">
+        <p>The SecondHandCell Team</p>
+      </div>
+    </div>
+  </body>
+  </html>
+`;
+
+const FMI_EMAIL_HTML = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Action Required for Order #**ORDER_ID**</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
+      .header { background-color: #f0ad4e; color: #ffffff; padding: 24px; text-align: center; }
+      .header h1 { font-size: 24px; margin: 0; }
+      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
+      .content h2 { color: #f0ad4e; font-size: 20px; margin-top: 24px; margin-bottom: 8px; }
+      .content p { margin: 0 0 16px; }
+      .order-id { color: #f0ad4e; font-weight: bold; }
+      .button-container { text-align: center; margin: 24px 0; }
+      .button { display: inline-block; background-color: #f0ad4e; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px; }
+      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
+      .countdown-text { text-align: center; margin-top: 20px; font-size: 18px; font-weight: bold; color: #333333; }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="header">
+        <h1>Action Required for Your Order</h1>
+      </div>
+      <div class="content">
+        <p>Hello **CUSTOMER_NAME**, </p>
+        <p>This is a notification about your device for order <strong class="order-id">#**ORDER_ID**</strong>. We've detected that "Find My iPhone" (FMI) is still active on the device. **FMI must be turned off for us to complete your buyback transaction.**</p>
+        <p>Please follow these steps to turn off FMI:</p>
+        <ol>
+          <li>Go to <a href="https://icloud.com/find" target="_blank">icloud.com/find</a> and sign in with your Apple ID.</li>
+          <li>Click on "All Devices" at the top of the screen.</li>
+          <li>Select the device you are sending to us.</li>
+          <li>Click "Remove from Account".</li>
+        </ol>
+        <p>Once you have completed this step, please click the button below to let us know. You have **72 hours** to turn off FMI. If we don't receive confirmation within this period, your offer will be automatically reduced to the lowest possible price (as if the device were damaged).</p>
+        <div class="button-container">
+          <a href="**CONFIRM_URL**" class="button">Did it already? Click here.</a>
+        </div>
+        <div class="countdown-text">72-hour countdown has begun.</div>
+        <p>If you have any questions, please reply to this email.</p>
+      </div>
+      <div class="footer">
+        <p>The SecondHandCell Team</p>
+      </div>
+    </div>
+  </body>
+  </html>
+`;
+
+const BAL_DUE_EMAIL_HTML = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Action Required for Order #**ORDER_ID**</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
+      .header { background-color: #f0ad4e; color: #ffffff; padding: 24px; text-align: center; }
+      .header h1 { font-size: 24px; margin: 0; }
+      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
+      .content h2 { color: #f0ad4e; font-size: 20px; margin-top: 24px; margin-bottom: 8px; }
+      .content p { margin: 0 0 16px; }
+      .order-id { color: #f0ad4e; font-weight: bold; }
+      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="header">
+        <h1>Action Required for Your Order</h1>
+      </div>
+      <div class="content">
+        <p>Hello **CUSTOMER_NAME**, </p>
+        <p>This is a notification about your device for order <strong class="order-id">#**ORDER_ID**</strong>. We've detected that a **FINANCIAL_STATUS** is on the device with your carrier.</p>
+        <p>To continue with your buyback, you must resolve this with your carrier. Please contact them directly to clear the outstanding balance.</p>
+        <p>You have **72 hours** to clear the balance. If we don't receive an updated status from our system within this period, your offer will be automatically reduced to the lowest possible price (as if the device were damaged).</p>
+        <p>If you have any questions, please reply to this email.</p>
+      </div>
+      <div class="footer">
+        <p>The SecondHandCell Team</p>
+      </div>
+    </div>
+  </body>
+  </html>
+`;
+
+const DOWNGRADE_EMAIL_HTML = `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update on Your Order - Order #**ORDER_ID**</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
+      .header { background-color: #f0ad4e; color: #ffffff; padding: 24px; text-align: center; }
+      .header h1 { font-size: 24px; margin: 0; }
+      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
+      .content p { margin: 0 0 16px; }
+      .order-id { color: #f0ad4e; font-weight: bold; }
+      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="header">
+        <h1>Update on Your Order</h1>
+      </div>
+      <div class="content">
+        <p>Hello **CUSTOMER_NAME**, </p>
+        <p>This is an automated notification regarding your order <strong class="order-id">#**ORDER_ID**</strong>. The 72-hour period to resolve the issue with your device has expired. As a result, your offer has been automatically adjusted to the damaged device price, which is <strong>$**NEW_PRICE**</strong>.</p>
+        <p>If you have any questions, please reply to this email.</p>
+      </div>
+      <div class="footer">
+        <p>The SecondHandCell Team</p>
+      </div>
+    </div>
+  </body>
+  </html>
+`;
 /**
  * --- NEW ---
  * Generates the next sequential order number in SHC-XXXXX format using a Firestore transaction.
@@ -1179,13 +1350,13 @@ exports.api = functions.https.onRequest(app);
 // New endpoint for PhoneChecks ESN API
 app.post("/check-esn", async (req, res) => {
   try {
-    const { imei, carrier, devicetype } = req.body;
+    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
     
     // Log the incoming request body for debugging
     console.log("Received request to /check-esn with payload:", req.body);
 
-    if (!imei || !carrier || !devicetype) {
-      return res.status(400).json({ error: "Missing required fields: imei, carrier, and devicetype are all required." });
+    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
+      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
     }
 
     const apiUrl = "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
@@ -1197,19 +1368,202 @@ app.post("/check-esn", async (req, res) => {
       devicetype: devicetype
     };
 
-    // Log the payload sent to the external API
-    console.log("Sending payload to PhoneChecks API:", requestPayload);
+    // Use URLSearchParams to format data as application/x-www-form-urlencoded
+    const params = new URLSearchParams(requestPayload);
 
-    const response = await axios.post(apiUrl, requestPayload, {
+    // Log the payload being sent to the external API
+    console.log("Sending payload to PhoneChecks API:", params.toString());
+
+    // Call the external API
+    const response = await axios.post(apiUrl, params.toString(), {
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
     });
+
+    // Assume the PhoneCheck API returns data in a structure like this:
+    // { "isBlacklisted": false, "findMyIphoneStatus": "Off", "financialStatus": "Clear" }
+    // We'll use these simplified fields for our logic.
+    const phoneCheckData = response.data;
+
+    let isBlacklisted = phoneCheckData.isBlacklisted || false;
+    let fmiStatus = phoneCheckData.findMyIphoneStatus || "Off";
+    let financialStatus = phoneCheckData.financialStatus || "Clear";
+    
+    // Handle specific cases based on the API response
+    if (isBlacklisted) {
+        const legalText = `
+            New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
+            ... (rest of your legal text)
+        `; // Placeholder for your legal text
+        
+        const customerEmailHtml = BLACKLISTED_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+            .replace(/\*\*ORDER_ID\*\*/g, orderId)
+            .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
+            .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
+            
+        await transporter.sendMail({
+            from: functions.config().email.user,
+            to: customerEmail,
+            subject: `Important Notice Regarding Your Device - Order #${orderId}`,
+            html: customerEmailHtml,
+        });
+
+        // Update Firestore status and add phone check data
+        await updateOrderBoth(orderId, {
+            status: "blacklisted",
+            phoneCheckData: phoneCheckData,
+        });
+
+    } else if (fmiStatus === "On") {
+        const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared?orderId=${orderId}`;
+        const customerEmailHtml = FMI_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+            .replace(/\*\*ORDER_ID\*\*/g, orderId)
+            .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
+
+        await transporter.sendMail({
+            from: functions.config().email.user,
+            to: customerEmail,
+            subject: `Action Required for Order #${orderId}`,
+            html: customerEmailHtml,
+        });
+
+        // Update Firestore with new status and a 72-hour downgrade timer
+        const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+        await updateOrderBoth(orderId, {
+            status: "fmi_on_pending",
+            fmiAutoDowngradeDate: downgradeDate,
+            phoneCheckData: phoneCheckData,
+        });
+
+    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
+        const customerEmailHtml = BAL_DUE_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+            .replace(/\*\*ORDER_ID\*\*/g, orderId)
+            .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+
+        await transporter.sendMail({
+            from: functions.config().email.user,
+            to: customerEmail,
+            subject: `Action Required for Order #${orderId}`,
+            html: customerEmailHtml,
+        });
+
+        // Update Firestore with new status and a 72-hour downgrade timer
+        const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+        await updateOrderBoth(orderId, {
+            status: "balance_due_pending",
+            balanceAutoDowngradeDate: downgradeDate,
+            phoneCheckData: phoneCheckData,
+        });
+        
+    } else {
+        // All checks passed, proceed with the normal flow
+        // You might want to update the order status to something like "clean_check"
+        // and send a notification to the customer or internal team.
+        await updateOrderBoth(orderId, {
+          status: "imei_checked",
+          phoneCheckData: phoneCheckData,
+        });
+    }
 
     res.status(200).json(response.data);
 
   } catch (error) {
-    console.error("Error calling PhoneChecks API:", error.response?.data || error.message);
+    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
     res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
   }
+});
+
+// New endpoint for when the customer manually clears an FMI lock
+app.post("/orders/:id/fmi-cleared", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const docRef = ordersCollection.doc(id);
+        const doc = await docRef.get();
+        if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+
+        const order = { id: doc.id, ...doc.data() };
+        
+        // This check prevents accidental or malicious status changes
+        if (order.status !== "fmi_on_pending") {
+            return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
+        }
+        
+        // Update the status and remove the downgrade timer
+        await updateOrderBoth(id, {
+            status: "fmi_cleared",
+            fmiAutoDowngradeDate: null,
+        });
+
+        // Notify admins that the FMI lock has been cleared manually
+        const internalSubject = `FMI Cleared Manually for Order #${id}`;
+        const internalHtmlBody = `<p>The customer has manually confirmed that the FMI lock for Order <strong>#${id}</strong> has been cleared. The order can now proceed.</p>`;
+        await sendZendeskComment(order, internalSubject, internalHtmlBody, false);
+        
+        res.json({ message: "FMI status updated successfully." });
+
+    } catch (err) {
+        console.error("Error clearing FMI status:", err);
+        res.status(500).json({ error: "Failed to clear FMI status" });
+    }
+});
+
+// New Scheduled function to auto-downgrade offers after 72 hours if no action is taken
+exports.autoDowngradeOffers = functions.pubsub.schedule("every 6 hours").onRun(async (context) => {
+    const now = admin.firestore.Timestamp.now();
+    
+    // Check for FMI pending orders that have expired
+    const fmiExpired = await ordersCollection
+      .where("status", "==", "fmi_on_pending")
+      .where("fmiAutoDowngradeDate", "<=", now)
+      .get();
+    
+    // Check for Balance Due pending orders that have expired
+    const balExpired = await ordersCollection
+      .where("status", "==", "balance_due_pending")
+      .where("balanceAutoDowngradeDate", "<=", now)
+      .get();
+
+    const updates = [...fmiExpired.docs, ...balExpired.docs].map(async (doc) => {
+      const orderData = { id: doc.id, ...doc.data() };
+      
+      // Assume 'damaged' price is stored in a `prices` object or calculated dynamically
+      const damagedPrice = 20.00; // Placeholder for the lowest price
+      
+      const customerEmailHtml = DOWNGRADE_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderData.id)
+        .replace(/\*\*NEW_PRICE\*\*/g, damagedPrice.toFixed(2));
+      
+      const internalSubject = `Order #${orderData.id} Automatically Downgraded`;
+      const internalHtmlBody = `<p>The offer for Order <strong>#${orderData.id}</strong> has been <strong>automatically downgraded</strong> to the damaged device price due to an unresolved carrier/FMI issue. The new offer price is <strong>$${damagedPrice.toFixed(2)}</strong>.</p>`;
+      
+      await Promise.all([
+        transporter.sendMail({
+            from: functions.config().email.user,
+            to: orderData.shippingInfo.email,
+            subject: `Update on Your Order - Order #${orderData.id}`,
+            html: customerEmailHtml,
+        }),
+        sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
+      ]);
+      
+      // Update the order with the downgraded price and final status
+      await updateOrderBoth(doc.id, {
+          status: "downgraded_price",
+          reOffer: {
+            newPrice: damagedPrice,
+            reasons: ["Automatically downgraded due to unresolved FMI or balance due issue"],
+            comments: "",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+      });
+    });
+
+    await Promise.all(updates);
+    console.log(`Automatically downgraded ${updates.length} expired offers.`);
+    return null;
 });

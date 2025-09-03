@@ -315,7 +315,7 @@
                 <!-- Updated label display for flexibility -->
                 <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
                 <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
-                <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
+                <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
 
                 <p id="modal-loading-message" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
             </div>
@@ -325,8 +325,20 @@
                 <h4 class="text-lg font-semibold text-gray-800 mb-4">Check Received Device Conditions</h4>
                 <div class="space-y-4">
                     <div>
+                        <label for="check-imei" class="block text-sm font-medium text-gray-700">IMEI</label>
+                        <div class="flex items-center space-x-2 mt-1">
+                            <input type="text" id="check-imei" class="flex-grow rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter IMEI number" required>
+                            <button type="button" id="check-imei-btn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">
+                                Check
+                            </button>
+                        </div>
+                    </div>
+                    <div id="esn-check-results-container" class="bg-gray-100 p-4 rounded-lg hidden">
+                        <pre id="esn-results-pre" class="text-sm text-gray-800 whitespace-pre-wrap break-words"></pre>
+                    </div>
+                    <div>
                         <label for="check-gb" class="block text-sm font-medium text-gray-700">Storage (GB)</label>
-                        <input type="number" id="check-gb" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 256" required>
+                        <input type="number" id="check-gb" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-100 cursor-not-allowed sm:text-sm p-2" placeholder="e.g., 256" disabled>
                     </div>
                     <div>
                         <label for="check-carrier-type" class="block text-sm font-medium text-gray-700">Carrier</label>
@@ -346,48 +358,6 @@
                             <option value="">Select...</option>
                             <option value="iphone">iOS</option>
                             <option value="android">Android</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="check-imei" class="block text-sm font-medium text-gray-700">IMEI</label>
-                        <div class="flex items-center space-x-2 mt-1">
-                            <input type="text" id="check-imei" class="flex-grow rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter IMEI number" required>
-                            <button type="button" id="check-imei-btn" class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-2 px-3 rounded-md transition-colors duration-200">
-                                Check
-                            </button>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">IMEI Status</label>
-                        <div class="mt-1 flex space-x-4">
-                            <label class="inline-flex items-center">
-                                <input type="radio" name="imei-status" value="clean" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300" required>
-                                <span class="ml-2 text-gray-700 text-sm">Clean</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="radio" name="imei-status" value="blacklisted" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300">
-                                <span class="ml-2 text-gray-700 text-sm">Blacklisted</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="radio" name="imei-status" value="financed" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300">
-                                <span class="ml-2 text-gray-700 text-sm">Financed</span>
-                            </label>
-                            <label class="inline-flex items-center">
-                                <input type="radio" name="imei-status" value="lost/stolen" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300">
-                                <span class="ml-2 text-gray-700 text-sm">Lost/Stolen</span>
-                            </label>
-                        </div>
-                    </div>
-                    <div id="imei-problem-reason-container" class="hidden">
-                        <label for="imei-problem-reason" class="block text-sm font-medium text-gray-700">Reason for problem</label>
-                        <input type="text" id="imei-problem-reason" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., Blacklisted due to balance">
-                    </div>
-                    <div id="lock-status-container">
-                        <label for="check-lock-status" class="block text-sm font-medium text-gray-700">Carrier Lock Status</label>
-                        <select id="check-lock-status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
-                            <option value="">Select...</option>
-                            <option value="unlocked">Unlocked</option>
-                            <option value="locked">Locked</option>
                         </select>
                     </div>
                     <div id="power-on-container">
@@ -423,6 +393,14 @@
                             <option value="good">Good</option>
                             <option value="fair">Fair</option>
                             <option value="broken">Broken</option>
+                        </select>
+                    </div>
+                    <div id="lock-status-container">
+                        <label for="check-lock-status" class="block text-sm font-medium text-gray-700">Carrier Lock Status</label>
+                        <select id="check-lock-status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                            <option value="">Select...</option>
+                            <option value="unlocked">Unlocked</option>
+                            <option value="locked">Locked</option>
                         </select>
                     </div>
                 </div>
@@ -636,9 +614,9 @@
         const checkDeviceType = document.getElementById('check-device-type');
         const checkImei = document.getElementById('check-imei');
         const checkImeiBtn = document.getElementById('check-imei-btn');
-        const imeiStatusRadios = document.querySelectorAll('input[name="imei-status"]');
-        const imeiProblemReasonContainer = document.getElementById('imei-problem-reason-container');
-        const imeiProblemReasonInput = document.getElementById('imei-problem-reason');
+        const esnCheckResultsContainer = document.getElementById('esn-check-results-container');
+        const esnResultsPre = document.getElementById('esn-results-pre');
+
         const checkPowerOn = document.getElementById('check-power-on');
         const checkFunctional = document.getElementById('check-functional');
         const checkCracks = document.getElementById('check-cracks');
@@ -668,8 +646,7 @@
         const esnCheckResultsModal = document.getElementById('esn-check-results-modal');
         const closeEsnModal = document.getElementById('close-esn-modal');
         const esnLoadingIndicator = document.getElementById('esn-loading-indicator');
-        const esnResultsPre = document.getElementById('esn-results-pre');
-
+        
         let allOrders = [];
         let currentActiveStatus = 'all';
         let currentOrderData = null; // Store the currently viewed order data
@@ -705,98 +682,6 @@
         closeReofferFormBtn.addEventListener('click', () => {
              reofferFormContainer.classList.add('hidden');
              orderDetailsModal.classList.remove('hidden');
-        });
-        
-        // Listen for changes on IMEI status radios
-        imeiStatusRadios.forEach(radio => {
-            radio.addEventListener('change', (event) => {
-                if (event.target.value !== 'clean') {
-                    imeiProblemReasonContainer.classList.remove('hidden');
-                } else {
-                    imeiProblemReasonContainer.classList.add('hidden');
-                }
-            });
-        });
-
-        // Handle IMEI Check Button click
-        checkImeiBtn.addEventListener('click', async () => {
-            const imei = checkImei.value;
-            const carrier = checkCarrierType.value;
-            const devicetype = checkDeviceType.value;
-
-            if (!imei || !carrier || !devicetype) {
-                alert('Please fill out the IMEI, Carrier, and Device Type.');
-                return;
-            }
-            
-            // Show the ESN check results modal and loading indicator
-            esnCheckResultsModal.classList.remove('hidden');
-            esnLoadingIndicator.classList.remove('hidden');
-            esnResultsPre.textContent = '';
-            
-            try {
-                const url = `${BACKEND_BASE_URL}/check-esn`;
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({ imei, carrier, devicetype }),
-                });
-                
-                const data = await response.json();
-                esnResultsPre.textContent = JSON.stringify(data, null, 2);
-
-                // Now, intelligently pre-select the radio button based on the response
-                let status = 'clean';
-                let reason = '';
-                if (data.Remarks) {
-                  if (data.Remarks.toLowerCase().includes('bad')) {
-                    status = 'blacklisted';
-                    reason = data.Remarks;
-                  } else if (data.Remarks.toLowerCase().includes('ub') || data.Remarks.toLowerCase().includes('ob') || data.Remarks.toLowerCase().includes('pp')) {
-                    status = 'financed';
-                    reason = `Finance lock detected: ${data.Remarks}`;
-                  } else if (data.Remarks.toLowerCase().includes('n/a') || data.Remarks.toLowerCase().includes('incorrect')) {
-                    status = 'clean'; // Or handle as an error
-                    reason = `IMEI is incorrect or not available.`;
-                  }
-                }
-                
-                if (data.RawResponse?.imeihistory) {
-                    const isLostOrStolen = data.RawResponse.imeihistory.some(entry => 
-                        entry.reasoncodedesc?.toLowerCase().includes('stolen or lost')
-                    );
-                    if (isLostOrStolen) {
-                        status = 'lost/stolen';
-                        reason = reason + ' ' + (data.RawResponse.imeihistory.map(e => e.reasoncodedesc).join(', '))
-                    }
-                }
-
-                // Check and set the radio button
-                const selectedRadio = document.querySelector(`input[name="imei-status"][value="${status}"]`);
-                if (selectedRadio) {
-                    selectedRadio.checked = true;
-                    if (status !== 'clean') {
-                      imeiProblemReasonContainer.classList.remove('hidden');
-                      imeiProblemReasonInput.value = reason;
-                    } else {
-                      imeiProblemReasonContainer.classList.add('hidden');
-                      imeiProblemReasonInput.value = '';
-                    }
-                } else {
-                    document.querySelector('input[name="imei-status"][value="clean"]').checked = true;
-                    imeiProblemReasonContainer.classList.add('hidden');
-                    imeiProblemReasonInput.value = '';
-                }
-
-            } catch (error) {
-                console.error("Error during IMEI check:", error);
-                esnResultsPre.textContent = `Error: ${error.message}`;
-            } finally {
-                esnLoadingIndicator.classList.add('hidden');
-            }
         });
         
         // Listen for changes on power-on to dynamically show/hide fields
@@ -840,6 +725,62 @@
             }
         });
 
+        // Handle IMEI Check Button click
+        checkImeiBtn.addEventListener('click', async () => {
+            const imei = checkImei.value;
+            const carrier = checkCarrierType.value;
+            const devicetype = checkDeviceType.value;
+            const orderId = currentOrderData.id;
+            const customerName = currentOrderData.shippingInfo.fullName;
+            const customerEmail = currentOrderData.shippingInfo.email;
+        
+            if (!imei || !carrier || !devicetype || !orderId) {
+                displayModalMessage('Please fill out IMEI, Carrier, and Device Type.', 'error');
+                return;
+            }
+            
+            esnCheckResultsContainer.classList.remove('hidden');
+            esnResultsPre.textContent = 'Checking IMEI status...';
+            
+            modalLoadingMessage.classList.remove('hidden');
+            checkImeiBtn.disabled = true;
+
+            try {
+                const url = `${BACKEND_BASE_URL}/check-esn`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ imei, carrier, devicetype, orderId, customerName, customerEmail }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("Backend error response:", response.status, errorData);
+                    throw new Error(errorData.error || `Failed to check ESN: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                esnResultsPre.textContent = JSON.stringify(data, null, 2);
+
+                const storageFromApi = data.Storage || null;
+                if (storageFromApi) {
+                    checkGb.value = storageFromApi;
+                }
+                
+                displayModalMessage('IMEI check completed. The customer has been notified if action is required.', 'success');
+
+            } catch (error) {
+                console.error("Error during IMEI check:", error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+                checkImeiBtn.disabled = false;
+            }
+        });
+
         function updateDashboardCounts(ordersData) {
             pendingShipmentCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
             shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length; // New count update
@@ -877,6 +818,24 @@
                         reofferTimer = `<span class="status-bubble-subtext text-gray-500">Auto-accept in ${days} days</span>`;
                     } else {
                         reofferTimer = `<span class="status-bubble-subtext text-red-500">Auto-accept overdue</span>`;
+                    }
+                } else if (order.status === 'fmi_on_pending' && order.fmiAutoDowngradeDate) {
+                    const downgradeDate = new Date(order.fmiAutoDowngradeDate._seconds * 1000);
+                    const timeLeft = downgradeDate.getTime() - Date.now();
+                    if (timeLeft > 0) {
+                        const hours = Math.ceil(timeLeft / (1000 * 60 * 60));
+                        reofferTimer = `<span class="status-bubble-subtext text-gray-500">Downgrade in ${hours} hrs</span>`;
+                    } else {
+                        reofferTimer = `<span class="status-bubble-subtext text-red-500">Downgrade overdue</span>`;
+                    }
+                } else if (order.status === 'balance_due_pending' && order.balanceAutoDowngradeDate) {
+                    const downgradeDate = new Date(order.balanceAutoDowngradeDate._seconds * 1000);
+                    const timeLeft = downgradeDate.getTime() - Date.now();
+                    if (timeLeft > 0) {
+                        const hours = Math.ceil(timeLeft / (1000 * 60 * 60));
+                        reofferTimer = `<span class="status-bubble-subtext text-gray-500">Downgrade in ${hours} hrs</span>`;
+                    } else {
+                        reofferTimer = `<span class="status-bubble-subtext text-red-500">Downgrade overdue</span>`;
                     }
                 }
 
@@ -925,6 +884,9 @@
                 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
                 case 're-offered-declined': return 'bg-red-100 text-red-800 status-bubble';
                 case 'return-label-generated': return 'bg-gray-400 text-gray-800 status-bubble';
+                case 'blacklisted': return 'bg-red-500 text-white status-bubble';
+                case 'fmi_on_pending':
+                case 'balance_due_pending': return 'bg-yellow-500 text-white status-bubble';
                 default: return 'bg-gray-100 text-gray-800 status-bubble';
             }
         }
@@ -941,6 +903,9 @@
             modalLabelRow.classList.add('hidden');
             modalSecondaryLabelRow.classList.add('hidden');
             modalReturnLabelRow.classList.add('hidden');
+            
+            // Hide ESN check results initially
+            esnCheckResultsContainer.classList.add('hidden');
 
             orderDetailsModal.classList.remove('hidden');
 
@@ -1048,6 +1013,9 @@
             switch (currentStatus) {
                 case 'order_pending':
                 case 'shipping_kit_requested': // Added new status here
+                case 'fmi_on_pending':
+                case 'balance_due_pending':
+                case 'blacklisted':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     break;
                 case 'label_generated':
@@ -1094,41 +1062,34 @@
             checkDeviceType.value = '';
             checkCarrierType.value = '';
             
-            // Uncheck IMEI status radios
-            imeiStatusRadios.forEach(radio => radio.checked = false);
-
-            // Pre-fill GB and IMEI if they exist in the order
+            // Pre-fill fields from order data
             checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
             checkImei.value = order.imei || '';
             
-            // Pre-fill carrier from the order data
             const orderCarrier = order.carrier?.toLowerCase();
             if (orderCarrier) {
               const carrierOption = document.querySelector(`#check-carrier-type option[value="${orderCarrier}"]`);
               if (carrierOption) {
                 checkCarrierType.value = orderCarrier;
               } else {
-                // If the carrier isn't in the list, select "Other" and log a warning.
                 checkCarrierType.value = 'other';
                 console.warn(`Carrier "${order.carrier}" from order data is not a pre-defined option.`);
               }
             }
 
-
-            // Pre-fill device type based on a simple check
             const deviceName = order.device.toLowerCase();
             if (deviceName.includes('iphone')) {
                 checkDeviceType.value = 'iphone';
             } else if (deviceName.includes('samsung') || deviceName.includes('pixel')) {
                 checkDeviceType.value = 'android';
             }
-
-            // Reset dynamic fields and their required status
+            
+            // Hide dynamic fields
             functionalContainer.classList.add('hidden');
             cracksContainer.classList.add('hidden');
             cosmeticContainer.classList.add('hidden');
-            imeiProblemReasonContainer.classList.add('hidden');
 
+            // Reset dynamic fields and their required status
             checkFunctional.removeAttribute('required');
             checkCracks.removeAttribute('required');
             checkCosmetic.removeAttribute('required');
@@ -1150,8 +1111,6 @@
                 cosmetic: checkCosmetic.value,
                 gb: checkGb.value,
                 imei: checkImei.value,
-                imeiStatus: document.querySelector('input[name="imei-status"]:checked')?.value || 'unknown',
-                imeiProblemReason: imeiProblemReasonContainer.classList.contains('hidden') ? '' : imeiProblemReasonInput.value,
                 lockStatus: checkLockStatus.value,
                 deviceType: checkDeviceType.value
             };
@@ -1163,7 +1122,6 @@
             const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
             allFormFields.forEach(field => field.classList.remove('required-field'));
             
-            // Re-validate based on new flow
             const requiredFields = [checkGb, checkCarrierType, checkDeviceType, checkImei, checkLockStatus, checkPowerOn];
             requiredFields.forEach(field => {
                  if (!field.value) {
@@ -1177,20 +1135,18 @@
                      checkFunctional.classList.add('required-field');
                      isValid = false;
                  }
-
-                 if (receivedConditions.functional === 'yes' && receivedConditions.cracks === 'yes') {
-                     if (!receivedConditions.cosmetic) {
-                         checkCosmetic.classList.add('required-field');
-                         isValid = false;
-                     }
+                 if (receivedConditions.functional === 'yes') {
+                    if (!receivedConditions.cracks) {
+                      checkCracks.classList.add('required-field');
+                      isValid = false;
+                    }
+                    if (receivedConditions.cracks === 'yes' || receivedConditions.cracks === 'no') {
+                        if (!receivedConditions.cosmetic) {
+                           checkCosmetic.classList.add('required-field');
+                           isValid = false;
+                        }
+                    }
                  }
-                 else if(receivedConditions.functional === 'yes' && receivedConditions.cracks === 'no') {
-                     if (!receivedConditions.cosmetic) {
-                         checkCosmetic.classList.add('required-field');
-                         isValid = false;
-                     }
-                 }
-
             }
 
             if (!isValid) {
@@ -1241,13 +1197,6 @@
                 if (receivedConditions.gb && receivedConditions.gb !== customerConditions.gb.replace('GB','')) {
                     reasons.push('Storage size mismatch');
                     comments += `Customer listed storage as ${customerConditions.gb}, but it is ${receivedConditions.gb}GB. `;
-                }
-                if (receivedConditions.imeiStatus !== 'clean') {
-                    reasons.push('IMEI check problem');
-                    comments += `IMEI status is ${receivedConditions.imeiStatus}.`;
-                    if (receivedConditions.imeiProblemReason) {
-                         comments += ` Reason: ${receivedConditions.imeiProblemReason}.`;
-                    }
                 }
                 if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
                      reasons.push('Carrier Lock Status mismatch');
@@ -1316,8 +1265,6 @@
                 fulfilledOrders: { // New section to save fulfilled orders
                     gb: checks.gb,
                     imei: checks.imei,
-                    imeiStatus: checks.imeiStatus,
-                    imeiProblemReason: checks.imeiProblemReason,
                     lockStatus: checks.lockStatus,
                     conditions: {
                         power_on: checks.power_on,
@@ -1405,21 +1352,6 @@
             // Check if the price is a valid number
             if (isNaN(newPrice) || newPrice === undefined) {
                  throw new Error(`Invalid price found for cosmetic condition: ${finalCondition}.`);
-            }
-            
-            // Apply deductions based on IMEI status
-            switch (receivedConditions.imeiStatus) {
-                case 'blacklisted':
-                    newPrice = newPrice * 0.30;
-                    break;
-                case 'financed':
-                    newPrice = newPrice * 0.40;
-                    break;
-                case 'lost/stolen':
-                    newPrice = newPrice * 0.10;
-                    break;
-                default:
-                    break;
             }
             
             console.log("Calculated new price:", newPrice);
@@ -1583,8 +1515,8 @@
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                            ? order.reOffer.newPrice.toFixed(2)
-                            : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                    ? order.reOffer.newPrice.toFixed(2)
+                                    : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
