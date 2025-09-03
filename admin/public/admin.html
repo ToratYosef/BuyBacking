@@ -812,8 +812,19 @@
                 
                 displayModalMessage('IMEI check completed. The customer has been notified if action is required.', 'success');
 
-                // On successful IMEI check, update the order status to 'imei_checked'
-                await updateDoc(doc(db, 'orders', orderId), { status: 'imei_checked' });
+                // On successful IMEI check, update the order status to 'imei_checked' and save the raw response
+                const updateData = {
+                    status: 'imei_checked',
+                    fulfilledOrders: {
+                        imei: data.deviceid,
+                        gb: checkGb.value,
+                        lockStatus: checkLockStatus.value,
+                        deviceType: checkDeviceType.value,
+                        rawResponse: data.RawResponse // Save the full raw response
+                    }
+                };
+
+                await updateDoc(doc(db, 'orders', orderId), updateData);
                 
                 openOrderDetailsModal(orderId);
 
@@ -925,7 +936,7 @@
                 case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble'; // New status class
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
-                case 'imei_checked': return 'bg-yellow-400 text-white status-bubble';
+                case 'imei_checked': return 'bg-blue-200 text-blue-800 status-bubble'; // Updated color for new status
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
                 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
                 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
@@ -1151,8 +1162,11 @@
             checkDeviceType.value = fulfilledData.deviceType;
             checkDeviceType.disabled = true;
             checkImeiBtn.classList.add('hidden');
-            esnCheckResultsContainer.classList.add('hidden');
             
+            // Show and populate the raw IMEI response
+            esnCheckResultsContainer.classList.remove('hidden');
+            esnResultsPre.textContent = JSON.stringify(fulfilledData.rawResponse, null, 2);
+
             // Enable and pre-populate the manual condition fields
             powerOnContainer.classList.remove('hidden');
             functionalContainer.classList.remove('hidden');
