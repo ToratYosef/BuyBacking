@@ -17,7 +17,6 @@
       gtag('config', 'G-SLRRJRXHHE');
     </script>
 
-
     <style>
         body {
             font-family: "Inter", sans-serif;
@@ -612,6 +611,8 @@
         const modalActionButtons = document.getElementById('modal-action-buttons');
         const modalLoadingMessage = document.getElementById('modal-loading-message');
         const modalMessage = document.getElementById('modal-message');
+        const imeiInfoDisplay = document.getElementById('imei-info-display');
+
 
         const reofferFormContainer = document.getElementById('reoffer-form-container');
         const closeReofferFormBtn = document.getElementById('close-reoffer-form-btn');
@@ -665,6 +666,7 @@
         let currentActiveStatus = 'all';
         let currentOrderData = null; // Store the currently viewed order data
         
+        // Modal click listeners
         orderDetailsModal.addEventListener('click', (event) => {
             if (event.target === orderDetailsModal) {
                 closeOrderDetailsModal();
@@ -742,14 +744,11 @@
         // Handle IMEI Check Button click
         checkImeiBtn.addEventListener('click', async () => {
             const imei = checkImei.value;
-            const carrier = checkCarrierType.value;
-            const devicetype = checkDeviceType.value;
             const orderId = currentOrderData.id;
-            const customerName = currentOrderData.shippingInfo.fullName;
-            const customerEmail = currentOrderData.shippingInfo.email;
+            const authToken = await auth.currentUser.getIdToken();
         
-            if (!imei || !carrier || !devicetype || !orderId) {
-                displayModalMessage('Please fill out IMEI, Carrier, and Device Type.', 'error');
+            if (!imei) {
+                displayModalMessage('Please enter an IMEI number.', 'error');
                 return;
             }
             
@@ -760,72 +759,33 @@
             checkImeiBtn.disabled = true;
 
             try {
-                const url = `${BACKEND_BASE_URL}/check-esn`;
+                const url = `https://api.phonecheck.com/v2/imei/blacklist/${imei}`;
                 const response = await fetch(url, {
-                    method: 'POST',
+                    method: 'GET',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({ imei, carrier, devicetype, orderId, customerName, customerEmail }),
+                        'token_master': 'test_token_123' // Placeholder, replace with real token
+                    }
                 });
 
                 if (!response.ok) {
                     const errorData = await response.json();
-                    console.error("Backend error response:", response.status, errorData);
-                    throw new Error(errorData.error || `Failed to check ESN: ${response.status}`);
+                    console.error("Phonecheck API error:", response.status, errorData);
+                    throw new Error(errorData.msg || `Phonecheck API failed with status: ${response.status}`);
                 }
                 
                 const data = await response.json();
-                esnResultsPre.textContent = JSON.stringify(data, null, 2);
-
-                const storageFromApi = data.Storage || null;
-                if (storageFromApi) {
-                    checkGb.value = storageFromApi;
-                }
                 
-                // Populates the "Check Received Device Conditions" form using the API response.
-                const rawResponse = data.RawResponse;
-                if (rawResponse) {
-                    // Populate IMEI field
-                    checkImei.value = data.deviceid;
-                    
-                    // Populate Device Type field
-                    const deviceType = rawResponse.operatingsys?.toLowerCase();
-                    if (deviceType) {
-                        checkDeviceType.value = deviceType;
-                    }
-
-                    // Populate Cosmetic Condition based on Remarks
-                    const remarks = rawResponse.Remarks?.toLowerCase();
-                    if (remarks) {
-                        const cosmeticOptions = ['flawless', 'excellent', 'good', 'fair', 'broken'];
-                        if (cosmeticOptions.includes(remarks)) {
-                            checkCosmetic.value = remarks;
-                        } else {
-                             // Handle cases where API returns a value not directly in the dropdown
-                             console.warn(`API remarks value "${remarks}" is not a recognized cosmetic condition.`);
-                             checkCosmetic.value = 'good';
-                        }
-                    }
-                }
-                
-                displayModalMessage('IMEI check completed. The customer has been notified if action is required.', 'success');
-
-                // On successful IMEI check, update the order status to 'imei_checked' and save the raw response
-                const updateData = {
+                // Save the full raw response to Firestore
+                await updateDoc(doc(db, 'orders', orderId), { 
                     status: 'imei_checked',
                     fulfilledOrders: {
-                        imei: data.deviceid,
-                        gb: checkGb.value,
-                        lockStatus: checkLockStatus.value,
-                        deviceType: checkDeviceType.value,
-                        rawResponse: data.RawResponse // Save the full raw response
+                        imei: imei,
+                        rawResponse: data
                     }
-                };
-
-                await updateDoc(doc(db, 'orders', orderId), updateData);
+                });
                 
+                // Display a success message
+                displayModalMessage('IMEI check completed. The order status has been updated.', 'success');
                 openOrderDetailsModal(orderId);
 
             } catch (error) {
@@ -948,23 +908,33 @@
                 default: return 'bg-gray-100 text-gray-800 status-bubble';
             }
         }
-
-        async function openOrderDetailsModal(orderId) {
+        
+        // New function to reset the modal state
+        function resetModalState() {
             modalActionButtons.innerHTML = '';
             modalLoadingMessage.classList.add('hidden');
             modalMessage.classList.add('hidden');
             modalMessage.textContent = '';
             modalVenmoUsernameRow.classList.add('hidden');
-            conditionCheckFormContainer.classList.add('hidden'); // Hide condition check form
-            
-            // Hide all label rows initially
+            conditionCheckFormContainer.classList.add('hidden');
+            // Hide all label rows
             modalLabelRow.classList.add('hidden');
             modalSecondaryLabelRow.classList.add('hidden');
             modalReturnLabelRow.classList.add('hidden');
-            
-            // Hide ESN check results initially
+            // Hide IMEI results
             esnCheckResultsContainer.classList.add('hidden');
+            // Clear all form inputs
+            const formFields = conditionCheckFormContainer.querySelectorAll('input, select');
+            formFields.forEach(field => {
+                field.value = '';
+                field.classList.remove('required-field');
+                field.disabled = false;
+            });
+            modalActionButtons.classList.remove('hidden');
+        }
 
+        async function openOrderDetailsModal(orderId) {
+            resetModalState(); // Reset the modal to a clean state
             orderDetailsModal.classList.remove('hidden');
 
             try {
@@ -1083,6 +1053,13 @@
                     modalActionButtons.appendChild(createButton('Check Conditions', () => showConditionCheckForm(order), 'bg-green-600 hover:bg-green-700'));
                     break;
                 case 'imei_checked':
+                    // New button for viewing IMEI info
+                    const viewImeiInfoButton = document.createElement('button');
+                    viewImeiInfoButton.textContent = 'View IMEI Info';
+                    viewImeiInfoButton.className = 'bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 shadow';
+                    viewImeiInfoButton.onclick = () => showImeiInfo(order.fulfilledOrders.rawResponse);
+                    modalActionButtons.appendChild(viewImeiInfoButton);
+
                     modalActionButtons.appendChild(createButton('Finalize Conditions', () => showFinalConditionForm(order), 'bg-green-600 hover:bg-green-700'));
                     break;
                 case 're-offered-pending':
@@ -1105,6 +1082,37 @@
             }
         }
         
+        function showImeiInfo(rawResponse) {
+            if (!rawResponse || !rawResponse.data) {
+                imeiInfoDisplay.innerHTML = '<p class="text-red-500">No IMEI data found.</p>';
+                return;
+            }
+
+            const data = rawResponse.data;
+            let infoHtml = `
+                <p><strong>Overall Status:</strong> ${data.overall ? formatCondition(data.overall) : 'N/A'}</p>
+                <p><strong>IMEI:</strong> ${data.imei || 'N/A'}</p>
+                <p><strong>Blacklist Status:</strong> ${data.blacklistStatus || 'N/A'}</p>
+                <p><strong>Manufacturer:</strong> ${data.make || 'N/A'}</p>
+                <p><strong>Model:</strong> ${data.model || 'N/A'}</p>
+                <p><strong>Operating System:</strong> ${data.operatingSys || 'N/A'}</p>
+                <p><strong>Device Type:</strong> ${data.deviceType || 'N/A'}</p>
+                <h5 class="mt-4 font-semibold">IMEI History:</h5>
+                <ul class="list-disc list-inside ml-4 text-sm">
+            `;
+
+            if (data.imeiHistory && data.imeiHistory.length > 0) {
+                data.imeiHistory.forEach(history => {
+                    infoHtml += `<li><strong>Action:</strong> ${history.action || 'N/A'} (<strong>Reason:</strong> ${history.reasoncodedesc || 'N/A'}) on ${history.date || 'N/A'} by ${history.by || 'N/A'} in ${history.Country || 'N/A'}</li>`;
+                });
+            } else {
+                infoHtml += '<li>No history found.</li>';
+            }
+            infoHtml += `</ul>`;
+
+            imeiInfoDisplay.innerHTML = infoHtml;
+        }
+
         function showConditionCheckForm(order) {
             // Set title for the IMEI check
             conditionFormTitle.textContent = 'Check Received Device IMEI';
@@ -1113,26 +1121,27 @@
             const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
             allFormFields.forEach(field => field.classList.remove('required-field'));
             
-            // Enable all fields and show the IMEI check button
+            // Enable only the IMEI input for initial check
             checkImei.disabled = false;
-            checkGb.disabled = false;
-            checkCarrierType.disabled = false;
-            checkDeviceType.disabled = false;
-            checkImeiBtn.classList.remove('hidden');
-
-            // Reset all values
-            checkImei.value = order.imei || '';
-            checkGb.value = '';
-            checkCarrierType.value = '';
-            checkDeviceType.value = '';
+            checkGb.disabled = true;
+            checkCarrierType.disabled = true;
+            checkDeviceType.disabled = true;
+            checkLockStatus.disabled = true;
 
             // Hide the conditional fields for now
             powerOnContainer.classList.add('hidden');
             functionalContainer.classList.add('hidden');
             cracksContainer.classList.add('hidden');
             cosmeticContainer.classList.add('hidden');
-            checkLockStatus.disabled = false;
+            
+            // Clear all values for a new check
+            checkImei.value = '';
+            checkGb.value = '';
+            checkCarrierType.value = '';
+            checkDeviceType.value = '';
             checkLockStatus.value = '';
+            
+            checkImeiBtn.classList.remove('hidden');
 
             modalActionButtons.classList.add('hidden');
             conditionCheckFormContainer.classList.remove('hidden');
@@ -1224,8 +1233,8 @@
             });
 
             if (!isValid) {
-                 displayModalMessage('Please fill out all required fields.', 'error');
-                 return;
+                displayModalMessage('Please fill out all required fields.', 'error');
+                return;
             }
             
             modalLoadingMessage.classList.remove('hidden');
@@ -1320,8 +1329,8 @@
             }
 
             if (!isValid) {
-                 displayModalMessage('Please fill out all required fields.', 'error');
-                 return;
+                displayModalMessage('Please fill out all required fields.', 'error');
+                return;
             }
 
             modalLoadingMessage.classList.remove('hidden');
@@ -1572,9 +1581,9 @@
             try {
                 const url = `${BACKEND_BASE_URL}/orders/${orderId}/re-offer`;
                 console.log("Submitting re-offer to:", url);
-                const response = await fetch(url, {
+                const response = await fetch(url, { 
                     method: 'POST',
-                    headers: { 
+                    headers: {  
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${authToken}` // Include token
                     },
@@ -1652,7 +1661,7 @@
                 console.log(`Performing action ${actionType} to:`, url);
                 const response = await fetch(url, {
                     method: method,
-                    headers: { 
+                    headers: {  
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${authToken}` // Include token
                     },
@@ -1680,8 +1689,8 @@
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                                         ? order.reOffer.newPrice.toFixed(2)
-                                         : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                             ? order.reOffer.newPrice.toFixed(2)
+                                             : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
