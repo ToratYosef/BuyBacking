@@ -6,7 +6,7 @@
     <title>Order Management Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-        
+    
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-SLRRJRXHHE"></script>
     <script>
@@ -154,6 +154,11 @@
                             <i class="fas fa-truck mr-3"></i> Received
                         </a>
                     </li>
+                    <li>
+                        <a href="#" data-status="imei_checked" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-mobile-alt mr-3"></i> IMEI Checked
+                        </a>
+                    </li>
                     <li class="reoffer-menu-item">
                         <a href="#" class="reoffer-parent block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
                             <i class="fas fa-dollar-sign mr-3"></i> Reoffer
@@ -224,6 +229,13 @@
                         <div id="received-count" class="text-4xl font-extrabold mt-1">0</div>
                     </div>
                     <i class="fas fa-truck text-5xl opacity-40"></i>
+                </div>
+                <div id="card-imei_checked" data-status="imei_checked" class="dashboard-card bg-cyan-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-semibold opacity-80">IMEI Checked</div>
+                        <div id="imei-checked-count" class="text-4xl font-extrabold mt-1">0</div>
+                    </div>
+                    <i class="fas fa-check-double text-5xl opacity-40"></i>
                 </div>
                 <div id="card-completed" data-status="completed" class="dashboard-card bg-purple-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
                     <div>
@@ -316,6 +328,7 @@
                 <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
                 <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
                 <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
+                <p id="modal-imei-details-row" class="hidden"><strong>IMEI:</strong> <span id="modal-imei-display"></span></p>
 
                 <p id="modal-loading-message" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
             </div>
@@ -551,6 +564,7 @@
         const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count'); // New count element
         const labelGeneratedCount = document.getElementById('label-generated-count');
         const receivedCount = document.getElementById('received-count');
+        const imeiCheckedCount = document.getElementById('imei-checked-count');
         const completedCount = document.getElementById('completed-count');
         const reofferedPendingCount = document.getElementById('re-offered-pending-count');
         const reofferedAcceptedCount = document.getElementById('re-offered-accepted-count');
@@ -591,6 +605,8 @@
         const modalReturnLabelDescription = document.getElementById('modal-return-label-description');
         const modalReturnLabelLink = document.getElementById('modal-return-label-link');
         const modalReturnTrackingNumberDisplay = document.getElementById('modal-return-tracking-number-display');
+        const modalImeiDetailsRow = document.getElementById('modal-imei-details-row');
+        const modalImeiDisplay = document.getElementById('modal-imei-display');
 
         const modalActionButtons = document.getElementById('modal-action-buttons');
         const modalLoadingMessage = document.getElementById('modal-loading-message');
@@ -609,7 +625,6 @@
         const checkCarrierType = document.getElementById('check-carrier-type');
         const checkDeviceType = document.getElementById('check-device-type');
         const checkImei = document.getElementById('check-imei');
-        const checkImeiBtn = document.getElementById('check-imei-btn');
         const imeiStatusDisplayContainer = document.getElementById('imei-status-display-container');
         const imeiStatusText = document.getElementById('imei-status-text');
         const imeiStatusReasonText = document.getElementById('imei-status-reason-text');
@@ -724,67 +739,12 @@
             }
         });
 
-        // Handle IMEI Check Button click
-        checkImeiBtn.addEventListener('click', async () => {
-            const imei = checkImei.value;
-            const carrier = checkCarrierType.value;
-            const devicetype = checkDeviceType.value;
-            const orderId = currentOrderData.id;
-            const customerName = currentOrderData.shippingInfo.fullName;
-            const customerEmail = currentOrderData.shippingInfo.email;
-        
-            if (!imei || !carrier || !devicetype || !orderId) {
-                displayModalMessage('Please fill out IMEI, Carrier, and Device Type.', 'error');
-                return;
-            }
-            
-            esnCheckResultsContainer.classList.remove('hidden');
-            esnResultsPre.textContent = 'Checking IMEI status...';
-            
-            modalLoadingMessage.classList.remove('hidden');
-            checkImeiBtn.disabled = true;
-
-            try {
-                const url = `${BACKEND_BASE_URL}/check-esn`;
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({ imei, carrier, devicetype, orderId, customerName, customerEmail }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    console.error("Backend error response:", response.status, errorData);
-                    throw new Error(errorData.error || `Failed to check ESN: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                esnResultsPre.textContent = JSON.stringify(data, null, 2);
-
-                const storageFromApi = data.Storage || null;
-                if (storageFromApi) {
-                    checkGb.value = storageFromApi;
-                }
-                
-                displayModalMessage('IMEI check completed. The customer has been notified if action is required.', 'success');
-
-            } catch (error) {
-                console.error("Error during IMEI check:", error);
-                displayModalMessage(`Error: ${error.message}`, 'error');
-            } finally {
-                modalLoadingMessage.classList.add('hidden');
-                checkImeiBtn.disabled = false;
-            }
-        });
-
         function updateDashboardCounts(ordersData) {
             pendingShipmentCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
             shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length; // New count update
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
             receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
+            imeiCheckedCount.textContent = ordersData.filter(o => o.status === 'imei_checked').length;
             completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
             reofferedPendingCount.textContent = ordersData.filter(o => o.status === 're-offered-pending').length;
             reofferedAcceptedCount.textContent = ordersData.filter(o => o.status === 're-offered-accepted').length;
@@ -844,8 +804,8 @@
                     <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${itemDescription}</td>
                     <td class="px-6 py-4 whitespace-normal text-sm">
                         <span class="${getStatusClass(order.status)}">
-                           <span class="status-bubble-text">${statusText}</span>
-                           ${reofferTimer}
+                            <span class="status-bubble-text">${statusText}</span>
+                            ${reofferTimer}
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${order.trackingNumber || 'N/A'}</td>
@@ -878,6 +838,7 @@
                 case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble'; // New status class
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
+                case 'imei_checked': return 'bg-cyan-100 text-cyan-800 status-bubble';
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
                 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
                 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
@@ -902,6 +863,7 @@
             modalLabelRow.classList.add('hidden');
             modalSecondaryLabelRow.classList.add('hidden');
             modalReturnLabelRow.classList.add('hidden');
+            modalImeiDetailsRow.classList.add('hidden');
             
             // Hide ESN check results initially
             esnCheckResultsContainer.classList.add('hidden');
@@ -955,6 +917,11 @@
                 modalStatus.textContent = formatStatus(order.status);
                 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
 
+                if (order.imei) {
+                    modalImeiDisplay.textContent = order.imei;
+                    modalImeiDetailsRow.classList.remove('hidden');
+                }
+                
                 // Logic to handle which label(s) to display
                 if (order.shippingPreference === 'Shipping Kit Requested') {
                     // For shipping kit, display both outbound (kit) and inbound (device) labels
@@ -1021,6 +988,9 @@
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;
                 case 'received':
+                    modalActionButtons.appendChild(createButton('Check IMEI', () => handleAction(order.id, 'checkImei', 'bg-purple-600 hover:bg-purple-700')));
+                    break;
+                case 'imei_checked':
                     modalActionButtons.appendChild(createButton('Check Conditions', () => showConditionCheckForm(order.id), 'bg-green-600 hover:bg-green-700'));
                     break;
                 case 're-offered-pending':
@@ -1066,8 +1036,10 @@
                 imeiStatusDisplayContainer.classList.remove('hidden');
                 imeiStatusText.textContent = formatStatus(order.imeiStatus);
                 imeiStatusReasonText.textContent = order.imeiProblemReason || '';
-                esnResultsPre.textContent = JSON.stringify(order.imeiCheckRawResponse, null, 2);
-                esnCheckResultsContainer.classList.remove('hidden');
+                if (order.imeiCheckRawResponse) {
+                    esnResultsPre.textContent = JSON.stringify(order.imeiCheckRawResponse, null, 2);
+                    esnCheckResultsContainer.classList.remove('hidden');
+                }
             } else {
                 imeiStatusDisplayContainer.classList.add('hidden');
                 esnCheckResultsContainer.classList.add('hidden');
@@ -1143,16 +1115,16 @@
                      isValid = false;
                  }
                  if (receivedConditions.functional === 'yes') {
-                    if (!receivedConditions.cracks) {
-                      checkCracks.classList.add('required-field');
-                      isValid = false;
-                    }
-                    if (receivedConditions.cracks === 'yes' || receivedConditions.cracks === 'no') {
+                   if (!receivedConditions.cracks) {
+                     checkCracks.classList.add('required-field');
+                     isValid = false;
+                   }
+                   if (receivedConditions.cracks === 'yes' || receivedConditions.cracks === 'no') {
                         if (!receivedConditions.cosmetic) {
                            checkCosmetic.classList.add('required-field');
                            isValid = false;
                         }
-                    }
+                   }
                  }
             }
 
@@ -1453,30 +1425,51 @@
                 let url;
                 let method = 'PUT';
                 let body = {};
+                let displayMessage;
 
                 switch(actionType) {
                     case 'generateLabel':
                         url = `${BACKEND_BASE_URL}/generate-label/${orderId}`;
                         method = 'POST';
+                        displayMessage = 'Shipping label generated and sent.';
                         break;
                     case 'markReceived':
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
                         body = { status: 'received' };
+                        displayMessage = 'Order marked as received.';
                         break;
+                    case 'checkImei':
+                         url = `${BACKEND_BASE_URL}/check-esn`;
+                         method = 'POST';
+                         const order = allOrders.find(o => o.id === orderId);
+                         if (!order) {
+                             throw new Error('Order data not found locally.');
+                         }
+                         body = { 
+                             imei: order.imei, 
+                             carrier: order.carrier, 
+                             devicetype: order.device.includes('iPhone') ? 'iphone' : 'android',
+                             orderId: order.id,
+                             customerName: order.shippingInfo.fullName,
+                             customerEmail: order.shippingInfo.email
+                         };
+                         displayMessage = 'IMEI check completed. The order status has been updated.';
+                         break;
                     case 'markCompleted':
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
                         body = { status: 'completed' };
+                        displayMessage = 'Order marked as completed.';
                         break;
                     case 'payNow':
-                        const order = allOrders.find(o => o.id === orderId);
-                        if (!order) {
+                        const paymentOrder = allOrders.find(o => o.id === orderId);
+                        if (!paymentOrder) {
                             throw new Error('Order data not found locally.');
                         }
-                        const paymentLink = generatePaymentLink(order);
+                        const paymentLink = generatePaymentLink(paymentOrder);
                         if (paymentLink) {
                             window.open(paymentLink, '_blank');
                             displayModalMessage('Payment link generated and opened in a new tab.', 'success');
-                            await handleAction(order.id, 'markCompleted');
+                            await handleAction(paymentOrder.id, 'markCompleted');
                         } else {
                             throw new Error('Could not generate payment link.');
                         }
@@ -1486,6 +1479,7 @@
                     case 'sendReturnLabel':
                          url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
                          method = 'POST';
+                         displayMessage = 'Return label generated and sent.';
                          break;
                     default:
                         throw new Error('Unknown action.');
@@ -1508,7 +1502,7 @@
                 }
                 const result = await response.json();
                 
-                displayModalMessage(result.message, 'success');
+                displayModalMessage(displayMessage, 'success');
                 openOrderDetailsModal(orderId);
 
             } catch (error) {
@@ -1522,8 +1516,8 @@
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                                    ? order.reOffer.newPrice.toFixed(2)
-                                    : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                         ? order.reOffer.newPrice.toFixed(2)
+                                         : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
