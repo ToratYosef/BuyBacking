@@ -329,6 +329,18 @@
                         <input type="number" id="check-gb" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 256" required>
                     </div>
                     <div>
+                        <label for="check-carrier-type" class="block text-sm font-medium text-gray-700">Carrier</label>
+                        <select id="check-carrier-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
+                            <option value="">Select Carrier</option>
+                            <option value="verizon">Verizon</option>
+                            <option value="att">AT&T</option>
+                            <option value="tmobile">T-Mobile</option>
+                            <option value="sprint">Sprint</option>
+                            <option value="unlocked">Unlocked</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div>
                         <label for="check-device-type" class="block text-sm font-medium text-gray-700">Device Type</label>
                         <select id="check-device-type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" required>
                             <option value="">Select...</option>
@@ -620,6 +632,7 @@
         // New condition check form elements
         const conditionCheckFormContainer = document.getElementById('condition-check-form-container');
         const checkGb = document.getElementById('check-gb');
+        const checkCarrierType = document.getElementById('check-carrier-type');
         const checkDeviceType = document.getElementById('check-device-type');
         const checkImei = document.getElementById('check-imei');
         const checkImeiBtn = document.getElementById('check-imei-btn');
@@ -708,11 +721,11 @@
         // Handle IMEI Check Button click
         checkImeiBtn.addEventListener('click', async () => {
             const imei = checkImei.value;
-            const carrier = currentOrderData.carrier;
+            const carrier = checkCarrierType.value;
             const devicetype = checkDeviceType.value;
 
             if (!imei || !carrier || !devicetype) {
-                alert('Please fill out the IMEI, Device Type, and ensure the order has a carrier listed.');
+                alert('Please fill out the IMEI, Carrier, and Device Type.');
                 return;
             }
             
@@ -735,20 +748,47 @@
                 const data = await response.json();
                 esnResultsPre.textContent = JSON.stringify(data, null, 2);
 
-                // If the check returns a bad status, pre-select the radio button
-                const status = data.checkStatus || data.error?.toLowerCase();
-                if (status === 'blacklisted') {
-                    document.querySelector('input[name="imei-status"][value="blacklisted"]').checked = true;
-                    imeiProblemReasonContainer.classList.remove('hidden');
-                } else if (status === 'lost/stolen') {
-                    document.querySelector('input[name="imei-status"][value="lost/stolen"]').checked = true;
-                    imeiProblemReasonContainer.classList.remove('hidden');
-                } else if (status === 'financed') {
-                    document.querySelector('input[name="imei-status"][value="financed"]').checked = true;
-                    imeiProblemReasonContainer.classList.remove('hidden');
+                // Now, intelligently pre-select the radio button based on the response
+                let status = 'clean';
+                let reason = '';
+                if (data.Remarks) {
+                  if (data.Remarks.toLowerCase().includes('bad')) {
+                    status = 'blacklisted';
+                    reason = data.Remarks;
+                  } else if (data.Remarks.toLowerCase().includes('ub') || data.Remarks.toLowerCase().includes('ob') || data.Remarks.toLowerCase().includes('pp')) {
+                    status = 'financed';
+                    reason = `Finance lock detected: ${data.Remarks}`;
+                  } else if (data.Remarks.toLowerCase().includes('n/a') || data.Remarks.toLowerCase().includes('incorrect')) {
+                    status = 'clean'; // Or handle as an error
+                    reason = `IMEI is incorrect or not available.`;
+                  }
+                }
+                
+                if (data.RawResponse?.imeihistory) {
+                    const isLostOrStolen = data.RawResponse.imeihistory.some(entry => 
+                        entry.reasoncodedesc?.toLowerCase().includes('stolen or lost')
+                    );
+                    if (isLostOrStolen) {
+                        status = 'lost/stolen';
+                        reason = reason + ' ' + (data.RawResponse.imeihistory.map(e => e.reasoncodedesc).join(', '))
+                    }
+                }
+
+                // Check and set the radio button
+                const selectedRadio = document.querySelector(`input[name="imei-status"][value="${status}"]`);
+                if (selectedRadio) {
+                    selectedRadio.checked = true;
+                    if (status !== 'clean') {
+                      imeiProblemReasonContainer.classList.remove('hidden');
+                      imeiProblemReasonInput.value = reason;
+                    } else {
+                      imeiProblemReasonContainer.classList.add('hidden');
+                      imeiProblemReasonInput.value = '';
+                    }
                 } else {
                     document.querySelector('input[name="imei-status"][value="clean"]').checked = true;
                     imeiProblemReasonContainer.classList.add('hidden');
+                    imeiProblemReasonInput.value = '';
                 }
 
             } catch (error) {
@@ -1051,7 +1091,8 @@
             checkLockStatus.value = '';
             checkImei.value = '';
             checkGb.value = '';
-            checkDeviceType.value = ''; // Clear new field
+            checkDeviceType.value = '';
+            checkCarrierType.value = '';
             
             // Uncheck IMEI status radios
             imeiStatusRadios.forEach(radio => radio.checked = false);
@@ -1059,6 +1100,28 @@
             // Pre-fill GB and IMEI if they exist in the order
             checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
             checkImei.value = order.imei || '';
+            
+            // Pre-fill carrier from the order data
+            const orderCarrier = order.carrier?.toLowerCase();
+            if (orderCarrier) {
+              const carrierOption = document.querySelector(`#check-carrier-type option[value="${orderCarrier}"]`);
+              if (carrierOption) {
+                checkCarrierType.value = orderCarrier;
+              } else {
+                // If the carrier isn't in the list, select "Other" and log a warning.
+                checkCarrierType.value = 'other';
+                console.warn(`Carrier "${order.carrier}" from order data is not a pre-defined option.`);
+              }
+            }
+
+
+            // Pre-fill device type based on a simple check
+            const deviceName = order.device.toLowerCase();
+            if (deviceName.includes('iphone')) {
+                checkDeviceType.value = 'iphone';
+            } else if (deviceName.includes('samsung') || deviceName.includes('pixel')) {
+                checkDeviceType.value = 'android';
+            }
 
             // Reset dynamic fields and their required status
             functionalContainer.classList.add('hidden');
@@ -1090,7 +1153,7 @@
                 imeiStatus: document.querySelector('input[name="imei-status"]:checked')?.value || 'unknown',
                 imeiProblemReason: imeiProblemReasonContainer.classList.contains('hidden') ? '' : imeiProblemReasonInput.value,
                 lockStatus: checkLockStatus.value,
-                deviceType: checkDeviceType.value // Add new field
+                deviceType: checkDeviceType.value
             };
 
             // Basic form validation
@@ -1101,7 +1164,7 @@
             allFormFields.forEach(field => field.classList.remove('required-field'));
             
             // Re-validate based on new flow
-            const requiredFields = [checkGb, checkImei, checkLockStatus, checkPowerOn, checkDeviceType];
+            const requiredFields = [checkGb, checkCarrierType, checkDeviceType, checkImei, checkLockStatus, checkPowerOn];
             requiredFields.forEach(field => {
                  if (!field.value) {
                      field.classList.add('required-field');

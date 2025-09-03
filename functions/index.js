@@ -1180,6 +1180,9 @@ exports.api = functions.https.onRequest(app);
 app.post("/check-esn", async (req, res) => {
   try {
     const { imei, carrier, devicetype } = req.body;
+    
+    // Log the incoming request body for debugging
+    console.log("Received request to /check-esn with payload:", req.body);
 
     if (!imei || !carrier || !devicetype) {
       return res.status(400).json({ error: "Missing required fields: imei, carrier, and devicetype are all required." });
@@ -1193,6 +1196,9 @@ app.post("/check-esn", async (req, res) => {
       carrier: carrier,
       devicetype: devicetype
     };
+
+    // Log the payload sent to the external API
+    console.log("Sending payload to PhoneChecks API:", requestPayload);
 
     const response = await axios.post(apiUrl, requestPayload, {
       headers: {
