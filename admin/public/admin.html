@@ -154,11 +154,6 @@
                             <i class="fas fa-truck mr-3"></i> Received
                         </a>
                     </li>
-                    <li>
-                        <a href="#" data-status="imei_checked" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                            <i class="fas fa-search-plus mr-3"></i> IMEI Checked
-                        </a>
-                    </li>
                     <li class="reoffer-menu-item">
                         <a href="#" class="reoffer-parent block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
                             <i class="fas fa-dollar-sign mr-3"></i> Reoffer
@@ -229,13 +224,6 @@
                         <div id="received-count" class="text-4xl font-extrabold mt-1">0</div>
                     </div>
                     <i class="fas fa-truck text-5xl opacity-40"></i>
-                </div>
-                <div id="card-imei_checked" data-status="imei_checked" class="dashboard-card bg-sky-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-semibold opacity-80">IMEI Checked</div>
-                        <div id="imei-checked-count" class="text-4xl font-extrabold mt-1">0</div>
-                    </div>
-                    <i class="fas fa-search-plus text-5xl opacity-40"></i>
                 </div>
                 <div id="card-completed" data-status="completed" class="dashboard-card bg-purple-500 text-white p-6 rounded-lg shadow-lg flex items-center justify-between">
                     <div>
@@ -540,124 +528,1109 @@
         let db;
         let auth;
         let authToken = null; // Store the ID token here
+        
+        // UI Elements for Login
+        const loginFormContainer = document.getElementById('login-form-container');
+        const dashboardContainer = document.getElementById('dashboard-container');
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const loginButton = document.getElementById('login-btn');
+        const loginMessage = document.getElementById('login-message');
+        const displayUserEmail = document.getElementById('display-user-email');
+        const signOutButton = document.getElementById('sign-out-btn');
+
+
+        const ordersTableBody = document.getElementById('orders-table-body');
+        const noOrdersMessage = document.getElementById('no-orders-message');
+        const searchInput = document.getElementById('search-orders');
+        const statusLinks = document.querySelectorAll('.status-link');
+        // Removed displayUserId as we're using displayUserEmail now
+        const dashboardCards = document.querySelectorAll('.dashboard-card');
+
+        const pendingShipmentCount = document.getElementById('pending-shipment-count');
+        const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count'); // New count element
+        const labelGeneratedCount = document.getElementById('label-generated-count');
+        const receivedCount = document.getElementById('received-count');
+        const completedCount = document.getElementById('completed-count');
+        const reofferedPendingCount = document.getElementById('re-offered-pending-count');
+        const reofferedAcceptedCount = document.getElementById('re-offered-accepted-count');
+        const reofferedDeclinedCount = document.getElementById('re-offered-declined-count');
+        const returnLabelGeneratedCount = document.getElementById('return-label-generated-count');
+        
+        const orderDetailsModal = document.getElementById('order-details-modal');
+        const closeModalButton = document.getElementById('close-modal');
+        const modalOrderId = document.getElementById('modal-order-id');
+        const modalCustomerName = document.getElementById('modal-customer-name');
+        const modalCustomerEmail = document.getElementById('modal-customer-email');
+        const modalItem = document.getElementById('modal-item');
+        const modalStorage = document.getElementById('modal-storage');
+        const modalCarrier = document.getElementById('modal-carrier');
+        const modalPrice = document.getElementById('modal-price');
+        const modalPaymentMethod = document.getElementById('modal-payment-method');
+        const modalVenmoUsernameRow = document.getElementById('modal-venmo-username-row');
+        const modalVenmoUsername = document.getElementById('modal-venmo-username');
+        const modalShippingAddress = document.getElementById('modal-shipping-address');
+        const modalConditionPowerOn = document.getElementById('modal-condition-power-on');
+        const modalConditionFunctional = document.getElementById('modal-condition-functional');
+        const modalConditionCracks = document.getElementById('modal-condition-cracks');
+        const modalConditionCosmetic = document.getElementById('modal-condition-cosmetic');
+        const modalStatus = document.getElementById('modal-status');
+        
+        // New/Updated label elements in modal
+        const modalLabelRow = document.getElementById('modal-label-row');
+        const modalLabelDescription = document.getElementById('modal-label-description');
+        const modalLabelLink = document.getElementById('modal-label-link');
+        const modalTrackingNumber = document.getElementById('modal-tracking-number');
+
+        const modalSecondaryLabelRow = document.getElementById('modal-secondary-label-row');
+        const modalSecondaryLabelDescription = document.getElementById('modal-secondary-label-description');
+        const modalSecondaryLabelLink = document.getElementById('modal-secondary-label-link');
+        const modalSecondaryTrackingNumberDisplay = document.getElementById('modal-secondary-tracking-number-display');
+
+        const modalReturnLabelRow = document.getElementById('modal-return-label-row');
+        const modalReturnLabelDescription = document.getElementById('modal-return-label-description');
+        const modalReturnLabelLink = document.getElementById('modal-return-label-link');
+        const modalReturnTrackingNumberDisplay = document.getElementById('modal-return-tracking-number-display');
+
+        const modalActionButtons = document.getElementById('modal-action-buttons');
+        const modalLoadingMessage = document.getElementById('modal-loading-message');
+        const modalMessage = document.getElementById('modal-message');
+
+        const reofferFormContainer = document.getElementById('reoffer-form-container');
+        const closeReofferFormBtn = document.getElementById('close-reoffer-form-btn');
+        const reofferNewPrice = document.getElementById('reoffer-new-price');
+        const reofferComments = document.getElementById('reoffer-comments');
+        const submitReofferBtn = document.getElementById('submit-reoffer-btn');
+        const cancelReofferBtn = document.getElementById('cancel-reoffer-btn');
+
+        // New condition check form elements
+        const conditionCheckFormContainer = document.getElementById('condition-check-form-container');
+        const checkGb = document.getElementById('check-gb');
+        const checkCarrierType = document.getElementById('check-carrier-type');
+        const checkDeviceType = document.getElementById('check-device-type');
+        const checkImei = document.getElementById('check-imei');
+        const checkImeiBtn = document.getElementById('check-imei-btn');
+        const imeiStatusDisplayContainer = document.getElementById('imei-status-display-container');
+        const imeiStatusText = document.getElementById('imei-status-text');
+        const imeiStatusReasonText = document.getElementById('imei-status-reason-text');
+        const esnCheckResultsContainer = document.getElementById('esn-check-results-container');
+        const esnResultsPre = document.getElementById('esn-results-pre');
+
+        const checkPowerOn = document.getElementById('check-power-on');
+        const checkFunctional = document.getElementById('check-functional');
+        const checkCracks = document.getElementById('check-cracks');
+        const checkCosmetic = document.getElementById('check-cosmetic');
+        const checkLockStatus = document.getElementById('check-lock-status');
+
+        const powerOnContainer = document.getElementById('power-on-container');
+        const functionalContainer = document.getElementById('functional-container');
+        const cracksContainer = document.getElementById('cracks-container');
+        const cosmeticContainer = document.getElementById('cosmetic-container');
+
+        const submitConditionCheckBtn = document.getElementById('submit-condition-check-btn');
+        const cancelConditionCheckBtn = document.getElementById('cancel-condition-check-btn');
+        
+        const reofferParentLink = document.querySelector('.reoffer-parent');
+        const reofferSubmenu = document.querySelector('.submenu-container');
+
+        // New price confirmation modal elements
+        const priceConfirmModal = document.getElementById('price-confirm-modal');
+        const originalPriceSpan = document.getElementById('original-price');
+        const newPriceSpan = document.getElementById('new-price');
+        const priceDifferenceSpan = document.getElementById('price-difference');
+        const proceedReofferBtn = document.getElementById('proceed-reoffer-btn');
+        const cancelReofferConfirmBtn = document.getElementById('cancel-reoffer-confirm-btn');
+
+        // ESN check results modal elements
+        const esnCheckResultsModal = document.getElementById('esn-check-results-modal');
+        const closeEsnModal = document.getElementById('close-esn-modal');
+        const esnLoadingIndicator = document.getElementById('esn-loading-indicator');
+        
         let allOrders = [];
         let currentActiveStatus = 'all';
         let currentOrderData = null; // Store the currently viewed order data
         
+        orderDetailsModal.addEventListener('click', (event) => {
+            if (event.target === orderDetailsModal) {
+                closeOrderDetailsModal();
+            }
+        });
+
+        esnCheckResultsModal.addEventListener('click', (event) => {
+            if (event.target === esnCheckResultsModal) {
+                closeEsnCheckModal();
+            }
+        });
+        closeEsnModal.addEventListener('click', closeEsnCheckModal);
+
+
+        priceConfirmModal.addEventListener('click', (event) => {
+            if (event.target === priceConfirmModal) {
+                priceConfirmModal.classList.add('hidden');
+                orderDetailsModal.classList.remove('hidden');
+            }
+        });
+
+        reofferFormContainer.addEventListener('click', (event) => {
+            if (event.target === reofferFormContainer) {
+                reofferFormContainer.classList.add('hidden');
+                orderDetailsModal.classList.remove('hidden');
+            }
+        });
+
+        closeReofferFormBtn.addEventListener('click', () => {
+             reofferFormContainer.classList.add('hidden');
+             orderDetailsModal.classList.remove('hidden');
+        });
+        
+        // Listen for changes on power-on to dynamically show/hide fields
+        checkPowerOn.addEventListener('change', (event) => {
+            if (event.target.value === 'yes') {
+                functionalContainer.classList.remove('hidden');
+                checkFunctional.setAttribute('required', 'required');
+            } else {
+                functionalContainer.classList.add('hidden');
+                cracksContainer.classList.add('hidden');
+                cosmeticContainer.classList.add('hidden');
+                checkFunctional.removeAttribute('required');
+                checkCracks.removeAttribute('required');
+                checkCosmetic.removeAttribute('required');
+            }
+        });
+        
+        // Listen for changes on functional to dynamically show/hide fields
+        checkFunctional.addEventListener('change', (event) => {
+            if (event.target.value === 'yes') {
+                cracksContainer.classList.remove('hidden');
+                checkCracks.setAttribute('required', 'required');
+                cosmeticContainer.classList.remove('hidden');
+                checkCosmetic.setAttribute('required', 'required');
+            } else {
+                cracksContainer.classList.add('hidden');
+                cosmeticContainer.classList.add('hidden');
+                checkCracks.removeAttribute('required');
+                checkCosmetic.removeAttribute('required');
+            }
+        });
+        
+        // This is a new listener for the "no cracks" field
+        checkCracks.addEventListener('change', (event) => {
+            if (event.target.value === 'yes') {
+                cosmeticContainer.classList.remove('hidden');
+                checkCosmetic.setAttribute('required', 'required');
+            } else {
+                cosmeticContainer.classList.add('hidden');
+                checkCosmetic.removeAttribute('required');
+            }
+        });
+
+        // Handle IMEI Check Button click
+        checkImeiBtn.addEventListener('click', async () => {
+            const imei = checkImei.value;
+            const carrier = checkCarrierType.value;
+            const devicetype = checkDeviceType.value;
+            const orderId = currentOrderData.id;
+            const customerName = currentOrderData.shippingInfo.fullName;
+            const customerEmail = currentOrderData.shippingInfo.email;
+        
+            if (!imei || !carrier || !devicetype || !orderId) {
+                displayModalMessage('Please fill out IMEI, Carrier, and Device Type.', 'error');
+                return;
+            }
+            
+            esnCheckResultsContainer.classList.remove('hidden');
+            esnResultsPre.textContent = 'Checking IMEI status...';
+            
+            modalLoadingMessage.classList.remove('hidden');
+            checkImeiBtn.disabled = true;
+
+            try {
+                const url = `${BACKEND_BASE_URL}/check-esn`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ imei, carrier, devicetype, orderId, customerName, customerEmail }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("Backend error response:", response.status, errorData);
+                    throw new Error(errorData.error || `Failed to check ESN: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                esnResultsPre.textContent = JSON.stringify(data, null, 2);
+
+                const storageFromApi = data.Storage || null;
+                if (storageFromApi) {
+                    checkGb.value = storageFromApi;
+                }
+                
+                displayModalMessage('IMEI check completed. The customer has been notified if action is required.', 'success');
+
+            } catch (error) {
+                console.error("Error during IMEI check:", error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+                checkImeiBtn.disabled = false;
+            }
+        });
+
+        function updateDashboardCounts(ordersData) {
+            pendingShipmentCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
+            shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length; // New count update
+            labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
+            receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
+            completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
+            reofferedPendingCount.textContent = ordersData.filter(o => o.status === 're-offered-pending').length;
+            reofferedAcceptedCount.textContent = ordersData.filter(o => o.status === 're-offered-accepted').length;
+            reofferedDeclinedCount.textContent = ordersData.filter(o => o.status === 're-offered-declined').length;
+            returnLabelGeneratedCount.textContent = ordersData.filter(o => o.status === 'return-label-generated').length;
+        }
+
+        function renderOrders(ordersToDisplay) {
+            ordersTableBody.innerHTML = '';
+            if (ordersToDisplay.length === 0) {
+                noOrdersMessage.classList.remove('hidden');
+                return;
+            }
+            noOrdersMessage.classList.add('hidden');
+
+            ordersToDisplay.forEach(order => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
+                const itemDescription = `${order.device} ${order.storage}`;
+                const displayId = order.id;
+                
+                let reofferTimer = '';
+                let statusText = formatStatus(order.status);
+                if (order.status === 're-offered-pending' && order.reOffer && order.reOffer.autoAcceptDate) {
+                    const autoAcceptDate = new Date(order.reOffer.autoAcceptDate._seconds * 1000);
+                    const timeLeft = autoAcceptDate.getTime() - Date.now();
+                    if (timeLeft > 0) {
+                        const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+                        reofferTimer = `<span class="status-bubble-subtext text-gray-500">Auto-accept in ${days} days</span>`;
+                    } else {
+                        reofferTimer = `<span class="status-bubble-subtext text-red-500">Auto-accept overdue</span>`;
+                    }
+                } else if (order.status === 'fmi_on_pending' && order.fmiAutoDowngradeDate) {
+                    const downgradeDate = new Date(order.fmiAutoDowngradeDate._seconds * 1000);
+                    const timeLeft = downgradeDate.getTime() - Date.now();
+                    if (timeLeft > 0) {
+                        const hours = Math.ceil(timeLeft / (1000 * 60 * 60));
+                        reofferTimer = `<span class="status-bubble-subtext text-gray-500">Downgrade in ${hours} hrs</span>`;
+                    } else {
+                        reofferTimer = `<span class="status-bubble-subtext text-red-500">Downgrade overdue</span>`;
+                    }
+                } else if (order.status === 'balance_due_pending' && order.balanceAutoDowngradeDate) {
+                    const downgradeDate = new Date(order.balanceAutoDowngradeDate._seconds * 1000);
+                    const timeLeft = downgradeDate.getTime() - Date.now();
+                    if (timeLeft > 0) {
+                        const hours = Math.ceil(timeLeft / (1000 * 60 * 60));
+                        reofferTimer = `<span class="status-bubble-subtext text-gray-500">Downgrade in ${hours} hrs</span>`;
+                    } else {
+                        reofferTimer = `<span class="status-bubble-subtext text-red-500">Downgrade overdue</span>`;
+                    }
+                }
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-normal text-sm font-medium text-gray-900">${displayId}</td>
+                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${customerName}</td>
+                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${itemDescription}</td>
+                    <td class="px-6 py-4 whitespace-normal text-sm">
+                        <span class="${getStatusClass(order.status)}">
+                           <span class="status-bubble-text">${statusText}</span>
+                           ${reofferTimer}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${order.trackingNumber || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-normal text-sm font-medium">
+                        <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
+                    </td>
+                `;
+                ordersTableBody.appendChild(row);
+            });
+
+            document.querySelectorAll('.view-details-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const orderId = event.target.dataset.orderId;
+                    openOrderDetailsModal(orderId);
+                });
+            });
+        }
+
+        function formatStatus(status) {
+            return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+
+        function formatCondition(condition) {
+            return condition.charAt(0).toUpperCase() + condition.slice(1);
+        }
+
+        function getStatusClass(status) {
+            switch (status) {
+                case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble';
+                case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble'; // New status class
+                case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
+                case 'received': return 'bg-green-100 text-green-800 status-bubble';
+                case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
+                case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
+                case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
+                case 're-offered-declined': return 'bg-red-100 text-red-800 status-bubble';
+                case 'return-label-generated': return 'bg-gray-400 text-gray-800 status-bubble';
+                case 'blacklisted': return 'bg-red-500 text-white status-bubble';
+                case 'fmi_on_pending':
+                case 'balance_due_pending': return 'bg-yellow-500 text-white status-bubble';
+                default: return 'bg-gray-100 text-gray-800 status-bubble';
+            }
+        }
+
+        async function openOrderDetailsModal(orderId) {
+            modalActionButtons.innerHTML = '';
+            modalLoadingMessage.classList.add('hidden');
+            modalMessage.classList.add('hidden');
+            modalMessage.textContent = '';
+            modalVenmoUsernameRow.classList.add('hidden');
+            conditionCheckFormContainer.classList.add('hidden'); // Hide condition check form
+            
+            // Hide all label rows initially
+            modalLabelRow.classList.add('hidden');
+            modalSecondaryLabelRow.classList.add('hidden');
+            modalReturnLabelRow.classList.add('hidden');
+            
+            // Hide ESN check results initially
+            esnCheckResultsContainer.classList.add('hidden');
+
+            orderDetailsModal.classList.remove('hidden');
+
+            try {
+                modalLoadingMessage.classList.remove('hidden');
+                const url = `${BACKEND_BASE_URL}/orders/${orderId}`; 
+                console.log("Fetching order details from:", url);
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}` // Include token
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Backend error response:", response.status, errorText);
+                    throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
+                }
+                const order = await response.json();
+                currentOrderData = order; // Store order data globally for later use
+
+                modalOrderId.textContent = order.id;
+                modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
+                modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
+                modalItem.textContent = order.device;
+                modalStorage.textContent = order.storage;
+                modalCarrier.textContent = order.carrier;
+                modalPrice.textContent = order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00';
+
+                modalPaymentMethod.textContent = order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A';
+                if (order.paymentMethod === 'venmo' && order.paymentDetails && order.paymentDetails.venmoUsername) {
+                    modalVenmoUsername.textContent = order.paymentDetails.venmoUsername;
+                    modalVenmoUsernameRow.classList.remove('hidden');
+                }
+
+                const shippingInfo = order.shippingInfo;
+                if (shippingInfo) {
+                    modalShippingAddress.textContent = `${shippingInfo.streetAddress}, ${shippingInfo.city}, ${shippingInfo.state}, ${shippingInfo.zipCode}`;
+                } else {
+                    modalShippingAddress.textContent = 'N/A';
+                }
+
+                modalConditionPowerOn.textContent = order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A';
+                modalConditionFunctional.textContent = order.condition_functional ? formatCondition(order.condition_functional) : 'N/A';
+                modalConditionCracks.textContent = order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A';
+                modalConditionCosmetic.textContent = order.condition_cosmetic ? formatCondition(order.condition_cosmetic) : 'N/A';
+
+                modalStatus.textContent = formatStatus(order.status);
+                modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
+
+                // Logic to handle which label(s) to display
+                if (order.shippingPreference === 'Shipping Kit Requested') {
+                    // For shipping kit, display both outbound (kit) and inbound (device) labels
+                    if (order.outboundLabelUrl) {
+                        modalLabelLink.href = order.outboundLabelUrl;
+                        modalTrackingNumber.textContent = order.outboundTrackingNumber || 'N/A';
+                        modalLabelDescription.textContent = 'Outbound Kit Label';
+                        modalLabelRow.classList.remove('hidden');
+                    }
+                    if (order.inboundLabelUrl) {
+                        modalSecondaryLabelLink.href = order.inboundLabelUrl;
+                        modalSecondaryTrackingNumberDisplay.textContent = order.inboundTrackingNumber || 'N/A';
+                        modalSecondaryLabelDescription.textContent = 'Inbound Device Label';
+                        modalSecondaryLabelRow.classList.remove('hidden');
+                    }
+                } else if (order.shippingPreference === 'Email Label Requested' && order.uspsLabelUrl) {
+                    // For email label, show the single USPS label (which is the inbound label)
+                    modalLabelLink.href = order.uspsLabelUrl;
+                    modalTrackingNumber.textContent = order.trackingNumber || 'N/A';
+                    modalLabelDescription.textContent = 'Shipping Label';
+                    modalLabelRow.classList.remove('hidden');
+                }
+
+                // This block handles return labels specifically for re-offer declines,
+                // distinct from the inbound/outbound labels for shipping kits.
+                if (order.returnLabelUrl) {
+                    modalReturnLabelLink.href = order.returnLabelUrl;
+                    modalReturnTrackingNumberDisplay.textContent = order.returnTrackingNumber || 'N/A';
+                    modalReturnLabelDescription.textContent = 'Return Label';
+                    modalReturnLabelRow.classList.remove('hidden');
+                }
+
+
+                renderActionButtons(order);
+                modalLoadingMessage.classList.add('hidden');
+
+            } catch (error) {
+                console.error('Error fetching order details:', error);
+                displayModalMessage(`Error fetching order details: ${error.message}. Please try again.`, 'error');
+                modalLoadingMessage.classList.add('hidden');
+            }
+        }
+
+        function renderActionButtons(order) {
+            modalActionButtons.innerHTML = '';
+            const createButton = (text, onClick, className = 'bg-blue-600 hover:bg-blue-700') => {
+                const button = document.createElement('button');
+                button.textContent = text;
+                button.className = `${className} text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 shadow`;
+                button.onclick = onClick;
+                return button;
+            };
+
+            const currentStatus = order.status;
+            switch (currentStatus) {
+                case 'order_pending':
+                case 'shipping_kit_requested': // Added new status here
+                case 'fmi_on_pending':
+                case 'balance_due_pending':
+                case 'blacklisted':
+                    modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
+                    break;
+                case 'label_generated':
+                    modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
+                    break;
+                case 'received':
+                    modalActionButtons.appendChild(createButton('Check Conditions', () => showConditionCheckForm(order.id), 'bg-green-600 hover:bg-green-700'));
+                    break;
+                case 're-offered-pending':
+                    if (order.reOffer && order.reOffer.newPrice) {
+                        const reOfferDiv = document.createElement('div');
+                        reOfferDiv.className = 'p-3 bg-gray-100 rounded-md';
+                        reOfferDiv.innerHTML = `<p><strong>Proposed New Price:</strong> $${order.reOffer.newPrice.toFixed(2)}</p><p><strong>Reasons:</strong> ${order.reOffer.reasons.join(', ')}</p><p><strong>Comments:</strong> ${order.reOffer.comments}</p>`;
+                        modalActionButtons.appendChild(reOfferDiv);
+                    }
+                    break;
+                case 're-offered-accepted':
+                    modalActionButtons.appendChild(createButton('Pay Now', () => handleAction(order.id, 'payNow', 'bg-teal-600 hover:bg-teal-700')));
+                    break;
+                case 're-offered-declined':
+                    modalActionButtons.appendChild(createButton('Send Return Label', () => handleAction(order.id, 'sendReturnLabel', 'bg-red-600 hover:bg-red-700')));
+                    break;
+                case 'return-label-generated':
+                case 'completed':
+                    break;
+            }
+        }
+        
+        function showConditionCheckForm(orderId) {
+            const order = allOrders.find(o => o.id === orderId);
+            if (!order) {
+                displayModalMessage('Order not found for condition check.', 'error');
+                return;
+            }
+            
+            // Clear all dropdowns
+            checkPowerOn.value = '';
+            checkFunctional.value = '';
+            checkCracks.value = '';
+            checkCosmetic.value = '';
+            checkLockStatus.value = '';
+
+            // Pre-fill fields from order data
+            checkImei.value = order.imei || '';
+            checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
+
+            // Display IMEI status if available
+            if (order.imeiStatus) {
+                imeiStatusDisplayContainer.classList.remove('hidden');
+                imeiStatusText.textContent = formatStatus(order.imeiStatus);
+                imeiStatusReasonText.textContent = order.imeiProblemReason || '';
+                esnResultsPre.textContent = JSON.stringify(order.imeiCheckRawResponse, null, 2);
+                esnCheckResultsContainer.classList.remove('hidden');
+            } else {
+                imeiStatusDisplayContainer.classList.add('hidden');
+                esnCheckResultsContainer.classList.add('hidden');
+            }
+
+            const orderCarrier = order.carrier?.toLowerCase();
+            if (orderCarrier) {
+              const carrierOption = document.querySelector(`#check-carrier-type option[value="${orderCarrier}"]`);
+              if (carrierOption) {
+                checkCarrierType.value = orderCarrier;
+              } else {
+                checkCarrierType.value = 'other';
+                console.warn(`Carrier "${order.carrier}" from order data is not a pre-defined option.`);
+              }
+            }
+
+            const deviceName = order.device.toLowerCase();
+            if (deviceName.includes('iphone')) {
+                checkDeviceType.value = 'iphone';
+            } else if (deviceName.includes('samsung') || deviceName.includes('pixel')) {
+                checkDeviceType.value = 'android';
+            }
+            
+            // Hide dynamic fields
+            functionalContainer.classList.add('hidden');
+            cracksContainer.classList.add('hidden');
+            cosmeticContainer.classList.add('hidden');
+
+            // Reset dynamic fields and their required status
+            checkFunctional.removeAttribute('required');
+            checkCracks.removeAttribute('required');
+            checkCosmetic.removeAttribute('required');
+
+            modalActionButtons.classList.add('hidden');
+            conditionCheckFormContainer.classList.remove('hidden');
+            submitConditionCheckBtn.onclick = () => submitConditionCheck(orderId);
+            cancelConditionCheckBtn.onclick = () => {
+                conditionCheckFormContainer.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
+            };
+        }
+
+        async function submitConditionCheck(orderId) {
+            const receivedConditions = {
+                power_on: checkPowerOn.value,
+                functional: checkFunctional.value,
+                cracks: checkCracks.value,
+                cosmetic: checkCosmetic.value,
+                gb: checkGb.value,
+                imei: checkImei.value,
+                lockStatus: checkLockStatus.value,
+                deviceType: checkDeviceType.value
+            };
+
+            // Basic form validation
+            let isValid = true;
+            
+            // Clear previous required highlights
+            const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
+            allFormFields.forEach(field => field.classList.remove('required-field'));
+            
+            const requiredFields = [checkGb, checkCarrierType, checkDeviceType, checkImei, checkLockStatus, checkPowerOn];
+            requiredFields.forEach(field => {
+                 if (!field.value) {
+                     field.classList.add('required-field');
+                     isValid = false;
+                 }
+            });
+
+            if (receivedConditions.power_on === 'yes') {
+                 if (!receivedConditions.functional) {
+                     checkFunctional.classList.add('required-field');
+                     isValid = false;
+                 }
+                 if (receivedConditions.functional === 'yes') {
+                    if (!receivedConditions.cracks) {
+                      checkCracks.classList.add('required-field');
+                      isValid = false;
+                    }
+                    if (receivedConditions.cracks === 'yes' || receivedConditions.cracks === 'no') {
+                        if (!receivedConditions.cosmetic) {
+                           checkCosmetic.classList.add('required-field');
+                           isValid = false;
+                        }
+                    }
+                 }
+            }
+
+            if (!isValid) {
+                 displayModalMessage('Please fill out all required fields.', 'error');
+                 return;
+            }
+            
+            modalLoadingMessage.classList.remove('hidden');
+            conditionCheckFormContainer.classList.add('hidden');
+
+            try {
+                const order = allOrders.find(o => o.id === orderId);
+                if (!order) {
+                    throw new Error('Order data not found locally.');
+                }
+                
+                // Update the Firestore document with the admin's findings
+                await updateOrderWithCheckResults(orderId, receivedConditions);
+
+                const customerConditions = {
+                    power_on: order.condition_power_on,
+                    functional: order.condition_functional,
+                    cracks: order.condition_cracks,
+                    cosmetic: order.condition_cosmetic,
+                    gb: order.storage,
+                    lockStatus: order.lockStatus
+                };
+                
+                let reasons = [];
+                let comments = '';
+                
+                if (receivedConditions.power_on !== customerConditions.power_on) {
+                    reasons.push('Powers On condition mismatch');
+                    comments += `Customer said it powered on, but it does not. `;
+                }
+                if (receivedConditions.functional !== customerConditions.functional) {
+                    reasons.push('Functional condition mismatch');
+                    comments += `Customer said it was functional, but it is not. `;
+                }
+                if (receivedConditions.cracks !== customerConditions.cracks) {
+                    reasons.push('Cracks condition mismatch');
+                    comments += `Customer said there were no cracks, but there are. `;
+                }
+                if (receivedConditions.cosmetic !== customerConditions.cosmetic) {
+                    reasons.push('Cosmetic condition mismatch');
+                    comments += `Customer listed cosmetic condition as ${customerConditions.cosmetic}, but it is ${receivedConditions.cosmetic}. `;
+                }
+                if (receivedConditions.gb && receivedConditions.gb !== customerConditions.gb.replace('GB','')) {
+                    reasons.push('Storage size mismatch');
+                    comments += `Customer listed storage as ${customerConditions.gb}, but it is ${receivedConditions.gb}GB. `;
+                }
+                if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
+                     reasons.push('Carrier Lock Status mismatch');
+                     comments += `Customer listed lock status as ${customerConditions.lockStatus}, but it is ${receivedConditions.lockStatus}.`;
+                }
+
+
+                const newPrice = await calculateNewPrice(order.device, receivedConditions.gb, receivedConditions);
+                
+                const oldPrice = parseFloat(order.estimatedQuote);
+                const newPriceFloat = parseFloat(newPrice);
+                
+                if (oldPrice !== newPriceFloat) {
+                    // A discrepancy was found, show re-offer form
+                    console.log('Price discrepancy found. Opening price confirmation modal.');
+                    showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
+                } else {
+                    // No discrepancy, proceed to mark as completed
+                    displayModalMessage('All conditions match the customer description. Proceeding to mark as completed.', 'success');
+                    await handleAction(orderId, 'markCompleted');
+                }
+
+            } catch (error) {
+                console.error("Condition check error:", error);
+                displayModalMessage(`Error during condition check: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
+        }
+        
+        function showPriceConfirmationModal(orderId, oldPrice, newPrice, reasons, comments) {
+            console.log(`Opening price confirmation modal for order ${orderId}. Old price: $${oldPrice.toFixed(2)}, New price: $${newPrice.toFixed(2)}`);
+            originalPriceSpan.textContent = oldPrice.toFixed(2);
+            newPriceSpan.textContent = newPrice.toFixed(2);
+            
+            const difference = newPrice - oldPrice;
+            priceDifferenceSpan.textContent = `${difference > 0 ? '+' : ''}$${difference.toFixed(2)}`;
+            
+            priceDifferenceSpan.classList.remove('text-green-600', 'text-red-600');
+            if (difference < 0) { // New price is lower, which is a good thing for us
+                priceDifferenceSpan.classList.add('text-green-600');
+            } else if (difference > 0) { // New price is higher, which is bad for us
+                priceDifferenceSpan.classList.add('text-red-600');
+            }
+
+            // Set up button actions for the confirmation modal
+            proceedReofferBtn.onclick = () => {
+                console.log('Proceeding with re-offer. Closing price confirmation modal and opening re-offer form.');
+                priceConfirmModal.classList.add('hidden');
+                showReofferFormWithData(orderId, newPrice, reasons, comments);
+            };
+
+            cancelReofferConfirmBtn.onclick = () => {
+                console.log('Canceling re-offer. Closing price confirmation modal and returning to order details.');
+                priceConfirmModal.classList.add('hidden');
+                orderDetailsModal.classList.remove('hidden');
+            };
+
+            orderDetailsModal.classList.add('hidden');
+            priceConfirmModal.classList.remove('hidden');
+        }
+
+        async function updateOrderWithCheckResults(orderId, checks) {
+            const orderDocRef = doc(db, 'orders', orderId);
+            const updateData = {
+                fulfilledOrders: { // New section to save fulfilled orders
+                    gb: checks.gb,
+                    imei: checks.imei,
+                    lockStatus: checks.lockStatus,
+                    conditions: {
+                        power_on: checks.power_on,
+                        functional: checks.functional,
+                        cracks: checks.cracks,
+                        cosmetic: checks.cosmetic
+                    }
+                }
+            };
+            try {
+                await updateDoc(orderDocRef, updateData);
+                console.log(`Order ${orderId} successfully updated with check results.`);
+            } catch (error) {
+                console.error('Error updating order with check results:', error);
+                throw new Error('Failed to save check results to database.');
+            }
+        }
+
+        async function getDevicePricing(brand, model) {
+            const docRef = doc(db, 'devices', brand, 'models', model);
+            console.log("Fetching pricing data from path:", docRef.path);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                return docSnap.data();
+            } else {
+                console.warn(`Pricing data not found for brand: ${brand}, model: ${model}.`);
+                return null;
+            }
+        }
+
+        async function calculateNewPrice(device, storage, receivedConditions) {
+            // Check if the device is an iPhone and remove the word from the model string
+            let deviceModel = device.toLowerCase();
+            let brand = '';
+            
+            if (deviceModel.startsWith('iphone')) {
+                brand = 'iphone';
+                deviceModel = deviceModel.substring('iphone'.length).trim();
+            } else {
+                // Assuming the first word is the brand for other devices
+                const parts = deviceModel.split(' ');
+                brand = parts[0];
+                deviceModel = parts.slice(1).join(' ');
+            }
+            
+            // Construct the Firestore document ID by replacing spaces with hyphens
+            const firestoreDeviceID = deviceModel.replace(/\s/g, '-');
+            
+            // Fetch pricing data using the corrected device ID
+            const pricingData = await getDevicePricing(brand, firestoreDeviceID);
+            if (!pricingData) {
+                throw new Error(`Pricing data not found for ${device}.`);
+            }
+
+            const storageKey = `${storage}GB`;
+            const pricingByStorage = pricingData.prices[storageKey];
+            if (!pricingByStorage) {
+                throw new Error(`Pricing data not found for storage size ${storageKey}.`);
+            }
+
+            const lockStatus = receivedConditions.lockStatus || 'unlocked';
+            
+            let newPrice;
+            let finalCondition;
+            
+            if (receivedConditions.power_on === 'no') {
+                newPrice = pricingByStorage[lockStatus]['noPower'];
+            } else if (receivedConditions.functional === 'no') {
+                newPrice = pricingByStorage[lockStatus]['broken'];
+            } else {
+                // Device powers on and is functional
+                if (receivedConditions.cracks === 'yes') {
+                     // Has cracks, but is functional
+                    newPrice = pricingByStorage[lockStatus]['broken'];
+                } else {
+                    // Powers on, is functional, and has no cracks. Use cosmetic condition.
+                    finalCondition = receivedConditions.cosmetic;
+                    if (finalCondition === 'excellent') {
+                        finalCondition = 'good';
+                    }
+                    newPrice = pricingByStorage[lockStatus][finalCondition];
+                }
+            }
+            
+            // Check if the price is a valid number
+            if (isNaN(newPrice) || newPrice === undefined) {
+                 throw new Error(`Invalid price found for cosmetic condition: ${finalCondition}.`);
+            }
+            
+            console.log("Calculated new price:", newPrice);
+            return newPrice;
+        }
+
+        function showReofferFormWithData(orderId, newPrice, reasons, comments) {
+            console.log(`Opening re-offer form modal for order ${orderId}. New price: $${newPrice.toFixed(2)}`);
+            orderDetailsModal.classList.add('hidden');
+            reofferFormContainer.classList.remove('hidden');
+            reofferNewPrice.value = newPrice.toFixed(2);
+            reofferComments.value = comments;
+            
+            document.querySelectorAll('input[name="reoffer-reasons"]').forEach(cb => {
+                cb.checked = false;
+            });
+            reasons.forEach(reason => {
+                if (reason.includes('Cosmetic')) document.getElementById('reason-deep-scratches').checked = true;
+                if (reason.includes('Cracks')) document.getElementById('reason-cracked').checked = true;
+                if (reason.includes('Functional') || reason.includes('Powers On')) document.getElementById('reason-non-functional').checked = true;
+                if (reason.includes('IMEI') || reason.includes('Storage')) document.getElementById('reason-other').checked = true;
+            });
+
+            submitReofferBtn.onclick = () => submitReOfferFromForm(orderId);
+            cancelReofferBtn.onclick = () => {
+                reofferFormContainer.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
+            };
+        }
+
+        async function submitReOfferFromForm(orderId) {
+            const newPrice = reofferNewPrice.value;
+            const comments = reofferComments.value;
+            const reasons = Array.from(document.querySelectorAll('input[name="reoffer-reasons"]:checked')).map(cb => cb.value);
+
+            // Hide previous messages and clear required fields highlighting
+            modalMessage.classList.add('hidden');
+            reofferNewPrice.classList.remove('required-field');
+            
+            if (!newPrice || isNaN(parseFloat(newPrice))) {
+                reofferNewPrice.classList.add('required-field');
+                displayModalMessage('Please enter a valid price.', 'error');
+                return;
+            }
+            if (reasons.length === 0) {
+                displayModalMessage('Please select at least one reason.', 'error');
+                return;
+            }
+
+            modalLoadingMessage.classList.remove('hidden');
+            reofferFormContainer.classList.add('hidden');
+
+            try {
+                const url = `${BACKEND_BASE_URL}/orders/${orderId}/re-offer`;
+                console.log("Submitting re-offer to:", url);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}` // Include token
+                    },
+                    body: JSON.stringify({ newPrice: parseFloat(newPrice), reasons, comments })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Backend error response for re-offer:", response.status, errorText);
+                    throw new Error(errorText || `Failed to send re-offer: ${response.status} - ${errorText.substring(0, 100)}`);
+                }
+                const result = await response.json();
+                
+                displayModalMessage(result.message, 'success');
+                openOrderDetailsModal(orderId);
+
+            } catch (error) {
+                console.error("Action error:", error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
+                reofferFormContainer.classList.remove('hidden'); // Re-open the form on error
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
+            }
+        }
+
+        async function handleAction(orderId, actionType) {
+            modalLoadingMessage.classList.remove('hidden');
+            modalActionButtons.classList.add('hidden');
+            modalMessage.classList.add('hidden');
+            modalMessage.textContent = '';
+
+            try {
+                let url;
+                let method = 'PUT';
+                let body = {};
+
+                switch(actionType) {
+                    case 'generateLabel':
+                        url = `${BACKEND_BASE_URL}/generate-label/${orderId}`;
+                        method = 'POST';
+                        break;
+                    case 'markReceived':
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
+                        body = { status: 'received' };
+                        break;
+                    case 'markCompleted':
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
+                        body = { status: 'completed' };
+                        break;
+                    case 'payNow':
+                        const order = allOrders.find(o => o.id === orderId);
+                        if (!order) {
+                            throw new Error('Order data not found locally.');
+                        }
+                        const paymentLink = generatePaymentLink(order);
+                        if (paymentLink) {
+                            window.open(paymentLink, '_blank');
+                            displayModalMessage('Payment link generated and opened in a new tab.', 'success');
+                            await handleAction(order.id, 'markCompleted');
+                        } else {
+                            throw new Error('Could not generate payment link.');
+                        }
+                        modalLoadingMessage.classList.add('hidden');
+                        modalActionButtons.classList.remove('hidden');
+                        return;
+                    case 'sendReturnLabel':
+                         url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
+                         method = 'POST';
+                         break;
+                    default:
+                        throw new Error('Unknown action.');
+                }
+
+                console.log(`Performing action ${actionType} to:`, url);
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}` // Include token
+                    },
+                    body: Object.keys(body).length > 0 ? JSON.stringify(body) : null
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Backend error response for action:", response.status, errorText);
+                    throw new Error(errorText || `Failed to perform action: ${response.status} - ${errorText.substring(0, 100)}`);
+                }
+                const result = await response.json();
+                
+                displayModalMessage(result.message, 'success');
+                openOrderDetailsModal(orderId);
+
+            } catch (error) {
+                console.error("Action error:", error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
+            }
+        }
+
+        function generatePaymentLink(order) {
+            const amount = order.reOffer?.newPrice
+                                    ? order.reOffer.newPrice.toFixed(2)
+                                    : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+            const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
+            const venmoUsername = order.paymentDetails?.venmoUsername;
+
+            if (order.paymentMethod === 'venmo' && venmoUsername) {
+                const note = `Payment for ${order.device} - Order ${order.id}`;
+                return `https://venmo.com/?txn=pay&aud_id=${venmoUsername}&amount=${amount}&note=${encodeURIComponent(note)}`;
+            }
+            return null;
+        }
+
+        function displayModalMessage(message, type) {
+            modalMessage.textContent = message;
+            modalMessage.className = `mt-4 p-3 text-sm rounded-md`;
+            if (type === 'success') {
+                modalMessage.classList.add('bg-green-100', 'text-green-700');
+            } else if (type === 'error') {
+                modalMessage.classList.add('bg-red-100', 'text-red-700');
+            }
+            modalMessage.classList.remove('hidden');
+        }
+
+        function closeOrderDetailsModal() {
+            orderDetailsModal.classList.add('hidden');
+        }
+
+        function closeEsnCheckModal() {
+            esnCheckResultsModal.classList.add('hidden');
+        }
+        
+        reofferParentLink.addEventListener('click', (event) => {
+            event.preventDefault();
+            reofferSubmenu.classList.toggle('open');
+        });
+
+        statusLinks.forEach(link => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                currentActiveStatus = link.dataset.status;
+                statusLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                filterAndRenderOrders(currentActiveStatus, searchInput.value);
+            });
+        });
+        
+        dashboardCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const statusToFilter = card.dataset.status;
+                const targetLink = document.querySelector(`.status-link[data-status="${statusToFilter}"]`);
+                if (targetLink) {
+                    targetLink.click();
+                }
+            });
+        });
+
+        searchInput.addEventListener('input', () => {
+            filterAndRenderOrders(currentActiveStatus, searchInput.value);
+        });
+
+        closeModalButton.addEventListener('click', closeOrderDetailsModal);
+
+        // --- Admin Login/Logout Functions ---
+        async function handleLogin() {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            loginMessage.classList.add('hidden'); // Hide previous messages
+
+            if (!email || !password) {
+                loginMessage.textContent = 'Please enter both email and password.';
+                loginMessage.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                // Ensure persistence is set before attempting login
+                await setPersistence(auth, browserLocalPersistence);
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                console.log('Admin logged in:', userCredential.user.email);
+            } catch (error) {
+                console.error("Login error:", error);
+                let errorMessage = 'Login failed. Please check your credentials.';
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                    errorMessage = 'Invalid email or password.';
+                } else if (error.code === 'auth/too-many-requests') {
+                    errorMessage = 'Too many failed login attempts. Please try again later.';
+                }
+                loginMessage.textContent = errorMessage;
+                loginMessage.classList.remove('hidden');
+            }
+        }
+
+        async function handleSignOut() {
+            try {
+                await signOut(auth);
+                console.log('Admin signed out.');
+            } catch (error) {
+                console.error("Error signing out:", error);
+            }
+        }
+
+        // Event Listeners for Login/Logout
+        loginButton.addEventListener('click', handleLogin);
+        signOutButton.addEventListener('click', handleSignOut);
+
         document.addEventListener('DOMContentLoaded', async () => {
             firebaseApp = initializeApp(firebaseConfig);
             db = getFirestore(firebaseApp);
             auth = getAuth(firebaseApp);
-
-            // UI Elements for Login
-            const loginFormContainer = document.getElementById('login-form-container');
-            const dashboardContainer = document.getElementById('dashboard-container');
-            const emailInput = document.getElementById('email-input');
-            const passwordInput = document.getElementById('password-input');
-            const loginButton = document.getElementById('login-btn');
-            const loginMessage = document.getElementById('login-message');
-            const displayUserEmail = document.getElementById('display-user-email');
-            const signOutButton = document.getElementById('sign-out-btn');
-
-            const ordersTableBody = document.getElementById('orders-table-body');
-            const noOrdersMessage = document.getElementById('no-orders-message');
-            const searchInput = document.getElementById('search-orders');
-            const statusLinks = document.querySelectorAll('.status-link');
-            const dashboardCards = document.querySelectorAll('.dashboard-card');
-
-            const pendingShipmentCount = document.getElementById('pending-shipment-count');
-            const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count');
-            const labelGeneratedCount = document.getElementById('label-generated-count');
-            const receivedCount = document.getElementById('received-count');
-            const imeiCheckedCount = document.getElementById('imei-checked-count');
-            const completedCount = document.getElementById('completed-count');
-            const reofferedPendingCount = document.getElementById('re-offered-pending-count');
-            const reofferedAcceptedCount = document.getElementById('re-offered-accepted-count');
-            const reofferedDeclinedCount = document.getElementById('re-offered-declined-count');
-            const returnLabelGeneratedCount = document.getElementById('return-label-generated-count');
-            
-            const orderDetailsModal = document.getElementById('order-details-modal');
-            const closeModalButton = document.getElementById('close-modal');
-            const modalOrderId = document.getElementById('modal-order-id');
-            const modalCustomerName = document.getElementById('modal-customer-name');
-            const modalCustomerEmail = document.getElementById('modal-customer-email');
-            const modalItem = document.getElementById('modal-item');
-            const modalStorage = document.getElementById('modal-storage');
-            const modalCarrier = document.getElementById('modal-carrier');
-            const modalPrice = document.getElementById('modal-price');
-            const modalPaymentMethod = document.getElementById('modal-payment-method');
-            const modalVenmoUsernameRow = document.getElementById('modal-venmo-username-row');
-            const modalVenmoUsername = document.getElementById('modal-venmo-username');
-            const modalShippingAddress = document.getElementById('modal-shipping-address');
-            const modalConditionPowerOn = document.getElementById('modal-condition-power-on');
-            const modalConditionFunctional = document.getElementById('modal-condition-functional');
-            const modalConditionCracks = document.getElementById('modal-condition-cracks');
-            const modalConditionCosmetic = document.getElementById('modal-condition-cosmetic');
-            const modalStatus = document.getElementById('modal-status');
-            
-            // New/Updated label elements in modal
-            const modalLabelRow = document.getElementById('modal-label-row');
-            const modalLabelDescription = document.getElementById('modal-label-description');
-            const modalLabelLink = document.getElementById('modal-label-link');
-            const modalTrackingNumber = document.getElementById('modal-tracking-number');
-
-            const modalSecondaryLabelRow = document.getElementById('modal-secondary-label-row');
-            const modalSecondaryLabelDescription = document.getElementById('modal-secondary-label-description');
-            const modalSecondaryLabelLink = document.getElementById('modal-secondary-label-link');
-            const modalSecondaryTrackingNumberDisplay = document.getElementById('modal-secondary-tracking-number-display');
-
-            const modalReturnLabelRow = document.getElementById('modal-return-label-row');
-            const modalReturnLabelDescription = document.getElementById('modal-return-label-description');
-            const modalReturnLabelLink = document.getElementById('modal-return-label-link');
-            const modalReturnTrackingNumberDisplay = document.getElementById('modal-return-tracking-number-display');
-
-            const modalActionButtons = document.getElementById('modal-action-buttons');
-            const modalLoadingMessage = document.getElementById('modal-loading-message');
-            const modalMessage = document.getElementById('modal-message');
-
-            const reofferFormContainer = document.getElementById('reoffer-form-container');
-            const closeReofferFormBtn = document.getElementById('close-reoffer-form-btn');
-            const reofferNewPrice = document.getElementById('reoffer-new-price');
-            const reofferComments = document.getElementById('reoffer-comments');
-            const submitReofferBtn = document.getElementById('submit-reoffer-btn');
-            const cancelReofferBtn = document.getElementById('cancel-reoffer-btn');
-
-            // New condition check form elements
-            const conditionCheckFormContainer = document.getElementById('condition-check-form-container');
-            const checkGb = document.getElementById('check-gb');
-            const checkCarrierType = document.getElementById('check-carrier-type');
-            const checkDeviceType = document.getElementById('check-device-type');
-            const checkImei = document.getElementById('check-imei');
-            const imeiStatusDisplayContainer = document.getElementById('imei-status-display-container');
-            const imeiStatusText = document.getElementById('imei-status-text');
-            const imeiStatusReasonText = document.getElementById('imei-status-reason-text');
-            const esnCheckResultsContainer = document.getElementById('esn-check-results-container');
-            const esnResultsPre = document.getElementById('esn-results-pre');
-
-            const checkPowerOn = document.getElementById('check-power-on');
-            const checkFunctional = document.getElementById('check-functional');
-            const checkCracks = document.getElementById('check-cracks');
-            const checkCosmetic = document.getElementById('check-cosmetic');
-            const checkLockStatus = document.getElementById('check-lock-status');
-
-            const powerOnContainer = document.getElementById('power-on-container');
-            const functionalContainer = document.getElementById('functional-container');
-            const cracksContainer = document.getElementById('cracks-container');
-            const cosmeticContainer = document.getElementById('cosmetic-container');
-
-            const submitConditionCheckBtn = document.getElementById('submit-condition-check-btn');
-            const cancelConditionCheckBtn = document.getElementById('cancel-condition-check-btn');
-            
-            const reofferParentLink = document.querySelector('.reoffer-parent');
-            const reofferSubmenu = document.querySelector('.submenu-container');
-
-            // New price confirmation modal elements
-            const priceConfirmModal = document.getElementById('price-confirm-modal');
-            const originalPriceSpan = document.getElementById('original-price');
-            const newPriceSpan = document.getElementById('new-price');
-            const priceDifferenceSpan = document.getElementById('price-difference');
-            const proceedReofferBtn = document.getElementById('proceed-reoffer-btn');
-            const cancelReofferConfirmBtn = document.getElementById('cancel-reoffer-confirm-btn');
 
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
@@ -676,915 +1649,6 @@
                     ordersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-8">Please log in to view orders.</td></tr>`;
                 }
             });
-            
-            orderDetailsModal.addEventListener('click', (event) => {
-                if (event.target === orderDetailsModal) {
-                    closeOrderDetailsModal();
-                }
-            });
-
-            priceConfirmModal.addEventListener('click', (event) => {
-                if (event.target === priceConfirmModal) {
-                    priceConfirmModal.classList.add('hidden');
-                    orderDetailsModal.classList.remove('hidden');
-                }
-            });
-
-            reofferFormContainer.addEventListener('click', (event) => {
-                if (event.target === reofferFormContainer) {
-                    reofferFormContainer.classList.add('hidden');
-                    orderDetailsModal.classList.remove('hidden');
-                }
-            });
-
-            closeReofferFormBtn.addEventListener('click', () => {
-                 reofferFormContainer.classList.add('hidden');
-                 orderDetailsModal.classList.remove('hidden');
-            });
-            
-            // Listen for changes on power-on to dynamically show/hide fields
-            checkPowerOn.addEventListener('change', (event) => {
-                if (event.target.value === 'yes') {
-                    functionalContainer.classList.remove('hidden');
-                    checkFunctional.setAttribute('required', 'required');
-                } else {
-                    functionalContainer.classList.add('hidden');
-                    cracksContainer.classList.add('hidden');
-                    cosmeticContainer.classList.add('hidden');
-                    checkFunctional.removeAttribute('required');
-                    checkCracks.removeAttribute('required');
-                    checkCosmetic.removeAttribute('required');
-                }
-            });
-            
-            // Listen for changes on functional to dynamically show/hide fields
-            checkFunctional.addEventListener('change', (event) => {
-                if (event.target.value === 'yes') {
-                    cracksContainer.classList.remove('hidden');
-                    checkCracks.setAttribute('required', 'required');
-                    cosmeticContainer.classList.remove('hidden');
-                    checkCosmetic.setAttribute('required', 'required');
-                } else {
-                    cracksContainer.classList.add('hidden');
-                    cosmeticContainer.classList.add('hidden');
-                    checkCracks.removeAttribute('required');
-                    checkCosmetic.removeAttribute('required');
-                }
-            });
-            
-            // This is a new listener for the "no cracks" field
-            checkCracks.addEventListener('change', (event) => {
-                if (event.target.value === 'yes') {
-                    cosmeticContainer.classList.remove('hidden');
-                    checkCosmetic.setAttribute('required', 'required');
-                } else {
-                    cosmeticContainer.classList.add('hidden');
-                    checkCosmetic.removeAttribute('required');
-                }
-            });
-
-            function updateDashboardCounts(ordersData) {
-                pendingShipmentCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
-                shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length; // New count update
-                labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
-                receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
-                imeiCheckedCount.textContent = ordersData.filter(o => o.status === 'imei_checked').length;
-                completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
-                reofferedPendingCount.textContent = ordersData.filter(o => o.status === 're-offered-pending').length;
-                reofferedAcceptedCount.textContent = ordersData.filter(o => o.status === 're-offered-accepted').length;
-                reofferedDeclinedCount.textContent = ordersData.filter(o => o.status === 're-offered-declined').length;
-                returnLabelGeneratedCount.textContent = ordersData.filter(o => o.status === 'return-label-generated').length;
-            }
-
-            function renderOrders(ordersToDisplay) {
-                ordersTableBody.innerHTML = '';
-                if (ordersToDisplay.length === 0) {
-                    noOrdersMessage.classList.remove('hidden');
-                    return;
-                }
-                noOrdersMessage.classList.add('hidden');
-
-                ordersToDisplay.forEach(order => {
-                    const row = document.createElement('tr');
-                    row.className = 'hover:bg-gray-50';
-                    const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-                    const itemDescription = `${order.device} ${order.storage}`;
-                    const displayId = order.id;
-                    
-                    let reofferTimer = '';
-                    let statusText = formatStatus(order.status);
-                    if (order.status === 're-offered-pending' && order.reOffer && order.reOffer.autoAcceptDate) {
-                        const autoAcceptDate = new Date(order.reOffer.autoAcceptDate._seconds * 1000);
-                        const timeLeft = autoAcceptDate.getTime() - Date.now();
-                        if (timeLeft > 0) {
-                            const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-                            reofferTimer = `<span class="status-bubble-subtext text-gray-500">Auto-accept in ${days} days</span>`;
-                        } else {
-                            reofferTimer = `<span class="status-bubble-subtext text-red-500">Auto-accept overdue</span>`;
-                        }
-                    } else if (order.status === 'fmi_on_pending' && order.fmiAutoDowngradeDate) {
-                        const downgradeDate = new Date(order.fmiAutoDowngradeDate._seconds * 1000);
-                        const timeLeft = downgradeDate.getTime() - Date.now();
-                        if (timeLeft > 0) {
-                            const hours = Math.ceil(timeLeft / (1000 * 60 * 60));
-                            reofferTimer = `<span class="status-bubble-subtext text-gray-500">Downgrade in ${hours} hrs</span>`;
-                        } else {
-                            reofferTimer = `<span class="status-bubble-subtext text-red-500">Downgrade overdue</span>`;
-                        }
-                    } else if (order.status === 'balance_due_pending' && order.balanceAutoDowngradeDate) {
-                        const downgradeDate = new Date(order.balanceAutoDowngradeDate._seconds * 1000);
-                        const timeLeft = downgradeDate.getTime() - Date.now();
-                        if (timeLeft > 0) {
-                            const hours = Math.ceil(timeLeft / (1000 * 60 * 60));
-                            reofferTimer = `<span class="status-bubble-subtext text-gray-500">Downgrade in ${hours} hrs</span>`;
-                        } else {
-                            reofferTimer = `<span class="status-bubble-subtext text-red-500">Downgrade overdue</span>`;
-                        }
-                    }
-
-                    row.innerHTML = `
-                        <td class="px-6 py-4 whitespace-normal text-sm font-medium text-gray-900">${displayId}</td>
-                        <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${customerName}</td>
-                        <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${itemDescription}</td>
-                        <td class="px-6 py-4 whitespace-normal text-sm">
-                            <span class="${getStatusClass(order.status)}">
-                               <span class="status-bubble-text">${statusText}</span>
-                               ${reofferTimer}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${order.trackingNumber || 'N/A'}</td>
-                        <td class="px-6 py-4 whitespace-normal text-sm font-medium">
-                            <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
-                        </td>
-                    `;
-                    ordersTableBody.appendChild(row);
-                });
-
-                document.querySelectorAll('.view-details-btn').forEach(button => {
-                    button.addEventListener('click', (event) => {
-                        const orderId = event.target.dataset.orderId;
-                        openOrderDetailsModal(orderId);
-                    });
-                });
-            }
-
-            function formatStatus(status) {
-                return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-            }
-
-            function formatCondition(condition) {
-                return condition.charAt(0).toUpperCase() + condition.slice(1);
-            }
-
-            function getStatusClass(status) {
-                switch (status) {
-                    case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble';
-                    case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble'; // New status class
-                    case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
-                    case 'received': return 'bg-green-100 text-green-800 status-bubble';
-                    case 'imei_checked': return 'bg-sky-100 text-sky-800 status-bubble';
-                    case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
-                    case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
-                    case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
-                    case 're-offered-declined': return 'bg-red-100 text-red-800 status-bubble';
-                    case 'return-label-generated': return 'bg-gray-400 text-gray-800 status-bubble';
-                    case 'blacklisted': return 'bg-red-500 text-white status-bubble';
-                    case 'fmi_on_pending':
-                    case 'balance_due_pending': return 'bg-yellow-500 text-white status-bubble';
-                    default: return 'bg-gray-100 text-gray-800 status-bubble';
-                }
-            }
-
-            async function openOrderDetailsModal(orderId) {
-                modalActionButtons.innerHTML = '';
-                modalLoadingMessage.classList.add('hidden');
-                modalMessage.classList.add('hidden');
-                modalMessage.textContent = '';
-                modalVenmoUsernameRow.classList.add('hidden');
-                conditionCheckFormContainer.classList.add('hidden'); // Hide condition check form
-                
-                // Hide all label rows initially
-                modalLabelRow.classList.add('hidden');
-                modalSecondaryLabelRow.classList.add('hidden');
-                modalReturnLabelRow.classList.add('hidden');
-
-                orderDetailsModal.classList.remove('hidden');
-
-                try {
-                    modalLoadingMessage.classList.remove('hidden');
-                    const url = `${BACKEND_BASE_URL}/orders/${orderId}`; 
-                    console.log("Fetching order details from:", url);
-                    const response = await fetch(url, {
-                        headers: {
-                            'Authorization': `Bearer ${authToken}` // Include token
-                        }
-                    });
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error("Backend error response:", response.status, errorText);
-                        throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
-                    }
-                    const order = await response.json();
-                    currentOrderData = order; // Store order data globally for later use
-
-                    modalOrderId.textContent = order.id;
-                    modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-                    modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
-                    modalItem.textContent = order.device;
-                    modalStorage.textContent = order.storage;
-                    modalCarrier.textContent = order.carrier;
-                    modalPrice.textContent = order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00';
-
-                    modalPaymentMethod.textContent = order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A';
-                    if (order.paymentMethod === 'venmo' && order.paymentDetails && order.paymentDetails.venmoUsername) {
-                        modalVenmoUsername.textContent = order.paymentDetails.venmoUsername;
-                        modalVenmoUsernameRow.classList.remove('hidden');
-                    }
-
-                    const shippingInfo = order.shippingInfo;
-                    if (shippingInfo) {
-                        modalShippingAddress.textContent = `${shippingInfo.streetAddress}, ${shippingInfo.city}, ${shippingInfo.state}, ${shippingInfo.zipCode}`;
-                    } else {
-                        modalShippingAddress.textContent = 'N/A';
-                    }
-
-                    modalConditionPowerOn.textContent = order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A';
-                    modalConditionFunctional.textContent = order.condition_functional ? formatCondition(order.condition_functional) : 'N/A';
-                    modalConditionCracks.textContent = order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A';
-                    modalConditionCosmetic.textContent = order.condition_cosmetic ? formatCondition(order.condition_cosmetic) : 'N/A';
-
-                    modalStatus.textContent = formatStatus(order.status);
-                    modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
-
-                    // Logic to handle which label(s) to display
-                    if (order.shippingPreference === 'Shipping Kit Requested') {
-                        // For shipping kit, display both outbound (kit) and inbound (device) labels
-                        if (order.outboundLabelUrl) {
-                            modalLabelLink.href = order.outboundLabelUrl;
-                            modalTrackingNumber.textContent = order.outboundTrackingNumber || 'N/A';
-                            modalLabelDescription.textContent = 'Outbound Kit Label';
-                            modalLabelRow.classList.remove('hidden');
-                        }
-                        if (order.inboundLabelUrl) {
-                            modalSecondaryLabelLink.href = order.inboundLabelUrl;
-                            modalSecondaryTrackingNumberDisplay.textContent = order.inboundTrackingNumber || 'N/A';
-                            modalSecondaryLabelDescription.textContent = 'Inbound Device Label';
-                            modalSecondaryLabelRow.classList.remove('hidden');
-                        }
-                    } else if (order.shippingPreference === 'Email Label Requested' && order.uspsLabelUrl) {
-                        // For email label, show the single USPS label (which is the inbound label)
-                        modalLabelLink.href = order.uspsLabelUrl;
-                        modalTrackingNumber.textContent = order.trackingNumber || 'N/A';
-                        modalLabelDescription.textContent = 'Shipping Label';
-                        modalLabelRow.classList.remove('hidden');
-                    }
-
-                    // This block handles return labels specifically for re-offer declines,
-                    // distinct from the inbound/outbound labels for shipping kits.
-                    if (order.returnLabelUrl) {
-                        modalReturnLabelLink.href = order.returnLabelUrl;
-                        modalReturnTrackingNumberDisplay.textContent = order.returnTrackingNumber || 'N/A';
-                        modalReturnLabelDescription.textContent = 'Return Label';
-                        modalReturnLabelRow.classList.remove('hidden');
-                    }
-
-
-                    renderActionButtons(order);
-                    modalLoadingMessage.classList.add('hidden');
-
-                } catch (error) {
-                    console.error('Error fetching order details:', error);
-                    displayModalMessage(`Error fetching order details: ${error.message}. Please try again.`, 'error');
-                    modalLoadingMessage.classList.add('hidden');
-                }
-            }
-
-            function renderActionButtons(order) {
-                modalActionButtons.innerHTML = '';
-                const createButton = (text, onClick, className = 'bg-blue-600 hover:bg-blue-700') => {
-                    const button = document.createElement('button');
-                    button.textContent = text;
-                    button.className = `${className} text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 shadow`;
-                    button.onclick = onClick;
-                    return button;
-                };
-
-                const currentStatus = order.status;
-                switch (currentStatus) {
-                    case 'order_pending':
-                    case 'shipping_kit_requested': // Added new status here
-                    case 'fmi_on_pending':
-                    case 'balance_due_pending':
-                    case 'blacklisted':
-                        modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
-                        break;
-                    case 'label_generated':
-                        modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
-                        break;
-                    case 'received':
-                    case 'imei_checked':
-                        modalActionButtons.appendChild(createButton('Check Conditions', () => showConditionCheckForm(order.id), 'bg-green-600 hover:bg-green-700'));
-                        break;
-                    case 're-offered-pending':
-                        if (order.reOffer && order.reOffer.newPrice) {
-                            const reOfferDiv = document.createElement('div');
-                            reOfferDiv.className = 'p-3 bg-gray-100 rounded-md';
-                            reOfferDiv.innerHTML = `<p><strong>Proposed New Price:</strong> $${order.reOffer.newPrice.toFixed(2)}</p><p><strong>Reasons:</strong> ${order.reOffer.reasons.join(', ')}</p><p><strong>Comments:</strong> ${order.reOffer.comments}</p>`;
-                            modalActionButtons.appendChild(reOfferDiv);
-                        }
-                        break;
-                    case 're-offered-accepted':
-                        modalActionButtons.appendChild(createButton('Pay Now', () => handleAction(order.id, 'payNow', 'bg-teal-600 hover:bg-teal-700')));
-                        break;
-                    case 're-offered-declined':
-                        modalActionButtons.appendChild(createButton('Send Return Label', () => handleAction(order.id, 'sendReturnLabel', 'bg-red-600 hover:bg-red-700')));
-                        break;
-                    case 'return-label-generated':
-                    case 'completed':
-                        break;
-                }
-            }
-            
-            function showConditionCheckForm(orderId) {
-                const order = allOrders.find(o => o.id === orderId);
-                if (!order) {
-                    displayModalMessage('Order not found for condition check.', 'error');
-                    return;
-                }
-                
-                // Clear all dropdowns
-                checkPowerOn.value = '';
-                checkFunctional.value = '';
-                checkCracks.value = '';
-                checkCosmetic.value = '';
-                checkLockStatus.value = '';
-
-                // Pre-fill fields from order data
-                checkImei.value = order.imei || '';
-                checkGb.value = order.storage ? parseInt(order.storage.replace('GB', ''), 10) : '';
-
-                // Display IMEI status if available
-                if (order.imeiStatus) {
-                    imeiStatusDisplayContainer.classList.remove('hidden');
-                    imeiStatusText.textContent = formatStatus(order.imeiStatus);
-                    imeiStatusReasonText.textContent = order.imeiProblemReason || '';
-                    esnResultsPre.textContent = JSON.stringify(order.imeiCheckRawResponse, null, 2);
-                    esnCheckResultsContainer.classList.remove('hidden');
-                } else {
-                    imeiStatusDisplayContainer.classList.add('hidden');
-                    esnCheckResultsContainer.classList.add('hidden');
-                }
-
-                const orderCarrier = order.carrier?.toLowerCase();
-                if (orderCarrier) {
-                  const carrierOption = document.querySelector(`#check-carrier-type option[value="${orderCarrier}"]`);
-                  if (carrierOption) {
-                    checkCarrierType.value = orderCarrier;
-                  } else {
-                    checkCarrierType.value = 'other';
-                    console.warn(`Carrier "${order.carrier}" from order data is not a pre-defined option.`);
-                  }
-                }
-
-                const deviceName = order.device.toLowerCase();
-                if (deviceName.includes('iphone')) {
-                    checkDeviceType.value = 'iphone';
-                } else if (deviceName.includes('samsung') || deviceName.includes('pixel')) {
-                    checkDeviceType.value = 'android';
-                }
-                
-                // Hide dynamic fields
-                functionalContainer.classList.add('hidden');
-                cracksContainer.classList.add('hidden');
-                cosmeticContainer.classList.add('hidden');
-
-                // Reset dynamic fields and their required status
-                checkFunctional.removeAttribute('required');
-                checkCracks.removeAttribute('required');
-                checkCosmetic.removeAttribute('required');
-
-                modalActionButtons.classList.add('hidden');
-                conditionCheckFormContainer.classList.remove('hidden');
-                submitConditionCheckBtn.onclick = () => submitConditionCheck(orderId);
-                cancelConditionCheckBtn.onclick = () => {
-                    conditionCheckFormContainer.classList.add('hidden');
-                    modalActionButtons.classList.remove('hidden');
-                };
-            }
-
-            async function submitConditionCheck(orderId) {
-                const receivedConditions = {
-                    power_on: checkPowerOn.value,
-                    functional: checkFunctional.value,
-                    cracks: checkCracks.value,
-                    cosmetic: checkCosmetic.value,
-                    gb: checkGb.value,
-                    imei: checkImei.value,
-                    lockStatus: checkLockStatus.value,
-                    deviceType: checkDeviceType.value
-                };
-
-                // Basic form validation
-                let isValid = true;
-                
-                // Clear previous required highlights
-                const allFormFields = conditionCheckFormContainer.querySelectorAll('input, select');
-                allFormFields.forEach(field => field.classList.remove('required-field'));
-                
-                const requiredFields = [checkGb, checkCarrierType, checkDeviceType, checkImei, checkLockStatus, checkPowerOn];
-                requiredFields.forEach(field => {
-                     if (!field.value) {
-                         field.classList.add('required-field');
-                         isValid = false;
-                     }
-                });
-
-                if (receivedConditions.power_on === 'yes') {
-                     if (!receivedConditions.functional) {
-                         checkFunctional.classList.add('required-field');
-                         isValid = false;
-                     }
-                     if (receivedConditions.functional === 'yes') {
-                        if (!receivedConditions.cracks) {
-                          checkCracks.classList.add('required-field');
-                          isValid = false;
-                        }
-                        if (receivedConditions.cracks === 'yes' || receivedConditions.cracks === 'no') {
-                            if (!receivedConditions.cosmetic) {
-                               checkCosmetic.classList.add('required-field');
-                               isValid = false;
-                            }
-                        }
-                     }
-                }
-
-                if (!isValid) {
-                     displayModalMessage('Please fill out all required fields.', 'error');
-                     return;
-                }
-                
-                modalLoadingMessage.classList.remove('hidden');
-                conditionCheckFormContainer.classList.add('hidden');
-
-                try {
-                    const order = allOrders.find(o => o.id === orderId);
-                    if (!order) {
-                        throw new Error('Order data not found locally.');
-                    }
-                    
-                    // Update the Firestore document with the admin's findings
-                    await updateOrderWithCheckResults(orderId, receivedConditions);
-
-                    const customerConditions = {
-                        power_on: order.condition_power_on,
-                        functional: order.condition_functional,
-                        cracks: order.condition_cracks,
-                        cosmetic: order.condition_cosmetic,
-                        gb: order.storage,
-                        lockStatus: order.lockStatus
-                    };
-                    
-                    let reasons = [];
-                    let comments = '';
-                    
-                    if (receivedConditions.power_on !== customerConditions.power_on) {
-                        reasons.push('Powers On condition mismatch');
-                        comments += `Customer said it powered on, but it does not. `;
-                    }
-                    if (receivedConditions.functional !== customerConditions.functional) {
-                        reasons.push('Functional condition mismatch');
-                        comments += `Customer said it was functional, but it is not. `;
-                    }
-                    if (receivedConditions.cracks !== customerConditions.cracks) {
-                        reasons.push('Cracks condition mismatch');
-                        comments += `Customer said there were no cracks, but there are. `;
-                    }
-                    if (receivedConditions.cosmetic !== customerConditions.cosmetic) {
-                        reasons.push('Cosmetic condition mismatch');
-                        comments += `Customer listed cosmetic condition as ${customerConditions.cosmetic}, but it is ${receivedConditions.cosmetic}. `;
-                    }
-                    if (receivedConditions.gb && receivedConditions.gb !== customerConditions.gb.replace('GB','')) {
-                        reasons.push('Storage size mismatch');
-                        comments += `Customer listed storage as ${customerConditions.gb}, but it is ${receivedConditions.gb}GB. `;
-                    }
-                    if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
-                         reasons.push('Carrier Lock Status mismatch');
-                         comments += `Customer listed lock status as ${customerConditions.lockStatus}, but it is ${receivedConditions.lockStatus}.`;
-                    }
-
-
-                    const newPrice = await calculateNewPrice(order.device, receivedConditions.gb, receivedConditions);
-                    
-                    const oldPrice = parseFloat(order.estimatedQuote);
-                    const newPriceFloat = parseFloat(newPrice);
-                    
-                    if (oldPrice !== newPriceFloat) {
-                        // A discrepancy was found, show re-offer form
-                        console.log('Price discrepancy found. Opening price confirmation modal.');
-                        showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
-                    } else {
-                        // No discrepancy, proceed to mark as completed
-                        displayModalMessage('All conditions match the customer description. Proceeding to mark as completed.', 'success');
-                        await handleAction(orderId, 'markCompleted');
-                    }
-
-                } catch (error) {
-                    console.error("Condition check error:", error);
-                    displayModalMessage(`Error during condition check: ${error.message}`, 'error');
-                } finally {
-                    modalLoadingMessage.classList.add('hidden');
-                }
-            }
-            
-            function showPriceConfirmationModal(orderId, oldPrice, newPrice, reasons, comments) {
-                console.log(`Opening price confirmation modal for order ${orderId}. Old price: $${oldPrice.toFixed(2)}, New price: $${newPrice.toFixed(2)}`);
-                originalPriceSpan.textContent = oldPrice.toFixed(2);
-                newPriceSpan.textContent = newPrice.toFixed(2);
-                
-                const difference = newPrice - oldPrice;
-                priceDifferenceSpan.textContent = `${difference > 0 ? '+' : ''}$${difference.toFixed(2)}`;
-                
-                priceDifferenceSpan.classList.remove('text-green-600', 'text-red-600');
-                if (difference < 0) { // New price is lower, which is a good thing for us
-                    priceDifferenceSpan.classList.add('text-green-600');
-                } else if (difference > 0) { // New price is higher, which is bad for us
-                    priceDifferenceSpan.classList.add('text-red-600');
-                }
-
-                // Set up button actions for the confirmation modal
-                proceedReofferBtn.onclick = () => {
-                    console.log('Proceeding with re-offer. Closing price confirmation modal and opening re-offer form.');
-                    priceConfirmModal.classList.add('hidden');
-                    showReofferFormWithData(orderId, newPrice, reasons, comments);
-                };
-
-                cancelReofferConfirmBtn.onclick = () => {
-                    console.log('Canceling re-offer. Closing price confirmation modal and returning to order details.');
-                    priceConfirmModal.classList.add('hidden');
-                    orderDetailsModal.classList.remove('hidden');
-                };
-
-                orderDetailsModal.classList.add('hidden');
-                priceConfirmModal.classList.remove('hidden');
-            }
-
-            async function updateOrderWithCheckResults(orderId, checks) {
-                const orderDocRef = doc(db, 'orders', orderId);
-                const updateData = {
-                    fulfilledOrders: { // New section to save fulfilled orders
-                        gb: checks.gb,
-                        imei: checks.imei,
-                        lockStatus: checks.lockStatus,
-                        conditions: {
-                            power_on: checks.power_on,
-                            functional: checks.functional,
-                            cracks: checks.cracks,
-                            cosmetic: checks.cosmetic
-                        }
-                    }
-                };
-                try {
-                    await updateDoc(orderDocRef, updateData);
-                    console.log(`Order ${orderId} successfully updated with check results.`);
-                } catch (error) {
-                    console.error('Error updating order with check results:', error);
-                    throw new Error('Failed to save check results to database.');
-                }
-            }
-
-            async function getDevicePricing(brand, model) {
-                const docRef = doc(db, 'devices', brand, 'models', model);
-                console.log("Fetching pricing data from path:", docRef.path);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    return docSnap.data();
-                } else {
-                    console.warn(`Pricing data not found for brand: ${brand}, model: ${model}.`);
-                    return null;
-                }
-            }
-
-            async function calculateNewPrice(device, storage, receivedConditions) {
-                // Check if the device is an iPhone and remove the word from the model string
-                let deviceModel = device.toLowerCase();
-                let brand = '';
-                
-                if (deviceModel.startsWith('iphone')) {
-                    brand = 'iphone';
-                    deviceModel = deviceModel.substring('iphone'.length).trim();
-                } else {
-                    // Assuming the first word is the brand for other devices
-                    const parts = deviceModel.split(' ');
-                    brand = parts[0];
-                    deviceModel = parts.slice(1).join(' ');
-                }
-                
-                // Construct the Firestore document ID by replacing spaces with hyphens
-                const firestoreDeviceID = deviceModel.replace(/\s/g, '-');
-                
-                // Fetch pricing data using the corrected device ID
-                const pricingData = await getDevicePricing(brand, firestoreDeviceID);
-                if (!pricingData) {
-                    throw new Error(`Pricing data not found for ${device}.`);
-                }
-
-                const storageKey = `${storage}GB`;
-                const pricingByStorage = pricingData.prices[storageKey];
-                if (!pricingByStorage) {
-                    throw new Error(`Pricing data not found for storage size ${storageKey}.`);
-                }
-
-                const lockStatus = receivedConditions.lockStatus || 'unlocked';
-                
-                let newPrice;
-                let finalCondition;
-                
-                if (receivedConditions.power_on === 'no') {
-                    newPrice = pricingByStorage[lockStatus]['noPower'];
-                } else if (receivedConditions.functional === 'no') {
-                    newPrice = pricingByStorage[lockStatus]['broken'];
-                } else {
-                    // Device powers on and is functional
-                    if (receivedConditions.cracks === 'yes') {
-                         // Has cracks, but is functional
-                        newPrice = pricingByStorage[lockStatus]['broken'];
-                    } else {
-                        // Powers on, is functional, and has no cracks. Use cosmetic condition.
-                        finalCondition = receivedConditions.cosmetic;
-                        if (finalCondition === 'excellent') {
-                            finalCondition = 'good';
-                        }
-                        newPrice = pricingByStorage[lockStatus][finalCondition];
-                    }
-                }
-                
-                // Check if the price is a valid number
-                if (isNaN(newPrice) || newPrice === undefined) {
-                     throw new Error(`Invalid price found for cosmetic condition: ${finalCondition}.`);
-                }
-                
-                console.log("Calculated new price:", newPrice);
-                return newPrice;
-            }
-
-            function showReofferFormWithData(orderId, newPrice, reasons, comments) {
-                console.log(`Opening re-offer form modal for order ${orderId}. New price: $${newPrice.toFixed(2)}`);
-                orderDetailsModal.classList.add('hidden');
-                reofferFormContainer.classList.remove('hidden');
-                reofferNewPrice.value = newPrice.toFixed(2);
-                reofferComments.value = comments;
-                
-                document.querySelectorAll('input[name="reoffer-reasons"]').forEach(cb => {
-                    cb.checked = false;
-                });
-                reasons.forEach(reason => {
-                    if (reason.includes('Cosmetic')) document.getElementById('reason-deep-scratches').checked = true;
-                    if (reason.includes('Cracks')) document.getElementById('reason-cracked').checked = true;
-                    if (reason.includes('Functional') || reason.includes('Powers On')) document.getElementById('reason-non-functional').checked = true;
-                    if (reason.includes('IMEI') || reason.includes('Storage')) document.getElementById('reason-other').checked = true;
-                });
-
-                submitReofferBtn.onclick = () => submitReOfferFromForm(orderId);
-                cancelReofferBtn.onclick = () => {
-                    reofferFormContainer.classList.add('hidden');
-                    modalActionButtons.classList.remove('hidden');
-                };
-            }
-
-            async function submitReOfferFromForm(orderId) {
-                const newPrice = reofferNewPrice.value;
-                const comments = reofferComments.value;
-                const reasons = Array.from(document.querySelectorAll('input[name="reoffer-reasons"]:checked')).map(cb => cb.value);
-
-                // Hide previous messages and clear required fields highlighting
-                modalMessage.classList.add('hidden');
-                reofferNewPrice.classList.remove('required-field');
-                
-                if (!newPrice || isNaN(parseFloat(newPrice))) {
-                    reofferNewPrice.classList.add('required-field');
-                    displayModalMessage('Please enter a valid price.', 'error');
-                    return;
-                }
-                if (reasons.length === 0) {
-                    displayModalMessage('Please select at least one reason.', 'error');
-                    return;
-                }
-
-                modalLoadingMessage.classList.remove('hidden');
-                reofferFormContainer.classList.add('hidden');
-
-                try {
-                    const url = `${BACKEND_BASE_URL}/orders/${orderId}/re-offer`;
-                    console.log("Submitting re-offer to:", url);
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}` // Include token
-                        },
-                        body: JSON.stringify({ newPrice: parseFloat(newPrice), reasons, comments })
-                    });
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error("Backend error response for re-offer:", response.status, errorText);
-                        throw new Error(errorText || `Failed to send re-offer: ${response.status} - ${errorText.substring(0, 100)}`);
-                    }
-                    const result = await response.json();
-                    
-                    displayModalMessage(result.message, 'success');
-                    openOrderDetailsModal(orderId);
-
-                } catch (error) {
-                    console.error("Action error:", error);
-                    displayModalMessage(`Error: ${error.message}`, 'error');
-                    reofferFormContainer.classList.remove('hidden'); // Re-open the form on error
-                } finally {
-                    modalLoadingMessage.classList.add('hidden');
-                    modalActionButtons.classList.remove('hidden');
-                }
-            }
-
-            async function handleAction(orderId, actionType) {
-                modalLoadingMessage.classList.remove('hidden');
-                modalActionButtons.classList.add('hidden');
-                modalMessage.classList.add('hidden');
-                modalMessage.textContent = '';
-
-                try {
-                    let url;
-                    let method = 'PUT';
-                    let body = {};
-
-                    switch(actionType) {
-                        case 'generateLabel':
-                            url = `${BACKEND_BASE_URL}/generate-label/${orderId}`;
-                            method = 'POST';
-                            break;
-                        case 'markReceived':
-                            url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
-                            body = { status: 'received' };
-                            break;
-                        case 'markCompleted':
-                            url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
-                            body = { status: 'completed' };
-                            break;
-                        case 'payNow':
-                            const order = allOrders.find(o => o.id === orderId);
-                            if (!order) {
-                                throw new Error('Order data not found locally.');
-                            }
-                            const paymentLink = generatePaymentLink(order);
-                            if (paymentLink) {
-                                window.open(paymentLink, '_blank');
-                                displayModalMessage('Payment link generated and opened in a new tab.', 'success');
-                                await handleAction(order.id, 'markCompleted');
-                            } else {
-                                throw new Error('Could not generate payment link.');
-                            }
-                            modalLoadingMessage.classList.add('hidden');
-                            modalActionButtons.classList.remove('hidden');
-                            return;
-                        case 'sendReturnLabel':
-                             url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
-                             method = 'POST';
-                             break;
-                        default:
-                            throw new Error('Unknown action.');
-                    }
-
-                    console.log(`Performing action ${actionType} to:`, url);
-                    const response = await fetch(url, {
-                        method: method,
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${authToken}` // Include token
-                        },
-                        body: Object.keys(body).length > 0 ? JSON.stringify(body) : null
-                    });
-
-                    if (!response.ok) {
-                        const errorText = await response.text();
-                        console.error("Backend error response for action:", response.status, errorText);
-                        throw new Error(errorText || `Failed to perform action: ${response.status} - ${errorText.substring(0, 100)}`);
-                    }
-                    const result = await response.json();
-                    
-                    displayModalMessage(result.message, 'success');
-                    openOrderDetailsModal(orderId);
-
-                } catch (error) {
-                    console.error("Action error:", error);
-                    displayModalMessage(`Error: ${error.message}`, 'error');
-                } finally {
-                    modalLoadingMessage.classList.add('hidden');
-                    modalActionButtons.classList.remove('hidden');
-                }
-            }
-
-            function generatePaymentLink(order) {
-                const amount = order.reOffer?.newPrice
-                                        ? order.reOffer.newPrice.toFixed(2)
-                                        : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
-                const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
-                const venmoUsername = order.paymentDetails?.venmoUsername;
-
-                if (order.paymentMethod === 'venmo' && venmoUsername) {
-                    const note = `Payment for ${order.device} - Order ${order.id}`;
-                    return `https://venmo.com/?txn=pay&aud_id=${venmoUsername}&amount=${amount}&note=${encodeURIComponent(note)}`;
-                }
-                return null;
-            }
-
-            function displayModalMessage(message, type) {
-                modalMessage.textContent = message;
-                modalMessage.className = `mt-4 p-3 text-sm rounded-md`;
-                if (type === 'success') {
-                    modalMessage.classList.add('bg-green-100', 'text-green-700');
-                } else if (type === 'error') {
-                    modalMessage.classList.add('bg-red-100', 'text-red-700');
-                }
-                modalMessage.classList.remove('hidden');
-            }
-
-            function closeOrderDetailsModal() {
-                orderDetailsModal.classList.add('hidden');
-            }
-            
-            reofferParentLink.addEventListener('click', (event) => {
-                event.preventDefault();
-                reofferSubmenu.classList.toggle('open');
-            });
-
-            statusLinks.forEach(link => {
-                link.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    currentActiveStatus = link.dataset.status;
-                    statusLinks.forEach(l => l.classList.remove('active'));
-                    link.classList.add('active');
-                    filterAndRenderOrders(currentActiveStatus, searchInput.value);
-                });
-            });
-            
-            dashboardCards.forEach(card => {
-                card.addEventListener('click', () => {
-                    const statusToFilter = card.dataset.status;
-                    const targetLink = document.querySelector(`.status-link[data-status="${statusToFilter}"]`);
-                    if (targetLink) {
-                        targetLink.click();
-                    }
-                });
-            });
-
-            searchInput.addEventListener('input', () => {
-                filterAndRenderOrders(currentActiveStatus, searchInput.value);
-            });
-
-            closeModalButton.addEventListener('click', closeOrderDetailsModal);
-
-            // --- Admin Login/Logout Functions ---
-            async function handleLogin() {
-                const email = emailInput.value;
-                const password = passwordInput.value;
-                loginMessage.classList.add('hidden'); // Hide previous messages
-
-                if (!email || !password) {
-                    loginMessage.textContent = 'Please enter both email and password.';
-                    loginMessage.classList.remove('hidden');
-                    return;
-                }
-
-                try {
-                    // Ensure persistence is set before attempting login
-                    await setPersistence(auth, browserLocalPersistence);
-                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                    console.log('Admin logged in:', userCredential.user.email);
-                } catch (error) {
-                    console.error("Login error:", error);
-                    let errorMessage = 'Login failed. Please check your credentials.';
-                    if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-                        errorMessage = 'Invalid email or password.';
-                    } else if (error.code === 'auth/too-many-requests') {
-                        errorMessage = 'Too many failed login attempts. Please try again later.';
-                    }
-                    loginMessage.textContent = errorMessage;
-                    loginMessage.classList.remove('hidden');
-                }
-            }
-
-            async function handleSignOut() {
-                try {
-                    await signOut(auth);
-                    console.log('Admin signed out.');
-                } catch (error) {
-                    console.error("Error signing out:", error);
-                }
-            }
-
-            // Event Listeners for Login/Logout
-            loginButton.addEventListener('click', handleLogin);
-            signOutButton.addEventListener('click', handleSignOut);
         });
 
         async function fetchAndRenderOrders() {
