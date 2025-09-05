@@ -1417,7 +1417,7 @@ app.post("/check-esn", async (req, res) => {
         });
 
     } else if (fmiStatus === "On") {
-        const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared?orderId=${orderId}`;
+        const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
         const customerEmailHtml = FMI_EMAIL_HTML
             .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
             .replace(/\*\*ORDER_ID\*\*/g, orderId)

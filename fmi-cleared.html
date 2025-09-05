@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SecondHandCell - Action Required</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/favicon/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9evSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-SLRRJRXHHE"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        
+        gtag('config', 'G-SLRRJRXHHE');
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvU0S58N4TVxJ5Ag4l7B-r534hng4BxVw&libraries=places&callback=initAutocomplete" async defer></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import {
+            getAuth,
+            signInWithPopup,
+            GoogleAuthProvider,
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            signOut,
+            onAuthStateChanged,
+            updateProfile,
+            sendPasswordResetEmail
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+            getFirestore,
+            collection,
+            addDoc,
+            serverTimestamp,
+            doc,
+            getDoc,
+            updateDoc,
+            setDoc
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "auth.secondhandcell.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.appspot.com",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseAuth = auth;
+        window.GoogleAuthProvider = GoogleAuthProvider;
+        window.signInWithPopup = signInWithPopup;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signOut = signOut;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.updateProfile = updateProfile;
+        window.sendPasswordResetEmail = sendPasswordResetEmail;
+        window.firebaseDb = db;
+        window.firebaseServerTimestamp = serverTimestamp;
+        window.firebase = {
+            firestore: {
+                doc: doc,
+                getDoc: getDoc
+            }
+        };
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        /* Custom styles from original HTML */
+        .user-monogram {
+            display: flex; align-items: center; justify-content: center;
+            width: 2.5rem; height: 2.5rem;
+            border-radius: 9999px;
+            background-color: #dbeafe; color: #1d4ed8;
+            font-weight: 700; font-size: 1.125rem;
+            cursor: pointer; user-select: none;
+        }
+        .auth-dropdown {
+            position: absolute; right: 0; margin-top: 0.5rem;
+            width: 12rem; background-color: white;
+            border-radius: 0.375rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding-top: 0.25rem; padding-bottom: 0.25rem;
+            z-index: 50;
+        }
+        .modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            opacity: 0; visibility: hidden;
+        }
+        .modal.is-visible {
+            opacity: 1; visibility: visible;
+        }
+        .modal-content {
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-out;
+        }
+        .modal.is-visible .modal-content {
+            transform: translateY(0);
+        }
+        .btn-google-style {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; background-color: white; color: #475569;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            border: 1px solid #cbd5e1; font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+        }
+        .btn-google-style:hover { background-color: #f8fafc; }
+        .btn-dark-slate {
+            width: 100%; background-color: #1e293b; color: white;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            font-weight: 600; transition: all 0.3s ease;
+            border: none; cursor: pointer;
+        }
+        .btn-dark-slate:hover { background-color: #0f172a; }
+        .btn-red-logout {
+            display: block; width: 100%; text-align: left;
+            padding: 0.5rem 1rem; font-size: 0.875rem; color: #dc2626;
+            background-color: transparent; border: none;
+            transition: background-color 0.2s ease; cursor: pointer;
+        }
+        .btn-red-logout:hover { background-color: #fef2f2; }
+        .prose {
+            max-width: 65ch;
+            color: #334155;
+        }
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+        .prose p, .prose ul {
+            margin-bottom: 1em;
+        }
+        .prose ul {
+            list-style-position: inside;
+            padding-left: 1em;
+        }
+        .prose li {
+            margin-bottom: 0.5em;
+        }
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 1rem;
+            height: 200px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex-1">
+                <a href="#" class="h-16 inline-block">
+                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+                </a>
+            </div>
+            <div class="hidden md:flex flex-col items-center flex-1">
+                <div class="text-2xl font-extrabold text-slate-800">
+                    <span class="text-black">Second</span><span style="color: #54a929;">HandCell</span>
+                </div>
+                <p class="text-sm -mt-1" style="color: #54a929;">Turn Your Old<span class="text-black"> Phone Into Cash!</span></p>
+            </div>
+            <nav class="flex items-center space-x-4 flex-1 justify-end">
+                <div id="authStatusContainer" class="relative inline-block">
+                    <a href="#" id="loginNavBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Login/Sign Up</a>
+                    <div id="userMonogram" class="user-monogram hidden"></div>
+                    <div id="authDropdown" class="auth-dropdown hidden">
+                        <a href="https://secondhandcell.com/my-account.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
+                        <button id="logoutBtn" class="btn-red-logout">Logout</button>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content for Action Required -->
+    <main class="flex-grow container mx-auto px-4 py-12 flex flex-col justify-center items-center">
+        <div class="max-w-2xl w-full bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+
+            <!-- Action Header -->
+            <div class="header bg-[#f0ad4e] text-white p-6 text-center">
+                <h1 class="text-2xl font-bold">Action Required for Your Order</h1>
+            </div>
+
+            <!-- Content Section -->
+            <div class="content p-6 text-gray-700 leading-relaxed">
+                <p class="mb-4">Hello Customer Name,</p>
+                <p class="mb-6">This is a follow-up regarding your recent order. Please take a moment to review the options below.</p>
+
+                <!-- Buttons Container -->
+                <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mb-6">
+                    <button 
+                        onclick="handleFmiCleared()"
+                        class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 w-full sm:w-auto"
+                    >
+                        FMI Cleared
+                    </button>
+                    <button 
+                        onclick="handleReturnDevice()"
+                        class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 w-full sm:w-auto"
+                    >
+                        Return Device
+                    </button>
+                </div>
+                
+                <!-- Accordion Dropdown -->
+                <div class="border border-gray-300 rounded-lg overflow-hidden mb-6">
+                    <button 
+                        onclick="toggleDropdown()" 
+                        class="w-full text-left p-4 bg-gray-50 hover:bg-gray-100 transition-colors duration-200 focus:outline-none"
+                    >
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-lg">How do I clear my Apple Find My?</span>
+                            <svg id="dropdownIcon" class="w-5 h-5 transition-transform duration-300 transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </button>
+                    <div id="dropdownContent" class="hidden p-4 bg-gray-50 border-t border-gray-300">
+                        <ol class="list-decimal list-inside space-y-2">
+                            <li>Go to <a href="https://icloud.com/find" target="_blank" class="text-blue-600 hover:underline font-medium">icloud.com/find</a> and sign in with your Apple ID.</li>
+                            <li>Click on "All Devices" at the top of the screen.</li>
+                            <li>Select the device you are sending to us.</li>
+                            <li>Click "Remove from Account".</li>
+                        </ol>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals (Copied from original HTML) -->
+    <div id="quoteModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content text-center">
+            <div class="bg-red-100 text-red-800 p-3 rounded-lg mb-4 text-sm font-medium">
+                Important: Devices cannot be lost, reported stolen, have an outstanding balance, or a blacklisted IMEI.
+            </div>
+            <h2 class="text-3xl font-extrabold text-indigo-800 mb-4 sm:text-2xl">Your Instant Quote!</h2>
+            <p class="text-5xl font-extrabold text-indigo-600 mb-4 sm:text-4xl" id="finalQuoteAmountPopup">$0</p>
+            <p class="text-md text-slate-600 mb-6 sm:text-sm">This is an estimate. Final offer subject to certified inspection.</p>
+            <button id="quoteModalContinueBtn" class="btn-secondary-green w-full max-w-xs mx-auto">
+                Continue
+            </button>
+        </div>
+    </div>
+    
+    <div id="loginModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2><div class="flex border-b border-slate-200 mb-6"><button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Login</button><button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Sign Up</button></div><form id="loginForm" class="space-y-4"><p class="text-slate-600 text-center">Log in to continue with your order.</p><button type="button" id="googleLoginBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Login with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="loginEmail" class="sr-only">Email Address</label><input type="email" id="loginEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email"></div><div><label for="loginPassword" class="sr-only">Password</label><input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="current-password"></div><button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button><p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-blue-600 font-semibold hover:underline">Reset it here</a></p></form><form id="signupForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Create an account to complete your order.</p><button type="button" id="googleSignupBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Sign Up with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="signupName" class="sr-only">Full Name</label><input type="text" id="signupName" placeholder="Full Name" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="name"></div><div><label for="signupEmail" class="sr-only">Email Address</label><input type="email" id="signupEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email"></div><div><label for="signupPassword" class="sr-only">Password</label><input type="password" id="signupPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="new-password"></div><button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button><p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-blue-600 font-semibold hover:underline">Log in here</a></p></form><form id="forgotPasswordForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Enter your email to receive a password reset link.</p><div><label for="forgotEmail" class="sr-only">Email Address</label><input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email"></div><button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button><p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-blue-600 font-semibold hover:underline">Return to Login</a></p></form><div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div></div></div>
+    
+    <div id="aboutUsModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2><p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p></div></div>
+    
+    <div id="privacyPolicyModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Privacy Policy</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p><h3>Information We Collect</h3><p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition. </p><h3>How We Use Your Information</h3><p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p><h3>Data Security and Wiping</h3><p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased. </p><h3>Disclosure of Your Information</h3><p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p><h3>Your Consent</h3><p>By using our site, you consent to our website's privacy policy.</p></div></div></div>
+
+    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><div class="prose max-h-[80vh] overflow-y-auto pr-4"><h2 class="text-2xl font-bold text-slate-800 mb-4">Terms & Conditions</h2><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p><h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p><hr class="my-6 border-t border-slate-300"><h3>5. Policy on Lost/Stolen Devices & Legal Compliance (New York State & NYC)</h3><p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This section outlines our strict policy and the legal framework governing such transactions in New York State and New York City.</p><h4>Laws That May Apply (NY State + NYC)</h4><ul><li>**New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property:** If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.</li><li>**New York Penal Law § 165.40 – Criminal possession of stolen property in the 5th degree:** Knowingly possessing stolen property (or should reasonably know it’s stolen) is a misdemeanor.</li><li>**New York Penal Law § 165.45–165.54 – Criminal possession of stolen property (4th–1st degree):** Felonies based on the value of the stolen property. Smartphones can easily push this into felony territory if valuable.</li><li>**New York City Administrative Code § 20-272 et seq. (Secondhand Dealer Law):** Dealers in secondhand goods must:<ul><li>Keep records of all items received (including seller ID).</li><li>Provide daily reports to the NYPD of transactions (often through electronic reporting).</li><li>If police suspect an item is lost/stolen, you must hold and exhibit it to them.</li></ul></li><li>**New York City Administrative Code § 20-273:** It is unlawful to conceal, withhold, or refuse inspection of such goods.</li><li>**Federal Considerations (18 U.S.C. § 2315 – Possession or sale of stolen property):** If stolen goods (like phones) cross state lines or involve interstate commerce, federal law applies.</li></ul><h4>Process to Handle Lost/Stolen Phones in Your Buyback</h4><p>Here’s our step-by-step written policy to handle devices suspected of being lost or stolen:</p><h5>Intake & Verification</h5><ul><li>Every device received must be checked against:<ul><li>IMEI/serial number databases (e.g., GSMA, carrier blacklists).</li><li>Customer’s government-issued ID at time of transaction.</li></ul></li><li>Record the transaction in compliance with NYC Secondhand Dealer laws.</li></ul><h5>If a Device is Flagged as Lost or Stolen</h5><ul><li>Immediately set the device aside and do not refurbish, resell, or dispose of it.</li><li>Clearly label it as “On Hold – Suspected Lost/Stolen.”</li></ul><h5>Customer Communication</h5><ul><li>If the customer requests the item back:<ul><li>Explain: “Under New York law, we cannot return or release devices suspected to be lost or stolen. These items must be reported and may only be released by law enforcement.”</li></ul></li></ul><h5>Law Enforcement Notification</h5><ul><li>Report the device to the NYPD Property Clerk’s Office (or local precinct if outside NYC).</li><li>Provide transaction records, customer ID, and the device itself if requested.</li></ul><h5>If a Device is Cleared by Law Enforcement</h5><ul><li>You may proceed with processing the device as normal.</li></ul><h5>Recordkeeping</h5><ul><li>Keep all paperwork of the transaction, report, and police correspondence for at least 5 years (per NYC dealer rules).</li></ul></div></div></div>
+    
+    <div id="confirmationModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm p-6 relative modal-content text-center">
+            <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <i id="confirmationIcon" class="fa-solid mb-4 text-4xl"></i>
+            <h2 id="confirmationTitle" class="text-2xl font-bold mb-2"></h2>
+            <p id="confirmationMessage" class="text-slate-600 mb-4"></p>
+            <button onclick="closeModal('confirmationModal')" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300">Close</button>
+        </div>
+    </div>
+
+    <!-- Footer (Copied from your provided HTML) -->
+    <footer class="bg-slate-800 text-white">
+        <div class="container mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    <div>
+                        <h3 class="text-xl font-bold mb-4">SecondHandCell</h3>
+                        <p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-4">Quick Links</h3>
+                        <ul class="space-y-2">
+                            <li><a href="#" class="text-slate-400 hover:text-white transition duration-300">Home</a></li>
+                            <li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li>
+                            <li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li>
+                            <li><a href="#" id="termsAndConditionsLink" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold mb-4">Contact Us</h3>
+                        <p class="text-slate-400">Email: support@secondhandcell.com</p>
+                        <p class="text-slate-400">Phone: (123) 456-7890</p>
+                    </div>
+                </div>
+                <div class="bg-slate-700 p-6 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
+                    <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                    <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
+                        <label for="footerPromoEmail" class="sr-only">Email Address</label>
+                        <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Sign Up</button>
+                    </form>
+                    <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
+                </div>
+            </div>
+            <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
+        </div>
+    </footer>
+
+    <script>
+        // Placeholder functions for the original script to prevent errors
+        function initAutocomplete() {}
+        function loadImageWithFallback() {}
+        
+        // Modal Control Functions
+        function openModal(modalId) { document.getElementById(modalId)?.classList.add('is-visible'); }
+        function closeModal(modalId) { document.getElementById(modalId)?.classList.remove('is-visible'); }
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target.classList.contains('modal')) closeModal(modal.id);
+            });
+            modal.querySelector('.close-modal-btn')?.addEventListener('click', () => closeModal(modal.id));
+        });
+
+        const showConfirmationModal = (title, message, isSuccess = true) => {
+            const modal = document.getElementById('confirmationModal');
+            const icon = document.getElementById('confirmationIcon');
+            const titleEl = document.getElementById('confirmationTitle');
+            const messageEl = document.getElementById('confirmationMessage');
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+            
+            // Set icon and color based on success status
+            icon.classList.remove('text-green-500', 'text-red-500', 'fa-circle-check', 'fa-circle-xmark');
+            if (isSuccess) {
+                icon.classList.add('fa-circle-check', 'text-green-500');
+            } else {
+                icon.classList.add('fa-circle-xmark', 'text-red-500');
+            }
+            openModal('confirmationModal');
+        };
+
+        // Button functionality with API call simulation
+        async function handleFmiCleared() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('orderId');
+
+            if (!orderId) {
+                showConfirmationModal("Error", "Order ID not found in URL.", false);
+                return;
+            }
+
+            try {
+                // Simulating a POST request to your backend endpoint
+                const response = await fetch(`/orders/${orderId}/fmi-cleared`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showConfirmationModal("Success!", "FMI status has been updated. Thank you!");
+                } else {
+                    showConfirmationModal("Error", data.error || "Failed to update FMI status.", false);
+                }
+            } catch (error) {
+                console.error('Error updating FMI status:', error);
+                showConfirmationModal("Error", "A network error occurred. Please try again later.", false);
+            }
+        }
+
+        async function handleReturnDevice() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('orderId');
+
+            if (!orderId) {
+                showConfirmationModal("Error", "Order ID not found in URL.", false);
+                return;
+            }
+
+            try {
+                // Simulating a POST request to your backend endpoint
+                const response = await fetch('/return-phone-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orderId }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showConfirmationModal("Return Requested", "We've received your request. A label will be emailed to you shortly.");
+                } else {
+                    showConfirmationModal("Error", data.error || "Failed to request return.", false);
+                }
+            } catch (error) {
+                console.error('Error requesting return:', error);
+                showConfirmationModal("Error", "A network error occurred. Please try again later.", false);
+            }
+        }
+
+        function toggleDropdown() {
+            const content = document.getElementById('dropdownContent');
+            const icon = document.getElementById('dropdownIcon');
+            content.classList.toggle('hidden');
+            icon.classList.toggle('rotate-180');
+        }
+        
+        // Modal references
+        const loginModal = document.getElementById('loginModal');
+
+        // All the original event listeners and functions from your provided HTML
+        document.addEventListener('DOMContentLoaded', async function() {
+            const auth = window.firebaseAuth;
+            const GoogleAuthProvider = window.GoogleAuthProvider;
+            const signInWithPopup = window.signInWithPopup;
+            const signInWithEmailAndPassword = window.signInWithEmailAndPassword;
+            const createUserWithEmailAndPassword = window.createUserWithEmailAndPassword;
+            const signOut = window.signOut;
+            const onAuthStateChanged = window.onAuthStateChanged;
+            const updateProfile = window.updateProfile;
+            const sendPasswordResetEmail = window.sendPasswordResetEmail;
+            const db = window.firebaseDb;
+            const { doc, getDoc } = window.firebase.firestore;
+            const serverTimestamp = window.firebaseServerTimestamp;
+
+            function getRandomLightColor() {
+                const hue = Math.floor(Math.random() * 360);
+                const saturation = Math.floor(Math.random() * 30) + 70;
+                const lightness = Math.floor(Math.random() * 20) + 70;
+                return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                const authStatusContainer = document.getElementById('authStatusContainer');
+                const userMonogram = document.getElementById('userMonogram');
+                const authDropdown = document.getElementById('authDropdown');
+                const loginNavBtn = document.getElementById('loginNavBtn');
+
+                if (user) {
+                    let initials = '';
+                    if (user.displayName) {
+                        initials = user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+                    } else if (user.email) {
+                        const username = user.email.split('@')[0];
+                        const nameParts = username.split('.');
+                        initials = nameParts.map(part => part.charAt(0)).join('').toUpperCase().substring(0, 2);
+                    }
+
+                    loginNavBtn.classList.add('hidden');
+                    userMonogram.classList.remove('hidden');
+                    userMonogram.textContent = initials;
+                    userMonogram.style.backgroundColor = getRandomLightColor();
+                    closeModal('loginModal');
+                } else {
+                    loginNavBtn.classList.remove('hidden');
+                    userMonogram.classList.add('hidden');
+                    userMonogram.textContent = '';
+                    authDropdown.classList.add('hidden');
+                }
+            });
+
+            const logoutBtn = document.getElementById('logoutBtn');
+            const loginNavBtn = document.getElementById('loginNavBtn');
+            const authStatusContainer = document.getElementById('authStatusContainer');
+            const userMonogram = document.getElementById('userMonogram');
+            const authDropdown = document.getElementById('authDropdown');
+
+            userMonogram.addEventListener('click', (e) => {
+                e.stopPropagation();
+                authDropdown.classList.toggle('hidden');
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!authStatusContainer.contains(e.target)) {
+                    authDropdown.classList.add('hidden');
+                }
+            });
+
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    await signOut(auth);
+                } catch (error) {
+                    console.error("Logout error:", error);
+                }
+            });
+
+            function showAuthMessage(msg, type) {
+                const authMessage = document.getElementById('authMessage');
+                authMessage.textContent = msg;
+                authMessage.className = `mt-4 p-3 rounded-lg text-sm text-center w-full`;
+                if (type === 'error') {
+                    authMessage.classList.add('bg-red-100', 'text-red-700');
+                } else if (type === 'success') {
+                    authMessage.classList.add('bg-green-100', 'text-green-700');
+                } else if (type === 'info') {
+                    authMessage.classList.add('bg-blue-100', 'text-blue-700');
+                }
+            }
+            
+            function showLoginModal() {
+                openModal('loginModal');
+                showTab('login');
+            }
+
+            function showTab(tabName) {
+                const loginForm = document.getElementById('loginForm');
+                const signupForm = document.getElementById('signupForm');
+                const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+                const loginTabBtn = document.getElementById('loginTabBtn');
+                const signupTabBtn = document.getElementById('signupTabBtn');
+
+                if (tabName === 'login') {
+                    loginForm.classList.remove('hidden');
+                    signupForm.classList.add('hidden');
+                    forgotPasswordForm.classList.add('hidden');
+                    loginTabBtn.classList.add('border-blue-600', 'text-blue-600');
+                    signupTabBtn.classList.remove('border-blue-600', 'text-blue-600');
+                } else if (tabName === 'signup') {
+                    signupForm.classList.remove('hidden');
+                    loginForm.classList.add('hidden');
+                    forgotPasswordForm.classList.add('hidden');
+                    signupTabBtn.classList.add('border-blue-600', 'text-blue-600');
+                    loginTabBtn.classList.remove('border-blue-600', 'text-blue-600');
+                } else if (tabName === 'forgotPassword') {
+                    forgotPasswordForm.classList.remove('hidden');
+                    loginForm.classList.add('hidden');
+                    signupForm.classList.add('hidden');
+                    loginTabBtn.classList.remove('border-blue-600', 'text-blue-600');
+                    signupTabBtn.classList.remove('border-blue-600', 'text-blue-600');
+                }
+            }
+
+            document.getElementById('aboutUsLink').addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
+            document.getElementById('privacyPolicyLink').addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
+            document.getElementById('termsAndConditionsLink').addEventListener('click', (e) => { e.preventDefault(); openModal('termsAndConditionsModal'); });
+            
+            const closeLoginModalBtn = loginModal.querySelector('.close-modal-btn');
+            if(closeLoginModalBtn) closeLoginModalBtn.addEventListener('click', () => closeModal('loginModal'));
+            
+            document.getElementById('loginTabBtn').addEventListener('click', () => { showTab('login'); });
+            document.getElementById('signupTabBtn').addEventListener('click', () => { showTab('signup'); });
+            document.getElementById('loginNavBtn').addEventListener('click', (e) => { e.preventDefault(); showLoginModal(); });
+            document.getElementById('switchToLogin').addEventListener('click', (e) => { e.preventDefault(); showTab('login'); });
+            document.getElementById('returnToLogin').addEventListener('click', (e) => { e.preventDefault(); showTab('login'); });
+            document.getElementById('forgotPasswordLink').addEventListener('click', (e) => { e.preventDefault(); showTab('forgotPassword'); });
+
+            document.getElementById('forgotPasswordForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('forgotEmail').value;
+                if (!email) {
+                    showAuthMessage('Please enter your email address.', 'error');
+                    return;
+                }
+                
+                try {
+                    await sendPasswordResetEmail(auth, email);
+                    showAuthMessage('A password reset link has been sent to your email. Check your inbox and spam folder.', 'success');
+                    document.getElementById('forgotEmail').value = '';
+                } catch (error) {
+                    showAuthMessage(`Password reset failed: ${error.message}`, 'error');
+                }
+            });
+
+            const googleProvider = new GoogleAuthProvider();
+
+            document.getElementById('googleLoginBtn').addEventListener('click', async () => {
+                try {
+                    await signInWithPopup(auth, googleProvider);
+                } catch (error) {
+                    showAuthMessage(`Google login failed: ${error.message}`, 'error');
+                }
+            });
+
+            document.getElementById('googleSignupBtn').addEventListener('click', async () => {
+                try {
+                    await signInWithPopup(auth, googleProvider);
+                } catch (error) {
+                    showAuthMessage(`Google signup failed: ${error.message}`, 'error');
+                }
+            });
+
+            document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('loginEmail').value;
+                const password = document.getElementById('loginPassword').value;
+                if (!email || !password) {
+                    showAuthMessage('Please enter both email and password.', 'error');
+                    return;
+                }
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                    showAuthMessage(`Login failed: ${error.message}`, 'error');
+                }
+            });
+
+            document.getElementById('signupForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = document.getElementById('signupName').value;
+                const email = document.getElementById('signupEmail').value;
+                const password = document.getElementById('signupPassword').value;
+
+                if (!name || !email || !password) {
+                    showAuthMessage('Please enter your name, email, and password.', 'error');
+                    return;
+                }
+                if (password.length < 6) {
+                    showAuthMessage('Password should be at least 6 characters.', 'error');
+                    return;
+                }
+
+                try {
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    await updateProfile(userCredential.user, { displayName: name });
+                } catch (error) {
+                    showAuthMessage(`Sign up failed: ${error.message}`, 'error');
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>

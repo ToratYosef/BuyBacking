@@ -169,27 +169,32 @@
                 padding-top: 0.5rem;
                 padding-bottom: 0.5rem;
             }
-            header .container > .flex-1:first-child {
-                width: auto;
-                flex-grow: 0;
-            }
-            header .container > .flex-1:last-child {
-                width: auto;
-                flex-grow: 0;
-                justify-content: flex-end;
-            }
-            header .flex-col {
-                display: none;
+            header .logo-container {
+                display: flex;
+                align-items: center;
             }
             header .h-12 {
-                height: 3rem;
+                height: 2.5rem;
             }
-            header .md\:h-20 {
-                height: 3rem;
+            header .logo-text-container {
+                display: flex;
+                flex-direction: column;
+                margin-left: 0.5rem;
+            }
+            header .logo-text-container .text-xl {
+                font-size: 1rem;
+            }
+            header .logo-text-container p {
+                font-size: 0.6rem;
+                line-height: 1;
             }
             header nav {
-                margin-top: 0;
-                justify-content: flex-end;
+                flex-grow: 0;
+            }
+            #loginNavBtn {
+                font-size: 0.75rem;
+                padding: 0.3rem 0.6rem;
+                white-space: nowrap;
             }
             .grid {
                 grid-template-columns: 1fr;
@@ -216,12 +221,7 @@
             .modal-content h2 {
                 font-size: 1.5rem;
             }
-            #loginNavBtn {
-                font-size: 0.75rem;
-                padding: 0.375rem 0.625rem;
-                white-space: nowrap;
-            }
-            /* New table-specific mobile styles to prevent horizontal scroll */
+            /* Table mobile styles */
             table, thead, tbody, th, td, tr {
                 display: block;
             }
@@ -262,6 +262,33 @@
                 width: auto;
                 align-self: flex-start;
             }
+            .hidden-on-mobile {
+                display: none;
+            }
+        }
+        /* Desktop Styles */
+        @media (min-width: 768px) {
+            header .container {
+                display: grid;
+                grid-template-columns: 1fr auto 1fr;
+                align-items: center;
+            }
+            
+            header .container > div:nth-child(1) {
+                justify-self: start;
+            }
+            
+            header .container > div:nth-child(2) {
+                justify-self: center;
+            }
+            
+            header .container > nav {
+                justify-self: end;
+            }
+
+            .hidden-on-desktop {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -269,25 +296,38 @@
 
     <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center md:py-5">
-            <div class="flex-1">
-                <a href="index.html" class="h-12 inline-block md:h-20">
-                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
-                </a>
+            
+            <!-- Mobile and Left Desktop Logo -->
+            <a href="index.html" class="flex items-center space-x-2 logo-container flex-none">
+                <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-12 md:h-20 w-auto">
+                <div class="flex-col items-start hidden-on-desktop logo-text-container">
+                    <div class="text-xl font-extrabold whitespace-nowrap">
+                        <span class="text-black">Second</span><span style="color: #54a929;">HandCell</span>
+                    </div>
+                    <p class="text-[0.6rem] -mt-1 whitespace-nowrap" style="color: #54a929;">Turn Your Old<span class="text-black"> Phone Into Cash!</span></p>
+                </div>
+            </a>
+            
+            <!-- Desktop Centered Title and Slogan -->
+            <div class="hidden-on-mobile md:flex flex-col items-center">
+                <div class="text-2xl font-extrabold whitespace-nowrap">
+                    <span class="text-black">Second</span><span style="color: #54a929;">HandCell</span>
+                </div>
+                <p class="text-sm -mt-1 whitespace-nowrap" style="color: #54a929;">Turn Your Old<span class="text-black"> Phone Into Cash!</span></p>
             </div>
-            <div class="hidden md:flex flex-col items-center flex-1">
-                <div class="text-2xl font-extrabold text-slate-800 fancy-header-text">SecondHandCell</div>
-                <p class="text-sm text-slate-500 -mt-1 fancy-header-text">Turn Your Old Phone into Cash!</p>
-            </div>
-            <nav class="flex items-center space-x-4 flex-1 justify-end">
+            
+            <!-- Right-aligned User Icon/Login -->
+            <nav class="flex-none md:flex-1 flex justify-end items-center space-x-4">
                 <div id="authStatusContainer" class="relative inline-block">
-                    <a href="#" id="loginNavBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Login/Sign Up</a>
+                    <a href="index.html" id="loginNavBtn" class="bg-blue-600 text-white px-2.5 py-1.5 md:px-4 md:py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm text-xs md:text-base">Login/Sign Up</a>
                     <div id="userMonogram" class="user-monogram hidden"></div>
                     <div id="authDropdown" class="auth-dropdown hidden">
-                        <a href="https://secondhandcell.com/my-account.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
+                        <a href="my-account.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
                         <button id="logoutBtn" class="btn-red-logout">Logout</button>
                     </div>
                 </div>
             </nav>
+            
         </div>
     </header>
 
@@ -466,6 +506,70 @@
                 <p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p>
                 <h3>4. Limitation of Liability</h3>
                 <p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p>
+                <h3>5. Policy on Lost/Stolen Devices & Legal Compliance (New York State & NYC)</h3>
+                <p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This section outlines our strict policy and the legal framework governing such transactions in New York State and New York City.</p>
+                <h4>Laws That May Apply (NY State + NYC)</h4>
+                <ul>
+                    <li><strong>New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property:</strong> If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.</li>
+                    <li><strong>New York Penal Law § 165.40 – Criminal possession of stolen property in the 5th degree:</strong> Knowingly possessing stolen property (or should reasonably know it’s stolen) is a misdemeanor.</li>
+                    <li><strong>New York Penal Law § 165.45–165.54 – Criminal possession of stolen property (4th–1st degree):</strong> Felonies based on the value of the stolen property. Smartphones can easily push this into felony territory if valuable.</li>
+                    <li><strong>New York City Administrative Code § 20-272 et seq. (Secondhand Dealer Law):</strong> Dealers in secondhand goods must:
+                            <ul>
+                                <li>Keep records of all items received (including seller ID).</li>
+                                <li>Provide daily reports to the NYPD of transactions (often through electronic reporting).</li>
+                                <li>If police suspect an item is lost/stolen, you must hold and exhibit it to them.</li>
+                            </ul>
+                    </li>
+                    <li><strong>New York City Administrative Code § 20-273:</strong> It is unlawful to conceal, withhold, or refuse inspection of such goods.</li>
+                    <li><strong>General Business Law (NY) GBL § 89-g and following – Regulation of pawnbrokers and secondhand dealers:</strong> Requires keeping detailed records and prohibits resale of items flagged as stolen/lost until cleared.</li>
+                </ul>
+                <h4>Process to Handle Lost/Stolen Phones in Your Buyback</h4>
+                <p>Here’s our step-by-step written policy to handle devices suspected of being lost or stolen:</p>
+                <h5>Intake & Verification</h5>
+                <ul>
+                    <li>Every device received must be checked against:
+                            <ul>
+                                <li>IMEI/serial number databases (e.g., GSMA, carrier blacklists).</li>
+                                <li>Customer’s government-issued ID at time of transaction.</li>
+                            </ul>
+                    </li>
+                    <li>Record the transaction in compliance with NYC Secondhand Dealer laws.</li>
+                </ul>
+                <h5>If a Device is Flagged as Lost or Stolen</h5>
+                <ul>
+                    <li>Immediately set the device aside and do not refurbish, resell, or dispose of it.</li>
+                    <li>Clearly label it as “On Hold – Suspected Lost/Stolen.”</li>
+                </ul>
+                <h5>Customer Communication</h5>
+                <ul>
+                    <li>If the customer requests the item back:
+                            <ul>
+                                <li>Explain: “Under New York law, we cannot return or release devices suspected to be lost or stolen. These items must be reported and may only be released by law enforcement.”</li>
+                            </ul>
+                    </li>
+                </ul>
+                <h5>Law Enforcement Notification</h5>
+                <ul>
+                    <li>Report the device to the NYPD Property Clerk’s Office (or local precinct if outside NYC).</li>
+                    <li>Provide transaction records, customer ID, and the device itself if requested.</li>
+                </ul>
+                <h5>Outcome</h5>
+                <ul>
+                    <li>If police confirm the device is stolen:
+                            <ul>
+                                <li>It will be seized and returned to the rightful owner or carrier.</li>
+                            </ul>
+                    </li>
+                    <li>If cleared:
+                            <ul>
+                                <li>You may proceed with processing the device as normal.</li>
+                            </ul>
+                    </li>
+                </ul>
+                <h5>Recordkeeping</h5>
+                <ul>
+                    <li>Keep all paperwork of the transaction, report, and police correspondence for at least 5 years (per NYC dealer rules).</li>
+                </ul>
             </div>
         </div>
     </div>

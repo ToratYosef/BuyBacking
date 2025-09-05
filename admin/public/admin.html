@@ -6,7 +6,7 @@
     <title>Order Management Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-        
+    
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-SLRRJRXHHE"></script>
     <script>
@@ -297,6 +297,7 @@
         </main>
     </div>
 
+    <!-- Order Details Modal -->
     <div id="order-details-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
             <button id="close-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">
@@ -331,6 +332,12 @@
                 <p id="modal-loading-message" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
             </div>
             
+            <!-- NEW: Section to display detailed IMEI check results -->
+            <div id="imei-info-display" class="mt-4 p-4 border border-gray-200 rounded-lg hidden">
+                <h4 class="text-lg font-semibold text-gray-800 mb-2">Detailed IMEI Information</h4>
+                <div id="imei-data-content" class="text-sm text-gray-800 whitespace-pre-wrap break-words"></div>
+            </div>
+
             <!-- New Section for Condition Check -->
             <div id="condition-check-form-container" class="mt-6 p-4 border border-gray-200 rounded-lg hidden">
                 <h4 class="text-lg font-semibold text-gray-800 mb-4" id="condition-form-title">Check Received Device Conditions</h4>
@@ -559,7 +566,6 @@
         const noOrdersMessage = document.getElementById('no-orders-message');
         const searchInput = document.getElementById('search-orders');
         const statusLinks = document.querySelectorAll('.status-link');
-        // Removed displayUserId as we're using displayUserEmail now
         const dashboardCards = document.querySelectorAll('.dashboard-card');
 
         const pendingShipmentCount = document.getElementById('pending-shipment-count');
@@ -611,7 +617,10 @@
         const modalActionButtons = document.getElementById('modal-action-buttons');
         const modalLoadingMessage = document.getElementById('modal-loading-message');
         const modalMessage = document.getElementById('modal-message');
+        
+        // NEW: Element to display detailed IMEI info
         const imeiInfoDisplay = document.getElementById('imei-info-display');
+        const imeiDataContent = document.getElementById('imei-data-content');
 
 
         const reofferFormContainer = document.getElementById('reoffer-form-container');
@@ -759,6 +768,7 @@
             checkImeiBtn.disabled = true;
 
             try {
+                // Placeholder for real API call
                 const url = `https://api.phonecheck.com/v2/imei/blacklist/${imei}`;
                 const response = await fetch(url, {
                     method: 'GET',
@@ -784,7 +794,7 @@
                     }
                 });
                 
-                // Display a success message
+                // Display a success message and re-open the modal with updated data
                 displayModalMessage('IMEI check completed. The order status has been updated.', 'success');
                 openOrderDetailsModal(orderId);
 
@@ -923,6 +933,7 @@
             modalReturnLabelRow.classList.add('hidden');
             // Hide IMEI results
             esnCheckResultsContainer.classList.add('hidden');
+            imeiInfoDisplay.classList.add('hidden'); // NEW: Hide the detailed IMEI info display
             // Clear all form inputs
             const formFields = conditionCheckFormContainer.querySelectorAll('input, select');
             formFields.forEach(field => {
@@ -1059,7 +1070,8 @@
                     const viewImeiInfoButton = document.createElement('button');
                     viewImeiInfoButton.textContent = 'View IMEI Info';
                     viewImeiInfoButton.className = 'bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 shadow';
-                    viewImeiInfoButton.onclick = () => showImeiInfo(order.fulfilledOrders.rawResponse);
+                    viewImeiInfoButton.onclick = () => showImeiInfo(order.fulfilledOrders);
+
                     modalActionButtons.appendChild(viewImeiInfoButton);
 
                     modalActionButtons.appendChild(createButton('Finalize Conditions', () => showFinalConditionForm(order), 'bg-green-600 hover:bg-green-700'));
@@ -1084,21 +1096,29 @@
             }
         }
         
-        function showImeiInfo(rawResponse) {
-            if (!rawResponse || !rawResponse.data) {
-                imeiInfoDisplay.innerHTML = '<p class="text-red-500">No IMEI data found.</p>';
+        // NEW: Correctly populates the IMEI info display
+        function showImeiInfo(fulfilledOrdersData) {
+            // Check for the IMEI number directly from the fulfilledOrdersData object
+            const imei = fulfilledOrdersData.imei;
+            const rawResponse = fulfilledOrdersData.rawResponse;
+
+            // Use the rawResponse data, which might be nested or at the top level
+            const data = rawResponse.data || rawResponse;
+
+            if (!imei) {
+                imeiDataContent.innerHTML = '<p class="text-red-500">No IMEI data found.</p>';
+                imeiInfoDisplay.classList.remove('hidden');
                 return;
             }
 
-            const data = rawResponse.data;
             let infoHtml = `
                 <p><strong>Overall Status:</strong> ${data.overall ? formatCondition(data.overall) : 'N/A'}</p>
-                <p><strong>IMEI:</strong> ${data.imei || 'N/A'}</p>
+                <p><strong>IMEI:</strong> ${imei}</p>
                 <p><strong>Blacklist Status:</strong> ${data.blacklistStatus || 'N/A'}</p>
-                <p><strong>Manufacturer:</strong> ${data.make || 'N/A'}</p>
-                <p><strong>Model:</strong> ${data.model || 'N/A'}</p>
+                <p><strong>Manufacturer:</strong> ${data.make || data.manufacturer || 'N/A'}</p>
+                <p><strong>Model:</strong> ${data.model || data.modelname || 'N/A'}</p>
                 <p><strong>Operating System:</strong> ${data.operatingSys || 'N/A'}</p>
-                <p><strong>Device Type:</strong> ${data.deviceType || 'N/A'}</p>
+                <p><strong>Device Type:</strong> ${data.deviceType || data.devicetype || 'N/A'}</p>
                 <h5 class="mt-4 font-semibold">IMEI History:</h5>
                 <ul class="list-disc list-inside ml-4 text-sm">
             `;
@@ -1112,7 +1132,8 @@
             }
             infoHtml += `</ul>`;
 
-            imeiInfoDisplay.innerHTML = infoHtml;
+            imeiDataContent.innerHTML = infoHtml;
+            imeiInfoDisplay.classList.remove('hidden');
         }
 
         function showConditionCheckForm(order) {
@@ -1314,93 +1335,93 @@
 
         async function submitFinalConditionCheck(orderId) {
              const receivedConditions = {
-                power_on: checkPowerOn.value,
-                functional: checkFunctional.value,
-                cracks: checkCracks.value,
-                cosmetic: checkCosmetic.value,
-                gb: checkGb.value,
-                imei: checkImei.value,
-                lockStatus: checkLockStatus.value,
-                deviceType: checkDeviceType.value
-            };
-            
-            // Basic form validation for the final check stage
-            let isValid = true;
-            if (!receivedConditions.power_on || !receivedConditions.functional || !receivedConditions.cracks || !receivedConditions.cosmetic || !receivedConditions.lockStatus) {
-                isValid = false;
-            }
+                 power_on: checkPowerOn.value,
+                 functional: checkFunctional.value,
+                 cracks: checkCracks.value,
+                 cosmetic: checkCosmetic.value,
+                 gb: checkGb.value,
+                 imei: checkImei.value,
+                 lockStatus: checkLockStatus.value,
+                 deviceType: checkDeviceType.value
+             };
+             
+             // Basic form validation for the final check stage
+             let isValid = true;
+             if (!receivedConditions.power_on || !receivedConditions.functional || !receivedConditions.cracks || !receivedConditions.cosmetic || !receivedConditions.lockStatus) {
+                 isValid = false;
+             }
 
-            if (!isValid) {
-                displayModalMessage('Please fill out all required fields.', 'error');
-                return;
-            }
+             if (!isValid) {
+                 displayModalMessage('Please fill out all required fields.', 'error');
+                 return;
+             }
 
-            modalLoadingMessage.classList.remove('hidden');
-            conditionCheckFormContainer.classList.add('hidden');
+             modalLoadingMessage.classList.remove('hidden');
+             conditionCheckFormContainer.classList.add('hidden');
 
-            try {
-                const order = allOrders.find(o => o.id === orderId);
-                if (!order) {
-                    throw new Error('Order data not found locally.');
-                }
-                
-                // Logic to compare received conditions with customer submitted conditions
-                const customerConditions = {
-                    power_on: order.condition_power_on,
-                    functional: order.condition_functional,
-                    cracks: order.condition_cracks,
-                    cosmetic: order.condition_cosmetic,
-                    gb: order.storage,
-                    lockStatus: order.lockStatus
-                };
+             try {
+                 const order = allOrders.find(o => o.id === orderId);
+                 if (!order) {
+                     throw new Error('Order data not found locally.');
+                 }
+                 
+                 // Logic to compare received conditions with customer submitted conditions
+                 const customerConditions = {
+                     power_on: order.condition_power_on,
+                     functional: order.condition_functional,
+                     cracks: order.condition_cracks,
+                     cosmetic: order.condition_cosmetic,
+                     gb: order.storage,
+                     lockStatus: order.lockStatus
+                 };
 
-                let reasons = [];
-                let comments = '';
+                 let reasons = [];
+                 let comments = '';
 
-                if (receivedConditions.power_on !== customerConditions.power_on) {
-                    reasons.push('Powers On condition mismatch');
-                    comments += `Customer said it powered on, but it does not. `;
-                }
-                if (receivedConditions.functional !== customerConditions.functional) {
-                    reasons.push('Functional condition mismatch');
-                    comments += `Customer said it was functional, but it is not. `;
-                }
-                if (receivedConditions.cracks !== customerConditions.cracks) {
-                    reasons.push('Cracks condition mismatch');
-                    comments += `Customer said there were no cracks, but there are. `;
-                }
-                if (receivedConditions.cosmetic !== customerConditions.cosmetic) {
-                    reasons.push('Cosmetic condition mismatch');
-                    comments += `Customer listed cosmetic condition as ${customerConditions.cosmetic}, but it is ${receivedConditions.cosmetic}. `;
-                }
-                if (receivedConditions.gb && receivedConditions.gb !== customerConditions.gb.replace('GB','')) {
-                    reasons.push('Storage size mismatch');
-                    comments += `Customer listed storage as ${customerConditions.gb}, but it is ${receivedConditions.gb}GB. `;
-                }
-                if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
-                     reasons.push('Carrier Lock Status mismatch');
-                     comments += `Customer listed lock status as ${customerConditions.lockStatus}, but it is ${receivedConditions.lockStatus}.`;
-                }
+                 if (receivedConditions.power_on !== customerConditions.power_on) {
+                     reasons.push('Powers On condition mismatch');
+                     comments += `Customer said it powered on, but it does not. `;
+                 }
+                 if (receivedConditions.functional !== customerConditions.functional) {
+                     reasons.push('Functional condition mismatch');
+                     comments += `Customer said it was functional, but it is not. `;
+                 }
+                 if (receivedConditions.cracks !== customerConditions.cracks) {
+                     reasons.push('Cracks condition mismatch');
+                     comments += `Customer said there were no cracks, but there are. `;
+                 }
+                 if (receivedConditions.cosmetic !== customerConditions.cosmetic) {
+                     reasons.push('Cosmetic condition mismatch');
+                     comments += `Customer listed cosmetic condition as ${customerConditions.cosmetic}, but it is ${receivedConditions.cosmetic}. `;
+                 }
+                 if (receivedConditions.gb && receivedConditions.gb !== customerConditions.gb.replace('GB','')) {
+                     reasons.push('Storage size mismatch');
+                     comments += `Customer listed storage as ${customerConditions.gb}, but it is ${receivedConditions.gb}GB. `;
+                 }
+                 if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
+                      reasons.push('Carrier Lock Status mismatch');
+                      comments += `Customer listed lock status as ${customerConditions.lockStatus}, but it is ${receivedConditions.lockStatus}.`;
+                 }
 
-                const newPrice = await calculateNewPrice(order.device, receivedConditions.gb, receivedConditions);
-                const oldPrice = parseFloat(order.estimatedQuote);
-                const newPriceFloat = parseFloat(newPrice);
-                
-                if (oldPrice !== newPriceFloat) {
-                    // A discrepancy was found, show re-offer form
-                    console.log('Price discrepancy found. Opening price confirmation modal.');
-                    showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
-                } else {
-                    // No discrepancy, proceed to mark as completed
-                    displayModalMessage('All conditions match the customer description. Proceeding to mark as completed.', 'success');
-                    await handleAction(orderId, 'markCompleted');
-                }
-            } catch (error) {
-                console.error("Final condition check error:", error);
-                displayModalMessage(`Error during final condition check: ${error.message}`, 'error');
-            } finally {
-                modalLoadingMessage.classList.add('hidden');
-            }
+                 const newPrice = await calculateNewPrice(order.device, receivedConditions.gb, receivedConditions);
+                 const oldPrice = parseFloat(order.estimatedQuote);
+                 const newPriceFloat = parseFloat(newPrice);
+                 
+                 if (oldPrice !== newPriceFloat) {
+                     // A discrepancy was found, show re-offer form
+                     console.log('Price discrepancy found. Opening price confirmation modal.');
+                     showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
+                 } else {
+                     // No discrepancy, proceed to mark as completed
+                     displayModalMessage('All conditions match the customer description. Proceeding to mark as completed.', 'success');
+                     await handleAction(orderId, 'markCompleted');
+                 }
+             } catch (error) {
+                 console.error("Final condition check error:", error);
+                 displayModalMessage(`Error during final condition check: ${error.message}`, 'error');
+             } finally {
+                 modalLoadingMessage.classList.add('hidden');
+             }
         }
         
         function showPriceConfirmationModal(orderId, oldPrice, newPrice, reasons, comments) {
@@ -1653,9 +1674,9 @@
                         modalActionButtons.classList.remove('hidden');
                         return;
                     case 'sendReturnLabel':
-                         url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
-                         method = 'POST';
-                         break;
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
+                        method = 'POST';
+                        break;
                     default:
                         throw new Error('Unknown action.');
                 }
@@ -1691,8 +1712,8 @@
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                                             ? order.reOffer.newPrice.toFixed(2)
-                                             : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                        ? order.reOffer.newPrice.toFixed(2)
+                                        : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
