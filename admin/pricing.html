@@ -5,15 +5,348 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Pricing Management</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.3/css/all.min.css">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar { min-width: 280px; }
+        .main-content { flex: 1; }
+        .sticky-header-container {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background-color: #f9fafb;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+        .sticky-table-header {
+            position: sticky;
+            top: 175px;
+            z-index: 40;
+            background-color: #f9fafb;
+        }
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+        }
+        .file-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .file-input-btn {
+            background-color: #e5e7eb;
+            color: #4b5563;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.15s ease-in-out;
+        }
+        .file-input-btn:hover { background-color: #d1d5db; }
+        .file-input-name { color: #6b7280; font-style: italic; }
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex">
+    
+    <aside class="sidebar fixed top-0 left-0 h-full bg-slate-900 text-gray-100 flex flex-col p-6 shadow-xl z-20">
+        <div class="flex-shrink-0 mb-8">
+            <h2 class="text-2xl font-extrabold tracking-tight text-blue-400">Admin Panel</h2>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+            <nav id="brand-nav" class="space-y-2">
+                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 bg-slate-700 text-white" data-brand="all">
+                    <i class="fas fa-grip-horizontal w-5"></i>
+                    All Brands
+                </a>
+                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 text-gray-400 hover:text-white hover:bg-slate-700" data-brand="iphone">
+                    <i class="fas fa-mobile-alt w-5"></i>
+                    iPhones
+                </a>
+                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 text-gray-400 hover:text-white hover:bg-slate-700" data-brand="samsung">
+                    <i class="fas fa-mobile-alt w-5"></i>
+                    Samsung
+                </a>
+                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 text-gray-400 hover:text-white hover:bg-slate-700" data-brand="google_pixel">
+                    <i class="fas fa-mobile-alt w-5"></i>
+                    Google Pixel
+                </a>
+                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 text-gray-400 hover:text-white hover:bg-slate-700" data-brand="ipad">
+                    <i class="fas fa-tablet-alt w-5"></i>
+                    iPads
+                </a>
+            </nav>
+        </div>
+        <div class="mt-auto">
+            <div id="adminPanelControls" class="flex flex-col items-start gap-2 py-4 border-t border-slate-700 hidden">
+                <span id="userEmailDisplay" class="text-sm font-medium text-gray-400"></span>
+                <button id="logoutBtn" class="bg-red-600 text-white px-3 py-2 rounded-md font-semibold text-sm hover:bg-red-700 transition-colors flex items-center gap-2">
+                    <i class="fas fa-sign-out-alt"></i>Logout
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <div class="main-content flex-1 min-h-screen flex flex-col ml-72">
+        <div id="loginSection" class="flex-1 flex items-center justify-center p-6 hidden">
+            <div class="bg-white p-8 rounded-lg shadow-2xl max-w-sm w-full">
+                <h2 class="text-2xl font-bold mb-4 text-center text-gray-900">Admin Login</h2>
+                <p class="text-gray-600 mb-6 text-center">Please sign in to manage device pricing.</p>
+                <form id="loginForm" class="space-y-4">
+                    <input type="email" id="loginEmail" placeholder="Email" class="w-full rounded-md border border-gray-300 p-3 focus:border-blue-500 focus:ring-blue-500" autocomplete="email">
+                    <input type="password" id="loginPassword" placeholder="Password" class="w-full rounded-md border border-gray-300 p-3 focus:border-blue-500 focus:ring-blue-500" autocomplete="current-password">
+                    <button type="submit" id="loginEmailBtn" class="bg-blue-600 text-white w-full px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
+                        Sign In with Email
+                    </button>
+                </form>
+                <p class="my-4 text-gray-400 text-center">or</p>
+                <button id="loginGoogleBtn" class="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors w-full">
+                    <i class="fab fa-google mr-2"></i>Sign In with Google
+                </button>
+            </div>
+        </div>
+        <div id="loadingIndicator" class="flex-1 flex items-center justify-center py-20">
+            <i class="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
+        </div>
+
+        <div id="adminPanel" class="flex-1 flex flex-col hidden">
+            <div class="sticky-header-container p-6 pb-4">
+                <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+                    <h1 class="text-3xl font-bold text-gray-900">Pricing Management</h1>
+                    <div class="relative flex items-center">
+                        <i class="fas fa-search absolute left-3 text-gray-400"></i>
+                        <input type="text" id="searchInput" placeholder="Search by model..." class="pl-10 p-2 border border-gray-300 rounded-full w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-md flex items-center justify-between flex-wrap gap-3">
+                    <div class="text-gray-500">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Prices change automatically when you type and save. Yellow border indicates pending changes.
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="addNewModelBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-blue-700 transition-colors flex items-center gap-2">
+                            <i class="fas fa-plus"></i>
+                            Add New Model
+                        </button>
+                        <button id="exportXLSXBtn" class="bg-emerald-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2">
+                            <i class="fas fa-file-excel"></i>
+                            Export
+                        </button>
+                        <button id="importXLSXBtn" class="bg-purple-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-purple-700 transition-colors flex items-center gap-2">
+                            <i class="fas fa-file-import"></i>
+                            Import
+                        </button>
+                        <button id="bulkEditBtn" class="bg-amber-500 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-amber-600 transition-colors flex items-center gap-2">
+                            <i class="fas fa-edit"></i>
+                            Bulk Edit
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <main class="flex-1 p-6 overflow-y-auto">
+                <div class="bg-white rounded-lg shadow-md overflow-x-auto">
+                    <table id="pricingTable" class="min-w-full divide-y divide-gray-200">
+                        <thead class="sticky top-0 z-10 bg-white shadow">
+                            <tr id="pricingTableHeader"></tr>
+                        </thead>
+                        <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+                <div id="statusMessage" class="hidden"></div>
+            </main>
+        </div>
+    </div>
+    
+    <div id="addEditModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
+        <div class="relative bg-white rounded-lg shadow-2xl p-8 max-w-4xl w-full mx-4 my-8">
+            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900">Add/Edit Pricing Model</h3>
+            <form id="addEditForm" class="space-y-6">
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="deviceName" class="block text-sm font-medium text-gray-700">Device Name</label>
+                        <input type="text" id="deviceName" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="deviceBrand" class="block text-sm font-medium text-gray-700">Brand</label>
+                        <select id="deviceBrand" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Select Brand</option>
+                            <option value="iphone">iPhones</option>
+                            <option value="samsung">Samsung</option>
+                            <option value="ipad">iPads</option>
+                            <option value="google_pixel">Google Pixels</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="deviceSlug" class="block text-sm font-medium text-gray-700">Slug (e.g., galaxy-s24-ultra)</label>
+                        <input type="text" id="deviceSlug" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="imageUrl" class="block text-sm font-medium text-gray-700">Image URL</label>
+                        <input type="text" id="imageUrl" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+                
+                <hr class="my-6 border-t border-gray-200">
+                <div id="storageOptionsContainer" class="space-y-6">
+                    <div class="storage-option bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-lg font-semibold text-gray-900">New Storage Option</h4>
+                            <button type="button" class="text-red-500 hover:text-red-700 delete-storage-option">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Storage Size (e.g., 64GB, 128GB)</label>
+                                <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
+                                    <div class="grid grid-cols-2 gap-2 mt-1">
+                                        <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="Good" class="unlocked-good rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power rounded-md border-gray-300 shadow-sm p-2">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
+                                    <div class="grid grid-cols-2 gap-2 mt-1">
+                                        <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="Good" class="locked-good rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="Fair" class="locked-fair rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="Damaged" class="locked-damaged rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="Broken" class="locked-broken rounded-md border-gray-300 shadow-sm p-2">
+                                        <input type="number" step="0.01" placeholder="No Power" class="locked-no-power rounded-md border-gray-300 shadow-sm p-2">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" id="addStorageOptionBtn" class="mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 transition-colors flex items-center gap-2">
+                    <i class="fas fa-plus"></i>
+                    Add Storage Option
+                </button>
+                
+                <div class="mt-8 flex justify-end gap-4">
+                    <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-blue-700">Save Pricing</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="bulkEditModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
+        <div class="relative bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full mx-4 my-8">
+            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900">Bulk Edit Prices</h3>
+            <form id="bulkEditForm" class="space-y-6">
+                <div>
+                    <label for="bulkBrand" class="block text-sm font-medium text-gray-700">Brand</label>
+                    <select id="bulkBrand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        <option value="">All Brands</option>
+                        <option value="iphone">iPhones</option>
+                        <option value="samsung">Samsung</option>
+                        <option value="ipad">iPads</option>
+                        <option value="google_pixel">Google Pixels</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="bulkModel" class="block text-sm font-medium text-gray-700">Model</label>
+                    <select id="bulkModel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        <option value="">All Models</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="bulkStatus" class="block text-sm font-medium text-gray-700">Lock Status / Connectivity</label>
+                    <select id="bulkStatus" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        <option value="all">All</option>
+                        <option value="unlocked">Unlocked</option>
+                        <option value="locked">Locked</option>
+                        <option value="lte">LTE</option>
+                        <option value="wifi">Wi-Fi</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="bulkQuality" class="block text-sm font-medium text-gray-700">Quality/Condition</label>
+                    <select id="bulkQuality" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                        <option value="all">All</option>
+                        <option value="flawless">Flawless</option>
+                        <option value="good">Good</option>
+                        <option value="fair">Fair</option>
+                        <option value="damaged">Damaged</option>
+                        <option value="broken">Broken</option>
+                        <option value="noPower">No Power</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="bulkAction" class="block text-sm font-medium text-gray-700">Action</label>
+                        <select id="bulkAction" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                            <option value="add">Add ($)</option>
+                            <option value="subtract">Subtract ($)</option>
+                            <option value="percent">Add (%)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="bulkValue" class="block text-sm font-medium text-gray-700">Value</label>
+                        <input type="number" step="0.01" id="bulkValue" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    </div>
+                </div>
+                <div class="mt-8 flex justify-end gap-4">
+                    <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
+                    <button type="submit" class="bg-amber-500 text-white px-6 py-2 rounded-md font-semibold hover:bg-amber-600">Apply Bulk Edit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="importModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
+        <div class="relative bg-white rounded-lg shadow-2xl p-8 max-w-4xl w-full mx-4 my-8">
+            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900">Import Prices from XLSX</h3>
+            <div class="space-y-6">
+                <p class="text-gray-600">Select an XLSX file to import pricing data. The file must contain columns: "Device", "Storage", "Lock Status", "Flawless", "Good", "Fair", "Damaged", "Broken", "No Power", "Slug", "Brand".</p>
+                <div class="file-input-wrapper">
+                    <label for="importFile" class="file-input-btn">Choose File</label>
+                    <span id="importFileName" class="file-input-name">No file chosen</span>
+                    <input type="file" id="importFile" accept=".xlsx">
+                </div>
+            </div>
+            <div id="overwriteWarningSection" class="mt-6 hidden"></div>
+            <div id="overwriteActions" class="mt-8 flex justify-end gap-4 hidden">
+                <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
+                <button type="button" id="confirmOverwriteBtn" class="bg-purple-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-purple-700 transition-colors">Confirm Import</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithCustomToken, signOut, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         
         // Use provided Firebase variables with a hardcoded fallback for local testing
         const tempFirebaseConfig = {
@@ -31,6 +364,7 @@
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
+        // Ensure firebaseConfig has a projectId before initializing
         if (!firebaseConfig.projectId) {
             console.error("Firebase 'projectId' not provided. Please check your configuration.");
         }
@@ -43,7 +377,6 @@
         let allDevices = [];
         let pendingChanges = {};
         
-        // Custom confirmation modal variables
         const customConfirmModal = document.createElement('div');
         customConfirmModal.id = 'customConfirmModal';
         
@@ -82,10 +415,11 @@
             const bulkEditModal = document.getElementById('bulkEditModal');
             const bulkEditForm = document.getElementById('bulkEditForm');
             const importModal = document.getElementById('importModal');
-            const importForm = document.getElementById('importForm');
+            const importFileForm = document.getElementById('importFileForm'); 
+            const importFile = document.getElementById('importFile');
+            const importFileName = document.getElementById('importFileName');
             const overwriteWarningSection = document.getElementById('overwriteWarningSection');
-            const confirmImportBtn = document.getElementById('confirmImportBtn');
-            const previewImportBtn = document.getElementById('previewImportBtn');
+            const confirmOverwriteBtn = document.getElementById('confirmOverwriteBtn');
             const closeModalBtns = document.querySelectorAll('.close-modal-btn');
             const statusMessage = document.getElementById('statusMessage');
             const loginSection = document.getElementById('loginSection');
@@ -100,19 +434,24 @@
             const searchInput = document.getElementById('searchInput');
             const brandFilter = document.getElementById('brandFilter');
             const pricingTableHeader = document.getElementById('pricingTableHeader');
-            const importFile = document.getElementById('importFile');
+            const addStorageOptionBtn = document.getElementById('addStorageOptionBtn');
+            const storageOptionsContainer = document.getElementById('storageOptionsContainer');
             
-            // Initial authentication check
             if (initialAuthToken) {
                 try {
                     await signInWithCustomToken(auth, initialAuthToken);
                 } catch (error) {
                     console.error("Error signing in with custom token:", error);
                 }
+            } else {
+                // Anonymous sign-in if no custom token exists, so the app still loads.
+                await signInAnonymously(auth);
             }
             
             const checkAdminStatus = async (user) => {
-                if (!user) { return false; }
+                if (!user) {
+                    return false;
+                }
                 try {
                     const adminDocRef = doc(db, 'admins', user.uid);
                     const adminDoc = await getDoc(adminDocRef);
@@ -125,26 +464,33 @@
             
             onAuthStateChanged(auth, async (user) => {
                 loadingIndicator.classList.remove('hidden');
+                loginSection.classList.add('hidden');
+                adminPanel.classList.add('hidden');
                 
                 if (user) {
                     const isAdmin = await checkAdminStatus(user);
                     if (isAdmin) {
                         userEmailDisplay.textContent = user.email;
-                        loginSection.classList.add('hidden');
                         adminPanel.classList.remove('hidden');
                         loadingIndicator.classList.add('hidden');
+                        document.getElementById('adminPanelControls').classList.remove('hidden');
+                        console.log("Admin user authenticated and authorized.");
                         await fetchAndRenderPricing();
                     } else {
+                        console.log("User signed in but not an authorized admin. Signing out...");
                         await signOut(auth);
                         loadingIndicator.classList.add('hidden');
                         loginSection.classList.remove('hidden');
                         adminPanel.classList.add('hidden');
+                        document.getElementById('adminPanelControls').classList.add('hidden');
                         displayStatusMessage("You are not authorized to view this page. Please sign in with an admin account.", 'error');
                     }
                 } else {
                     loadingIndicator.classList.add('hidden');
                     loginSection.classList.remove('hidden');
                     adminPanel.classList.add('hidden');
+                    document.getElementById('adminPanelControls').classList.add('hidden');
+                    console.log("User not authenticated.");
                 }
             });
 
@@ -180,7 +526,7 @@
             });
 
             const fetchAndRenderPricing = async (filters = {}) => {
-                pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">Loading pricing data...</td></tr>';
+                pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-gray-500">Loading pricing data...</td></tr>';
                 const iphoneCollection = collection(db, "devices/iphone/models");
                 const samsungCollection = collection(db, "devices/samsung/models");
                 const ipadCollection = collection(db, "devices/ipad/models");
@@ -258,8 +604,8 @@
                     }
 
                     if (a.status !== b.status) {
-                        const statusOrder = a.brand === 'ipad' ? ['lte', 'wifi'] : ['unlocked', 'locked'];
-                        return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
+                       const statusOrder = a.brand === 'ipad' ? ['lte', 'wifi'] : ['unlocked', 'locked'];
+                       return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
                     }
                     
                     const storageA = parseInt(a.storage);
@@ -280,37 +626,37 @@
                 if (filters.brand === 'ipad') {
                     pricingTableHeader.innerHTML = `
                         <tr>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Device</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Storage</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Connectivity</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Flawless</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Good</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Fair</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Damaged</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Broken</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">No Power</th>
-                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Actions</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Device</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Storage</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Connectivity</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Flawless</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Good</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Fair</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Damaged</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Broken</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">No Power</th>
+                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Actions</th>
                         </tr>
                     `;
                 } else {
                     pricingTableHeader.innerHTML = `
                         <tr>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Device</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Storage</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Lock Status</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Flawless</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Good</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Fair</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Damaged</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Broken</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">No Power</th>
-                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50">Actions</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Device</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Storage</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Lock Status</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Flawless</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Good</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Fair</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Damaged</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Broken</th>
+                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">No Power</th>
+                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Actions</th>
                         </tr>
                     `;
                 }
                 
                 if (sortedRows.length === 0) {
-                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4">No matching devices found.</td></tr>';
+                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-gray-500">No matching devices found.</td></tr>';
                     return;
                 }
                 
@@ -327,7 +673,7 @@
                     input.addEventListener('input', handleEditPrice);
                     input.addEventListener('blur', (e) => {
                         const uniqueKey = `${e.target.dataset.id}-${e.target.dataset.storage}-${e.target.dataset.status}`;
-                        const saveBtn = document.querySelector(`.save-row-btn[data-row-key="${uniqueKey}"]`);
+                        const saveBtn = document.querySelector(`.save-row-btn`);
                         const isChanged = Object.keys(pendingChanges).some(key => key.startsWith(uniqueKey));
                         if(isChanged) {
                            saveBtn.classList.remove('hidden');
@@ -370,12 +716,12 @@
             
             const showCustomConfirm = (message, callback) => {
                 const modalHtml = `
-                    <div class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center">
+                    <div class="fixed inset-0 bg-gray-900 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
                         <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-sm w-full mx-4 my-8">
                             <h3 class="text-xl font-bold mb-4 text-gray-900">Confirm Action</h3>
                             <p class="text-gray-600 mb-6">${message}</p>
                             <div class="flex justify-end gap-4">
-                                <button id="cancel-confirm" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold">Cancel</button>
+                                <button id="cancel-confirm" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
                                 <button id="ok-confirm" class="bg-red-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-600">Delete</button>
                             </div>
                         </div>
@@ -396,15 +742,15 @@
 
             const createPriceRow = (device, storage, status, prices) => {
                 const row = document.createElement('tr');
-                row.className = 'border-b border-gray-200 hover:bg-gray-50';
+                row.className = 'border-b border-gray-200 hover:bg-gray-50 transition-colors';
                 
                 const rowKey = `${device.id}-${storage}-${status}`;
                 const saveBtnHtml = `
-                    <button class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-700 save-row-btn hidden" data-row-key="${rowKey}">
+                    <button class="bg-blue-500 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-blue-600 transition-colors save-row-btn hidden" data-row-key="${rowKey}">
                         <i class="fas fa-save mr-1"></i>Save
                     </button>
                 `;
-                const deleteBtnHtml = `<button class="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${device.id}" data-brand="${device.brand}" data-name="${device.name}">Delete</button>`;
+                const deleteBtnHtml = `<button class="bg-red-500 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-red-600 transition-colors delete-btn" data-id="${device.id}" data-brand="${device.brand}" data-name="${device.name}">Delete</button>`;
                 
                 let statusText = status;
                 let statusClass = '';
@@ -413,23 +759,25 @@
                     statusClass = status === 'lte' ? 'text-blue-600' : 'text-indigo-600';
                 } else {
                     statusText = status.charAt(0).toUpperCase() + status.slice(1);
-                    statusClass = status === 'unlocked' ? 'text-green-600' : 'text-red-600';
+                    statusClass = status === 'unlocked' ? 'text-emerald-600' : 'text-red-600';
                 }
                 
                 row.innerHTML = `
-                    <td class="py-3 px-4 flex items-center gap-2 whitespace-nowrap">
-                        <img class="w-10 h-10 object-contain rounded-md border" data-base-src="${device.imageUrl}" alt="${device.name}">
-                        <span>${device.name}</span>
+                    <td class="py-3 px-4 font-semibold text-sm">
+                        <div class="flex items-center gap-3">
+                            <img class="w-10 h-10 object-contain rounded-md border p-1 bg-white" data-base-src="${device.imageUrl}" alt="${device.name}">
+                            <span>${device.name}</span>
+                        </div>
                     </td>
-                    <td class="py-3 px-4 whitespace-nowrap">${storage}</td>
-                    <td class="py-3 px-4 font-semibold text-sm ${statusClass} whitespace-nowrap">${statusText}</td>
+                    <td class="py-3 px-4 text-gray-600">${storage}</td>
+                    <td class="py-3 px-4 font-medium text-sm ${statusClass}">${statusText}</td>
                     ${renderEditablePriceCell(prices.flawless, device, storage, status, 'flawless')}
                     ${renderEditablePriceCell(prices.good, device, storage, status, 'good')}
                     ${renderEditablePriceCell(prices.fair, device, storage, status, 'fair')}
                     ${renderEditablePriceCell(prices.damaged, device, storage, status, 'damaged')}
                     ${renderEditablePriceCell(prices.broken, device, storage, status, 'broken')}
                     ${renderEditablePriceCell(prices.noPower, device, storage, status, 'noPower')}
-                    <td class="py-3 px-4 text-center space-x-2 whitespace-nowrap">
+                    <td class="py-3 px-4 text-center space-x-2">
                         ${saveBtnHtml}
                         ${deleteBtnHtml}
                     </td>
@@ -449,7 +797,7 @@
 
                 return `
                     <td class="py-3 px-2">
-                        <div class="relative flex items-center bg-gray-100 rounded-lg p-2 border border-gray-200 hover:border-blue-500 transition-colors ${hasPendingChange ? 'border-orange-500 ring-2 ring-orange-200' : ''}">
+                        <div class="relative flex items-center bg-white rounded-md p-2 border border-gray-300 hover:border-blue-500 transition-colors ${hasPendingChange ? 'border-amber-500 ring-2 ring-amber-200' : ''}">
                             <span class="text-gray-500 text-xs mr-1">$</span>
                             <input 
                                 type="number" 
@@ -495,10 +843,10 @@
                 const rowHasChanges = Object.keys(pendingChanges).some(key => key.startsWith(rowKey));
                 if (rowHasChanges) {
                     saveBtn.classList.remove('hidden');
-                    inputWrapper.classList.add('border-orange-500', 'ring-2', 'ring-orange-200');
+                    inputWrapper.classList.add('border-amber-500', 'ring-2', 'ring-amber-200');
                 } else {
                     saveBtn.classList.add('hidden');
-                    inputWrapper.classList.remove('border-orange-500', 'ring-2', 'ring-orange-200');
+                    inputWrapper.classList.remove('border-amber-500', 'ring-2', 'ring-amber-200');
                 }
             };
 
@@ -514,6 +862,9 @@
                     displayStatusMessage('No changes to save for this row.', 'info');
                     return;
                 }
+
+                console.log("Saving changes for row:", rowKey);
+                console.log("Changes to commit:", changesToSave);
 
                 displayStatusMessage('Saving changes...', 'info');
                 button.disabled = true;
@@ -532,14 +883,15 @@
 
                 try {
                     await batch.commit();
+                    console.log("Batch committed successfully!");
                     displayStatusMessage('Changes saved successfully!', 'success');
                     
                     const deviceToUpdate = allDevices.find(d => d.id === changesToSave[0].id);
                     if (deviceToUpdate) {
                         changesToSave.forEach(change => {
-                            if (!deviceToUpdate.prices[change.storage]) deviceToUpdate.prices[change.storage] = {};
-                            if (!deviceToUpdate.prices[change.storage][change.status]) deviceToUpdate.prices[change.storage][change.status] = {};
-                            deviceToUpdate.prices[change.storage][change.status][change.condition] = change.value;
+                             if (!deviceToUpdate.prices[change.storage]) deviceToUpdate.prices[change.storage] = {};
+                             if (!deviceToUpdate.prices[change.storage][change.status]) deviceToUpdate.prices[change.storage][change.status] = {};
+                             deviceToUpdate.prices[change.storage][change.status][change.condition] = change.value;
                         });
                     }
                     
@@ -548,69 +900,73 @@
                 } catch (error) {
                     console.error("Error committing changes:", error);
                     displayStatusMessage('Error saving changes. Please try again.', 'error');
-                } finally {
                     button.disabled = false;
                     button.innerHTML = `<i class="fas fa-save mr-1"></i>Save`;
                 }
             };
             
             searchInput.addEventListener('input', () => renderPricingTable(allDevices, { search: searchInput.value, brand: brandFilter.value }));
-            brandFilter.addEventListener('change', () => renderPricingTable(allDevices, { search: searchInput.value, brand: brandFilter.value }));
-            
-            // Export to XLSX
+            document.getElementById('brandFilter').addEventListener('change', (e) => {
+                const selectedBrand = e.target.value;
+                const brandFilterLinks = document.querySelectorAll('#brand-nav a');
+                brandFilterLinks.forEach(link => {
+                    link.classList.remove('bg-gray-700', 'text-white');
+                    link.classList.add('text-gray-400', 'hover:text-white', 'hover:bg-gray-700');
+                    if (link.dataset.brand === selectedBrand || (selectedBrand === '' && link.dataset.brand === 'all')) {
+                        link.classList.add('bg-gray-700', 'text-white');
+                        link.classList.remove('text-gray-400');
+                    }
+                });
+                renderPricingTable(allDevices, { search: searchInput.value, brand: selectedBrand });
+            });
+            document.getElementById('brand-nav').addEventListener('click', (e) => {
+                if (e.target.tagName === 'A' || e.target.closest('A')) {
+                    e.preventDefault();
+                    const link = e.target.closest('A');
+                    const selectedBrand = link.dataset.brand === 'all' ? '' : link.dataset.brand;
+                    document.getElementById('brandFilter').value = selectedBrand;
+                    renderPricingTable(allDevices, { search: searchInput.value, brand: selectedBrand });
+                    
+                    // Update active class on click
+                    document.querySelectorAll('#brand-nav a').forEach(item => {
+                        item.classList.remove('bg-gray-700', 'text-white');
+                        item.classList.add('text-gray-400');
+                    });
+                    link.classList.add('bg-gray-700', 'text-white');
+                }
+            });
+
             exportXLSXBtn.addEventListener('click', () => {
-                if (allDevices.length === 0) {
+                const table = document.getElementById('pricingTable');
+                if (!table) {
                     displayStatusMessage('No data to export.', 'error');
                     return;
                 }
-            
-                const dataForExport = [];
-                const header = ["Device", "Slug", "Brand", "Storage", "Lock Status", "Flawless", "Good", "Fair", "Damaged", "Broken", "No Power"];
-            
-                allDevices.forEach(device => {
-                    Object.keys(device.prices).forEach(storage => {
-                        Object.keys(device.prices[storage]).forEach(status => {
-                            const prices = device.prices[storage][status];
-                            dataForExport.push([
-                                device.name,
-                                device.slug,
-                                device.brand,
-                                storage,
-                                status,
-                                prices.flawless,
-                                prices.good,
-                                prices.fair,
-                                prices.damaged,
-                                prices.broken,
-                                prices.noPower
-                            ]);
-                        });
-                    });
-                });
-            
-                const worksheet = XLSX.utils.aoa_to_sheet([header, ...dataForExport]);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Pricing Data");
-                XLSX.writeFile(workbook, "pricing_data.xlsx");
-            
+
+                const wb = XLSX.utils.table_to_book(table);
+                XLSX.writeFile(wb, "pricing_data.xlsx");
                 displayStatusMessage('Export successful!', 'success');
             });
-
-            // Import from XLSX workflow
+            
             importXLSXBtn.addEventListener('click', () => {
                 importModal.classList.remove('hidden');
+                importFileForm.reset();
+                importFileName.textContent = 'No file chosen';
+                overwriteWarningSection.innerHTML = '';
+                overwriteWarningSection.classList.add('hidden');
+                document.getElementById('overwriteActions').classList.add('hidden');
             });
             
             let changesToCommit = [];
             
-            previewImportBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const file = importFile.files[0];
+            importFile.addEventListener('change', (e) => {
+                const file = e.target.files[0];
                 if (!file) {
-                    displayStatusMessage("Please select a file to import.", 'error');
+                    importFileName.textContent = 'No file chosen';
                     return;
                 }
-                
+                importFileName.textContent = file.name;
+
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     try {
@@ -624,7 +980,7 @@
                     } catch (error) {
                         console.error("Error reading XLSX file:", error);
                         displayStatusMessage("Failed to read the XLSX file. Please ensure it's a valid format.", 'error');
-                        importForm.reset();
+                        importFileForm.reset();
                     }
                 };
                 reader.readAsArrayBuffer(file);
@@ -640,8 +996,8 @@
                 });
                 
                 importedData.forEach(row => {
-                    const slug = row['Slug'];
-                    const brand = row['Brand'] ? row['Brand'].toLowerCase() : null;
+                    const slug = row['Slug'] ? String(row['Slug']).trim() : null;
+                    const brand = row['Brand'] ? String(row['Brand']).toLowerCase().trim() : null;
                     
                     if (!slug || !brand) {
                         console.warn('Skipping row due to missing Slug or Brand:', row);
@@ -651,8 +1007,8 @@
                     const existingDevice = currentDataMap[slug];
                     
                     if (existingDevice && existingDevice.brand === brand) {
-                        const storage = row['Storage'] ? row['Storage'].toLowerCase() : null;
-                        const status = row['Lock Status'] ? row['Lock Status'].toLowerCase() : null;
+                        const storage = row['Storage'] ? String(row['Storage']).toLowerCase().trim() : null;
+                        const status = row['Lock Status'] ? String(row['Lock Status']).toLowerCase().trim() : null;
                         
                         if (!storage || !status) {
                              console.warn('Skipping row due to missing Storage or Lock Status:', row);
@@ -665,15 +1021,18 @@
                             const newPrice = row[quality];
                             const conditionKey = quality.replace(/\s/g, '').toLowerCase();
                             
-                            if (newPrice !== undefined && newPrice !== null && typeof newPrice === 'number') {
-                                if (existingPriceData && existingPriceData[conditionKey] !== newPrice) {
+                            if (newPrice !== undefined && newPrice !== null && !isNaN(newPrice)) {
+                                const oldPrice = existingPriceData ? existingPriceData[conditionKey] : null;
+                                if (oldPrice !== newPrice) {
                                     changesToCommit.push({
-                                        id: existingDevice.id, // Use the device ID from the database
+                                        id: existingDevice.id,
+                                        device: existingDevice.name,
+                                        slug: slug,
                                         brand: brand,
                                         storage: storage,
                                         status: status,
                                         condition: conditionKey,
-                                        oldPrice: existingPriceData[conditionKey] || 'N/A',
+                                        oldPrice: oldPrice || 'N/A',
                                         newPrice: newPrice
                                     });
                                 }
@@ -684,10 +1043,10 @@
 
                 if (changesToCommit.length > 0) {
                     let tableHTML = `
-                        <h4 class="text-lg font-semibold text-red-600 mb-4">Warning: The following prices will be overwritten.</h4>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-sm text-left text-gray-500 rounded-lg">
-                                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                        <h4 class="text-lg font-semibold text-red-600 mb-4">Warning: The following prices will be updated.</h4>
+                        <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
+                            <table class="w-full text-sm text-left text-gray-500">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
                                     <tr>
                                         <th scope="col" class="py-3 px-6">Device</th>
                                         <th scope="col" class="py-3 px-6">Storage</th>
@@ -702,7 +1061,7 @@
                     changesToCommit.forEach(change => {
                         tableHTML += `
                             <tr class="bg-white border-b hover:bg-gray-50">
-                                <td class="py-4 px-6 font-medium text-gray-900">${change.id}</td>
+                                <td class="py-4 px-6 font-medium text-gray-900">${change.device}</td>
                                 <td class="py-4 px-6">${change.storage}</td>
                                 <td class="py-4 px-6">${change.status}</td>
                                 <td class="py-4 px-6">${change.condition}</td>
@@ -715,7 +1074,6 @@
                     overwriteWarningSection.innerHTML = tableHTML;
                     overwriteWarningSection.classList.remove('hidden');
                     document.getElementById('overwriteActions').classList.remove('hidden');
-                    displayStatusMessage(`${changesToCommit.length} changes detected. Review and confirm import.`, 'info');
                 } else {
                     displayStatusMessage('No changes detected. Data is up to date.', 'info');
                     overwriteWarningSection.classList.add('hidden');
@@ -723,17 +1081,20 @@
                 }
             };
             
-            confirmImportBtn.addEventListener('click', async () => {
+            confirmOverwriteBtn.addEventListener('click', async () => {
                 displayStatusMessage('Updating prices...', 'info');
-                confirmImportBtn.disabled = true;
+                confirmOverwriteBtn.disabled = true;
+                confirmOverwriteBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Importing...`;
+
                 const batch = writeBatch(db);
                 
                 const updatesByDoc = changesToCommit.reduce((acc, change) => {
-                    if (!acc[change.id]) {
-                        acc[change.id] = { brand: change.brand, updates: {} };
+                    const docId = change.id;
+                    if (!acc[docId]) {
+                        acc[docId] = { brand: change.brand, updates: {} };
                     }
                     const updatePath = `prices.${change.storage}.${change.status}.${change.condition}`;
-                    acc[change.id].updates[updatePath] = change.newPrice;
+                    acc[docId].updates[updatePath] = change.newPrice;
                     return acc;
                 }, {});
 
@@ -752,7 +1113,8 @@
                     console.error("Error committing batch:", error);
                     displayStatusMessage('Error updating prices. Please try again.', 'error');
                 } finally {
-                    confirmImportBtn.disabled = false;
+                    confirmOverwriteBtn.disabled = false;
+                    confirmOverwriteBtn.innerHTML = `Confirm Import`;
                 }
             });
 
@@ -765,7 +1127,8 @@
                     addEditModal.classList.add('hidden');
                     bulkEditModal.classList.add('hidden');
                     importModal.classList.add('hidden');
-                    importForm.reset();
+                    importFileForm.reset();
+                    importFileName.textContent = 'No file chosen';
                     overwriteWarningSection.innerHTML = '';
                     overwriteWarningSection.classList.add('hidden');
                     document.getElementById('overwriteActions').classList.add('hidden');
@@ -786,6 +1149,7 @@
                     return;
                 }
 
+                const updates = {};
                 const matchingDevices = allDevices.filter(device => {
                     let matches = true;
                     if (bulkBrand && device.brand !== bulkBrand) matches = false;
@@ -867,6 +1231,8 @@
 
             addNewModelBtn.addEventListener('click', () => {
                 addEditForm.reset();
+                storageOptionsContainer.innerHTML = '';
+                addStorageOptionBtn.click();
                 addEditModal.classList.remove('hidden');
             });
             
@@ -928,42 +1294,48 @@
                 }
             });
 
-            document.getElementById('addStorageOptionBtn').addEventListener('click', () => {
-                const container = document.getElementById('storageOptionsContainer');
+            addStorageOptionBtn.addEventListener('click', () => {
                 const newOption = document.createElement('div');
-                newOption.className = 'storage-option grid grid-cols-12 gap-4 mb-4';
+                newOption.className = 'storage-option bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner';
                 newOption.innerHTML = `
-                    <div class="col-span-2">
-                        <label class="block text-sm font-medium text-gray-700">Storage</label>
-                        <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
+                    <div class="flex items-center justify-between mb-4">
+                        <h4 class="text-lg font-semibold text-gray-900">New Storage Option</h4>
+                        <button type="button" class="text-red-500 hover:text-red-700 delete-storage-option">
+                            <i class="fas fa-times"></i>
+                        </button>
                     </div>
-                    <div class="col-span-5">
-                        <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
-                        <div class="flex flex-wrap gap-2 mt-1">
-                            <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="Good" class="unlocked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Storage Size (e.g., 64GB, 128GB)</label>
+                            <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
                         </div>
-                    </div>
-                    <div class="col-span-5">
-                        <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
-                        <div class="flex flex-wrap gap-2 mt-1">
-                            <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="Good" class="locked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="Fair" class="locked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="Damaged" class="locked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="Broken" class="locked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            <input type="number" step="0.01" placeholder="No Power" class="locked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
+                                <div class="grid grid-cols-2 gap-2 mt-1">
+                                    <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="Good" class="unlocked-good rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power rounded-md border-gray-300 shadow-sm p-2">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
+                                <div class="grid grid-cols-2 gap-2 mt-1">
+                                    <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="Good" class="locked-good rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="Fair" class="locked-fair rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="Damaged" class="locked-damaged rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="Broken" class="locked-broken rounded-md border-gray-300 shadow-sm p-2">
+                                    <input type="number" step="0.01" placeholder="No Power" class="locked-no-power rounded-md border-gray-300 shadow-sm p-2">
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-span-12 flex justify-end">
-                        <button type="button" class="bg-red-500 text-white px-3 py-2 rounded-md delete-storage-option">Delete</button>
                     </div>
                 `;
-                container.appendChild(newOption);
+                storageOptionsContainer.appendChild(newOption);
                 
                 newOption.querySelector('.delete-storage-option').addEventListener('click', () => {
                     newOption.remove();
@@ -972,275 +1344,9 @@
 
             function displayStatusMessage(message, type) {
                 statusMessage.textContent = message;
-                statusMessage.className = `p-3 rounded-md mt-4 text-center ${type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} ${type === 'info' ? 'bg-blue-100 text-blue-700' : ''}`;
+                statusMessage.className = `p-3 rounded-md mt-4 text-center ${type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'} ${type === 'info' ? 'bg-blue-100 text-blue-700' : ''}`;
             }
         });
     </script>
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        
-        .sticky-header {
-            position: sticky;
-            top: 0;
-            z-index: 50;  
-        }
-
-        input[type="text"], input[type="number"], select {
-            border-color: #d1d5db;
-        }
-        input:focus, select:focus {
-            outline: none;
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);
-        }
-    </style>
-</head>
-<body class="bg-gray-100 text-gray-800">
-
-    <header class="bg-white shadow-md">
-        <div class="container mx-auto p-6 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-900">Pricing Management</h1>
-            <div id="adminPanelControls" class="flex items-center gap-4 hidden">
-                <span id="userEmailDisplay" class="text-sm font-medium"></span>
-                <button id="logoutBtn" class="text-red-500 font-semibold hover:text-red-700">Logout</button>
-            </div>
-        </div>
-    </header>
-
-    <main class="container mx-auto p-6">
-        <div id="loadingIndicator" class="flex justify-center items-center py-20">
-            <i class="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
-        </div>
-        
-        <div id="loginSection" class="text-center py-20 hidden">
-            <div class="bg-white p-8 rounded-lg shadow-md max-w-sm mx-auto">
-                <h2 class="text-2xl font-bold mb-4">Admin Login</h2>
-                <p class="text-gray-600 mb-6">Please sign in to manage device pricing.</p>
-                <form id="loginForm" class="space-y-4">
-                    <input type="email" id="loginEmail" placeholder="Email" class="w-full rounded-lg border-gray-300 p-3" autocomplete="email">
-                    <input type="password" id="loginPassword" placeholder="Password" class="w-full rounded-lg border-gray-300 p-3" autocomplete="current-password">
-                    <button type="submit" id="loginEmailBtn" class="bg-gray-800 text-white w-full px-6 py-3 rounded-lg font-semibold hover:bg-gray-900 transition-colors">
-                        Sign In with Email
-                    </button>
-                </form>
-                <p class="my-4 text-gray-500">or</p>
-                <button id="loginGoogleBtn" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors w-full">
-                    <i class="fab fa-google mr-2"></i>Sign In with Google
-                </button>
-            </div>
-        </div>
-
-        <div id="adminPanel" class="hidden">
-            <div class="bg-white shadow-md p-6 mb-6 rounded-lg flex items-center justify-between flex-wrap gap-4">
-                <div class="flex items-center gap-4">
-                    <div class="relative flex items-center">
-                        <i class="fas fa-search absolute left-3 text-gray-400"></i>
-                        <input type="text" id="searchInput" placeholder="Search by model..." class="pl-10 p-2 border rounded-full w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <select id="brandFilter" class="p-2 border rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">All Brands</option>
-                            <option value="iphone">iPhones</option>
-                            <option value="samsung">Samsung</option>
-                            <option value="ipad">iPads</option>
-                            <option value="google_pixel">Google Pixels</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <button id="addNewModelBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                        <i class="fas fa-plus mr-2"></i>Add New Model
-                    </button>
-                    <button id="exportXLSXBtn" class="bg-green-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-600 transition-colors">
-                        <i class="fas fa-file-excel mr-2"></i>Export to XLSX
-                    </button>
-                    <button id="importXLSXBtn" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-purple-700 transition-colors">
-                        <i class="fas fa-file-import mr-2"></i>Import from XLSX
-                    </button>
-                    <button id="bulkEditBtn" class="bg-orange-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-600 transition-colors">
-                        <i class="fas fa-edit mr-2"></i>Bulk Edit
-                    </button>
-                </div>
-            </div>
-
-            <div class="bg-white shadow-lg rounded-lg overflow-x-auto">
-                <table id="pricingTable" class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50 sticky-header">
-                        <tr id="pricingTableHeader"></tr>
-                    </thead>
-                    <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200"></tbody>
-                </table>
-            </div>
-            <div id="statusMessage" class="hidden"></div>
-        </div>
-    </main>
-
-    <div id="addEditModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
-        <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-4xl w-full mx-4 my-8">
-            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
-                <i class="fas fa-times"></i>
-            </button>
-            <h3 class="text-2xl font-bold mb-6 text-gray-900">Add/Edit Pricing Model</h3>
-            <form id="addEditForm" class="space-y-6">
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label for="deviceName" class="block text-sm font-medium text-gray-700">Device Name</label>
-                        <input type="text" id="deviceName" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                    </div>
-                    <div>
-                        <label for="deviceBrand" class="block text-sm font-medium text-gray-700">Brand</label>
-                        <select id="deviceBrand" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                            <option value="">Select Brand</option>
-                            <option value="iphone">iPhones</option>
-                            <option value="samsung">Samsung</option>
-                            <option value="ipad">iPads</option>
-                            <option value="google_pixel">Google Pixels</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="deviceSlug" class="block text-sm font-medium text-gray-700">Slug (e.g., galaxy-s24-ultra)</label>
-                        <input type="text" id="deviceSlug" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                    </div>
-                    <div>
-                        <label for="imageUrl" class="block text-sm font-medium text-gray-700">Image URL</label>
-                        <input type="text" id="imageUrl" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                    </div>
-                </div>
-                
-                <hr class="my-6">
-                <h4 class="text-xl font-bold text-gray-900 mb-4">Pricing by Storage and Condition</h4>
-                <div id="storageOptionsContainer" class="space-y-4">
-                    <div class="storage-option grid grid-cols-12 gap-4 mb-4">
-                        <div class="col-span-2">
-                            <label class="block text-sm font-medium text-gray-700">Storage</label>
-                            <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        </div>
-                        <div class="col-span-5">
-                            <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
-                            <div class="flex flex-wrap gap-2 mt-1">
-                                <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="Good" class="unlocked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            </div>
-                        </div>
-                        <div class="col-span-5">
-                            <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
-                            <div class="flex flex-wrap gap-2 mt-1">
-                                <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="Good" class="locked-good flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="Fair" class="locked-fair flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="Damaged" class="locked-damaged flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="Broken" class="locked-broken flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                                <input type="number" step="0.01" placeholder="No Power" class="locked-no-power flex-1 rounded-md border-gray-300 shadow-sm p-2">
-                            </div>
-                        </div>
-                        <div class="col-span-12 flex justify-end">
-                            <button type="button" class="bg-red-500 text-white px-3 py-2 rounded-md delete-storage-option">Delete</button>
-                        </div>
-                    </div>
-                </div>
-
-                <button type="button" id="addStorageOptionBtn" class="mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
-                    <i class="fas fa-plus mr-2"></i>Add Storage Option
-                </button>
-                
-                <div class="mt-8 flex justify-end gap-4">
-                    <button type="button" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold close-modal-btn">Cancel</button>
-                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Save Pricing</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    
-    <div id="bulkEditModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
-        <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4 my-8">
-            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
-                <i class="fas fa-times"></i>
-            </button>
-            <h3 class="text-2xl font-bold mb-6 text-gray-900">Bulk Edit Prices</h3>
-            <form id="bulkEditForm" class="space-y-6">
-                <div>
-                    <label for="bulkBrand" class="block text-sm font-medium text-gray-700">Brand</label>
-                    <select id="bulkBrand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        <option value="">All Brands</option>
-                        <option value="iphone">iPhones</option>
-                        <option value="samsung">Samsung</option>
-                        <option value="ipad">iPads</option>
-                        <option value="google_pixel">Google Pixels</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="bulkModel" class="block text-sm font-medium text-gray-700">Model</label>
-                    <select id="bulkModel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        <option value="">All Models</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="bulkStatus" class="block text-sm font-medium text-gray-700">Lock Status / Connectivity</label>
-                    <select id="bulkStatus" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        <option value="all">All</option>
-                        <option value="unlocked">Unlocked</option>
-                        <option value="locked">Locked</option>
-                        <option value="lte">LTE</option>
-                        <option value="wifi">Wi-Fi</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="bulkQuality" class="block text-sm font-medium text-gray-700">Quality/Condition</label>
-                    <select id="bulkQuality" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        <option value="all">All</option>
-                        <option value="flawless">Flawless</option>
-                        <option value="good">Good</option>
-                        <option value="fair">Fair</option>
-                        <option value="damaged">Damaged</option>
-                        <option value="broken">Broken</option>
-                        <option value="noPower">No Power</option>
-                    </select>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label for="bulkAction" class="block text-sm font-medium text-gray-700">Action</label>
-                        <select id="bulkAction" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                            <option value="add">Add ($)</option>
-                            <option value="subtract">Subtract ($)</option>
-                            <option value="percent">Add (%)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="bulkValue" class="block text-sm font-medium text-gray-700">Value</label>
-                        <input type="number" step="0.01" id="bulkValue" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                    </div>
-                </div>
-                <div class="mt-8 flex justify-end gap-4">
-                    <button type="button" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold close-modal-btn">Cancel</button>
-                    <button type="submit" class="bg-orange-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-orange-600">Apply Bulk Edit</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    
-    <div id="importModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 overflow-y-auto h-full w-full flex items-center justify-center hidden">
-        <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full mx-4 my-8">
-            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 close-modal-btn">
-                <i class="fas fa-times"></i>
-            </button>
-            <h3 class="text-2xl font-bold mb-6 text-gray-900">Import Prices from XLSX</h3>
-            <form id="importForm" class="space-y-6">
-                <p class="text-gray-600">Select an XLSX file to import pricing data. The file must contain columns: "Device", "Storage", "Lock Status", "Flawless", "Good", "Fair", "Damaged", "Broken", "No Power", **"Slug"**, **"Brand"**.</p>
-                <input type="file" id="importFile" accept=".xlsx" class="w-full text-gray-700">
-                <div class="mt-4 flex justify-end">
-                    <button type="button" id="previewImportBtn" class="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700">Preview Import</button>
-                </div>
-            </form>
-            <div id="overwriteWarningSection" class="mt-6 hidden"></div>
-            <div id="overwriteActions" class="mt-8 flex justify-end gap-4 hidden">
-                <button type="button" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold close-modal-btn">Cancel</button>
-                <button type="button" id="confirmImportBtn" class="bg-red-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-600">Confirm Overwrite</button>
-            </div>
-        </div>
-    </div>
 </body>
 </html>
