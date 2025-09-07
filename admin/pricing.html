@@ -1,768 +1,464 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pricing Management Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <style>
-    :root { color-scheme: light dark; }
-    html, body { height: 100%; }
-    body {
-      font-family: 'Inter', sans-serif;
-      background: #f3f4f6;
-      color: #111827;
-    }
-    .sidebar { min-width: 18rem; width: 18rem; }
-    .sticky-header-container { position: sticky; top: 0; z-index: 50; background: #f9fafb; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
-    .modal-overlay { background: rgba(0,0,0,.6); backdrop-filter: blur(2px); }
-    input[type="number"]::-webkit-inner-spin-button,
-    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-    input[type="number"] { -moz-appearance: textfield; }
-    .file-input-wrapper { display: flex; align-items: center; gap: .5rem; }
-    .file-input-btn { background:#e5e7eb; color:#4b5563; padding:.5rem 1rem; border-radius:.375rem; cursor:pointer; font-weight:600; transition:.15s; }
-    .file-input-btn:hover { background:#d1d5db; }
-    input[type="file"]{ display:none; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price Management Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Poppins', sans-serif; }
+        .table-container { max-height: 70vh; overflow-y: auto; }
+        .sticky-header th { position: sticky; top: 0; background-color: #f1f5f9; z-index: 10; }
+        .btn-primary { @apply bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300; }
+        .btn-secondary { @apply bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300; }
+        .modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            opacity: 0; visibility: hidden;
+        }
+        .modal.is-visible {
+            opacity: 1; visibility: visible;
+        }
+    </style>
 </head>
-<body class="flex min-h-screen">
-  <!-- Sidebar -->
-  <aside class="sidebar fixed top-0 left-0 h-full bg-slate-800 text-gray-100 flex flex-col p-6 shadow-xl z-20">
-    <div class="flex-shrink-0 mb-8">
-      <h2 class="text-2xl font-extrabold tracking-tight text-teal-400"><i class="fas fa-chart-line mr-2"></i>Pricing Panel</h2>
-    </div>
-    <div class="flex-1 overflow-y-auto pr-2">
-      <nav id="brand-nav" class="space-y-2"></nav>
-    </div>
-    <div class="mt-auto">
-      <div id="adminPanelControls" class="flex flex-col items-start gap-2 py-4 border-t border-slate-700">
-        <span id="userEmailDisplay" class="text-sm font-medium text-gray-400"></span>
-        <button id="logoutBtn" class="bg-red-600 text-white px-3 py-2 rounded-md font-semibold text-sm hover:bg-red-700 transition-colors flex items-center gap-2">
-          <i class="fas fa-sign-out-alt"></i>Logout
-        </button>
-      </div>
-    </div>
-  </aside>
+<body class="bg-gray-100 p-8">
 
-  <!-- Main -->
-  <div class="main-content flex-1 min-h-screen flex flex-col ml-72">
-    <div id="loadingIndicator" class="flex-1 flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-4xl text-teal-600"></i></div>
-
-    <div id="adminPanel" class="flex-1 flex flex-col hidden">
-      <!-- Top Bar -->
-      <div class="sticky-header-container p-6 pb-4">
-        <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
-          <h1 class="text-3xl font-bold text-gray-900">Pricing Management</h1>
-          <div class="relative flex items-center">
-            <i class="fas fa-search absolute left-4 text-gray-400"></i>
-            <input id="searchInput" type="text" placeholder="Search by model..." class="pl-12 pr-4 py-2 border border-gray-300 rounded-full w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-shadow" />
-          </div>
-        </div>
-        <div class="bg-white p-4 rounded-xl shadow-md flex items-center justify-between flex-wrap gap-3">
-          <p class="text-gray-500 text-sm"><i class="fas fa-info-circle mr-2"></i>Real-time updates. Price changes automatically when you click away.</p>
-          <div class="flex flex-wrap gap-2">
-            <button id="addNewModelBtn" class="bg-teal-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-teal-700 transition-colors flex items-center gap-2"><i class="fas fa-plus"></i> Add New Model</button>
-            <button id="exportXLSXBtn" class="bg-emerald-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2"><i class="fas fa-file-excel"></i> Export</button>
-            <button id="importXLSXBtn" class="bg-purple-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-purple-700 transition-colors flex items-center gap-2"><i class="fas fa-file-import"></i> Import</button>
-            <button id="bulkEditBtn" class="bg-amber-500 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-amber-600 transition-colors flex items-center gap-2"><i class="fas fa-edit"></i> Bulk Edit</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Table -->
-      <main class="flex-1 p-6 overflow-y-auto">
-        <div class="bg-white rounded-xl shadow-md overflow-x-auto">
-          <table id="pricingTable" class="min-w-full divide-y divide-gray-200">
-            <thead class="sticky top-0 z-10 bg-white shadow">
-              <tr id="pricingTableHeader" class="text-xs text-gray-700 uppercase"></tr>
-            </thead>
-            <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200"></tbody>
-          </table>
-        </div>
-      </main>
-    </div>
-  </div>
-
-  <!-- Add/Edit Modal -->
-  <div id="addEditModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
-    <div class="relative bg-white rounded-xl shadow-2xl p-8 max-w-4xl w-full mx-4 my-8">
-      <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn"><i class="fas fa-times text-xl"></i></button>
-      <h3 class="text-2xl font-bold mb-6 text-gray-900">Add/Edit Pricing Model</h3>
-      <form id="addEditForm" class="space-y-6">
-        <div class="grid md:grid-cols-2 gap-6">
-          <div>
-            <label for="deviceName" class="block text-sm font-medium text-gray-700">Device Name</label>
-            <input id="deviceName" type="text" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:ring-teal-500 focus:border-teal-500" />
-          </div>
-          <div>
-            <label for="deviceBrand" class="block text-sm font-medium text-gray-700">Brand</label>
-            <select id="deviceBrand" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:ring-teal-500 focus:border-teal-500">
-              <option value="">Select Brand</option>
-              <option value="iphone">iPhones</option>
-              <option value="samsung">Samsung</option>
-              <option value="ipad">iPads</option>
-              <option value="google_pixel">Google Pixel</option>
+    <!-- Header and Controls -->
+    <header class="bg-white rounded-xl shadow-lg p-6 mb-8 flex flex-col md:flex-row justify-between items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4 md:mb-0">Price Management Dashboard</h1>
+        <div class="flex items-center space-x-4">
+            <div class="relative">
+                <input type="search" id="searchInput" placeholder="Search for device..." class="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            </div>
+            <select id="brandFilter" class="py-2 px-4 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="all">All Brands</option>
+                <option value="iphone">iPhone</option>
+                <option value="samsung">Samsung</option>
+                <option value="google_pixel">Google</option>
+                <option value="ipad">iPad</option>
+                <option value="macbook">MacBook</option>
+                <option value="other">Other</option>
             </select>
-          </div>
-          <div>
-            <label for="deviceSlug" class="block text-sm font-medium text-gray-700">Slug (e.g., galaxy-s24-ultra)</label>
-            <input id="deviceSlug" type="text" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:ring-teal-500 focus:border-teal-500" />
-          </div>
-          <div>
-            <label for="imageUrl" class="block text-sm font-medium text-gray-700">Image URL</label>
-            <input id="imageUrl" type="text" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:ring-teal-500 focus:border-teal-500" />
-          </div>
+            <button id="importBtn" class="btn-primary"><i class="fas fa-file-excel mr-2"></i>Import Prices</button>
         </div>
-        <hr class="my-6 border-t border-gray-200" />
-        <div id="storageOptionsContainer" class="space-y-6"></div>
-        <button type="button" id="addStorageOptionBtn" class="mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 transition-colors flex items-center gap-2"><i class="fas fa-plus"></i> Add Storage Option</button>
-        <div class="mt-8 flex justify-end gap-4">
-          <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
-          <button type="submit" class="bg-teal-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-teal-700">Save Pricing</button>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="bg-white rounded-xl shadow-lg p-6">
+        <div id="statusMessage" class="hidden mb-4 p-3 rounded-lg text-sm text-center"></div>
+        <div id="loadingIndicator" class="text-center py-12">
+            <i class="fa-solid fa-spinner fa-spin text-4xl text-blue-600"></i>
+            <p class="text-gray-500 mt-2">Loading device data...</p>
         </div>
-      </form>
+        <div id="deviceTableContainer" class="table-container hidden">
+            <table class="min-w-full bg-white rounded-lg">
+                <thead class="sticky-header">
+                    <tr>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Device</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Storage</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Lock Status</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Flawless</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Good</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Fair</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Damaged</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Broken</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">No Power</th>
+                        <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="deviceTableBody" class="divide-y divide-gray-200">
+                    <!-- Table rows will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Excel Import Modal -->
+    <div id="importModal" class="modal fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-6 w-full max-w-4xl shadow-xl">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Import Prices from Excel</h2>
+                <button id="closeModalBtn" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <div class="mb-4">
+                <label class="block text-gray-700 font-semibold mb-2" for="excelFile">Choose Excel File (.xlsx, .xls)</label>
+                <input type="file" id="excelFile" accept=".xlsx, .xls" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+            </div>
+            <div id="excelPreview" class="table-container border rounded-lg overflow-hidden hidden">
+                <table class="min-w-full bg-white">
+                    <thead class="sticky-header"></thead>
+                    <tbody class="divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+            <div id="importStatus" class="mt-4 hidden p-3 rounded-lg text-center"></div>
+            <div class="mt-6 flex justify-end space-x-4">
+                <button id="cancelImportBtn" class="btn-secondary">Cancel</button>
+                <button id="processImportBtn" class="btn-primary hidden">Confirm & Update Prices</button>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <!-- Bulk Edit Modal -->
-  <div id="bulkEditModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
-    <div class="relative bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 my-8">
-      <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn"><i class="fas fa-times text-xl"></i></button>
-      <h3 class="text-2xl font-bold mb-6 text-gray-900">Bulk Edit Prices</h3>
-      <form id="bulkEditForm" class="space-y-6">
-        <div>
-          <label for="bulkBrand" class="block text-sm font-medium text-gray-700">Brand</label>
-          <select id="bulkBrand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3">
-            <option value="all">All Brands</option>
-          </select>
-        </div>
-        <div>
-          <label for="bulkStatus" class="block text-sm font-medium text-gray-700">Lock Status / Connectivity</label>
-          <select id="bulkStatus" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3">
-            <option value="all">All</option>
-            <option value="unlocked">Unlocked</option>
-            <option value="locked">Locked</option>
-            <option value="lte">LTE</option>
-            <option value="wifi">Wi-Fi</option>
-          </select>
-        </div>
-        <div>
-          <label for="bulkQuality" class="block text-sm font-medium text-gray-700">Quality/Condition</label>
-          <select id="bulkQuality" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3">
-            <option value="all">All</option>
-            <option value="flawless">Flawless</option>
-            <option value="good">Good</option>
-            <option value="fair">Fair</option>
-            <option value="damaged">Damaged</option>
-            <option value="broken">Broken</option>
-            <option value="noPower">No Power</option>
-          </select>
-        </div>
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label for="bulkAction" class="block text-sm font-medium text-gray-700">Action</label>
-            <select id="bulkAction" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3">
-              <option value="add">Add ($)</option>
-              <option value="subtract">Subtract ($)</option>
-              <option value="percent">Add (%)</option>
-            </select>
-          </div>
-          <div>
-            <label for="bulkValue" class="block text-sm font-medium text-gray-700">Value</label>
-            <input id="bulkValue" type="number" step="0.01" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3" />
-          </div>
-        </div>
-        <div class="mt-8 flex justify-end gap-4">
-          <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
-          <button type="submit" class="bg-amber-500 text-white px-6 py-2 rounded-md font-semibold hover:bg-amber-600">Apply Bulk Edit</button>
-        </div>
-      </form>
-    </div>
-  </div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs, updateDoc, doc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-  <!-- Import Modal -->
-  <div id="importModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
-    <div class="relative bg-white rounded-xl shadow-2xl p-8 max-w-4xl w-full mx-4 my-8">
-      <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn"><i class="fas fa-times text-xl"></i></button>
-      <h3 class="text-2xl font-bold mb-6 text-gray-900">Import Prices from XLSX</h3>
-      <div class="space-y-6">
-        <p class="text-gray-600">Select an XLSX file to import pricing data. The file must contain columns: "Device", "Storage", "Lock Status", "Flawless", "Good", "Fair", "Damaged", "Broken", "No Power", "Slug", "Brand".</p>
-        <div class="file-input-wrapper">
-          <label for="importFile" class="file-input-btn">Choose File</label>
-          <span id="importFileName" class="text-gray-500 italic">No file chosen</span>
-          <input id="importFile" type="file" accept=".xlsx" />
-        </div>
-      </div>
-      <div id="overwriteWarningSection" class="mt-6 hidden"></div>
-      <div id="overwriteActions" class="mt-8 flex justify-end gap-4 hidden">
-        <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
-        <button id="confirmOverwriteBtn" type="button" class="bg-purple-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-purple-700 transition-colors">Confirm Import</button>
-      </div>
-    </div>
-  </div>
+        // Firebase Config (your provided credentials)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "auth.secondhandcell.com",
+            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-  <!-- Simple Confirm Modal -->
-  <div id="customConfirmModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
-    <div class="relative bg-white rounded-lg shadow-2xl p-8 max-w-sm w-full mx-4 my-8">
-      <h3 class="text-xl font-bold mb-4 text-gray-900">Confirm Action</h3>
-      <p id="confirmMessage" class="text-gray-600 mb-6"></p>
-      <div class="flex justify-end gap-4">
-        <button id="cancel-confirm" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
-        <button id="ok-confirm" class="bg-red-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-600">Delete</button>
-      </div>
-    </div>
-  </div>
+        // Global state
+        let allDevices = [];
+        let filteredDevices = [];
+        const supportedBrands = ['iphone', 'samsung', 'google_pixel', 'ipad', 'macbook', 'other'];
+        const conditions = ['flawless', 'good', 'fair', 'damaged', 'broken', 'noPower'];
 
-  <!-- Floating Status Message (single, unique ID) -->
-  <div id="statusMessage" class="fixed bottom-4 right-4 p-4 rounded-md shadow-lg hidden transition-opacity duration-300 text-sm font-medium z-50"></div>
+        // DOM elements
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const deviceTableContainer = document.getElementById('deviceTableContainer');
+        const deviceTableBody = document.getElementById('deviceTableBody');
+        const searchInput = document.getElementById('searchInput');
+        const brandFilter = document.getElementById('brandFilter');
+        const statusMessage = document.getElementById('statusMessage');
+        const importModal = document.getElementById('importModal');
+        const importBtn = document.getElementById('importBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const excelFile = document.getElementById('excelFile');
+        const excelPreview = document.getElementById('excelPreview');
+        const processImportBtn = document.getElementById('processImportBtn');
+        const cancelImportBtn = document.getElementById('cancelImportBtn');
+        const importStatus = document.getElementById('importStatus');
 
-  <script type="module">
-    // Firebase v10 modular SDK
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+        function showStatus(message, type) {
+            statusMessage.textContent = message;
+            statusMessage.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700');
+            if (type === 'error') {
+                statusMessage.classList.add('bg-red-100', 'text-red-700');
+            } else if (type === 'success') {
+                statusMessage.classList.add('bg-green-100', 'text-green-700');
+            } else {
+                 statusMessage.classList.add('bg-blue-100', 'text-blue-700');
+            }
+            statusMessage.classList.remove('hidden');
+        }
 
-    // --- CONFIG ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
-      authDomain: "buyback-a0f05.firebaseapp.com",
-      projectId: "buyback-a0f05",
-      storageBucket: "buyback-a0f05.firebasestorage.app",
-      messagingSenderId: "876430429098",
-      appId: "1:876430429098:web:f6dd64b1960d90461979d3",
-      measurementId: "G-6WWQN44JHT"
-    };
+        // --- AUTHENTICATION ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                console.log("User is authenticated:", user.uid);
+                await fetchDevices();
+            } else {
+                console.log("No user is signed in. Signing in anonymously...");
+                try {
+                    await signInAnonymously(auth);
+                    await fetchDevices();
+                } catch (error) {
+                    console.error("Anonymous auth failed:", error);
+                    showStatus("Authentication failed. Please check Firebase Auth settings.", "error");
+                }
+            }
+        });
+        
+        // --- FETCH & RENDER DEVICES ---
+        const fetchDevices = async () => {
+            loadingIndicator.classList.remove('hidden');
+            deviceTableContainer.classList.add('hidden');
+            allDevices = [];
 
-    // Brands we support (must match your Firestore doc IDs under devices/*)
-    const SUPPORTED_BRANDS = ["iphone", "ipad", "samsung", "google_pixel"]; // devices/{brand}/models/{slug}
+            try {
+                for (const brand of supportedBrands) {
+                    const collectionPath = `devices/${brand}/models`;
+                    const querySnapshot = await getDocs(collection(db, collectionPath));
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        allDevices.push({ ...data, brand: brand, docId: doc.id, documentPath: collectionPath });
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching devices from Firestore:", error);
+                showStatus("Failed to load device data. Check console for details.", "error");
+            }
+            applyFilters();
+        };
 
-    let app, db, auth, userId;
+        const renderTable = (devices) => {
+            deviceTableBody.innerHTML = '';
+            loadingIndicator.classList.add('hidden');
+            if (devices.length > 0) {
+                deviceTableContainer.classList.remove('hidden');
+            } else {
+                deviceTableContainer.classList.add('hidden');
+                showStatus("No devices found.", "info");
+                return;
+            }
 
-    const el = (id) => document.getElementById(id);
-    const elements = {
-      adminPanel: el('adminPanel'),
-      loadingIndicator: el('loadingIndicator'),
-      userEmailDisplay: el('userEmailDisplay'),
-      logoutBtn: el('logoutBtn'),
-      brandNav: el('brand-nav'),
-      searchInput: el('searchInput'),
-      addNewModelBtn: el('addNewModelBtn'),
-      exportXLSXBtn: el('exportXLSXBtn'),
-      importXLSXBtn: el('importXLSXBtn'),
-      bulkEditBtn: el('bulkEditBtn'),
-      pricingTableBody: el('pricingTableBody'),
-      pricingTableHeader: el('pricingTableHeader'),
-      addEditModal: el('addEditModal'),
-      bulkEditModal: el('bulkEditModal'),
-      importModal: el('importModal'),
-      addEditForm: el('addEditForm'),
-      bulkEditForm: el('bulkEditForm'),
-      storageOptionsContainer: el('storageOptionsContainer'),
-      addStorageOptionBtn: el('addStorageOptionBtn'),
-      statusMessageEl: el('statusMessage'),
-      customConfirmModal: el('customConfirmModal'),
-      importFile: el('importFile'),
-      importFileName: el('importFileName'),
-      overwriteWarningSection: el('overwriteWarningSection'),
-      confirmOverwriteBtn: el('confirmOverwriteBtn'),
-      closeModalBtns: document.querySelectorAll('.close-modal-btn')
-    };
-
-    let allDevices = {};          // { brand: Array<DeviceDoc> }
-    let changesToCommit = [];
-    let fetchedBrands = [];       // actual brands found in Firestore
-    let activeBrand = 'all';
-    let deviceListeners = [];
-
-    // --- UI HELPERS ---
-    const showMessage = (message, type = 'info') => {
-      const box = elements.statusMessageEl;
-      box.textContent = message;
-      box.className = 'fixed bottom-4 right-4 p-4 rounded-md shadow-lg transition-opacity duration-300 text-sm font-medium z-50';
-      if (type === 'success') box.classList.add('bg-emerald-500','text-white');
-      else if (type === 'error') box.classList.add('bg-red-500','text-white');
-      else box.classList.add('bg-blue-500','text-white');
-      box.classList.remove('hidden');
-      setTimeout(() => box.classList.add('hidden'), 3000);
-    };
-
-    const showConfirmModal = (message, onConfirm) => {
-      const modal = elements.customConfirmModal;
-      document.getElementById('confirmMessage').textContent = message;
-      modal.classList.remove('hidden');
-      const handleConfirm = () => { onConfirm(true); cleanup(); };
-      const handleCancel = () => { onConfirm(false); cleanup(); };
-      const cleanup = () => {
-        modal.classList.add('hidden');
-        okBtn.removeEventListener('click', handleConfirm);
-        cancelBtn.removeEventListener('click', handleCancel);
-      };
-      const okBtn = document.getElementById('ok-confirm');
-      const cancelBtn = document.getElementById('cancel-confirm');
-      okBtn.addEventListener('click', handleConfirm);
-      cancelBtn.addEventListener('click', handleCancel);
-    };
-
-    const renderBrandNavigation = (currentBrand) => {
-      elements.brandNav.innerHTML = '';
-      const makeLink = (brandKey, label, icon) => {
-        const a = document.createElement('a');
-        a.href = '#';
-        a.dataset.brand = brandKey;
-        a.className = `flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 hover:text-white hover:bg-slate-700 ${currentBrand === brandKey ? 'bg-slate-700 text-white' : 'text-gray-400'}`;
-        a.innerHTML = `<i class="${icon} w-5"></i>${label}`;
-        return a;
-      };
-      elements.brandNav.appendChild(makeLink('all', 'All Brands', 'fas fa-grip-horizontal'));
-      fetchedBrands.forEach(brand => {
-        const label = brand.charAt(0).toUpperCase() + brand.slice(1).replace('_',' ');
-        elements.brandNav.appendChild(makeLink(brand, label, 'fas fa-mobile-alt'));
-      });
-    };
-
-    const renderPricingTable = (devices, filters) => {
-      // Header (cells only because TR already exists)
-      const isIpadFilter = filters.brand === 'ipad';
-      elements.pricingTableHeader.innerHTML = `
-        <th class="py-3 px-4 text-left font-semibold">Device</th>
-        <th class="py-3 px-4 text-left font-semibold">Storage</th>
-        <th class="py-3 px-4 text-left font-semibold">${isIpadFilter ? 'Connectivity' : 'Lock Status'}</th>
-        <th class="py-3 px-2 text-center font-semibold">Flawless</th>
-        <th class="py-3 px-2 text-center font-semibold">Good</th>
-        <th class="py-3 px-2 text-center font-semibold">Fair</th>
-        <th class="py-3 px-2 text-center font-semibold">Damaged</th>
-        <th class="py-3 px-2 text-center font-semibold">Broken</th>
-        <th class="py-3 px-2 text-center font-semibold">No Power</th>
-        <th class="py-3 px-4 text-center font-semibold">Actions</th>`;
-
-      const rows = Object.values(devices).flatMap(brandModels => brandModels.flatMap(device => {
-        const out = [];
-        const prices = device.prices || {};
-        for (const storage in prices) {
-          const byStatus = prices[storage] || {};
-          for (const status in byStatus) {
-            out.push({
-              id: device.id,
-              name: device.name,
-              brand: device.brand,
-              slug: device.slug,
-              imageUrl: device.imageUrl,
-              storage,
-              status,
-              prices: byStatus[status] || {}
+            devices.forEach(device => {
+                const deviceData = device.prices;
+                for (const storage in deviceData) {
+                    const storageData = deviceData[storage];
+                    for (const connectivity in storageData) {
+                        const prices = storageData[connectivity];
+                        const row = `
+                            <tr class="hover:bg-gray-50">
+                                <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900 flex items-center">
+                                    ${device.brand.includes('ipad') || device.brand.includes('macbook') ? 
+                                      `<i class="fas fa-tablet-alt text-xl mr-2"></i>` : 
+                                      `<i class="fas fa-mobile-alt text-xl mr-2"></i>`}
+                                    ${device.name}
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-500">${storage}</td>
+                                <td class="py-3 px-4 whitespace-nowrap text-sm font-semibold ${connectivity === 'unlocked' ? 'text-green-600' : 'text-red-600'}">${connectivity}</td>
+                                ${conditions.map(condition => `
+                                    <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900">
+                                        <div class="flex items-center">
+                                            <span>$</span>
+                                            <input type="number" value="${prices[condition] || 0}"
+                                                   class="w-24 border rounded-lg px-2 py-1 text-center"
+                                                   data-doc-id="${device.docId}"
+                                                   data-doc-path="${device.documentPath}"
+                                                   data-storage="${storage}"
+                                                   data-connectivity="${connectivity}"
+                                                   data-condition="${condition}"
+                                                   onblur="handlePriceUpdate(this)"
+                                                   onkeypress="if(event.key === 'Enter') this.blur();">
+                                        </div>
+                                    </td>
+                                `).join('')}
+                                <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900">
+                                    <button class="text-red-500 hover:text-red-700" 
+                                            onclick="showStatus('Deletion is not yet supported in this version.', 'error')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        deviceTableBody.insertAdjacentHTML('beforeend', row);
+                    }
+                }
             });
-          }
-        }
-        return out;
-      }));
-
-      const filtered = rows.filter(r => {
-        const matchesBrand = !filters.brand || filters.brand === 'all' ? true : (r.brand || '').toLowerCase() === filters.brand.toLowerCase();
-        const matchesSearch = filters.search ? (r.name || '').toLowerCase().includes(filters.search.toLowerCase()) : true;
-        return matchesBrand && matchesSearch;
-      }).sort((a,b) => {
-        const order = ['iphone','ipad','google_pixel','samsung'];
-        const bc = order.indexOf(a.brand) - order.indexOf(b.brand);
-        if (bc !== 0) return bc;
-        const num = s => { const m = (s||'').match(/(\d+)/); return m ? parseInt(m[1]) : 0; };
-        const sa = num(a.name), sb = num(b.name); if (sa !== sb) return sb - sa;
-        if (a.name !== b.name) return a.name.localeCompare(b.name);
-        if (a.status !== b.status) return a.status.localeCompare(b.status);
-        const toInt = s => parseInt((s||'').replace(/[^0-9]/g,'')) || 0;
-        return toInt(a.storage) - toInt(b.storage);
-      });
-
-      const tbody = elements.pricingTableBody;
-      tbody.innerHTML = '';
-      if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-gray-500">No matching devices found.</td></tr>';
-        return;
-      }
-      filtered.forEach(row => tbody.appendChild(createPriceRow(row)));
-    };
-
-    const createPriceRow = (row) => {
-      const tr = document.createElement('tr');
-      tr.className = 'border-b border-gray-200 hover:bg-gray-50';
-      const isIpad = row.brand === 'ipad';
-      const statusText = isIpad ? (row.status === 'lte' ? 'LTE' : 'Wi‑Fi') : (row.status.charAt(0).toUpperCase() + row.status.slice(1));
-      const statusClass = isIpad ? (row.status === 'lte' ? 'text-blue-600' : 'text-indigo-600') : (row.status === 'unlocked' ? 'text-emerald-600' : 'text-red-600');
-
-      const priceCell = (condition) => {
-        const val = row.prices && row.prices[condition] != null ? Number(row.prices[condition]).toFixed(2) : '';
-        return `
-          <td class="py-3 px-2">
-            <div class="relative flex items-center bg-white rounded-lg p-2 border border-gray-300 hover:border-teal-500">
-              <span class="text-gray-500 text-xs mr-1">$</span>
-              <input type="number" step="0.01" value="${val}" placeholder="N/A"
-                class="price-input w-full bg-transparent text-gray-900 font-medium text-center focus:outline-none"
-                data-id="${row.id}" data-brand="${row.brand}" data-storage="${row.storage}" data-status="${row.status}" data-condition="${condition}" />
-            </div>
-          </td>`;
-      };
-
-      tr.innerHTML = `
-        <td class="py-3 px-4 font-semibold text-sm">
-          <div class="flex items-center gap-3">
-            <img class="w-10 h-10 object-contain rounded-md border p-1 bg-white" src="${row.imageUrl || 'https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG'}" alt="${row.name}">
-            <span>${row.name || ''}</span>
-          </div>
-        </td>
-        <td class="py-3 px-4 text-gray-600">${row.storage || ''}</td>
-        <td class="py-3 px-4 font-medium text-sm ${statusClass}">${statusText}</td>
-        ${['flawless','good','fair','damaged','broken','noPower'].map(priceCell).join('')}
-        <td class="py-3 px-4 text-center">
-          <button class="bg-red-500 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${row.id}" data-name="${row.name}" data-brand="${row.brand}">Delete</button>
-        </td>`;
-
-      // Inline save on change
-      tr.querySelectorAll('.price-input').forEach(input => {
-        let initial = input.value;
-        input.addEventListener('focus', () => { initial = input.value; });
-        input.addEventListener('change', async (e) => {
-          const { id, brand, storage, status, condition } = e.target.dataset;
-          const newVal = parseFloat(e.target.value);
-          if (isNaN(newVal)) { e.target.value = initial; return showMessage('Invalid price. Enter a number.', 'error'); }
-          const updatePath = `prices.${storage}.${status}.${condition}`;
-          try {
-            const ref = doc(db, `devices/${brand}/models`, id);
-            await setDoc(ref, { [updatePath]: newVal }, { merge: true });
-            showMessage('Price updated!', 'success');
-          } catch (err) {
-            console.error(err); showMessage('Failed to update price.', 'error');
-          }
-        });
-      });
-      return tr;
-    };
-
-    // --- IMPORT HANDLING ---
-    const processImportData = (importedRows) => {
-      changesToCommit = [];
-      elements.overwriteWarningSection.innerHTML = '';
-
-      // map current devices by slug
-      const currentBySlug = {};
-      for (const brand in allDevices) {
-        (allDevices[brand] || []).forEach(d => { if (d.slug) currentBySlug[d.slug] = d; });
-      }
-
-      importedRows.forEach(row => {
-        const slug = row['Slug'] ? String(row['Slug']).trim() : null;
-        const brand = row['Brand'] ? String(row['Brand']).toLowerCase().trim() : null;
-        if (!slug || !brand) return;
-        const existing = currentBySlug[slug];
-        if (existing && existing.brand === brand) {
-          const storage = row['Storage'] ? String(row['Storage']).toLowerCase().trim() : null;
-          const status = row['Lock Status'] ? String(row['Lock Status']).toLowerCase().trim() : null;
-          if (!storage || !status) return;
-          const existingPriceData = existing?.prices?.[storage]?.[status] || {};
-          ['Flawless','Good','Fair','Damaged','Broken','No Power'].forEach(label => {
-            const val = row[label];
-            const key = label.replace(/\s/g,'').toLowerCase();
-            if (val !== undefined && val !== null && !isNaN(val)) {
-              const oldPrice = existingPriceData[key] ?? null;
-              if (oldPrice !== Number(val)) {
-                changesToCommit.push({ id: existing.id, device: existing.name, slug, brand, storage, status, condition: key, oldPrice, newPrice: Number(val) });
-              }
-            }
-          });
-        }
-      });
-
-      if (changesToCommit.length === 0) {
-        showMessage('No changes detected. Data is up to date.', 'info');
-        elements.overwriteWarningSection.classList.add('hidden');
-        document.getElementById('overwriteActions').classList.add('hidden');
-        return;
-      }
-
-      let html = `
-        <h4 class="text-lg font-semibold text-red-600 mb-4">Warning: The following prices will be updated.</h4>
-        <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
-          <table class="w-full text-sm text-left text-gray-600">
-            <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
-              <tr><th class="py-3 px-6">Device</th><th class="py-3 px-6">Storage</th><th class="py-3 px-6">Status</th><th class="py-3 px-6">Condition</th><th class="py-3 px-6">Old</th><th class="py-3 px-6">New</th></tr>
-            </thead><tbody>`;
-      for (const ch of changesToCommit) {
-        html += `<tr class="bg-white border-b"><td class="py-2 px-6 font-medium text-gray-900">${ch.device}</td><td class="py-2 px-6">${ch.storage}</td><td class="py-2 px-6">${ch.status}</td><td class="py-2 px-6">${ch.condition}</td><td class="py-2 px-6 text-red-500">${ch.oldPrice!=null?('$'+ch.oldPrice.toFixed(2)):'N/A'}</td><td class="py-2 px-6 text-green-600">${'$'+ch.newPrice.toFixed(2)}</td></tr>`;
-      }
-      html += '</tbody></table></div>';
-      elements.overwriteWarningSection.innerHTML = html;
-      elements.overwriteWarningSection.classList.remove('hidden');
-      document.getElementById('overwriteActions').classList.remove('hidden');
-    };
-
-    const detachListeners = () => { deviceListeners.forEach(u => { try { u(); } catch {} }); deviceListeners = []; };
-
-    const setupListeners = () => {
-      detachListeners();
-      allDevices = {};
-      if (fetchedBrands.length === 0) {
-        elements.pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-gray-500">No devices found. Add a new device to get started.</td></tr>';
-        elements.loadingIndicator.classList.add('hidden');
-        return;
-      }
-      elements.loadingIndicator.classList.remove('hidden');
-      let loaded = 0;
-      fetchedBrands.forEach(brand => {
-        const unsub = onSnapshot(collection(db, `devices/${brand}/models`), (snap) => {
-          allDevices[brand] = snap.docs.map(d => ({ id: d.id, brand, ...d.data() }));
-          loaded++;
-          if (loaded === fetchedBrands.length) {
-            renderPricingTable(allDevices, { search: elements.searchInput.value, brand: activeBrand });
-            elements.loadingIndicator.classList.add('hidden');
-          }
-        }, (err) => { console.error(err); showMessage(`Failed to load ${brand}.`, 'error'); });
-        deviceListeners.push(unsub);
-      });
-    };
-
-    // --- INIT ---
-    document.addEventListener('DOMContentLoaded', () => {
-      try { app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app); }
-      catch (e) { console.error('Firebase init error', e); return showMessage('Failed to initialize Firebase.', 'error'); }
-
-      onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          try { await signInAnonymously(auth); return; } catch (e) { console.error(e); return showMessage('Anonymous sign-in failed. Enable it in Firebase Auth.', 'error'); }
-        }
-        userId = user.uid;
-        elements.userEmailDisplay.textContent = `User ID: ${userId}`;
-        elements.adminPanel.classList.remove('hidden');
-        elements.loadingIndicator.classList.remove('hidden');
-
-        // Live list of brands under /devices, filtered to only SUPPORTED_BRANDS
-        const unsubBrands = onSnapshot(collection(db, 'devices'), (brandSnap) => {
-          const found = brandSnap.docs.map(d => d.id).filter(id => SUPPORTED_BRANDS.includes(id));
-          // Fallback: if collection has none yet, at least show the supported ones
-          fetchedBrands = found.length ? found : SUPPORTED_BRANDS;
-          renderBrandNavigation(activeBrand);
-          setupListeners();
-        }, (err) => { console.error('Brand fetch error', err); showMessage('Failed to load brands.', 'error'); });
-        deviceListeners.push(unsubBrands);
-      });
-
-      // Sidebar brand filter
-      elements.brandNav.addEventListener('click', (e) => {
-        const a = e.target.closest('a');
-        if (!a) return;
-        e.preventDefault();
-        activeBrand = a.dataset.brand;
-        renderBrandNavigation(activeBrand);
-        renderPricingTable(allDevices, { search: elements.searchInput.value, brand: activeBrand });
-      });
-
-      // Search
-      elements.searchInput.addEventListener('input', () => {
-        renderPricingTable(allDevices, { search: elements.searchInput.value, brand: activeBrand });
-      });
-
-      // Table actions (delete)
-      elements.pricingTableBody.addEventListener('click', (e) => {
-        const btn = e.target.closest('.delete-btn');
-        if (!btn) return;
-        const { id, name, brand } = btn.dataset;
-        showConfirmModal(`Delete ${name}? This cannot be undone.`, async (ok) => {
-          if (!ok) return;
-          try { await deleteDoc(doc(db, `devices/${brand}/models`, id)); showMessage(`${name} deleted.`, 'success'); }
-          catch (err) { console.error(err); showMessage('Delete failed.', 'error'); }
-        });
-      });
-
-      // Add Storage Block template
-      elements.addStorageOptionBtn.addEventListener('click', () => {
-        const brand = (document.getElementById('deviceBrand').value)||'';
-        const isIpad = brand === 'ipad';
-        const label1 = isIpad ? 'LTE Prices' : 'Unlocked Prices';
-        const label2 = isIpad ? 'Wi‑Fi Prices' : 'Locked Prices';
-        const block = document.createElement('div');
-        block.className = 'storage-option bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner';
-        block.innerHTML = `
-          <div class="flex items-center justify-between mb-4">
-            <h4 class="text-lg font-semibold text-gray-900">New Storage Option</h4>
-            <button type="button" class="text-red-500 hover:text-red-700 delete-storage-option"><i class="fas fa-times"></i></button>
-          </div>
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Storage Size (e.g., 64GB, 128GB)</label>
-              <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700">${label1}</label>
-                <div class="grid grid-cols-2 gap-2 mt-1">
-                  <input type="number" step="0.01" placeholder="Flawless" class="status1-flawless rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="Good" class="status1-good rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="Fair" class="status1-fair rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="Damaged" class="status1-damaged rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="Broken" class="status1-broken rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="No Power" class="status1-no-power rounded-md border-gray-300 shadow-sm p-2" />
-                </div>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700">${label2}</label>
-                <div class="grid grid-cols-2 gap-2 mt-1">
-                  <input type="number" step="0.01" placeholder="Flawless" class="status2-flawless rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="Good" class="status2-good rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="Fair" class="status2-fair rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="Damaged" class="status2-damaged rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="Broken" class="status2-broken rounded-md border-gray-300 shadow-sm p-2" />
-                  <input type="number" step="0.01" placeholder="No Power" class="status2-no-power rounded-md border-gray-300 shadow-sm p-2" />
-                </div>
-              </div>
-            </div>
-          </div>`;
-        elements.storageOptionsContainer.appendChild(block);
-        block.querySelector('.delete-storage-option').addEventListener('click', () => block.remove());
-      });
-
-      // Open Add/Edit modal
-      elements.addNewModelBtn.addEventListener('click', () => {
-        elements.addEditForm.reset();
-        elements.storageOptionsContainer.innerHTML = '';
-        elements.addStorageOptionBtn.click();
-        elements.addEditModal.classList.remove('hidden');
-      });
-
-      // Save model
-      elements.addEditForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const deviceData = {
-          name: document.getElementById('deviceName').value.trim(),
-          brand: document.getElementById('deviceBrand').value.trim(),
-          slug: document.getElementById('deviceSlug').value.trim(),
-          imageUrl: document.getElementById('imageUrl').value.trim(),
-          prices: {}
         };
-        if (!SUPPORTED_BRANDS.includes(deviceData.brand)) return showMessage('Brand must be one of: '+SUPPORTED_BRANDS.join(', '), 'error');
-        document.querySelectorAll('.storage-option').forEach(opt => {
-          const storage = opt.querySelector('.storage-size').value.trim();
-          if (!storage) return;
-          const isIpad = deviceData.brand === 'ipad';
-          const k1 = isIpad ? 'lte' : 'unlocked';
-          const k2 = isIpad ? 'wifi' : 'locked';
-          const num = (sel) => { const v = parseFloat(opt.querySelector(sel)?.value); return isNaN(v) ? null : v; };
-          const prices1 = { flawless:num('.status1-flawless'), good:num('.status1-good'), fair:num('.status1-fair'), damaged:num('.status1-damaged'), broken:num('.status1-broken'), noPower:num('.status1-no-power') };
-          const prices2 = { flawless:num('.status2-flawless'), good:num('.status2-good'), fair:num('.status2-fair'), damaged:num('.status2-damaged'), broken:num('.status2-broken'), noPower:num('.status2-no-power') };
-          deviceData.prices[storage.toLowerCase()] = { [k1]: prices1, [k2]: prices2 };
-        });
-        try {
-          // Use slug as the document ID so it matches your desired /slug structure
-          const ref = doc(db, `devices/${deviceData.brand}/models`, deviceData.slug);
-          await setDoc(ref, deviceData, { merge: true });
-          elements.addEditModal.classList.add('hidden');
-          showMessage('Model added/updated successfully!', 'success');
-        } catch (err) { console.error(err); showMessage('Error saving model.', 'error'); }
-      });
 
-      // Close any modal
-      elements.closeModalBtns.forEach(btn => btn.addEventListener('click', () => {
-        elements.addEditModal.classList.add('hidden');
-        elements.bulkEditModal.classList.add('hidden');
-        elements.importModal.classList.add('hidden');
-      }));
+        const applyFilters = () => {
+            const searchText = searchInput.value.toLowerCase();
+            const brand = brandFilter.value;
 
-      // Export
-      elements.exportXLSXBtn.addEventListener('click', () => {
-        const table = document.getElementById('pricingTable');
-        if (!table) return showMessage('No data to export.', 'error');
-        const wb = XLSX.utils.table_to_book(table);
-        XLSX.writeFile(wb, 'pricing_data.xlsx');
-        showMessage('Exported to pricing_data.xlsx', 'success');
-      });
+            filteredDevices = allDevices.filter(device => {
+                const matchesSearch = device.name.toLowerCase().includes(searchText) || (device.brand && device.brand.toLowerCase().includes(searchText));
+                const matchesBrand = brand === 'all' || (device.brand && device.brand.toLowerCase() === brand);
+                return matchesSearch && matchesBrand;
+            });
 
-      // Import flow
-      elements.importXLSXBtn.addEventListener('click', () => {
-        elements.importModal.classList.remove('hidden');
-        elements.importFile.value = '';
-        elements.importFileName.textContent = 'No file chosen';
-        elements.overwriteWarningSection.innerHTML = '';
-        elements.overwriteWarningSection.classList.add('hidden');
-        document.getElementById('overwriteActions').classList.add('hidden');
-      });
-      elements.importFile.addEventListener('change', (e) => {
-        const file = e.target.files?.[0];
-        if (!file) { elements.importFileName.textContent = 'No file chosen'; return; }
-        elements.importFileName.textContent = file.name;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          try {
-            const data = new Uint8Array(ev.target.result);
-            const wb = XLSX.read(data, { type:'array' });
-            const sheet = wb.Sheets[wb.SheetNames[0]];
-            const json = XLSX.utils.sheet_to_json(sheet);
-            processImportData(json);
-          } catch (err) { console.error(err); showMessage('Invalid XLSX file.', 'error'); }
+            renderTable(filteredDevices);
         };
-        reader.readAsArrayBuffer(file);
-      });
-      elements.confirmOverwriteBtn.addEventListener('click', async () => {
-        showMessage('Importing updates...', 'info');
-        elements.confirmOverwriteBtn.disabled = true; elements.confirmOverwriteBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Importing...`;
-        const batch = writeBatch(db);
-        const grouped = changesToCommit.reduce((acc, ch) => { (acc[ch.id] ||= { brand: ch.brand, updates: {} })["updates"][`prices.${ch.storage}.${ch.status}.${ch.condition}`] = ch.newPrice; return acc; }, {});
-        for (const id in grouped) {
-          const { brand, updates } = grouped[id];
-          const ref = doc(db, `devices/${brand}/models`, id);
-          if (Object.keys(updates).length) batch.update(ref, updates);
-        }
-        try { await batch.commit(); showMessage('All prices updated!', 'success'); elements.importModal.classList.add('hidden'); }
-        catch (err) { console.error(err); showMessage('Import failed.', 'error'); }
-        finally { elements.confirmOverwriteBtn.disabled = false; elements.confirmOverwriteBtn.textContent = 'Confirm Import'; }
-      });
+        
+        searchInput.addEventListener('input', applyFilters);
+        brandFilter.addEventListener('change', applyFilters);
 
-      // Bulk edit
-      elements.bulkEditBtn.addEventListener('click', () => {
-        elements.bulkEditForm.reset();
-        const sel = document.getElementById('bulkBrand');
-        // clear existing options except first
-        while (sel.options.length > 1) sel.remove(1);
-        fetchedBrands.forEach(b => { const o = document.createElement('option'); o.value = b; o.textContent = b.charAt(0).toUpperCase()+b.slice(1).replace('_',' '); sel.appendChild(o); });
-        elements.bulkEditModal.classList.remove('hidden');
-      });
-      elements.bulkEditForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const brand = document.getElementById('bulkBrand').value;
-        const status = document.getElementById('bulkStatus').value;
-        const quality = document.getElementById('bulkQuality').value;
-        const action = document.getElementById('bulkAction').value;
-        const value = parseFloat(document.getElementById('bulkValue').value);
-        if (isNaN(value)) return showMessage('Enter a valid number.', 'error');
-        const rows = Object.values(allDevices).flatMap(bm => bm.flatMap(d => {
-          const list = []; const prices = d.prices || {};
-          for (const s in prices) { const byStatus = prices[s]||{}; for (const st in byStatus) list.push({ id:d.id, brand:d.brand, storage:s, status:st, prices:byStatus[st] }); }
-          return list; }));
-        const filtered = rows.filter(r => (brand==='all'||r.brand===brand) && (status==='all'||r.status===status));
-        const batch = writeBatch(db);
-        let count = 0;
-        const grouped = {};
-        filtered.forEach(r => {
-          for (const q in r.prices) {
-            if (quality==='all' || q===quality) {
-              const cur = r.prices[q]; if (cur==null) continue;
-              let nv = cur; if (action==='percent') nv = cur + cur*(value/100); else if (action==='add') nv = cur + value; else nv = cur - value;
-              nv = Number(nv.toFixed(2));
-              (grouped[r.id] ||= { brand:r.brand, updates:{} }).updates[`prices.${r.storage}.${r.status}.${q}`] = nv; count++;
+        // --- UPDATE PRICE LOGIC ---
+        window.handlePriceUpdate = async (element) => {
+            const newPrice = parseFloat(element.value);
+            if (isNaN(newPrice) || newPrice < 0) {
+                showStatus("Invalid price entered.", "error");
+                element.value = element.defaultValue; // Revert to old value
+                return;
             }
-          }
-        });
-        for (const id in grouped) {
-          const { brand: b, updates } = grouped[id];
-          const ref = doc(db, `devices/${b}/models`, id);
-          if (Object.keys(updates).length) batch.update(ref, updates);
-        }
-        if (!count) return showMessage('No matching prices to update.', 'info');
-        try { await batch.commit(); showMessage(`Bulk edit successful! ${count} prices updated.`, 'success'); elements.bulkEditModal.classList.add('hidden'); }
-        catch (err) { console.error(err); showMessage('Bulk update failed.', 'error'); }
-      });
 
-      // Faux-logout (anon)
-      elements.logoutBtn.addEventListener('click', () => showMessage('Logged out. Refresh to sign in again.', 'info'));
-    });
-  </script>
+            const docId = element.dataset.docId;
+            const docPath = element.dataset.docPath;
+            const storage = element.dataset.storage;
+            const connectivity = element.dataset.connectivity;
+            const condition = element.dataset.condition;
+            const docRef = doc(db, docPath, docId);
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const docSnapshot = await transaction.get(docRef);
+                    if (!docSnapshot.exists()) {
+                        throw "Document does not exist!";
+                    }
+
+                    const prices = docSnapshot.data().prices;
+                    if (!prices[storage] || !prices[storage][connectivity] || prices[storage][connectivity][condition] === undefined) {
+                        throw `Price path not found for ${docId} (${storage} - ${connectivity} - ${condition}).`;
+                    }
+                    prices[storage][connectivity][condition] = newPrice;
+                    transaction.update(docRef, { prices: prices });
+                });
+                
+                element.defaultValue = newPrice;
+                showStatus(`Price for ${docId} (${storage} - ${connectivity} - ${condition}) updated successfully!`, "success");
+            } catch (e) {
+                console.error("Transaction failed: ", e);
+                showStatus("Failed to update price. Check console for details.", "error");
+                element.value = element.defaultValue; // Revert on error
+            }
+        };
+
+        // --- EXCEL IMPORT LOGIC ---
+        importBtn.addEventListener('click', () => importModal.classList.add('is-visible'));
+        closeModalBtn.addEventListener('click', () => importModal.classList.remove('is-visible'));
+        cancelImportBtn.addEventListener('click', () => {
+            excelFile.value = null;
+            excelPreview.classList.add('hidden');
+            importStatus.classList.add('hidden');
+            processImportBtn.classList.add('hidden');
+            importModal.classList.remove('is-visible');
+        });
+
+        excelFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) {
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+                
+                if (json.length > 0) {
+                    renderExcelPreview(json);
+                    importStatus.classList.add('hidden');
+                    processImportBtn.classList.remove('hidden');
+                } else {
+                    showImportStatus('No data found in the Excel file.', 'error');
+                    processImportBtn.classList.add('hidden');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+        
+        const renderExcelPreview = (data) => {
+            const previewTable = excelPreview.querySelector('table');
+            const previewHeader = previewTable.querySelector('thead');
+            const previewBody = previewTable.querySelector('tbody');
+
+            previewHeader.innerHTML = '';
+            previewBody.innerHTML = '';
+
+            const headers = Object.keys(data[0]);
+            const headerRow = `<tr>${headers.map(h => `<th class="py-2 px-4 text-left text-xs font-semibold text-gray-600 uppercase">${h}</th>`).join('')}</tr>`;
+            previewHeader.insertAdjacentHTML('beforeend', headerRow);
+
+            data.forEach(row => {
+                const rowHTML = `<tr>${headers.map(h => `<td class="py-2 px-4 whitespace-nowrap text-sm text-gray-900">${row[h]}</td>`).join('')}</tr>`;
+                previewBody.insertAdjacentHTML('beforeend', rowHTML);
+            });
+            excelPreview.classList.remove('hidden');
+        };
+        
+        const showImportStatus = (message, type) => {
+            importStatus.textContent = message;
+            importStatus.className = `mt-4 p-3 rounded-lg text-sm text-center ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+            importStatus.classList.remove('hidden');
+        };
+
+        processImportBtn.addEventListener('click', async () => {
+             showImportStatus('Processing import...', 'info');
+             const file = excelFile.files[0];
+             if (!file) {
+                 showImportStatus('No file selected.', 'error');
+                 return;
+             }
+
+             const reader = new FileReader();
+             reader.onload = async (e) => {
+                 const data = new Uint8Array(e.target.result);
+                 const workbook = XLSX.read(data, { type: 'array' });
+                 const firstSheetName = workbook.SheetNames[0];
+                 const worksheet = workbook.Sheets[firstSheetName];
+                 const json = XLSX.utils.sheet_to_json(worksheet);
+
+                 let updatedCount = 0;
+                 let errorCount = 0;
+
+                 // Map of column headers from the Excel file to Firestore fields
+                 const conditionMap = {
+                     'Flawless': 'flawless',
+                     'Good': 'good',
+                     'Fair': 'fair',
+                     'Damaged': 'damaged',
+                     'Broken': 'broken',
+                     'No Power': 'noPower'
+                 };
+                 const conditionHeaders = Object.keys(conditionMap);
+
+                 const updates = [];
+
+                 json.forEach((row, index) => {
+                     const brand = row['Brand']?.toLowerCase();
+                     const slug = row['Slug'];
+                     const storage = row['Storage'];
+                     const connectivity = row['Lock Status']?.toLowerCase();
+
+                     // Validate essential fields for the transaction
+                     if (!brand || !slug || !storage || !connectivity) {
+                         console.error(`Skipping row ${index + 2} due to missing primary identifiers (Brand, Slug, Storage, or Lock Status):`, row);
+                         errorCount++;
+                         return;
+                     }
+
+                     const collectionPath = `devices/${brand}/models`;
+                     const docRef = doc(db, collectionPath, slug);
+                     
+                     // Create an update for each condition column in the row
+                     conditionHeaders.forEach(conditionHeader => {
+                         const price = row[conditionHeader];
+                         const condition = conditionMap[conditionHeader];
+
+                         if (price !== undefined && price !== null && !isNaN(parseFloat(price))) {
+                             const newPrice = parseFloat(price);
+                             updates.push(runTransaction(db, async (transaction) => {
+                                 const docSnapshot = await transaction.get(docRef);
+                                 if (!docSnapshot.exists()) {
+                                     throw `Document for slug '${slug}' does not exist!`;
+                                 }
+                                 const currentPrices = docSnapshot.data().prices;
+                                 if (!currentPrices[storage] || !currentPrices[storage][connectivity] || currentPrices[storage][connectivity][condition] === undefined) {
+                                     throw `Price path not found for ${slug} (${storage} - ${connectivity} - ${condition}).`;
+                                 }
+                                 currentPrices[storage][connectivity][condition] = newPrice;
+                                 transaction.update(docRef, { prices: currentPrices });
+                                 updatedCount++;
+                             }).catch(e => {
+                                 console.error(`Transaction failed for row ${index + 2}, condition '${condition}':`, row, e);
+                                 errorCount++;
+                             }));
+                         } else {
+                             console.warn(`Skipping row ${index + 2}, condition '${condition}' due to invalid price value:`, row);
+                         }
+                     });
+                 });
+                 
+                 await Promise.all(updates);
+
+                 if (errorCount === 0) {
+                     showImportStatus(`Successfully updated ${updatedCount} prices!`, 'success');
+                 } else {
+                     showImportStatus(`Updated ${updatedCount} prices with ${errorCount} errors. See console for details.`, 'error');
+                 }
+                 
+                 importModal.classList.remove('is-visible');
+                 fetchDevices(); // Refresh the main table
+             };
+             reader.readAsArrayBuffer(file);
+        });
+    </script>
 </body>
 </html>
