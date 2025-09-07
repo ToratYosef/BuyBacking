@@ -1,1352 +1,768 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Pricing Management</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .sidebar { min-width: 280px; }
-        .main-content { flex: 1; }
-        .sticky-header-container {
-            position: sticky;
-            top: 0;
-            z-index: 50;
-            background-color: #f9fafb;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
-        }
-        .sticky-table-header {
-            position: sticky;
-            top: 175px;
-            z-index: 40;
-            background-color: #f9fafb;
-        }
-        input[type="number"]::-webkit-inner-spin-button, 
-        input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type="number"] {
-            -moz-appearance: textfield;
-        }
-        .modal-overlay {
-            background-color: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(2px);
-        }
-        .file-input-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .file-input-btn {
-            background-color: #e5e7eb;
-            color: #4b5563;
-            padding: 0.5rem 1rem;
-            border-radius: 0.375rem;
-            cursor: pointer;
-            font-weight: 600;
-            transition: background-color 0.15s ease-in-out;
-        }
-        .file-input-btn:hover { background-color: #d1d5db; }
-        .file-input-name { color: #6b7280; font-style: italic; }
-        input[type="file"] { display: none; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pricing Management Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+    }
+    .sidebar { min-width: 18rem; width: 18rem; }
+    .sticky-header-container { position: sticky; top: 0; z-index: 50; background: #f9fafb; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+    .modal-overlay { background: rgba(0,0,0,.6); backdrop-filter: blur(2px); }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type="number"] { -moz-appearance: textfield; }
+    .file-input-wrapper { display: flex; align-items: center; gap: .5rem; }
+    .file-input-btn { background:#e5e7eb; color:#4b5563; padding:.5rem 1rem; border-radius:.375rem; cursor:pointer; font-weight:600; transition:.15s; }
+    .file-input-btn:hover { background:#d1d5db; }
+    input[type="file"]{ display:none; }
+  </style>
 </head>
-<body class="bg-gray-100 text-gray-800 flex">
-    
-    <aside class="sidebar fixed top-0 left-0 h-full bg-slate-900 text-gray-100 flex flex-col p-6 shadow-xl z-20">
-        <div class="flex-shrink-0 mb-8">
-            <h2 class="text-2xl font-extrabold tracking-tight text-blue-400">Admin Panel</h2>
-        </div>
-        <div class="flex-1 overflow-y-auto">
-            <nav id="brand-nav" class="space-y-2">
-                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 bg-slate-700 text-white" data-brand="all">
-                    <i class="fas fa-grip-horizontal w-5"></i>
-                    All Brands
-                </a>
-                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 text-gray-400 hover:text-white hover:bg-slate-700" data-brand="iphone">
-                    <i class="fas fa-mobile-alt w-5"></i>
-                    iPhones
-                </a>
-                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 text-gray-400 hover:text-white hover:bg-slate-700" data-brand="samsung">
-                    <i class="fas fa-mobile-alt w-5"></i>
-                    Samsung
-                </a>
-                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 text-gray-400 hover:text-white hover:bg-slate-700" data-brand="google_pixel">
-                    <i class="fas fa-mobile-alt w-5"></i>
-                    Google Pixel
-                </a>
-                <a href="#" class="flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 text-gray-400 hover:text-white hover:bg-slate-700" data-brand="ipad">
-                    <i class="fas fa-tablet-alt w-5"></i>
-                    iPads
-                </a>
-            </nav>
-        </div>
-        <div class="mt-auto">
-            <div id="adminPanelControls" class="flex flex-col items-start gap-2 py-4 border-t border-slate-700 hidden">
-                <span id="userEmailDisplay" class="text-sm font-medium text-gray-400"></span>
-                <button id="logoutBtn" class="bg-red-600 text-white px-3 py-2 rounded-md font-semibold text-sm hover:bg-red-700 transition-colors flex items-center gap-2">
-                    <i class="fas fa-sign-out-alt"></i>Logout
-                </button>
-            </div>
-        </div>
-    </aside>
-
-    <div class="main-content flex-1 min-h-screen flex flex-col ml-72">
-        <div id="loginSection" class="flex-1 flex items-center justify-center p-6 hidden">
-            <div class="bg-white p-8 rounded-lg shadow-2xl max-w-sm w-full">
-                <h2 class="text-2xl font-bold mb-4 text-center text-gray-900">Admin Login</h2>
-                <p class="text-gray-600 mb-6 text-center">Please sign in to manage device pricing.</p>
-                <form id="loginForm" class="space-y-4">
-                    <input type="email" id="loginEmail" placeholder="Email" class="w-full rounded-md border border-gray-300 p-3 focus:border-blue-500 focus:ring-blue-500" autocomplete="email">
-                    <input type="password" id="loginPassword" placeholder="Password" class="w-full rounded-md border border-gray-300 p-3 focus:border-blue-500 focus:ring-blue-500" autocomplete="current-password">
-                    <button type="submit" id="loginEmailBtn" class="bg-blue-600 text-white w-full px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                        Sign In with Email
-                    </button>
-                </form>
-                <p class="my-4 text-gray-400 text-center">or</p>
-                <button id="loginGoogleBtn" class="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors w-full">
-                    <i class="fab fa-google mr-2"></i>Sign In with Google
-                </button>
-            </div>
-        </div>
-        <div id="loadingIndicator" class="flex-1 flex items-center justify-center py-20">
-            <i class="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
-        </div>
-
-        <div id="adminPanel" class="flex-1 flex flex-col hidden">
-            <div class="sticky-header-container p-6 pb-4">
-                <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
-                    <h1 class="text-3xl font-bold text-gray-900">Pricing Management</h1>
-                    <div class="relative flex items-center">
-                        <i class="fas fa-search absolute left-3 text-gray-400"></i>
-                        <input type="text" id="searchInput" placeholder="Search by model..." class="pl-10 p-2 border border-gray-300 rounded-full w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                </div>
-                <div class="bg-white p-4 rounded-lg shadow-md flex items-center justify-between flex-wrap gap-3">
-                    <div class="text-gray-500">
-                        <i class="fas fa-info-circle mr-2"></i>
-                        Prices change automatically when you type and save. Yellow border indicates pending changes.
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="addNewModelBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-blue-700 transition-colors flex items-center gap-2">
-                            <i class="fas fa-plus"></i>
-                            Add New Model
-                        </button>
-                        <button id="exportXLSXBtn" class="bg-emerald-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2">
-                            <i class="fas fa-file-excel"></i>
-                            Export
-                        </button>
-                        <button id="importXLSXBtn" class="bg-purple-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-purple-700 transition-colors flex items-center gap-2">
-                            <i class="fas fa-file-import"></i>
-                            Import
-                        </button>
-                        <button id="bulkEditBtn" class="bg-amber-500 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-amber-600 transition-colors flex items-center gap-2">
-                            <i class="fas fa-edit"></i>
-                            Bulk Edit
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <main class="flex-1 p-6 overflow-y-auto">
-                <div class="bg-white rounded-lg shadow-md overflow-x-auto">
-                    <table id="pricingTable" class="min-w-full divide-y divide-gray-200">
-                        <thead class="sticky top-0 z-10 bg-white shadow">
-                            <tr id="pricingTableHeader"></tr>
-                        </thead>
-                        <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200"></tbody>
-                    </table>
-                </div>
-                <div id="statusMessage" class="hidden"></div>
-            </main>
-        </div>
+<body class="flex min-h-screen">
+  <!-- Sidebar -->
+  <aside class="sidebar fixed top-0 left-0 h-full bg-slate-800 text-gray-100 flex flex-col p-6 shadow-xl z-20">
+    <div class="flex-shrink-0 mb-8">
+      <h2 class="text-2xl font-extrabold tracking-tight text-teal-400"><i class="fas fa-chart-line mr-2"></i>Pricing Panel</h2>
     </div>
-    
-    <div id="addEditModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
-        <div class="relative bg-white rounded-lg shadow-2xl p-8 max-w-4xl w-full mx-4 my-8">
-            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-            <h3 class="text-2xl font-bold mb-6 text-gray-900">Add/Edit Pricing Model</h3>
-            <form id="addEditForm" class="space-y-6">
-                <div class="grid md:grid-cols-2 gap-6">
-                    <div>
-                        <label for="deviceName" class="block text-sm font-medium text-gray-700">Device Name</label>
-                        <input type="text" id="deviceName" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label for="deviceBrand" class="block text-sm font-medium text-gray-700">Brand</label>
-                        <select id="deviceBrand" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">Select Brand</option>
-                            <option value="iphone">iPhones</option>
-                            <option value="samsung">Samsung</option>
-                            <option value="ipad">iPads</option>
-                            <option value="google_pixel">Google Pixels</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="deviceSlug" class="block text-sm font-medium text-gray-700">Slug (e.g., galaxy-s24-ultra)</label>
-                        <input type="text" id="deviceSlug" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label for="imageUrl" class="block text-sm font-medium text-gray-700">Image URL</label>
-                        <input type="text" id="imageUrl" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                </div>
-                
-                <hr class="my-6 border-t border-gray-200">
-                <div id="storageOptionsContainer" class="space-y-6">
-                    <div class="storage-option bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner">
-                        <div class="flex items-center justify-between mb-4">
-                            <h4 class="text-lg font-semibold text-gray-900">New Storage Option</h4>
-                            <button type="button" class="text-red-500 hover:text-red-700 delete-storage-option">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Storage Size (e.g., 64GB, 128GB)</label>
-                                <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
-                                    <div class="grid grid-cols-2 gap-2 mt-1">
-                                        <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="Good" class="unlocked-good rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power rounded-md border-gray-300 shadow-sm p-2">
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
-                                    <div class="grid grid-cols-2 gap-2 mt-1">
-                                        <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="Good" class="locked-good rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="Fair" class="locked-fair rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="Damaged" class="locked-damaged rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="Broken" class="locked-broken rounded-md border-gray-300 shadow-sm p-2">
-                                        <input type="number" step="0.01" placeholder="No Power" class="locked-no-power rounded-md border-gray-300 shadow-sm p-2">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <div class="flex-1 overflow-y-auto pr-2">
+      <nav id="brand-nav" class="space-y-2"></nav>
+    </div>
+    <div class="mt-auto">
+      <div id="adminPanelControls" class="flex flex-col items-start gap-2 py-4 border-t border-slate-700">
+        <span id="userEmailDisplay" class="text-sm font-medium text-gray-400"></span>
+        <button id="logoutBtn" class="bg-red-600 text-white px-3 py-2 rounded-md font-semibold text-sm hover:bg-red-700 transition-colors flex items-center gap-2">
+          <i class="fas fa-sign-out-alt"></i>Logout
+        </button>
+      </div>
+    </div>
+  </aside>
 
-                <button type="button" id="addStorageOptionBtn" class="mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 transition-colors flex items-center gap-2">
-                    <i class="fas fa-plus"></i>
-                    Add Storage Option
-                </button>
-                
-                <div class="mt-8 flex justify-end gap-4">
-                    <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
-                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-blue-700">Save Pricing</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    
-    <div id="bulkEditModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
-        <div class="relative bg-white rounded-lg shadow-2xl p-8 max-w-2xl w-full mx-4 my-8">
-            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-            <h3 class="text-2xl font-bold mb-6 text-gray-900">Bulk Edit Prices</h3>
-            <form id="bulkEditForm" class="space-y-6">
-                <div>
-                    <label for="bulkBrand" class="block text-sm font-medium text-gray-700">Brand</label>
-                    <select id="bulkBrand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        <option value="">All Brands</option>
-                        <option value="iphone">iPhones</option>
-                        <option value="samsung">Samsung</option>
-                        <option value="ipad">iPads</option>
-                        <option value="google_pixel">Google Pixels</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="bulkModel" class="block text-sm font-medium text-gray-700">Model</label>
-                    <select id="bulkModel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        <option value="">All Models</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="bulkStatus" class="block text-sm font-medium text-gray-700">Lock Status / Connectivity</label>
-                    <select id="bulkStatus" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        <option value="all">All</option>
-                        <option value="unlocked">Unlocked</option>
-                        <option value="locked">Locked</option>
-                        <option value="lte">LTE</option>
-                        <option value="wifi">Wi-Fi</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="bulkQuality" class="block text-sm font-medium text-gray-700">Quality/Condition</label>
-                    <select id="bulkQuality" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        <option value="all">All</option>
-                        <option value="flawless">Flawless</option>
-                        <option value="good">Good</option>
-                        <option value="fair">Fair</option>
-                        <option value="damaged">Damaged</option>
-                        <option value="broken">Broken</option>
-                        <option value="noPower">No Power</option>
-                    </select>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label for="bulkAction" class="block text-sm font-medium text-gray-700">Action</label>
-                        <select id="bulkAction" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                            <option value="add">Add ($)</option>
-                            <option value="subtract">Subtract ($)</option>
-                            <option value="percent">Add (%)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="bulkValue" class="block text-sm font-medium text-gray-700">Value</label>
-                        <input type="number" step="0.01" id="bulkValue" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                    </div>
-                </div>
-                <div class="mt-8 flex justify-end gap-4">
-                    <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
-                    <button type="submit" class="bg-amber-500 text-white px-6 py-2 rounded-md font-semibold hover:bg-amber-600">Apply Bulk Edit</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    
-    <div id="importModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
-        <div class="relative bg-white rounded-lg shadow-2xl p-8 max-w-4xl w-full mx-4 my-8">
-            <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-            <h3 class="text-2xl font-bold mb-6 text-gray-900">Import Prices from XLSX</h3>
-            <div class="space-y-6">
-                <p class="text-gray-600">Select an XLSX file to import pricing data. The file must contain columns: "Device", "Storage", "Lock Status", "Flawless", "Good", "Fair", "Damaged", "Broken", "No Power", "Slug", "Brand".</p>
-                <div class="file-input-wrapper">
-                    <label for="importFile" class="file-input-btn">Choose File</label>
-                    <span id="importFileName" class="file-input-name">No file chosen</span>
-                    <input type="file" id="importFile" accept=".xlsx">
-                </div>
-            </div>
-            <div id="overwriteWarningSection" class="mt-6 hidden"></div>
-            <div id="overwriteActions" class="mt-8 flex justify-end gap-4 hidden">
-                <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
-                <button type="button" id="confirmOverwriteBtn" class="bg-purple-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-purple-700 transition-colors">Confirm Import</button>
-            </div>
-        </div>
-    </div>
+  <!-- Main -->
+  <div class="main-content flex-1 min-h-screen flex flex-col ml-72">
+    <div id="loadingIndicator" class="flex-1 flex items-center justify-center py-20"><i class="fas fa-spinner fa-spin text-4xl text-teal-600"></i></div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, getDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        
-        // Use provided Firebase variables with a hardcoded fallback for local testing
-        const tempFirebaseConfig = {
-            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
-            authDomain: "auth.secondhandcell.com",
-            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com",
-            projectId: "buyback-a0f05",
-            storageBucket: "buyback-a0f05.firebasestorage.app",
-            messagingSenderId: "876430429098",
-            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
-            measurementId: "G-6WWQN44JHT"
-        };
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : tempFirebaseConfig;
-        
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // Ensure firebaseConfig has a projectId before initializing
-        if (!firebaseConfig.projectId) {
-            console.error("Firebase 'projectId' not provided. Please check your configuration.");
+    <div id="adminPanel" class="flex-1 flex flex-col hidden">
+      <!-- Top Bar -->
+      <div class="sticky-header-container p-6 pb-4">
+        <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+          <h1 class="text-3xl font-bold text-gray-900">Pricing Management</h1>
+          <div class="relative flex items-center">
+            <i class="fas fa-search absolute left-4 text-gray-400"></i>
+            <input id="searchInput" type="text" placeholder="Search by model..." class="pl-12 pr-4 py-2 border border-gray-300 rounded-full w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-teal-500 transition-shadow" />
+          </div>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-md flex items-center justify-between flex-wrap gap-3">
+          <p class="text-gray-500 text-sm"><i class="fas fa-info-circle mr-2"></i>Real-time updates. Price changes automatically when you click away.</p>
+          <div class="flex flex-wrap gap-2">
+            <button id="addNewModelBtn" class="bg-teal-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-teal-700 transition-colors flex items-center gap-2"><i class="fas fa-plus"></i> Add New Model</button>
+            <button id="exportXLSXBtn" class="bg-emerald-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2"><i class="fas fa-file-excel"></i> Export</button>
+            <button id="importXLSXBtn" class="bg-purple-600 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-purple-700 transition-colors flex items-center gap-2"><i class="fas fa-file-import"></i> Import</button>
+            <button id="bulkEditBtn" class="bg-amber-500 text-white px-4 py-2 rounded-md font-semibold text-sm hover:bg-amber-600 transition-colors flex items-center gap-2"><i class="fas fa-edit"></i> Bulk Edit</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <main class="flex-1 p-6 overflow-y-auto">
+        <div class="bg-white rounded-xl shadow-md overflow-x-auto">
+          <table id="pricingTable" class="min-w-full divide-y divide-gray-200">
+            <thead class="sticky top-0 z-10 bg-white shadow">
+              <tr id="pricingTableHeader" class="text-xs text-gray-700 uppercase"></tr>
+            </thead>
+            <tbody id="pricingTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div id="addEditModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
+    <div class="relative bg-white rounded-xl shadow-2xl p-8 max-w-4xl w-full mx-4 my-8">
+      <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn"><i class="fas fa-times text-xl"></i></button>
+      <h3 class="text-2xl font-bold mb-6 text-gray-900">Add/Edit Pricing Model</h3>
+      <form id="addEditForm" class="space-y-6">
+        <div class="grid md:grid-cols-2 gap-6">
+          <div>
+            <label for="deviceName" class="block text-sm font-medium text-gray-700">Device Name</label>
+            <input id="deviceName" type="text" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:ring-teal-500 focus:border-teal-500" />
+          </div>
+          <div>
+            <label for="deviceBrand" class="block text-sm font-medium text-gray-700">Brand</label>
+            <select id="deviceBrand" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:ring-teal-500 focus:border-teal-500">
+              <option value="">Select Brand</option>
+              <option value="iphone">iPhones</option>
+              <option value="samsung">Samsung</option>
+              <option value="ipad">iPads</option>
+              <option value="google_pixel">Google Pixel</option>
+            </select>
+          </div>
+          <div>
+            <label for="deviceSlug" class="block text-sm font-medium text-gray-700">Slug (e.g., galaxy-s24-ultra)</label>
+            <input id="deviceSlug" type="text" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:ring-teal-500 focus:border-teal-500" />
+          </div>
+          <div>
+            <label for="imageUrl" class="block text-sm font-medium text-gray-700">Image URL</label>
+            <input id="imageUrl" type="text" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:ring-teal-500 focus:border-teal-500" />
+          </div>
+        </div>
+        <hr class="my-6 border-t border-gray-200" />
+        <div id="storageOptionsContainer" class="space-y-6"></div>
+        <button type="button" id="addStorageOptionBtn" class="mt-4 bg-gray-200 text-gray-700 px-4 py-2 rounded-md font-semibold hover:bg-gray-300 transition-colors flex items-center gap-2"><i class="fas fa-plus"></i> Add Storage Option</button>
+        <div class="mt-8 flex justify-end gap-4">
+          <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
+          <button type="submit" class="bg-teal-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-teal-700">Save Pricing</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bulk Edit Modal -->
+  <div id="bulkEditModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
+    <div class="relative bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full mx-4 my-8">
+      <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn"><i class="fas fa-times text-xl"></i></button>
+      <h3 class="text-2xl font-bold mb-6 text-gray-900">Bulk Edit Prices</h3>
+      <form id="bulkEditForm" class="space-y-6">
+        <div>
+          <label for="bulkBrand" class="block text-sm font-medium text-gray-700">Brand</label>
+          <select id="bulkBrand" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3">
+            <option value="all">All Brands</option>
+          </select>
+        </div>
+        <div>
+          <label for="bulkStatus" class="block text-sm font-medium text-gray-700">Lock Status / Connectivity</label>
+          <select id="bulkStatus" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3">
+            <option value="all">All</option>
+            <option value="unlocked">Unlocked</option>
+            <option value="locked">Locked</option>
+            <option value="lte">LTE</option>
+            <option value="wifi">Wi-Fi</option>
+          </select>
+        </div>
+        <div>
+          <label for="bulkQuality" class="block text-sm font-medium text-gray-700">Quality/Condition</label>
+          <select id="bulkQuality" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3">
+            <option value="all">All</option>
+            <option value="flawless">Flawless</option>
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
+            <option value="damaged">Damaged</option>
+            <option value="broken">Broken</option>
+            <option value="noPower">No Power</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="bulkAction" class="block text-sm font-medium text-gray-700">Action</label>
+            <select id="bulkAction" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3">
+              <option value="add">Add ($)</option>
+              <option value="subtract">Subtract ($)</option>
+              <option value="percent">Add (%)</option>
+            </select>
+          </div>
+          <div>
+            <label for="bulkValue" class="block text-sm font-medium text-gray-700">Value</label>
+            <input id="bulkValue" type="number" step="0.01" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3" />
+          </div>
+        </div>
+        <div class="mt-8 flex justify-end gap-4">
+          <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
+          <button type="submit" class="bg-amber-500 text-white px-6 py-2 rounded-md font-semibold hover:bg-amber-600">Apply Bulk Edit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="importModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
+    <div class="relative bg-white rounded-xl shadow-2xl p-8 max-w-4xl w-full mx-4 my-8">
+      <button class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors close-modal-btn"><i class="fas fa-times text-xl"></i></button>
+      <h3 class="text-2xl font-bold mb-6 text-gray-900">Import Prices from XLSX</h3>
+      <div class="space-y-6">
+        <p class="text-gray-600">Select an XLSX file to import pricing data. The file must contain columns: "Device", "Storage", "Lock Status", "Flawless", "Good", "Fair", "Damaged", "Broken", "No Power", "Slug", "Brand".</p>
+        <div class="file-input-wrapper">
+          <label for="importFile" class="file-input-btn">Choose File</label>
+          <span id="importFileName" class="text-gray-500 italic">No file chosen</span>
+          <input id="importFile" type="file" accept=".xlsx" />
+        </div>
+      </div>
+      <div id="overwriteWarningSection" class="mt-6 hidden"></div>
+      <div id="overwriteActions" class="mt-8 flex justify-end gap-4 hidden">
+        <button type="button" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-md font-semibold close-modal-btn hover:bg-gray-300">Cancel</button>
+        <button id="confirmOverwriteBtn" type="button" class="bg-purple-600 text-white px-6 py-2 rounded-md font-semibold hover:bg-purple-700 transition-colors">Confirm Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Simple Confirm Modal -->
+  <div id="customConfirmModal" class="fixed inset-0 modal-overlay overflow-y-auto h-full w-full flex items-center justify-center hidden">
+    <div class="relative bg-white rounded-lg shadow-2xl p-8 max-w-sm w-full mx-4 my-8">
+      <h3 class="text-xl font-bold mb-4 text-gray-900">Confirm Action</h3>
+      <p id="confirmMessage" class="text-gray-600 mb-6"></p>
+      <div class="flex justify-end gap-4">
+        <button id="cancel-confirm" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
+        <button id="ok-confirm" class="bg-red-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-600">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Status Message (single, unique ID) -->
+  <div id="statusMessage" class="fixed bottom-4 right-4 p-4 rounded-md shadow-lg hidden transition-opacity duration-300 text-sm font-medium z-50"></div>
+
+  <script type="module">
+    // Firebase v10 modular SDK
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+    // --- CONFIG ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+      authDomain: "buyback-a0f05.firebaseapp.com",
+      projectId: "buyback-a0f05",
+      storageBucket: "buyback-a0f05.firebasestorage.app",
+      messagingSenderId: "876430429098",
+      appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+      measurementId: "G-6WWQN44JHT"
+    };
+
+    // Brands we support (must match your Firestore doc IDs under devices/*)
+    const SUPPORTED_BRANDS = ["iphone", "ipad", "samsung", "google_pixel"]; // devices/{brand}/models/{slug}
+
+    let app, db, auth, userId;
+
+    const el = (id) => document.getElementById(id);
+    const elements = {
+      adminPanel: el('adminPanel'),
+      loadingIndicator: el('loadingIndicator'),
+      userEmailDisplay: el('userEmailDisplay'),
+      logoutBtn: el('logoutBtn'),
+      brandNav: el('brand-nav'),
+      searchInput: el('searchInput'),
+      addNewModelBtn: el('addNewModelBtn'),
+      exportXLSXBtn: el('exportXLSXBtn'),
+      importXLSXBtn: el('importXLSXBtn'),
+      bulkEditBtn: el('bulkEditBtn'),
+      pricingTableBody: el('pricingTableBody'),
+      pricingTableHeader: el('pricingTableHeader'),
+      addEditModal: el('addEditModal'),
+      bulkEditModal: el('bulkEditModal'),
+      importModal: el('importModal'),
+      addEditForm: el('addEditForm'),
+      bulkEditForm: el('bulkEditForm'),
+      storageOptionsContainer: el('storageOptionsContainer'),
+      addStorageOptionBtn: el('addStorageOptionBtn'),
+      statusMessageEl: el('statusMessage'),
+      customConfirmModal: el('customConfirmModal'),
+      importFile: el('importFile'),
+      importFileName: el('importFileName'),
+      overwriteWarningSection: el('overwriteWarningSection'),
+      confirmOverwriteBtn: el('confirmOverwriteBtn'),
+      closeModalBtns: document.querySelectorAll('.close-modal-btn')
+    };
+
+    let allDevices = {};          // { brand: Array<DeviceDoc> }
+    let changesToCommit = [];
+    let fetchedBrands = [];       // actual brands found in Firestore
+    let activeBrand = 'all';
+    let deviceListeners = [];
+
+    // --- UI HELPERS ---
+    const showMessage = (message, type = 'info') => {
+      const box = elements.statusMessageEl;
+      box.textContent = message;
+      box.className = 'fixed bottom-4 right-4 p-4 rounded-md shadow-lg transition-opacity duration-300 text-sm font-medium z-50';
+      if (type === 'success') box.classList.add('bg-emerald-500','text-white');
+      else if (type === 'error') box.classList.add('bg-red-500','text-white');
+      else box.classList.add('bg-blue-500','text-white');
+      box.classList.remove('hidden');
+      setTimeout(() => box.classList.add('hidden'), 3000);
+    };
+
+    const showConfirmModal = (message, onConfirm) => {
+      const modal = elements.customConfirmModal;
+      document.getElementById('confirmMessage').textContent = message;
+      modal.classList.remove('hidden');
+      const handleConfirm = () => { onConfirm(true); cleanup(); };
+      const handleCancel = () => { onConfirm(false); cleanup(); };
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        okBtn.removeEventListener('click', handleConfirm);
+        cancelBtn.removeEventListener('click', handleCancel);
+      };
+      const okBtn = document.getElementById('ok-confirm');
+      const cancelBtn = document.getElementById('cancel-confirm');
+      okBtn.addEventListener('click', handleConfirm);
+      cancelBtn.addEventListener('click', handleCancel);
+    };
+
+    const renderBrandNavigation = (currentBrand) => {
+      elements.brandNav.innerHTML = '';
+      const makeLink = (brandKey, label, icon) => {
+        const a = document.createElement('a');
+        a.href = '#';
+        a.dataset.brand = brandKey;
+        a.className = `flex items-center gap-4 p-3 rounded-lg text-sm font-medium transition-colors duration-200 hover:text-white hover:bg-slate-700 ${currentBrand === brandKey ? 'bg-slate-700 text-white' : 'text-gray-400'}`;
+        a.innerHTML = `<i class="${icon} w-5"></i>${label}`;
+        return a;
+      };
+      elements.brandNav.appendChild(makeLink('all', 'All Brands', 'fas fa-grip-horizontal'));
+      fetchedBrands.forEach(brand => {
+        const label = brand.charAt(0).toUpperCase() + brand.slice(1).replace('_',' ');
+        elements.brandNav.appendChild(makeLink(brand, label, 'fas fa-mobile-alt'));
+      });
+    };
+
+    const renderPricingTable = (devices, filters) => {
+      // Header (cells only because TR already exists)
+      const isIpadFilter = filters.brand === 'ipad';
+      elements.pricingTableHeader.innerHTML = `
+        <th class="py-3 px-4 text-left font-semibold">Device</th>
+        <th class="py-3 px-4 text-left font-semibold">Storage</th>
+        <th class="py-3 px-4 text-left font-semibold">${isIpadFilter ? 'Connectivity' : 'Lock Status'}</th>
+        <th class="py-3 px-2 text-center font-semibold">Flawless</th>
+        <th class="py-3 px-2 text-center font-semibold">Good</th>
+        <th class="py-3 px-2 text-center font-semibold">Fair</th>
+        <th class="py-3 px-2 text-center font-semibold">Damaged</th>
+        <th class="py-3 px-2 text-center font-semibold">Broken</th>
+        <th class="py-3 px-2 text-center font-semibold">No Power</th>
+        <th class="py-3 px-4 text-center font-semibold">Actions</th>`;
+
+      const rows = Object.values(devices).flatMap(brandModels => brandModels.flatMap(device => {
+        const out = [];
+        const prices = device.prices || {};
+        for (const storage in prices) {
+          const byStatus = prices[storage] || {};
+          for (const status in byStatus) {
+            out.push({
+              id: device.id,
+              name: device.name,
+              brand: device.brand,
+              slug: device.slug,
+              imageUrl: device.imageUrl,
+              storage,
+              status,
+              prices: byStatus[status] || {}
+            });
+          }
         }
-        
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const provider = new GoogleAuthProvider();
+        return out;
+      }));
 
-        let allDevices = [];
-        let pendingChanges = {};
-        
-        const customConfirmModal = document.createElement('div');
-        customConfirmModal.id = 'customConfirmModal';
-        
-        function loadImageWithFallback(imgElement, imageUrl) {
-            if (!imageUrl) {
-                console.warn("No imageUrl provided for device. Showing fallback image.");
-                imgElement.src = 'https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';
-                return;
-            }
-            
-            const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
-            let current = 0;
-            
-            function tryLoad() {
-                if (current >= extensions.length) {
-                    console.error(`Failed to load image from all attempts for URL: ${imageUrl}.`);
-                    imgElement.src = 'https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG';
-                    return;
-                }
-                
-                const testSrc = imageUrl + extensions[current];
-                const img = new Image();
-                img.onload = () => { imgElement.src = testSrc; };
-                img.onerror = () => { current++; tryLoad(); };
-                img.src = testSrc;
-            }
-            
-            tryLoad();
-        }
+      const filtered = rows.filter(r => {
+        const matchesBrand = !filters.brand || filters.brand === 'all' ? true : (r.brand || '').toLowerCase() === filters.brand.toLowerCase();
+        const matchesSearch = filters.search ? (r.name || '').toLowerCase().includes(filters.search.toLowerCase()) : true;
+        return matchesBrand && matchesSearch;
+      }).sort((a,b) => {
+        const order = ['iphone','ipad','google_pixel','samsung'];
+        const bc = order.indexOf(a.brand) - order.indexOf(b.brand);
+        if (bc !== 0) return bc;
+        const num = s => { const m = (s||'').match(/(\d+)/); return m ? parseInt(m[1]) : 0; };
+        const sa = num(a.name), sb = num(b.name); if (sa !== sb) return sb - sa;
+        if (a.name !== b.name) return a.name.localeCompare(b.name);
+        if (a.status !== b.status) return a.status.localeCompare(b.status);
+        const toInt = s => parseInt((s||'').replace(/[^0-9]/g,'')) || 0;
+        return toInt(a.storage) - toInt(b.storage);
+      });
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const pricingTableBody = document.getElementById('pricingTableBody');
-            const addNewModelBtn = document.getElementById('addNewModelBtn');
-            const addEditModal = document.getElementById('addEditModal');
-            const addEditForm = document.getElementById('addEditForm');
-            const bulkEditModal = document.getElementById('bulkEditModal');
-            const bulkEditForm = document.getElementById('bulkEditForm');
-            const importModal = document.getElementById('importModal');
-            const importFileForm = document.getElementById('importFileForm'); 
-            const importFile = document.getElementById('importFile');
-            const importFileName = document.getElementById('importFileName');
-            const overwriteWarningSection = document.getElementById('overwriteWarningSection');
-            const confirmOverwriteBtn = document.getElementById('confirmOverwriteBtn');
-            const closeModalBtns = document.querySelectorAll('.close-modal-btn');
-            const statusMessage = document.getElementById('statusMessage');
-            const loginSection = document.getElementById('loginSection');
-            const adminPanel = document.getElementById('adminPanel');
-            const userEmailDisplay = document.getElementById('userEmailDisplay');
-            const loginForm = document.getElementById('loginForm');
-            const logoutBtn = document.getElementById('logoutBtn');
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            const exportXLSXBtn = document.getElementById('exportXLSXBtn');
-            const importXLSXBtn = document.getElementById('importXLSXBtn');
-            const bulkEditBtn = document.getElementById('bulkEditBtn');
-            const searchInput = document.getElementById('searchInput');
-            const brandFilter = document.getElementById('brandFilter');
-            const pricingTableHeader = document.getElementById('pricingTableHeader');
-            const addStorageOptionBtn = document.getElementById('addStorageOptionBtn');
-            const storageOptionsContainer = document.getElementById('storageOptionsContainer');
-            
-            if (initialAuthToken) {
-                try {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } catch (error) {
-                    console.error("Error signing in with custom token:", error);
-                }
-            } else {
-                // Anonymous sign-in if no custom token exists, so the app still loads.
-                await signInAnonymously(auth);
-            }
-            
-            const checkAdminStatus = async (user) => {
-                if (!user) {
-                    return false;
-                }
-                try {
-                    const adminDocRef = doc(db, 'admins', user.uid);
-                    const adminDoc = await getDoc(adminDocRef);
-                    return adminDoc.exists();
-                } catch (error) {
-                    console.error("Error checking admin status:", error);
-                    return false;
-                }
-            };
-            
-            onAuthStateChanged(auth, async (user) => {
-                loadingIndicator.classList.remove('hidden');
-                loginSection.classList.add('hidden');
-                adminPanel.classList.add('hidden');
-                
-                if (user) {
-                    const isAdmin = await checkAdminStatus(user);
-                    if (isAdmin) {
-                        userEmailDisplay.textContent = user.email;
-                        adminPanel.classList.remove('hidden');
-                        loadingIndicator.classList.add('hidden');
-                        document.getElementById('adminPanelControls').classList.remove('hidden');
-                        console.log("Admin user authenticated and authorized.");
-                        await fetchAndRenderPricing();
-                    } else {
-                        console.log("User signed in but not an authorized admin. Signing out...");
-                        await signOut(auth);
-                        loadingIndicator.classList.add('hidden');
-                        loginSection.classList.remove('hidden');
-                        adminPanel.classList.add('hidden');
-                        document.getElementById('adminPanelControls').classList.add('hidden');
-                        displayStatusMessage("You are not authorized to view this page. Please sign in with an admin account.", 'error');
-                    }
-                } else {
-                    loadingIndicator.classList.add('hidden');
-                    loginSection.classList.remove('hidden');
-                    adminPanel.classList.add('hidden');
-                    document.getElementById('adminPanelControls').classList.add('hidden');
-                    console.log("User not authenticated.");
-                }
-            });
+      const tbody = elements.pricingTableBody;
+      tbody.innerHTML = '';
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-gray-500">No matching devices found.</td></tr>';
+        return;
+      }
+      filtered.forEach(row => tbody.appendChild(createPriceRow(row)));
+    };
 
-            loginForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const email = document.getElementById('loginEmail').value;
-                const password = document.getElementById('loginPassword').value;
-                displayStatusMessage('Signing in...', 'info');
-                try {
-                    await signInWithEmailAndPassword(auth, email, password);
-                } catch (error) {
-                    console.error("Email login error:", error);
-                    displayStatusMessage(`Login failed: ${error.message}`, 'error');
-                }
-            });
-            
-            document.getElementById('loginGoogleBtn').addEventListener('click', async () => {
-                displayStatusMessage('Signing in with Google...', 'info');
-                try {
-                    await signInWithPopup(auth, provider);
-                } catch (error) {
-                    console.error("Google login error:", error);
-                    displayStatusMessage(`Google login failed: ${error.message}`, 'error');
-                }
-            });
+    const createPriceRow = (row) => {
+      const tr = document.createElement('tr');
+      tr.className = 'border-b border-gray-200 hover:bg-gray-50';
+      const isIpad = row.brand === 'ipad';
+      const statusText = isIpad ? (row.status === 'lte' ? 'LTE' : 'Wi‑Fi') : (row.status.charAt(0).toUpperCase() + row.status.slice(1));
+      const statusClass = isIpad ? (row.status === 'lte' ? 'text-blue-600' : 'text-indigo-600') : (row.status === 'unlocked' ? 'text-emerald-600' : 'text-red-600');
 
-            logoutBtn.addEventListener('click', async () => {
-                try {
-                    await signOut(auth);
-                } catch (error) {
-                    console.error("Logout error:", error);
-                }
-            });
+      const priceCell = (condition) => {
+        const val = row.prices && row.prices[condition] != null ? Number(row.prices[condition]).toFixed(2) : '';
+        return `
+          <td class="py-3 px-2">
+            <div class="relative flex items-center bg-white rounded-lg p-2 border border-gray-300 hover:border-teal-500">
+              <span class="text-gray-500 text-xs mr-1">$</span>
+              <input type="number" step="0.01" value="${val}" placeholder="N/A"
+                class="price-input w-full bg-transparent text-gray-900 font-medium text-center focus:outline-none"
+                data-id="${row.id}" data-brand="${row.brand}" data-storage="${row.storage}" data-status="${row.status}" data-condition="${condition}" />
+            </div>
+          </td>`;
+      };
 
-            const fetchAndRenderPricing = async (filters = {}) => {
-                pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-gray-500">Loading pricing data...</td></tr>';
-                const iphoneCollection = collection(db, "devices/iphone/models");
-                const samsungCollection = collection(db, "devices/samsung/models");
-                const ipadCollection = collection(db, "devices/ipad/models");
-                const googlePixelCollection = collection(db, "devices/google_pixel/models");
+      tr.innerHTML = `
+        <td class="py-3 px-4 font-semibold text-sm">
+          <div class="flex items-center gap-3">
+            <img class="w-10 h-10 object-contain rounded-md border p-1 bg-white" src="${row.imageUrl || 'https://placehold.co/40x40/E5E7EB/4B5563?text=NO+IMG'}" alt="${row.name}">
+            <span>${row.name || ''}</span>
+          </div>
+        </td>
+        <td class="py-3 px-4 text-gray-600">${row.storage || ''}</td>
+        <td class="py-3 px-4 font-medium text-sm ${statusClass}">${statusText}</td>
+        ${['flawless','good','fair','damaged','broken','noPower'].map(priceCell).join('')}
+        <td class="py-3 px-4 text-center">
+          <button class="bg-red-500 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-red-600 delete-btn" data-id="${row.id}" data-name="${row.name}" data-brand="${row.brand}">Delete</button>
+        </td>`;
 
-                try {
-                    const [iphoneSnapshot, samsungSnapshot, ipadSnapshot, googlePixelSnapshot] = await Promise.all([
-                        getDocs(iphoneCollection),
-                        getDocs(samsungCollection),
-                        getDocs(ipadCollection),
-                        getDocs(googlePixelCollection)
-                    ]);
-                    
-                    allDevices = [];
-                    iphoneSnapshot.forEach(doc => allDevices.push({ id: doc.id, brand: 'iphone', ...doc.data() }));
-                    samsungSnapshot.forEach(doc => allDevices.push({ id: doc.id, brand: 'samsung', ...doc.data() }));
-                    ipadSnapshot.forEach(doc => allDevices.push({ id: doc.id, brand: 'ipad', ...doc.data() }));
-                    googlePixelSnapshot.forEach(doc => allDevices.push({ id: doc.id, brand: 'google_pixel', ...doc.data() }));
-                    
-                    renderPricingTable(allDevices, filters);
-                } catch (error) {
-                    console.error("Error fetching pricing data: ", error);
-                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-red-500">Error loading data. Please check your permissions.</td></tr>';
-                }
-            };
-            
-            const sortAndFilterDevices = (devices, filters) => {
-                const filtered = devices.filter(device => {
-                    const matchesSearch = filters.search ? device.name.toLowerCase().includes(filters.search.toLowerCase()) : true;
-                    const matchesBrand = filters.brand ? device.brand.toLowerCase() === filters.brand.toLowerCase() : true;
-                    return matchesSearch && matchesBrand;
-                });
-                
-                const allRows = [];
-                filtered.forEach(device => {
-                    Object.keys(device.prices).forEach(storage => {
-                            if (device.brand === 'iphone' || device.brand === 'samsung' || device.brand === 'google_pixel') {
-                                if (device.prices[storage].unlocked) {
-                                    allRows.push({ ...device, storage, status: 'unlocked', prices: device.prices[storage].unlocked });
-                                }
-                                if (device.prices[storage].locked) {
-                                    allRows.push({ ...device, storage, status: 'locked', prices: device.prices[storage].locked });
-                                }
-                            }
-                            if (device.brand === 'ipad') {
-                                if (device.prices[storage].wifi) {
-                                    allRows.push({ ...device, storage, status: 'wifi', prices: device.prices[storage].wifi });
-                                }
-                                if (device.prices[storage].lte) {
-                                    allRows.push({ ...device, storage, status: 'lte', prices: device.prices[storage].lte });
-                                }
-                            }
-                    });
-                });
-                
-                return allRows.sort((a, b) => {
-                    const brandOrder = ['iphone', 'ipad', 'google_pixel', 'samsung'];
-                    const brandComparison = brandOrder.indexOf(a.brand) - brandOrder.indexOf(b.brand);
-                    if (brandComparison !== 0) {
-                        return brandComparison;
-                    }
-                    
-                    const getModelSeries = (name) => {
-                        const match = name.match(/(\d+)/);
-                        return match ? parseInt(match[1]) : 0;
-                    };
-                    const seriesA = getModelSeries(a.name);
-                    const seriesB = getModelSeries(b.name);
-                    if (seriesA !== seriesB) {
-                        return seriesB - seriesA;
-                    }
-
-                    if (a.name !== b.name) {
-                        return a.name.localeCompare(b.name);
-                    }
-
-                    if (a.status !== b.status) {
-                       const statusOrder = a.brand === 'ipad' ? ['lte', 'wifi'] : ['unlocked', 'locked'];
-                       return statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
-                    }
-                    
-                    const storageA = parseInt(a.storage);
-                    const storageB = parseInt(b.storage);
-                    if (storageA !== storageB) {
-                        return storageA - storageB;
-                    }
-
-                    return 0;
-                });
-            };
-
-            const renderPricingTable = (devices, filters) => {
-                pricingTableBody.innerHTML = '';
-                
-                const sortedRows = sortAndFilterDevices(devices, filters);
-                
-                if (filters.brand === 'ipad') {
-                    pricingTableHeader.innerHTML = `
-                        <tr>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Device</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Storage</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Connectivity</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Flawless</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Good</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Fair</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Damaged</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Broken</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">No Power</th>
-                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Actions</th>
-                        </tr>
-                    `;
-                } else {
-                    pricingTableHeader.innerHTML = `
-                        <tr>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Device</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Storage</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Lock Status</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Flawless</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Good</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Fair</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Damaged</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Broken</th>
-                            <th scope="col" class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">No Power</th>
-                            <th scope="col" class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky top-0 z-10 bg-white shadow">Actions</th>
-                        </tr>
-                    `;
-                }
-                
-                if (sortedRows.length === 0) {
-                    pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-gray-500">No matching devices found.</td></tr>';
-                    return;
-                }
-                
-                sortedRows.forEach(row => {
-                    const tableRow = createPriceRow(row, row.storage, row.status, row.prices);
-                    pricingTableBody.appendChild(tableRow);
-                });
-
-                document.querySelectorAll('.price-input').forEach(input => {
-                    input.addEventListener('focus', (e) => {
-                        e.target.select();
-                        e.target.dataset.originalValue = e.target.value;
-                    });
-                    input.addEventListener('input', handleEditPrice);
-                    input.addEventListener('blur', (e) => {
-                        const uniqueKey = `${e.target.dataset.id}-${e.target.dataset.storage}-${e.target.dataset.status}`;
-                        const saveBtn = document.querySelector(`.save-row-btn`);
-                        const isChanged = Object.keys(pendingChanges).some(key => key.startsWith(uniqueKey));
-                        if(isChanged) {
-                           saveBtn.classList.remove('hidden');
-                        } else {
-                           saveBtn.classList.add('hidden');
-                        }
-                    });
-                    input.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            e.target.blur();
-                        }
-                    });
-                });
-                
-                document.querySelectorAll('.delete-btn').forEach(button => {
-                    button.addEventListener('click', async (e) => {
-                        const brand = e.target.dataset.brand;
-                        const id = e.target.dataset.id;
-                        const deviceName = e.target.dataset.name;
-                        
-                        showCustomConfirm(`Are you sure you want to delete ${deviceName}? This action is irreversible.`, async (confirmed) => {
-                            if (confirmed) {
-                                try {
-                                    await deleteDoc(doc(db, `devices/${brand}/models`, id));
-                                    displayStatusMessage(`${deviceName} deleted successfully!`, 'success');
-                                    fetchAndRenderPricing({ search: searchInput.value, brand: brandFilter.value });
-                                } catch (error) {
-                                    console.error("Error deleting document:", error);
-                                    displayStatusMessage(`Error deleting ${deviceName}.`, 'error');
-                                }
-                            }
-                        });
-                    });
-                });
-
-                document.querySelectorAll('.save-row-btn').forEach(button => {
-                    button.addEventListener('click', saveRowChanges);
-                });
-            };
-            
-            const showCustomConfirm = (message, callback) => {
-                const modalHtml = `
-                    <div class="fixed inset-0 bg-gray-900 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
-                        <div class="relative bg-white rounded-lg shadow-xl p-8 max-w-sm w-full mx-4 my-8">
-                            <h3 class="text-xl font-bold mb-4 text-gray-900">Confirm Action</h3>
-                            <p class="text-gray-600 mb-6">${message}</p>
-                            <div class="flex justify-end gap-4">
-                                <button id="cancel-confirm" class="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
-                                <button id="ok-confirm" class="bg-red-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-red-600">Delete</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(customConfirmModal);
-                customConfirmModal.innerHTML = modalHtml;
-                document.getElementById('cancel-confirm').addEventListener('click', () => {
-                    customConfirmModal.remove();
-                    callback(false);
-                });
-                document.getElementById('ok-confirm').addEventListener('click', () => {
-                    customConfirmModal.remove();
-                    callback(true);
-                });
-            };
-
-
-            const createPriceRow = (device, storage, status, prices) => {
-                const row = document.createElement('tr');
-                row.className = 'border-b border-gray-200 hover:bg-gray-50 transition-colors';
-                
-                const rowKey = `${device.id}-${storage}-${status}`;
-                const saveBtnHtml = `
-                    <button class="bg-blue-500 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-blue-600 transition-colors save-row-btn hidden" data-row-key="${rowKey}">
-                        <i class="fas fa-save mr-1"></i>Save
-                    </button>
-                `;
-                const deleteBtnHtml = `<button class="bg-red-500 text-white px-3 py-1 rounded-md text-xs font-semibold hover:bg-red-600 transition-colors delete-btn" data-id="${device.id}" data-brand="${device.brand}" data-name="${device.name}">Delete</button>`;
-                
-                let statusText = status;
-                let statusClass = '';
-                if (device.brand === 'ipad') {
-                    statusText = status === 'lte' ? 'LTE' : 'Wi-Fi';
-                    statusClass = status === 'lte' ? 'text-blue-600' : 'text-indigo-600';
-                } else {
-                    statusText = status.charAt(0).toUpperCase() + status.slice(1);
-                    statusClass = status === 'unlocked' ? 'text-emerald-600' : 'text-red-600';
-                }
-                
-                row.innerHTML = `
-                    <td class="py-3 px-4 font-semibold text-sm">
-                        <div class="flex items-center gap-3">
-                            <img class="w-10 h-10 object-contain rounded-md border p-1 bg-white" data-base-src="${device.imageUrl}" alt="${device.name}">
-                            <span>${device.name}</span>
-                        </div>
-                    </td>
-                    <td class="py-3 px-4 text-gray-600">${storage}</td>
-                    <td class="py-3 px-4 font-medium text-sm ${statusClass}">${statusText}</td>
-                    ${renderEditablePriceCell(prices.flawless, device, storage, status, 'flawless')}
-                    ${renderEditablePriceCell(prices.good, device, storage, status, 'good')}
-                    ${renderEditablePriceCell(prices.fair, device, storage, status, 'fair')}
-                    ${renderEditablePriceCell(prices.damaged, device, storage, status, 'damaged')}
-                    ${renderEditablePriceCell(prices.broken, device, storage, status, 'broken')}
-                    ${renderEditablePriceCell(prices.noPower, device, storage, status, 'noPower')}
-                    <td class="py-3 px-4 text-center space-x-2">
-                        ${saveBtnHtml}
-                        ${deleteBtnHtml}
-                    </td>
-                `;
-                
-                const imgElement = row.querySelector('img');
-                loadImageWithFallback(imgElement, device.imageUrl);
-                
-                return row;
-            };
-
-            const renderEditablePriceCell = (price, device, storage, status, condition) => {
-                const uniqueKey = `${device.id}-${storage}-${status}-${condition}`;
-                const pendingValue = pendingChanges[uniqueKey]?.value;
-                const value = pendingValue !== undefined ? pendingValue.toFixed(2) : (price !== undefined && price !== null ? price.toFixed(2) : '');
-                const hasPendingChange = pendingValue !== undefined;
-
-                return `
-                    <td class="py-3 px-2">
-                        <div class="relative flex items-center bg-white rounded-md p-2 border border-gray-300 hover:border-blue-500 transition-colors ${hasPendingChange ? 'border-amber-500 ring-2 ring-amber-200' : ''}">
-                            <span class="text-gray-500 text-xs mr-1">$</span>
-                            <input 
-                                type="number" 
-                                step="0.01" 
-                                value="${value}" 
-                                placeholder="N/A"
-                                class="price-input w-full bg-transparent text-gray-900 font-medium text-center focus:outline-none"
-                                data-id="${device.id}"
-                                data-brand="${device.brand}"
-                                data-storage="${storage}"
-                                data-status="${status}"
-                                data-condition="${condition}"
-                                data-original-value="${price}"
-                            />
-                        </div>
-                    </td>
-                `;
-            };
-
-            const handleEditPrice = (e) => {
-                const input = e.target;
-                const newValue = parseFloat(input.value);
-                const originalValue = parseFloat(input.dataset.originalValue);
-                const uniqueKey = `${input.dataset.id}-${input.dataset.storage}-${input.dataset.status}-${input.dataset.condition}`;
-                const rowKey = `${input.dataset.id}-${input.dataset.storage}-${input.dataset.status}`;
-                const rowElement = input.closest('tr');
-                const saveBtn = rowElement.querySelector(`.save-row-btn`);
-                const inputWrapper = input.closest('div');
-
-                if (isNaN(newValue) || parseFloat(newValue.toFixed(2)) === parseFloat(originalValue.toFixed(2))) {
-                    delete pendingChanges[uniqueKey];
-                } else {
-                     pendingChanges[uniqueKey] = {
-                         id: input.dataset.id,
-                         brand: input.dataset.brand,
-                         storage: input.dataset.storage,
-                         status: input.dataset.status,
-                         condition: input.dataset.condition,
-                         value: newValue
-                     };
-                }
-                
-                const rowHasChanges = Object.keys(pendingChanges).some(key => key.startsWith(rowKey));
-                if (rowHasChanges) {
-                    saveBtn.classList.remove('hidden');
-                    inputWrapper.classList.add('border-amber-500', 'ring-2', 'ring-amber-200');
-                } else {
-                    saveBtn.classList.add('hidden');
-                    inputWrapper.classList.remove('border-amber-500', 'ring-2', 'ring-amber-200');
-                }
-            };
-
-            const saveRowChanges = async (e) => {
-                const button = e.target.closest('button');
-                const rowKey = button.dataset.rowKey;
-                
-                const changesToSave = Object.keys(pendingChanges)
-                                             .filter(key => key.startsWith(rowKey))
-                                             .map(key => pendingChanges[key]);
-
-                if (changesToSave.length === 0) {
-                    displayStatusMessage('No changes to save for this row.', 'info');
-                    return;
-                }
-
-                console.log("Saving changes for row:", rowKey);
-                console.log("Changes to commit:", changesToSave);
-
-                displayStatusMessage('Saving changes...', 'info');
-                button.disabled = true;
-                button.innerHTML = `<i class="fas fa-spinner fa-spin mr-1"></i>Saving...`;
-
-                const batch = writeBatch(db);
-                const docRef = doc(db, `devices/${changesToSave[0].brand}/models`, changesToSave[0].id);
-                const updateObject = {};
-
-                changesToSave.forEach(change => {
-                    const updatePath = `prices.${change.storage}.${change.status}.${change.condition}`;
-                    updateObject[updatePath] = change.value;
-                });
-                
-                batch.update(docRef, updateObject);
-
-                try {
-                    await batch.commit();
-                    console.log("Batch committed successfully!");
-                    displayStatusMessage('Changes saved successfully!', 'success');
-                    
-                    const deviceToUpdate = allDevices.find(d => d.id === changesToSave[0].id);
-                    if (deviceToUpdate) {
-                        changesToSave.forEach(change => {
-                             if (!deviceToUpdate.prices[change.storage]) deviceToUpdate.prices[change.storage] = {};
-                             if (!deviceToUpdate.prices[change.storage][change.status]) deviceToUpdate.prices[change.storage][change.status] = {};
-                             deviceToUpdate.prices[change.storage][change.status][change.condition] = change.value;
-                        });
-                    }
-                    
-                    renderPricingTable(allDevices, { search: searchInput.value, brand: brandFilter.value });
-                    
-                } catch (error) {
-                    console.error("Error committing changes:", error);
-                    displayStatusMessage('Error saving changes. Please try again.', 'error');
-                    button.disabled = false;
-                    button.innerHTML = `<i class="fas fa-save mr-1"></i>Save`;
-                }
-            };
-            
-            searchInput.addEventListener('input', () => renderPricingTable(allDevices, { search: searchInput.value, brand: brandFilter.value }));
-            document.getElementById('brandFilter').addEventListener('change', (e) => {
-                const selectedBrand = e.target.value;
-                const brandFilterLinks = document.querySelectorAll('#brand-nav a');
-                brandFilterLinks.forEach(link => {
-                    link.classList.remove('bg-gray-700', 'text-white');
-                    link.classList.add('text-gray-400', 'hover:text-white', 'hover:bg-gray-700');
-                    if (link.dataset.brand === selectedBrand || (selectedBrand === '' && link.dataset.brand === 'all')) {
-                        link.classList.add('bg-gray-700', 'text-white');
-                        link.classList.remove('text-gray-400');
-                    }
-                });
-                renderPricingTable(allDevices, { search: searchInput.value, brand: selectedBrand });
-            });
-            document.getElementById('brand-nav').addEventListener('click', (e) => {
-                if (e.target.tagName === 'A' || e.target.closest('A')) {
-                    e.preventDefault();
-                    const link = e.target.closest('A');
-                    const selectedBrand = link.dataset.brand === 'all' ? '' : link.dataset.brand;
-                    document.getElementById('brandFilter').value = selectedBrand;
-                    renderPricingTable(allDevices, { search: searchInput.value, brand: selectedBrand });
-                    
-                    // Update active class on click
-                    document.querySelectorAll('#brand-nav a').forEach(item => {
-                        item.classList.remove('bg-gray-700', 'text-white');
-                        item.classList.add('text-gray-400');
-                    });
-                    link.classList.add('bg-gray-700', 'text-white');
-                }
-            });
-
-            exportXLSXBtn.addEventListener('click', () => {
-                const table = document.getElementById('pricingTable');
-                if (!table) {
-                    displayStatusMessage('No data to export.', 'error');
-                    return;
-                }
-
-                const wb = XLSX.utils.table_to_book(table);
-                XLSX.writeFile(wb, "pricing_data.xlsx");
-                displayStatusMessage('Export successful!', 'success');
-            });
-            
-            importXLSXBtn.addEventListener('click', () => {
-                importModal.classList.remove('hidden');
-                importFileForm.reset();
-                importFileName.textContent = 'No file chosen';
-                overwriteWarningSection.innerHTML = '';
-                overwriteWarningSection.classList.add('hidden');
-                document.getElementById('overwriteActions').classList.add('hidden');
-            });
-            
-            let changesToCommit = [];
-            
-            importFile.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file) {
-                    importFileName.textContent = 'No file chosen';
-                    return;
-                }
-                importFileName.textContent = file.name;
-
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    try {
-                        const data = new Uint8Array(event.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const sheetName = workbook.SheetNames[0];
-                        const sheet = workbook.Sheets[sheetName];
-                        const json = XLSX.utils.sheet_to_json(sheet);
-                        
-                        processImportData(json);
-                    } catch (error) {
-                        console.error("Error reading XLSX file:", error);
-                        displayStatusMessage("Failed to read the XLSX file. Please ensure it's a valid format.", 'error');
-                        importFileForm.reset();
-                    }
-                };
-                reader.readAsArrayBuffer(file);
-            });
-            
-            const processImportData = (importedData) => {
-                changesToCommit = [];
-                overwriteWarningSection.innerHTML = '';
-                
-                const currentDataMap = {};
-                allDevices.forEach(device => {
-                    currentDataMap[device.slug] = device;
-                });
-                
-                importedData.forEach(row => {
-                    const slug = row['Slug'] ? String(row['Slug']).trim() : null;
-                    const brand = row['Brand'] ? String(row['Brand']).toLowerCase().trim() : null;
-                    
-                    if (!slug || !brand) {
-                        console.warn('Skipping row due to missing Slug or Brand:', row);
-                        return;
-                    }
-                    
-                    const existingDevice = currentDataMap[slug];
-                    
-                    if (existingDevice && existingDevice.brand === brand) {
-                        const storage = row['Storage'] ? String(row['Storage']).toLowerCase().trim() : null;
-                        const status = row['Lock Status'] ? String(row['Lock Status']).toLowerCase().trim() : null;
-                        
-                        if (!storage || !status) {
-                             console.warn('Skipping row due to missing Storage or Lock Status:', row);
-                             return;
-                        }
-
-                        const existingPriceData = existingDevice.prices?.[storage]?.[status];
-
-                        ['Flawless', 'Good', 'Fair', 'Damaged', 'Broken', 'No Power'].forEach(quality => {
-                            const newPrice = row[quality];
-                            const conditionKey = quality.replace(/\s/g, '').toLowerCase();
-                            
-                            if (newPrice !== undefined && newPrice !== null && !isNaN(newPrice)) {
-                                const oldPrice = existingPriceData ? existingPriceData[conditionKey] : null;
-                                if (oldPrice !== newPrice) {
-                                    changesToCommit.push({
-                                        id: existingDevice.id,
-                                        device: existingDevice.name,
-                                        slug: slug,
-                                        brand: brand,
-                                        storage: storage,
-                                        status: status,
-                                        condition: conditionKey,
-                                        oldPrice: oldPrice || 'N/A',
-                                        newPrice: newPrice
-                                    });
-                                }
-                            }
-                        });
-                    }
-                });
-
-                if (changesToCommit.length > 0) {
-                    let tableHTML = `
-                        <h4 class="text-lg font-semibold text-red-600 mb-4">Warning: The following prices will be updated.</h4>
-                        <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
-                            <table class="w-full text-sm text-left text-gray-500">
-                                <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
-                                    <tr>
-                                        <th scope="col" class="py-3 px-6">Device</th>
-                                        <th scope="col" class="py-3 px-6">Storage</th>
-                                        <th scope="col" class="py-3 px-6">Status</th>
-                                        <th scope="col" class="py-3 px-6">Condition</th>
-                                        <th scope="col" class="py-3 px-6">Old Price</th>
-                                        <th scope="col" class="py-3 px-6">New Price</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                    `;
-                    changesToCommit.forEach(change => {
-                        tableHTML += `
-                            <tr class="bg-white border-b hover:bg-gray-50">
-                                <td class="py-4 px-6 font-medium text-gray-900">${change.device}</td>
-                                <td class="py-4 px-6">${change.storage}</td>
-                                <td class="py-4 px-6">${change.status}</td>
-                                <td class="py-4 px-6">${change.condition}</td>
-                                <td class="py-4 px-6 text-red-500">$${change.oldPrice !== 'N/A' ? change.oldPrice.toFixed(2) : 'N/A'}</td>
-                                <td class="py-4 px-6 text-green-500">$${change.newPrice.toFixed(2)}</td>
-                            </tr>
-                        `;
-                    });
-                    tableHTML += `</tbody></table></div>`;
-                    overwriteWarningSection.innerHTML = tableHTML;
-                    overwriteWarningSection.classList.remove('hidden');
-                    document.getElementById('overwriteActions').classList.remove('hidden');
-                } else {
-                    displayStatusMessage('No changes detected. Data is up to date.', 'info');
-                    overwriteWarningSection.classList.add('hidden');
-                    document.getElementById('overwriteActions').classList.add('hidden');
-                }
-            };
-            
-            confirmOverwriteBtn.addEventListener('click', async () => {
-                displayStatusMessage('Updating prices...', 'info');
-                confirmOverwriteBtn.disabled = true;
-                confirmOverwriteBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Importing...`;
-
-                const batch = writeBatch(db);
-                
-                const updatesByDoc = changesToCommit.reduce((acc, change) => {
-                    const docId = change.id;
-                    if (!acc[docId]) {
-                        acc[docId] = { brand: change.brand, updates: {} };
-                    }
-                    const updatePath = `prices.${change.storage}.${change.status}.${change.condition}`;
-                    acc[docId].updates[updatePath] = change.newPrice;
-                    return acc;
-                }, {});
-
-                for (const id in updatesByDoc) {
-                    const { brand, updates } = updatesByDoc[id];
-                    const docRef = doc(db, `devices/${brand}/models`, id);
-                    batch.update(docRef, updates);
-                }
-                
-                try {
-                    await batch.commit();
-                    displayStatusMessage('All prices updated successfully!', 'success');
-                    importModal.classList.add('hidden');
-                    fetchAndRenderPricing({ search: searchInput.value, brand: brandFilter.value });
-                } catch (error) {
-                    console.error("Error committing batch:", error);
-                    displayStatusMessage('Error updating prices. Please try again.', 'error');
-                } finally {
-                    confirmOverwriteBtn.disabled = false;
-                    confirmOverwriteBtn.innerHTML = `Confirm Import`;
-                }
-            });
-
-            bulkEditBtn.addEventListener('click', () => {
-                bulkEditModal.classList.remove('hidden');
-            });
-            
-            closeModalBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    addEditModal.classList.add('hidden');
-                    bulkEditModal.classList.add('hidden');
-                    importModal.classList.add('hidden');
-                    importFileForm.reset();
-                    importFileName.textContent = 'No file chosen';
-                    overwriteWarningSection.innerHTML = '';
-                    overwriteWarningSection.classList.add('hidden');
-                    document.getElementById('overwriteActions').classList.add('hidden');
-                });
-            });
-
-            bulkEditForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const bulkBrand = document.getElementById('bulkBrand').value;
-                const bulkModel = document.getElementById('bulkModel').value;
-                const bulkQuality = document.getElementById('bulkQuality').value;
-                const bulkAction = document.getElementById('bulkAction').value;
-                const bulkValue = parseFloat(document.getElementById('bulkValue').value);
-                const bulkStatus = document.getElementById('bulkStatus').value;
-
-                if (isNaN(bulkValue)) {
-                    displayStatusMessage('Please enter a valid number for the bulk value.', 'error');
-                    return;
-                }
-
-                const updates = {};
-                const matchingDevices = allDevices.filter(device => {
-                    let matches = true;
-                    if (bulkBrand && device.brand !== bulkBrand) matches = false;
-                    if (bulkModel && device.slug !== bulkModel) matches = false;
-                    return matches;
-                });
-                
-                const batch = writeBatch(db);
-
-                matchingDevices.forEach(device => {
-                    const docRef = doc(db, `devices/${device.brand}/models`, device.id);
-                    let shouldUpdate = false;
-                    
-                    const newPrices = JSON.parse(JSON.stringify(device.prices));
-
-                    for (const storage in newPrices) {
-                        const priceData = newPrices[storage];
-                        
-                        const statusesToUpdate = [];
-                        if (device.brand === 'ipad') {
-                            if (bulkStatus === 'all') {
-                                statusesToUpdate.push('lte', 'wifi');
-                            } else if (priceData[bulkStatus]) {
-                                statusesToUpdate.push(bulkStatus);
-                            }
-                        } else {
-                            if (bulkStatus === 'all') {
-                                statusesToUpdate.push('unlocked', 'locked');
-                            } else if (priceData[bulkStatus]) {
-                                statusesToUpdate.push(bulkStatus);
-                            }
-                        }
-
-                        statusesToUpdate.forEach(status => {
-                            if (priceData[status]) {
-                                for (const condition in priceData[status]) {
-                                    if (bulkQuality === 'all' || condition === bulkQuality) {
-                                        let currentPrice = priceData[status][condition];
-                                        if (currentPrice !== null && currentPrice !== undefined) {
-                                            if (bulkAction === 'percent') {
-                                                currentPrice += currentPrice * (bulkValue / 100);
-                                            } else if (bulkAction === 'add') {
-                                                currentPrice += bulkValue;
-                                            } else if (bulkAction === 'subtract') {
-                                                currentPrice -= bulkValue;
-                                            }
-                                            priceData[status][condition] = parseFloat(currentPrice.toFixed(2));
-                                            shouldUpdate = true;
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    }
-                    if (shouldUpdate) {
-                         batch.set(docRef, { prices: newPrices }, { merge: true });
-                    }
-                });
-                
-                try {
-                    await batch.commit();
-                    displayStatusMessage('Bulk edit successful!', 'success');
-                    bulkEditModal.classList.add('hidden');
-                    fetchAndRenderPricing({ search: searchInput.value, brand: brandFilter.value });
-                } catch (error) {
-                    console.error("Error with bulk update:", error);
-                    displayStatusMessage('Bulk update failed. Please try again.', 'error');
-                }
-            });
-
-            const bulkModelSelect = document.getElementById('bulkModel');
-            allDevices.forEach(device => {
-                const option = document.createElement('option');
-                option.value = device.slug;
-                option.textContent = device.name;
-                bulkModelSelect.appendChild(option);
-            });
-
-
-            addNewModelBtn.addEventListener('click', () => {
-                addEditForm.reset();
-                storageOptionsContainer.innerHTML = '';
-                addStorageOptionBtn.click();
-                addEditModal.classList.remove('hidden');
-            });
-            
-            addEditForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                
-                const deviceName = document.getElementById('deviceName').value;
-                const deviceBrand = document.getElementById('deviceBrand').value;
-                const deviceSlug = document.getElementById('deviceSlug').value;
-                const imageUrl = document.getElementById('imageUrl').value;
-                const storageOptions = document.querySelectorAll('.storage-option');
-
-                const prices = {};
-                storageOptions.forEach(option => {
-                    const storage = option.querySelector('.storage-size').value;
-                    if (!storage) return;
-                    
-                    const unlockedPrices = {};
-                    const lockedPrices = {};
-                    
-                    const isIpad = deviceBrand === 'ipad';
-                    const statusKey1 = isIpad ? 'lte' : 'unlocked';
-                    const statusKey2 = isIpad ? 'wifi' : 'locked';
-
-                    unlockedPrices.flawless = parseFloat(option.querySelector('.unlocked-flawless').value) || null;
-                    unlockedPrices.good = parseFloat(option.querySelector('.unlocked-good').value) || null;
-                    unlockedPrices.fair = parseFloat(option.querySelector('.unlocked-fair').value) || null;
-                    unlockedPrices.damaged = parseFloat(option.querySelector('.unlocked-damaged').value) || null;
-                    unlockedPrices.broken = parseFloat(option.querySelector('.unlocked-broken').value) || null;
-                    unlockedPrices.noPower = parseFloat(option.querySelector('.unlocked-no-power').value) || null;
-
-                    lockedPrices.flawless = parseFloat(option.querySelector('.locked-flawless').value) || null;
-                    lockedPrices.good = parseFloat(option.querySelector('.locked-good').value) || null;
-                    lockedPrices.fair = parseFloat(option.querySelector('.locked-fair').value) || null;
-                    lockedPrices.damaged = parseFloat(option.querySelector('.locked-damaged').value) || null;
-                    lockedPrices.broken = parseFloat(option.querySelector('.locked-broken').value) || null;
-                    lockedPrices.noPower = parseFloat(option.querySelector('.locked-no-power').value) || null;
-
-                    prices[storage] = { [statusKey1]: unlockedPrices, [statusKey2]: lockedPrices };
-                });
-
-                const newDeviceData = {
-                    name: deviceName,
-                    brand: deviceBrand,
-                    slug: deviceSlug,
-                    imageUrl: imageUrl,
-                    prices: prices
-                };
-
-                try {
-                    await setDoc(doc(db, `devices/${deviceBrand}/models`, deviceSlug), newDeviceData);
-                    addEditModal.classList.add('hidden');
-                    addEditForm.reset();
-                    fetchAndRenderPricing();
-                    displayStatusMessage('Model added/updated successfully!', 'success');
-                } catch (error) {
-                    console.error("Error adding document: ", error);
-                    displayStatusMessage('Error adding/updating model.', 'error');
-                }
-            });
-
-            addStorageOptionBtn.addEventListener('click', () => {
-                const newOption = document.createElement('div');
-                newOption.className = 'storage-option bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner';
-                newOption.innerHTML = `
-                    <div class="flex items-center justify-between mb-4">
-                        <h4 class="text-lg font-semibold text-gray-900">New Storage Option</h4>
-                        <button type="button" class="text-red-500 hover:text-red-700 delete-storage-option">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Storage Size (e.g., 64GB, 128GB)</label>
-                            <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Unlocked Prices</label>
-                                <div class="grid grid-cols-2 gap-2 mt-1">
-                                    <input type="number" step="0.01" placeholder="Flawless" class="unlocked-flawless rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="Good" class="unlocked-good rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="Fair" class="unlocked-fair rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="Damaged" class="unlocked-damaged rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="Broken" class="unlocked-broken rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="No Power" class="unlocked-no-power rounded-md border-gray-300 shadow-sm p-2">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Locked Prices</label>
-                                <div class="grid grid-cols-2 gap-2 mt-1">
-                                    <input type="number" step="0.01" placeholder="Flawless" class="locked-flawless rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="Good" class="locked-good rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="Fair" class="locked-fair rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="Damaged" class="locked-damaged rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="Broken" class="locked-broken rounded-md border-gray-300 shadow-sm p-2">
-                                    <input type="number" step="0.01" placeholder="No Power" class="locked-no-power rounded-md border-gray-300 shadow-sm p-2">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                storageOptionsContainer.appendChild(newOption);
-                
-                newOption.querySelector('.delete-storage-option').addEventListener('click', () => {
-                    newOption.remove();
-                });
-            });
-
-            function displayStatusMessage(message, type) {
-                statusMessage.textContent = message;
-                statusMessage.className = `p-3 rounded-md mt-4 text-center ${type === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'} ${type === 'info' ? 'bg-blue-100 text-blue-700' : ''}`;
-            }
+      // Inline save on change
+      tr.querySelectorAll('.price-input').forEach(input => {
+        let initial = input.value;
+        input.addEventListener('focus', () => { initial = input.value; });
+        input.addEventListener('change', async (e) => {
+          const { id, brand, storage, status, condition } = e.target.dataset;
+          const newVal = parseFloat(e.target.value);
+          if (isNaN(newVal)) { e.target.value = initial; return showMessage('Invalid price. Enter a number.', 'error'); }
+          const updatePath = `prices.${storage}.${status}.${condition}`;
+          try {
+            const ref = doc(db, `devices/${brand}/models`, id);
+            await setDoc(ref, { [updatePath]: newVal }, { merge: true });
+            showMessage('Price updated!', 'success');
+          } catch (err) {
+            console.error(err); showMessage('Failed to update price.', 'error');
+          }
         });
-    </script>
+      });
+      return tr;
+    };
+
+    // --- IMPORT HANDLING ---
+    const processImportData = (importedRows) => {
+      changesToCommit = [];
+      elements.overwriteWarningSection.innerHTML = '';
+
+      // map current devices by slug
+      const currentBySlug = {};
+      for (const brand in allDevices) {
+        (allDevices[brand] || []).forEach(d => { if (d.slug) currentBySlug[d.slug] = d; });
+      }
+
+      importedRows.forEach(row => {
+        const slug = row['Slug'] ? String(row['Slug']).trim() : null;
+        const brand = row['Brand'] ? String(row['Brand']).toLowerCase().trim() : null;
+        if (!slug || !brand) return;
+        const existing = currentBySlug[slug];
+        if (existing && existing.brand === brand) {
+          const storage = row['Storage'] ? String(row['Storage']).toLowerCase().trim() : null;
+          const status = row['Lock Status'] ? String(row['Lock Status']).toLowerCase().trim() : null;
+          if (!storage || !status) return;
+          const existingPriceData = existing?.prices?.[storage]?.[status] || {};
+          ['Flawless','Good','Fair','Damaged','Broken','No Power'].forEach(label => {
+            const val = row[label];
+            const key = label.replace(/\s/g,'').toLowerCase();
+            if (val !== undefined && val !== null && !isNaN(val)) {
+              const oldPrice = existingPriceData[key] ?? null;
+              if (oldPrice !== Number(val)) {
+                changesToCommit.push({ id: existing.id, device: existing.name, slug, brand, storage, status, condition: key, oldPrice, newPrice: Number(val) });
+              }
+            }
+          });
+        }
+      });
+
+      if (changesToCommit.length === 0) {
+        showMessage('No changes detected. Data is up to date.', 'info');
+        elements.overwriteWarningSection.classList.add('hidden');
+        document.getElementById('overwriteActions').classList.add('hidden');
+        return;
+      }
+
+      let html = `
+        <h4 class="text-lg font-semibold text-red-600 mb-4">Warning: The following prices will be updated.</h4>
+        <div class="max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
+          <table class="w-full text-sm text-left text-gray-600">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+              <tr><th class="py-3 px-6">Device</th><th class="py-3 px-6">Storage</th><th class="py-3 px-6">Status</th><th class="py-3 px-6">Condition</th><th class="py-3 px-6">Old</th><th class="py-3 px-6">New</th></tr>
+            </thead><tbody>`;
+      for (const ch of changesToCommit) {
+        html += `<tr class="bg-white border-b"><td class="py-2 px-6 font-medium text-gray-900">${ch.device}</td><td class="py-2 px-6">${ch.storage}</td><td class="py-2 px-6">${ch.status}</td><td class="py-2 px-6">${ch.condition}</td><td class="py-2 px-6 text-red-500">${ch.oldPrice!=null?('$'+ch.oldPrice.toFixed(2)):'N/A'}</td><td class="py-2 px-6 text-green-600">${'$'+ch.newPrice.toFixed(2)}</td></tr>`;
+      }
+      html += '</tbody></table></div>';
+      elements.overwriteWarningSection.innerHTML = html;
+      elements.overwriteWarningSection.classList.remove('hidden');
+      document.getElementById('overwriteActions').classList.remove('hidden');
+    };
+
+    const detachListeners = () => { deviceListeners.forEach(u => { try { u(); } catch {} }); deviceListeners = []; };
+
+    const setupListeners = () => {
+      detachListeners();
+      allDevices = {};
+      if (fetchedBrands.length === 0) {
+        elements.pricingTableBody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-gray-500">No devices found. Add a new device to get started.</td></tr>';
+        elements.loadingIndicator.classList.add('hidden');
+        return;
+      }
+      elements.loadingIndicator.classList.remove('hidden');
+      let loaded = 0;
+      fetchedBrands.forEach(brand => {
+        const unsub = onSnapshot(collection(db, `devices/${brand}/models`), (snap) => {
+          allDevices[brand] = snap.docs.map(d => ({ id: d.id, brand, ...d.data() }));
+          loaded++;
+          if (loaded === fetchedBrands.length) {
+            renderPricingTable(allDevices, { search: elements.searchInput.value, brand: activeBrand });
+            elements.loadingIndicator.classList.add('hidden');
+          }
+        }, (err) => { console.error(err); showMessage(`Failed to load ${brand}.`, 'error'); });
+        deviceListeners.push(unsub);
+      });
+    };
+
+    // --- INIT ---
+    document.addEventListener('DOMContentLoaded', () => {
+      try { app = initializeApp(firebaseConfig); auth = getAuth(app); db = getFirestore(app); }
+      catch (e) { console.error('Firebase init error', e); return showMessage('Failed to initialize Firebase.', 'error'); }
+
+      onAuthStateChanged(auth, async (user) => {
+        if (!user) {
+          try { await signInAnonymously(auth); return; } catch (e) { console.error(e); return showMessage('Anonymous sign-in failed. Enable it in Firebase Auth.', 'error'); }
+        }
+        userId = user.uid;
+        elements.userEmailDisplay.textContent = `User ID: ${userId}`;
+        elements.adminPanel.classList.remove('hidden');
+        elements.loadingIndicator.classList.remove('hidden');
+
+        // Live list of brands under /devices, filtered to only SUPPORTED_BRANDS
+        const unsubBrands = onSnapshot(collection(db, 'devices'), (brandSnap) => {
+          const found = brandSnap.docs.map(d => d.id).filter(id => SUPPORTED_BRANDS.includes(id));
+          // Fallback: if collection has none yet, at least show the supported ones
+          fetchedBrands = found.length ? found : SUPPORTED_BRANDS;
+          renderBrandNavigation(activeBrand);
+          setupListeners();
+        }, (err) => { console.error('Brand fetch error', err); showMessage('Failed to load brands.', 'error'); });
+        deviceListeners.push(unsubBrands);
+      });
+
+      // Sidebar brand filter
+      elements.brandNav.addEventListener('click', (e) => {
+        const a = e.target.closest('a');
+        if (!a) return;
+        e.preventDefault();
+        activeBrand = a.dataset.brand;
+        renderBrandNavigation(activeBrand);
+        renderPricingTable(allDevices, { search: elements.searchInput.value, brand: activeBrand });
+      });
+
+      // Search
+      elements.searchInput.addEventListener('input', () => {
+        renderPricingTable(allDevices, { search: elements.searchInput.value, brand: activeBrand });
+      });
+
+      // Table actions (delete)
+      elements.pricingTableBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('.delete-btn');
+        if (!btn) return;
+        const { id, name, brand } = btn.dataset;
+        showConfirmModal(`Delete ${name}? This cannot be undone.`, async (ok) => {
+          if (!ok) return;
+          try { await deleteDoc(doc(db, `devices/${brand}/models`, id)); showMessage(`${name} deleted.`, 'success'); }
+          catch (err) { console.error(err); showMessage('Delete failed.', 'error'); }
+        });
+      });
+
+      // Add Storage Block template
+      elements.addStorageOptionBtn.addEventListener('click', () => {
+        const brand = (document.getElementById('deviceBrand').value)||'';
+        const isIpad = brand === 'ipad';
+        const label1 = isIpad ? 'LTE Prices' : 'Unlocked Prices';
+        const label2 = isIpad ? 'Wi‑Fi Prices' : 'Locked Prices';
+        const block = document.createElement('div');
+        block.className = 'storage-option bg-gray-50 p-4 rounded-lg border border-gray-200 shadow-inner';
+        block.innerHTML = `
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="text-lg font-semibold text-gray-900">New Storage Option</h4>
+            <button type="button" class="text-red-500 hover:text-red-700 delete-storage-option"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Storage Size (e.g., 64GB, 128GB)</label>
+              <input type="text" class="storage-size mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2" />
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700">${label1}</label>
+                <div class="grid grid-cols-2 gap-2 mt-1">
+                  <input type="number" step="0.01" placeholder="Flawless" class="status1-flawless rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="Good" class="status1-good rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="Fair" class="status1-fair rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="Damaged" class="status1-damaged rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="Broken" class="status1-broken rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="No Power" class="status1-no-power rounded-md border-gray-300 shadow-sm p-2" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700">${label2}</label>
+                <div class="grid grid-cols-2 gap-2 mt-1">
+                  <input type="number" step="0.01" placeholder="Flawless" class="status2-flawless rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="Good" class="status2-good rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="Fair" class="status2-fair rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="Damaged" class="status2-damaged rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="Broken" class="status2-broken rounded-md border-gray-300 shadow-sm p-2" />
+                  <input type="number" step="0.01" placeholder="No Power" class="status2-no-power rounded-md border-gray-300 shadow-sm p-2" />
+                </div>
+              </div>
+            </div>
+          </div>`;
+        elements.storageOptionsContainer.appendChild(block);
+        block.querySelector('.delete-storage-option').addEventListener('click', () => block.remove());
+      });
+
+      // Open Add/Edit modal
+      elements.addNewModelBtn.addEventListener('click', () => {
+        elements.addEditForm.reset();
+        elements.storageOptionsContainer.innerHTML = '';
+        elements.addStorageOptionBtn.click();
+        elements.addEditModal.classList.remove('hidden');
+      });
+
+      // Save model
+      elements.addEditForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const deviceData = {
+          name: document.getElementById('deviceName').value.trim(),
+          brand: document.getElementById('deviceBrand').value.trim(),
+          slug: document.getElementById('deviceSlug').value.trim(),
+          imageUrl: document.getElementById('imageUrl').value.trim(),
+          prices: {}
+        };
+        if (!SUPPORTED_BRANDS.includes(deviceData.brand)) return showMessage('Brand must be one of: '+SUPPORTED_BRANDS.join(', '), 'error');
+        document.querySelectorAll('.storage-option').forEach(opt => {
+          const storage = opt.querySelector('.storage-size').value.trim();
+          if (!storage) return;
+          const isIpad = deviceData.brand === 'ipad';
+          const k1 = isIpad ? 'lte' : 'unlocked';
+          const k2 = isIpad ? 'wifi' : 'locked';
+          const num = (sel) => { const v = parseFloat(opt.querySelector(sel)?.value); return isNaN(v) ? null : v; };
+          const prices1 = { flawless:num('.status1-flawless'), good:num('.status1-good'), fair:num('.status1-fair'), damaged:num('.status1-damaged'), broken:num('.status1-broken'), noPower:num('.status1-no-power') };
+          const prices2 = { flawless:num('.status2-flawless'), good:num('.status2-good'), fair:num('.status2-fair'), damaged:num('.status2-damaged'), broken:num('.status2-broken'), noPower:num('.status2-no-power') };
+          deviceData.prices[storage.toLowerCase()] = { [k1]: prices1, [k2]: prices2 };
+        });
+        try {
+          // Use slug as the document ID so it matches your desired /slug structure
+          const ref = doc(db, `devices/${deviceData.brand}/models`, deviceData.slug);
+          await setDoc(ref, deviceData, { merge: true });
+          elements.addEditModal.classList.add('hidden');
+          showMessage('Model added/updated successfully!', 'success');
+        } catch (err) { console.error(err); showMessage('Error saving model.', 'error'); }
+      });
+
+      // Close any modal
+      elements.closeModalBtns.forEach(btn => btn.addEventListener('click', () => {
+        elements.addEditModal.classList.add('hidden');
+        elements.bulkEditModal.classList.add('hidden');
+        elements.importModal.classList.add('hidden');
+      }));
+
+      // Export
+      elements.exportXLSXBtn.addEventListener('click', () => {
+        const table = document.getElementById('pricingTable');
+        if (!table) return showMessage('No data to export.', 'error');
+        const wb = XLSX.utils.table_to_book(table);
+        XLSX.writeFile(wb, 'pricing_data.xlsx');
+        showMessage('Exported to pricing_data.xlsx', 'success');
+      });
+
+      // Import flow
+      elements.importXLSXBtn.addEventListener('click', () => {
+        elements.importModal.classList.remove('hidden');
+        elements.importFile.value = '';
+        elements.importFileName.textContent = 'No file chosen';
+        elements.overwriteWarningSection.innerHTML = '';
+        elements.overwriteWarningSection.classList.add('hidden');
+        document.getElementById('overwriteActions').classList.add('hidden');
+      });
+      elements.importFile.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) { elements.importFileName.textContent = 'No file chosen'; return; }
+        elements.importFileName.textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          try {
+            const data = new Uint8Array(ev.target.result);
+            const wb = XLSX.read(data, { type:'array' });
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet);
+            processImportData(json);
+          } catch (err) { console.error(err); showMessage('Invalid XLSX file.', 'error'); }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+      elements.confirmOverwriteBtn.addEventListener('click', async () => {
+        showMessage('Importing updates...', 'info');
+        elements.confirmOverwriteBtn.disabled = true; elements.confirmOverwriteBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>Importing...`;
+        const batch = writeBatch(db);
+        const grouped = changesToCommit.reduce((acc, ch) => { (acc[ch.id] ||= { brand: ch.brand, updates: {} })["updates"][`prices.${ch.storage}.${ch.status}.${ch.condition}`] = ch.newPrice; return acc; }, {});
+        for (const id in grouped) {
+          const { brand, updates } = grouped[id];
+          const ref = doc(db, `devices/${brand}/models`, id);
+          if (Object.keys(updates).length) batch.update(ref, updates);
+        }
+        try { await batch.commit(); showMessage('All prices updated!', 'success'); elements.importModal.classList.add('hidden'); }
+        catch (err) { console.error(err); showMessage('Import failed.', 'error'); }
+        finally { elements.confirmOverwriteBtn.disabled = false; elements.confirmOverwriteBtn.textContent = 'Confirm Import'; }
+      });
+
+      // Bulk edit
+      elements.bulkEditBtn.addEventListener('click', () => {
+        elements.bulkEditForm.reset();
+        const sel = document.getElementById('bulkBrand');
+        // clear existing options except first
+        while (sel.options.length > 1) sel.remove(1);
+        fetchedBrands.forEach(b => { const o = document.createElement('option'); o.value = b; o.textContent = b.charAt(0).toUpperCase()+b.slice(1).replace('_',' '); sel.appendChild(o); });
+        elements.bulkEditModal.classList.remove('hidden');
+      });
+      elements.bulkEditForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const brand = document.getElementById('bulkBrand').value;
+        const status = document.getElementById('bulkStatus').value;
+        const quality = document.getElementById('bulkQuality').value;
+        const action = document.getElementById('bulkAction').value;
+        const value = parseFloat(document.getElementById('bulkValue').value);
+        if (isNaN(value)) return showMessage('Enter a valid number.', 'error');
+        const rows = Object.values(allDevices).flatMap(bm => bm.flatMap(d => {
+          const list = []; const prices = d.prices || {};
+          for (const s in prices) { const byStatus = prices[s]||{}; for (const st in byStatus) list.push({ id:d.id, brand:d.brand, storage:s, status:st, prices:byStatus[st] }); }
+          return list; }));
+        const filtered = rows.filter(r => (brand==='all'||r.brand===brand) && (status==='all'||r.status===status));
+        const batch = writeBatch(db);
+        let count = 0;
+        const grouped = {};
+        filtered.forEach(r => {
+          for (const q in r.prices) {
+            if (quality==='all' || q===quality) {
+              const cur = r.prices[q]; if (cur==null) continue;
+              let nv = cur; if (action==='percent') nv = cur + cur*(value/100); else if (action==='add') nv = cur + value; else nv = cur - value;
+              nv = Number(nv.toFixed(2));
+              (grouped[r.id] ||= { brand:r.brand, updates:{} }).updates[`prices.${r.storage}.${r.status}.${q}`] = nv; count++;
+            }
+          }
+        });
+        for (const id in grouped) {
+          const { brand: b, updates } = grouped[id];
+          const ref = doc(db, `devices/${b}/models`, id);
+          if (Object.keys(updates).length) batch.update(ref, updates);
+        }
+        if (!count) return showMessage('No matching prices to update.', 'info');
+        try { await batch.commit(); showMessage(`Bulk edit successful! ${count} prices updated.`, 'success'); elements.bulkEditModal.classList.add('hidden'); }
+        catch (err) { console.error(err); showMessage('Bulk update failed.', 'error'); }
+      });
+
+      // Faux-logout (anon)
+      elements.logoutBtn.addEventListener('click', () => showMessage('Logged out. Refresh to sign in again.', 'info'));
+    });
+  </script>
 </body>
 </html>
