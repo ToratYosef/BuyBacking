@@ -398,55 +398,67 @@
                      'No Power': 'noPower'
                  };
                  const conditionHeaders = Object.keys(conditionMap);
-
-                 const updates = [];
+                 
+                 const deviceUpdates = {};
 
                  json.forEach((row, index) => {
-                     const brand = row['Brand']?.toLowerCase();
+                     // Normalize column values to match Firestore structure
+                     const brand = row['Brand']?.toLowerCase() === 'iphones' ? 'iphone' : row['Brand']?.toLowerCase();
                      const slug = row['Slug'];
                      const storage = row['Storage'];
-                     const connectivity = row['Lock Status']?.toLowerCase();
+                     const connectivity = row['Lock Status']?.toLowerCase().replace(' ', ''); // Remove space
 
-                     // Validate essential fields for the transaction
                      if (!brand || !slug || !storage || !connectivity) {
                          console.error(`Skipping row ${index + 2} due to missing primary identifiers (Brand, Slug, Storage, or Lock Status):`, row);
                          errorCount++;
                          return;
                      }
-
-                     const collectionPath = `devices/${brand}/models`;
-                     const docRef = doc(db, collectionPath, slug);
                      
-                     // Create an update for each condition column in the row
+                     // Initialize update object for the device if it doesn't exist
+                     if (!deviceUpdates[brand]) {
+                         deviceUpdates[brand] = {};
+                     }
+                     if (!deviceUpdates[brand][slug]) {
+                         deviceUpdates[brand][slug] = {};
+                     }
+                     if (!deviceUpdates[brand][slug][storage]) {
+                         deviceUpdates[brand][slug][storage] = {};
+                     }
+                     if (!deviceUpdates[brand][slug][storage][connectivity]) {
+                         deviceUpdates[brand][slug][storage][connectivity] = {};
+                     }
+                     
+                     // Map prices from the row to the update object
                      conditionHeaders.forEach(conditionHeader => {
                          const price = row[conditionHeader];
                          const condition = conditionMap[conditionHeader];
-
                          if (price !== undefined && price !== null && !isNaN(parseFloat(price))) {
-                             const newPrice = parseFloat(price);
-                             updates.push(runTransaction(db, async (transaction) => {
-                                 const docSnapshot = await transaction.get(docRef);
-                                 if (!docSnapshot.exists()) {
-                                     throw `Document for slug '${slug}' does not exist!`;
-                                 }
-                                 const currentPrices = docSnapshot.data().prices;
-                                 if (!currentPrices[storage] || !currentPrices[storage][connectivity] || currentPrices[storage][connectivity][condition] === undefined) {
-                                     throw `Price path not found for ${slug} (${storage} - ${connectivity} - ${condition}).`;
-                                 }
-                                 currentPrices[storage][connectivity][condition] = newPrice;
-                                 transaction.update(docRef, { prices: currentPrices });
-                                 updatedCount++;
-                             }).catch(e => {
-                                 console.error(`Transaction failed for row ${index + 2}, condition '${condition}':`, row, e);
-                                 errorCount++;
-                             }));
-                         } else {
-                             console.warn(`Skipping row ${index + 2}, condition '${condition}' due to invalid price value:`, row);
+                             deviceUpdates[brand][slug][storage][connectivity][condition] = parseFloat(price);
                          }
                      });
                  });
                  
-                 await Promise.all(updates);
+                 // Process updates for each device
+                 const updatePromises = [];
+                 for (const brand in deviceUpdates) {
+                     for (const slug in deviceUpdates[brand]) {
+                         const updateData = deviceUpdates[brand][slug];
+                         const collectionPath = `devices/${brand}/models`;
+                         const docRef = doc(db, collectionPath, slug);
+
+                         updatePromises.push(updateDoc(docRef, { prices: updateData })
+                            .then(() => {
+                                updatedCount++;
+                            })
+                            .catch(e => {
+                                console.error(`Failed to update document for slug '${slug}':`, e);
+                                errorCount++;
+                            })
+                         );
+                     }
+                 }
+
+                 await Promise.all(updatePromises);
 
                  if (errorCount === 0) {
                      showImportStatus(`Successfully updated ${updatedCount} prices!`, 'success');
