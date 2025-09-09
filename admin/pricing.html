@@ -104,7 +104,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, getDocs, updateDoc, doc, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Firebase Config (your provided credentials)
         const firebaseConfig = {
@@ -285,24 +285,21 @@
             const docRef = doc(db, docPath, docId);
 
             try {
-                await runTransaction(db, async (transaction) => {
-                    const docSnapshot = await transaction.get(docRef);
-                    if (!docSnapshot.exists()) {
-                        throw "Document does not exist!";
+                // Use a batched write to ensure atomicity and avoid race conditions
+                await setDoc(docRef, {
+                    prices: {
+                        [storage]: {
+                            [connectivity]: {
+                                [condition]: newPrice
+                            }
+                        }
                     }
+                }, { merge: true });
 
-                    const prices = docSnapshot.data().prices;
-                    if (!prices[storage] || !prices[storage][connectivity] || prices[storage][connectivity][condition] === undefined) {
-                        throw `Price path not found for ${docId} (${storage} - ${connectivity} - ${condition}).`;
-                    }
-                    prices[storage][connectivity][condition] = newPrice;
-                    transaction.update(docRef, { prices: prices });
-                });
-                
                 element.defaultValue = newPrice;
                 showStatus(`Price for ${docId} (${storage} - ${connectivity} - ${condition}) updated successfully!`, "success");
             } catch (e) {
-                console.error("Transaction failed: ", e);
+                console.error("Failed to update price: ", e);
                 showStatus("Failed to update price. Check console for details.", "error");
                 element.value = element.defaultValue; // Revert on error
             }
@@ -419,13 +416,18 @@
                          deviceUpdates[brand] = {};
                      }
                      if (!deviceUpdates[brand][slug]) {
-                         deviceUpdates[brand][slug] = {};
+                         deviceUpdates[brand][slug] = {
+                             name: row['Device'] || slug,
+                             slug: slug,
+                             brand: brand,
+                             prices: {}
+                         };
                      }
-                     if (!deviceUpdates[brand][slug][storage]) {
-                         deviceUpdates[brand][slug][storage] = {};
+                     if (!deviceUpdates[brand][slug].prices[storage]) {
+                         deviceUpdates[brand][slug].prices[storage] = {};
                      }
-                     if (!deviceUpdates[brand][slug][storage][connectivity]) {
-                         deviceUpdates[brand][slug][storage][connectivity] = {};
+                     if (!deviceUpdates[brand][slug].prices[storage][connectivity]) {
+                         deviceUpdates[brand][slug].prices[storage][connectivity] = {};
                      }
                      
                      // Map prices from the row to the update object
@@ -433,7 +435,7 @@
                          const price = row[conditionHeader];
                          const condition = conditionMap[conditionHeader];
                          if (price !== undefined && price !== null && !isNaN(parseFloat(price))) {
-                             deviceUpdates[brand][slug][storage][connectivity][condition] = parseFloat(price);
+                             deviceUpdates[brand][slug].prices[storage][connectivity][condition] = parseFloat(price);
                          }
                      });
                  });
@@ -446,7 +448,7 @@
                          const collectionPath = `devices/${brand}/models`;
                          const docRef = doc(db, collectionPath, slug);
 
-                         updatePromises.push(updateDoc(docRef, { prices: updateData })
+                         updatePromises.push(setDoc(docRef, updateData, { merge: true })
                             .then(() => {
                                 updatedCount++;
                             })
