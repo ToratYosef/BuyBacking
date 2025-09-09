@@ -260,11 +260,11 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
                     <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
-                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="index.html" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="#" id="termsAndConditionsLinkFooter" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                    <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="index.html" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="#" id="termsAndConditionsLinkFooter" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
                     <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p><p class="text-slate-400">Phone: (123) 456-7890</p></div>
                 </div>
                 <div class="bg-slate-700 p-6 rounded-lg">
-                    <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
+                    <h3 class="text-xl font-bold mb-2 text-white">Stay Updated </h3>
                     <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
                     <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
                         <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
@@ -535,16 +535,17 @@
                     phoneGrid.classList.remove('hidden');
                     noResultsMessage.classList.add('hidden');
                     deviceList.forEach(device => {
-                        let brandSlug = device.brand.toLowerCase().replace(/\s/g, '-');
+                        let brandSlug = String(device.brand || '').toLowerCase().replace(/\s/g, '-');
                         // Custom slug for Google Pixel devices
                         if (brandSlug === 'google_pixel') {
                             brandSlug = 'google';
                         }
-                        const deviceSlug = device.slug ? device.slug.toLowerCase().replace(/\s/g, '-') : device.name.toLowerCase().replace(/\s/g, '-').replace(/[^a-z0-9-]/g, '');
+                        // Use name if slug is missing or not a string
+                        const deviceSlug = String(device.slug || device.name || '').toLowerCase().replace(/\s/g, '-').replace(/[^a-z0-9-]/g, '');
                         const modelUrl = `/${brandSlug}/models/${deviceSlug}.html`;
 
                         const deviceCardHTML = `
-                            <a href="${modelUrl}" class="phone-card-link group" data-name="${device.name.toLowerCase()}" data-brand="${device.brand}">
+                            <a href="${modelUrl}" class="phone-card-link group" data-name="${String(device.name || '').toLowerCase()}" data-brand="${String(device.brand || '')}">
                                 <div class="phone-card-inner bg-white p-6 rounded-xl shadow-md text-center flex flex-col h-full">
                                     <img data-base-src="${device.imageUrl}" alt="${device.name}" class="mx-auto mb-4 h-48 object-contain">
                                     <h3 class="text-lg font-semibold text-slate-800">${device.name}</h3>
@@ -568,9 +569,9 @@
                     case 'lowest-price':
                         return devices.sort((a, b) => a.highestPrice - b.highestPrice);
                     case 'name-asc':
-                        return devices.sort((a, b) => a.name.localeCompare(b.name));
+                        return devices.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
                     case 'name-desc':
-                        return devices.sort((a, b) => b.name.localeCompare(a.name));
+                        return devices.sort((a, b) => String(b.name || '').localeCompare(String(a.name || '')));
                     default:
                         return devices;
                 }
@@ -582,10 +583,10 @@
 
                 let filteredDevices = allDevices;
                 if (activeFilter !== 'all') {
-                    filteredDevices = filteredDevices.filter(device => device.brand.toLowerCase() === activeFilter.toLowerCase());
+                    filteredDevices = filteredDevices.filter(device => String(device.brand || '').toLowerCase() === activeFilter.toLowerCase());
                 }
 
-                const searchedDevices = filteredDevices.filter(device => device.name.toLowerCase().includes(query) || device.brand.toLowerCase().includes(query));
+                const searchedDevices = filteredDevices.filter(device => String(device.name || '').toLowerCase().includes(query) || String(device.brand || '').toLowerCase().includes(query));
 
                 const sortedDevices = sortDevices(searchedDevices, sortBy);
                 renderDevices(sortedDevices);
@@ -828,7 +829,6 @@
                 chatMessages.innerHTML = '';
                 endChatConfirmModal.classList.add('hidden');
                 endChatConfirmModal.classList.remove('flex');
-                minimizeChat();
             });
 
             const sendMessage = async (text) => {
@@ -965,7 +965,7 @@
             };
 
             const handleOrderSelection = async (order) => {
-                const messageText = `Selected Order: ID: ${order.orderId}, Device: ${order.device}`;
+                const messageText = `Selected Order: ID: ${order.orderId} - Device: ${order.device}`;
                 await sendMessage(messageText);
                 orderSelectionContainer.classList.add('hidden');
                 if (currentChatId) {
