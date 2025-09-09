@@ -14,9 +14,10 @@
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-
         gtag('config', 'AW-17534255111');
     </script>
+    
+    <!-- This is the corrected way to load the Google Maps API, including the Places library directly. -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvU0S58N4TVxJ5Ag4l7B-r534hng4BxVw&libraries=places&callback=initAutocomplete" async defer></script>
 
     <script type="module">
@@ -494,7 +495,7 @@
                             </div>
                             <div class="carrier-option">
                                 <input type="radio" id="verizon" name="carrier" value="verizon">
-                                <label for="verizon" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
+                                <label for="verizon" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
                                     <i class="fa-solid fa-wifi text-3xl text-red-600 mb-2 sm:text-2xl"></i>
                                     <span class="block text-slate-700 font-medium sm:text-sm">Verizon</span>
                                 </label>
@@ -804,7 +805,6 @@
                     <div>
                         <h3 class="text-xl font-bold mb-4">Contact Us</h3>
                         <p class="text-slate-400">Email: support@secondhandcell.com</p>
-
                     </div>
                 </div>
                 <div class="bg-slate-700 p-6 rounded-lg">
@@ -823,40 +823,38 @@
     </footer>
 
     <script>
-        // Global variable to hold the autocomplete instance
         let autocomplete;
 
         // This function is called by the Google Maps script when it has loaded.
         function initAutocomplete() {
-            // Get the input element
             const streetAddressInput = document.getElementById('street-address');
-            
-            // Create the autocomplete object, restricting the search to geographical location types.
-            autocomplete = new google.maps.places.Autocomplete(streetAddressInput, {
-                types: ['address']
-            });
+            if (streetAddressInput && typeof google !== 'undefined' && typeof google.maps.places !== 'undefined') {
+                // The Places library is loaded, so we can now initialize the Autocomplete object.
+                autocomplete = new google.maps.places.Autocomplete(streetAddressInput, {
+                    types: ['address']
+                });
 
-            // When the user selects an address from the dropdown, populate the address fields in the form.
-            autocomplete.addListener('place_changed', fillInAddress);
+                // When the user selects an address from the dropdown, populate the address fields.
+                autocomplete.addListener('place_changed', fillInAddress);
+            } else {
+                console.warn("Google Maps Places library is not available, skipping autocomplete initialization.");
+            }
         }
 
         function fillInAddress() {
-            // Get the place details from the autocomplete object.
             const place = autocomplete.getPlace();
 
             if (!place || !place.address_components) {
                 console.warn("Autocomplete's returned place contains no address components");
                 return;
             }
-
-            // Get each component of the address from the place details,
-            // and then fill-in the corresponding field on the form.
+            
             const streetAddressInput = document.getElementById('street-address');
             const cityInput = document.getElementById('city');
             const stateInput = document.getElementById('state');
             const zipCodeInput = document.getElementById('zip-code');
 
-            // Clear out the fields first
+            // Clear out the previous values
             streetAddressInput.value = '';
             cityInput.value = '';
             stateInput.value = '';
@@ -889,7 +887,6 @@
             
             streetAddressInput.value = `${streetNumber} ${route}`.trim();
 
-            // Manually trigger an input event on each field to let other scripts know they've changed
             const event = new Event('input', { bubbles: true });
             streetAddressInput.dispatchEvent(event);
             cityInput.dispatchEvent(event);
@@ -937,7 +934,13 @@
                 }
             }
             
-            device = await fetchDevicePricing(deviceBrand, deviceSlug);
+            try {
+                device = await fetchDevicePricing(deviceBrand, deviceSlug);
+            } catch (error) {
+                console.error("Failed to fetch device data:", error);
+                loadingIndicator.innerHTML = '<p class="text-red-500">Error: Failed to load device data.</p>';
+                return;
+            }
             
             if (!device) {
                 console.error(`Device data for slug "${deviceSlug}" not found. Displaying error message.`);
