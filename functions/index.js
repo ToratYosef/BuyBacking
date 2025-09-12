@@ -36,7 +36,7 @@ app.use(
 );
 app.use(express.json()); // Middleware to parse JSON request bodies
 
-// --- NEW: Authentication Middleware ---
+// --- Authentication Middleware ---
 const verifyFirebaseToken = async (req, res, next) => {
     // The /submit-order route is public, so we bypass the check for it.
     if (req.path === '/submit-order') {
@@ -67,6 +67,7 @@ const verifyFirebaseToken = async (req, res, next) => {
     }
 };
 
+
 // Set up Nodemailer transporter using the Firebase Functions config
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -77,7 +78,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // --- Email HTML Templates ---
-const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p><strong>Your prepaid shipping label is attached to this email as a PDF.</strong> Please print it, affix it to your package, and drop it off at any USPS location.</p><p>We've also attached a custom label for your device. **Please print this second label and place the sticker inside your package, on the bag that holds your device.** This helps us quickly identify your order when it arrives. It's very important to do this step correctly to avoid any delays.</p><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
+const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Please click the button below to download and print your label. Affix it to your package and drop it off at any USPS location.</p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p>We've also attached a custom label for your device. **Please print this label and place the sticker inside your package, on the bag that holds your device.** This helps us quickly identify your order when it arrives. It's very important to do this step correctly to avoid any delays.</p><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 
 const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 
@@ -379,63 +380,42 @@ async function sendZendeskComment(orderData, subject, html_body, isPublic) {
 
 
 /**
- * --- REPLACED ShipEngine with ShipStation ---
- * Helper function to create a shipping label using the ShipStation API.
- * @param {Object} fromAddress - The sender's address.
- * @param {Object} toAddress - The recipient's address.
- * @param {string} labelReference - A reference string for the label (e.g., order ID).
- * @param {boolean} isReturn - Whether this is a return label.
- * @returns {Promise<Object>} The label data from ShipStation.
+ * --- Reverted to ShipEngine API v1 ---
+ * Helper function to create a shipping label using the ShipEngine API.
  */
-async function createShipStationLabel(fromAddress, toAddress, labelReference, isReturn = false) {
-    const shipstationApiKey = functions.config().shipstation.key;
-    const shipstationApiSecret = functions.config().shipstation.secret;
-
-    if (!shipstationApiKey || !shipstationApiSecret) {
-        throw new Error("ShipStation API key/secret not configured. Please set 'shipstation.key' and 'shipstation.secret' environment variables.");
-    }
-
-    const encodedAuth = Buffer.from(`${shipstationApiKey}:${shipstationApiSecret}`).toString("base64");
-    
-    // Map address format for ShipStation
-    const mapAddress = (addr) => ({
-        name: addr.name,
-        company: addr.company_name || null,
-        street1: addr.address_line1,
-        street2: addr.address_line2 || null,
-        city: addr.city_locality,
-        state: addr.state_province,
-        postalCode: addr.postal_code,
-        country: addr.country_code,
-        phone: addr.phone,
-    });
-
-    const payload = {
-        carrierCode: "usps",
-        serviceCode: "usps_priority", // Example, can be configured
-        packageCode: "package",
-        confirmation: "delivery",
-        shipDate: new Date().toISOString().split('T')[0],
-        weight: {
-            value: 1.0,
-            units: "ounces"
+async function createShipEngineLabel(fromAddress, toAddress, labelReference) {
+  const isSandbox = false; // Set to false for production
+  const payload = {
+    shipment: {
+      service_code: "usps_priority_mail",
+      ship_to: toAddress,
+      ship_from: fromAddress,
+      packages: [
+        {
+          weight: { value: 1, unit: "ounce" }, // Default weight, adjust if needed
+          label_messages: {
+            reference1: labelReference,
+          },
         },
-        shipFrom: mapAddress(fromAddress),
-        shipTo: mapAddress(toAddress),
-        isReturnLabel: isReturn,
-        advancedOptions: {
-            customField1: labelReference,
-        },
-        testLabel: true // Set to false for production
-    };
+      ],
+    },
+  };
+  if (isSandbox) payload.testLabel = true;
 
-    const response = await axios.post("https://ssapi.shipstation.com/labels", payload, {
-        headers: {
-            "Authorization": `Basic ${encodedAuth}`,
-            "Content-Type": "application/json",
-        },
-    });
-    return response.data;
+  const shipEngineApiKey = functions.config().shipengine.key;
+  if (!shipEngineApiKey) {
+    throw new Error(
+      "ShipEngine API key not configured. Please set 'shipengine.key' environment variable."
+    );
+  }
+
+  const response = await axios.post("https://api.shipengine.com/v1/labels", payload, {
+    headers: {
+      "API-Key": shipEngineApiKey,
+      "Content-Type": "application/json",
+    },
+  });
+  return response.data;
 }
 
 
@@ -872,33 +852,34 @@ app.post("/generate-label/:id", async (req, res) => {
         let customerMailOptions;
 
         if (order.shippingPreference === "Shipping Kit Requested") {
-            // OPTIMIZATION: Run API calls in parallel
-            const [outboundLabelData, inboundLabelData] = await Promise.all([
-                createShipStationLabel(
+             const [outboundLabelData, inboundLabelData] = await Promise.all([
+                createShipEngineLabel(
                     swiftBuyBackAddress,
                     buyerAddress,
                     `${orderIdForLabel}-OUTBOUND-KIT`
                 ),
-                createShipStationLabel(
+                createShipEngineLabel(
                     buyerAddress,
                     swiftBuyBackAddress,
                     `${orderIdForLabel}-INBOUND-DEVICE`
                 )
             ]);
-
+            
             updateData = {
                 ...updateData,
-                outboundShipmentId: outboundLabelData.shipmentId,
-                outboundTrackingNumber: outboundLabelData.trackingNumber,
-                inboundShipmentId: inboundLabelData.shipmentId,
-                inboundTrackingNumber: inboundLabelData.trackingNumber,
+                outboundLabelUrl: outboundLabelData.label_download?.pdf,
+                outboundTrackingNumber: outboundLabelData.tracking_number,
+                inboundLabelUrl: inboundLabelData.label_download?.pdf,
+                inboundTrackingNumber: inboundLabelData.tracking_number,
+                uspsLabelUrl: inboundLabelData.label_download?.pdf, // Keep for backward compatibility if needed
+                trackingNumber: inboundLabelData.tracking_number, // Keep for backward compatibility if needed
             };
 
             customerEmailSubject = `Your SecondHandCell Shipping Kit for Order #${order.id} is on its Way!`;
             customerEmailHtml = SHIPPING_KIT_EMAIL_HTML
                 .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
                 .replace(/\*\*ORDER_ID\*\*/g, order.id)
-                .replace(/\*\*TRACKING_NUMBER\*\*/g, outboundLabelData.trackingNumber || "N/A");
+                .replace(/\*\*TRACKING_NUMBER\*\*/g, outboundLabelData.tracking_number || "N/A");
 
             customerMailOptions = {
                 from: functions.config().email.user,
@@ -911,57 +892,52 @@ app.post("/generate-label/:id", async (req, res) => {
                 <p><strong>Shipping Kit Order:</strong> Labels generated for Order <strong>#${order.id}</strong>.</p>
                 <p><strong>Outbound Kit Label (SHC -> Customer):</strong></p>
                 <ul>
-                    <li>Tracking: <strong>${outboundLabelData.trackingNumber || "N/A"}</strong></li>
-                    <li>Shipment ID: ${outboundLabelData.shipmentId}</li>
+                    <li>Tracking: <strong>${outboundLabelData.tracking_number || "N/A"}</strong></li>
+                    <li>Download: <a href="${outboundLabelData.label_download?.pdf}" target="_blank">PDF</a></li>
                 </ul>
                 <p><strong>Inbound Device Label (Customer -> SHC):</strong></p>
                 <ul>
-                    <li>Tracking: <strong>${inboundLabelData.trackingNumber || "N/A"}</strong></li>
-                    <li>Shipment ID: ${inboundLabelData.shipmentId}</li>
+                    <li>Tracking: <strong>${inboundLabelData.tracking_number || "N/A"}</strong></li>
+                    <li>Download: <a href="${inboundLabelData.label_download?.pdf}" target="_blank">PDF</a></li>
                 </ul>
                 <p>The outbound kit tracking has been sent to the customer.</p>
             `;
         } else if (order.shippingPreference === "Email Label Requested") {
-            const customerLabelData = await createShipStationLabel(
+            const customerLabelData = await createShipEngineLabel(
                 buyerAddress,
                 swiftBuyBackAddress,
                 `${orderIdForLabel}-INBOUND-DEVICE`
             );
 
-            if (!customerLabelData.labelData) {
-                throw new Error("Label PDF data not available from ShipStation.");
+            const labelDownloadLink = customerLabelData.label_download?.pdf;
+            if (!labelDownloadLink) {
+                throw new Error("Label PDF link not available from ShipEngine.");
             }
             
             updateData = {
                 ...updateData,
-                shipmentId: customerLabelData.shipmentId,
-                trackingNumber: customerLabelData.trackingNumber,
-            };
-
-            const shippingLabelAttachment = {
-                filename: `Shipping-Label-${order.id}.pdf`,
-                content: customerLabelData.labelData,
-                encoding: 'base64',
-                contentType: 'application/pdf',
+                uspsLabelUrl: labelDownloadLink,
+                trackingNumber: customerLabelData.tracking_number,
             };
 
             customerEmailSubject = `Your SecondHandCell Shipping Label for Order #${order.id}`;
             customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
                 .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
                 .replace(/\*\*ORDER_ID\*\*/g, order.id)
-                .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.trackingNumber || "N/A");
+                .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || "N/A")
+                .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
 
             customerMailOptions = {
                 from: functions.config().email.user,
                 to: order.shippingInfo.email,
                 subject: customerEmailSubject,
                 html: customerEmailHtml,
-                attachments: [shippingLabelAttachment, customLabelAttachment]
+                attachments: [customLabelAttachment]
             };
 
             internalHtmlBody = `
                 <p>The shipping label for Order <strong>#${order.id}</strong> (email label option) has been successfully generated and sent to the customer.</p>
-                <p>Tracking Number: <strong>${customerLabelData.trackingNumber || "N/A"}</strong></p>
+                <p>Tracking Number: <strong>${customerLabelData.tracking_number || "N/A"}</strong></p>
                 <p>A custom internal label has also been generated and attached to the email for the customer to place on the device bag.</p>
             `;
         } else {
@@ -1162,34 +1138,32 @@ app.post("/orders/:id/return-label", async (req, res) => {
             country_code: "US",
         };
 
-        const returnLabelData = await createShipStationLabel(
+        const returnLabelData = await createShipEngineLabel(
             seccondHandCellAddress,
             buyerAddress,
-            `${orderIdForLabel}-RETURN`,
-            true // isReturn = true
+            `${orderIdForLabel}-RETURN`
         );
 
-        const returnTrackingNumber = returnLabelData.trackingNumber;
+        const returnTrackingNumber = returnLabelData.tracking_number;
 
         await updateOrderBoth(req.params.id, {
             status: "return-label-generated",
-            returnShipmentId: returnLabelData.shipmentId,
+            returnLabelUrl: returnLabelData.label_download?.pdf,
             returnTrackingNumber: returnTrackingNumber,
         });
-
-        const returnLabelAttachment = {
-            filename: `Return-Label-${order.id}.pdf`,
-            content: returnLabelData.labelData,
-            encoding: 'base64',
-            contentType: 'application/pdf',
-        };
 
         const customerMailOptions = {
             from: functions.config().email.user,
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Return Label",
-            html: `<p>Hello ${order.shippingInfo.fullName},</p><p>As requested, your return shipping label for order #${order.id} is attached to this email.</p><p>Return Tracking Number: <strong>${returnTrackingNumber || "N/A"}</strong></p><p>Thank you,</p><p>The SecondHandCell Team</p>`,
-            attachments: [returnLabelAttachment]
+            html: `
+              <p>Hello ${order.shippingInfo.fullName},</p>
+              <p>As requested, here is your return shipping label for your device (Order ID: ${order.id}):</p>
+              <p>Return Tracking Number: <strong>${returnTrackingNumber || "N/A"}</strong></p>
+              <a href="${returnLabelData.label_download?.pdf}">Download Return Label</a>
+              <p>Thank you,</p>
+              <p>The SecondHandCell Team</p>
+            `,
         };
 
         const internalSubject = `Return Label Sent for Order #${order.id}`;
@@ -1202,7 +1176,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
 
         res.json({
             message: "Return label generated successfully.",
-            returnShipmentId: returnLabelData.shipmentId,
+            returnLabelUrl: returnLabelData.label_download?.pdf,
             returnTrackingNumber: returnTrackingNumber,
             orderId: order.id,
         });
@@ -1502,5 +1476,5 @@ exports.onChatTransferUpdate = functions.firestore
 
 // Expose the Express app as a single Cloud Function
 // UPDATED: Increase memory and timeout for the API function
-exports.api = functions.runWith({ timeoutSeconds: 120, memory: '1GB' }).https.onRequest(app);
+exports.api = functions.runWith({ timeoutSeconds: 300, memory: '1GB' }).https.onRequest(app);
 
