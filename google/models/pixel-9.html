@@ -17,7 +17,6 @@
 
         gtag('config', 'AW-17534255111');
     </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvU0S58N4TVxJ5Ag4l7B-r534hng4BxVw&libraries=places&callback=initAutocomplete" async defer></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -822,81 +821,8 @@
         </div>
     </footer>
 
+    <!-- The Google Maps related JavaScript block has been removed from here. -->
     <script>
-        // Global variable to hold the autocomplete instance
-        let autocomplete;
-
-        // This function is called by the Google Maps script when it has loaded.
-        function initAutocomplete() {
-            // Get the input element
-            const streetAddressInput = document.getElementById('street-address');
-            
-            // Create the autocomplete object, restricting the search to geographical location types.
-            autocomplete = new google.maps.places.Autocomplete(streetAddressInput, {
-                types: ['address']
-            });
-
-            // When the user selects an address from the dropdown, populate the address fields in the form.
-            autocomplete.addListener('place_changed', fillInAddress);
-        }
-
-        function fillInAddress() {
-            // Get the place details from the autocomplete object.
-            const place = autocomplete.getPlace();
-
-            if (!place || !place.address_components) {
-                console.warn("Autocomplete's returned place contains no address components");
-                return;
-            }
-
-            // Get each component of the address from the place details,
-            // and then fill-in the corresponding field on the form.
-            const streetAddressInput = document.getElementById('street-address');
-            const cityInput = document.getElementById('city');
-            const stateInput = document.getElementById('state');
-            const zipCodeInput = document.getElementById('zip-code');
-
-            // Clear out the fields first
-            streetAddressInput.value = '';
-            cityInput.value = '';
-            stateInput.value = '';
-            zipCodeInput.value = '';
-
-            let streetNumber = '';
-            let route = '';
-
-            for (const component of place.address_components) {
-                const componentType = component.types[0];
-
-                switch (componentType) {
-                    case 'street_number':
-                        streetNumber = component.long_name;
-                        break;
-                    case 'route':
-                        route = component.short_name;
-                        break;
-                    case 'locality':
-                        cityInput.value = component.long_name;
-                        break;
-                    case 'administrative_area_level_1':
-                        stateInput.value = component.short_name;
-                        break;
-                    case 'postal_code':
-                        zipCodeInput.value = component.long_name;
-                        break;
-                }
-            }
-            
-            streetAddressInput.value = `${streetNumber} ${route}`.trim();
-
-            // Manually trigger an input event on each field to let other scripts know they've changed
-            const event = new Event('input', { bubbles: true });
-            streetAddressInput.dispatchEvent(event);
-            cityInput.dispatchEvent(event);
-            stateInput.dispatchEvent(event);
-            zipCodeInput.dispatchEvent(event);
-        }
-        
         let device = null;
 
         document.addEventListener('DOMContentLoaded', async function() {
