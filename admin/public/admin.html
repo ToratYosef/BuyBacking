@@ -75,21 +75,21 @@
 
     <!-- Admin Login Form -->
     <div id="login-form-container" class="fixed inset-0 bg-gray-100 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-8 space-y-6">
+        <form class="bg-white rounded-lg shadow-xl max-w-sm w-full p-8 space-y-6">
             <h2 class="text-3xl font-bold text-center text-gray-800">Admin Login</h2>
             <p id="login-message" class="text-center text-sm text-red-500 hidden"></p>
             <div>
                 <label for="email-input" class="sr-only">Email</label>
-                <input type="email" id="email-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Email">
+                <input type="email" id="email-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Email" autocomplete="email">
             </div>
             <div>
                 <label for="password-input" class="sr-only">Password</label>
-                <input type="password" id="password-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Password">
+                <input type="password" id="password-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Password" autocomplete="current-password">
             </div>
-            <button id="login-btn" class="w-full p-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors duration-200">
+            <button type="submit" id="login-btn" class="w-full p-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors duration-200">
                 Log In
             </button>
-        </div>
+        </form>
     </div>
 
     <!-- Main Dashboard Content (Hidden by default) -->
@@ -523,7 +523,7 @@
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-        // Corrected to include the base path for Cloud Functions
+        // The base URL for your Cloud Functions API endpoint
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -532,6 +532,18 @@
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         setLogLevel('debug');
         
+        // Fallback configuration if global variable isn't set
+        const defaultFirebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        const activeFirebaseConfig = firebaseConfig.projectId ? firebaseConfig : defaultFirebaseConfig;
+
         let firebaseApp;
         let db;
         let auth;
@@ -1548,7 +1560,7 @@
         }
 
         function showReofferFormWithData(orderId, newPrice, reasons, comments) {
-            console.log(`Opening re-offer form modal for order ${orderId}. New price: $${newPrice.toFixed(2)}`);
+            console.log(`Opening price confirmation modal for order ${orderId}. New price: $${newPrice.toFixed(2)}`);
             orderDetailsModal.classList.add('hidden');
             reofferFormContainer.classList.remove('hidden');
             reofferNewPrice.value = newPrice.toFixed(2);
@@ -1618,7 +1630,6 @@
             } catch (error) {
                 console.error("Action error:", error);
                 displayModalMessage(`Error: ${error.message}`, 'error');
-                reofferFormContainer.classList.remove('hidden'); // Re-open the form on error
             } finally {
                 modalLoadingMessage.classList.add('hidden');
                 modalActionButtons.classList.remove('hidden');
@@ -1638,7 +1649,7 @@
 
                 switch(actionType) {
                     case 'generateLabel': {
-                        url = `${BACKEND_BASE_URL}/generate-label/${orderId}`;
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/generate-label`;
                         const response = await fetch(url, {
                             method: 'POST',
                             headers: {
@@ -1650,22 +1661,9 @@
                             throw new Error(errorData.error || `Failed to generate label: ${response.status}`);
                         }
                         const data = await response.json();
-                        if (data.labelData) {
-                            // Decode base64 and create a blob URL to open the PDF
-                            const byteCharacters = atob(data.labelData);
-                            const byteNumbers = new Array(byteCharacters.length);
-                            for (let i = 0; i < byteCharacters.length; i++) {
-                                byteNumbers[i] = byteCharacters.charCodeAt(i);
-                            }
-                            const byteArray = new Uint8Array(byteNumbers);
-                            const blob = new Blob([byteArray], { type: 'application/pdf' });
-                            const url = URL.createObjectURL(blob);
-                            window.open(url, '_blank');
-                            displayModalMessage('Label generated and opened in a new tab. The order status has been updated.', 'success');
-                            openOrderDetailsModal(orderId); // Re-fetch order to show new status/tracking
-                        } else {
-                            displayModalMessage('Label was generated, but no PDF data was returned. Check the backend logs.', 'error');
-                        }
+                        // The backend now saves the URLs directly to Firestore, so we just need to refresh the modal.
+                        displayModalMessage('Label generation request sent. Refreshing order details...', 'success');
+                        openOrderDetailsModal(orderId);
                         modalLoadingMessage.classList.add('hidden');
                         modalActionButtons.classList.remove('hidden');
                         return;
@@ -1707,21 +1705,9 @@
                             throw new Error(errorData.error || `Failed to generate return label: ${response.status}`);
                         }
                         const data = await response.json();
-                        if (data.labelData) {
-                            const byteCharacters = atob(data.labelData);
-                            const byteNumbers = new Array(byteCharacters.length);
-                            for (let i = 0; i < byteCharacters.length; i++) {
-                                byteNumbers[i] = byteCharacters.charCodeAt(i);
-                            }
-                            const byteArray = new Uint8Array(byteNumbers);
-                            const blob = new Blob([byteArray], { type: 'application/pdf' });
-                            const url = URL.createObjectURL(blob);
-                            window.open(url, '_blank');
-                            displayModalMessage('Return label generated and opened in a new tab. The order status has been updated.', 'success');
-                            openOrderDetailsModal(orderId); // Re-fetch order to show new status/tracking
-                        } else {
-                            displayModalMessage('Return label was generated, but no PDF data was returned. Check the backend logs.', 'error');
-                        }
+                        // The backend now saves the URLs directly to Firestore, so we just need to refresh the modal.
+                        displayModalMessage('Return label generation request sent. Refreshing order details...', 'success');
+                        openOrderDetailsModal(orderId);
                         modalLoadingMessage.classList.add('hidden');
                         modalActionButtons.classList.remove('hidden');
                         return;
@@ -1867,37 +1853,40 @@
         signOutButton.addEventListener('click', handleSignOut);
 
         document.addEventListener('DOMContentLoaded', async () => {
-            firebaseApp = initializeApp(firebaseConfig);
-            db = getFirestore(firebaseApp);
-            auth = getAuth(firebaseApp);
+            try {
+                firebaseApp = initializeApp(activeFirebaseConfig);
+                db = getFirestore(firebaseApp);
+                auth = getAuth(firebaseApp);
 
-            if (initialAuthToken) {
-                await signInWithCustomToken(auth, initialAuthToken)
-                    .then((userCredential) => {
-                        console.log('Signed in with custom token:', userCredential.user.email);
-                    })
-                    .catch((error) => {
-                        console.error('Failed to sign in with custom token:', error);
-                    });
-            }
-
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    console.log('onAuthStateChanged: User is signed in. Email:', user.email);
-                    authToken = await user.getIdToken();
-                    displayUserEmail.textContent = user.email;
-                    loginFormContainer.classList.add('hidden');
-                    dashboardContainer.classList.remove('hidden');
-                    fetchAndRenderOrders();
-                } else {
-                    console.log('onAuthStateChanged: User is signed out.');
-                    authToken = null;
-                    displayUserEmail.textContent = '...';
-                    dashboardContainer.classList.add('hidden');
-                    loginFormContainer.classList.remove('hidden');
-                    ordersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-8">Please log in to view orders.</td></tr>`;
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
                 }
-            });
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        console.log('onAuthStateChanged: User is signed in. Email:', user.email);
+                        authToken = await user.getIdToken();
+                        displayUserEmail.textContent = user.email;
+                        loginFormContainer.classList.add('hidden');
+                        dashboardContainer.classList.remove('hidden');
+                        fetchAndRenderOrders();
+                    } else {
+                        console.log('onAuthStateChanged: User is signed out.');
+                        authToken = null;
+                        displayUserEmail.textContent = '...';
+                        dashboardContainer.classList.add('hidden');
+                        loginFormContainer.classList.remove('hidden');
+                        ordersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-gray-500 py-8">Please log in to view orders.</td></tr>`;
+                    }
+                });
+            } catch (error) {
+                console.error('Firebase initialization error:', error);
+                // Display a prominent error message if Firebase fails to initialize
+                loginMessage.textContent = 'Failed to initialize the application. Please check the console for more details.';
+                loginMessage.classList.remove('hidden');
+                loginFormContainer.classList.remove('hidden');
+                dashboardContainer.classList.add('hidden');
+            }
         });
 
         async function fetchAndRenderOrders() {
