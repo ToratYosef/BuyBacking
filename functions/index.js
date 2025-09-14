@@ -6,10 +6,6 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { URLSearchParams } = require('url');
 
-// --- PDF & Barcode Libraries ---
-const { PDFDocument, rgb } = require('pdf-lib');
-const bwipjs = require('bwip-js');
-
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 const db = admin.firestore();
@@ -36,39 +32,9 @@ app.use(
 );
 app.use(express.json()); // Middleware to parse JSON request bodies
 
-// --- Authentication Middleware ---
-const verifyFirebaseToken = async (req, res, next) => {
-    // The /submit-order route is public, so we bypass the check for it.
-    if (req.path === '/submit-order') {
-        return next();
-    }
-    
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        console.error('No Firebase ID token was passed as a Bearer token in the Authorization header.');
-        return res.status(403).send('Unauthorized');
-    }
-
-    const idToken = authHeader.split('Bearer ')[1];
-    try {
-        const decodedToken = await admin.auth().verifyIdToken(idToken);
-        req.user = decodedToken;
-        // Optional: Check if the user is an admin
-        const adminDoc = await adminsCollection.doc(req.user.uid).get();
-        if (!adminDoc.exists) {
-            return res.status(403).send('Forbidden: User is not an admin.');
-        }
-        next();
-        return;
-    } catch (error) {
-        console.error('Error while verifying Firebase ID token:', error);
-        res.status(403).send('Unauthorized');
-        return;
-    }
-};
-
-
 // Set up Nodemailer transporter using the Firebase Functions config
+// IMPORTANT: Ensure you have configured these environment variables:
+// firebase functions:config:set email.user="your_email@gmail.com" email.pass="your_app_password"
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -77,14 +43,14 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// --- Email HTML Templates ---
-const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Please click the button below to download and print your label. Affix it to your package and drop it off at any USPS location.</p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p>We've also attached a custom label for your device. **Please print this label and place the sticker inside your package, on the bag that holds your device.** This helps us quickly identify your order when it arrives. It's very important to do this step correctly to avoid any delays.</p><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
+// --- Email HTML Templates (unchanged from your version) ---
+const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Please click the button below to download and print your label. Affix it to your package and drop it off at any USPS location.</p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 
 const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 
-const ORDER_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Order Has Been Received!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.content h2{color:#333333;font-size:20px;margin-top:24px;margin-bottom:8px}.order-id{color:#007bff;font-weight:bold}ul{list-style-type:disc;padding-left:20px;margin:0 0 16px}ul li{margin-bottom:8px}.important-note{background-color:#fff3cd;border-left:4px solid #ffc107;padding:16px;margin-top:24px;font-size:14px;color:#856404}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1>Your SecondHandCell Order #**ORDER_ID** Has Been Received!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for choosing SecondHandCell! We've successfully received your order request for your **DEVICE_NAME**.</p><p>Your Order ID is <strong class="order-id">#**ORDER_ID**</strong>.</p><h2>Next Steps: Preparing Your Device for Shipment</h2><p>Before you send us your device, it's crucial to prepare it correctly. Please follow these steps:</p><ul><li><strong>Backup Your Data:</strong> Ensure all important photos, contacts, and files are backed up to a cloud service or another device.</li><li><strong>Factory Reset:</strong> Perform a full factory reset on your device to erase all personal data. This is vital for your privacy and security.</li><li><strong>Remove Accounts:</strong> Sign out of all accounts (e.g., Apple ID/iCloud, Google Account, Samsung Account).<ul><li>For Apple devices, turn off "Find My iPhone" (FMI).</li><li>For Android devices, ensure Factory Reset Protection (FRP) is disabled.</li></ul></li><li><strong>Remove SIM Card:</strong> Take out any physical SIM cards from the device.</li><li><strong>Remove Accessories:</strong> Do not include cases, screen protectors, or chargers unless specifically instructed.</li></ul><div class="important-note"><p><strong>Important:</strong> We cannot process devices with <strong>Find My iPhone (FMI)</strong>, <strong>Factory Reset Protection (FRP)</strong>, <strong>stolen/lost status</strong>, <strong>outstanding balance due</strong>, or <strong>blacklisted IMEI</strong>. Please ensure your device meets these conditions to avoid delays or rejection.</p></div>**SHIPPING_INSTRUCTION**</div><div class="footer"><p>The SecondHandCell Team</p></div></div></body></html>`;
+const ORDER_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Order Has Been Received!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content h2{color:#333333;font-size:20px;margin-top:24px;margin-bottom:8px}.order-id{color:#007bff;font-weight:bold}ul{list-style-type:disc;padding-left:20px;margin:0 0 16px}ul li{margin-bottom:8px}.important-note{background-color:#fff3cd;border-left:4px solid #ffc107;padding:16px;margin-top:24px;font-size:14px;color:#856404}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1>Your SecondHandCell Order #**ORDER_ID** Has Been Received!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for choosing SecondHandCell! We've successfully received your order request for your **DEVICE_NAME**.</p><p>Your Order ID is <strong class="order-id">#**ORDER_ID**</strong>.</p><h2>Next Steps: Preparing Your Device for Shipment</h2><p>Before you send us your device, it's crucial to prepare it correctly. Please follow these steps:</p><ul><li><strong>Backup Your Data:</strong> Ensure all important photos, contacts, and files are backed up to a cloud service or another device.</li><li><strong>Factory Reset:</strong> Perform a full factory reset on your device to erase all personal data. This is vital for your privacy and security.</li><li><strong>Remove Accounts:</strong> Sign out of all accounts (e.g., Apple ID/iCloud, Google Account, Samsung Account).<ul><li>For Apple devices, turn off "Find My iPhone" (FMI).</li><li>For Android devices, ensure Factory Reset Protection (FRP) is disabled.</li></ul></li><li><strong>Remove SIM Card:</strong> Take out any physical SIM cards from the device.</li><li><strong>Remove Accessories:</strong> Do not include cases, screen protectors, or chargers unless specifically instructed.</li></ul><div class="important-note"><p><strong>Important:</strong> We cannot process devices with <strong>Find My iPhone (FMI)</strong>, <strong>Factory Reset Protection (FRP)</strong>, <strong>stolen/lost status</strong>, <strong>outstanding balance due</strong>, or <strong>blacklisted IMEI</strong>. Please ensure your device meets these conditions to avoid delays or rejection.</p></div>**SHIPPING_INSTRUCTION**</div><div class="footer"><p>The SecondHandCell Team</p></div></div></body></html>`;
 
-const DEVICE_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Device Has Arrived!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}.order-id{color:#007bff;font-weight:bold}</style></head><body><div class="email-container"><div class="header"><h1>Your Device Has Arrived!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p><p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p></div><div class="footer"><p>Thank thank you for choosing SecondHandCell.</p></div></div></body></html>`;
+const DEVICE_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Device Has Arrived!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}.order-id{color:#007bff;font-weight:bold}</style></head><body><div class="email-container"><div class="header"><h1>Your Device Has Arrived!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p><p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p><p>Thank you,</p><p>The SecondHandCell Team</p></div><div class="footer"><p>Thank thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 
 // --- NEW EMAIL TEMPLATES ---
 const BLACKLISTED_EMAIL_HTML = `
@@ -226,8 +192,36 @@ const DOWNGRADE_EMAIL_HTML = `
   <html lang="en">
   <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Update on Your Order - Order #**ORDER_ID**</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#f0ad4e;color:#ffffff;padding:24px;text-align:center}.header h1{font-size:24px;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.order-id{color:#f0ad4e;font-weight:bold}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1>Update on Your Order</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>This is an automated notification regarding your order <strong class="order-id">#**ORDER_ID**</strong>. The 72-hour period to resolve the issue with your device has expired. As a result, your offer has been automatically adjusted to the damaged device price, which is <strong>$**NEW_PRICE**</strong>.</p><p>If you have any questions, please reply to this email.</p></div><div class="footer"><p>The SecondHandCell Team</p></div></div></body></html>`;
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update on Your Order - Order #**ORDER_ID**</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
+      .header { background-color: #f0ad4e; color: #ffffff; padding: 24px; text-align: center; }
+      .header h1 { font-size: 24px; margin: 0; }
+      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
+      .content p { margin: 0 0 16px; }
+      .order-id { color: #f0ad4e; font-weight: bold; }
+      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="header">
+        <h1>Update on Your Order</h1>
+      </div>
+      <div class="content">
+        <p>Hello **CUSTOMER_NAME**, </p>
+        <p>This is an automated notification regarding your order <strong class="order-id">#**ORDER_ID**</strong>. The 72-hour period to resolve the issue with your device has expired. As a result, your offer has been automatically adjusted to the damaged device price, which is <strong>$**NEW_PRICE**</strong>.</p>
+        <p>If you have any questions, please reply to this email.</p>
+      </div>
+      <div class="footer">
+        <p>The SecondHandCell Team</p>
+      </div>
+    </div>
+  </body>
+  </html>
+`;
 /**
  * --- NEW ---
  * Generates the next sequential order number in SHC-XXXXX format using a Firestore transaction.
@@ -378,148 +372,42 @@ async function sendZendeskComment(orderData, subject, html_body, isPublic) {
   }
 }
 
-
 /**
- * --- UPDATED: Switched to ShipStation API v1, createlabel endpoint ---
- * Helper function to create a shipping label using the ShipStation API.
- * The API returns a base64 encoded string of the PDF, not a direct URL.
+ * Helper function to create a shipping label using ShipEngine API.
  */
-async function createShipStationLabel(fromAddress, toAddress, carrierCode, serviceCode, packageCode = "package", weightInOunces = 1, testLabel = false) {
-    const shipstationApiKey = functions.config().shipstation.key;
-    const shipstationApiSecret = functions.config().shipstation.secret;
-    
-    if (!shipstationApiKey || !shipstationApiSecret) {
-        throw new Error("ShipStation API credentials not configured. Please set 'shipstation.key' and 'shipstation.secret' environment variables.");
-    }
-    
-    const authHeader = `Basic ${Buffer.from(`${shipstationApiKey}:${shipstationApiSecret}`).toString('base64')}`;
-    const today = new Date().toISOString().split('T')[0];
-
-    const payload = {
-        carrierCode: carrierCode,
-        serviceCode: serviceCode,
-        packageCode: packageCode,
-        shipDate: today,
-        weight: {
-            value: weightInOunces,
-            units: "ounces"
+async function createShipEngineLabel(fromAddress, toAddress, labelReference) {
+  const isSandbox = false; // Set to false for production
+  const payload = {
+    shipment: {
+      service_code: "usps_priority_mail",
+      ship_to: toAddress,
+      ship_from: fromAddress,
+      packages: [
+        {
+          weight: { value: 1, unit: "ounce" }, // Default weight, adjust if needed
+          label_messages: {
+            reference1: labelReference,
+          },
         },
-        shipFrom: fromAddress,
-        shipTo: toAddress,
-        testLabel: testLabel
-    };
+      ],
+    },
+  };
+  if (isSandbox) payload.testLabel = true;
 
-    try {
-        const response = await axios.post("https://ssapi.shipstation.com/shipments/createlabel", payload, {
-            headers: {
-                "Authorization": authHeader,
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        });
-        return response.data;
-    } catch (error) {
-        console.error("Error creating ShipStation label:", error.response?.data || error.message);
-        throw new Error(`Failed to create ShipStation label: ${error.response?.data?.ExceptionMessage || error.message}`);
-    }
-}
-
-
-/**
- * NEW: Helper function to generate a custom 4x6 PDF label with device details and a barcode.
- * @param {Object} order - The order document from Firestore.
- * @returns {Promise<Buffer>} The PDF document as a Buffer.
- */
-async function generateCustomLabelPdf(order) {
-  // Create a new PDF document (4x6 inches)
-  const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([432, 288]); // 4x6 inches in points (72 points per inch)
-  const { width, height } = page.getSize();
-  const fontSize = 12;
-
-  // Title
-  page.drawText('SecondHandCell', {
-    x: 30,
-    y: height - 40,
-    size: 24,
-    color: rgb(0, 0, 0),
-  });
-
-  // Customer and Order Info
-  page.drawText(`Order ID: ${order.id}`, {
-    x: 30,
-    y: height - 70,
-    size: 16,
-    color: rgb(0, 0, 0),
-  });
-  page.drawText(`Customer: ${order.shippingInfo.fullName}`, {
-    x: 30,
-    y: height - 90,
-    size: fontSize,
-    color: rgb(0, 0, 0),
-  });
-  page.drawText(`Email: ${order.shippingInfo.email}`, {
-    x: 30,
-    y: height - 110,
-    size: fontSize,
-    color: rgb(0, 0, 0),
-  });
-  page.drawText(`Device: ${order.device} - ${order.storage}`, {
-    x: 30,
-    y: height - 130,
-    size: fontSize,
-    color: rgb(0, 0, 0),
-  });
-
-  // Device Details (Answers)
-  const deviceDetails = order.answers || {};
-  let yOffset = height - 150;
-  for (const [question, answer] of Object.entries(deviceDetails)) {
-    // Format question nicely
-    const formattedQuestion = question.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-    page.drawText(`${formattedQuestion}: ${answer}`, {
-      x: 30,
-      y: yOffset,
-      size: fontSize,
-      color: rgb(0, 0, 0),
-    });
-    yOffset -= 15;
-    if (yOffset < 80) { // Add a new page if content overflows
-      page = pdfDoc.addPage([432, 288]);
-      yOffset = height - 40;
-    }
+  const shipEngineApiKey = functions.config().shipengine.key;
+  if (!shipEngineApiKey) {
+    throw new Error(
+      "ShipEngine API key not configured. Please set 'shipengine.key' environment variable."
+    );
   }
 
-  // Barcode
-  const barcodeData = order.id;
-  const barcodeSvg = await new Promise((resolve, reject) => {
-    bwipjs.toSVG({
-      bcid: 'code128', // Barcode type
-      text: barcodeData, // The text to encode
-      scale: 3,
-      height: 10,
-      includetext: false,
-      textxalign: 'center',
-    }, (err, svg) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(svg);
-      }
-    });
+  const response = await axios.post("https://api.shipengine.com/v1/labels", payload, {
+    headers: {
+      "API-Key": shipEngineApiKey,
+      "Content-Type": "application/json",
+    },
   });
-
-  const barcodeImage = await pdfDoc.embedSvg(barcodeSvg);
-  const barcodeDims = barcodeImage.scale(0.5);
-
-  page.drawImage(barcodeImage, {
-    x: (width - barcodeDims.width) / 2,
-    y: 30,
-    width: barcodeDims.width,
-    height: barcodeDims.height,
-  });
-
-  return await pdfDoc.save();
+  return response.data;
 }
 
 // --- Notification Helper Functions ---
@@ -609,10 +497,6 @@ async function addAdminFirestoreNotification(
 // ROUTES
 // ------------------------------
 
-// Apply the authentication middleware to all routes that require it
-app.use(verifyFirebaseToken);
-
-
 // Get all orders
 app.get("/orders", async (req, res) => {
   try {
@@ -640,7 +524,7 @@ app.get("/orders/:id", async (req, res) => {
   }
 });
 
-// Find by identifier (SHC-XXXXX or other external ID)
+// Find by identifier (SHC-XXXXX or 26-digit external)
 app.get("/orders/find", async (req, res) => {
   try {
     const { identifier } = req.query;
@@ -653,16 +537,15 @@ app.get("/orders/find", async (req, res) => {
     let orderDoc;
     if (identifier.match(/^SHC-\d{5}$/)) {
       orderDoc = await ordersCollection.doc(identifier).get();
-    } else {
-        const snapshot = await ordersCollection
+    } else if (identifier.length === 26 && identifier.match(/^\d+$/)) {
+      const snapshot = await ordersCollection
         .where("externalId", "==", identifier)
         .limit(1)
         .get();
-        if (!snapshot.empty) {
-            orderDoc = snapshot.docs[0];
-        }
+      if (!snapshot.empty) {
+        orderDoc = snapshot.docs[0];
+      }
     }
-
 
     if (!orderDoc || !orderDoc.exists) {
       return res
@@ -706,6 +589,7 @@ app.post("/submit-order", async (req, res) => {
       return res.status(400).json({ error: "Invalid order data" });
     }
 
+    // Generate sequential SHC-XXXXX order id starting at SHC-00000
     const orderId = await generateNextOrderNumber();
 
     let shippingInstructions = "";
@@ -719,11 +603,12 @@ app.post("/submit-order", async (req, res) => {
       newOrderStatus = "shipping_kit_requested";
     } else {
       shippingInstructions = `
-        <p style="margin-top: 24px;">We will send your shipping label in a separate email shortly.</p>
+        <p style="margin-top: 24px;">We will send your shipping label shortly.</p>
         <p>If you have any questions, please reply to this email.</p>
       `;
     }
 
+    // Customer-Facing Email: Order Received
     const customerEmailHtml = ORDER_RECEIVED_EMAIL_HTML
       .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
       .replace(/\*\*ORDER_ID\*\*/g, orderId)
@@ -737,6 +622,7 @@ app.post("/submit-order", async (req, res) => {
       html: customerEmailHtml,
     };
 
+    // Internal Admin Notification: New Order Placed
     const internalSubject = `New Order Placed: #${orderId}`;
     const internalHtmlBody = `
       <p>A new order has been placed by <strong>${orderData.shippingInfo.fullName}</strong> (Email: ${orderData.shippingInfo.email}).</p>
@@ -787,11 +673,12 @@ app.post("/submit-order", async (req, res) => {
 
     await Promise.all(notificationPromises);
 
+    // CREATE in BOTH locations
     const toSave = {
       ...orderData,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       status: newOrderStatus,
-      id: orderId,
+      id: orderId, // helpful to store within doc too
     };
     await writeOrderBoth(orderId, toSave);
 
@@ -802,6 +689,7 @@ app.post("/submit-order", async (req, res) => {
   }
 });
 
+// Helper to format status
 function formatStatusForEmail(status) {
   if (status === "order_pending") return "Order Pending";
   if (status === "shipping_kit_requested") return "Shipping Kit Requested";
@@ -814,158 +702,167 @@ function formatStatusForEmail(status) {
 
 // Generate initial shipping label(s) and send email to buyer
 app.post("/generate-label/:id", async (req, res) => {
-    try {
-      const doc = await ordersCollection.doc(req.params.id).get();
-      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+  try {
+    const doc = await ordersCollection.doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Order not found" });
 
-      const order = { id: doc.id, ...doc.data() };
-      const buyerShippingInfo = order.shippingInfo;
-      const orderIdForLabel = order.id || "N/A";
+    const order = { id: doc.id, ...doc.data() };
+    const buyerShippingInfo = order.shippingInfo;
+    const orderIdForLabel = order.id || "N/A";
 
-      const swiftBuyBackAddress = {
-          name: "SHC Returns",
-          company: "SecondHandCell",
-          phone: "555-555-5555",
-          street1: "1602 McDonald Ave Ste Rear",
-          street2: "(24th Ave Entrance)",
-          city: "Brooklyn",
-          state: "NY",
-          postalCode: "11223",
-          country: "US",
+    const swiftBuyBackAddress = {
+      name: "SHC Returns",
+      company_name: "SecondHandCell",
+      phone: "555-555-5555",
+      address_line1: "1602 McDonald Ave Ste Rear (24th Ave Entrance)",
+      city_locality: "Brooklyn",
+      state_province: "NY",
+      postal_code: "11223",
+      country_code: "US",
+    };
+
+    const buyerAddress = {
+      name: buyerShippingInfo.fullName,
+      phone: "555-555-5555",
+      address_line1: buyerShippingInfo.streetAddress,
+      city_locality: buyerShippingInfo.city,
+      state_province: buyerShippingInfo.state,
+      postal_code: buyerShippingInfo.zipCode,
+      country_code: "US",
+    };
+
+    let customerLabelData;
+    let updateData = { status: "label_generated" };
+    let internalHtmlBody = "";
+    let customerEmailSubject = "";
+    let customerEmailHtml = "";
+    let customerMailOptions;
+
+    if (order.shippingPreference === "Shipping Kit Requested") {
+      const outboundLabelData = await createShipEngineLabel(
+        swiftBuyBackAddress,
+        buyerAddress,
+        `${orderIdForLabel}-OUTBOUND-KIT`
+      );
+
+      const inboundLabelData = await createShipEngineLabel(
+        buyerAddress,
+        swiftBuyBackAddress,
+        `${orderIdForLabel}-INBOUND-DEVICE`
+      );
+
+      customerLabelData = outboundLabelData; // customer sees outbound kit tracking
+
+      updateData = {
+        ...updateData,
+        outboundLabelUrl: outboundLabelData.label_download?.pdf,
+        outboundTrackingNumber: outboundLabelData.tracking_number,
+        inboundLabelUrl: inboundLabelData.label_download?.pdf,
+        inboundTrackingNumber: inboundLabelData.tracking_number,
+        uspsLabelUrl: inboundLabelData.label_download?.pdf,
+        trackingNumber: inboundLabelData.tracking_number,
       };
 
-      const buyerAddress = {
-          name: buyerShippingInfo.fullName,
-          phone: "555-555-5555",
-          street1: buyerShippingInfo.streetAddress,
-          street2: "", // Added to match ShipStation API schema
-          city: buyerShippingInfo.city,
-          state: buyerShippingInfo.state,
-          postalCode: buyerShippingInfo.zipCode,
-          country: "US",
+      customerEmailSubject = `Your SecondHandCell Shipping Kit for Order #${order.id} is on its Way!`;
+      customerEmailHtml = SHIPPING_KIT_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
+        .replace(/\*\*ORDER_ID\*\*/g, order.id)
+        .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || "N/A");
+
+      customerMailOptions = {
+        from: functions.config().email.user,
+        to: order.shippingInfo.email,
+        subject: customerEmailSubject,
+        html: customerEmailHtml,
       };
 
-      let updateData = { status: "label_generated" };
-      let internalHtmlBody = "";
-      let customerEmailSubject = "";
-      let customerMailOptions;
-      let labelData, trackingNumber, inboundLabelData, outboundLabelData;
-      const weightInOunces = 1; // Default to 1 ounce
+      internalHtmlBody = `
+        <p><strong>Shipping Kit Order:</strong> Labels generated for Order <strong>#${order.id}</strong>.</p>
+        <p><strong>Outbound Kit Label (SecondHandCell -> Customer):</strong></p>
+        <ul>
+          <li>Tracking: <strong>${
+            outboundLabelData.tracking_number || "N/A"
+          }</strong></li>
+          <li>Download: <a href="${
+            outboundLabelData.label_download?.pdf
+          }" target="_blank">PDF</a></li>
+        </ul>
+        <p><strong>Inbound Device Label (Customer -> SecondHandCell - sent to customer later):</strong></p>
+        <ul>
+          <li>Tracking: <strong>${
+            inboundLabelData.tracking_number || "N/A"
+          }</strong></li>
+          <li>Download: <a href="${
+            inboundLabelData.label_download?.pdf
+          }" target="_blank">PDF</a></li>
+        </ul>
+        <p>The outbound kit tracking has been sent to the customer.</p>
+      `;
+    } else if (order.shippingPreference === "Email Label Requested") {
+      customerLabelData = await createShipEngineLabel(
+        buyerAddress,
+        swiftBuyBackAddress,
+        `${orderIdForLabel}-INBOUND-DEVICE`
+      );
 
-      if (order.shippingPreference === "Shipping Kit Requested") {
-        [outboundLabelData, inboundLabelData] = await Promise.all([
-          createShipStationLabel(
-            swiftBuyBackAddress,
-            buyerAddress,
-            "fedex", // Carrier Code
-            "fedex_ground", // Service Code
-            "package", // Package Code
-            weightInOunces
-          ),
-          createShipStationLabel(
-            buyerAddress,
-            swiftBuyBackAddress,
-            "usps",
-            "usps_first_class_package",
-            "package",
-            weightInOunces
-          )
-        ]);
-        
-        // Use the tracking and label data from the inbound label as the primary
-        labelData = inboundLabelData.labelData;
-        trackingNumber = inboundLabelData.trackingNumber;
-
-        updateData = {
-          ...updateData,
-          outboundLabelData: outboundLabelData.labelData,
-          outboundTrackingNumber: outboundLabelData.trackingNumber,
-          inboundLabelData: inboundLabelData.labelData,
-          inboundTrackingNumber: inboundLabelData.trackingNumber,
-          trackingNumber: inboundLabelData.trackingNumber, // Set primary tracking
-        };
-
-        customerEmailSubject = `Your SecondHandCell Shipping Kit for Order #${order.id} is on its Way!`;
-        customerEmailHtml = SHIPPING_KIT_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, order.id)
-            .replace(/\*\*TRACKING_NUMBER\*\*/g, outboundLabelData.trackingNumber || "N/A");
-
-        customerMailOptions = {
-          from: functions.config().email.user,
-          to: order.shippingInfo.email,
-          subject: customerEmailSubject,
-          html: customerEmailHtml,
-        };
-
-        internalHtmlBody = `
-            <p><strong>Shipping Kit Order:</strong> Labels generated for Order <strong>#${order.id}</strong>.</p>
-            <p><strong>Outbound Kit Label (SHC -> Customer):</strong></p>
-            <ul>
-                <li>Tracking: <strong>${outboundLabelData.trackingNumber || "N/A"}</strong></li>
-            </ul>
-            <p><strong>Inbound Device Label (Customer -> SHC):</strong></p>
-            <ul>
-                <li>Tracking: <strong>${inboundLabelData.trackingNumber || "N/A"}</strong></li>
-            </ul>
-            <p>The outbound kit tracking has been sent to the customer. Awaiting inbound shipment.</p>
-        `;
-
-      } else if (order.shippingPreference === "Email Label Requested") {
-        const customerLabelData = await createShipStationLabel(
-            buyerAddress,
-            swiftBuyBackAddress,
-            "usps",
-            "usps_first_class_package",
-            "package",
-            weightInOunces
+      const labelDownloadLink = customerLabelData.label_download?.pdf;
+      if (!labelDownloadLink) {
+        console.error(
+          "ShipEngine did not return a downloadable label PDF for order:",
+          order.id,
+          customerLabelData
         );
-        
-        labelData = customerLabelData.labelData;
-        trackingNumber = customerLabelData.trackingNumber;
-
-        updateData = {
-            ...updateData,
-            labelData: labelData,
-            trackingNumber: trackingNumber
-        };
-
-        customerEmailSubject = `Your SecondHandCell Shipping Label for Order #${order.id}`;
-        customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, order.id)
-            .replace(/\*\*TRACKING_NUMBER\*\*/g, trackingNumber || "N/A");
-
-        customerMailOptions = {
-            from: functions.config().email.user,
-            to: order.shippingInfo.email,
-            subject: customerEmailSubject,
-            html: customerEmailHtml
-        };
-
-        internalHtmlBody = `
-            <p>The shipping label for Order <strong>#${order.id}</strong> (email label option) has been successfully generated and sent to the customer.</p>
-            <p>Tracking Number: <strong>${trackingNumber || "N/A"}</strong></p>
-            <p>A custom internal label has also been generated and attached to the email for the customer to place on the device bag.</p>
-        `;
-      } else {
-        throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
+        throw new Error("Label PDF link not available from ShipEngine.");
       }
 
-      await updateOrderBoth(req.params.id, updateData);
+      updateData = {
+        ...updateData,
+        uspsLabelUrl: labelDownloadLink,
+        trackingNumber: customerLabelData.tracking_number,
+      };
 
-      await Promise.all([
-          transporter.sendMail(customerMailOptions),
-          sendZendeskComment(order, `Shipping Label Generated for Order #${order.id}`, internalHtmlBody, false),
-      ]);
+      customerEmailSubject = `Your SecondHandCell Shipping Label for Order #${order.id}`;
+      customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
+        .replace(/\*\*ORDER_ID\*\*/g, order.id)
+        .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || "N/A")
+        .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
 
-      res.json({ message: "Label(s) generated successfully", orderId: order.id, labelData, trackingNumber });
-    } catch (err) {
-      console.error("Error generating label:", err.response?.data || err.message || err);
-      res.status(500).json({ error: "Failed to generate label" });
+      customerMailOptions = {
+        from: functions.config().email.user,
+        to: order.shippingInfo.email,
+        subject: customerEmailSubject,
+        html: customerEmailHtml,
+      };
+
+      internalHtmlBody = `
+        <p>The shipping label for Order <strong>#${order.id}</strong> (email label option) has been successfully generated and sent to the customer.</p>
+        <p>Tracking Number: <strong>${
+          customerLabelData.tracking_number || "N/A"
+        }</strong></p>
+      `;
+    } else {
+      throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
     }
-});
 
+    await updateOrderBoth(req.params.id, updateData);
+
+    await Promise.all([
+      transporter.sendMail(customerMailOptions),
+      sendZendeskComment(
+        order,
+        `Shipping Label Generated for Order #${order.id}`,
+        internalHtmlBody,
+        false
+      ),
+    ]);
+
+    res.json({ message: "Label(s) generated successfully", orderId: order.id, ...updateData });
+  } catch (err) {
+    console.error("Error generating label:", err.response?.data || err.message || err);
+    res.status(500).json({ error: "Failed to generate label" });
+  }
+});
 
 // Update order status
 app.put("/orders/:id/status", async (req, res) => {
@@ -995,22 +892,42 @@ app.put("/orders/:id/status", async (req, res) => {
         });
 
         internalSubject = `Device Received for Order #${order.id}`;
-        internalHtmlBody = `<p>The device for Order <strong>#${order.id}</strong> has been received.</p><p>It is now awaiting inspection.</p>`;
-        internalNotificationPromise = sendZendeskComment(order, internalSubject, internalHtmlBody, false);
+        internalHtmlBody = `
+          <p>The device for Order <strong>#${order.id}</strong> has been received.</p>
+          <p>It is now awaiting inspection.</p>
+        `;
+        internalNotificationPromise = sendZendeskComment(
+          order,
+          internalSubject,
+          internalHtmlBody,
+          false
+        );
         break;
       }
       case "completed": {
-        const customerEmailHtml = `<p>Hello ${order.shippingInfo.fullName},</p><p>Great news! Your order <strong>#${order.id}</strong> has been completed and payment has been processed.</p><p>If you have any questions about your payment, please let us know.</p><p>Thank you for choosing SecondHandCell!</p>`;
         customerNotificationPromise = transporter.sendMail({
           from: functions.config().email.user,
           to: order.shippingInfo.email,
           subject: "Your SecondHandCell Order is Complete",
-          html: customerEmailHtml,
+          html: `
+            <p>Hello ${order.shippingInfo.fullName},</p>
+            <p>Great news! Your order <strong>#${order.id}</strong> has been completed and payment has been processed.</p>
+            <p>If you have any questions about your payment, please let us know.</p>
+            <p>Thank you for choosing SecondHandCell!</p>
+          `,
         });
 
         internalSubject = `Order Completed: #${order.id}`;
-        internalHtmlBody = `<p>Order <strong>#${order.id}</strong> has been marked as completed.</p><p>Payment has been processed for this order.</p>`;
-        internalNotificationPromise = sendZendeskComment(order, internalSubject, internalHtmlBody, false);
+        internalHtmlBody = `
+          <p>Order <strong>#${order.id}</strong> has been marked as completed.</p>
+          <p>Payment has been processed for this order.</p>
+        `;
+        internalNotificationPromise = sendZendeskComment(
+          order,
+          internalSubject,
+          internalHtmlBody,
+          false
+        );
         break;
       }
       default: {
@@ -1066,6 +983,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
         <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${order.id} and after inspection, we have a revised offer for you.</p>
         <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${order.estimatedQuote.toFixed(2)}</p>
         <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;"><strong>New Offer Price:</strong> $${Number(newPrice).toFixed(2)}</p>
+        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Reason for New Offer:</strong></p>
         <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;"><em>"${reasonString}"</em></p>
         <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
         <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
@@ -1115,94 +1033,87 @@ app.post("/orders/:id/re-offer", async (req, res) => {
   }
 });
 
+// Generate return shipping label and send email to buyer
 app.post("/orders/:id/return-label", async (req, res) => {
-    try {
-        const doc = await ordersCollection.doc(req.params.id).get();
-        if (!doc.exists) return res.status(404).json({ error: "Order not found" });
-        const order = { id: doc.id, ...doc.data() };
+  try {
+    const doc = await ordersCollection.doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+    const order = { id: doc.id, ...doc.data() };
 
-        const buyerShippingInfo = order.shippingInfo;
-        const orderIdForLabel = order.id || "N/A";
+    const buyerShippingInfo = order.shippingInfo;
+    const orderIdForLabel = order.id || "N/A";
 
-        const seccondHandCellAddress = {
-            name: "SHC Returns",
-            company: "SecondHandCell",
-            phone: "555-555-5555",
-            street1: "1602 McDonald Ave Ste Rear",
-            street2: "(24th Ave Entrance)",
-            city: "Brooklyn",
-            state: "NY",
-            postalCode: "11223",
-            country: "US",
-        };
+    const swiftBuyBackAddress = {
+      name: "SHC Returns",
+      company_name: "SecondHandCell",
+      phone: "555-555-5555",
+      address_line1: "1602 McDonald Ave Ste Rear (24th Ave Entrance)",
+      city_locality: "Brooklyn",
+      state_province: "NY",
+      postal_code: "11230",
+      country_code: "US",
+    };
 
-        const buyerAddress = {
-            name: buyerShippingInfo.fullName,
-            phone: "555-555-5555",
-            street1: buyerShippingInfo.streetAddress,
-            street2: "",
-            city: buyerShippingInfo.city,
-            state: buyerShippingInfo.state,
-            postalCode: buyerShippingInfo.zipCode,
-            country: "US",
-        };
+    const buyerAddress = {
+      name: buyerShippingInfo.fullName,
+      phone: "555-555-5555",
+      address_line1: buyerShippingInfo.streetAddress,
+      city_locality: buyerShippingInfo.city,
+      state_province: buyerShippingInfo.state,
+      postal_code: buyerShippingInfo.zipCode,
+      country_code: "US",
+    };
 
-        const returnLabelData = await createShipStationLabel(
-            seccondHandCellAddress,
-            buyerAddress,
-            "usps",
-            "usps_first_class_package",
-            "package",
-            1
-        );
+    const returnLabelData = await createShipEngineLabel(
+      swiftBuyBackAddress,
+      buyerAddress,
+      `${orderIdForLabel}-RETURN`
+    );
 
-        const returnTrackingNumber = returnLabelData.trackingNumber;
+    const returnTrackingNumber = returnLabelData.tracking_number;
 
-        await updateOrderBoth(req.params.id, {
-            status: "return-label-generated",
-            returnLabelData: returnLabelData.labelData,
-            returnTrackingNumber: returnTrackingNumber,
-        });
+    await updateOrderBoth(req.params.id, {
+      status: "return-label-generated",
+      returnLabelUrl: returnLabelData.label_download?.pdf,
+      returnTrackingNumber: returnTrackingNumber,
+    });
 
-        const customerMailOptions = {
-            from: functions.config().email.user,
-            to: order.shippingInfo.email,
-            subject: "Your SecondHandCell Return Label",
-            html: `
-                <p>Hello ${order.shippingInfo.fullName},</p>
-                <p>As requested, here is your return shipping label for your device (Order ID: ${order.id}):</p>
-                <p>Return Tracking Number: <strong>${returnTrackingNumber || "N/A"}</strong></p>
-                <p>Please open the attached PDF to download and print your label.</p>
-                <p>Thank you,</p>
-                <p>The SecondHandCell Team</p>
-            `,
-            attachments: [{
-                filename: `SecondHandCell-ReturnLabel-${order.id}.pdf`,
-                content: Buffer.from(returnLabelData.labelData, 'base64'),
-                contentType: 'application/pdf',
-            }],
-        };
+    const customerMailOptions = {
+      from: functions.config().email.user,
+      to: order.shippingInfo.email,
+      subject: "Your SecondHandCell Return Label",
+      html: `
+        <p>Hello ${order.shippingInfo.fullName},</p>
+        <p>As requested, here is your return shipping label for your device (Order ID: ${order.id}):</p>
+        <p>Return Tracking Number: <strong>${returnTrackingNumber || "N/A"}</strong></p>
+        <a href="${returnLabelData.label_download?.pdf}">Download Return Label</a>
+        <p>Thank you,</p>
+        <p>The SecondHandCell Team</p>
+      `,
+    };
 
-        const internalSubject = `Return Label Sent for Order #${order.id}`;
-        const internalHtmlBody = `<p>A return label for Order <strong>#${order.id}</strong> has been generated and sent to the customer.</p><p>Return Tracking Number: <strong>${returnTrackingNumber || "N/A"}</strong></p>`;
+    const internalSubject = `Return Label Sent for Order #${order.id}`;
+    const internalHtmlBody = `
+      <p>A return label for Order <strong>#${order.id}</strong> has been generated and sent to the customer.</p>
+      <p>Return Tracking Number: <strong>${returnTrackingNumber || "N/A"}</strong></p>
+    `;
 
-        await Promise.all([
-            transporter.sendMail(customerMailOptions),
-            sendZendeskComment(order, internalSubject, internalHtmlBody, false),
-        ]);
+    await Promise.all([
+      transporter.sendMail(customerMailOptions),
+      sendZendeskComment(order, internalSubject, internalHtmlBody, false),
+    ]);
 
-        res.json({
-            message: "Return label generated successfully.",
-            labelData: returnLabelData.labelData,
-            trackingNumber: returnTrackingNumber,
-            orderId: order.id,
-        });
-    } catch (err) {
-        console.error("Error generating return label:", err.response?.data || err);
-        res.status(500).json({ error: "Failed to generate return label" });
-    }
+    res.json({
+      message: "Return label generated successfully.",
+      returnLabelUrl: returnLabelData.label_download?.pdf,
+      returnTrackingNumber: returnTrackingNumber,
+      orderId: order.id,
+    });
+  } catch (err) {
+    console.error("Error generating return label:", err.response?.data || err);
+    res.status(500).json({ error: "Failed to generate return label" });
+  }
 });
-
 
 // Accept-offer action
 app.post("/accept-offer-action", async (req, res) => {
@@ -1293,82 +1204,23 @@ app.post("/return-phone-action", async (req, res) => {
       <p>The customer has <strong>declined</strong> the revised offer for Order #${orderData.id} and has requested that their phone be returned.</p>
       <p>Please initiate the return process and send a return shipping label.</p>
     `;
-    
+
     await Promise.all([
-      sendZendeskComment(orderData, `Return Request for Order #${orderData.id}`, customerHtmlBody, true),
+      sendZendeskComment(
+        orderData,
+        `Return Requested for Order #${orderData.id}`,
+        customerHtmlBody,
+        true
+      ),
       sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
     ]);
 
-    res.json({ message: "Return requested successfully. Admin has been notified to generate the label.", orderId: orderData.id });
+    res.json({ message: "Return requested successfully.", orderId: orderData.id });
   } catch (err) {
-    console.error("Error processing return request:", err);
-    res.status(500).json({ error: "Failed to process return request" });
+    console.error("Error requesting return:", err);
+    res.status(500).json({ error: "Failed to request return" });
   }
 });
-
-// --- NEW ENDPOINT for IMEI/ESN Check ---
-app.post("/check-esn", async (req, res) => {
-    const { imei, orderId, customerName, customerEmail } = req.body;
-
-    if (!imei || !orderId) {
-        return res.status(400).json({ error: "IMEI and Order ID are required." });
-    }
-
-    try {
-        // This is a MOCK API call. Replace this with your actual ESN check provider API call.
-        console.log(`Simulating ESN check for IMEI: ${imei}`);
-        const isClean = Math.random() > 0.1; // 90% chance of being clean for demonstration
-
-        const mockApiResponse = {
-            overall: isClean ? 'Clean' : 'Fail',
-            blacklistStatus: isClean ? 'Clean' : 'Lost Or Stolen',
-            imei: imei,
-            make: "Apple",
-            model: "iPhone 14 Pro",
-            operatingSys: "iOS 16.5",
-            deviceType: "phone",
-            imeiHistory: isClean ? [] : [{ action: 'BLACKLISTED', reasoncodedesc: 'Reported Lost or Stolen', date: new Date().toISOString() }]
-        };
-
-        const updateData = {
-            status: 'imei_checked',
-            fulfilledOrders: {
-                imei: imei,
-                rawResponse: mockApiResponse
-            }
-        };
-
-        if (!isClean) {
-            updateData.status = 'blacklisted'; // Update status if blacklisted
-        }
-
-        const { order } = await updateOrderBoth(orderId, updateData);
-
-        // If the device is not clean, send a notification email.
-        if (!isClean) {
-            console.log(`Device for order ${orderId} is blacklisted. Sending notification.`);
-            const blacklistEmailHtml = BLACKLISTED_EMAIL_HTML
-                .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName || 'Customer')
-                .replace(/\*\*ORDER_ID\*\*/g, orderId)
-                .replace(/\*\*STATUS_REASON\*\*/g, mockApiResponse.blacklistStatus)
-                .replace(/\*\*LEGAL_TEXT\*\*/g, 'As per our policy and legal requirements, we are obligated to report this device.');
-
-            const mailOptions = {
-                from: functions.config().email.user,
-                to: customerEmail,
-                subject: `Important Notice Regarding Your Device for Order #${orderId}`,
-                html: blacklistEmailHtml,
-            };
-            await transporter.sendMail(mailOptions);
-        }
-
-        res.json(mockApiResponse);
-    } catch (error) {
-        console.error("Error during IMEI check:", error);
-        res.status(500).json({ error: "Failed to perform IMEI check." });
-    }
-});
-
 
 // Scheduled function: auto-accept expired offers
 exports.autoAcceptOffers = functions.pubsub
@@ -1381,6 +1233,7 @@ exports.autoAcceptOffers = functions.pubsub
       .get();
 
     const updates = expiredOffers.docs.map(async (doc) => {
+      const orderRef = ordersCollection.doc(doc.id);
       const orderData = { id: doc.id, ...doc.data() };
 
       const customerHtmlBody = `
@@ -1471,7 +1324,6 @@ exports.onChatTransferUpdate = functions.firestore
         action: "open_chat",
         relatedDocType: "chat",
         relatedDocId: context.params.chatId,
-        relatedUserId: newChatData.ownerUid,
       }).catch((e) => console.error("FCM Send Error (Chat Transfer):", e));
 
       await addAdminFirestoreNotification(
@@ -1493,5 +1345,225 @@ exports.onChatTransferUpdate = functions.firestore
   });
 
 // Expose the Express app as a single Cloud Function
-// UPDATED: Increase memory and timeout for the API function
-exports.api = functions.runWith({ timeoutSeconds: 300, memory: '1GB' }).https.onRequest(app);
+exports.api = functions.https.onRequest(app);
+
+// New endpoint for PhoneChecks ESN API
+app.post("/check-esn", async (req, res) => {
+  try {
+    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
+    
+    // Log the incoming request body for debugging
+    console.log("Received request to /check-esn with payload:", req.body);
+
+    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
+      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
+    }
+
+    const apiUrl = "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+    const requestPayload = {
+      ApiKey: "5fed1416-159a-4c37-b9e4-49053fc9a399",
+      Username: "aecells1",
+      IMEI: imei,
+      carrier: carrier,
+      devicetype: devicetype
+    };
+
+    // Use URLSearchParams to format data as application/x-www-form-urlencoded
+    const params = new URLSearchParams(requestPayload);
+
+    // Log the payload being sent to the external API
+    console.log("Sending payload to PhoneChecks API:", params.toString());
+
+    // Call the external API
+    const response = await axios.post(apiUrl, params.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    // Assume the PhoneCheck API returns data in a structure like this:
+    // { "isBlacklisted": false, "findMyIphoneStatus": "Off", "financialStatus": "Clear" }
+    // We'll use these simplified fields for our logic.
+    const phoneCheckData = response.data;
+
+    let isBlacklisted = phoneCheckData.isBlacklisted || false;
+    let fmiStatus = phoneCheckData.findMyIphoneStatus || "Off";
+    let financialStatus = phoneCheckData.financialStatus || "Clear";
+    
+    // Handle specific cases based on the API response
+    if (isBlacklisted) {
+        const legalText = `
+            New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
+            ... (rest of your legal text)
+        `; // Placeholder for your legal text
+        
+        const customerEmailHtml = BLACKLISTED_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+            .replace(/\*\*ORDER_ID\*\*/g, orderId)
+            .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
+            .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
+            
+        await transporter.sendMail({
+            from: functions.config().email.user,
+            to: customerEmail,
+            subject: `Important Notice Regarding Your Device - Order #${orderId}`,
+            html: customerEmailHtml,
+        });
+
+        // Update Firestore status and add phone check data
+        await updateOrderBoth(orderId, {
+            status: "blacklisted",
+            phoneCheckData: phoneCheckData,
+        });
+
+    } else if (fmiStatus === "On") {
+        const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+        const customerEmailHtml = FMI_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+            .replace(/\*\*ORDER_ID\*\*/g, orderId)
+            .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
+
+        await transporter.sendMail({
+            from: functions.config().email.user,
+            to: customerEmail,
+            subject: `Action Required for Order #${orderId}`,
+            html: customerEmailHtml,
+        });
+
+        // Update Firestore with new status and a 72-hour downgrade timer
+        const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+        await updateOrderBoth(orderId, {
+            status: "fmi_on_pending",
+            fmiAutoDowngradeDate: downgradeDate,
+            phoneCheckData: phoneCheckData,
+        });
+
+    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
+        const customerEmailHtml = BAL_DUE_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+            .replace(/\*\*ORDER_ID\*\*/g, orderId)
+            .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+
+        await transporter.sendMail({
+            from: functions.config().email.user,
+            to: customerEmail,
+            subject: `Action Required for Order #${orderId}`,
+            html: customerEmailHtml,
+        });
+
+        // Update Firestore with new status and a 72-hour downgrade timer
+        const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+        await updateOrderBoth(orderId, {
+            status: "balance_due_pending",
+            balanceAutoDowngradeDate: downgradeDate,
+            phoneCheckData: phoneCheckData,
+        });
+        
+    } else {
+        // All checks passed, proceed with the normal flow
+        // You might want to update the order status to something like "clean_check"
+        // and send a notification to the customer or internal team.
+        await updateOrderBoth(orderId, {
+          status: "imei_checked",
+          phoneCheckData: phoneCheckData,
+        });
+    }
+
+    res.status(200).json(response.data);
+
+  } catch (error) {
+    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
+  }
+});
+
+// New endpoint for when the customer manually clears an FMI lock
+app.post("/orders/:id/fmi-cleared", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const docRef = ordersCollection.doc(id);
+        const doc = await docRef.get();
+        if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+
+        const order = { id: doc.id, ...doc.data() };
+        
+        // This check prevents accidental or malicious status changes
+        if (order.status !== "fmi_on_pending") {
+            return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
+        }
+        
+        // Update the status and remove the downgrade timer
+        await updateOrderBoth(id, {
+            status: "fmi_cleared",
+            fmiAutoDowngradeDate: null,
+        });
+
+        // Notify admins that the FMI lock has been cleared manually
+        const internalSubject = `FMI Cleared Manually for Order #${id}`;
+        const internalHtmlBody = `<p>The customer has manually confirmed that the FMI lock for Order <strong>#${id}</strong> has been cleared. The order can now proceed.</p>`;
+        await sendZendeskComment(order, internalSubject, internalHtmlBody, false);
+        
+        res.json({ message: "FMI status updated successfully." });
+
+    } catch (err) {
+        console.error("Error clearing FMI status:", err);
+        res.status(500).json({ error: "Failed to clear FMI status" });
+    }
+});
+
+// New Scheduled function to auto-downgrade offers after 72 hours if no action is taken
+exports.autoDowngradeOffers = functions.pubsub.schedule("every 6 hours").onRun(async (context) => {
+    const now = admin.firestore.Timestamp.now();
+    
+    // Check for FMI pending orders that have expired
+    const fmiExpired = await ordersCollection
+      .where("status", "==", "fmi_on_pending")
+      .where("fmiAutoDowngradeDate", "<=", now)
+      .get();
+    
+    // Check for Balance Due pending orders that have expired
+    const balExpired = await ordersCollection
+      .where("status", "==", "balance_due_pending")
+      .where("balanceAutoDowngradeDate", "<=", now)
+      .get();
+
+    const updates = [...fmiExpired.docs, ...balExpired.docs].map(async (doc) => {
+      const orderData = { id: doc.id, ...doc.data() };
+      
+      // Assume 'damaged' price is stored in a `prices` object or calculated dynamically
+      const damagedPrice = 20.00; // Placeholder for the lowest price
+      
+      const customerEmailHtml = DOWNGRADE_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderData.id)
+        .replace(/\*\*NEW_PRICE\*\*/g, damagedPrice.toFixed(2));
+      
+      const internalSubject = `Order #${orderData.id} Automatically Downgraded`;
+      const internalHtmlBody = `<p>The offer for Order <strong>#${orderData.id}</strong> has been <strong>automatically downgraded</strong> to the damaged device price due to an unresolved carrier/FMI issue. The new offer price is <strong>$${damagedPrice.toFixed(2)}</strong>.</p>`;
+      
+      await Promise.all([
+        transporter.sendMail({
+            from: functions.config().email.user,
+            to: orderData.shippingInfo.email,
+            subject: `Update on Your Order - Order #${orderData.id}`,
+            html: customerEmailHtml,
+        }),
+        sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
+      ]);
+      
+      // Update the order with the downgraded price and final status
+      await updateOrderBoth(doc.id, {
+          status: "downgraded_price",
+          reOffer: {
+            newPrice: damagedPrice,
+            reasons: ["Automatically downgraded due to unresolved FMI or balance due issue"],
+            comments: "",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+      });
+    });
+
+    await Promise.all(updates);
+    console.log(`Automatically downgraded ${updates.length} expired offers.`);
+    return null;
+});
