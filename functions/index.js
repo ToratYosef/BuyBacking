@@ -43,7 +43,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// --- Email HTML Templates (unchanged from your version) ---
+// --- EMAIL HTML Templates (unchanged from your version) ---
 const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Please click the button below to download and print your label. Affix it to your package and drop it off at any USPS location.</p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 
 const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
@@ -222,6 +222,22 @@ const DOWNGRADE_EMAIL_HTML = `
   </body>
   </html>
 `;
+
+// A mapping of full state names to their two-letter abbreviations
+const stateAbbreviations = {
+  "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
+  "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Florida": "FL", "Georgia": "GA",
+  "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN", "Iowa": "IA",
+  "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
+  "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS", "Missouri": "MO",
+  "Montana": "MT", "Nebraska": "NE", "Nevada": "NV", "New Hampshire": "NH", "New Jersey": "NJ",
+  "New Mexico": "NM", "New York": "NY", "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH",
+  "Oklahoma": "OK", "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC",
+  "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT",
+  "Virginia": "VA", "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY",
+  "District of Columbia": "DC"
+};
+
 /**
  * --- NEW ---
  * Generates the next sequential order number in SHC-XXXXX format using a Firestore transaction.
@@ -589,6 +605,14 @@ app.post("/submit-order", async (req, res) => {
       return res.status(400).json({ error: "Invalid order data" });
     }
 
+    // Convert full state name to two-letter abbreviation
+    const fullStateName = orderData.shippingInfo.state;
+    if (fullStateName && stateAbbreviations[fullStateName]) {
+      orderData.shippingInfo.state = stateAbbreviations[fullStateName];
+    } else {
+      console.warn(`Could not find abbreviation for state: ${fullStateName}. Assuming it is already an abbreviation or is invalid.`);
+    }
+
     // Generate sequential SHC-XXXXX order id starting at SHC-00000
     const orderId = await generateNextOrderNumber();
 
@@ -713,7 +737,7 @@ app.post("/generate-label/:id", async (req, res) => {
     const swiftBuyBackAddress = {
       name: "SHC Returns",
       company_name: "SecondHandCell",
-      phone: "555-555-5555",
+      phone: "347-559-1707",
       address_line1: "1602 McDonald Ave Ste Rear (24th Ave Entrance)",
       city_locality: "Brooklyn",
       state_province: "NY",
@@ -723,7 +747,7 @@ app.post("/generate-label/:id", async (req, res) => {
 
     const buyerAddress = {
       name: buyerShippingInfo.fullName,
-      phone: "555-555-5555",
+      phone: "347-559-1707",
       address_line1: buyerShippingInfo.streetAddress,
       city_locality: buyerShippingInfo.city,
       state_province: buyerShippingInfo.state,
@@ -1046,7 +1070,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
     const swiftBuyBackAddress = {
       name: "SHC Returns",
       company_name: "SecondHandCell",
-      phone: "555-555-5555",
+      phone: "347-559-1707",
       address_line1: "1602 McDonald Ave Ste Rear (24th Ave Entrance)",
       city_locality: "Brooklyn",
       state_province: "NY",
@@ -1056,7 +1080,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
 
     const buyerAddress = {
       name: buyerShippingInfo.fullName,
-      phone: "555-555-5555",
+      phone: "347-559-1707",
       address_line1: buyerShippingInfo.streetAddress,
       city_locality: buyerShippingInfo.city,
       state_province: buyerShippingInfo.state,
@@ -1324,6 +1348,7 @@ exports.onChatTransferUpdate = functions.firestore
         action: "open_chat",
         relatedDocType: "chat",
         relatedDocId: context.params.chatId,
+        relatedUserId: newChatData.ownerUid,
       }).catch((e) => console.error("FCM Send Error (Chat Transfer):", e));
 
       await addAdminFirestoreNotification(
@@ -1393,8 +1418,8 @@ app.post("/check-esn", async (req, res) => {
     // Handle specific cases based on the API response
     if (isBlacklisted) {
         const legalText = `
-            New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
-            ... (rest of your legal text)
+          New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
+          ... (rest of your legal text)
         `; // Placeholder for your legal text
         
         const customerEmailHtml = BLACKLISTED_EMAIL_HTML
