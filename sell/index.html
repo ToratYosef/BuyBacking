@@ -1321,6 +1321,7 @@
                 finalQuoteAmountMainDisplay.classList.remove('hidden');
                 if (isUserLoggedIn) {
                     nextSteps.classList.remove('hidden');
+                    updateOverview();
                     nextSteps.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 } else {
                     showLoginModal();
@@ -1482,6 +1483,18 @@
                 });
             }
 
+            function hideAndClearQuestions(...sections) {
+                sections.forEach(section => {
+                    section.classList.add('hidden');
+                    uncheckRadiosInContainer(section);
+                });
+            }
+
+            function showAndClearQuestions(section) {
+                section.classList.remove('hidden');
+                uncheckRadiosInContainer(section);
+            }
+            
             function hideAllQuestions() {
                 [carrierSection, powerOnSection, functionalSection, cracksSection, cosmeticSection, getQuoteBtn].forEach(el => {
                     el.classList.add('hidden');
@@ -1502,11 +1515,7 @@
                 if (this.value) {
                     carrierSection.classList.remove('hidden');
                     // Reset all dependent questions when storage changes
-                    uncheckRadiosInContainer(powerOnSection);
-                    uncheckRadiosInContainer(functionalSection);
-                    uncheckRadiosInContainer(cracksSection);
-                    uncheckRadiosInContainer(cosmeticSection);
-                    [powerOnSection, functionalSection, cracksSection, cosmeticSection].forEach(el => el.classList.add('hidden'));
+                    hideAndClearQuestions(powerOnSection, functionalSection, cracksSection, cosmeticSection);
                     getQuoteBtn.classList.add('hidden');
                     
                     clearQuoteMessage();
@@ -1521,10 +1530,7 @@
                 radio.addEventListener('change', () => {
                     powerOnSection.classList.remove('hidden');
                     // Reset all dependent questions when carrier changes
-                    uncheckRadiosInContainer(functionalSection);
-                    uncheckRadiosInContainer(cracksSection);
-                    uncheckRadiosInContainer(cosmeticSection);
-                    [functionalSection, cracksSection, cosmeticSection].forEach(el => el.classList.add('hidden'));
+                    hideAndClearQuestions(functionalSection, cracksSection, cosmeticSection);
                     getQuoteBtn.classList.add('hidden');
 
                     clearQuoteMessage();
@@ -1537,16 +1543,12 @@
                     if (radio.value === 'yes') {
                         functionalSection.classList.remove('hidden');
                         // Reset all dependent questions when power on changes
-                        uncheckRadiosInContainer(cracksSection);
-                        uncheckRadiosInContainer(cosmeticSection);
-                        [cracksSection, cosmeticSection].forEach(el => el.classList.add('hidden'));
+                        hideAndClearQuestions(cracksSection, cosmeticSection);
                         getQuoteBtn.classList.add('hidden');
 
                         clearQuoteMessage();
                     } else {
-                        functionalSection.classList.add('hidden');
-                        cracksSection.classList.add('hidden');
-                        cosmeticSection.classList.add('hidden');
+                        hideAndClearQuestions(functionalSection, cracksSection, cosmeticSection);
                         getQuoteBtn.classList.remove('hidden');
                     }
                     saveFormState();
@@ -1558,14 +1560,12 @@
                     if (radio.value === 'yes') {
                         cracksSection.classList.remove('hidden');
                         // Reset all dependent questions when functional changes
-                        uncheckRadiosInContainer(cosmeticSection);
-                        cosmeticSection.classList.add('hidden');
+                        hideAndClearQuestions(cosmeticSection);
                         getQuoteBtn.classList.add('hidden');
 
                         clearQuoteMessage();
                     } else {
-                        cracksSection.classList.add('hidden');
-                        cosmeticSection.classList.add('hidden');
+                        hideAndClearQuestions(cracksSection, cosmeticSection);
                         getQuoteBtn.classList.remove('hidden');
                     }
                     saveFormState();
@@ -1579,7 +1579,7 @@
                         getQuoteBtn.classList.add('hidden');
                         clearQuoteMessage();
                     } else {
-                        cosmeticSection.classList.add('hidden');
+                        hideAndClearQuestions(cosmeticSection);
                         getQuoteBtn.classList.remove('hidden');
                     }
                     saveFormState();
