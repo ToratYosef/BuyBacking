@@ -138,7 +138,6 @@ const ORDER_PLACED_ADMIN_EMAIL_HTML = `
   </body>
   </html>
 `;
-
 const BLACKLISTED_EMAIL_HTML = `
   <!DOCTYPE html>
   <html lang="en">
@@ -181,7 +180,6 @@ const BLACKLISTED_EMAIL_HTML = `
   </body>
   </html>
 `;
-
 const FMI_EMAIL_HTML = `
   <!DOCTYPE html>
   <html lang="en">
@@ -233,7 +231,6 @@ const FMI_EMAIL_HTML = `
   </body>
   </html>
 `;
-
 const BAL_DUE_EMAIL_HTML = `
   <!DOCTYPE html>
   <html lang="en">
@@ -272,7 +269,6 @@ const BAL_DUE_EMAIL_HTML = `
   </body>
   </html>
 `;
-
 const DOWNGRADE_EMAIL_HTML = `
   <!DOCTYPE html>
   <html lang="en">
