@@ -44,7 +44,6 @@ const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta ch
 const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 const ORDER_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Order Has Been Received!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content h2{color:#333333;font-size:20px;margin-top:24px;margin-bottom:8px}.order-id{color:#007bff;font-weight:bold}ul{list-style-type:disc;padding-left:20px;margin:0 0 16px}ul li{margin-bottom:8px}.important-note{background-color:#fff3cd;border-left:4px solid #ffc107;padding:16px;margin-top:24px;font-size:14px;color:#856404}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1>Your SecondHandCell Order #**ORDER_ID** Has Been Received!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for choosing SecondHandCell! We've successfully received your order request for your **DEVICE_NAME**.</p><p>Your Order ID is <strong class="order-id">#**ORDER_ID**</strong>.</p><h2>Next Steps: Preparing Your Device for Shipment</h2><p>Before you send us your device, it's crucial to prepare it correctly. Please follow these steps:</p><ul><li><strong>Backup Your Data:</strong> Ensure all important photos, contacts, and files are backed up to a cloud service or another device.</li><li><strong>Factory Reset:</strong> Perform a full factory reset on your device to erase all personal data. This is vital for your privacy and security.</li><li><strong>Remove Accounts:</strong> Sign out of all accounts (e.g., Apple ID/iCloud, Google Account, Samsung Account).<ul><li>For Apple devices, turn off "Find My iPhone" (FMI).</li><li>For Android devices, ensure Factory Reset Protection (FRP) is disabled.</li></ul></li><li><strong>Remove SIM Card:</strong> Take out any physical SIM cards from the device.</li><li><strong>Remove Accessories:</strong> Do not include cases, screen protectors, or chargers unless specifically instructed.</li></ul><div class="important-note"><p><strong>Important:</strong> We cannot process devices with <strong>Find My iPhone (FMI)</strong>, <strong>Factory Reset Protection (FRP)</strong>, <strong>stolen/lost status</strong>, <strong>outstanding balance due</strong>, or <strong>blacklisted IMEI</strong>. Please ensure your device meets these conditions to avoid delays or rejection.</p></div>**SHIPPING_INSTRUCTION**</div><div class="footer"><p>The SecondHandCell Team</p></div></div></body></html>`;
 const DEVICE_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Device Has Arrived!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}.order-id{color:#007bff;font-weight:bold}</style></head><body><div class="email-container"><div class="header"><h1>Your Device Has Arrived!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p><p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p></div><div class="footer"><p>Thank thank you for choosing SecondHandCell.</p></div></div></body></html>`;
-
 const ORDER_PLACED_ADMIN_EMAIL_HTML = `
   <!DOCTYPE html>
   <html lang="en">
@@ -514,6 +513,161 @@ function formatStatusForEmail(status) {
     .join(" ");
 }
 
+// Renamed from sendTestEmail to avoid conflict
+async function sendMultipleTestEmails(email, emailTypes) {
+  const mockOrderData = {
+    id: "TEST-00001",
+    shippingInfo: {
+      fullName: "Test User",
+      email: email,
+      streetAddress: "123 Test St",
+      city: "Test City",
+      state: "TS",
+      zipCode: "12345",
+    },
+    device: "iPhone 13",
+    storage: "256GB",
+    carrier: "Unlocked",
+    estimatedQuote: 500,
+    paymentMethod: "venmo",
+    paymentDetails: {
+      venmoUsername: "testuser",
+    },
+    uspsLabelUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+    trackingNumber: "1234567890",
+    reOffer: {
+      newPrice: 400,
+      reasons: ["Cracked Screen", "Deep Scratches"],
+      comments: "Device had more cosmetic damage than initially stated.",
+      autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    },
+    returnLabelUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+    returnTrackingNumber: "0987654321",
+  };
+
+  const mailPromises = emailTypes.map(emailType => {
+      let subject;
+      let htmlBody;
+
+      switch (emailType) {
+        case "shipping-label":
+          subject = `[TEST] Your SecondHandCell Shipping Label for Order #${mockOrderData.id}`;
+          htmlBody = SHIPPING_LABEL_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, mockOrderData.shippingInfo.fullName)
+            .replace(/\*\*ORDER_ID\*\*/g, mockOrderData.id)
+            .replace(/\*\*TRACKING_NUMBER\*\*/g, mockOrderData.trackingNumber)
+            .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, mockOrderData.uspsLabelUrl);
+          break;
+        case "reoffer":
+          subject = `[TEST] Re-offer for Order #${mockOrderData.id}`;
+          let reasonString = mockOrderData.reOffer.reasons.join(", ");
+          if (mockOrderData.reOffer.comments) reasonString += `; ${mockOrderData.reOffer.comments}`;
+          htmlBody = `
+            <div style="font-family: 'system-ui','-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Oxygen-Sans','Ubuntu','Cantarell','Helvetica Neue','Arial','sans-serif'; font-size: 14px; line-height: 1.5; color: #444444;">
+              <h2 style="color: #0056b3; font-weight: bold; text-transform: none; font-size: 20px; line-height: 26px; margin: 5px 0 10px;">Hello ${mockOrderData.shippingInfo.fullName},</h2>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${mockOrderData.id} and after inspection, we have a revised offer for you.</p>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${mockOrderData.estimatedQuote.toFixed(2)}</p>
+              <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;"><strong>New Offer Price:</strong> $${mockOrderData.reOffer.newPrice.toFixed(2)}</p>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Reason for New Offer:</strong></p>
+              <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;"><em>"${reasonString}"</em></p>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
+              <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
+                <tbody>
+                  <tr>
+                    <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                      <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
+                        <tbody>
+                          <tr>
+                            <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
+                              <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${mockOrderData.id}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
+                                Accept Offer ($${mockOrderData.reOffer.newPrice.toFixed(2)})
+                              </a>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table >
+                    </td>
+                    <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                      <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
+                        <tbody>
+                          <tr>
+                            <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
+                              <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${mockOrderData.id}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
+                                Return Phone Now
+                              </a>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SecondHandCell Team</p>
+            </div>
+          `;
+          break;
+        case "final-offer-accepted":
+          subject = `[TEST] Offer Accepted for Order #${mockOrderData.id}`;
+          htmlBody = `
+            <p>Hello ${mockOrderData.shippingInfo.fullName},</p>
+            <p>Great news! Your order <strong>#${mockOrderData.id}</strong> has been completed and payment has been processed.</p>
+            <p>If you have any questions about your payment, please let us know.</p>
+            <p>Thank you for choosing SecondHandCell!</p>
+          `;
+          break;
+        case "return-label":
+          subject = `[TEST] Your SecondHandCell Return Label`;
+          htmlBody = `
+            <p>Hello ${mockOrderData.shippingInfo.fullName},</p>
+            <p>As requested, here is your return shipping label for your device (Order ID: ${mockOrderData.id}):</p>
+            <p>Return Tracking Number: <strong>${mockOrderData.returnTrackingNumber}</strong></p>
+            <a href="${mockOrderData.returnLabelUrl}">Download Return Label</a>
+            <p>Thank you,</p>
+            <p>The SecondHandCell Team</p>
+          `;
+          break;
+        case "blacklisted":
+          subject = `[TEST] Important Notice Regarding Your Device - Order #${mockOrderData.id}`;
+          htmlBody = BLACKLISTED_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, mockOrderData.shippingInfo.fullName)
+            .replace(/\*\*ORDER_ID\*\*/g, mockOrderData.id)
+            .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
+            .replace(/\*\*LEGAL_TEXT\*\*/g, "This is mock legal text for testing.");
+          break;
+        case "fmi":
+          subject = `[TEST] Action Required for Order #${mockOrderData.id}`;
+          htmlBody = FMI_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, mockOrderData.shippingInfo.fullName)
+            .replace(/\*\*ORDER_ID\*\*/g, mockOrderData.id)
+            .replace(/\*\*CONFIRM_URL\*\*/g, `https://example.com/mock-confirm-fmi`);
+          break;
+        case "balance-due":
+          subject = `[TEST] Action Required for Order #${mockOrderData.id}`;
+          htmlBody = BAL_DUE_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, mockOrderData.shippingInfo.fullName)
+            .replace(/\*\*ORDER_ID\*\*/g, mockOrderData.id)
+            .replace(/\*\*FINANCIAL_STATUS\*\*/g, "an outstanding balance");
+          break;
+        default:
+          return Promise.resolve();
+      }
+
+      const mailOptions = {
+        from: functions.config().email.user,
+        to: email,
+        subject: subject,
+        html: htmlBody,
+      };
+
+      return transporter.sendMail(mailOptions);
+  });
+
+  await Promise.all(mailPromises);
+  return { message: "Test emails sent successfully." };
+}
+
 // ------------------------------
 // ROUTES
 // ------------------------------
@@ -615,7 +769,7 @@ app.post("/submit-order", async (req, res) => {
     const orderId = await generateNextOrderNumber();
 
     let shippingInstructions = "";
-    let newOrderStatus = "new_order";
+    let newOrderStatus = "order_pending";
 
     if (orderData.shippingPreference === "Shipping Kit Requested") {
       shippingInstructions = `
@@ -649,15 +803,15 @@ app.post("/submit-order", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Your SecondHandCell Order #${orderId} Has Been Received!`,
       html: customerEmailHtml,
-      bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
     };
 
     const adminMailOptions = {
       from: functions.config().email.user,
-      to: 'noreply@secondhandcell.com',
+      to: 'sales@secondhandcell.com',
       subject: `${orderData.shippingInfo.fullName} - placed an order for a ${orderData.device}`,
       html: adminEmailHtml,
-      bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+      bcc: ["saulsetton16@gmail.com"]
     };
 
     const notificationPromises = [
@@ -800,7 +954,7 @@ app.post("/generate-label/:id", async (req, res) => {
         to: order.shippingInfo.email,
         subject: customerEmailSubject,
         html: customerEmailHtml,
-        bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
       };
 
     } else if (order.shippingPreference === "Email Label Requested") {
@@ -839,7 +993,7 @@ app.post("/generate-label/:id", async (req, res) => {
         to: order.shippingInfo.email,
         subject: customerEmailSubject,
         html: customerEmailHtml,
-        bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
       };
     } else {
       throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
@@ -877,7 +1031,7 @@ app.put("/orders/:id/status", async (req, res) => {
           to: order.shippingInfo.email,
           subject: "Your SecondHandCell Device Has Arrived",
           html: deviceReceivedHtml,
-          bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+          bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
         });
         break;
       }
@@ -892,7 +1046,7 @@ app.put("/orders/:id/status", async (req, res) => {
             <p>If you have any questions about your payment, please let us know.</p>
             <p>Thank you for choosing SecondHandCell!</p>
           `,
-          bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+          bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
         });
         break;
       }
@@ -992,7 +1146,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
       to: order.shippingInfo.email,
       subject: `Re-offer for Order #${order.id}`,
       html: customerEmailHtml,
-      bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
     });
 
     res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
@@ -1058,7 +1212,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
         <p>Thank you,</p>
         <p>The SecondHandCell Team</p>
       `,
-      bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
     };
 
     await transporter.sendMail(customerMailOptions);
@@ -1109,7 +1263,7 @@ app.post("/accept-offer-action", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Offer Accepted for Order #${orderData.id}`,
       html: customerHtmlBody,
-      bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
     });
 
     res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
@@ -1152,7 +1306,7 @@ app.post("/return-phone-action", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Return Requested for Order #${orderData.id}`,
       html: customerHtmlBody,
-      bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
     });
 
     res.json({ message: "Return requested successfully.", orderId: orderData.id });
@@ -1189,7 +1343,276 @@ exports.autoAcceptOffers = functions.pubsub
         to: orderData.shippingInfo.email,
         subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
         html: customerHtmlBody,
-        bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      await updateOrderBoth(doc.id, {
+        status: "re-offered-auto-accepted",
+        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
+    await Promise.all(updates);
+    console.log(`Auto-accepted ${updates.length} expired offers.`);
+    return null;
+  });
+
+exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
+  try {
+    console.log(`New user created: ${user.uid}`);
+    const userData = {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || null,
+      phoneNumber: user.phoneNumber || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await usersCollection.doc(user.uid).set(userData);
+    console.log(`User data for ${user.uid} saved to Firestore.`);
+  } catch (error) {
+    console.error("Error saving user data to Firestore:", error);
+  }
+});
+
+exports.onChatTransferUpdate = functions.firestore
+  .document("chats/{chatId}")
+  .onUpdate(async (change, context) => {
+    const newChatData = change.after.data();
+    const oldChatData = change.before.data();
+
+    const newTransferRequest = newChatData.transferRequest;
+    const oldTransferRequest = oldChatData.transferRequest;
+
+    if (
+      newTransferRequest &&
+      newTransferRequest.status === "pending" &&
+      (!oldTransferRequest || oldTransferRequest.status !== "pending")
+    ) {
+      const targetAdminUid = newTransferRequest.toUid;
+      const fromAdminName = newTransferRequest.fromName;
+      const chatUser =
+        newTransferRequest.userDisplayName ||
+        newChatData.ownerUid ||
+        newChatData.guestId;
+
+      const notificationMessage = `Chat transfer from ${fromAdminName} for ${chatUser}.`;
+
+      await sendAdminPushNotification("Incoming Chat Transfer!", notificationMessage, {
+        chatId: context.params.chatId,
+        userId: newChatData.ownerUid,
+        action: "open_chat",
+        relatedDocType: "chat",
+        relatedDocId: context.params.chatId,
+        relatedUserId: newChatData.ownerUid,
+      }).catch((e) => console.error("FCM Send Error (Chat Transfer):", e));
+
+      await addAdminFirestoreNotification(
+        targetAdminUid,
+        notificationMessage,
+        "chat",
+        context.params.chatId,
+        newChatData.ownerUid
+      ).catch((e) =>
+        console.error("Firestore Notification Error (Chat Transfer):", e)
+      );
+
+      console.log(
+        `Notification sent for chat transfer to admin ${targetAdminUid} for chat ${context.params.chatId}.`
+      );
+    }
+
+    return null;
+  });
+
+app.post("/test-emails", async (req, res) => {
+  const { email, emailTypes } = req.body;
+
+  if (!email || !emailTypes || !Array.isArray(emailTypes)) {
+    return res.status(400).json({ error: "Email and emailTypes array are required." });
+  }
+
+  try {
+    const testResult = await sendMultipleTestEmails(email, emailTypes);
+    console.log("Test emails sent. Types:", emailTypes);
+    res.status(200).json(testResult);
+  } catch (error) {
+    console.error("Failed to send test emails:", error);
+    res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
+  }
+});
+
+app.post("/check-esn", async (req, res) => {
+  try {
+    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
+    
+    console.log("Received request to /check-esn with payload:", req.body);
+
+    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
+      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
+    }
+
+    const apiUrl = "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+    const requestPayload = {
+      ApiKey: "5fed1416-159a-4c37-b9e4-49053fc9a399",
+      Username: "aecells1",
+      IMEI: imei,
+      carrier: carrier,
+      devicetype: devicetype
+    };
+
+    const params = new URLSearchParams(requestPayload);
+    console.log("Sending payload to PhoneChecks API:", params.toString());
+
+    const response = await axios.post(apiUrl, params.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    const phoneCheckData = response.data;
+
+    let isBlacklisted = phoneCheckData.isBlacklisted || false;
+    let fmiStatus = phoneCheckData.findMyIphoneStatus || "Off";
+    let financialStatus = phoneCheckData.financialStatus || "Clear";
+    
+    if (isBlacklisted) {
+      const legalText = `
+        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
+        ... (rest of your legal text)
+      `;
+      
+      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
+        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
+        
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      await updateOrderBoth(orderId, {
+        status: "blacklisted",
+        phoneCheckData: phoneCheckData,
+      });
+
+    } else if (fmiStatus === "On") {
+      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+      const customerEmailHtml = FMI_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Action Required for Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+      await updateOrderBoth(orderId, {
+        status: "fmi_on_pending",
+        fmiAutoDowngradeDate: downgradeDate,
+        phoneCheckData: phoneCheckData,
+      });
+
+    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
+      const customerEmailHtml = BAL_DUE_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Action Required for Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+      await updateOrderBoth(orderId, {
+        status: "balance_due_pending",
+        balanceAutoDowngradeDate: downgradeDate,
+        phoneCheckData: phoneCheckData,
+      });
+      
+    } else {
+      await updateOrderBoth(orderId, {
+        status: "imei_checked",
+        phoneCheckData: phoneCheckData,
+      });
+    }
+
+    res.status(200).json(response.data);
+
+  } catch (error) {
+    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
+  }
+});
+
+app.post("/orders/:id/fmi-cleared", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const docRef = ordersCollection.doc(id);
+      const doc = await docRef.get();
+      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+
+      const order = { id: doc.id, ...doc.data() };
+      
+      if (order.status !== "fmi_on_pending") {
+          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
+      }
+      
+      await updateOrderBoth(id, {
+          status: "fmi_cleared",
+          fmiAutoDowngradeDate: null,
+      });
+
+      res.json({ message: "FMI status updated successfully." });
+
+    } catch (err) {
+        console.error("Error clearing FMI status:", err);
+        res.status(500).json({ error: "Failed to clear FMI status" });
+    }
+});
+
+exports.autoAcceptOffers = functions.pubsub
+  .schedule("every 24 hours")
+  .onRun(async (context) => {
+    const now = admin.firestore.Timestamp.now();
+    const expiredOffers = await ordersCollection
+      .where("status", "==", "re-offered-pending")
+      .where("reOffer.autoAcceptDate", "<=", now)
+      .get();
+
+    const updates = expiredOffers.docs.map(async (doc) => {
+      const orderData = { id: doc.id, ...doc.data() };
+
+      const customerHtmlBody = `
+        <p>Hello ${orderData.shippingInfo.fullName},</p>
+        <p>As we have not heard back from you regarding your revised offer, it has been automatically accepted as per our terms and conditions.</p>
+        <p>Payment processing for the revised amount of <strong>$${orderData.reOffer.newPrice.toFixed(
+          2
+        )}</strong> will now begin.</p>
+        <p>Thank you,</p>
+        <p>The SecondHandCell Team</p>
+      `;
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: orderData.shippingInfo.email,
+        subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
+        html: customerHtmlBody,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
       });
 
       await updateOrderBoth(doc.id, {
@@ -1272,193 +1695,3 @@ exports.onChatTransferUpdate = functions.firestore
   });
 
 exports.api = functions.https.onRequest(app);
-
-app.post("/check-esn", async (req, res) => {
-  try {
-    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
-    
-    console.log("Received request to /check-esn with payload:", req.body);
-
-    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
-      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
-    }
-
-    const apiUrl = "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
-    const requestPayload = {
-      ApiKey: "5fed1416-159a-4c37-b9e4-49053fc9a399",
-      Username: "aecells1",
-      IMEI: imei,
-      carrier: carrier,
-      devicetype: devicetype
-    };
-
-    const params = new URLSearchParams(requestPayload);
-    console.log("Sending payload to PhoneChecks API:", params.toString());
-
-    const response = await axios.post(apiUrl, params.toString(), {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-
-    const phoneCheckData = response.data;
-
-    let isBlacklisted = phoneCheckData.isBlacklisted || false;
-    let fmiStatus = phoneCheckData.findMyIphoneStatus || "Off";
-    let financialStatus = phoneCheckData.financialStatus || "Clear";
-    
-    if (isBlacklisted) {
-      const legalText = `
-        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
-        ... (rest of your legal text)
-      `;
-      
-      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
-        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
-        
-      await transporter.sendMail({
-        from: functions.config().email.user,
-        to: customerEmail,
-        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
-      });
-
-      await updateOrderBoth(orderId, {
-        status: "blacklisted",
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (fmiStatus === "On") {
-      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
-      const customerEmailHtml = FMI_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
-
-      await transporter.sendMail({
-        from: functions.config().email.user,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "fmi_on_pending",
-        fmiAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
-      const customerEmailHtml = BAL_DUE_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
-
-      await transporter.sendMail({
-        from: functions.config().email.user,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "balance_due_pending",
-        balanceAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-      
-    } else {
-      await updateOrderBoth(orderId, {
-        status: "imei_checked",
-        phoneCheckData: phoneCheckData,
-      });
-    }
-
-    res.status(200).json(response.data);
-
-  } catch (error) {
-    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
-  }
-});
-
-app.post("/orders/:id/fmi-cleared", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const docRef = ordersCollection.doc(id);
-      const doc = await docRef.get();
-      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
-
-      const order = { id: doc.id, ...doc.data() };
-      
-      if (order.status !== "fmi_on_pending") {
-          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
-      }
-      
-      await updateOrderBoth(id, {
-          status: "fmi_cleared",
-          fmiAutoDowngradeDate: null,
-      });
-
-      res.json({ message: "FMI status updated successfully." });
-
-    } catch (err) {
-        console.error("Error clearing FMI status:", err);
-        res.status(500).json({ error: "Failed to clear FMI status" });
-    }
-});
-
-exports.autoDowngradeOffers = functions.pubsub.schedule("every 6 hours").onRun(async (context) => {
-    const now = admin.firestore.Timestamp.now();
-    
-    const fmiExpired = await ordersCollection
-      .where("status", "==", "fmi_on_pending")
-      .where("fmiAutoDowngradeDate", "<=", now)
-      .get();
-    
-    const balExpired = await ordersCollection
-      .where("status", "==", "balance_due_pending")
-      .where("balanceAutoDowngradeDate", "<=", now)
-      .get();
-
-    const updates = [...fmiExpired.docs, ...balExpired.docs].map(async (doc) => {
-      const orderData = { id: doc.id, ...doc.data() };
-      
-      const damagedPrice = 20.00;
-      
-      const customerEmailHtml = DOWNGRADE_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderData.id)
-        .replace(/\*\*NEW_PRICE\*\*/g, damagedPrice.toFixed(2));
-      
-      await transporter.sendMail({
-        from: functions.config().email.user,
-        to: orderData.shippingInfo.email,
-        subject: `Update on Your Order - Order #${orderData.id}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcells.com", "saulsetton16@gmail.com"]
-      });
-      
-      await updateOrderBoth(doc.id, {
-          status: "downgraded_price",
-          reOffer: {
-            newPrice: damagedPrice,
-            reasons: ["Automatically downgraded due to unresolved FMI or balance due issue"],
-            comments: "",
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-      });
-    });
-
-    await Promise.all(updates);
-    console.log(`Automatically downgraded ${updates.length} expired offers.`);
-    return null;
-});

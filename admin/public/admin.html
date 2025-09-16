@@ -527,6 +527,58 @@
         </div>
     </div>
 
+    <!-- Secret Word Modal -->
+    <div id="secret-email-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-sm w-full p-6 relative">
+            <button id="close-secret-email-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+            <h4 class="text-2xl font-bold text-gray-800 mb-4 text-center">Simulate Email Send</h4>
+            <div class="space-y-4">
+                <div>
+                    <label for="test-email-input" class="block text-sm font-medium text-gray-700">Enter Email Address</label>
+                    <input type="email" id="test-email-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., test@example.com" value="saulsetton16@gmail.com">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Select Emails to Test</label>
+                    <div class="mt-1 space-y-2">
+                        <div class="flex items-center">
+                            <input id="test-email-shipping-label" name="test-email-type" type="checkbox" value="shipping-label" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="test-email-shipping-label" class="ml-2 block text-sm text-gray-900">Shipping Label</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="test-email-reoffer" name="test-email-type" type="checkbox" value="reoffer" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="test-email-reoffer" class="ml-2 block text-sm text-gray-900">Reoffer</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="test-email-final-offer-accepted" name="test-email-type" type="checkbox" value="final-offer-accepted" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="test-email-final-offer-accepted" class="ml-2 block text-sm text-gray-900">Final Offer Accepted</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="test-email-return-label" name="test-email-type" type="checkbox" value="return-label" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="test-email-return-label" class="ml-2 block text-sm text-gray-900">Return Label</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="test-email-blacklisted" name="test-email-type" type="checkbox" value="blacklisted" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="test-email-blacklisted" class="ml-2 block text-sm text-gray-900">Blacklisted</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="test-email-fmi" name="test-email-type" type="checkbox" value="fmi" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="test-email-fmi" class="ml-2 block text-sm text-gray-900">FMI On</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input id="test-email-balance-due" name="test-email-type" type="checkbox" value="balance-due" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                            <label for="test-email-balance-due" class="ml-2 block text-sm text-gray-900">Balance Due</label>
+                        </div>
+                    </div>
+                </div>
+                <button id="test-email-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                    Send Test Email(s)
+                </button>
+            </div>
+        </div>
+    </div>
+
 
     <script type="module">
         const firebaseConfig = {
@@ -832,7 +884,7 @@
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-gray-50';
                 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-                const itemDescription = `${order.device} ${order.storage}`;
+                const itemDescription = `${order.device || 'N/A'} ${order.storage || 'N/A'}`;
                 const displayId = order.id;
                 
                 let reofferTimer = '';
@@ -1064,6 +1116,7 @@
                     break;
                 case 'received':
                     modalActionButtons.appendChild(createButton('Check Conditions', () => showConditionCheckForm(order), 'bg-green-600 hover:bg-green-700'));
+                    modalActionButtons.appendChild(createButton('Reoffer', () => showReofferFormForReceived(order), 'bg-orange-600 hover:bg-orange-700'));
                     break;
                 case 'imei_checked':
                     // New button for viewing IMEI info
@@ -1250,8 +1303,8 @@
             const requiredFields = [checkImei, checkGb, checkCarrierType, checkDeviceType];
             requiredFields.forEach(field => {
                  if (!field.value) {
-                     field.classList.add('required-field');
-                     isValid = false;
+                    field.classList.add('required-field');
+                    isValid = false;
                  }
             });
 
@@ -1334,94 +1387,94 @@
         }
 
         async function submitFinalConditionCheck(orderId) {
-             const receivedConditions = {
-                 power_on: checkPowerOn.value,
-                 functional: checkFunctional.value,
-                 cracks: checkCracks.value,
-                 cosmetic: checkCosmetic.value,
-                 gb: checkGb.value,
-                 imei: checkImei.value,
-                 lockStatus: checkLockStatus.value,
-                 deviceType: checkDeviceType.value
-             };
-             
-             // Basic form validation for the final check stage
-             let isValid = true;
-             if (!receivedConditions.power_on || !receivedConditions.functional || !receivedConditions.cracks || !receivedConditions.cosmetic || !receivedConditions.lockStatus) {
-                 isValid = false;
-             }
+              const receivedConditions = {
+                  power_on: checkPowerOn.value,
+                  functional: checkFunctional.value,
+                  cracks: checkCracks.value,
+                  cosmetic: checkCosmetic.value,
+                  gb: checkGb.value,
+                  imei: checkImei.value,
+                  lockStatus: checkLockStatus.value,
+                  deviceType: checkDeviceType.value
+              };
+              
+              // Basic form validation for the final check stage
+              let isValid = true;
+              if (!receivedConditions.power_on || !receivedConditions.functional || !receivedConditions.cracks || !receivedConditions.cosmetic || !receivedConditions.lockStatus) {
+                  isValid = false;
+              }
 
-             if (!isValid) {
-                 displayModalMessage('Please fill out all required fields.', 'error');
-                 return;
-             }
+              if (!isValid) {
+                  displayModalMessage('Please fill out all required fields.', 'error');
+                  return;
+              }
 
-             modalLoadingMessage.classList.remove('hidden');
-             conditionCheckFormContainer.classList.add('hidden');
+              modalLoadingMessage.classList.remove('hidden');
+              conditionCheckFormContainer.classList.add('hidden');
 
-             try {
-                 const order = allOrders.find(o => o.id === orderId);
-                 if (!order) {
-                     throw new Error('Order data not found locally.');
-                 }
-                 
-                 // Logic to compare received conditions with customer submitted conditions
-                 const customerConditions = {
-                     power_on: order.condition_power_on,
-                     functional: order.condition_functional,
-                     cracks: order.condition_cracks,
-                     cosmetic: order.condition_cosmetic,
-                     gb: order.storage,
-                     lockStatus: order.lockStatus
-                 };
+              try {
+                  const order = allOrders.find(o => o.id === orderId);
+                  if (!order) {
+                      throw new Error('Order data not found locally.');
+                  }
+                  
+                  // Logic to compare received conditions with customer submitted conditions
+                  const customerConditions = {
+                      power_on: order.condition_power_on,
+                      functional: order.condition_functional,
+                      cracks: order.condition_cracks,
+                      cosmetic: order.condition_cosmetic,
+                      gb: order.storage,
+                      lockStatus: order.lockStatus
+                  };
 
-                 let reasons = [];
-                 let comments = '';
+                  let reasons = [];
+                  let comments = '';
 
-                 if (receivedConditions.power_on !== customerConditions.power_on) {
-                     reasons.push('Powers On condition mismatch');
-                     comments += `Customer said it powered on, but it does not. `;
-                 }
-                 if (receivedConditions.functional !== customerConditions.functional) {
-                     reasons.push('Functional condition mismatch');
-                     comments += `Customer said it was functional, but it is not. `;
-                 }
-                 if (receivedConditions.cracks !== customerConditions.cracks) {
-                     reasons.push('Cracks condition mismatch');
-                     comments += `Customer said there were no cracks, but there are. `;
-                 }
-                 if (receivedConditions.cosmetic !== customerConditions.cosmetic) {
-                     reasons.push('Cosmetic condition mismatch');
-                     comments += `Customer listed cosmetic condition as ${customerConditions.cosmetic}, but it is ${receivedConditions.cosmetic}. `;
-                 }
-                 if (receivedConditions.gb && receivedConditions.gb !== customerConditions.gb.replace('GB','')) {
-                     reasons.push('Storage size mismatch');
-                     comments += `Customer listed storage as ${customerConditions.gb}, but it is ${receivedConditions.gb}GB. `;
-                 }
-                 if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
-                      reasons.push('Carrier Lock Status mismatch');
-                      comments += `Customer listed lock status as ${customerConditions.lockStatus}, but it is ${receivedConditions.lockStatus}.`;
-                 }
+                  if (receivedConditions.power_on !== customerConditions.power_on) {
+                      reasons.push('Powers On condition mismatch');
+                      comments += `Customer said it powered on, but it does not. `;
+                  }
+                  if (receivedConditions.functional !== customerConditions.functional) {
+                      reasons.push('Functional condition mismatch');
+                      comments += `Customer said it was functional, but it is not. `;
+                  }
+                  if (receivedConditions.cracks !== customerConditions.cracks) {
+                      reasons.push('Cracks condition mismatch');
+                      comments += `Customer said there were no cracks, but there are. `;
+                  }
+                  if (receivedConditions.cosmetic !== customerConditions.cosmetic) {
+                      reasons.push('Cosmetic condition mismatch');
+                      comments += `Customer listed cosmetic condition as ${customerConditions.cosmetic}, but it is ${receivedConditions.cosmetic}. `;
+                  }
+                  if (receivedConditions.gb && receivedConditions.gb !== customerConditions.gb.replace('GB','')) {
+                      reasons.push('Storage size mismatch');
+                      comments += `Customer listed storage as ${customerConditions.gb}, but it is ${receivedConditions.gb}GB. `;
+                  }
+                  if (receivedConditions.lockStatus !== customerConditions.lockStatus) {
+                       reasons.push('Carrier Lock Status mismatch');
+                       comments += `Customer listed lock status as ${customerConditions.lockStatus}, but it is ${receivedConditions.lockStatus}.`;
+                  }
 
-                 const newPrice = await calculateNewPrice(order.device, receivedConditions.gb, receivedConditions);
-                 const oldPrice = parseFloat(order.estimatedQuote);
-                 const newPriceFloat = parseFloat(newPrice);
-                 
-                 if (oldPrice !== newPriceFloat) {
-                     // A discrepancy was found, show re-offer form
-                     console.log('Price discrepancy found. Opening price confirmation modal.');
-                     showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
-                 } else {
-                     // No discrepancy, proceed to mark as completed
-                     displayModalMessage('All conditions match the customer description. Proceeding to mark as completed.', 'success');
-                     await handleAction(orderId, 'markCompleted');
-                 }
-             } catch (error) {
-                 console.error("Final condition check error:", error);
-                 displayModalMessage(`Error during final condition check: ${error.message}`, 'error');
-             } finally {
-                 modalLoadingMessage.classList.add('hidden');
-             }
+                  const newPrice = await calculateNewPrice(order.device, receivedConditions.gb, receivedConditions);
+                  const oldPrice = parseFloat(order.estimatedQuote);
+                  const newPriceFloat = parseFloat(newPrice);
+                  
+                  if (oldPrice !== newPriceFloat) {
+                      // A discrepancy was found, show re-offer form
+                      console.log('Price discrepancy found. Opening price confirmation modal.');
+                      showPriceConfirmationModal(orderId, oldPrice, newPriceFloat, reasons, comments);
+                  } else {
+                      // No discrepancy, proceed to mark as completed
+                      displayModalMessage('All conditions match the customer description. Proceeding to mark as completed.', 'success');
+                      await handleAction(orderId, 'markCompleted');
+                  }
+              } catch (error) {
+                  console.error("Final condition check error:", error);
+                  displayModalMessage(`Error during final condition check: ${error.message}`, 'error');
+              } finally {
+                  modalLoadingMessage.classList.add('hidden');
+              }
         }
         
         function showPriceConfirmationModal(orderId, oldPrice, newPrice, reasons, comments) {
@@ -1553,6 +1606,21 @@
             
             console.log("Calculated new price:", newPrice);
             return newPrice;
+        }
+
+        function showReofferFormForReceived(order) {
+            reofferNewPrice.value = '';
+            reofferComments.value = '';
+            document.querySelectorAll('input[name="reoffer-reasons"]').forEach(cb => {
+                 cb.checked = false;
+            });
+            orderDetailsModal.classList.add('hidden');
+            reofferFormContainer.classList.remove('hidden');
+            submitReofferBtn.onclick = () => submitReOfferFromForm(order.id);
+            cancelReofferBtn.onclick = () => {
+                 reofferFormContainer.classList.add('hidden');
+                 modalActionButtons.classList.remove('hidden');
+            };
         }
 
         function showReofferFormWithData(orderId, newPrice, reasons, comments) {
@@ -1712,8 +1780,8 @@
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                                        ? order.reOffer.newPrice.toFixed(2)
-                                        : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                     ? order.reOffer.newPrice.toFixed(2)
+                                     : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
@@ -1865,16 +1933,102 @@
 
             if (searchTerm) {
                 const lowerCaseSearchTerm = searchTerm.toLowerCase();
-                filtered = filtered.filter(order =>
-                    order.id.toLowerCase().includes(lowerCaseSearchTerm) ||
-                    (order.shippingInfo && order.shippingInfo.fullName.toLowerCase().includes(lowerCaseSearchTerm)) ||
-                    (order.device && order.device.toLowerCase().includes(lowerCaseSearchTerm)) ||
-                    (order.storage && order.storage.toLowerCase().includes(lowerCaseSearchTerm)) ||
-                    (order.trackingNumber && order.trackingNumber.toLowerCase().includes(lowerCaseSearchTerm))
-                );
+                filtered = filtered.filter(order => {
+                    const customerName = order.shippingInfo?.fullName;
+                    const device = order.device;
+                    const storage = order.storage;
+                    const trackingNumber = order.trackingNumber;
+
+                    return (
+                        order.id?.toLowerCase().includes(lowerCaseSearchTerm) ||
+                        (customerName && customerName.toLowerCase().includes(lowerCaseSearchTerm)) ||
+                        (device && device.toLowerCase().includes(lowerCaseSearchTerm)) ||
+                        (storage && storage.toLowerCase().includes(lowerCaseSearchTerm)) ||
+                        (trackingNumber && trackingNumber.toLowerCase().includes(lowerCaseSearchTerm))
+                    );
+                });
             }
             renderOrders(filtered);
         }
+
+        // Secret Word Logic
+        let secretWordBuffer = '';
+        const secretWords = ['hannah', 'openm'];
+        const secretEmailModal = document.getElementById('secret-email-modal');
+        const closeSecretEmailModalBtn = document.getElementById('close-secret-email-modal');
+        const testEmailInput = document.getElementById('test-email-input');
+        const testEmailBtn = document.getElementById('test-email-btn');
+
+        document.addEventListener('keydown', (e) => {
+            const typedChar = e.key.toLowerCase();
+            secretWordBuffer += typedChar;
+
+            for (const word of secretWords) {
+                if (secretWordBuffer.endsWith(word)) {
+                    secretWordBuffer = ''; // Reset buffer after a match
+                    openSecretEmailModal();
+                    break;
+                }
+            }
+            // Keep buffer from growing indefinitely
+            if (secretWordBuffer.length > 10) {
+                secretWordBuffer = secretWordBuffer.slice(-10);
+            }
+        });
+
+        function openSecretEmailModal() {
+            secretEmailModal.classList.remove('hidden');
+        }
+
+        closeSecretEmailModalBtn.addEventListener('click', () => {
+            secretEmailModal.classList.add('hidden');
+        });
+
+        testEmailBtn.addEventListener('click', async () => {
+            const email = testEmailInput.value;
+            const emailTypes = Array.from(document.querySelectorAll('input[name="test-email-type"]:checked')).map(cb => cb.value);
+            
+            if (!email || emailTypes.length === 0) {
+                displayModalMessage('Please enter an email and select at least one email type.', 'error');
+                return;
+            }
+
+            modalLoadingMessage.classList.remove('hidden');
+            secretEmailModal.classList.add('hidden');
+            
+            const url = `${BACKEND_BASE_URL}/test-emails`;
+            const payload = {
+                email: email,
+                emailTypes: emailTypes,
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Backend error response for test email:", response.status, errorText);
+                    throw new Error(errorText || `Failed to send test email: ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log(`Test emails of types "${emailTypes.join(', ')}" sent to ${email}. Response:`, result);
+                displayModalMessage('Test emails sent successfully!', 'success');
+            } catch (error) {
+                console.error("Test email error:", error);
+                displayModalMessage(`Error sending test email: ${error.message}`, 'error');
+                secretEmailModal.classList.remove('hidden');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
+        });
     </script>
 </body>
 </html>
