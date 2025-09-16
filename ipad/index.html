@@ -1,12 +1,186 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Redirecting...</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecondHandCell - iPad Buyback</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="/favicon/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9evSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
     <script>
-      window.location.replace("https://www.secondhandcell.com/ipad-landing.html");
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-17534255111');
     </script>
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f8fafc; /* Tailwind slate-50 */
+            color: #1e293b; /* Tailwind slate-800 */
+        }
+        .user-monogram {
+            display: flex; align-items: center; justify-content: center;
+            width: 2.5rem; height: 2.5rem;
+            border-radius: 9999px;
+            background-color: #dbeafe; color: #1d4ed8; /* blue-100, blue-700 */
+            font-weight: 700; font-size: 1.125rem;
+            cursor: pointer; user-select: none;
+        }
+        .auth-dropdown {
+            position: absolute; right: 0; margin-top: 0.5rem;
+            width: 12rem; background-color: white;
+            border-radius: 0.375rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding-top: 0.25rem; padding-bottom: 0.25rem;
+            z-index: 50;
+        }
+        .modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            opacity: 0; visibility: hidden;
+        }
+        .modal.is-visible {
+            opacity: 1; visibility: visible;
+        }
+        .modal-content {
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-out;
+        }
+        .modal.is-visible .modal-content {
+            transform: translateY(0);
+        }
+         .btn-red-logout {
+            display: block; width: 100%; text-align: left;
+            padding: 0.5rem 1rem; font-size: 0.875rem; color: #dc2626;
+            background-color: transparent; border: none;
+            transition: background-color 0.2s ease; cursor: pointer;
+        }
+        .btn-red-logout:hover { background-color: #fef2f2; }
+    </style>
 </head>
-<body>
-    <p>If you are not redirected automatically, follow this <a href="https://www.secondhandcell.com/ipad-landing.html">link to the new page</a>.</p>
+<body class="bg-slate-50 flex flex-col min-h-screen">
+
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
+        <div class="container mx-auto px-4 py-3 flex items-center md:py-5">
+            <div class="flex-1 flex justify-start items-center logo-container-left">
+                <a href="index.html" class="h-12 md:h-20 w-auto">
+                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+                </a>
+            </div>
+            <div class="flex-none flex-col items-center flex-1 logo-text-container-center">
+                <div class="text-xl md:text-2xl font-extrabold whitespace-nowrap">
+                    <span class="text-black">Second</span><span style="color: #54a929;">HandCell</span>
+                </div>
+                <p class="text-[0.6rem] md:text-sm -mt-1 whitespace-nowrap" style="color: #54a929;">Turn Your Old<span class="text-black"> Phone Into Cash!</span></p>
+            </div>
+            <nav class="flex-1 flex justify-end items-center space-x-4">
+                <div id="authStatusContainer" class="relative inline-block">
+                    <a href="#" id="loginNavBtn" class="bg-blue-600 text-white px-2.5 py-1.5 md:px-4 md:py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm text-xs md:text-base">Login/Sign Up</a>
+                    <div id="userMonogram" class="user-monogram hidden"></div>
+                    <div id="authDropdown" class="auth-dropdown hidden">
+                        <a href="https://secondhandcell.com/my-account.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
+                        <button id="logoutBtn" class="btn-red-logout">Logout</button>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main class="flex-grow flex items-center justify-center">
+        <div class="container mx-auto px-4 py-12 text-center">
+            <div class="bg-white p-8 md:p-12 rounded-2xl shadow-xl max-w-2xl mx-auto">
+                <div class="mx-auto mb-6 w-20 h-20 rounded-full bg-red-100 flex items-center justify-center text-4xl text-red-500">
+                    <i class="fa-solid fa-tablet-screen-button"></i>
+                </div>
+                <h1 class="text-3xl md:text-4xl font-extrabold text-slate-800 mb-4">Sorry, we don't accept iPads at this time.</h1>
+                <p class="text-slate-600 text-lg mb-8">
+                    Our buyback program is not currently available for iPads. We are constantly updating our services, so please check back in the future!
+                </p>
+                <a href="index.html" class="bg-blue-600 text-white px-8 py-4 rounded-full font-bold text-lg shadow-lg hover:bg-blue-700 transition-transform duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300 inline-block">
+                    Sell Another Device?
+                </a>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-slate-800 text-white">
+        <div class="container mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
+                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="index.html" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="#" id="privacyPolicyLink" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="#" id="termsAndConditionsLinkFooter" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                    <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
+                </div>
+                <div class="bg-slate-700 p-6 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
+                    <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                    <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
+                        <label for="footerPromoEmail" class="sr-only">Email Address</label>
+                        <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Sign Up</button>
+                    </form>
+                    <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
+                </div>
+            </div>
+            <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
+        </div>
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "auth.secondhandcell.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.appspot.com",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const authStatusContainer = document.getElementById('authStatusContainer');
+            const userMonogram = document.getElementById('userMonogram');
+            const authDropdown = document.getElementById('authDropdown');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const loginNavBtn = document.getElementById('loginNavBtn');
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    loginNavBtn.classList.add('hidden');
+                    userMonogram.classList.remove('hidden');
+                    const displayName = user.displayName;
+                    const email = user.email;
+                    let initials = displayName ? displayName.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) : (email ? email.charAt(0).toUpperCase() : '');
+                    userMonogram.textContent = initials;
+                } else {
+                    loginNavBtn.classList.remove('hidden');
+                    userMonogram.classList.add('hidden');
+                    authDropdown.classList.add('hidden');
+                }
+            });
+
+            userMonogram.addEventListener('click', (e) => { e.stopPropagation(); authDropdown.classList.toggle('hidden'); });
+            document.addEventListener('click', (e) => { if (!authStatusContainer.contains(e.target)) { authDropdown.classList.add('hidden'); } });
+            logoutBtn.addEventListener('click', () => signOut(auth));
+            loginNavBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Redirect to login modal on main page or show a modal here
+                // For simplicity, redirecting to index.html where modal logic exists
+                window.location.href = 'index.html#login';
+            });
+        });
+    </script>
+
 </body>
 </html>
