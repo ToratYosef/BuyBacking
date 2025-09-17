@@ -1,13 +1,17 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Anyone can read all documents.
     match /{document=**} {
-      // Anyone can read the data.
       allow read: if true;
+      // Only signed-in users can write to all other collections.
+      allow write: if request.auth != null;
+    }
 
-      // Only signed-in users can write (create, update, delete).
-      allow write: if request
-      .auth != null;
+    // New, corrected rule for the 'chats' collection and all its subcollections.
+    // This allows both signed-in and guest users to read and write chat messages.
+    match /chats/{document=**} {
+      allow read, write: if true;
     }
   }
 }

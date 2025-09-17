@@ -12,6 +12,7 @@ const db = admin.firestore();
 const ordersCollection = db.collection("orders");
 const usersCollection = db.collection("users");
 const adminsCollection = db.collection("admins");
+const chatsCollection = db.collection("chats");
 
 const app = express();
 
@@ -40,7 +41,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // --- EMAIL HTML Templates (unchanged from your version) ---
-const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Please click the button below to download and print your label. Affix it to your package and drop it off at any USPS location.</p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
+const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 const ORDER_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Order Has Been Received!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content h2{color:#333333;font-size:20px;margin-top:24px;margin-bottom:8px}.order-id{color:#007bff;font-weight:bold}ul{list-style-type:disc;padding-left:20px;margin:0 0 16px}ul li{margin-bottom:8px}.important-note{background-color:#fff3cd;border-left:4px solid #ffc107;padding:16px;margin-top:24px;font-size:14px;color:#856404}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1>Your SecondHandCell Order #**ORDER_ID** Has Been Received!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for choosing SecondHandCell! We've successfully received your order request for your **DEVICE_NAME**.</p><p>Your Order ID is <strong class="order-id">#**ORDER_ID**</strong>.</p><h2>Next Steps: Preparing Your Device for Shipment</h2><p>Before you send us your device, it's crucial to prepare it correctly. Please follow these steps:</p><ul><li><strong>Backup Your Data:</strong> Ensure all important photos, contacts, and files are backed up to a cloud service or another device.</li><li><strong>Factory Reset:</strong> Perform a full factory reset on your device to erase all personal data. This is vital for your privacy and security.</li><li><strong>Remove Accounts:</strong> Sign out of all accounts (e.g., Apple ID/iCloud, Google Account, Samsung Account).<ul><li>For Apple devices, turn off "Find My iPhone" (FMI).</li><li>For Android devices, ensure Factory Reset Protection (FRP) is disabled.</li></ul></li><li><strong>Remove SIM Card:</strong> Take out any physical SIM cards from the device.</li><li><strong>Remove Accessories:</strong> Do not include cases, screen protectors, or chargers unless specifically instructed.</li></ul><div class="important-note"><p><strong>Important:</strong> We cannot process devices with <strong>Find My iPhone (FMI)</strong>, <strong>Factory Reset Protection (FRP)</strong>, <strong>stolen/lost status</strong>, <strong>outstanding balance due</strong>, or <strong>blacklisted IMEI</strong>. Please ensure your device meets these conditions to avoid delays or rejection.</p></div>**SHIPPING_INSTRUCTION**</div><div class="footer"><p>The SecondHandCell Team</p></div></div></body></html>`;
 const DEVICE_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Device Has Arrived!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}.order-id{color:#007bff;font-weight:bold}</style></head><body><div class="email-container"><div class="header"><h1>Your Device Has Arrived!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p><p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p></div><div class="footer"><p>Thank thank you for choosing SecondHandCell.</p></div></div></body></html>`;
@@ -644,7 +645,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
           htmlBody = BAL_DUE_EMAIL_HTML
             .replace(/\*\*CUSTOMER_NAME\*\*/g, mockOrderData.shippingInfo.fullName)
             .replace(/\*\*ORDER_ID\*\*/g, mockOrderData.id)
-            .replace(/\*\*FINANCIAL_STATUS\*\*/g, "an outstanding balance");
+            .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
           break;
         default:
           return Promise.resolve();
@@ -658,7 +659,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
       };
 
       return transporter.sendMail(mailOptions);
-  });
+    });
 
   await Promise.all(mailPromises);
   return { message: "Test emails sent successfully." };
@@ -867,18 +868,19 @@ app.post("/generate-label/:id", async (req, res) => {
     const buyerShippingInfo = order.shippingInfo;
     const orderIdForLabel = order.id || "N/A";
 
-    const packageData = {
+    // Define package data for the outbound and return labels
+    // Outbound label is for the shipping kit (box + padding)
+    const outboundPackageData = {
       service_code: "usps_first_class_mail",
-      dimensions: {
-        unit: "inch",
-        height: 2,
-        width: 4,
-        length: 6,
-      },
-      weight: {
-        ounces: 8,
-        unit: "ounce",
-      },
+      dimensions: { unit: "inch", height: 2, width: 4, length: 6 },
+      weight: { ounces: 4, unit: "ounce" }, // Kit weighs 4oz
+    };
+
+    // Return label is for the phone inside the kit
+    const inboundPackageData = {
+      service_code: "usps_first_class_mail",
+      dimensions: { unit: "inch", height: 2, width: 4, length: 6 },
+      weight: { ounces: 8, unit: "ounce" }, // Phone weighs 8oz
     };
 
     const swiftBuyBackAddress = {
@@ -909,22 +911,20 @@ app.post("/generate-label/:id", async (req, res) => {
     let customerMailOptions;
 
     if (order.shippingPreference === "Shipping Kit Requested") {
+      // Create outbound label for the kit
       const outboundLabelData = await createShipEngineLabel(
         swiftBuyBackAddress,
         buyerAddress,
         `${orderIdForLabel}-OUTBOUND-KIT`,
-        {
-          service_code: "usps_first_class_mail",
-          dimensions: { height: 2, width: 4, length: 6 },
-          weight: { ounces: 8, unit: "ounce" }
-        }
+        outboundPackageData // Use the 4oz package data
       );
 
+      // Create inbound label for the phone
       const inboundLabelData = await createShipEngineLabel(
         buyerAddress,
         swiftBuyBackAddress,
         `${orderIdForLabel}-INBOUND-DEVICE`,
-        packageData
+        inboundPackageData // Use the 8oz package data
       );
 
       customerLabelData = outboundLabelData;
@@ -935,6 +935,7 @@ app.post("/generate-label/:id", async (req, res) => {
         outboundTrackingNumber: outboundLabelData.tracking_number,
         inboundLabelUrl: inboundLabelData.label_download?.pdf,
         inboundTrackingNumber: inboundLabelData.tracking_number,
+        // The uspsLabelUrl and trackingNumber fields will hold the INBOUND label data
         uspsLabelUrl: inboundLabelData.label_download?.pdf,
         trackingNumber: inboundLabelData.tracking_number,
       };
@@ -954,11 +955,12 @@ app.post("/generate-label/:id", async (req, res) => {
       };
 
     } else if (order.shippingPreference === "Email Label Requested") {
+      // For a single label request, we only create the inbound label
       customerLabelData = await createShipEngineLabel(
         buyerAddress,
         swiftBuyBackAddress,
         `${orderIdForLabel}-INBOUND-DEVICE`,
-        packageData
+        inboundPackageData // Use the 8oz package data
       );
 
       const labelDownloadLink = customerLabelData.label_download?.pdf;
@@ -1312,6 +1314,35 @@ app.post("/return-phone-action", async (req, res) => {
   }
 });
 
+app.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const orderRef = ordersCollection.doc(orderId);
+    const orderDoc = await orderRef.get();
+
+    if (!orderDoc.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const orderData = orderDoc.data();
+    const userId = orderData.userId;
+
+    // Delete from the main collection
+    await orderRef.delete();
+
+    // If a userId is associated, delete from the user's subcollection as well
+    if (userId) {
+      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
+      await userOrderRef.delete();
+    }
+
+    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
+  } catch (err) {
+    console.error("Error deleting order:", err);
+    res.status(500).json({ error: "Failed to delete order." });
+  }
+});
+
 exports.autoAcceptOffers = functions.pubsub
   .schedule("every 24 hours")
   .onRun(async (context) => {
@@ -1355,6 +1386,12 @@ exports.autoAcceptOffers = functions.pubsub
 
 exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
   try {
+    // Do not create a user record if the user is anonymous (no email)
+    if (!user.email) {
+      console.log(`Anonymous user created: ${user.uid}. Skipping Firestore record creation.`);
+      return null;
+    }
+
     console.log(`New user created: ${user.uid}`);
     const userData = {
       uid: user.uid,
@@ -1416,6 +1453,72 @@ exports.onChatTransferUpdate = functions.firestore
       console.log(
         `Notification sent for chat transfer to admin ${targetAdminUid} for chat ${context.params.chatId}.`
       );
+    }
+
+    return null;
+  });
+
+exports.onNewChatMessage = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // Check if the message is from a user and is the first message in the chat subcollection.
+    // This is a robust check to avoid sending emails for every message.
+    const messagesSnapshot = await db.collection(`chats/${chatId}/messages`)
+      .orderBy('createdAt')
+      .limit(2)
+      .get();
+      
+    if (messagesSnapshot.docs.length === 1 && newMessage.senderType === "user") {
+      const chatDocRef = db.collection("chats").doc(chatId);
+      const chatDoc = await chatDocRef.get();
+      const chatData = chatDoc.data();
+
+      if (!chatDoc.exists || (!chatData.ownerUid && !chatData.guestId)) {
+        console.log(`Chat ${chatId} not found or no user associated. Exiting.`);
+        return null;
+      }
+      
+      const customerName = chatData.ownerUid || chatData.guestId;
+      
+      const mailOptions = {
+        from: functions.config().email.user,
+        to: "support@secondhandcell.com",
+        bcc: "saulsetton16@gmail.com",
+        subject: "New Chat: Respond Quick",
+        html: `
+          <p>A new chat has been started by user: <strong>${customerName}</strong>.</p>
+          <p>Please respond quickly to assist the customer.</p>
+          <a href="https://secondhandcell.com/chat/chat.html?chatId=${chatId}" 
+              style="display: inline-block; padding: 10px 20px; font-size: 16px; color: #ffffff; background-color: #4CAF50; text-decoration: none; border-radius: 5px;">
+              Go to Chat
+          </a>
+        `,
+      };
+
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log(`Email sent for new chat: ${chatId}`);
+
+        // OPTIONAL: Send a push notification to admins as well.
+        await sendAdminPushNotification(
+          "New Chat Alert! 💬",
+          `New chat started by ${customerName}.`,
+          {
+            chatId: chatId,
+            userId: chatData.ownerUid,
+            action: "open_chat",
+            relatedDocType: "chat",
+            relatedDocId: chatId,
+            relatedUserId: chatData.ownerUid,
+          }
+        );
+
+      } catch (error) {
+        console.error("Error sending email or notification for new chat:", error);
+      }
     }
 
     return null;
@@ -1581,6 +1684,35 @@ app.post("/orders/:id/fmi-cleared", async (req, res) => {
     }
 });
 
+app.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const orderRef = ordersCollection.doc(orderId);
+    const orderDoc = await orderRef.get();
+
+    if (!orderDoc.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const orderData = orderDoc.data();
+    const userId = orderData.userId;
+
+    // Delete from the main collection
+    await orderRef.delete();
+
+    // If a userId is associated, delete from the user's subcollection as well
+    if (userId) {
+      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
+      await userOrderRef.delete();
+    }
+
+    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
+  } catch (err) {
+    console.error("Error deleting order:", err);
+    res.status(500).json({ error: "Failed to delete order." });
+  }
+});
+
 exports.autoAcceptOffers = functions.pubsub
   .schedule("every 24 hours")
   .onRun(async (context) => {
@@ -1624,6 +1756,12 @@ exports.autoAcceptOffers = functions.pubsub
 
 exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
   try {
+    // Do not create a user record if the user is anonymous (no email)
+    if (!user.email) {
+      console.log(`Anonymous user created: ${user.uid}. Skipping Firestore record creation.`);
+      return null;
+    }
+
     console.log(`New user created: ${user.uid}`);
     const userData = {
       uid: user.uid,
@@ -1685,6 +1823,72 @@ exports.onChatTransferUpdate = functions.firestore
       console.log(
         `Notification sent for chat transfer to admin ${targetAdminUid} for chat ${context.params.chatId}.`
       );
+    }
+
+    return null;
+  });
+
+exports.onNewChatMessage = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // Check if the message is from a user and is the first message in the chat subcollection.
+    // This is a robust check to avoid sending emails for every message.
+    const messagesSnapshot = await db.collection(`chats/${chatId}/messages`)
+      .orderBy('createdAt')
+      .limit(2)
+      .get();
+      
+    if (messagesSnapshot.docs.length === 1 && newMessage.senderType === "user") {
+      const chatDocRef = db.collection("chats").doc(chatId);
+      const chatDoc = await chatDocRef.get();
+      const chatData = chatDoc.data();
+
+      if (!chatDoc.exists || (!chatData.ownerUid && !chatData.guestId)) {
+        console.log(`Chat ${chatId} not found or no user associated. Exiting.`);
+        return null;
+      }
+      
+      const customerName = chatData.ownerUid || chatData.guestId;
+      
+      const mailOptions = {
+        from: functions.config().email.user,
+        to: "support@secondhandcell.com",
+        bcc: "saulsetton16@gmail.com",
+        subject: "New Chat: Respond Quick",
+        html: `
+          <p>A new chat has been started by user: <strong>${customerName}</strong>.</p>
+          <p>Please respond quickly to assist the customer.</p>
+          <a href="https://secondhandcell.com/chat/chat.html?chatId=${chatId}" 
+              style="display: inline-block; padding: 10px 20px; font-size: 16px; color: #ffffff; background-color: #4CAF50; text-decoration: none; border-radius: 5px;">
+              Go to Chat
+          </a>
+        `,
+      };
+
+      try {
+        await transporter.sendMail(mailOptions);
+        console.log(`Email sent for new chat: ${chatId}`);
+
+        // OPTIONAL: Send a push notification to admins as well.
+        await sendAdminPushNotification(
+          "New Chat Alert! 💬",
+          `New chat started by ${customerName}.`,
+          {
+            chatId: chatId,
+            userId: chatData.ownerUid,
+            action: "open_chat",
+            relatedDocType: "chat",
+            relatedDocId: chatId,
+            relatedUserId: chatData.ownerUid,
+          }
+        );
+
+      } catch (error) {
+        console.error("Error sending email or notification for new chat:", error);
+      }
     }
 
     return null;
