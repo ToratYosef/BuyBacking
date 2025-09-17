@@ -162,12 +162,10 @@ const BLACKLISTED_EMAIL_HTML = `
     <div class="email-container">
       <div class="header">
         <h1>Important Notice Regarding Your Device</h1>
+        <br>
         
 
-
-
 [Image of a warning sign]
-
 
       </div>
       <div class="content">
@@ -673,12 +671,12 @@ async function sendMultipleTestEmails(email, emailTypes) {
                               <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderToUse.id}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
                                 Accept Offer ($${orderToUse.reOffer.newPrice.toFixed(2)})
                               </a>
-                          </td>
+                            </td>
                           </tr>
                         </tbody>
                       </table >
-                  </td>
-                  <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                    </td>
+                    <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
                       <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
                         <tbody>
                           <tr>
@@ -686,18 +684,18 @@ async function sendMultipleTestEmails(email, emailTypes) {
                               <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderToUse.id}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
                                 Return Phone Now
                               </a>
-                          </td>
+                            </td>
                           </tr>
                         </tbody>
                       </table>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SecondHandCell Team</p>
-          </div>
-        `;
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SecondHandCell Team</p>
+            </div>
+          `;
           break;
         case "final-offer-accepted":
           orderToUse = mockOrderData;
@@ -756,10 +754,13 @@ async function sendMultipleTestEmails(email, emailTypes) {
             </div>
             <!-- End TrustBox widget -->
           `;
+          
           let trustboxHtml = "";
+          // Check if there was no re-offer and no return
           if (!orderToUse.reOffer && !orderToUse.returnLabelUrl) {
             trustboxHtml = TRUSTBOX_WIDGET;
           }
+
           htmlBody = ORDER_COMPLETED_EMAIL_HTML
             .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
             .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
@@ -1685,9 +1686,9 @@ app.post("/check-esn", async (req, res) => {
       return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
     }
 
-    const apiUrl = "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+    const apiUrl = "https://cloudportal.phonecheck.com/cloud/cloudDB/CheckEsn/";
     const requestPayload = new URLSearchParams();
-    requestPayload.append("ApiKey", "5fed1416-159a-4c37-b9e4-49053fc9a399");
+    requestPayload.append("ApiKey", "308b6790-b767-4b43-9065-2c00e13cdbf7");
     requestPayload.append("Username", "aecells1");
     requestPayload.append("IMEI", imei);
     requestPayload.append("carrier", carrier);
@@ -1697,7 +1698,7 @@ app.post("/check-esn", async (req, res) => {
 
     const response = await axios.post(apiUrl, requestPayload.toString(), {
       headers: {
-        "Content-Type": "application/form-data",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
     });
 
@@ -1844,186 +1845,5 @@ app.delete("/orders/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete order." });
   }
 });
-
-exports.autoAcceptOffers = functions.pubsub
-  .schedule("every 24 hours")
-  .onRun(async (context) => {
-    const now = admin.firestore.Timestamp.now();
-    const expiredOffers = await ordersCollection
-      .where("status", "==", "re-offered-pending")
-      .where("reOffer.autoAcceptDate", "<=", now)
-      .get();
-
-    const updates = expiredOffers.docs.map(async (doc) => {
-      const orderData = { id: doc.id, ...doc.data() };
-
-      const customerHtmlBody = `
-        <p>Hello ${orderData.shippingInfo.fullName},</p>
-        <p>As we have not heard back from you regarding your revised offer, it has been automatically accepted as per our terms and conditions.</p>
-        <p>Payment processing for the revised amount of <strong>$${orderData.reOffer.newPrice.toFixed(
-          2
-        )}</strong> will now begin.</p>
-        <p>Thank you,</p>
-        <p>The SecondHandCell Team</p>
-      `;
-
-      await transporter.sendMail({
-        from: functions.config().email.user,
-        to: orderData.shippingInfo.email,
-        subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
-        html: customerHtmlBody,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      await updateOrderBoth(doc.id, {
-        status: "re-offered-auto-accepted",
-        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    });
-
-    await Promise.all(updates);
-    console.log(`Auto-accepted ${updates.length} expired offers.`);
-    return null;
-  });
-
-exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
-  try {
-    // Do not create a user record if the user is anonymous (no email)
-    if (!user.email) {
-      console.log(`Anonymous user created: ${user.uid}. Skipping Firestore record creation.`);
-      return null;
-    }
-
-    console.log(`New user created: ${user.uid}`);
-    const userData = {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName || null,
-      phoneNumber: user.phoneNumber || null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await usersCollection.doc(user.uid).set(userData);
-    console.log(`User data for ${user.uid} saved to Firestore.`);
-  } catch (error) {
-    console.error("Error saving user data to Firestore:", error);
-  }
-});
-
-exports.onChatTransferUpdate = functions.firestore
-  .document("chats/{chatId}")
-  .onUpdate(async (change, context) => {
-    const newChatData = change.after.data();
-    const oldChatData = change.before.data();
-
-    const newTransferRequest = newChatData.transferRequest;
-    const oldTransferRequest = oldChatData.transferRequest;
-
-    if (
-      newTransferRequest &&
-      newTransferRequest.status === "pending" &&
-      (!oldTransferRequest || oldTransferRequest.status !== "pending")
-    ) {
-      const targetAdminUid = newTransferRequest.toUid;
-      const fromAdminName = newTransferRequest.fromName;
-      const chatUser =
-        newTransferRequest.userDisplayName ||
-        newChatData.ownerUid ||
-        newChatData.guestId;
-
-      const notificationMessage = `Chat transfer from ${fromAdminName} for ${chatUser}.`;
-
-      await sendAdminPushNotification("Incoming Chat Transfer!", notificationMessage, {
-        chatId: context.params.chatId,
-        userId: newChatData.ownerUid,
-        action: "open_chat",
-        relatedDocType: "chat",
-        relatedDocId: context.params.chatId,
-        relatedUserId: newChatData.ownerUid,
-      }).catch((e) => console.error("FCM Send Error (Chat Transfer):", e));
-
-      await addAdminFirestoreNotification(
-        targetAdminUid,
-        notificationMessage,
-        "chat",
-        context.params.chatId,
-        newChatData.ownerUid
-      ).catch((e) =>
-        console.error("Firestore Notification Error (Chat Transfer):", e)
-      );
-
-      console.log(
-        `Notification sent for chat transfer to admin ${targetAdminUid} for chat ${context.params.chatId}.`
-      );
-    }
-
-    return null;
-  });
-
-exports.onNewChatMessage = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // Check if the message is from a user and is the first message in the chat subcollection.
-    // This is a robust check to avoid sending emails for every message.
-    const messagesSnapshot = await db.collection(`chats/${chatId}/messages`)
-      .orderBy('createdAt')
-      .limit(2)
-      .get();
-      
-    if (messagesSnapshot.docs.length === 1 && newMessage.senderType === "user") {
-      const chatDocRef = db.collection("chats").doc(chatId);
-      const chatDoc = await chatDocRef.get();
-      const chatData = chatDoc.data();
-
-      if (!chatDoc.exists || (!chatData.ownerUid && !chatData.guestId)) {
-        console.log(`Chat ${chatId} not found or no user associated. Exiting.`);
-        return null;
-      }
-      
-      const customerName = chatData.ownerUid || chatData.guestId;
-      
-      const mailOptions = {
-        from: functions.config().email.user,
-        to: "support@secondhandcell.com",
-        bcc: "saulsetton16@gmail.com",
-        subject: "New Chat: Respond Quick",
-        html: `
-          <p>A new chat has been started by user: <strong>${customerName}</strong>.</p>
-          <p>Please respond quickly to assist the customer.</p>
-          <a href="https://secondhandcell.com/chat/chat.html?chatId=${chatId}" 
-              style="display: inline-block; padding: 10px 20px; font-size: 16px; color: #ffffff; background-color: #4CAF50; text-decoration: none; border-radius: 5px;">
-              Go to Chat
-          </a>
-        `,
-      };
-
-      try {
-        await transporter.sendMail(mailOptions);
-        console.log(`Email sent for new chat: ${chatId}`);
-
-        // OPTIONAL: Send a push notification to admins as well.
-        await sendAdminPushNotification(
-          "New Chat Alert! 💬",
-          `New chat started by ${customerName}.`,
-          {
-            chatId: chatId,
-            userId: chatData.ownerUid,
-            action: "open_chat",
-            relatedDocType: "chat",
-            relatedDocId: chatId,
-            relatedUserId: chatData.ownerUid,
-          }
-        );
-
-      } catch (error) {
-        console.error("Error sending email or notification for new chat:", error);
-      }
-    }
-
-    return null;
-  });
 
 exports.api = functions.https.onRequest(app);
