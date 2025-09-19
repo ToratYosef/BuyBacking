@@ -1,17 +1,30 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Anyone can read all documents.
+    // This general rule allows any authenticated user to read from any collection.
+    // It's a broad rule for administrative access.
     match /{document=**} {
-      allow read: if true;
-      // Only signed-in users can write to all other collections.
-      allow write: if request.auth != null;
+      allow read: if request.auth != null;
     }
 
-    // New, corrected rule for the 'chats' collection and all its subcollections.
-    // This allows both signed-in and guest users to read and write chat messages.
+    // This rule specifically allows authenticated users to read and write to the
+    // device_clicks collection and any of its documents.
+    match /device_clicks/{document=**} {
+        allow read, write: if request.auth != null;
+    }
+    
+    // Allows anonymous and authenticated users to read and write to chats.
     match /chats/{document=**} {
       allow read, write: if true;
+    }
+
+    // Allows authenticated users to read from the 'users' and 'admins' collections.
+    match /users/{document} {
+      allow read: if request.auth != null;
+    }
+    
+    match /admins/{document} {
+      allow read: if request.auth != null;
     }
   }
 }
