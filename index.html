@@ -721,7 +721,7 @@
         <div id="chat-window">
             <div class="bg-blue-700 text-white p-4 flex justify-between items-center">
                 <h3 class="font-bold text-lg">Customer Support</h3>
-                <div class="flex items-center space-x-2">                 <button id="chat-order-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="View My Orders">
+                <div class="flex items-center space-x-2">     <button id="chat-order-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="View My Orders">
                         <i class="fa-solid fa-box-open text-xl"></i>
                     </button>
                     <button id="chat-minimize-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="Minimize Chat">
@@ -743,7 +743,7 @@
                     </button>
                 </div>
                 <div id="order-list" class="space-y-2 max-h-48 overflow-y-auto">
-                                                 </div>
+                                                            </div>
             </div>
 
             <div id="typing-indicator-container" class="p-2 hidden">
@@ -789,8 +789,8 @@
                         </div>
                     </div>
                     <div class="mb-4">
-                                 <label for="survey-comments" class="font-semibold text-slate-700 block mb-2">Additional Comments (optional):</label>
-                                 <textarea id="survey-comments" rows="2" class="w-full border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                               <label for="survey-comments" class="font-semibold text-slate-700 block mb-2">Additional Comments (optional):</label>
+                               <textarea id="survey-comments" rows="2" class="w-full border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                     </div>
                     <button type="submit" class="btn-dark-slate">Submit Feedback</button>
                 </form>
@@ -817,7 +817,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where, runTransaction, FieldValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Your Firebase configuration
         const firebaseConfig = {
@@ -837,15 +837,43 @@
 
         // --- Firebase Click Tracker Function ---
         const trackButtonClick = async (buttonName) => {
+            const cleanedButtonName = buttonName.replace(/\s/g, '_').replace(/'/g, '');
+            const buttonDocRef = doc(db, "button_clicks", cleanedButtonName);
+            const userId = auth.currentUser ? auth.currentUser.uid : getOrCreateGuestId();
+
             try {
-                await addDoc(collection(db, "button_clicks"), {
-                    button: buttonName,
-                    timestamp: serverTimestamp(),
-                    userId: auth.currentUser ? auth.currentUser.uid : 'guest'
+                await runTransaction(db, async (transaction) => {
+                    const buttonDoc = await transaction.get(buttonDocRef);
+
+                    if (!buttonDoc.exists()) {
+                        // If it doesn't exist, create it with initial values
+                        transaction.set(buttonDocRef, {
+                            count: 1,
+                            buttonName: buttonName,
+                            history: [{
+                                timestamp: serverTimestamp(),
+                                userId: userId
+                            }],
+                            lastClicked: serverTimestamp()
+                        });
+                    } else {
+                        // If it exists, update it atomically
+                        const data = buttonDoc.data();
+                        const updatedHistory = [...data.history, {
+                            timestamp: serverTimestamp(),
+                            userId: userId
+                        }];
+
+                        transaction.update(buttonDocRef, {
+                            count: FieldValue.increment(1),
+                            history: updatedHistory,
+                            lastClicked: serverTimestamp()
+                        });
+                    }
                 });
-                console.log(`Click on '${buttonName}' successfully tracked.`);
+                console.log(`Click on '${buttonName}' successfully tracked and updated.`);
             } catch (error) {
-                console.error("Error tracking button click:", error);
+                console.error("Transaction failed: ", error);
             }
         };
         // ----------------------------------------
@@ -904,7 +932,7 @@
 
             document.querySelectorAll('.feature-card h3').forEach(card => {
                 card.addEventListener('click', () => {
-                    trackButtonClick(`Feature_Card_${card.textContent.trim().replace(/\s/g, '_')}`);
+                    trackButtonClick(`Feature_Card_${card.textContent.trim()}`);
                 });
             });
             

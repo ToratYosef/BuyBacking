@@ -8,10 +8,19 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // New, corrected rule for the 'chats' collection and all its subcollections.
-    // This allows both signed-in and guest users to read and write chat messages.
+    // This allows anyone to read and write chat messages.
     match /chats/{document=**} {
       allow read, write: if true;
+    }
+    
+    // 💡 Add this new rule to allow anyone to write to device_clicks.
+    match /device_clicks/{document=**} {
+      allow write: if true;
+    }
+    
+    // 💡 Add this new rule to allow anyone to write to device_clicks.
+    match /device_clicks/{document=**} {
+      allow write: if true;
     }
   }
 }

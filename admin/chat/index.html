@@ -36,6 +36,7 @@
         .chat-bubble-user { background-color: #f1f5f9; color: #1e293b; } /* Lighter gray for user */
         .chat-bubble-admin { background-color: #3b82f6; color: #ffffff; } /* Solid blue for admin */
         .chat-bubble-system { background-color: #fef08a; color: #a16207; } /* Yellow for system */
+        .chat-bubble-bot { background-color: #e2e8f0; color: #475569; } /* Neutral gray for the bot */
         .modal { transition: opacity 0.3s ease, visibility 0.3s ease; }
         .modal-content { transition: transform 0.3s ease; }
         .tab-btn.active { border-color: #2563eb; color: #2563eb; font-weight: 600; }
@@ -46,6 +47,8 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
+    <!-- Notification Sound -->
+    <audio id="chat-notification-sound" src="https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3" preload="auto"></audio>
 
     <!-- LOGIN SCREEN -->
     <div id="login-screen" class="flex items-center justify-center min-h-screen">
@@ -276,6 +279,7 @@
         const notificationList = document.getElementById('notification-list');
         const markAllReadBtn = document.getElementById('mark-all-read-btn');
         const inAppNotification = document.getElementById('in-app-notification');
+        const chatNotificationSound = document.getElementById('chat-notification-sound');
 
         // --- State Variables ---
         let currentAdmin = null;
@@ -417,6 +421,11 @@
                     const isClosed = chatData.status === 'ended_by_agent' || chatData.status === 'ended_by_user';
                     const hasUnread = chatData.lastMessageSeenByAdmin === false && chatData.lastMessageSender !== currentAdmin?.uid;
 
+                    // Play sound for new message if not already viewing this chat
+                    if (hasUnread && chatId !== activeChatIdState) {
+                        chatNotificationSound.play();
+                    }
+
                     const newItem = document.createElement('div');
                     newItem.id = `chat-item-${chatId}`;
                     newItem.className = `p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors ${activeChatIdState === chatId ? 'bg-blue-50' : ''} ${hasUnread ? 'font-semibold' : ''}`;
@@ -532,17 +541,18 @@
         function renderMessage(msg) {
             const isAdminMessage = msg.sender === currentAdmin.uid;
             const isSystemMessage = msg.type === 'system';
+            const isBotMessage = msg.senderType === 'bot';
             
-            let bubbleClass = isSystemMessage ? 'chat-bubble-system text-center text-sm italic' : (isAdminMessage ? 'chat-bubble-admin' : 'chat-bubble-user');
-            let alignment = isSystemMessage ? 'self-center' : (isAdminMessage ? 'self-end' : 'self-start');
+            let bubbleClass = isSystemMessage ? 'chat-bubble-system text-center text-sm italic' : (isBotMessage ? 'chat-bubble-bot' : (isAdminMessage ? 'chat-bubble-admin' : 'chat-bubble-user'));
+            let alignment = isSystemMessage ? 'self-center' : (isBotMessage ? 'self-start' : (isAdminMessage ? 'self-end' : 'self-start'));
             
             const messageDiv = document.createElement('div');
             messageDiv.className = `p-3 rounded-xl max-w-[85%] break-words ${bubbleClass} ${alignment}`;
             
             if (!isSystemMessage) {
-                const senderPrefix = isAdminMessage ? 'You' : 'User';
-                const senderColor = isAdminMessage ? 'text-white' : 'text-slate-800'; // Adjusted color for contrast
-                messageDiv.innerHTML = `<p class="text-xs font-bold mb-1 ${senderColor}">${senderPrefix}</p>`;
+                const senderName = isBotMessage ? 'Auto-responder' : (isAdminMessage ? 'You' : 'User');
+                const senderColor = isAdminMessage ? 'text-white' : 'text-slate-800';
+                messageDiv.innerHTML = `<p class="text-xs font-bold mb-1 ${senderColor}">${senderName}</p>`;
             }
             
             messageDiv.innerHTML += `<p>${msg.text}</p>`;

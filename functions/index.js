@@ -18,7 +18,7 @@ const app = express();
 
 const allowedOrigins = [
   "https://toratyosef.github.io",
-  "https://buyback-a0f05.web.app",
+  "https://buyback-a0f05.firebaseapp.com",
   "https://secondhandcell.com",
   "https://www.secondhandcell.com",
 ];
@@ -165,7 +165,11 @@ const BLACKLISTED_EMAIL_HTML = `
         <br>
         
 
+
+
 [Image of a warning sign]
+
+
 
       </div>
       <div class="content">
@@ -733,7 +737,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
           subject = `[TEST] Action Required for Order #${orderToUse.id}`;
           htmlBody = FMI_EMAIL_HTML
             .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
+            .replace(/\*\*ORDER_ID\*\*/g, orderToUsem.id)
             .replace(/\*\*CONFIRM_URL\*\*/g, `https://example.com/mock-confirm-fmi`);
           break;
         case "balance-due":
@@ -1251,7 +1255,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
                       </td>
                     </tr>
                   </tbody>
-                </table>
+                </table >
               </td>
               <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
                 <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
@@ -1478,6 +1482,30 @@ app.delete("/orders/:id", async (req, res) => {
   }
 });
 
+// A new route to handle sending a general email
+app.post("/send-email", async (req, res) => {
+    try {
+        const { to, bcc, subject, html } = req.body;
+        if (!to || !subject || !html) {
+            return res.status(400).json({ error: "Missing required fields: to, subject, and html are required." });
+        }
+
+        const mailOptions = {
+            from: functions.config().email.user,
+            to: to,
+            subject: subject,
+            html: html,
+            bcc: bcc || [], // Use the bcc from the request body, or an empty array if not provided
+        };
+
+        await transporter.sendMail(mailOptions);
+        res.status(200).json({ message: "Email sent successfully." });
+    } catch (error) {
+        console.error("Error sending email:", error);
+        res.status(500).json({ error: "Failed to send email." });
+    }
+});
+
 exports.autoAcceptOffers = functions.pubsub
   .schedule("every 24 hours")
   .onRun(async (context) => {
@@ -1593,26 +1621,28 @@ exports.onChatTransferUpdate = functions.firestore
     return null;
   });
 
+// This function now sends the email and push notification on the *first* user message.
 exports.onNewChatMessage = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
     const newMessage = snap.data();
     const chatId = context.params.chatId;
 
-    // Check if the message is from a user and is the first message in the chat subcollection.
-    // This is a robust check to avoid sending emails for every message.
+    // We only want to notify admins on the first user message.
     const messagesSnapshot = await db.collection(`chats/${chatId}/messages`)
-      .orderBy('createdAt')
+      .orderBy('timestamp')
       .limit(2)
       .get();
       
+    // Check if this is the first message in the chat from a user (index 0)
+    // and that the chat has not been claimed by an agent yet.
     if (messagesSnapshot.docs.length === 1 && newMessage.senderType === "user") {
       const chatDocRef = db.collection("chats").doc(chatId);
       const chatDoc = await chatDocRef.get();
       const chatData = chatDoc.data();
 
-      if (!chatDoc.exists || (!chatData.ownerUid && !chatData.guestId)) {
-        console.log(`Chat ${chatId} not found or no user associated. Exiting.`);
+      // Only proceed if no agent has joined yet
+      if (chatData.agentHasJoined) {
         return null;
       }
       
@@ -1626,9 +1656,9 @@ exports.onNewChatMessage = functions.firestore
         html: `
           <p>A new chat has been started by user: <strong>${customerName}</strong>.</p>
           <p>Please respond quickly to assist the customer.</p>
-          <a href="https://secondhandcell.com/chat/chat.html?chatId=${chatId}" 
+          <a href="https://secondhandcell.com/admin/public/admin.html?chatId=${chatId}" 
               style="display: inline-block; padding: 10px 20px; font-size: 16px; color: #ffffff; background-color: #4CAF50; text-decoration: none; border-radius: 5px;">
-              Go to Chat
+            Go to Chat
           </a>
         `,
       };
@@ -1637,7 +1667,6 @@ exports.onNewChatMessage = functions.firestore
         await transporter.sendMail(mailOptions);
         console.log(`Email sent for new chat: ${chatId}`);
 
-        // OPTIONAL: Send a push notification to admins as well.
         await sendAdminPushNotification(
           "New Chat Alert! 💬",
           `New chat started by ${customerName}.`,
@@ -1657,6 +1686,32 @@ exports.onNewChatMessage = functions.firestore
     }
 
     return null;
+  });
+
+// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+exports.onNewChatCreated = functions.firestore
+  .document("chats/{chatId}")
+  .onCreate(async (snap, context) => {
+    const newChatData = snap.data();
+    const chatId = context.params.chatId;
+
+    // Check if a user has started the chat and no agent has joined yet
+    if ((newChatData.ownerUid || newChatData.guestId) && !newChatData.agentHasJoined) {
+      try {
+        const messagesRef = db.collection(`chats/${chatId}/messages`);
+        const botMessage = {
+          text: "Hello! Thank you for contacting SecondHandCell. An agent will be with you shortly.",
+          sender: "bot",
+          senderType: "bot",
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        await messagesRef.add(botMessage);
+        console.log(`Auto-response sent for chat: ${chatId}`);
+      } catch (error) {
+        console.error("Error sending auto-response:", error);
+      }
+    }
   });
 
 app.post("/test-emails", async (req, res) => {

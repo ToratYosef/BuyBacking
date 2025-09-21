@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secondhandcell.com Email Sender</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 90%;
+            margin: 2rem auto;
+            padding: 2rem;
+            background-color: #ffffff;
+            border-radius: 1rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .section-title {
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+        .btn-secondary {
+            background-color: #f9fafb;
+            color: #4b5563;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .btn-secondary:hover {
+            background-color: #e5e7eb;
+        }
+        .input-field {
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            width: 100%;
+        }
+        .copy-box {
+            background-color: #f3f4f6;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container space-y-8">
+        <h1 class="text-3xl font-bold text-center text-gray-800">Email Marketing Tool</h1>
+        
+        <!-- HTML Email Input -->
+        <div class="space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700 section-title">HTML Email Content</h2>
+            <textarea id="htmlInput" class="w-full h-96 p-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Paste your HTML email code here..."></textarea>
+            <button id="previewBtn" class="w-full btn-primary font-bold">Preview Email</button>
+        </div>
+
+        <!-- Email Preview -->
+        <div class="space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700 section-title">Email Preview</h2>
+            <iframe id="previewFrame" class="w-full h-96 border rounded-lg bg-white" style="border: 1px solid #d1d5db;"></iframe>
+        </div>
+
+        <!-- Recipient and Send Section -->
+        <div class="space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700 section-title">Recipients & Sending</h2>
+            <div class="flex items-center space-x-4">
+                <label for="toInput" class="text-gray-600 font-medium whitespace-nowrap">To:</label>
+                <input type="text" id="toInput" class="input-field" value="sales@secondhandcell.com">
+            </div>
+             <div class="flex items-center space-x-4">
+                <label for="bccInput" class="text-gray-600 font-medium whitespace-nowrap">BCC:</label>
+                <input type="text" id="bccInput" class="input-field" placeholder="Paste BCC emails here...">
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                <button id="pullEmailsBtn" class="btn-secondary font-bold w-full sm:w-auto">Pull All Emails</button>
+                <div class="flex-grow">
+                    <div id="emailsDisplay" class="copy-box text-sm text-gray-700 font-mono overflow-auto"></div>
+                </div>
+                <button id="copyEmailsBtn" class="btn-secondary font-bold w-full sm:w-auto">Copy Emails</button>
+            </div>
+            
+            <button id="sendBtn" class="w-full btn-primary font-bold">Send Email</button>
+            <div id="statusMessage" class="mt-4 text-center font-medium"></div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // IMPORTANT: In a real-world scenario, you would not expose API keys directly in client-side code.
+        // These keys should be stored securely on a server.
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // UI Elements
+        const htmlInput = document.getElementById('htmlInput');
+        const previewBtn = document.getElementById('previewBtn');
+        const previewFrame = document.getElementById('previewFrame');
+        const toInput = document.getElementById('toInput');
+        const bccInput = document.getElementById('bccInput');
+        const pullEmailsBtn = document.getElementById('pullEmailsBtn');
+        const emailsDisplay = document.getElementById('emailsDisplay');
+        const copyEmailsBtn = document.getElementById('copyEmailsBtn');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusMessage = document.getElementById('statusMessage');
+
+        // Authentication and Firestore setup
+        async function setupFirebase() {
+            try {
+                // Sign in anonymously to read public data
+                await signInAnonymously(auth);
+                console.log("Signed in anonymously to Firebase.");
+            } catch (error) {
+                console.error("Error signing in to Firebase:", error);
+                statusMessage.textContent = "Error signing in to Firebase. Check console for details.";
+                statusMessage.style.color = 'red';
+            }
+        }
+        
+        setupFirebase();
+
+        // Pull all emails from the 'signed_up_emails' collection
+        pullEmailsBtn.addEventListener('click', async () => {
+            statusMessage.textContent = 'Pulling emails...';
+            statusMessage.style.color = 'gray';
+            try {
+                const emailsRef = collection(db, "signed_up_emails");
+                const querySnapshot = await getDocs(emailsRef);
+                const emails = [];
+                querySnapshot.forEach((doc) => {
+                    const emailData = doc.data();
+                    if (emailData.email) {
+                        emails.push(emailData.email);
+                    }
+                });
+                const emailList = emails.join(', ');
+                emailsDisplay.textContent = emailList || 'No emails found.';
+                statusMessage.textContent = `Found ${emails.length} emails.`;
+                statusMessage.style.color = 'green';
+            } catch (error) {
+                console.error("Error pulling emails:", error);
+                statusMessage.textContent = "Error pulling emails. Check console for details.";
+                statusMessage.style.color = 'red';
+            }
+        });
+
+        // Copy emails to clipboard
+        copyEmailsBtn.addEventListener('click', () => {
+            const emails = emailsDisplay.textContent;
+            if (emails && emails !== 'No emails found.') {
+                // Use a temporary element to copy the text
+                const tempTextarea = document.createElement('textarea');
+                tempTextarea.value = emails;
+                document.body.appendChild(tempTextarea);
+                tempTextarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempTextarea);
+
+                statusMessage.textContent = 'Emails copied to clipboard!';
+                statusMessage.style.color = 'green';
+            } else {
+                statusMessage.textContent = 'No emails to copy.';
+                statusMessage.style.color = 'red';
+            }
+        });
+
+        // Preview email in the iframe
+        previewBtn.addEventListener('click', () => {
+            const htmlContent = htmlInput.value;
+            const iframeDoc = previewFrame.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.write(htmlContent);
+            iframeDoc.close();
+        });
+
+        // Send the email
+        sendBtn.addEventListener('click', async () => {
+            statusMessage.textContent = 'Sending email...';
+            statusMessage.style.color = 'gray';
+
+            const htmlContent = htmlInput.value;
+            const toAddress = toInput.value;
+            const bccAddresses = bccInput.value.split(',').map(e => e.trim()).filter(e => e);
+
+            // IMPORTANT: Nodemailer runs on a backend server, not in the browser.
+            // This is a placeholder fetch request to a hypothetical server endpoint.
+            // You MUST create a server that listens on this endpoint and uses Nodemailer to send the email.
+            // The server-side code would look something like this:
+            /*
+            // server.js
+            const express = require('express');
+            const nodemailer = require('nodemailer');
+            const bodyParser = require('body-parser');
+
+            const app = express();
+            app.use(bodyParser.json());
+
+            const transporter = nodemailer.createTransport({
+                // your Nodemailer configuration
+            });
+
+            app.post('/send-email', (req, res) => {
+                const { to, bcc, html } = req.body;
+                const mailOptions = {
+                    from: 'youremail@example.com',
+                    to: to,
+                    bcc: bcc,
+                    subject: 'Thank You for Being a Loyal Customer!',
+                    html: html
+                };
+
+                transporter.sendMail(mailOptions, (error, info) => {
+                    if (error) {
+                        return res.status(500).send(error.toString());
+                    }
+                    res.status(200).send('Email sent: ' + info.response);
+                });
+            });
+
+            app.listen(3000, () => console.log('Server running on port 3000'));
+            */
+            try {
+                const response = await fetch('/send-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        to: toAddress,
+                        bcc: bccAddresses,
+                        html: htmlContent
+                    })
+                });
+
+                if (response.ok) {
+                    statusMessage.textContent = 'Email sent successfully!';
+                    statusMessage.style.color = 'green';
+                } else {
+                    const errorText = await response.text();
+                    console.error("Failed to send email:", errorText);
+                    statusMessage.textContent = `Failed to send email. Error: ${errorText}`;
+                    statusMessage.style.color = 'red';
+                }
+            } catch (error) {
+                console.error("Network or server error:", error);
+                statusMessage.textContent = "A network error occurred. Check your server connection.";
+                statusMessage.style.color = 'red';
+            }
+        });
+    </script>
+</body>
+</html>
