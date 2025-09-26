@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SecondHandCell - Trusted Reviews</title>
+    <meta name="description" content="Read reviews and get an instant, transparent quote for your used iPhone, Samsung, and more." />
+    <link rel="icon" href="/favicon/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-17534255111');
+    </script>
+    
+    <!-- TrustBox script -->
+    <script type="text/javascript" src="//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js" async></script>
+
+    <style>
+        /* BASE STYLES: Full Page Dark Background */
+        body {
+            font-family: 'Poppins', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: linear-gradient(135deg, #0f172a, #1e3a8a);
+            background-color: #0f172a; 
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23ffffff' fill-opacity='0.15' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'/%3E%3Cpath d='M1 1h1v1H1V1zm2 2h1v1H3V3z'/%3E%3C/svg%3E");
+            background-size: 80px 80px;
+            color: #e2e8f0; /* Light text color for dark background */
+        }
+        .fancy-header-text {
+            font-family: 'Dancing Script', cursive;
+        }
+        /* Styles needed for header/footer (copied from index.html styling in context) */
+        .user-monogram { display: flex; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; border-radius: 9999px; background-color: #dbeafe; color: #1d4ed8; font-weight: 700; font-size: 1.125rem; cursor: pointer; user-select: none; }
+        .auth-dropdown { position: absolute; right: 0; margin-top: 0.5rem; width: 12rem; background-color: white; border-radius: 0.375rem; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); padding-top: 0.25rem; padding-bottom: 0.25rem; z-index: 50; }
+        .btn-red-logout { display: block; width: 100%; text-align: left; padding: 0.5rem 1rem; font-size: 0.875rem; color: #dc2626; background-color: transparent; border: none; transition: background-color 0.2s ease; cursor: pointer; }
+        .btn-red-logout:hover { background-color: #fef2f2; }
+        .btn-dark-slate { width: 100%; background-color: #1e293b; color: white; padding: 0.75rem 1rem; border-radius: 0.5rem; font-weight: 600; transition: all 0.3s ease; border: none; cursor: pointer; }
+        .btn-dark-slate:hover { background-color: #0f172a; }
+        .modal { transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; opacity: 0; visibility: hidden; }
+        .modal.is-visible { opacity: 1; visibility: visible; }
+        .modal-content { transform: translateY(-20px); transition: transform 0.3s ease-out; }
+        .modal.is-visible .modal-content { transform: translateY(0); }
+        .btn-google-style { display: flex; align-items: center; justify-content: center; width: 100%; background-color: white; color: #475569; padding: 0.75rem 1rem; border: 1px solid #cbd5e1; font-weight: 600; transition: all 0.3s ease; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); cursor: pointer; }
+        .btn-google-style:hover { background-color: #f8fafc; }
+
+
+        /* Device Card Grid Styles */
+        .card-grid-item {
+            position: relative; border-radius: 1rem; overflow: hidden; aspect-ratio: 1 / 1; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center; padding: 1rem;
+            transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            background-color: white;
+        }
+        .card-grid-item:hover { transform: translateY(-8px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .image-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; width: 100%; }
+        .card-grid-item img { width: 90%; height: auto; object-fit: contain; }
+
+        /* General Section Styles for Dark Background */
+        .content-layer { position: relative; z-index: 2; }
+        .review-section { background-color: transparent; padding-top: 4rem; }
+        .dark-bg-section { background: transparent; padding-top: 0; padding-bottom: 4rem; }
+
+        /* REVIEW CARD STYLES (Adjusted Blue) */
+        .review-card-container {
+            background-color: white; border-radius: 1rem; padding: 2rem 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); height: 100%; display: flex;
+            flex-direction: column; align-items: center; justify-content: space-between;
+            transition: all 0.3s ease;
+        }
+        .review-card-container:hover { box-shadow: 0 15px 20px -5px rgba(0, 0, 0, 0.2); transform: translateY(-5px); }
+        .review-card-container h3 { font-size: 1.5rem; font-weight: 700; color: #1e293b; margin-top: 0.5rem; }
+        .review-card-container p { color: #64748b; font-size: 0.95rem; margin-bottom: 1.5rem; }
+        .review-card-container .logo-container { height: 2.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; }
+
+        /* Individual Card Overrides (Adjusted Google Blue to Lighter shade: blue-500) */
+        .card-google { border-top: 6px solid #4299e1; } 
+        .card-trustpilot { border-top: 6px solid #10b981; } 
+        .card-yelp { border-top: 6px solid #ef4444; } 
+        
+        /* Button Styles (Adjusted Google Blue) */
+        .btn-google { background-color: #4299e1; color: white; } 
+        .btn-google:hover { background-color: #3b82f6; } 
+        .btn-trustpilot { background-color: #10b981; color: white; }
+        .btn-trustpilot:hover { background-color: #059669; }
+        .btn-yelp { background-color: #ef4444; color: white; }
+        .btn-yelp:hover { background-color: #dc2626; }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+    <!-- HEADER (Copied from index.html context) -->
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
+        <div class="container mx-auto px-4 py-3 flex items-center md:py-5 justify-between">
+            <div class="flex-1 flex justify-start items-center logo-container-left">
+                <a href="index.html" class="h-12 md:h-20 w-auto">
+                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+                </a>
+            </div>
+            <div class="flex-none flex-col items-center hidden md:flex logo-text-container-center">
+                <div class="text-xl md:text-2xl font-extrabold whitespace-nowrap">
+                    <span class="text-black">Second</span><span class="text-green-500">HandCell</span>
+                </div>
+                <p class="text-[0.6rem] md:text-sm -mt-1 whitespace-nowrap text-green-500">Turn Your Old<span class="text-black"> Phone Into Cash!</span></p>
+            </div>
+            <nav class="flex-1 flex justify-end items-center space-x-4">
+                <div id="authStatusContainer" class="relative inline-block">
+                    <!-- This button triggers the login modal defined below -->
+                    <a href="#" id="loginNavBtn" class="bg-indigo-600 text-white px-2.5 py-1.5 md:px-4 md:py-2 rounded-full font-semibold hover:bg-indigo-700 transition-colors duration-300 shadow-sm text-xs md:text-base">Login/Sign Up</a>
+                    <div id="userMonogram" class="user-monogram hidden"></div>
+                    <div id="authDropdown" class="auth-dropdown hidden rounded-lg shadow-xl">
+                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">My Account</a>
+                        <button id="logoutBtn" class="btn-red-logout rounded-b-lg">Logout</button>
+                    </div>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-grow">
+
+        <!-- 1. Review Card Section (Transparent Background over Dark Body) -->
+        <section class="review-section container mx-auto px-4 py-16">
+            
+            <div class="max-w-5xl mx-auto text-center mb-12">
+                <h1 class="text-3xl md:text-4xl font-extrabold text-white mb-2">
+                    Trusted By Thousands
+                </h1>
+                <p class="text-lg text-slate-300">
+                    See our latest reviews and ratings on external, independent platforms.
+                </p>
+            </div>
+
+            <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+                
+                <!-- Google Card (Blue) -->
+                <a href="https://search.google.com/local/reviews?placeid=YOUR_GOOGLE_PLACE_ID" target="_blank" class="block" id="review-link-google">
+                    <div class="review-card-container card-google">
+                        <div class="logo-container">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg" alt="Google Logo" class="h-8 w-auto">
+                        </div>
+                        <h3 class="mt-4">Google Reviews</h3>
+                        <p class="mt-2 text-center">Read our public customer reviews.</p>
+                        <span class="w-full text-center px-6 py-3 rounded-full font-semibold transition-colors btn-google">See Reviews</span>
+                    </div>
+                </a>
+
+                <!-- Trustpilot Card (Green) -->
+                <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" class="block" id="review-link-trustpilot">
+                    <div class="review-card-container card-trustpilot">
+                        <div class="logo-container">
+                            <i class="fa-solid fa-star text-4xl text-emerald-500"></i>
+                        </div>
+                        <h3 class="mt-4">Trustpilot</h3>
+                        <p class="mt-2 text-center">Check our verified customer feedback.</p>
+                        <span class="w-full text-center px-6 py-3 rounded-full font-semibold transition-colors btn-trustpilot">View Profile</span>
+                    </div>
+                </a>
+
+                <!-- Yelp Card (Red) -->
+                <a href="https://www.yelp.com/writeareview/biz/KWMxMMypF1yAfwH1rdKgJw" target="_blank" class="block" id="review-link-yelp">
+                    <div class="review-card-container card-yelp">
+                        <div class="logo-container">
+                            <i class="fa-brands fa-yelp text-4xl text-red-500"></i>
+                        </div>
+                        <h3 class="mt-4">Yelp</h3>
+                        <p class="mt-2 text-center">Write a Review on Yelp.</p>
+                        <span class="w-full text-center px-6 py-3 rounded-full font-semibold transition-colors btn-yelp">Go to Yelp</span>
+                    </div>
+                </a>
+            </div>
+            
+        </section>
+
+        <!-- 2. Device Grid Section (Transparent Background over Dark Body) -->
+        <section class="dark-bg-section">
+            <div class="container mx-auto px-4 py-8 content-layer">
+                <div class="mt-4 w-full max-w-5xl mx-auto">
+                    <h2 class="text-2xl md:text-3xl font-bold text-white mb-6 text-center">Start Your Offer Today!</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        
+                        <!-- iPhone Card (Image Only) -->
+                        <a href="/iphone/" class="card-grid-item" id="device-link-iphone">
+                            <div class="image-container">
+                                <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/apple.png" alt="iPhone" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=iPhone';">
+                            </div>
+                        </a>
+
+                        <!-- Samsung Card (Image Only) -->
+                        <a href="/samsung/" class="card-grid-item" id="device-link-samsung">
+                            <div class="image-container">
+                                <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/samsung.png" alt="Samsung" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=Samsung';">
+                            </div>
+                        </a>
+
+                        <!-- Google Pixel Card (Image Only) -->
+                        <a href="/google/" class="card-grid-item" id="device-link-google">
+                            <div class="image-container">
+                                <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/googlepixel.jpg" alt="Google Pixel" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=Google+Pixel';">
+                            </div>
+                        </a>
+
+                        <!-- iPad Card (Image Only) -->
+                        <a href="/ipad-landing.html" class="card-grid-item" id="device-link-ipad">
+                            <div class="image-container">
+                                <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/ipad.svg" alt="iPad" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=iPad';">
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER (Copied from index.html context) -->
+    <footer class="bg-slate-800 text-white mt-auto">
+        <div class="container mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
+                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="index.html" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                    <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
+                </div>
+                <div class="bg-slate-700 p-6 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
+                    <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                    <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
+                        <label for="footerPromoEmail" class="sr-only">Email Address</label>
+                        <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="submit" id="footerSignupBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Sign Up</button>
+                    </form>
+                    <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
+                </div>
+            </div>
+            <div class="bg-slate-800 text-white p-6 rounded-xl shadow-lg mt-8 text-center border-2 border-red-600">
+                <p class="text-lg font-bold">IMPORTANT NOTICE</p>
+                <p class="mt-2 text-sm md:text-base">We do not purchase blacklisted or lost/stolen devices. All devices are verified through a legal compliance check.</p>
+            </div>
+            <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
+        </div>
+    </footer>
+
+    <!-- LOGIN MODAL (Copied from index.html context) -->
+    <div id="loginModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2><div class="flex border-b border-slate-200 mb-6"><button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Login</button><button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Sign Up</button></div><form id="loginForm" class="space-y-4"><p class="text-slate-600 text-center">Log in to continue with your order.</p><button type="button" id="googleLoginBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Login with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="loginEmail" class="sr-only">Email Address</label><input type="email" id="loginEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="loginPassword" class="sr-only">Password</label><input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="current-password"></div><button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button><p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-blue-600 font-semibold hover:underline">Reset it here</a></p></form><form id="signupForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Create an account to complete your order.</p><button type="button" id="googleSignupBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Sign Up with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="signupName" class="sr-only">Full Name</label><input type="text" id="signupName" placeholder="Full Name" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="signupEmail" class="sr-only">Email Address</label><input type="email" id="signupEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email"></div><div><label for="signupPassword" class="sr-only">Password</label><input type="password" id="signupPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="new-password"></div><button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button><p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-blue-600 font-semibold hover:underline">Log in here</a></p></form><form id="forgotPasswordForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Enter your email to receive a password reset link.</p><div><label for="forgotEmail" class="sr-only">Email Address</label><input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button><p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-blue-600 font-semibold hover:underline">Return to Login</a></p></form><div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div></div></div>
+    
+    <!-- About Us Modal (Copied from index.html context) -->
+    <div id="aboutUsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2><p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p></div></div>
+
+    <!-- START OF SCRIPT BLOCK (Minimal Firebase Auth/Modal Logic) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, doc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        setLogLevel('debug');
+        
+        // Use global variables provided by the platform
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Utility to get or create a guest ID for localStorage persistence
+        const getOrCreateGuestId = () => {
+            let id = localStorage.getItem('guestChatId');
+            if (!id) {
+                id = `guest_${crypto.randomUUID()}`;
+                localStorage.setItem('guestChatId', id);
+            }
+            return id;
+        };
+
+        // Simplified Click Tracker
+        const trackButtonClick = async (buttonName) => {
+            console.log(`Tracking click: ${buttonName}`);
+            // Note: Using dummy console log as full Firestore tracking requires complex dependencies not strictly needed for this file.
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // --- UI ELEMENT SELECTION ---
+            const loginModal = document.getElementById('loginModal');
+            const loginNavBtn = document.getElementById('loginNavBtn');
+            const userMonogram = document.getElementById('userMonogram');
+            const authDropdown = document.getElementById('authDropdown');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const aboutUsModal = document.getElementById('aboutUsModal');
+            const aboutUsLink = document.getElementById('aboutUsLink');
+            const closeButtons = document.querySelectorAll('.close-modal-btn');
+            
+            // Modal Tab and Form elements
+            const loginTabBtn = document.getElementById('loginTabBtn');
+            const signupTabBtn = document.getElementById('signupTabBtn');
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+            const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+            const authMessage = document.getElementById('authMessage');
+            const authStatusContainer = document.getElementById('authStatusContainer');
+
+
+            // --- MODAL UTILITIES ---
+            const openModal = (modal) => { modal.classList.add('is-visible'); };
+            const closeModal = (modal) => { modal.classList.remove('is-visible'); };
+            const showAuthMessage = (msg, type) => {
+                authMessage.textContent = msg;
+                authMessage.className = 'mt-4 p-3 rounded-lg text-sm text-center w-full';
+                if (type === 'error') authMessage.classList.add('bg-red-100', 'text-red-700');
+                else if (type === 'success') authMessage.classList.add('bg-green-100', 'text-green-700');
+                else authMessage.classList.add('bg-blue-100', 'text-blue-700');
+                authMessage.classList.remove('hidden');
+            };
+
+            const showTab = (tabName) => {
+                if (authMessage) authMessage.classList.add('hidden');
+                [loginForm, signupForm, forgotPasswordForm].forEach(form => form?.classList.add('hidden'));
+                [loginTabBtn, signupTabBtn].forEach(btn => {
+                    btn?.classList.remove('border-blue-600', 'text-blue-600');
+                    btn?.classList.add('border-transparent', 'text-slate-500');
+                });
+                if (tabName === 'login') { loginForm?.classList.remove('hidden'); loginTabBtn?.classList.add('border-blue-600', 'text-blue-600'); }
+                else if (tabName === 'signup') { signupForm?.classList.remove('hidden'); signupTabBtn?.classList.add('border-blue-600', 'text-blue-600'); }
+                else if (tabName === 'forgotPassword') { forgotPasswordForm?.classList.remove('hidden'); }
+            };
+
+
+            // --- AUTH STATE LISTENER & INITIAL LOGIN ---
+            
+            // This logic is designed to run anytime the auth state changes.
+            onAuthStateChanged(auth, async (user) => {
+                if (user && !user.isAnonymous) {
+                    if (loginNavBtn) loginNavBtn.classList.add('hidden');
+                    if (userMonogram) {
+                        userMonogram.classList.remove('hidden');
+                        const initials = user.displayName ? user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) : (user.email ? user.email.charAt(0).toUpperCase() : '');
+                        userMonogram.textContent = initials;
+                    }
+                    closeModal(loginModal);
+                } else {
+                    if (loginNavBtn) loginNavBtn.classList.remove('hidden');
+                    if (userMonogram) userMonogram.classList.add('hidden');
+                    if (authDropdown) authDropdown.classList.add('hidden');
+
+                     // Attempt anonymous login if no user is present.
+                    if (!auth.currentUser) {
+                        try {
+                             await signInAnonymously(auth);
+                        } catch (e) {
+                            console.error("Anonymous sign-in failed:", e);
+                        }
+                    }
+                }
+            });
+
+
+            // --- EVENT LISTENERS ---
+            
+            // Header/Dropdown Interactions
+            if (loginNavBtn) {
+                loginNavBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    openModal(loginModal);
+                    showTab('login'); // Ensure it defaults to login tab
+                });
+            }
+            if (userMonogram) {
+                userMonogram.addEventListener('click', (e) => { e.stopPropagation(); authDropdown.classList.toggle('hidden'); });
+                document.addEventListener('click', (e) => { 
+                    if (authStatusContainer && !authStatusContainer.contains(e.target)) {
+                        authDropdown.classList.add('hidden'); 
+                    } 
+                });
+            }
+            if (logoutBtn) logoutBtn.addEventListener('click', () => signOut(auth));
+            if (aboutUsLink) aboutUsLink.addEventListener('click', (e) => { e.preventDefault(); openModal(aboutUsModal); });
+
+            // Modal Close Listeners
+            closeButtons.forEach(button => {
+                button.addEventListener('click', () => { closeModal(loginModal); closeModal(aboutUsModal); });
+            });
+            [loginModal, aboutUsModal].forEach(modal => {
+                modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+            });
+
+            // Auth Modal Tab/Form Listeners
+            if (loginTabBtn) loginTabBtn.addEventListener('click', () => showTab('login'));
+            if (signupTabBtn) signupTabBtn.addEventListener('click', () => showTab('signup'));
+            const switchToLogin = document.getElementById('switchToLogin');
+            if (switchToLogin) switchToLogin.addEventListener('click', (e) => { e.preventDefault(); showTab('login'); });
+            const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+            if (forgotPasswordLink) forgotPasswordLink.addEventListener('click', (e) => { e.preventDefault(); showTab('forgotPassword'); });
+            const returnToLogin = document.getElementById('returnToLogin');
+            if (returnToLogin) returnToLogin.addEventListener('click', (e) => { e.preventDefault(); showTab('login'); });
+
+            // Google Sign In
+            const googleProvider = new GoogleAuthProvider();
+            const signInWithGoogle = async () => {
+                try {
+                    showAuthMessage('Redirecting to Google...', 'info');
+                    await signInWithPopup(auth, googleProvider); 
+                } catch (error) { 
+                    showAuthMessage(`Google sign-in failed: ${error.message}`, 'error'); 
+                }
+            };
+            const googleLoginBtn = document.getElementById('googleLoginBtn');
+            if (googleLoginBtn) googleLoginBtn.addEventListener('click', signInWithGoogle);
+            const googleSignupBtn = document.getElementById('googleSignupBtn');
+            if (googleSignupBtn) googleSignupBtn.addEventListener('click', signInWithGoogle);
+
+            // Email Login/Signup/Reset
+            if (loginForm) loginForm.addEventListener('submit', async (e) => { 
+                e.preventDefault(); 
+                const email = document.getElementById('loginEmail').value;
+                const password = document.getElementById('loginPassword').value;
+                try {
+                    showAuthMessage('Logging in...', 'info');
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (error) { 
+                    showAuthMessage(`Login failed: ${error.code.replace('auth/', '').split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')}`, 'error'); 
+                }
+            });
+
+            if (signupForm) signupForm.addEventListener('submit', async (e) => { 
+                e.preventDefault(); 
+                const name = document.getElementById('signupName').value;
+                const email = document.getElementById('signupEmail').value;
+                const password = document.getElementById('signupPassword').value;
+                if (password.length < 6) { showAuthMessage('Password must be at least 6 characters.', 'error'); return; }
+                try {
+                    showAuthMessage('Creating account...', 'info');
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    await updateProfile(userCredential.user, { displayName: name });
+                } catch (error) { 
+                    showAuthMessage(`Sign up failed: ${error.code.replace('auth/', '').split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')}`, 'error'); 
+                }
+            });
+
+            if (forgotPasswordForm) forgotPasswordForm.addEventListener('submit', async (e) => { 
+                e.preventDefault(); 
+                const email = document.getElementById('forgotEmail').value;
+                try {
+                    showAuthMessage('Sending reset email...', 'info');
+                    await sendPasswordResetEmail(auth, email);
+                    showAuthMessage('Password reset email sent! Check your inbox.', 'success');
+                } catch (error) { 
+                    showAuthMessage(`Failed to send email: ${error.message}`, 'error'); 
+                }
+            });
+            
+            // Footer Email Signup (using Firestore stub - retained logic)
+            const footerEmailSignupForm = document.getElementById('footerEmailSignupForm');
+            const footerSignupMessage = document.getElementById('footerSignupMessage');
+            if (footerEmailSignupForm) {
+                footerEmailSignupForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const email = document.getElementById('footerPromoEmail').value;
+                    footerSignupMessage.textContent = 'Submitting...';
+                    footerSignupMessage.className = 'mt-3 text-sm text-center text-blue-300';
+                    
+                    try {
+                        // Example: Use Firestore to record email signups
+                        await addDoc(collection(db, "signed_up_emails"), { email: email, timestamp: new Date() });
+                        footerSignupMessage.textContent = 'Success! Thanks for signing up.';
+                        footerSignupMessage.className = 'mt-3 text-sm text-center text-green-300';
+                        footerEmailSignupForm.reset();
+                    } catch (error) {
+                        console.error("Error adding document: ", error);
+                        footerSignupMessage.textContent = 'Error: Could not sign up.';
+                        footerSignupMessage.className = 'mt-3 text-sm text-center text-red-300';
+                    }
+                });
+            }
+
+            // Click tracking for links
+            document.querySelectorAll('a[id^="review-link-"]').forEach(link => {
+                link.addEventListener('click', () => trackButtonClick(`Review_Link_Click_${link.id}`));
+            });
+            document.querySelectorAll('a[id^="device-link-"]').forEach(link => {
+                link.addEventListener('click', () => trackButtonClick(`Device_Link_Click_${link.id}`));
+            });
+            
+        });
+    </script>
+    <!-- END OF SCRIPT BLOCK -->
+</body>
+</html>
