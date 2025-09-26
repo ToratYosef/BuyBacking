@@ -29,21 +29,37 @@
     </script>
 
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
         body {
-            font-family: 'Poppins', sans-serif;
-            background-color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            background-color: #dbeafe; /* Light blue background for the page body */
             color: #1e293b;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
+        
+        /* NEW: Full-width main section background and pattern */
+        .main-content-section {
+            background-color: #1e3a8a; /* Deep Blue Fallback */
+            /* Subtle geometric pattern */
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34L30 30.913l-6 3.085-3-5.196L30 22l9 5.196zM3 13h48v48H3z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            padding: 4rem 1rem; /* Base padding */
+            box-shadow: inset 0 10px 10px -5px rgba(0, 0, 0, 0.2); /* Soft shadow for depth */
+        }
+        
+        /* NEW: Fade-in animation */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeInUp { animation: fadeInUp 0.8s ease-out forwards; }
+
         .fancy-header-text {
             font-family: 'Dancing Script', cursive;
         }
-        .phone-card-link:hover .phone-card-inner,
-        .feature-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        }
+        
+        /* Removed old redundant hover styles on .phone-card-link */
         .phone-card-inner, .feature-card {
             transition: all 0.3s ease-in-out;
         }
@@ -170,51 +186,73 @@
         @media (max-width: 767px) {
             #chat-window { width: 100vw; height: 100vh; border-radius: 0; right: 0; bottom: 0; }
             #chat-widget-container { bottom: 1rem; right: 1rem; }
+            .main-content-section {
+                padding: 2rem 0.5rem; /* Reduced padding on mobile, using container for horizontal margin */
+            }
+        }
+        /* Desktop padding adjustment */
+        @media (min-width: 768px) {
+            .main-content-section {
+                padding: 6rem 1rem; 
+            }
         }
         .card-grid-item {
             position: relative;
             border-radius: 1rem;
             overflow: hidden;
             aspect-ratio: 1 / 1;
+            /* UPDATED: Flex setup to center content */
             display: flex;
-            flex-direction: column; /* Changed to column to stack elements */
-            justify-content: space-between; /* Space out the image container and the label */
-            align-items: center;
+            flex-direction: column; 
+            justify-content: center; /* Center items vertically */
+            align-items: center; /* Center items horizontally */
             text-align: center;
             padding: 1rem;
-            transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            transition: all 0.3s ease-in-out, box-shadow 0.3s ease-in-out, border-color 0.3s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             background-color: white;
+            border: 3px solid transparent;
         }
 
         .card-grid-item:hover {
             transform: translateY(-8px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3), 0 4px 6px -2px rgba(59, 130, 246, 0.1); /* Blue glow shadow */
+            border-color: #3b82f6; /* Blue border on hover */
+            background-color: #eff6ff; /* Very light blue background on hover */
         }
 
         .image-container {
-            flex-grow: 1; /* This container will take up all available space */
+            /* UPDATED: Ensures image container fills space, and centers content */
             display: flex;
-            justify-content: center; /* Horizontally center the image */
-            align-items: center; /* Vertically center the image */
+            justify-content: center; 
+            align-items: center;
             width: 100%;
+            flex-grow: 1; /* Allow container to take up primary space */
         }
 
         .card-grid-item img {
             width: 90%;
             height: auto;
+            max-height: 100%; 
             object-fit: contain;
         }
+        /* REMOVED .label height definition to remove empty space */
         .card-grid-item .label {
             position: relative;
             z-index: 10;
             font-size: 1.125rem;
-            font-weight: 600;
+            font-weight: 700;
             color: #1f2937;
+            transition: color 0.3s ease-in-out;
+            margin-top: 0.5rem; /* Space between image area and label */
+            /* Removed height: 20%; to avoid fixed space and allow image to center better */
+        }
+        .card-grid-item:hover .label {
+            color: #1d4ed8; /* Darker blue text on hover */
         }
     </style>
 </head>
-<body class="bg-slate-50 flex flex-col min-h-screen">
+<body class="flex flex-col min-h-screen">
 <!-- Google Tag Manager (noscript) -->
 <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8"
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -245,41 +283,40 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="flex-grow container mx-auto px-4 py-12">
-        <div class="text-center mb-12">
-            <h1 class="text-4xl md:text-5xl font-extrabold text-slate-800">Sell Your Device</h1>
-            <p class="mt-3 text-lg text-slate-600 max-w-2xl mx-auto">Select your device category to get a quote!</p>
-        </div>
+    <!-- Main Content - FULL WIDTH BACKGROUND -->
+    <main class="flex-grow">
+        <div class="main-content-section animate-fadeInUp">
+            <div class="container mx-auto px-4">
+                <div class="text-center mb-12">
+                    <h1 class="text-4xl md:text-5xl font-extrabold text-white">Choose Your Device</h1>
+                    <p class="mt-3 text-lg text-blue-100 max-w-2xl mx-auto">Select from the brands below to get your instant quote!</p>
+                </div>
 
-        <!-- New Category Grid -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-5xl mx-auto">
-            <a href="/iphone/" class="card-grid-item">
-                <div class="image-container">
-                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/apple.png" alt="iPhone" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=iPhone';">
+                <!-- Category Grid (Remains centered via mx-auto) -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto">
+                    <a href="/iphone/" class="card-grid-item">
+                        <div class="image-container">
+                            <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/apple.png" alt="iPhone" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=iPhone';">
+                        </div>
+                    </a>
+                    <a href="/samsung/" class="card-grid-item">
+                        <div class="image-container">
+                            <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/samsung.png" alt="Samsung" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=Samsung';">
+                        </div>
+                    </a>
+                    <a href="/google/" class="card-grid-item">
+                        <div class="image-container">
+                            <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/googlepixel.jpg" alt="Google Pixel" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=Google+Pixel';">
+                        </div>
+                    </a>
+                    <a href="/ipad-landing.html" class="card-grid-item">
+                        <div class="image-container">
+                            <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/ipad.svg" alt="iPad" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=iPad';">
+                        </div>
+                    </a>
                 </div>
-                <div class="label">iPhone</div>
-            </a>
-            <a href="/samsung/" class="card-grid-item">
-                <div class="image-container">
-                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/samsung.png" alt="Samsung" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=Samsung';">
-                </div>
-                <div class="label">Samsung</div>
-            </a>
-            <a href="/google/" class="card-grid-item">
-                <div class="image-container">
-                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/googlepixel.jpg" alt="Google Pixel" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=Google+Pixel';">
-                </div>
-                <div class="label">Google Pixel</div>
-            </a>
-            <a href="/ipad-landing.html" class="card-grid-item">
-                <div class="image-container">
-                    <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/ipad.svg" alt="iPad" onerror="this.onerror=null;this.src='https://placehold.co/300x300/e0e7ff/4338ca?text=iPad';">
-                </div>
-                <div class="label">iPad</div>
-            </a>
+            </div>
         </div>
-        
     </main>
 
     <!-- FOOTER -->
@@ -338,6 +375,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Config & Initialization ---
+        // Global variables provided by the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
             authDomain: "auth.secondhandcell.com",
@@ -347,13 +386,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             appId: "1:876430429098:web:f6dd64b1960d90461979d3",
             measurementId: "G-6WWQN44JHT"
         };
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
         document.addEventListener('DOMContentLoaded', async function() {
             // --- AUTHENTICATION LOGIC ---
-            const authStatusContainer = document.getElementById('authStatusContainer');
             const loginNavBtn = document.getElementById('loginNavBtn');
             const userMonogram = document.getElementById('userMonogram');
             const authDropdown = document.getElementById('authDropdown');
@@ -580,7 +620,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     const agentJoinedFlag = localStorage.getItem(`agentJoined_${chatId}`);
                     if (data.agentName && data.agentHasJoined && !agentJoinedFlag) {
                         const joinMsgText = `<i class="fa-solid fa-headset mr-2"></i>${data.agentName} has joined the chat.`;
-                        await addDoc(collection(db, `chats/${chatId}/messages`), {
+                        addDoc(collection(db, `chats/${chatId}/messages`), {
                             text: joinMsgText,
                             timestamp: serverTimestamp(),
                             sender: 'system',
