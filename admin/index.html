@@ -16,9 +16,6 @@
         
           gtag('config', 'AW-17534255111');
           gtag('config', 'G-8JYPJDKSP8');
-        
-          // ✅ ADD THIS LINE FOR THE PAGE VIEW CONVERSION
-          gtag('event', 'conversion', {'send_to': 'AW-17534255111/09vcCOjI85QbEIeA_qhB'});
         </script>
 
 
@@ -473,7 +470,8 @@
                 const displayId = order.id;
                 
                 let reofferTimer = '';
-                let statusText = formatStatus(order.status);
+                // Pass the entire order object to formatStatus for conditional logic
+                let statusText = formatStatus(order); 
                 if (order.status === 're-offered-pending' && order.reOffer && order.reOffer.autoAcceptDate) {
                     const autoAcceptDate = new Date(order.reOffer.autoAcceptDate._seconds * 1000);
                     const timeLeft = autoAcceptDate.getTime() - Date.now();
@@ -511,16 +509,30 @@
             });
         }
 
-        function formatStatus(status) {
-            if (status === 'order_pending') { // Custom text for order_pending
+        /**
+         * Formats the order status text for display in the dashboard.
+         * Now accepts the entire order object to check shipping preference.
+         * @param {Object} order - The order object.
+         */
+        function formatStatus(order) {
+            const status = order.status;
+            const preference = order.shippingPreference;
+
+            if (status === 'order_pending') {
                 return 'Order Pending';
             }
-            if (status === 'shipping_kit_requested') { // Custom text for shipping_kit_requested
+            if (status === 'shipping_kit_requested') {
                 return 'Shipping Kit Requested';
             }
-            if (status === 'label_generated') { // Custom text for label_generated
+            if (status === 'label_generated') {
+                // If the user requested an emailed label, display "Label Generated"
+                if (preference === 'Email Label Requested') {
+                    return 'Label Generated';
+                }
+                // Otherwise (for Shipping Kit Requested), display "Shipping Kit on the Way"
                 return 'Shipping Kit on the Way';
             }
+            // Fallback for other statuses
             return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
 
@@ -597,7 +609,8 @@
                 modalConditionCracks.textContent = order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A';
                 modalConditionCosmetic.textContent = order.condition_cosmetic ? formatCondition(order.condition_cosmetic) : 'N/A';
 
-                modalStatus.textContent = formatStatus(order.status);
+                // Pass the order object to formatStatus here as well
+                modalStatus.textContent = formatStatus(order);
                 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
 
                 // Logic to handle which label(s) to display
