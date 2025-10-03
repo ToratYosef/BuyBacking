@@ -11,7 +11,7 @@ admin.initializeApp();
 const db = admin.firestore();
 const ordersCollection = db.collection("orders");
 const usersCollection = db.collection("users");
-const adminsCollection = db.collection("admins");
+const adminsCollection = db.collection("admins"); // This collection should only contain manually designated admin UIDs
 const chatsCollection = db.collection("chats");
 
 const app = express();
@@ -167,7 +167,10 @@ const BLACKLISTED_EMAIL_HTML = `
 
 
 
+
+
 [Image of a warning sign]
+
 
 
 
@@ -737,7 +740,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
           subject = `[TEST] Action Required for Order #${orderToUse.id}`;
           htmlBody = FMI_EMAIL_HTML
             .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, orderToUsem.id)
+            .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
             .replace(/\*\*CONFIRM_URL\*\*/g, `https://example.com/mock-confirm-fmi`);
           break;
         case "balance-due":
@@ -746,7 +749,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
           htmlBody = BAL_DUE_EMAIL_HTML
             .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
             .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
-            .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+            .replace(/\*\*FINANCIAL_STATUS\*\*/g, orderToUse.financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
           break;
         case "completed":
           orderToUse = mockOrderDataWithoutReoffer;
@@ -1547,6 +1550,8 @@ exports.autoAcceptOffers = functions.pubsub
     return null;
   });
 
+// This function creates a user document in the 'users' collection, but NOT in the 'admins' collection.
+// New accounts should never be set as admins here.
 exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
   try {
     // Do not create a user record if the user is anonymous (no email)
@@ -1562,10 +1567,11 @@ exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
       displayName: user.displayName || null,
       phoneNumber: user.phoneNumber || null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      // NOTE: No 'isAdmin' field is set here. User accounts are only written to the usersCollection.
     };
 
     await usersCollection.doc(user.uid).set(userData);
-    console.log(`User data for ${user.uid} saved to Firestore.`);
+    console.log(`User data for ${user.uid} saved to Firestore (users collection).`);
   } catch (error) {
     console.error("Error saving user data to Firestore:", error);
   }
