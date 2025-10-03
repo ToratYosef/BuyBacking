@@ -79,6 +79,13 @@
         .status-bubble-subtext {
             @apply block text-xs mt-0.5;
         }
+        /* Custom fixed widths for better table alignment with more columns */
+        .w-8p { width: 8%; }
+        .w-10p { width: 10%; }
+        .w-15p { width: 15%; }
+        .w-17p { width: 17%; }
+        .w-20p { width: 20%; }
+
     </style>
 </head>
 <body class="flex flex-col md:flex-row min-h-screen">
@@ -242,16 +249,17 @@
                 <table class="min-w-full table-auto divide-y divide-gray-200">
                     <thead class="bg-gray-50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Order ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Customer Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Item</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Status</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Tracking #</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Actions</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-8p">Order ID</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-15p">Order Date</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-15p">Customer Name</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-15p">Item</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20p">Status</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-10p">Tracking #</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-17p">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="orders-table-body" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="6" class="text-center text-gray-500 py-8">Loading orders...</td></tr>
+                        <tr><td colspan="7" class="text-center text-gray-500 py-8">Loading orders...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -332,6 +340,35 @@
                     </button>
                     <button id="submit-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
                         Send Re-offer
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Fulfillment Form -->
+            <div id="manual-fulfillment-form-container" class="mt-6 p-4 border border-gray-200 rounded-lg hidden">
+                <h4 class="text-lg font-semibold text-gray-800 mb-4">Manually Fulfill Order (External Label)</h4>
+                <p id="manual-fulfillment-message" class="text-sm text-gray-600 mb-4">Enter the tracking number(s) generated externally. This will update the order status and notify the customer.</p>
+                
+                <div class="space-y-4">
+                    <div id="manual-outbound-tracking-group">
+                        <label for="manual-outbound-tracking" class="block text-sm font-medium text-gray-700">Outbound Kit Tracking # (Required for Kits)</label>
+                        <input type="text" id="manual-outbound-tracking" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 9400100000000000000000">
+                    </div>
+                    <div id="manual-inbound-tracking-group">
+                        <label for="manual-inbound-tracking" class="block text-sm font-medium text-gray-700">Inbound Device Tracking # (Required)</label>
+                        <input type="text" id="manual-inbound-tracking" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 9400100000000000000001">
+                    </div>
+                    <div>
+                        <label for="manual-label-url" class="block text-sm font-medium text-gray-700">Inbound Label URL (Optional - direct PDF link)</label>
+                        <input type="url" id="manual-label-url" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., https://example.com/label.pdf">
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-end gap-3">
+                    <button id="cancel-manual-fulfillment-btn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                        Cancel
+                    </button>
+                    <button id="submit-manual-fulfillment-btn" type="button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                        Confirm Fulfillment
                     </button>
                 </div>
             </div>
@@ -428,6 +465,14 @@
         const submitReofferBtn = document.getElementById('submit-reoffer-btn');
         const cancelReofferBtn = document.getElementById('cancel-reoffer-btn');
         
+        const manualFulfillmentFormContainer = document.getElementById('manual-fulfillment-form-container');
+        const manualOutboundTracking = document.getElementById('manual-outbound-tracking');
+        const manualInboundTracking = document.getElementById('manual-inbound-tracking');
+        const manualLabelUrl = document.getElementById('manual-label-url');
+        const manualOutboundTrackingGroup = document.getElementById('manual-outbound-tracking-group');
+        const submitManualFulfillmentBtn = document.getElementById('submit-manual-fulfillment-btn');
+        const cancelManualFulfillmentBtn = document.getElementById('cancel-manual-fulfillment-btn');
+
         const reofferParentLink = document.querySelector('.reoffer-parent');
         const reofferSubmenu = document.querySelector('.submenu-container');
 
@@ -440,6 +485,13 @@
                 closeOrderDetailsModal();
             }
         });
+
+        function formatDate(timestamp) {
+            if (!timestamp) return 'N/A';
+            // Handles both Firestore Timestamp objects (with _seconds) and Date objects
+            const date = timestamp._seconds ? new Date(timestamp._seconds * 1000) : new Date(timestamp);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
 
         function updateDashboardCounts(ordersData) {
             // Updated to 'order_pending'
@@ -468,6 +520,7 @@
                 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
                 const itemDescription = `${order.device} ${order.storage}`;
                 const displayId = order.id;
+                const orderDate = formatDate(order.createdAt);
                 
                 let reofferTimer = '';
                 // Pass the entire order object to formatStatus for conditional logic
@@ -484,18 +537,19 @@
                 }
 
                 row.innerHTML = `
-                    <td class="px-6 py-4 whitespace-normal text-sm font-medium text-gray-900">${displayId}</td>
-                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${customerName}</td>
-                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${itemDescription}</td>
-                    <td class="px-6 py-4 whitespace-normal text-sm">
+                    <td class="px-3 py-4 whitespace-normal text-sm font-medium text-gray-900 w-8p">${displayId}</td>
+                    <td class="px-3 py-4 whitespace-normal text-sm text-gray-500 w-15p">${orderDate}</td>
+                    <td class="px-3 py-4 whitespace-normal text-sm text-gray-500 w-15p">${customerName}</td>
+                    <td class="px-3 py-4 whitespace-normal text-sm text-gray-500 w-15p">${itemDescription}</td>
+                    <td class="px-3 py-4 whitespace-normal text-sm w-20p">
                         <span class="${getStatusClass(order.status)}">
                            <span class="status-bubble-text">${statusText}</span>
                            ${reofferTimer}
                         </span>
                     </td>
-                    <td class="px-6 py-4 whitespace-normal text-sm text-gray-500">${order.trackingNumber || 'N/A'}</td>
-                    <td class="px-6 py-4 whitespace-normal text-sm font-medium">
-                        <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
+                    <td class="px-3 py-4 whitespace-normal text-sm text-gray-500 w-10p">${order.trackingNumber || 'N/A'}</td>
+                    <td class="px-3 py-4 whitespace-normal text-sm font-medium w-17p">
+                        <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">Details</button>
                     </td>
                 `;
                 ordersTableBody.appendChild(row);
@@ -562,6 +616,7 @@
             modalMessage.textContent = '';
             modalVenmoUsernameRow.classList.add('hidden');
             reofferFormContainer.classList.add('hidden');
+            manualFulfillmentFormContainer.classList.add('hidden'); // Hide manual form initially
             
             // Hide all label rows initially
             modalLabelRow.classList.add('hidden');
@@ -668,9 +723,12 @@
 
             const currentStatus = order.status;
             switch (currentStatus) {
-                case 'order_pending': // Updated status
+                case 'order_pending': 
                 case 'shipping_kit_requested':
+                    // Button for automated label generation
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
+                    // Button for manual fulfillment
+                    modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order)));
                     break;
                 case 'label_generated':
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
@@ -707,6 +765,86 @@
                 reofferFormContainer.classList.add('hidden');
                 modalActionButtons.classList.remove('hidden');
             };
+        }
+
+        /**
+         * Shows the form for manual tracking number input.
+         * @param {Object} order The current order object.
+         */
+        function showManualFulfillmentForm(order) {
+            modalActionButtons.classList.add('hidden');
+            manualFulfillmentFormContainer.classList.remove('hidden');
+            manualOutboundTracking.value = '';
+            manualInboundTracking.value = '';
+            manualLabelUrl.value = '';
+
+            const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
+
+            if (isKitOrder) {
+                manualOutboundTrackingGroup.classList.remove('hidden');
+                manualOutboundTracking.required = true;
+                document.querySelector('#manual-outbound-tracking-group label').textContent = 'Outbound Kit Tracking # (Required)';
+                document.querySelector('#manual-inbound-tracking-group label').textContent = 'Inbound Device Tracking # (Required)';
+            } else {
+                manualOutboundTrackingGroup.classList.add('hidden');
+                manualOutboundTracking.required = false;
+                document.querySelector('#manual-inbound-tracking-group label').textContent = 'Shipping Label Tracking # (Required)';
+            }
+
+            submitManualFulfillmentBtn.onclick = () => handleManualFulfillment(order.id, isKitOrder);
+            cancelManualFulfillmentBtn.onclick = () => {
+                manualFulfillmentFormContainer.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
+            };
+        }
+
+        async function handleManualFulfillment(orderId, isKitOrder) {
+            const outboundTracking = manualOutboundTracking.value.trim();
+            const inboundTracking = manualInboundTracking.value.trim();
+            const labelUrl = manualLabelUrl.value.trim();
+
+            if (isKitOrder && !outboundTracking) {
+                displayModalMessage('Outbound Kit Tracking Number is required for Shipping Kit orders.', 'error');
+                return;
+            }
+            if (!inboundTracking) {
+                displayModalMessage('Inbound Device Tracking Number is required.', 'error');
+                return;
+            }
+
+            modalLoadingMessage.classList.remove('hidden');
+            manualFulfillmentFormContainer.classList.add('hidden');
+            modalMessage.classList.add('hidden');
+
+            try {
+                const url = `${BACKEND_BASE_URL}/manual-fulfill/${orderId}`;
+                console.log("Submitting manual fulfillment to:", url);
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        outboundTrackingNumber: isKitOrder ? outboundTracking : null,
+                        inboundTrackingNumber: inboundTracking,
+                        inboundLabelUrl: labelUrl || 'https://placehold.co/1x1/ffffff/fff?text=N/A', // Placeholder if URL is missing
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error("Backend error response for manual fulfillment:", response.status, errorText);
+                    throw new Error(errorText || `Failed to manually fulfill order: ${response.status} - ${errorText.substring(0, 100)}`);
+                }
+                const result = await response.json();
+                
+                displayModalMessage(result.message, 'success');
+                openOrderDetailsModal(orderId);
+
+            } catch (error) {
+                console.error("Action error:", error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
         }
 
         async function submitReOfferFromForm(orderId) {
@@ -895,7 +1033,7 @@
                 fetchAndRenderOrders();
             } catch (error) {
                 console.error("Error initializing Firebase:", error);
-                ordersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+                ordersTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
             }
         });
 
@@ -909,7 +1047,7 @@
                 });
             } catch (error) {
                 console.error('Error fetching real-time orders:', error);
-                ordersTableBody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+                ordersTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
             }
         }
 
