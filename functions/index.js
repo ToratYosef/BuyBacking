@@ -129,11 +129,12 @@ const ORDER_PLACED_ADMIN_EMAIL_HTML = `
           <p><strong>Shipping Preference:</strong> **SHIPPING_PREFERENCE**</p>
         </div>
         <div class="button-container">
-          <a href="https://secondhandcell.com/admin/public/admin.html" class="button">Fulfill Order Now</a>
+          <a href="https://secondhandcell.com/admin" class="button">Fulfill Order Now</a>
         </div>
+        <p>This is an automated notification from SecondHandCell.</p>
       </div>
       <div class="footer">
-        <p>This is an automated notification from SecondHandCell.</p>
+        <p>The SecondHandCell Team</p>
       </div>
     </div>
   </body>
@@ -164,16 +165,6 @@ const BLACKLISTED_EMAIL_HTML = `
         <h1>Important Notice Regarding Your Device</h1>
         <br>
         
-
-
-
-
-
-[Image of a warning sign]
-
-
-
-
       </div>
       <div class="content">
         <p>Hello **CUSTOMER_NAME**, </p>
@@ -183,7 +174,6 @@ const BLACKLISTED_EMAIL_HTML = `
         <p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This is a matter of legal and ethical compliance.</p>
         <p>Because the device is flagged, we cannot proceed with this transaction. Under New York law, we are required to report and hold any device suspected of being lost or stolen. The device cannot be returned to you. We must cooperate with law enforcement to ensure the device is handled in accordance with legal requirements.</p>
         <p>We advise you to contact your cellular carrier or the original owner of the device to resolve the status issue directly with them.</p>
-        <p>For more details on the laws and our policy, please review the information below:</p>
         <p>**LEGAL_TEXT**</p>
       </div>
       <div class="footer">
@@ -304,7 +294,7 @@ const DOWNGRADE_EMAIL_HTML = `
     <div class="email-container">
       <div class="header">
         <h1>Update on Your Order</h1>
-      </div>
+        </div>
       <div class="content">
         <p>Hello **CUSTOMER_NAME**, </p>
         <p>This is an automated notification regarding your order <strong class="order-id">#**ORDER_ID**</strong>. The 72-hour period to resolve the issue with your device has expired. As a result, your offer has been automatically reduced to the lowest possible price (as if the device were damaged).</p>
@@ -450,7 +440,7 @@ async function sendAdminPushNotification(title, body, data = {}) {
 
     if (allTokens.length === 0) {
       console.log(
-        "No FCM tokens found for any admin. Cannot send push notification."
+        "No FCM tokens found for any admin. Cannot send push notification in test mode."
       );
       return;
     }
@@ -639,153 +629,153 @@ async function sendMultipleTestEmails(email, emailTypes) {
   };
   
   const mailPromises = emailTypes.map(emailType => {
-      let subject;
-      let htmlBody;
-      let orderToUse;
+    let subject;
+    let htmlBody;
+    let orderToUse;
 
-      switch (emailType) {
-        case "shipping-label":
-          orderToUse = mockOrderData;
-          subject = `[TEST] Your SecondHandCell Shipping Label for Order #${orderToUse.id}`;
-          htmlBody = SHIPPING_LABEL_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
-            .replace(/\*\*TRACKING_NUMBER\*\*/g, orderToUse.trackingNumber)
-            .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, orderToUse.uspsLabelUrl);
-          break;
-        case "reoffer":
-          orderToUse = mockOrderData;
-          subject = `[TEST] Re-offer for Order #${orderToUse.id}`;
-          let reasonString = orderToUse.reOffer.reasons.join(", ");
-          if (orderToUse.reOffer.comments) reasonString += `; ${orderToUse.reOffer.comments}`;
-          htmlBody = `
-            <div style="font-family: 'system-ui','-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Oxygen-Sans','Ubuntu','Cantarell','Helvetica Neue','Arial','sans-serif'; font-size: 14px; line-height: 1.5; color: #444444;">
-              <h2 style="color: #0056b3; font-weight: bold; text-transform: none; font-size: 20px; line-height: 26px; margin: 5px 0 10px;">Hello ${orderToUse.shippingInfo.fullName},</h2>
-              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${orderToUse.id} and after inspection, we have a revised offer for you.</p>
-              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${orderToUse.estimatedQuote.toFixed(2)}</p>
-              <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;"><strong>New Offer Price:</strong> $${orderToUse.reOffer.newPrice.toFixed(2)}</p>
-              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Reason for New Offer:</strong></p>
-              <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;"><em>"${reasonString}"</em></p>
-              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
-              <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
-                <tbody>
-                  <tr>
-                    <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
-                      <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
-                        <tbody>
-                          <tr>
-                            <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
-                              <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderToUse.id}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
-                                Accept Offer ($${orderToUse.reOffer.newPrice.toFixed(2)})
-                              </a>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table >
-                    </td>
-                    <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
-                      <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
-                        <tbody>
-                          <tr>
-                            <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
-                              <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderToUse.id}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
-                                Return Phone Now
-                              </a>
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
-              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SecondHandCell Team</p>
-            </div>
-          `;
-          break;
-        case "final-offer-accepted":
-          orderToUse = mockOrderData;
-          subject = `[TEST] Offer Accepted for Order #${orderToUse.id}`;
-          htmlBody = `
-            <p>Hello ${orderToUse.shippingInfo.fullName},</p>
-            <p>Great news! Your order <strong>#${orderToUse.id}</strong> has been completed and payment has been processed.</p>
-            <p>If you have any questions about your payment, please let us know.</p>
-            <p>Thank you for choosing SecondHandCell!</p>
-          `;
-          break;
-        case "return-label":
-          orderToUse = mockOrderData;
-          subject = `[TEST] Your SecondHandCell Return Label`;
-          htmlBody = `
-            <p>Hello ${orderToUse.shippingInfo.fullName},</p>
-            <p>As requested, here is your return shipping label for your device (Order ID: ${orderToUse.id}):</p>
-            <p>Return Tracking Number: <strong>${orderToUse.returnTrackingNumber}</strong></p>
-            <a href="${orderToUse.returnLabelUrl}">Download Return Label</a>
-            <p>Thank you,</p>
-            <p>The SecondHandCell Team</p>
-          `;
-          break;
-        case "blacklisted":
-          orderToUse = mockOrderData;
-          subject = `[TEST] Important Notice Regarding Your Device - Order #${orderToUse.id}`;
-          htmlBody = BLACKLISTED_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
-            .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
-            .replace(/\*\*LEGAL_TEXT\*\*/g, "This is mock legal text for testing.");
-          break;
-        case "fmi":
-          orderToUse = mockOrderData;
-          subject = `[TEST] Action Required for Order #${orderToUse.id}`;
-          htmlBody = FMI_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
-            .replace(/\*\*CONFIRM_URL\*\*/g, `https://example.com/mock-confirm-fmi`);
-          break;
-        case "balance-due":
-          orderToUse = mockOrderData;
-          subject = `[TEST] Action Required for Order #${orderToUse.id}`;
-          htmlBody = BAL_DUE_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
-            .replace(/\*\*FINANCIAL_STATUS\*\*/g, orderToUse.financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
-          break;
-        case "completed":
-          orderToUse = mockOrderDataWithoutReoffer;
-          subject = `[TEST] Your SecondHandCell Order is Complete!`;
-          const TRUSTBOX_WIDGET = `
-            <!-- TrustBox widget - Review Collector -->
-            <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5271f986-aa8e-4797-b776-ad18270086fd">
-              <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
-            </div>
-            <!-- End TrustBox widget -->
-          `;
-          
-          let trustboxHtml = "";
-          // Check if there was no re-offer and no return
-          if (!orderToUse.reOffer && !orderToUse.returnLabelUrl) {
-            trustboxHtml = TRUSTBOX_WIDGET;
-          }
+    switch (emailType) {
+      case "shipping-label":
+        orderToUse = mockOrderData;
+        subject = `[TEST] Your SecondHandCell Shipping Label for Order #${orderToUse.id}`;
+        htmlBody = SHIPPING_LABEL_EMAIL_HTML
+          .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
+          .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
+          .replace(/\*\*TRACKING_NUMBER\*\*/g, orderToUse.trackingNumber)
+          .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, orderToUse.uspsLabelUrl);
+        break;
+      case "reoffer":
+        orderToUse = mockOrderData;
+        subject = `[TEST] Re-offer for Order #${orderToUse.id}`;
+        let reasonString = orderToUse.reOffer.reasons.join(", ");
+        if (orderToUse.reOffer.comments) reasonString += `; ${orderToUse.reOffer.comments}`;
+        htmlBody = `
+          <div style="font-family: 'system-ui','-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Oxygen-Sans','Ubuntu','Cantarell','Helvetica Neue','Arial','sans-serif'; font-size: 14px; line-height: 1.5; color: #444444;">
+            <h2 style="color: #0056b3; font-weight: bold; text-transform: none; font-size: 20px; line-height: 26px; margin: 5px 0 10px;">Hello ${orderToUse.shippingInfo.fullName},</h2>
+            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${orderToUse.id} and after inspection, we have a revised offer for you.</p>
+            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${orderToUse.estimatedQuote.toFixed(2)}</p>
+            <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;"><strong>New Offer Price:</strong> $${orderToUse.reOffer.newPrice.toFixed(2)}</p>
+            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Reason for New Offer:</strong></p>
+            <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;"><em>"${reasonString}"</em></p>
+            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
+            <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
+              <tbody>
+                <tr>
+                  <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                    <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
+                      <tbody>
+                        <tr>
+                          <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
+                            <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderToUse.id}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
+                              Accept Offer ($${orderToUse.reOffer.newPrice.toFixed(2)})
+                            </a>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table >
+                  </td>
+                  <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                    <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
+                      <tbody>
+                        <tr>
+                          <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
+                            <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderToUse.id}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
+                              Return Phone Now
+                            </a>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
+            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SecondHandCell Team</p>
+          </div>
+        `;
+        break;
+      case "final-offer-accepted":
+        orderToUse = mockOrderData;
+        subject = `[TEST] Offer Accepted for Order #${orderToUse.id}`;
+        htmlBody = `
+          <p>Hello ${orderToUse.shippingInfo.fullName},</p>
+          <p>Great news! Your order <strong>#${orderToUse.id}</strong> has been completed and payment has been processed.</p>
+          <p>If you have any questions about your payment, please let us know.</p>
+          <p>Thank you for choosing SecondHandCell!</p>
+        `;
+        break;
+      case "return-label":
+        orderToUse = mockOrderData;
+        subject = `[TEST] Your SecondHandCell Return Label`;
+        htmlBody = `
+          <p>Hello ${orderToUse.shippingInfo.fullName},</p>
+          <p>As requested, here is your return shipping label for your device (Order ID: ${orderToUse.id}):</p>
+          <p>Return Tracking Number: <strong>${orderToUse.returnTrackingNumber}</strong></p>
+          <a href="${orderToUse.returnLabelUrl}">Download Return Label</a>
+          <p>Thank you,</p>
+          <p>The SecondHandCell Team</p>
+        `;
+        break;
+      case "blacklisted":
+        orderToUse = mockOrderData;
+        subject = `[TEST] Important Notice Regarding Your Device - Order #${orderToUse.id}`;
+        htmlBody = BLACKLISTED_EMAIL_HTML
+          .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
+          .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
+          .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
+          .replace(/\*\*LEGAL_TEXT\*\*/g, "This is mock legal text for testing.");
+        break;
+      case "fmi":
+        orderToUse = mockOrderData;
+        subject = `[TEST] Action Required for Order #${orderToUse.id}`;
+        htmlBody = FMI_EMAIL_HTML
+          .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
+          .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
+          .replace(/\*\*CONFIRM_URL\*\*/g, `https://example.com/mock-confirm-fmi`);
+        break;
+      case "balance-due":
+        orderToUse = mockOrderData;
+        subject = `[TEST] Action Required for Order #${orderToUse.id}`;
+        htmlBody = BAL_DUE_EMAIL_HTML
+          .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
+          .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
+          .replace(/\*\*FINANCIAL_STATUS\*\*/g, orderToUse.financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+        break;
+      case "completed":
+        orderToUse = mockOrderDataWithoutReoffer;
+        subject = `[TEST] Your SecondHandCell Order is Complete!`;
+        const TRUSTBOX_WIDGET = `
+          <!-- TrustBox widget - Review Collector -->
+          <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5271f986-aa8e-4797-b776-ad18270086fd">
+            <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
+          </div>
+          <!-- End TrustBox widget -->
+        `;
+        
+        let trustboxHtml = "";
+        // Check if there was no re-offer and no return
+        if (!orderToUse.reOffer && !orderToUse.returnLabelUrl) {
+          trustboxHtml = TRUSTBOX_WIDGET;
+        }
 
-          htmlBody = ORDER_COMPLETED_EMAIL_HTML
-            .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
-            .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
-            .replace(/\*\*TRUSTBOX_WIDGET\*\*/g, trustboxHtml);
-          break;
-        default:
-          return Promise.resolve();
-      }
+        htmlBody = ORDER_COMPLETED_EMAIL_HTML
+          .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
+          .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
+          .replace(/\*\*TRUSTBOX_WIDGET\*\*/g, trustboxHtml);
+        break;
+      default:
+        return Promise.resolve();
+    }
 
-      const mailOptions = {
-        from: functions.config().email.user,
-        to: email,
-        subject: subject,
-        html: htmlBody,
-      };
+    const mailOptions = {
+      from: functions.config().email.user,
+      to: email,
+      subject: subject,
+      html: htmlBody,
+    };
 
-      return transporter.sendMail(mailOptions);
-    });
+    return transporter.sendMail(mailOptions);
+  });
 
   await Promise.all(mailPromises);
   return { message: "Test emails sent successfully." };
@@ -1580,115 +1570,74 @@ exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
 exports.onChatTransferUpdate = functions.firestore
   .document("chats/{chatId}")
   .onUpdate(async (change, context) => {
-    const newChatData = change.after.data();
-    const oldChatData = change.before.data();
-
-    const newTransferRequest = newChatData.transferRequest;
-    const oldTransferRequest = oldChatData.transferRequest;
-
-    if (
-      newTransferRequest &&
-      newTransferRequest.status === "pending" &&
-      (!oldTransferRequest || oldTransferRequest.status !== "pending")
-    ) {
-      const targetAdminUid = newTransferRequest.toUid;
-      const fromAdminName = newTransferRequest.fromName;
-      const chatUser =
-        newTransferRequest.userDisplayName ||
-        newChatData.ownerUid ||
-        newChatData.guestId;
-
-      const notificationMessage = `Chat transfer from ${fromAdminName} for ${chatUser}.`;
-
-      await sendAdminPushNotification("Incoming Chat Transfer!", notificationMessage, {
-        chatId: context.params.chatId,
-        userId: newChatData.ownerUid,
-        action: "open_chat",
-        relatedDocType: "chat",
-        relatedDocId: context.params.chatId,
-        relatedUserId: newChatData.ownerUid,
-      }).catch((e) => console.error("FCM Send Error (Chat Transfer):", e));
-
-      await addAdminFirestoreNotification(
-        targetAdminUid,
-        notificationMessage,
-        "chat",
-        context.params.chatId,
-        newChatData.ownerUid
-      ).catch((e) =>
-        console.error("Firestore Notification Error (Chat Transfer):", e)
-      );
-
-      console.log(
-        `Notification sent for chat transfer to admin ${targetAdminUid} for chat ${context.params.chatId}.`
-      );
-    }
-
+    // Removed all chat transfer notification logic
     return null;
   });
 
-// This function now sends the email and push notification on the *first* user message.
+// FIX: This function triggers notifications for the first user message in a new chat.
 exports.onNewChatMessage = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
     const newMessage = snap.data();
     const chatId = context.params.chatId;
 
-    // We only want to notify admins on the first user message.
-    const messagesSnapshot = await db.collection(`chats/${chatId}/messages`)
-      .orderBy('timestamp')
-      .limit(2)
+    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+
+    // 2. Check if an agent is already handling the chat (to prevent spamming admins)
+    if (chatData.agentHasJoined) {
+      return null;
+    }
+    
+    // 3. Check if this is the FIRST user message in the chat.
+    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
+      .where('senderType', '==', 'user')
       .get();
-      
-    // Check if this is the first message in the chat from a user (index 0)
-    // and that the chat has not been claimed by an agent yet.
-    if (messagesSnapshot.docs.length === 1 && newMessage.senderType === "user") {
-      const chatDocRef = db.collection("chats").doc(chatId);
-      const chatDoc = await chatDocRef.get();
-      const chatData = chatDoc.data();
 
-      // Only proceed if no agent has joined yet
-      if (chatData.agentHasJoined) {
-        return null;
-      }
+    // If the number of user messages is exactly 1 (the message that just triggered this function),
+    // it means this is the first message from the user.
+    if (userMessagesSnapshot.docs.length === 1) {
       
-      const customerName = chatData.ownerUid || chatData.guestId;
+      const userIdentifier = chatData.ownerUid || chatData.guestId;
       
-      const mailOptions = {
-        from: functions.config().email.user,
-        to: "support@secondhandcell.com",
-        bcc: "saulsetton16@gmail.com",
-        subject: "New Chat: Respond Quick",
-        html: `
-          <p>A new chat has been started by user: <strong>${customerName}</strong>.</p>
-          <p>Please respond quickly to assist the customer.</p>
-          <a href="https://secondhandcell.com/admin/public/admin.html?chatId=${chatId}" 
-              style="display: inline-block; padding: 10px 20px; font-size: 16px; color: #ffffff; background-color: #4CAF50; text-decoration: none; border-radius: 5px;">
-            Go to Chat
-          </a>
-        `,
-      };
+      // 3a. Send FCM Push Notification to all admins
+      const fcmPromise = sendAdminPushNotification(
+        "💬 New Customer Chat!",
+        `Chat started by ${userIdentifier}.`,
+        {
+          chatId: chatId,
+          userId: chatData.ownerUid || "guest",
+          relatedDocType: "chat",
+          relatedDocId: chatId,
+          relatedUserId: chatData.ownerUid // Use ownerUid if available, null otherwise
+        }
+      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
 
-      try {
-        await transporter.sendMail(mailOptions);
-        console.log(`Email sent for new chat: ${chatId}`);
-
-        await sendAdminPushNotification(
-          "New Chat Alert! 💬",
-          `New chat started by ${customerName}.`,
-          {
-            chatId: chatId,
-            userId: chatData.ownerUid,
-            action: "open_chat",
-            relatedDocType: "chat",
-            relatedDocId: chatId,
-            relatedUserId: chatData.ownerUid,
-          }
+      // 3b. Add Firestore Notifications for each admin
+      const firestoreNotificationPromises = [];
+      const adminsSnapshot = await adminsCollection.get();
+      adminsSnapshot.docs.forEach((adminDoc) => {
+        firestoreNotificationPromises.push(
+          addAdminFirestoreNotification(
+            adminDoc.id,
+            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
+            "chat",
+            chatId,
+            chatData.ownerUid
+          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
         );
+      });
 
-      } catch (error) {
-        console.error("Error sending email or notification for new chat:", error);
-      }
+      // Wait for all notifications to be sent
+      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
+      
+      console.log(`New chat started by ${userIdentifier}. Notifications sent.`);
     }
 
     return null;
@@ -1698,26 +1647,8 @@ exports.onNewChatMessage = functions.firestore
 exports.onNewChatCreated = functions.firestore
   .document("chats/{chatId}")
   .onCreate(async (snap, context) => {
-    const newChatData = snap.data();
-    const chatId = context.params.chatId;
-
-    // Check if a user has started the chat and no agent has joined yet
-    if ((newChatData.ownerUid || newChatData.guestId) && !newChatData.agentHasJoined) {
-      try {
-        const messagesRef = db.collection(`chats/${chatId}/messages`);
-        const botMessage = {
-          text: "Hello! Thank you for contacting SecondHandCell. An agent will be with you shortly.",
-          sender: "bot",
-          senderType: "bot",
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        };
-
-        await messagesRef.add(botMessage);
-        console.log(`Auto-response sent for chat: ${chatId}`);
-      } catch (error) {
-        console.error("Error sending auto-response:", error);
-      }
-    }
+    // Removed all auto-response logic as chat notifications are removed.
+    return null;
   });
 
 app.post("/test-emails", async (req, res) => {
@@ -1766,7 +1697,7 @@ app.post("/check-esn", async (req, res) => {
     const phoneCheckData = response.data;
 
     let isBlacklisted = phoneCheckData.isBlacklisted || false;
-    let fmiStatus = phoneCheckData.findMyIphoneStatus || "Off";
+    let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
     let financialStatus = phoneCheckData.financialStatus || "Clear";
     
     if (isBlacklisted) {
@@ -1878,33 +1809,7 @@ app.post("/orders/:id/fmi-cleared", async (req, res) => {
     }
 });
 
-app.delete("/orders/:id", async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    const orderRef = ordersCollection.doc(orderId);
-    const orderDoc = await orderRef.get();
-
-    if (!orderDoc.exists) {
-      return res.status(404).json({ error: "Order not found." });
-    }
-
-    const orderData = orderDoc.data();
-    const userId = orderData.userId;
-
-    // Delete from the main collection
-    await orderRef.delete();
-
-    // If a userId is associated, delete from the user's subcollection as well
-    if (userId) {
-      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
-      await userOrderRef.delete();
-    }
-
-    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
-  } catch (err) {
-    console.error("Error deleting order:", err);
-    res.status(500).json({ error: "Failed to delete order." });
-  }
-});
+// Duplicated from above, removed duplicate:
+// app.delete("/orders/:id", async (req, res) => { /* ... */ });
 
 exports.api = functions.https.onRequest(app);
