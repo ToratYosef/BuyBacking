@@ -424,34 +424,29 @@ async function updateOrderBoth(orderId, partialData) {
   return { order: { id: orderId, ...base, ...partialData }, userId };
 }
 
-async function sendAdminPushNotification(title, body, data = {}) {
+// NEW HELPER: Sanitizes data to ensure all values are strings for FCM payload compliance.
+function stringifyData(obj = {}) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null) continue;
+    out[String(k)] = typeof v === 'string' ? v : String(v);
+  }
+  return out;
+}
+
+// Custom function to send FCM push notification to a specific token or list of tokens
+async function sendPushNotification(tokens, title, body, data = {}) {
   try {
-    const adminsSnapshot = await adminsCollection.get();
-    let allTokens = [];
-
-    for (const adminDoc of adminsSnapshot.docs) {
-      const adminUid = adminDoc.id;
-      const fcmTokensRef = adminsCollection.doc(adminUid).collection("fcmTokens");
-      const tokensSnapshot = await fcmTokensRef.get();
-      tokensSnapshot.forEach((doc) => {
-        allTokens.push(doc.id);
-      });
-    }
-
-    if (allTokens.length === 0) {
-      console.log(
-        "No FCM tokens found for any admin. Cannot send push notification in test mode."
-      );
-      return;
-    }
+    const tokenList = Array.isArray(tokens) ? tokens : [tokens];
+    if (!tokenList.length) return;
 
     const message = {
       notification: {
         title: title,
         body: body,
       },
-      data: data,
-      tokens: allTokens,
+      data: stringifyData(data), // <-- CRITICAL FIX: Sanitize data payload
+      tokens: tokenList,
     };
 
     const response = await admin.messaging().sendEachForMulticast(message);
@@ -461,17 +456,72 @@ async function sendAdminPushNotification(title, body, data = {}) {
       "failures:",
       response.failureCount
     );
+
+    const tokensToRemove = [];
     if (response.failureCount > 0) {
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
           console.error(
-            `Failed to send FCM to token ${allTokens[idx]}: ${resp.error}`
+            `Failed to send FCM to token ${tokenList[idx]}: ${resp.error}`
           );
+          // Check for token invalidation errors (e.g., 'messaging/registration-token-not-registered')
+          if (resp.error?.code === 'messaging/registration-token-not-registered' || 
+              resp.error?.code === 'messaging/invalid-argument') {
+            tokensToRemove.push(tokenList[idx]);
+          }
         }
       });
     }
+
+    // Prune invalid tokens from Firestore
+    if (tokensToRemove.length > 0) {
+      console.log(`Pruning ${tokensToRemove.length} invalid FCM tokens.`);
+      await admin.messaging().deleteRegistrationTokens(tokensToRemove);
+      
+      // OPTIONAL: Also delete token documents from the 'fcmTokens' subcollection
+      // This part requires knowing the Admin UID, which we don't have here. 
+      // The FCM deleteRegistrationTokens call cleans up the backend registration, which is essential.
+    }
+
+    return response;
   } catch (error) {
     console.error("Error sending FCM push notification:", error);
+  }
+}
+
+// Re-using and slightly updating the old sendAdminPushNotification to fetch ALL admin tokens.
+async function sendAdminPushNotification(title, body, data = {}) {
+  try {
+    const adminsSnapshot = await adminsCollection.get();
+    let allTokens = [];
+
+    for (const adminDoc of adminsSnapshot.docs) {
+      const adminUid = adminDoc.id;
+      const fcmTokensRef = adminsCollection.doc(adminUid).collection("fcmTokens");
+      const tokensSnapshot = await fcmTokensRef.get();
+      
+      // FIX: Safely retrieve the token, checking doc.data().token or using doc.id
+      tokensSnapshot.forEach((doc) => {
+        const d = doc.data() || {};
+        // The token is stored either as the document ID or explicitly in a 'token' field.
+        const token = d.token || doc.id; 
+        if (token && typeof token === 'string') {
+            allTokens.push(token);
+        }
+      });
+    }
+
+    if (allTokens.length === 0) {
+      console.log(
+        "No FCM tokens found for any admin. Cannot send push notification."
+      );
+      return;
+    }
+    
+    return await sendPushNotification(allTokens, title, body, data);
+    
+  } catch (error) {
+    console.error("Error sending FCM push notification to all admins:", error);
   }
 }
 
@@ -1541,7 +1591,6 @@ exports.autoAcceptOffers = functions.pubsub
   });
 
 // This function creates a user document in the 'users' collection, but NOT in the 'admins' collection.
-// New accounts should never be set as admins here.
 exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
   try {
     // Do not create a user record if the user is anonymous (no email)
@@ -1574,8 +1623,8 @@ exports.onChatTransferUpdate = functions.firestore
     return null;
   });
 
-// FIX: This function triggers notifications for the first user message in a new chat.
-exports.onNewChatMessage = functions.firestore
+// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
+exports.onNewChatOpened = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
     const newMessage = snap.data();
@@ -1590,7 +1639,7 @@ exports.onNewChatMessage = functions.firestore
     const chatDoc = await chatDocRef.get();
     const chatData = chatDoc.data();
 
-    // 2. Check if an agent is already handling the chat (to prevent spamming admins)
+    // 2. Check if the chat is already active or assigned
     if (chatData.agentHasJoined) {
       return null;
     }
@@ -1600,26 +1649,31 @@ exports.onNewChatMessage = functions.firestore
       .where('senderType', '==', 'user')
       .get();
 
-    // If the number of user messages is exactly 1 (the message that just triggered this function),
-    // it means this is the first message from the user.
     if (userMessagesSnapshot.docs.length === 1) {
       
       const userIdentifier = chatData.ownerUid || chatData.guestId;
+      const relatedUserId = chatData.ownerUid;
       
-      // 3a. Send FCM Push Notification to all admins
+      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
+      await chatDocRef.set({
+          lastMessageSender: newMessage.sender, // The user's ID/guest ID
+          lastMessageSeenByAdmin: false,
+      }, { merge: true });
+
+      // Send notifications to ALL admins for a new UNASSIGNED chat.
       const fcmPromise = sendAdminPushNotification(
         "💬 New Customer Chat!",
         `Chat started by ${userIdentifier}.`,
         {
           chatId: chatId,
-          userId: chatData.ownerUid || "guest",
+          userId: relatedUserId || "guest", // Use safe string fallback
           relatedDocType: "chat",
           relatedDocId: chatId,
-          relatedUserId: chatData.ownerUid // Use ownerUid if available, null otherwise
+          relatedUserId: relatedUserId,
         }
       ).catch((e) => console.error("FCM Send Error (New Chat):", e));
 
-      // 3b. Add Firestore Notifications for each admin
+      // Add Firestore Notifications for each admin
       const firestoreNotificationPromises = [];
       const adminsSnapshot = await adminsCollection.get();
       adminsSnapshot.docs.forEach((adminDoc) => {
@@ -1629,15 +1683,101 @@ exports.onNewChatMessage = functions.firestore
             `New Chat: ID: ${chatId} from ${userIdentifier}.`,
             "chat",
             chatId,
-            chatData.ownerUid
+            relatedUserId
           ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
         );
       });
 
-      // Wait for all notifications to be sent
       await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
       
-      console.log(`New chat started by ${userIdentifier}. Notifications sent.`);
+      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
+    }
+
+    return null;
+  });
+
+
+// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
+exports.onNewCustomerResponse = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Only process user messages
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+    
+    const assignedAdminUid = chatData.assignedAdminUid;
+    const userIdentifier = chatData.ownerUid || chatData.guestId;
+
+    // We only proceed if an admin is assigned to this chat.
+    if (!assignedAdminUid) {
+        return null;
+    }
+    
+    // We explicitly check if chatData.ownerUid is available for the payload.
+    const relatedUserId = chatData.ownerUid;
+
+
+    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
+    // We look at the sender of the second-to-last message (0 is the current one).
+    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
+        .orderBy('timestamp', 'desc')
+        .limit(2)
+        .get();
+        
+    // The message that triggered this function is index 0. We want the one before it (index 1).
+    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
+        ? messageSnapshots.docs[1].data()
+        : null;
+
+    // Update chat metadata, marking the latest sender as the user and setting unread flag.
+    // This MUST happen regardless of notification sending.
+    await chatDocRef.set({
+        lastMessageSender: newMessage.sender, // The user's ID/guest ID
+        lastMessageSeenByAdmin: false,
+    }, { merge: true });
+
+    // 3. Only notify the assigned admin if the LAST message *before* this new one
+    // was sent by the assigned admin. This prevents notification spam from a user sending
+    // multiple messages in a row.
+    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
+        
+        // Send push notification to the specific assigned admin
+        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
+        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
+        
+        if (adminTokens.length > 0) {
+            await sendPushNotification(
+                adminTokens,
+                "💬 New Message in Your Chat!",
+                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
+                {
+                    chatId: chatId,
+                    userId: relatedUserId || "guest",
+                    relatedDocType: "chat",
+                    relatedDocId: chatId,
+                    relatedUserId: relatedUserId,
+                }
+            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
+        }
+        
+        // Add Firestore Notification for the assigned admin
+        await addAdminFirestoreNotification(
+            assignedAdminUid,
+            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
+            "chat",
+            chatId,
+            relatedUserId
+        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
+        
+        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
     }
 
     return null;
@@ -1694,7 +1834,7 @@ app.post("/check-esn", async (req, res) => {
       },
     });
 
-    const phoneCheckData = response.data;
+    phoneCheckData = response.data;
 
     let isBlacklisted = phoneCheckData.isBlacklisted || false;
     let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
@@ -1809,7 +1949,1276 @@ app.post("/orders/:id/fmi-cleared", async (req, res) => {
     }
 });
 
-// Duplicated from above, removed duplicate:
-// app.delete("/orders/:id", async (req, res) => { /* ... */ });
+app.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const orderRef = ordersCollection.doc(orderId);
+    const orderDoc = await orderRef.get();
+
+    if (!orderDoc.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const orderData = orderDoc.data();
+    const userId = orderData.userId;
+
+    // Delete from the main collection
+    await orderRef.delete();
+
+    // If a userId is associated, delete from the user's subcollection as well
+    if (userId) {
+      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
+      await userOrderRef.delete();
+    }
+
+    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
+  } catch (err) {
+    console.error("Error deleting order:", err);
+    res.status(500).json({ error: "Failed to delete order." });
+  }
+});
+
 
 exports.api = functions.https.onRequest(app);
+
+// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
+exports.onNewChatOpened = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+
+    // 2. Check if the chat is already active or assigned
+    if (chatData.agentHasJoined) {
+      return null;
+    }
+    
+    // 3. Check if this is the FIRST user message in the chat.
+    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
+      .where('senderType', '==', 'user')
+      .get();
+
+    if (userMessagesSnapshot.docs.length === 1) {
+      
+      const userIdentifier = chatData.ownerUid || chatData.guestId;
+      const relatedUserId = chatData.ownerUid;
+      
+      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
+      await chatDocRef.set({
+          lastMessageSender: newMessage.sender, // The user's ID/guest ID
+          lastMessageSeenByAdmin: false,
+      }, { merge: true });
+
+      // Send notifications to ALL admins for a new UNASSIGNED chat.
+      const fcmPromise = sendAdminPushNotification(
+        "💬 New Customer Chat!",
+        `Chat started by ${userIdentifier}.`,
+        {
+          chatId: chatId,
+          userId: relatedUserId || "guest", // Use safe string fallback
+          relatedDocType: "chat",
+          relatedDocId: chatId,
+          relatedUserId: relatedUserId,
+        }
+      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
+
+      // Add Firestore Notifications for each admin
+      const firestoreNotificationPromises = [];
+      const adminsSnapshot = await adminsCollection.get();
+      adminsSnapshot.docs.forEach((adminDoc) => {
+        firestoreNotificationPromises.push(
+          addAdminFirestoreNotification(
+            adminDoc.id,
+            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
+            "chat",
+            chatId,
+            relatedUserId
+          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
+        );
+      });
+
+      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
+      
+      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
+    }
+
+    return null;
+  });
+
+
+// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
+exports.onNewCustomerResponse = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Only process user messages
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+    
+    const assignedAdminUid = chatData.assignedAdminUid;
+    const userIdentifier = chatData.ownerUid || chatData.guestId;
+
+    // We only proceed if an admin is assigned to this chat.
+    if (!assignedAdminUid) {
+        return null;
+    }
+    
+    // We explicitly check if chatData.ownerUid is available for the payload.
+    const relatedUserId = chatData.ownerUid;
+
+
+    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
+    // We look at the sender of the second-to-last message (0 is the current one).
+    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
+        .orderBy('timestamp', 'desc')
+        .limit(2)
+        .get();
+        
+    // The message that triggered this function is index 0. We want the one before it (index 1).
+    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
+        ? messageSnapshots.docs[1].data()
+        : null;
+
+    // Update chat metadata, marking the latest sender as the user and setting unread flag.
+    // This MUST happen regardless of notification sending.
+    await chatDocRef.set({
+        lastMessageSender: newMessage.sender, // The user's ID/guest ID
+        lastMessageSeenByAdmin: false,
+    }, { merge: true });
+
+    // 3. Only notify the assigned admin if the LAST message *before* this new one
+    // was sent by the assigned admin. This prevents notification spam from a user sending
+    // multiple messages in a row.
+    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
+        
+        // Send push notification to the specific assigned admin
+        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
+        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
+        
+        if (adminTokens.length > 0) {
+            await sendPushNotification(
+                adminTokens,
+                "💬 New Message in Your Chat!",
+                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
+                {
+                    chatId: chatId,
+                    userId: relatedUserId || "guest",
+                    relatedDocType: "chat",
+                    relatedDocId: chatId,
+                    relatedUserId: relatedUserId,
+                }
+            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
+        }
+        
+        // Add Firestore Notification for the assigned admin
+        await addAdminFirestoreNotification(
+            assignedAdminUid,
+            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
+            "chat",
+            chatId,
+            relatedUserId
+        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
+        
+        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
+    }
+
+    return null;
+  });
+
+// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+exports.onNewChatCreated = functions.firestore
+  .document("chats/{chatId}")
+  .onCreate(async (snap, context) => {
+    // Removed all auto-response logic as chat notifications are removed.
+    return null;
+  });
+
+app.post("/test-emails", async (req, res) => {
+  const { email, emailTypes } = req.body;
+
+  if (!email || !emailTypes || !Array.isArray(emailTypes)) {
+    return res.status(400).json({ error: "Email and emailTypes array are required." });
+  }
+
+  try {
+    const testResult = await sendMultipleTestEmails(email, emailTypes);
+    console.log("Test emails sent. Types:", emailTypes);
+    res.status(200).json(testResult);
+  } catch (error) {
+    console.error("Failed to send test emails:", error);
+    res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
+  }
+});
+
+app.post("/check-esn", async (req, res) => {
+  try {
+    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
+    
+    console.log("Received request to /check-esn with payload:", req.body);
+
+    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
+      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
+    }
+
+    const apiUrl = "https://cloudportal.phonecheck.com/cloud/cloudDB/CheckEsn/";
+    const requestPayload = new URLSearchParams();
+    requestPayload.append("ApiKey", "308b6790-b767-4b43-9065-2c00e13cdbf7");
+    requestPayload.append("Username", "aecells1");
+    requestPayload.append("IMEI", imei);
+    requestPayload.append("carrier", carrier);
+    requestPayload.append("devicetype", devicetype);
+
+    console.log("Sending payload to PhoneChecks API:", requestPayload.toString());
+
+    const response = await axios.post(apiUrl, requestPayload.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    phoneCheckData = response.data;
+
+    let isBlacklisted = phoneCheckData.isBlacklisted || false;
+    let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
+    let financialStatus = phoneCheckData.financialStatus || "Clear";
+    
+    if (isBlacklisted) {
+      const legalText = `
+        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
+        ... (rest of your legal text)
+      `;
+      
+      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
+        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
+        
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      await updateOrderBoth(orderId, {
+        status: "blacklisted",
+        phoneCheckData: phoneCheckData,
+      });
+
+    } else if (fmiStatus === "On") {
+      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+      const customerEmailHtml = FMI_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Action Required for Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+      await updateOrderBoth(orderId, {
+        status: "fmi_on_pending",
+        fmiAutoDowngradeDate: downgradeDate,
+        phoneCheckData: phoneCheckData,
+      });
+
+    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
+      const customerEmailHtml = BAL_DUE_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Action Required for Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+      await updateOrderBoth(orderId, {
+        status: "balance_due_pending",
+        balanceAutoDowngradeDate: downgradeDate,
+        phoneCheckData: phoneCheckData,
+      });
+      
+    } else {
+      await updateOrderBoth(orderId, {
+        status: "imei_checked",
+        phoneCheckData: phoneCheckData,
+      });
+    }
+
+    res.status(200).json(response.data);
+
+  } catch (error) {
+    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
+  }
+});
+
+app.post("/orders/:id/fmi-cleared", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const docRef = ordersCollection.doc(id);
+      const doc = await docRef.get();
+      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+
+      const order = { id: doc.id, ...doc.data() };
+      
+      if (order.status !== "fmi_on_pending") {
+          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
+      }
+      
+      await updateOrderBoth(id, {
+          status: "fmi_cleared",
+          fmiAutoDowngradeDate: null,
+      });
+
+      res.json({ message: "FMI status updated successfully." });
+
+    } catch (err) {
+        console.error("Error clearing FMI status:", err);
+        res.status(500).json({ error: "Failed to clear FMI status" });
+    }
+});
+
+app.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const orderRef = ordersCollection.doc(orderId);
+    const orderDoc = await orderRef.get();
+
+    if (!orderDoc.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const orderData = orderDoc.data();
+    const userId = orderData.userId;
+
+    // Delete from the main collection
+    await orderRef.delete();
+
+    // If a userId is associated, delete from the user's subcollection as well
+    if (userId) {
+      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
+      await userOrderRef.delete();
+    }
+
+    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
+  } catch (err) {
+    console.error("Error deleting order:", err);
+    res.status(500).json({ error: "Failed to delete order." });
+  }
+});
+
+
+exports.api = functions.https.onRequest(app);
+
+// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
+exports.onNewChatOpened = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+
+    // 2. Check if the chat is already active or assigned
+    if (chatData.agentHasJoined) {
+      return null;
+    }
+    
+    // 3. Check if this is the FIRST user message in the chat.
+    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
+      .where('senderType', '==', 'user')
+      .get();
+
+    if (userMessagesSnapshot.docs.length === 1) {
+      
+      const userIdentifier = chatData.ownerUid || chatData.guestId;
+      const relatedUserId = chatData.ownerUid;
+      
+      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
+      await chatDocRef.set({
+          lastMessageSender: newMessage.sender, // The user's ID/guest ID
+          lastMessageSeenByAdmin: false,
+      }, { merge: true });
+
+      // Send notifications to ALL admins for a new UNASSIGNED chat.
+      const fcmPromise = sendAdminPushNotification(
+        "💬 New Customer Chat!",
+        `Chat started by ${userIdentifier}.`,
+        {
+          chatId: chatId,
+          userId: relatedUserId || "guest", // Use safe string fallback
+          relatedDocType: "chat",
+          relatedDocId: chatId,
+          relatedUserId: relatedUserId,
+        }
+      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
+
+      // Add Firestore Notifications for each admin
+      const firestoreNotificationPromises = [];
+      const adminsSnapshot = await adminsCollection.get();
+      adminsSnapshot.docs.forEach((adminDoc) => {
+        firestoreNotificationPromises.push(
+          addAdminFirestoreNotification(
+            adminDoc.id,
+            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
+            "chat",
+            chatId,
+            relatedUserId
+          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
+        );
+      });
+
+      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
+      
+      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
+    }
+
+    return null;
+  });
+
+
+// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
+exports.onNewCustomerResponse = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Only process user messages
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+    
+    const assignedAdminUid = chatData.assignedAdminUid;
+    const userIdentifier = chatData.ownerUid || chatData.guestId;
+
+    // We only proceed if an admin is assigned to this chat.
+    if (!assignedAdminUid) {
+        return null;
+    }
+    
+    // We explicitly check if chatData.ownerUid is available for the payload.
+    const relatedUserId = chatData.ownerUid;
+
+
+    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
+    // We look at the sender of the second-to-last message (0 is the current one).
+    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
+        .orderBy('timestamp', 'desc')
+        .limit(2)
+        .get();
+        
+    // The message that triggered this function is index 0. We want the one before it (index 1).
+    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
+        ? messageSnapshots.docs[1].data()
+        : null;
+
+    // Update chat metadata, marking the latest sender as the user and setting unread flag.
+    // This MUST happen regardless of notification sending.
+    await chatDocRef.set({
+        lastMessageSender: newMessage.sender, // The user's ID/guest ID
+        lastMessageSeenByAdmin: false,
+    }, { merge: true });
+
+    // 3. Only notify the assigned admin if the LAST message *before* this new one
+    // was sent by the assigned admin. This prevents notification spam from a user sending
+    // multiple messages in a row.
+    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
+        
+        // Send push notification to the specific assigned admin
+        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
+        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
+        
+        if (adminTokens.length > 0) {
+            await sendPushNotification(
+                adminTokens,
+                "💬 New Message in Your Chat!",
+                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
+                {
+                    chatId: chatId,
+                    userId: relatedUserId || "guest",
+                    relatedDocType: "chat",
+                    relatedDocId: chatId,
+                    relatedUserId: relatedUserId,
+                }
+            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
+        }
+        
+        // Add Firestore Notification for the assigned admin
+        await addAdminFirestoreNotification(
+            assignedAdminUid,
+            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
+            "chat",
+            chatId,
+            relatedUserId
+        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
+        
+        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
+    }
+
+    return null;
+  });
+
+// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+exports.onNewChatCreated = functions.firestore
+  .document("chats/{chatId}")
+  .onCreate(async (snap, context) => {
+    // Removed all auto-response logic as chat notifications are removed.
+    return null;
+  });
+
+app.post("/test-emails", async (req, res) => {
+  const { email, emailTypes } = req.body;
+
+  if (!email || !emailTypes || !Array.isArray(emailTypes)) {
+    return res.status(400).json({ error: "Email and emailTypes array are required." });
+  }
+
+  try {
+    const testResult = await sendMultipleTestEmails(email, emailTypes);
+    console.log("Test emails sent. Types:", emailTypes);
+    res.status(200).json(testResult);
+  } catch (error) {
+    console.error("Failed to send test emails:", error);
+    res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
+  }
+});
+
+app.post("/check-esn", async (req, res) => {
+  try {
+    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
+    
+    console.log("Received request to /check-esn with payload:", req.body);
+
+    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
+      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
+    }
+
+    const apiUrl = "https://cloudportal.phonecheck.com/cloud/cloudDB/CheckEsn/";
+    const requestPayload = new URLSearchParams();
+    requestPayload.append("ApiKey", "308b6790-b767-4b43-9065-2c00e13cdbf7");
+    requestPayload.append("Username", "aecells1");
+    requestPayload.append("IMEI", imei);
+    requestPayload.append("carrier", carrier);
+    requestPayload.append("devicetype", devicetype);
+
+    console.log("Sending payload to PhoneChecks API:", requestPayload.toString());
+
+    const response = await axios.post(apiUrl, requestPayload.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    phoneCheckData = response.data;
+
+    let isBlacklisted = phoneCheckData.isBlacklisted || false;
+    let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
+    let financialStatus = phoneCheckData.financialStatus || "Clear";
+    
+    if (isBlacklisted) {
+      const legalText = `
+        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
+        ... (rest of your legal text)
+      `;
+      
+      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
+        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
+        
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      await updateOrderBoth(orderId, {
+        status: "blacklisted",
+        phoneCheckData: phoneCheckData,
+      });
+
+    } else if (fmiStatus === "On") {
+      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+      const customerEmailHtml = FMI_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Action Required for Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+      await updateOrderBoth(orderId, {
+        status: "fmi_on_pending",
+        fmiAutoDowngradeDate: downgradeDate,
+        phoneCheckData: phoneCheckData,
+      });
+
+    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
+      const customerEmailHtml = BAL_DUE_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Action Required for Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+      await updateOrderBoth(orderId, {
+        status: "balance_due_pending",
+        balanceAutoDowngradeDate: downgradeDate,
+        phoneCheckData: phoneCheckData,
+      });
+      
+    } else {
+      await updateOrderBoth(orderId, {
+        status: "imei_checked",
+        phoneCheckData: phoneCheckData,
+      });
+    }
+
+    res.status(200).json(response.data);
+
+  } catch (error) {
+    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
+  }
+});
+
+app.post("/orders/:id/fmi-cleared", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const docRef = ordersCollection.doc(id);
+      const doc = await docRef.get();
+      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+
+      const order = { id: doc.id, ...doc.data() };
+      
+      if (order.status !== "fmi_on_pending") {
+          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
+      }
+      
+      await updateOrderBoth(id, {
+          status: "fmi_cleared",
+          fmiAutoDowngradeDate: null,
+      });
+
+      res.json({ message: "FMI status updated successfully." });
+
+    } catch (err) {
+        console.error("Error clearing FMI status:", err);
+        res.status(500).json({ error: "Failed to clear FMI status" });
+    }
+});
+
+app.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const orderRef = ordersCollection.doc(orderId);
+    const orderDoc = await orderRef.get();
+
+    if (!orderDoc.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const orderData = orderDoc.data();
+    const userId = orderData.userId;
+
+    // Delete from the main collection
+    await orderRef.delete();
+
+    // If a userId is associated, delete from the user's subcollection as well
+    if (userId) {
+      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
+      await userOrderRef.delete();
+    }
+
+    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
+  } catch (err) {
+    console.error("Error deleting order:", err);
+    res.status(500).json({ error: "Failed to delete order." });
+  }
+});
+
+
+exports.api = functions.https.onRequest(app);
+
+// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
+exports.onNewChatOpened = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+
+    // 2. Check if the chat is already active or assigned
+    if (chatData.agentHasJoined) {
+      return null;
+    }
+    
+    // 3. Check if this is the FIRST user message in the chat.
+    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
+      .where('senderType', '==', 'user')
+      .get();
+
+    if (userMessagesSnapshot.docs.length === 1) {
+      
+      const userIdentifier = chatData.ownerUid || chatData.guestId;
+      const relatedUserId = chatData.ownerUid;
+      
+      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
+      await chatDocRef.set({
+          lastMessageSender: newMessage.sender, // The user's ID/guest ID
+          lastMessageSeenByAdmin: false,
+      }, { merge: true });
+
+      // Send notifications to ALL admins for a new UNASSIGNED chat.
+      const fcmPromise = sendAdminPushNotification(
+        "💬 New Customer Chat!",
+        `Chat started by ${userIdentifier}.`,
+        {
+          chatId: chatId,
+          userId: relatedUserId || "guest", // Use safe string fallback
+          relatedDocType: "chat",
+          relatedDocId: chatId,
+          relatedUserId: relatedUserId,
+        }
+      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
+
+      // Add Firestore Notifications for each admin
+      const firestoreNotificationPromises = [];
+      const adminsSnapshot = await adminsCollection.get();
+      adminsSnapshot.docs.forEach((adminDoc) => {
+        firestoreNotificationPromises.push(
+          addAdminFirestoreNotification(
+            adminDoc.id,
+            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
+            "chat",
+            chatId,
+            relatedUserId
+          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
+        );
+      });
+
+      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
+      
+      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
+    }
+
+    return null;
+  });
+
+
+// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
+exports.onNewCustomerResponse = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Only process user messages
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+    
+    const assignedAdminUid = chatData.assignedAdminUid;
+    const userIdentifier = chatData.ownerUid || chatData.guestId;
+
+    // We only proceed if an admin is assigned to this chat.
+    if (!assignedAdminUid) {
+        return null;
+    }
+    
+    // We explicitly check if chatData.ownerUid is available for the payload.
+    const relatedUserId = chatData.ownerUid;
+
+
+    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
+    // We look at the sender of the second-to-last message (0 is the current one).
+    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
+        .orderBy('timestamp', 'desc')
+        .limit(2)
+        .get();
+        
+    // The message that triggered this function is index 0. We want the one before it (index 1).
+    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
+        ? messageSnapshots.docs[1].data()
+        : null;
+
+    // Update chat metadata, marking the latest sender as the user and setting unread flag.
+    // This MUST happen regardless of notification sending.
+    await chatDocRef.set({
+        lastMessageSender: newMessage.sender, // The user's ID/guest ID
+        lastMessageSeenByAdmin: false,
+    }, { merge: true });
+
+    // 3. Only notify the assigned admin if the LAST message *before* this new one
+    // was sent by the assigned admin. This prevents notification spam from a user sending
+    // multiple messages in a row.
+    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
+        
+        // Send push notification to the specific assigned admin
+        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
+        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
+        
+        if (adminTokens.length > 0) {
+            await sendPushNotification(
+                adminTokens,
+                "💬 New Message in Your Chat!",
+                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
+                {
+                    chatId: chatId,
+                    userId: relatedUserId || "guest",
+                    relatedDocType: "chat",
+                    relatedDocId: chatId,
+                    relatedUserId: relatedUserId,
+                }
+            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
+        }
+        
+        // Add Firestore Notification for the assigned admin
+        await addAdminFirestoreNotification(
+            assignedAdminUid,
+            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
+            "chat",
+            chatId,
+            relatedUserId
+        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
+        
+        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
+    }
+
+    return null;
+  });
+
+// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+exports.onNewChatCreated = functions.firestore
+  .document("chats/{chatId}")
+  .onCreate(async (snap, context) => {
+    // Removed all auto-response logic as chat notifications are removed.
+    return null;
+  });
+
+app.post("/test-emails", async (req, res) => {
+  const { email, emailTypes } = req.body;
+
+  if (!email || !emailTypes || !Array.isArray(emailTypes)) {
+    return res.status(400).json({ error: "Email and emailTypes array are required." });
+  }
+
+  try {
+    const testResult = await sendMultipleTestEmails(email, emailTypes);
+    console.log("Test emails sent. Types:", emailTypes);
+    res.status(200).json(testResult);
+  } catch (error) {
+    console.error("Failed to send test emails:", error);
+    res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
+  }
+});
+
+app.post("/check-esn", async (req, res) => {
+  try {
+    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
+    
+    console.log("Received request to /check-esn with payload:", req.body);
+
+    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
+      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
+    }
+
+    const apiUrl = "https://cloudportal.phonecheck.com/cloud/cloudDB/CheckEsn/";
+    const requestPayload = new URLSearchParams();
+    requestPayload.append("ApiKey", "308b6790-b767-4b43-9065-2c00e13cdbf7");
+    requestPayload.append("Username", "aecells1");
+    requestPayload.append("IMEI", imei);
+    requestPayload.append("carrier", carrier);
+    requestPayload.append("devicetype", devicetype);
+
+    console.log("Sending payload to PhoneChecks API:", requestPayload.toString());
+
+    const response = await axios.post(apiUrl, requestPayload.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    });
+
+    phoneCheckData = response.data;
+
+    let isBlacklisted = phoneCheckData.isBlacklisted || false;
+    let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
+    let financialStatus = phoneCheckData.financialStatus || "Clear";
+    
+    if (isBlacklisted) {
+      const legalText = `
+        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
+        ... (rest of your legal text)
+      `;
+      
+      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
+        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
+        
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      await updateOrderBoth(orderId, {
+        status: "blacklisted",
+        phoneCheckData: phoneCheckData,
+      });
+
+    } else if (fmiStatus === "On") {
+      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+      const customerEmailHtml = FMI_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Action Required for Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+      await updateOrderBoth(orderId, {
+        status: "fmi_on_pending",
+        fmiAutoDowngradeDate: downgradeDate,
+        phoneCheckData: phoneCheckData,
+      });
+
+    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
+      const customerEmailHtml = BAL_DUE_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+        .replace(/\*\*ORDER_ID\*\*/g, orderId)
+        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+
+      await transporter.sendMail({
+        from: functions.config().email.user,
+        to: customerEmail,
+        subject: `Action Required for Order #${orderId}`,
+        html: customerEmailHtml,
+        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      });
+
+      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+      await updateOrderBoth(orderId, {
+        status: "balance_due_pending",
+        balanceAutoDowngradeDate: downgradeDate,
+        phoneCheckData: phoneCheckData,
+      });
+      
+    } else {
+      await updateOrderBoth(orderId, {
+        status: "imei_checked",
+        phoneCheckData: phoneCheckData,
+      });
+    }
+
+    res.status(200).json(response.data);
+
+  } catch (error) {
+    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
+  }
+});
+
+app.post("/orders/:id/fmi-cleared", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const docRef = ordersCollection.doc(id);
+      const doc = await docRef.get();
+      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
+
+      const order = { id: doc.id, ...doc.data() };
+      
+      if (order.status !== "fmi_on_pending") {
+          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
+      }
+      
+      await updateOrderBoth(id, {
+          status: "fmi_cleared",
+          fmiAutoDowngradeDate: null,
+      });
+
+      res.json({ message: "FMI status updated successfully." });
+
+    } catch (err) {
+        console.error("Error clearing FMI status:", err);
+        res.status(500).json({ error: "Failed to clear FMI status" });
+    }
+});
+
+app.delete("/orders/:id", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const orderRef = ordersCollection.doc(orderId);
+    const orderDoc = await orderRef.get();
+
+    if (!orderDoc.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const orderData = orderDoc.data();
+    const userId = orderData.userId;
+
+    // Delete from the main collection
+    await orderRef.delete();
+
+    // If a userId is associated, delete from the user's subcollection as well
+    if (userId) {
+      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
+      await userOrderRef.delete();
+    }
+
+    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
+  } catch (err) {
+    console.error("Error deleting order:", err);
+    res.status(500).json({ error: "Failed to delete order." });
+  }
+});
+
+
+exports.api = functions.https.onRequest(app);
+
+// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
+exports.onNewChatOpened = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+
+    // 2. Check if the chat is already active or assigned
+    if (chatData.agentHasJoined) {
+      return null;
+    }
+    
+    // 3. Check if this is the FIRST user message in the chat.
+    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
+      .where('senderType', '==', 'user')
+      .get();
+
+    if (userMessagesSnapshot.docs.length === 1) {
+      
+      const userIdentifier = chatData.ownerUid || chatData.guestId;
+      const relatedUserId = chatData.ownerUid;
+      
+      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
+      await chatDocRef.set({
+          lastMessageSender: newMessage.sender, // The user's ID/guest ID
+          lastMessageSeenByAdmin: false,
+      }, { merge: true });
+
+      // Send notifications to ALL admins for a new UNASSIGNED chat.
+      const fcmPromise = sendAdminPushNotification(
+        "💬 New Customer Chat!",
+        `Chat started by ${userIdentifier}.`,
+        {
+          chatId: chatId,
+          userId: relatedUserId || "guest", // Use safe string fallback
+          relatedDocType: "chat",
+          relatedDocId: chatId,
+          relatedUserId: relatedUserId,
+        }
+      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
+
+      // Add Firestore Notifications for each admin
+      const firestoreNotificationPromises = [];
+      const adminsSnapshot = await adminsCollection.get();
+      adminsSnapshot.docs.forEach((adminDoc) => {
+        firestoreNotificationPromises.push(
+          addAdminFirestoreNotification(
+            adminDoc.id,
+            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
+            "chat",
+            chatId,
+            relatedUserId
+          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
+        );
+      });
+
+      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
+      
+      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
+    }
+
+    return null;
+  });
+
+
+// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
+exports.onNewCustomerResponse = functions.firestore
+  .document("chats/{chatId}/messages/{messageId}")
+  .onCreate(async (snap, context) => {
+    const newMessage = snap.data();
+    const chatId = context.params.chatId;
+
+    // 1. Only process user messages
+    if (newMessage.senderType !== "user") {
+      return null;
+    }
+
+    const chatDocRef = db.collection("chats").doc(chatId);
+    const chatDoc = await chatDocRef.get();
+    const chatData = chatDoc.data();
+    
+    const assignedAdminUid = chatData.assignedAdminUid;
+    const userIdentifier = chatData.ownerUid || chatData.guestId;
+
+    // We only proceed if an admin is assigned to this chat.
+    if (!assignedAdminUid) {
+        return null;
+    }
+    
+    // We explicitly check if chatData.ownerUid is available for the payload.
+    const relatedUserId = chatData.ownerUid;
+
+
+    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
+    // We look at the sender of the second-to-last message (0 is the current one).
+    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
+        .orderBy('timestamp', 'desc')
+        .limit(2)
+        .get();
+        
+    // The message that triggered this function is index 0. We want the one before it (index 1).
+    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
+        ? messageSnapshots.docs[1].data()
+        : null;
+
+    // Update chat metadata, marking the latest sender as the user and setting unread flag.
+    // This MUST happen regardless of notification sending.
+    await chatDocRef.set({
+        lastMessageSender: newMessage.sender, // The user's ID/guest ID
+        lastMessageSeenByAdmin: false,
+    }, { merge: true });
+
+    // 3. Only notify the assigned admin if the LAST message *before* this new one
+    // was sent by the assigned admin. This prevents notification spam from a user sending
+    // multiple messages in a row.
+    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
+        
+        // Send push notification to the specific assigned admin
+        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
+        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
+        
+        if (adminTokens.length > 0) {
+            await sendPushNotification(
+                adminTokens,
+                "💬 New Message in Your Chat!",
+                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
+                {
+                    chatId: chatId,
+                    userId: relatedUserId || "guest",
+                    relatedDocType: "chat",
+                    relatedDocId: chatId,
+                    relatedUserId: relatedUserId,
+                }
+            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
+        }
+        
+        // Add Firestore Notification for the assigned admin
+        await addAdminFirestoreNotification(
+            assignedAdminUid,
+            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
+            "chat",
+            chatId,
+            relatedUserId
+        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
+        
+        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
+    }
+
+    return null;
+  });
+
+// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+exports.onNewChatCreated = functions.firestore
+  .document("chats/{chatId}")
+  .onCreate(async (snap, context) => {
+    // Removed all auto-response logic as chat notifications are removed.
+    return null;
+  });
