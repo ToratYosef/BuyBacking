@@ -18,7 +18,7 @@ const app = express();
 
 const allowedOrigins = [
   "https://toratyosef.github.io",
-  "https://buyback-a0f05.firebaseapp.com",
+  "https://buyback-a0f05.web.app",
   "https://secondhandcell.com",
   "https://www.secondhandcell.com",
 ];
