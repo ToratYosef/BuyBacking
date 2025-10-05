@@ -185,9 +185,9 @@
     </div>
     
     <!-- Transfer Notification -->
-    <div id="transfer-notification" class="fixed top-6 right-6 bg-white rounded-lg shadow-xl p-4 w-80 border-l-4 border-blue-500 hidden transform translate-x-full transition-transform duration-300 z-[1001]">
-        <p class="font-semibold text-slate-800">Incoming Chat Transfer</p>
-        <p class="text-sm text-slate-600 mt-1">From <strong id="transfer-from-admin"></strong> for chat with <strong id="transfer-chat-user"></strong>.</p>
+    <div id="transfer-notification" class="fixed top-6 right-6 bg-black bg-opacity-80 rounded-lg shadow-xl p-4 w-80 border-l-4 border-blue-500 hidden transform translate-x-full transition-transform duration-300 z-[1001]">
+        <p class="font-semibold text-white">Incoming Chat Transfer</p>
+        <p class="text-sm text-slate-200 mt-1">From <strong id="transfer-from-admin"></strong> for chat with <strong id="transfer-chat-user"></strong>.</p>
         <div class="mt-4 flex gap-2">
             <button id="accept-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-white bg-green-500 rounded-md hover:bg-green-600 transition-colors">Accept</button>
             <button id="decline-transfer-btn" class="flex-1 px-3 py-1.5 text-sm font-semibold text-slate-700 bg-slate-200 rounded-md hover:bg-slate-300 transition-colors">Decline</button>
@@ -1042,19 +1042,20 @@ Current Status: ${order.status}`;
 
                 unreadNotifications.forEach(notification => {
                     const notificationItem = document.createElement('div');
+                    // FIX: Ensure unread background is applied for visibility
                     notificationItem.className = `notification-item text-sm text-slate-700 unread`;
                     
                     let timeString = '';
                     if (notification.createdAt?.toDate) {
+                        // Display the notification time clearly
                         timeString = notification.createdAt.toDate().toLocaleString();
                     } else if (notification.createdAt) {
-                        // Fallback for non-Timestamp fields
                         timeString = new Date(notification.createdAt).toLocaleString();
                     }
 
                     notificationItem.innerHTML = `
                         <p>${notification.message}</p>
-                        <p class="text-xs text-slate-500 mt-1">${timeString}</p>
+                        <p class="text-xs text-slate-500 mt-1"><i class="fa-regular fa-clock mr-1"></i> ${timeString}</p>
                     `;
                     notificationItem.addEventListener('click', () => handleNotificationClick(notification));
                     notificationList.appendChild(notificationItem);
