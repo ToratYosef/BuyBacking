@@ -745,9 +745,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     
                     // Outbound Label (Kit)
                     if (order.outboundTrackingNumber) {
-                        modalLabelLink.href = USPS_TRACKING_URL + order.outboundTrackingNumber;
-                        modalTrackingNumber.textContent = order.outboundTrackingNumber;
-                        modalLabelDescription.textContent = 'Outbound Kit Tracking';
+                        modalLabelLink.href = order.outboundLabelUrl || '#'; // PDF link
+                        modalTrackingNumber.innerHTML = `<a href="${USPS_TRACKING_URL}${order.outboundTrackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${order.outboundTrackingNumber}</a>`;
+                        modalLabelDescription.textContent = 'Outbound Kit Label';
                         modalLabelRow.classList.remove('hidden');
                     } else if (order.outboundLabelUrl) {
                         // Fallback: if no tracking number, but PDF link exists
@@ -759,9 +759,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
                     // Inbound Label (Device)
                     if (order.inboundTrackingNumber) {
-                        modalSecondaryLabelLink.href = USPS_TRACKING_URL + order.inboundTrackingNumber;
-                        modalSecondaryTrackingNumberDisplay.textContent = order.inboundTrackingNumber;
-                        modalSecondaryLabelDescription.textContent = 'Inbound Device Tracking';
+                        modalSecondaryLabelLink.href = order.inboundLabelUrl || '#'; // PDF link
+                        modalSecondaryTrackingNumberDisplay.innerHTML = `<a href="${USPS_TRACKING_URL}${order.inboundTrackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${order.inboundTrackingNumber}</a>`;
+                        modalSecondaryLabelDescription.textContent = 'Inbound Device Label';
                         modalSecondaryLabelRow.classList.remove('hidden');
                     } else if (order.inboundLabelUrl) {
                          // Fallback: if no tracking number, but PDF link exists
@@ -776,8 +776,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 // 2. Email Label Requested (single USPS label/inbound label)
                 else if (order.shippingPreference === 'Email Label Requested') {
                     if (order.trackingNumber) {
-                        modalLabelLink.href = USPS_TRACKING_URL + order.trackingNumber;
-                        modalTrackingNumber.textContent = order.trackingNumber;
+                        modalLabelLink.href = order.uspsLabelUrl || '#'; // PDF link
+                        modalTrackingNumber.innerHTML = `<a href="${USPS_TRACKING_URL}${order.trackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${order.trackingNumber}</a>`;
                         modalLabelDescription.textContent = 'Shipping Label Tracking';
                         modalLabelRow.classList.remove('hidden');
                     } else if (order.uspsLabelUrl) {
@@ -791,8 +791,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
                 // 3. Return Label (For re-offer declines)
                 if (order.returnTrackingNumber) {
-                    modalReturnLabelLink.href = USPS_TRACKING_URL + order.returnTrackingNumber;
-                    modalReturnTrackingNumberDisplay.textContent = order.returnTrackingNumber;
+                    modalReturnLabelLink.href = order.returnLabelUrl || '#'; // PDF link
+                    modalReturnTrackingNumberDisplay.innerHTML = `<a href="${USPS_TRACKING_URL}${order.returnTrackingNumber}" target="_blank" class="text-red-600 hover:text-red-800 underline">${order.returnTrackingNumber}</a>`;
                     modalReturnLabelDescription.textContent = 'Return Label Tracking';
                     modalReturnLabelRow.classList.remove('hidden');
                 } else if (order.returnLabelUrl) {
