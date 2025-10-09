@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+const functions = require("firebase-functions/v1");
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
@@ -35,8 +35,8 @@ app.use(express.json());
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: functions.config().email.user,
-    pass: functions.config().email.pass,
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
 });
 
@@ -580,7 +580,7 @@ async function createShipEngineLabel(fromAddress, toAddress, labelReference, pac
   };
   if (isSandbox) payload.testLabel = true;
 
-  const shipEngineApiKey = functions.config().shipengine.key;
+  const shipEngineApiKey = process.env.SHIPENGINE_KEY;
   if (!shipEngineApiKey) {
     throw new Error(
       "ShipEngine API key not configured. Please set 'shipengine.key' environment variable."
@@ -715,7 +715,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
                       <tbody>
                         <tr>
                           <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
-                            <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderToUse.id}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
+                            <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderToUse.id}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
                               Accept Offer ($${orderToUse.reOffer.newPrice.toFixed(2)})
                             </a>
                           </td>
@@ -728,7 +728,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
                       <tbody>
                         <tr>
                           <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
-                            <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderToUse.id}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
+                            <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderToUse.id}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
                               Return Phone Now
                             </a>
                           </td>
@@ -818,7 +818,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
     }
 
     const mailOptions = {
-      from: functions.config().email.user,
+      from: process.env.EMAIL_USER,
       to: email,
       subject: subject,
       html: htmlBody,
@@ -962,7 +962,7 @@ app.post("/submit-order", async (req, res) => {
 
 
     const customerMailOptions = {
-      from: functions.config().email.user,
+      from: process.env.EMAIL_USER,
       to: orderData.shippingInfo.email,
       subject: `Your SecondHandCell Order #${orderId} Has Been Received!`,
       html: customerEmailHtml,
@@ -970,7 +970,7 @@ app.post("/submit-order", async (req, res) => {
     };
 
     const adminMailOptions = {
-      from: functions.config().email.user,
+      from: process.env.EMAIL_USER,
       to: 'sales@secondhandcell.com',
       subject: `${orderData.shippingInfo.fullName} - placed an order for a ${orderData.device}`,
       html: adminEmailHtml,
@@ -1113,7 +1113,7 @@ app.post("/generate-label/:id", async (req, res) => {
         .replace(/\*\*TRACKING_NUMBER\*\*/g, customerLabelData.tracking_number || "N/A");
 
       customerMailOptions = {
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: order.shippingInfo.email,
         subject: customerEmailSubject,
         html: customerEmailHtml,
@@ -1153,7 +1153,7 @@ app.post("/generate-label/:id", async (req, res) => {
         .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
 
       customerMailOptions = {
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: order.shippingInfo.email,
         subject: customerEmailSubject,
         html: customerEmailHtml,
@@ -1193,7 +1193,7 @@ app.put("/orders/:id/status", async (req, res) => {
           .replace(/\*\*ORDER_ID\*\*/g, order.id);
 
         customerNotificationPromise = transporter.sendMail({
-          from: functions.config().email.user,
+          from: process.env.EMAIL_USER,
           to: order.shippingInfo.email,
           subject: "Your SecondHandCell Device Has Arrived",
           html: customerEmailHtml,
@@ -1222,7 +1222,7 @@ app.put("/orders/:id/status", async (req, res) => {
           .replace(/\*\*TRUSTBOX_WIDGET\*\*/g, trustboxHtml);
 
         customerNotificationPromise = transporter.sendMail({
-          from: functions.config().email.user,
+          from: process.env.EMAIL_USER,
           to: order.shippingInfo.email,
           subject: "Your SecondHandCell Order is Complete",
           html: customerEmailHtml,
@@ -1292,7 +1292,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
                   <tbody>
                     <tr>
                       <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
-                        <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderId}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
+                        <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
                           Accept Offer ($${Number(newPrice).toFixed(2)})
                         </a>
                       </td>
@@ -1305,7 +1305,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
                   <tbody>
                     <tr>
                       <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
-                        <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderId}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
+                        <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
                           Return Phone Now
                         </a>
                       </td>
@@ -1322,7 +1322,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
     `;
 
     await transporter.sendMail({
-      from: functions.config().email.user,
+      from: process.env.EMAIL_USER,
       to: order.shippingInfo.email,
       subject: `Re-offer for Order #${order.id}`,
       html: customerEmailHtml,
@@ -1381,7 +1381,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
     });
 
     const customerMailOptions = {
-      from: functions.config().email.user,
+      from: process.env.EMAIL_USER,
       to: order.shippingInfo.email,
       subject: "Your SecondHandCell Return Label",
       html: `
@@ -1439,7 +1439,7 @@ app.post("/accept-offer-action", async (req, res) => {
     `;
 
     await transporter.sendMail({
-      from: functions.config().email.user,
+      from: process.env.EMAIL_USER,
       to: orderData.shippingInfo.email,
       subject: `Offer Accepted for Order #${orderData.id}`,
       html: customerHtmlBody,
@@ -1482,7 +1482,7 @@ app.post("/return-phone-action", async (req, res) => {
     `;
 
     await transporter.sendMail({
-      from: functions.config().email.user,
+      from: process.env.EMAIL_USER,
       to: orderData.shippingInfo.email,
       subject: `Return Requested for Order #${orderData.id}`,
       html: customerHtmlBody,
@@ -1534,7 +1534,7 @@ app.post("/send-email", async (req, res) => {
         }
 
         const mailOptions = {
-            from: functions.config().email.user,
+            from: process.env.EMAIL_USER,
             to: to,
             subject: subject,
             html: html,
@@ -1572,7 +1572,7 @@ exports.autoAcceptOffers = functions.pubsub
       `;
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: orderData.shippingInfo.email,
         subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
         html: customerHtmlBody,
@@ -1853,7 +1853,7 @@ app.post("/check-esn", async (req, res) => {
         .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
         
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Important Notice Regarding Your Device - Order #${orderId}`,
         html: customerEmailHtml,
@@ -1866,14 +1866,14 @@ app.post("/check-esn", async (req, res) => {
       });
 
     } else if (fmiStatus === "On") {
-      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+      const confirmUrl = `${process.env.APP_FRONTEND_URL}/fmi-cleared.html?orderId=${orderId}`;
       const customerEmailHtml = FMI_EMAIL_HTML
         .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
         .replace(/\*\*ORDER_ID\*\*/g, orderId)
         .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
@@ -1894,7 +1894,7 @@ app.post("/check-esn", async (req, res) => {
         .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
@@ -2211,7 +2211,7 @@ app.post("/check-esn", async (req, res) => {
         .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
         
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Important Notice Regarding Your Device - Order #${orderId}`,
         html: customerEmailHtml,
@@ -2224,14 +2224,14 @@ app.post("/check-esn", async (req, res) => {
       });
 
     } else if (fmiStatus === "On") {
-      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+      const confirmUrl = `${process.env.APP_FRONTEND_URL}/fmi-cleared.html?orderId=${orderId}`;
       const customerEmailHtml = FMI_EMAIL_HTML
         .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
         .replace(/\*\*ORDER_ID\*\*/g, orderId)
         .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
@@ -2252,7 +2252,7 @@ app.post("/check-esn", async (req, res) => {
         .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
@@ -2569,7 +2569,7 @@ app.post("/check-esn", async (req, res) => {
         .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
         
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Important Notice Regarding Your Device - Order #${orderId}`,
         html: customerEmailHtml,
@@ -2582,14 +2582,14 @@ app.post("/check-esn", async (req, res) => {
       });
 
     } else if (fmiStatus === "On") {
-      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+      const confirmUrl = `${process.env.APP_FRONTEND_URL}/fmi-cleared.html?orderId=${orderId}`;
       const customerEmailHtml = FMI_EMAIL_HTML
         .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
         .replace(/\*\*ORDER_ID\*\*/g, orderId)
         .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
@@ -2610,7 +2610,7 @@ app.post("/check-esn", async (req, res) => {
         .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
@@ -2927,7 +2927,7 @@ app.post("/check-esn", async (req, res) => {
         .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
         
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Important Notice Regarding Your Device - Order #${orderId}`,
         html: customerEmailHtml,
@@ -2940,14 +2940,14 @@ app.post("/check-esn", async (req, res) => {
       });
 
     } else if (fmiStatus === "On") {
-      const confirmUrl = `${functions.config().app.frontend_url}/fmi-cleared.html?orderId=${orderId}`;
+      const confirmUrl = `${process.env.APP_FRONTEND_URL}/fmi-cleared.html?orderId=${orderId}`;
       const customerEmailHtml = FMI_EMAIL_HTML
         .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
         .replace(/\*\*ORDER_ID\*\*/g, orderId)
         .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
@@ -2968,7 +2968,7 @@ app.post("/check-esn", async (req, res) => {
         .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
 
       await transporter.sendMail({
-        from: functions.config().email.user,
+        from: process.env.EMAIL_USER,
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,

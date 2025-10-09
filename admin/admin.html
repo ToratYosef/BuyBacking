@@ -16,11 +16,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-SLRRJRXHHE"></script>
     <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
     
-      gtag('config', 'G-SLRRJRXHHE');
+        gtag('config', 'G-SLRRJRXHHE');
     </script>
 
     <style>
@@ -39,8 +39,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             z-index: 50;
         }
         .main-content {
-            margin-left: 250px; 
-            flex-grow: 1; 
+            margin-left: 250px;  
+            flex-grow: 1;  
         }
         @media (max-width: 768px) {
             .sidebar {
@@ -130,7 +130,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <label for="search-orders" class="block text-gray-400 text-sm mb-2">Search Orders</label>
                 <div class="relative">
                     <input type="text" id="search-orders" placeholder="Search by ID, Customer, or Tracking..."
-                           class="w-full pl-10 pr-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            class="w-full pl-10 pr-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i class="fas fa-search text-gray-400"></i>
                     </div>
@@ -318,6 +318,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <div class="space-y-3 text-gray-700">
                 <p><strong>Customer:</strong> <span id="modal-customer-name"></span></p>
                 <p><strong>Email:</strong> <span id="modal-customer-email"></span></p>
+                <p><strong>Phone:</strong> <span id="modal-customer-phone"></span></p>
                 <p><strong>Item:</strong> <span id="modal-item"></span></p>
                 <p><strong>Storage:</strong> <span id="modal-storage"></span></p>
                 <p><strong>Carrier:</strong> <span id="modal-carrier"></span></p>
@@ -454,7 +455,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <div id="modal-message" class="mt-4 p-3 text-sm rounded-md hidden"></div>
         </div>
     </div>
-    
+
     <!-- ESN/IMEI Check Results Modal -->
     <div id="esn-check-results-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-xl w-full p-6 relative">
@@ -658,6 +659,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         const modalOrderId = document.getElementById('modal-order-id');
         const modalCustomerName = document.getElementById('modal-customer-name');
         const modalCustomerEmail = document.getElementById('modal-customer-email');
+        // NEW: Element for Phone Number
+        const modalCustomerPhone = document.getElementById('modal-customer-phone');
         const modalItem = document.getElementById('modal-item');
         const modalStorage = document.getElementById('modal-storage');
         const modalCarrier = document.getElementById('modal-carrier');
@@ -855,13 +858,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
-                        'token_master': '308b6790-b767-4b43-9065-2c00e13cdbf7', 
+                        'token_master': '308b6790-b767-4b43-9065-2c00e13cdbf7',  
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         imei,
-                        deviceType, 
-                        model,      
+                        deviceType,  
+                        model,     
                         carrier     
                     })
                 });
@@ -875,13 +878,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const data = await response.json();
                 
                 // Save the full raw response and new fields to Firestore
-                await updateDoc(doc(db, 'orders', orderId), { 
+                await updateDoc(doc(db, 'orders', orderId), {  
                     status: 'imei_checked',
                     fulfilledOrders: {
                         imei: imei,
-                        deviceType: deviceType, 
-                        model: model,           
-                        carrier: carrier,       
+                        deviceType: deviceType,  
+                        model: model,         
+                        carrier: carrier,     
                         rawResponse: data
                     }
                 });
@@ -1049,7 +1052,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             try {
                 modalLoadingMessage.classList.remove('hidden');
-                const url = `${BACKEND_BASE_URL}/orders/${orderId}`; 
+                const url = `${BACKEND_BASE_URL}/orders/${orderId}`;  
                 console.log("Fetching order details from:", url);
                 const response = await fetch(url, {
                     headers: {
@@ -1068,6 +1071,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 modalOrderId.textContent = order.id;
                 modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
                 modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
+                // ADDED: Display the customer's phone number
+                modalCustomerPhone.textContent = order.shippingInfo ? order.shippingInfo.phone : 'N/A';
                 modalItem.textContent = order.device;
                 modalStorage.textContent = order.storage;
                 modalCarrier.textContent = order.carrier;
@@ -1630,7 +1635,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             try {
                 const url = `${BACKEND_BASE_URL}/orders/${orderId}/re-offer`;
                 console.log("Submitting re-offer to:", url);
-                const response = await fetch(url, { 
+                const response = await fetch(url, {  
                     method: 'POST',
                     headers: {  
                         'Content-Type': 'application/json',
@@ -1738,8 +1743,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                                     ? order.reOffer.newPrice.toFixed(2)
-                                     : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                         ? order.reOffer.newPrice.toFixed(2)
+                                         : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
