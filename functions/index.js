@@ -966,7 +966,7 @@ app.post("/submit-order", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Your SecondHandCell Order #${orderId} Has Been Received!`,
       html: customerEmailHtml,
-      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com"]
     };
 
     const adminMailOptions = {
@@ -1117,7 +1117,7 @@ app.post("/generate-label/:id", async (req, res) => {
         to: order.shippingInfo.email,
         subject: customerEmailSubject,
         html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com"]
       };
 
     } else if (order.shippingPreference === "Email Label Requested") {
@@ -1157,7 +1157,7 @@ app.post("/generate-label/:id", async (req, res) => {
         to: order.shippingInfo.email,
         subject: customerEmailSubject,
         html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com"]
       };
     } else {
       throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
@@ -1197,7 +1197,7 @@ app.put("/orders/:id/status", async (req, res) => {
           to: order.shippingInfo.email,
           subject: "Your SecondHandCell Device Has Arrived",
           html: customerEmailHtml,
-          bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+          bcc: ["sales@secondhandcell.com"]
         });
         break;
       }
@@ -1226,7 +1226,7 @@ app.put("/orders/:id/status", async (req, res) => {
           to: order.shippingInfo.email,
           subject: "Your SecondHandCell Order is Complete",
           html: customerEmailHtml,
-          bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+          bcc: ["sales@secondhandcell.com"]
         });
         break;
       }
@@ -1326,7 +1326,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
       to: order.shippingInfo.email,
       subject: `Re-offer for Order #${order.id}`,
       html: customerEmailHtml,
-      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com"]
     });
 
     res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
@@ -1392,7 +1392,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
         <p>Thank you,</p>
         <p>The SecondHandCell Team</p>
       `,
-      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com"]
     };
 
     await transporter.sendMail(customerMailOptions);
@@ -1443,7 +1443,7 @@ app.post("/accept-offer-action", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Offer Accepted for Order #${orderData.id}`,
       html: customerHtmlBody,
-      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com"]
     });
 
     res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
@@ -1486,7 +1486,7 @@ app.post("/return-phone-action", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Return Requested for Order #${orderData.id}`,
       html: customerHtmlBody,
-      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com"]
     });
 
     res.json({ message: "Return requested successfully.", orderId: orderData.id });
@@ -1576,7 +1576,7 @@ exports.autoAcceptOffers = functions.pubsub
         to: orderData.shippingInfo.email,
         subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
         html: customerHtmlBody,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com"]
       });
 
       await updateOrderBoth(doc.id, {
@@ -2013,7 +2013,7 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       to: order.shippingInfo?.email,
       subject: '⏰ Friendly Reminder: We\'re Waiting for Your Device! 📱',
       html: emailHtml,
-      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+      bcc: ["sales@secondhandcell.com"]
     });
 
     // 8. Log admin action for audit trail
@@ -2301,7 +2301,7 @@ app.post("/check-esn", async (req, res) => {
         to: customerEmail,
         subject: `Important Notice Regarding Your Device - Order #${orderId}`,
         html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com"]
       });
 
       await updateOrderBoth(orderId, {
@@ -2321,7 +2321,7 @@ app.post("/check-esn", async (req, res) => {
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com"]
       });
 
       const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
@@ -2342,7 +2342,7 @@ app.post("/check-esn", async (req, res) => {
         to: customerEmail,
         subject: `Action Required for Order #${orderId}`,
         html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+        bcc: ["sales@secondhandcell.com"]
       });
 
       const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);

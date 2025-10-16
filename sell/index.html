@@ -1116,47 +1116,32 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const fullyFunctionalModal = document.getElementById('fullyFunctionalModal');
 
 
-            // Get parameters from the URL query string
+            // Get the device slug from the URL query parameter
             const urlParams = new URLSearchParams(window.location.search);
-            const brandParam = urlParams.get('brand');
-            const deviceSlug = urlParams.get('device');
-            const storageParam = urlParams.get('storage');
-            const carrierParam = urlParams.get('carrier');
-            const powerParam = urlParams.get('power');
-            const functionalityParam = urlParams.get('functionality');
-            const qualityParam = urlParams.get('quality');
-            const priceParam = urlParams.get('price');
+            const deviceParam = urlParams.get('device');
             
-            // Log the URL parameters for debugging
-            console.log('URL Parameters:', {
-                brand: brandParam,
-                device: deviceSlug,
-                storage: storageParam,
-                carrier: carrierParam,
-                power: powerParam,
-                functionality: functionalityParam,
-                quality: qualityParam,
-                price: priceParam
-            });
-
-            // Validate required parameters
-            if (!brandParam || !deviceSlug) {
-                loadingIndicator.classList.add('hidden');
-                errorDisplay.classList.remove('hidden');
-                console.error("Missing required parameters (brand or device) in URL.");
-                return;
+            function getBrandAndSlug(param) {
+                if (!param || typeof param !== 'string') return null;
+                const parts = param.split('-');
+                const brands = ['iphone', 'samsung', 'google', 'ipad'];
+                const brand = parts[0];
+                if (brands.includes(brand)) {
+                    return {
+                        brand: brand,
+                        slug: parts.slice(1).join('-')
+                    };
+                }
+                return null;
             }
 
-            const deviceInfo = {
-                brand: brandParam,
-                slug: deviceSlug,
-                storage: storageParam,
-                carrier: carrierParam,
-                power: powerParam,
-                functionality: functionalityParam,
-                quality: qualityParam,
-                estimatedPrice: priceParam
-            };
+            const deviceInfo = getBrandAndSlug(deviceParam);
+
+            if (!deviceInfo || !deviceInfo.slug) {
+                loadingIndicator.classList.add('hidden');
+                errorDisplay.classList.remove('hidden');
+                console.error("Invalid device parameter in URL.");
+                return;
+            }
 
             async function fetchDevicePricing(brand, slug) {
                 try {
@@ -1235,93 +1220,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
             storageSelect.innerHTML = '<option value="">Select Storage</option>';
             storageSelect.appendChild(fragment);
-            
-            // Auto-populate form from URL parameters if present
-            if (deviceInfo.storage && deviceInfo.carrier && deviceInfo.power && deviceInfo.functionality && deviceInfo.quality) {
-                console.log('Auto-populating form from URL parameters...');
-                
-                // Set storage
-                storageSelect.value = deviceInfo.storage;
-                
-                // Show carrier section and set carrier
-                setTimeout(() => {
-                    const carrierSection = document.getElementById('carrierSection');
-                    const powerOnSection = document.getElementById('powerOnSection');
-                    const functionalSection = document.getElementById('functionalSection');
-                    const cracksSection = document.getElementById('cracksSection');
-                    const cosmeticSection = document.getElementById('cosmeticSection');
-                    const getQuoteBtn = document.getElementById('getQuoteBtn');
-                    
-                    if (carrierSection) carrierSection.classList.remove('hidden');
-                    
-                    // Set carrier
-                    const carrierMapping = {
-                        'unlocked': 'unlocked',
-                        'verizon': 'verizon',
-                        'att': 'att',
-                        'tmobile': 'tmobile',
-                        'other': 'other-carrier'
-                    };
-                    const carrierValue = carrierMapping[deviceInfo.carrier] || deviceInfo.carrier;
-                    const carrierRadio = document.querySelector(`input[name="carrier"][value="${deviceInfo.carrier}"]`) || 
-                                        document.getElementById(carrierValue);
-                    if (carrierRadio) carrierRadio.checked = true;
-                    
-                    // Show power section and set power
-                    if (powerOnSection) powerOnSection.classList.remove('hidden');
-                    const powerRadio = document.querySelector(`input[name="q1_power_on"][value="${deviceInfo.power}"]`);
-                    if (powerRadio) powerRadio.checked = true;
-                    
-                    // Map functionality to the functional question
-                    if (deviceInfo.power === 'yes') {
-                        if (functionalSection) functionalSection.classList.remove('hidden');
-                        const functionalValue = deviceInfo.functionality === 'working' ? 'yes' : 'no';
-                        const functionalRadio = document.querySelector(`input[name="q2_fully_functional"][value="${functionalValue}"]`);
-                        if (functionalRadio) functionalRadio.checked = true;
-                        
-                        // Map quality to cracks and cosmetic
-                        if (functionalValue === 'yes') {
-                            if (cracksSection) cracksSection.classList.remove('hidden');
-                            
-                            // Quality mapping: flawless/scratched = no cracks, damaged = cracks
-                            const hasCracks = deviceInfo.quality === 'damaged' ? 'no' : 'yes';
-                            const cracksRadio = document.querySelector(`input[name="q3_no_cracks"][value="${hasCracks}"]`);
-                            if (cracksRadio) cracksRadio.checked = true;
-                            
-                            if (hasCracks === 'yes') {
-                                if (cosmeticSection) cosmeticSection.classList.remove('hidden');
-                                
-                                // Map quality to cosmetic condition
-                                const cosmeticMapping = {
-                                    'flawless': 'flawless',
-                                    'scratched': 'good'
-                                };
-                                const cosmeticValue = cosmeticMapping[deviceInfo.quality] || 'fair';
-                                const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${cosmeticValue}"]`);
-                                if (cosmeticRadio) cosmeticRadio.checked = true;
-                            } else {
-                                if (cosmeticSection) cosmeticSection.classList.add('hidden');
-                            }
-                        } else {
-                            if (cracksSection) cracksSection.classList.add('hidden');
-                            if (cosmeticSection) cosmeticSection.classList.add('hidden');
-                        }
-                    } else {
-                        if (functionalSection) functionalSection.classList.add('hidden');
-                        if (cracksSection) cracksSection.classList.add('hidden');
-                        if (cosmeticSection) cosmeticSection.classList.add('hidden');
-                    }
-                    
-                    // Show get quote button and auto-click it
-                    if (getQuoteBtn) {
-                        getQuoteBtn.classList.remove('hidden');
-                        // Auto-calculate quote
-                        setTimeout(() => {
-                            getQuoteBtn.click();
-                        }, 100);
-                    }
-                }, 100);
-            }
             
             // --- REST OF THE CODE ---
             const getQuoteBtn = document.getElementById('getQuoteBtn');
@@ -1435,9 +1333,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
 
             onAuthStateChanged(auth, (user) => {
-                const isRealUser = user && !user.isAnonymous;
-                
-                if (isRealUser) {
+                if (user) {
                     isUserLoggedIn = true;
                     currentUserId = user.uid;
                     console.log("User is logged in:", user.uid);
@@ -2194,7 +2090,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 
                 const orderData = {
                     device: device.name,
-                    brand: 'iphone',
+                    brand: deviceInfo.brand,
                     modelSlug: deviceInfo.slug,
                     carrier: document.querySelector('input[name="carrier"]:checked').value,
                     storage: document.getElementById('storage').value,
@@ -2246,12 +2142,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         throw new Error(result.error || 'Failed to submit order.');
                     }
                     
-                    // Get order ID from response and estimated price from deviceInfo or orderData
-                    const orderId = result.orderId || result.id || Date.now().toString();
-                    const totalPrice = deviceInfo.estimatedPrice || orderData.estimatedQuote || finalQuote || '0';
-                    
                     setTimeout(() => {
-                        window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${orderData.shippingPreference === 'Shipping Kit Requested' ? 'ship_kit' : 'email_label'}&orderId=${encodeURIComponent(orderId)}&price=${encodeURIComponent(totalPrice)}`;
+                        window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${orderData.shippingPreference === 'Shipping Kit Requested' ? 'ship_kit' : 'email_label'}`;
                     }, 2000);
                     
                 } catch (e) {
