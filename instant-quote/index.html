@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Price Your Device - SecondHandCell</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        h1, h2, h3 {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        
+        body {
+            background: #F5F6F8;
+        }
+        
+        .clean-card {
+            background: white;
+            border: 1px solid rgba(31, 41, 55, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .clean-card:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+        
+        .option-btn {
+            transition: all 0.2s ease;
+            border: 2px solid #E5E7EB;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+        
+        .option-btn:hover {
+            border-color: #6366F1;
+            background: #EEF2FF;
+        }
+        
+        .option-btn.selected {
+            border-color: #6366F1;
+            background: #EEF2FF;
+            box-shadow: 0 0 0 2px #C7D2FE;
+        }
+        
+        .price-summary {
+            background: linear-gradient(135deg, #1F2937 0%, #374151 100%);
+            color: white;
+            position: sticky;
+            top: 24px;
+        }
+        
+        .accent-gradient {
+            background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%);
+        }
+        
+        .accent-text {
+            background: linear-gradient(135deg, #EC4899 0%, #F97316 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .status-badge {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* Styles for Custom Modals */
+        .modal {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+            visibility: hidden;
+        }
+        .modal-content {
+            transform: translateY(-20px);
+            transition: transform 0.3s ease-out;
+        }
+        .modal.is-visible {
+            opacity: 1;
+            pointer-events: auto;
+            visibility: visible;
+        }
+        .modal.is-visible .modal-content {
+            transform: translateY(0);
+        }
+        .modal-body {
+            overflow-y: auto;
+            max-height: 70vh;
+        }
+        /* Custom class for the checkbox checkmark */
+        .custom-checkbox .checkmark {
+            display: inline-block;
+            width: 1.25rem;
+            height: 1.25rem;
+            border: 2px solid #94a3b8;
+            border-radius: 0.25rem;
+            position: relative;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .custom-checkbox input[type="checkbox"] {
+            display: none;
+        }
+        .custom-checkbox input[type="checkbox"]:checked + .checkmark {
+            background-color: #4f46e5;
+            border-color: #4f46e5;
+        }
+        .custom-checkbox input[type="checkbox"]:checked + .checkmark::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0.5rem;
+            height: 1rem;
+            border: solid white;
+            border-width: 0 3px 3px 0;
+            transform: translate(-50%, -60%) rotate(45deg);
+        }
+        .highlight-missing {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.5) !important;
+        }
+        /* Style for radio button/label highlighting */
+        .shipping-option input[type="radio"]:not(:checked) + label.highlight-missing,
+        .payment-option input[type="radio"]:not(:checked) + label.highlight-missing {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.5) !important;
+        }
+        .btn-disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background-color: #94a3b8 !important;
+            box-shadow: none;
+            transform: none !important;
+        }
+        /* Style for state select placeholder text */
+        #state:required:invalid:not(:focus) {
+            color: #64748b; /* slate-500 */
+        }
+        #state.highlight-missing {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.5) !important;
+        }
+        .btn-google-style {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; background-color: white; color: #475569;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            border: 1px solid #cbd5e1; font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+        }
+        .btn-google-style:hover { background-color: #f8fafc; }
+        .btn-dark-slate {
+            width: 100%; background-color: #1e293b; color: white;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            font-weight: 600; transition: all 0.3s ease;
+            border: none; cursor: pointer;
+        }
+        .btn-dark-slate:hover { background-color: #0f172a; }
+        .auth-message {
+            margin-top: 1rem; padding: 0.75rem; border-radius: 0.5rem; font-size: 0.875rem; text-align: center;
+        }
+        
+        /* Device Image Styling */
+        #device-image-preview {
+            max-width: 200px;
+            margin: 0 auto 16px auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #E5E7EB;
+        }
+        
+        #device-image-preview img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        /* Mobile adjustment for device image: hidden on small screens */
+        @media (max-width: 1023px) {
+            #device-image-container {
+                display: none !important;
+            }
+        }
+        /* Icon size for options */
+        .option-icon {
+            font-size: 2rem; /* Large icon */
+            color: #4F46E5; /* Indigo color */
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Mobile specific style adjustment for buttons and text */
+        @media (max-width: 767px) {
+            /* Text inside the dropdowns for Storage and Carrier */
+            #storage-select, #carrier-select {
+                font-size: 0.875rem; /* Slightly smaller text for better fit */
+                padding: 0.5rem 0.75rem; /* Reduced padding */
+            }
+
+            .option-btn {
+                padding: 0.5rem; /* Reduced padding on mobile */
+            }
+            .option-icon {
+                font-size: 1.5rem; /* Smaller icon on mobile */
+            }
+            .option-btn span {
+                font-size: 0.75rem; /* Smaller text on mobile */
+                line-height: 1.2;
+            }
+        }
+    </style>
+</head>
+<body class="p-6 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <a href="/" class="text-gray-600 hover:text-gray-900 inline-flex items-center mb-4">
+                <i class="fas fa-arrow-left mr-2"></i>
+                Back to Home
+            </a>
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">Price Your Device</h1>
+            <p class="text-gray-600 mt-2">Get an instant quote in just a few steps</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            <!-- Left Column - Form (3/5 width) -->
+            <div class="lg:col-span-3 space-y-4">
+
+                <!-- 1. PRICING INPUT SECTION (Initially Visible) -->
+                <div id="pricing-input-section" class="space-y-4">
+                    <!-- Brand Selection -->
+                    <div class="clean-card p-6">
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Select Brand</label>
+                        <div class="relative">
+                            <select id="brand-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-900 focus:outline-none focus:border-indigo-500 bg-white" onchange="window.loadDevices()">
+                                <option value="">Choose a brand...</option>
+                                <option value="iphone">iPhone</option>
+                                <option value="samsung">Samsung</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Device Selection -->
+                    <div class="clean-card p-6">
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Select Device</label>
+                        <div class="relative">
+                            <select id="device-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-900 focus:outline-none focus:border-indigo-500 bg-white" disabled onchange="window.loadStorage()">
+                                <option value="">Choose a device...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Storage & Carrier -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="clean-card p-6">
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">Storage</label>
+                            <select id="storage-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-900 focus:outline-none focus:border-indigo-500 bg-white" disabled onchange="window.checkFullForm()">
+                                <option value="">Select</option>
+                            </select>
+                        </div>
+                        <div class="clean-card p-6">
+                            <label class="block text-sm font-semibold text-gray-700 mb-3">Carrier</label>
+                            <select id="carrier-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-900 focus:outline-none focus:border-indigo-500 bg-white" onchange="window.checkFullForm()">
+                                <option value="unlocked">Unlocked</option>
+                                <option value="verizon">Verizon</option>
+                                <option value="att">AT&T</option>
+                                <option value="tmobile">T-Mobile</option>
+                                <option value="other">Other/Locked</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Condition Questions (Power) - ICONIZED -->
+                    <div class="clean-card p-6">
+                        <label class="block text-sm font-semibold text-gray-700 mb-4">Does it turn on?</label>
+                        <div class="grid grid-cols-2 gap-4" id="power-options">
+                            <button onclick="window.selectOption('power', 'yes')" class="option-btn p-4 rounded-lg">
+                                <i class="option-icon fas fa-power-off text-green-500"></i>
+                                <span class="font-medium">Yes</span>
+                            </button>
+                            <button onclick="window.selectOption('power', 'no')" class="option-btn p-4 rounded-lg">
+                                <i class="option-icon fas fa-power-off text-red-500"></i>
+                                <span class="font-medium">No</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Condition Questions (Screen) - ICONIZED -->
+                    <div class="clean-card p-6">
+                        <label class="block text-sm font-semibold text-gray-700 mb-4 flex items-center">
+                            Screen lights up correctly? 
+                            <a href="#" class="text-indigo-400 hover:text-indigo-300 ml-2" onclick="window.showFunctionalModal(event)" aria-label="What does 'Screen lights up correctly?' mean?">
+                                <i class="fas fa-info-circle"></i>
+                            </a>
+                        </label>
+                        <div class="grid grid-cols-2 gap-4" id="screen-options">
+                            <button onclick="window.selectOption('screen', 'yes')" class="option-btn p-4 rounded-lg">
+                                <i class="option-icon fas fa-mobile-screen-button text-green-500"></i>
+                                <span class="font-medium">Yes</span>
+                            </button>
+                            <button onclick="window.selectOption('screen', 'no')" class="option-btn p-4 rounded-lg">
+                                <i class="option-icon fas fa-mobile-screen-button text-red-500"></i>
+                                <span class="font-medium">No</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Condition Questions (Physical - 3-TIER) - ICONIZED -->
+                    <div class="clean-card p-6">
+                        <label class="block text-sm font-semibold text-gray-700 mb-4">What is the physical condition?</label>
+                        <div class="grid grid-cols-3 gap-4" id="cracks-options">
+                            <button onclick="window.selectOption('cracks', 'flawless')" class="option-btn p-4 rounded-lg">
+                                <i class="option-icon fas fa-gem text-indigo-500"></i>
+                                <span class="font-medium">Flawless</span>
+                            </button>
+                            <button onclick="window.selectOption('cracks', 'scratched')" class="option-btn p-4 rounded-lg">
+                                <i class="option-icon fas fa-pencil-ruler text-yellow-500"></i>
+                                <span class="font-medium">Scratched</span>
+                            </button>
+                            <button onclick="window.selectOption('cracks', 'damaged')" class="option-btn p-4 rounded-lg">
+                                <i class="option-icon fas fa-shield text-red-500"></i>
+                                <span class="font-medium">Damaged/<br>Cracked</span>
+                            </button>
+                        </div>
+                    </div>
+                </div> <!-- End #pricing-input-section -->
+
+                <button onclick="window.calculatePrice()" id="calculatePriceBtn" class="w-full py-4 px-6 accent-gradient text-white font-semibold rounded-lg transition-all transform hover:scale-105 shadow-lg">
+                    Calculate My Price
+                </button>
+                <div id="quote-message-box" class="hidden text-center text-sm p-3 rounded-lg"></div>
+
+
+                <!-- 2. SHIPPING DETAILS SECTION (Initially Hidden) -->
+                <div id="shipping-details-section" class="hidden space-y-6 pt-8">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-4">Confirm Your Order</h2>
+                    
+                    <!-- Shipping Preference -->
+                    <div id="shipping-preference-card" class="clean-card p-6 space-y-4">
+                        <label class="block text-xl font-semibold text-gray-700 mb-3">1. How would you like to ship?</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="shippingOptions">
+                            <div class="shipping-option">
+                                <input type="radio" id="ship_kit" name="shipping_preference" value="ship_kit">
+                                <label for="ship_kit" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 block" onclick="window.updateOverview()">
+                                    <i class="fa-solid fa-box text-3xl text-indigo-600 mb-2"></i>
+                                    <span class="font-semibold block">Ship Me a Box (Shipping Kit)</span>
+                                </label>
+                            </div>
+                            <div class="shipping-option">
+                                <input type="radio" id="email_label" name="shipping_preference" value="email_label">
+                                <label for="email_label" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 block" onclick="window.updateOverview()">
+                                    <i class="fa-solid fa-envelope text-3xl text-green-600 mb-2"></i>
+                                    <span class="font-semibold block">Email Me a Label</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Shipping Address -->
+                    <div id="shipping-address-card" class="clean-card p-6 space-y-4">
+                        <label class="block text-xl font-semibold text-gray-700 mb-3">2. Shipping & Contact Info</label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="md:col-span-2">
+                                <label for="fullName" class="block text-sm font-medium text-gray-700">Full Name</label>
+                                <input type="text" id="fullName" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2" oninput="window.updateOverview()">
+                            </div>
+                            <div>
+                                <label for="phone" class="block text-sm font-medium text-gray-700">Phone Number (Required)</label>
+                                <input type="tel" id="phone" required placeholder="(555) 555-5555" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2" oninput="window.formatPhoneNumber(this)">
+                            </div>
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-gray-700">Email Address</label>
+                                <input type="email" id="email" required placeholder="Email Address" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2" oninput="window.updateOverview()">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label for="street-address" class="block text-sm font-medium text-gray-700">Street Address</label>
+                                <input type="text" id="street-address" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2" oninput="window.updateOverview()">
+                            </div>
+                            <div>
+                                <label for="city" class="block text-sm font-medium text-gray-700">City</label>
+                                <input type="text" id="city" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2" oninput="window.updateOverview()">
+                            </div>
+                            <!-- State Selector -->
+                            <div>
+                                <label for="state" class="block text-sm font-medium text-gray-700">State (Required)</label>
+                                <select id="state" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" onchange="window.updateOverview()">
+                                    <option value="" disabled selected>Select State</option>
+                                    <!-- States populated by JS -->
+                                </select>
+                            </div>
+                            <div>
+                                <label for="zip-code" class="block text-sm font-medium text-gray-700">ZIP Code</label>
+                                <input type="text" id="zip-code" required class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2" oninput="window.updateOverview()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Order Overview and Final CTA -->
+                    <div id="order-review-card" class="clean-card p-6 space-y-4">
+                         <h3 class="text-xl font-bold text-gray-700 mb-4">3. Final Review</h3>
+                        <div class="p-4 bg-indigo-50 rounded-lg space-y-2 text-gray-800">
+                            <p><strong>Device:</strong> <span id="overviewDevice"></span></p>
+                            <p><strong>Quote:</strong> <span id="overviewQuote" class="font-bold text-indigo-600"></span></p>
+                            <p><strong>Carrier:</strong> <span id="overviewCarrier"></span></p>
+                            <p><strong>Shipping:</strong> <span id="overviewShippingPreference"></span></p>
+                            <p><strong>Ship To:</strong> <span id="overviewAddress"></span></p>
+                        </div>
+                        
+                        <label class="custom-checkbox flex items-start cursor-pointer pt-2">
+                            <input type="checkbox" id="termsAccepted">
+                            <span class="checkmark mt-1"></span>
+                            <span class="ml-4 text-sm text-gray-700">I accept the <a href="/terms" class="text-indigo-600 underline">terms and conditions</a> and certify this device is not lost or stolen.</span>
+                        </label>
+                        
+                        <!-- Renamed button to better reflect its function -->
+                        <button onclick="window.validateShippingAndOpenPayment()" id="sendPhoneBtn" class="w-full py-4 px-6 accent-gradient text-white font-semibold rounded-lg transition-all transform hover:scale-105 shadow-lg mt-4">
+                            Proceed to Payment
+                        </button>
+                    </div>
+
+                </div> <!-- End #shipping-details-section -->
+            </div>
+
+            <!-- Right Column - Price Summary (2/5 width) -->
+            <div class="lg:col-span-2">
+                <!-- Device Image Preview (Desktop Only) -->
+                <div id="device-image-container" class="hidden lg:block mb-4">
+                    <div id="device-image-preview" class="hidden">
+                        <img id="device-preview-img" src="https://placehold.co/200x200/E5E7EB/4F46E5?text=Device+Preview" alt="Device Preview">
+                    </div>
+                </div>
+
+                <!-- Price Summary Box -->
+                <div id="price-summary" class="hidden price-summary rounded-xl p-8 shadow-xl">
+                    <h3 class="text-2xl font-bold mb-2" id="device-name">iPhone iPhone 14</h3>
+                    <p class="text-sm opacity-90 mb-6" id="device-specs">256GB | Verizon</p>
+
+                    <div class="space-y-2 mb-8">
+                        <div id="condition-power" class="hidden flex items-center text-sm">
+                            <i class="fas fa-check-circle text-green-400 mr-2"></i>
+                            <span>Powers on</span>
+                        </div>
+                        <div id="condition-screen" class="hidden flex items-center text-sm">
+                            <i class="fas fa-check-circle text-green-400 mr-2"></i>
+                            <span>Screen works</span>
+                        </div>
+                        <!-- Physical Condition Summary -->
+                        <div id="condition-cracks" class="hidden flex items-center text-sm">
+                            <i class="fas fa-check-circle text-green-400 mr-2"></i>
+                            <span id="cracks-summary-text">Physical Condition</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-8">
+                        <div class="flex items-baseline gap-3 mb-2">
+                            <span class="text-5xl font-bold">$<span id="final-price">0.00</span></span>
+                            <span class="status-badge">
+                                <i class="fas fa-star mr-1 text-yellow-400"></i>
+                                PROMO
+                            </span>
+                        </div>
+                        <p class="text-xs opacity-75">Base Value: $<span id="original-price">0.00</span></p>
+                    </div>
+
+                    <button onclick="window.lockPriceAndProceed()" class="w-full py-4 px-6 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-all mb-4">
+                        <i class="fas fa-lock mr-2"></i>
+                        Lock This Price
+                    </button>
+
+                    <p class="text-xs opacity-75 text-center">Price subject to evaluation. <a href="/terms" class="underline">Terms apply</a>.</p>
+                </div>
+
+                <div id="placeholder-summary" class="price-summary rounded-xl p-8 shadow-xl flex flex-col items-center justify-center min-h-[400px]">
+                    <i class="fas fa-mobile-alt text-5xl opacity-30 mb-4"></i>
+                    <p class="text-lg opacity-75 text-center">Complete the form to see your device value</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Modal for Messages (replaces alert()) -->
+    <div id="message-modal" class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center modal opacity-0 pointer-events-none z-50">
+        <div class="bg-white rounded-lg p-6 shadow-2xl max-w-sm w-full transform modal-content translate-y-4">
+            <h4 class="text-xl font-bold text-red-600 mb-3 flex items-center">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                Required Fields
+            </h4>
+            <p id="message-text" class="text-gray-700 mb-4">A message will appear here.</p>
+            <button onclick="window.hideMessage()" class="w-full py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
+                Got It
+            </button>
+        </div>
+    </div>
+
+    <!-- Login/Sign Up Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center modal opacity-0 pointer-events-none z-50">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content">
+            <button class="absolute top-3 right-3 text-gray-400 hover:text-gray-600" onclick="window.hideLoginModal()"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Your SecondHandCell Account</h2>
+            
+            <div class="flex border-b border-gray-200 mb-6">
+                <button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-gray-500 hover:text-indigo-600 hover:border-indigo-600 transition-colors duration-200">Login</button>
+                <button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-gray-500 hover:text-indigo-600 hover:border-indigo-600 transition-colors duration-200">Sign Up</button>
+            </div>
+            
+            <form id="loginForm" class="space-y-4 hidden">
+                <p class="text-gray-600 text-center">Log in to continue with your order.</p>
+                <button type="button" id="googleLoginBtn" class="btn-google-style">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Login with Google
+                </button>
+                <div class="text-center text-gray-500 relative my-4">
+                    <span class="bg-white px-2 z-10 relative">or</span>
+                    <hr class="absolute inset-0 top-1/2 border-t border-gray-200">
+                </div>
+                <div>
+                    <label for="loginEmail" class="sr-only">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="Email Address" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                </div>
+                <div>
+                    <label for="loginPassword" class="sr-only">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Password" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                </div>
+                <button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button>
+            </form>
+            
+            <form id="signupForm" class="space-y-4 hidden">
+                <p class="text-gray-600 text-center">Create an account to complete your order.</p>
+                <button type="button" id="googleSignupBtn" class="btn-google-style">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Sign Up with Google
+                </button>
+                <div class="text-center text-gray-500 relative my-4">
+                    <span class="bg-white px-2 z-10 relative">or</span>
+                    <hr class="absolute inset-0 top-1/2 border-t border-gray-200">
+                </div>
+                <div>
+                    <label for="signupName" class="sr-only">Full Name</label>
+                    <input type="text" id="signupName" placeholder="Full Name" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                </div>
+                <div>
+                    <label for="signupEmail" class="sr-only">Email Address</label>
+                    <input type="email" id="signupEmail" placeholder="Email Address" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                </div>
+                <div>
+                    <label for="signupPassword" class="sr-only">Password</label>
+                    <input type="password" id="signupPassword" placeholder="Password" class="w-full border border-gray-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                </div>
+                <button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button>
+            </form>
+
+            <div id="authMessage" class="auth-message hidden"></div>
+        </div>
+    </div>
+    <!-- END LOGIN MODAL -->
+
+    <!-- Fully Functional Definition Modal -->
+    <div id="functional-details-modal" class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center modal opacity-0 pointer-events-none z-50">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-xl p-6 relative modal-content">
+            <button class="absolute top-3 right-3 text-gray-400 hover:text-gray-600" onclick="window.closeModal('functional-details-modal')"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">What does "Fully Functional" mean?</h2>
+            <div class="modal-body text-left">
+                <p class="font-semibold text-lg text-indigo-700 mb-3">For a device to qualify as **"Fully Functional"**, all of the following criteria must be met:</p>
+                <ul class="list-disc list-inside ml-4 space-y-2 text-gray-700 text-sm">
+                    <li>**Screen & Display:** The screen must work and fully light up (no dead pixels, discoloration, persistent image burn, or black dots/LCD damage).</li>
+                    <li>**Original Parts:** The device must contain **all original manufacturer parts**. Devices with third-party, non-original, or aftermarket replacement parts will be considered "Not Functional."</li>
+                    <li>**Key Features:** All exterior buttons (power, volume, mute), front/back camera and flashes, speakers, and microphones must function correctly.</li>
+                    <li>**Connectivity & Ports:** Charging port, Cellular, Wi-Fi, Bluetooth, and GPS must all work.</li>
+                    <li>**Biometrics & Touch:** The touchscreen, facial recognition (Face ID), and fingerprint sensor (Touch ID) must be fully operational.</li>
+                    <li>**Battery Health:** The battery must hold a sufficient charge for normal operation.</li>
+                </ul>
+                <p class="mt-4 text-sm text-red-600 font-medium">If your device fails any of these checks, please select "No" to the functionality question for an accurate revised offer.</p>
+            </div>
+        </div>
+    </div>
+    <!-- END FUNCTIONAL MODAL -->
+
+    <!-- NEW: Payment Modal -->
+    <div id="paymentModal" class="fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center modal opacity-0 pointer-events-none z-50">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 relative modal-content text-left">
+            <button class="absolute top-3 right-3 text-gray-400 hover:text-gray-600" onclick="window.closeModal('paymentModal')"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">3. How would you like to get paid? </h2>
+            <div id="payment-message-box" class="hidden text-center text-sm p-3 rounded-lg mb-4"></div>
+            
+            <div class="mb-8 grid grid-cols-3 gap-4" id="paymentOptions">
+                <div class="payment-option">
+                    <input type="radio" id="venmo" name="payment_method" value="venmo">
+                    <label for="venmo" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 block">
+                        <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 512 512" class="h-10 w-10 mb-2 mx-auto" aria-label="Venmo" role="img">
+                            <rect width="512" height="512" rx="15%" fill="#3396cd"/>
+                            <path d="m381.4 105.3c11 18.1 15.9 36.7 15.9 60.3 0 75.1-64.1 172.7-116.2 241.2h-118.8l-47.6-285 104.1-9.9 25.3 202.8c23.5-38.4 52.6-98.7 52.6-139.7 0-22.5-3.9-37.8-9.9-50.4z" fill="#fff"/>
+                        </svg>
+                        <span class="font-semibold block">Venmo</span>
+                    </label>
+                </div>
+                <div class="payment-option">
+                    <input type="radio" id="zelle" name="payment_method" value="zelle">
+                    <label for="zelle" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 block">
+                        <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48" class="h-10 w-10 mb-2 mx-auto">
+                            <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22 C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5 C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5 C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5 h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5 h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298 C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
+                        </svg>
+                        <span class="font-semibold block">Zelle</span>
+                    </label>
+                </div>
+                <div class="payment-option">
+                    <input type="radio" id="paypal" name="payment_method" value="paypal">
+                    <label for="paypal" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 block">
+                        <i class="fa-brands fa-paypal text-4xl text-blue-600 mb-2"></i>
+                        <span class="font-semibold block">PayPal</span>
+                    </label>
+                </div>
+            </div>
+
+            <div id="venmoFields" class="mb-8 p-6 bg-gray-100 rounded-lg shadow-inner hidden">
+                <h3 class="text-lg font-semibold text-gray-700 mb-3">Venmo Details</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label for="venmoUsername" class="block text-sm font-medium text-gray-700">Venmo Username</label>
+                        <input type="text" id="venmoUsername" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                    </div>
+                    <div>
+                        <label for="venmoUsernameConfirm" class="block text-sm font-medium text-gray-700">Verify Venmo Username</label>
+                        <input type="text" id="venmoUsernameConfirm" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                    </div>
+                </div>
+            </div>
+
+            <div id="zelleFields" class="mb-8 p-6 bg-gray-100 rounded-lg shadow-inner hidden">
+                <h3 class="text-lg font-semibold text-gray-700 mb-3">Zelle Details</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label for="zelleIdentifier" class="block text-sm font-medium text-gray-700">Zelle Email or Phone Number</label>
+                        <input type="text" id="zelleIdentifier" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                    </div>
+                    <div>
+                        <label for="zelleIdentifierConfirm" class="block text-sm font-medium text-gray-700">Verify Zelle Email or Phone Number</label>
+                        <input type="text" id="zelleIdentifierConfirm" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                    </div>
+                </div>
+            </div>
+
+            <div id="paypalFields" class="mb-8 p-6 bg-gray-100 rounded-lg shadow-inner hidden">
+                <h3 class="text-lg font-semibold text-gray-700 mb-3">PayPal Details</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label for="paypalEmail" class="block text-sm font-medium text-gray-700">PayPal Email Address</label>
+                        <input type="email" id="paypalEmail" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                    </div>
+                    <div>
+                        <label for="paypalEmailConfirm" class="block text-sm font-medium text-gray-700">Verify PayPal Email Address</label>
+                        <input type="email" id="paypalEmailConfirm" class="mt-1 block w-full border border-gray-300 rounded-lg shadow-sm p-2">
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="window.submitFinalOrder()" id="submitFinalOrderBtn" class="w-full py-4 px-6 bg-indigo-600 text-white font-semibold rounded-lg transition-all hover:bg-indigo-700 btn-disabled">
+                Submit Order & Finalize Payout
+            </button>
+        </div>
+    </div>
+    <!-- END PAYMENT MODAL -->
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+        import { getAuth, signInAnonymously, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, getDocs, doc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Configuration and State ---
+        setLogLevel('Debug');
+        
+        // ** API URL FOR BACKEND SUBMISSION **
+        // This should point to your Firebase Cloud Functions HTTP endpoint (exports.api).
+        const BACKEND_API_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api'; 
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            databaseURL: "https://buyback-a0f05-default-rtdb.firebaseio.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        const initialAuthToken = null; 
+        
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app); 
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const devicesCollectionPath = `devices`;
+
+        let selectedBrand = '';
+        let selectedDevice = '';
+        let deviceData = null; 
+        let conditions = { power: '', screen: '', cracks: '' };
+        let isAuthReady = false;
+        let finalQuote = 0.00; // Final calculated price
+        let currentUserId = null; // New: to store user ID
+
+        const US_STATES = [
+            { name: "Alabama", code: "AL" }, { name: "Alaska", code: "AK" }, { name: "Arizona", code: "AZ" }, { name: "Arkansas", code: "AR" },
+            { name: "California", code: "CA" }, { name: "Colorado", code: "CO" }, { name: "Connecticut", code: "CT" }, { name: "Delaware", code: "DE" },
+            { name: "Florida", code: "FL" }, { name: "Georgia", code: "GA" }, { name: "Hawaii", code: "HI" }, { name: "Idaho", code: "ID" },
+            { name: "Illinois", code: "IL" }, { name: "Indiana", code: "IN" }, { name: "Iowa", code: "IA" }, { name: "Kansas", code: "KS" },
+            { name: "Kentucky", code: "KY" }, { name: "Louisiana", code: "LA" }, { name: "Maine", code: "ME" }, { name: "Maryland", code: "MD" },
+            { name: "Massachusetts", code: "MA" }, { name: "Michigan", code: "MI" }, { name: "Minnesota", code: "MN" }, { name: "Mississippi", code: "MS" },
+            { name: "Missouri", code: "MO" }, { name: "Montana", code: "MT" }, { name: "Nebraska", code: "NE" }, { name: "Nevada", code: "NV" },
+            { name: "New Hampshire", code: "NH" }, { name: "New Jersey", code: "NJ" }, { name: "New Mexico", code: "NM" }, { name: "New York", code: "NY" },
+            { name: "North Carolina", code: "NC" }, { name: "North Dakota", code: "ND" }, { name: "Ohio", code: "OH" }, { name: "Oklahoma", code: "OK" },
+            { name: "Oregon", code: "OR" }, { name: "Pennsylvania", code: "PA" }, { name: "Rhode Island", code: "RI" }, { name: "South Carolina", code: "SC" },
+            { name: "South Dakota", code: "SD" }, { name: "Tennessee", code: "TN" }, { name: "Texas", code: "TX" }, { name: "Utah", code: "UT" },
+            { name: "Vermont", code: "VT" }, { name: "Virginia", code: "VA" }, { name: "Washington", code: "WA" }, { name: "West Virginia", code: "WV" },
+            { name: "Wisconsin", code: "WI" }, { name: "Wyoming", code: "WY" }
+        ];
+
+        // --- Authentication/Modal Elements ---
+        const loginModal = document.getElementById('loginModal');
+        const loginTabBtn = document.getElementById('loginTabBtn');
+        const signupTabBtn = document.getElementById('signupTabBtn');
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const authMessage = document.getElementById('authMessage');
+        const googleProvider = new GoogleAuthProvider();
+
+        const devicePreviewImg = document.getElementById('device-preview-img');
+        const deviceImagePreviewDiv = document.getElementById('device-image-preview');
+        
+        // --- Utility Functions ---
+
+        /** Formats the phone number as the user types: (###) ###-####. */
+        window.formatPhoneNumber = function(input) {
+            let cleaned = ('' + input.value).replace(/\D/g, '');
+            if (cleaned.length === 11 && cleaned.startsWith('1')) { cleaned = cleaned.substring(1); }
+            cleaned = cleaned.substring(0, 10);
+
+            let formatted = '';
+            if (cleaned.length > 0) { formatted += '(' + cleaned.substring(0, 3); }
+            if (cleaned.length >= 4) { formatted += ') ' + cleaned.substring(3, 6); }
+            if (cleaned.length >= 7) { formatted += '-' + cleaned.substring(6, 10); }
+
+            input.value = formatted;
+            input.maxLength = 14; 
+            window.updateOverview();
+        }
+
+        /** Populates the state select dropdown. */
+        function populateStateSelect() {
+            const selectElement = document.getElementById('state');
+            if (!selectElement) return;
+            
+            const fragment = document.createDocumentFragment();
+            US_STATES.forEach(state => {
+                const option = document.createElement('option');
+                option.value = state.code;
+                option.textContent = `${state.name} (${state.code})`;
+                fragment.appendChild(option);
+            });
+            selectElement.appendChild(fragment);
+        }
+
+        /** Opens a modal by making it visible and interactive */
+        function openModal(modalId) {
+            document.getElementById(modalId)?.classList.add('is-visible');
+        }
+
+        /** Closes a modal by hiding it and removing interactivity */
+        window.closeModal = function(modalId) {
+            document.getElementById(modalId)?.classList.remove('is-visible');
+        }
+
+        /** Opens the functional details modal. */
+        window.showFunctionalModal = function(e) {
+            e.preventDefault(); 
+            openModal('functional-details-modal');
+        }
+
+        function showMessage(message, title = "Operation Failed") {
+            document.getElementById('message-text').textContent = message;
+            const modal = document.getElementById('message-modal');
+            const header = modal.querySelector('h4');
+
+            header.textContent = title;
+            header.classList.toggle('text-red-600', title.includes('Required') || title.includes('Error') || title.includes('Failed'));
+            header.classList.toggle('text-indigo-600', !title.includes('Required') && !title.includes('Error') && !title.includes('Failed'));
+
+            modal.classList.remove('opacity-0', 'pointer-events-none', 'visibility-hidden');
+            modal.querySelector('div').classList.remove('translate-y-4');
+        }
+
+        window.hideMessage = function() {
+            const modal = document.getElementById('message-modal');
+            modal.classList.add('opacity-0', 'pointer-events-none', 'visibility-hidden');
+            modal.querySelector('div').classList.add('translate-y-4');
+            const header = modal.querySelector('h4');
+            header.textContent = "Required Fields";
+            header.classList.add('text-red-600');
+            header.classList.remove('text-indigo-600');
+        }
+        
+        function showPaymentMessage(msg, type) {
+            const messageBox = document.getElementById('payment-message-box');
+            messageBox.textContent = msg;
+            messageBox.className = 'text-center text-sm p-3 rounded-lg mb-4';
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700');
+            if (type === 'error') {
+                messageBox.classList.add('bg-red-100', 'text-red-700');
+            } else if (type === 'success') {
+                messageBox.classList.add('bg-green-100', 'text-green-700');
+            } else if (type === 'info') {
+                messageBox.classList.add('bg-blue-100', 'text-blue-700');
+            }
+            messageBox.classList.remove('hidden');
+        }
+        
+        function clearPaymentMessage() {
+             document.getElementById('payment-message-box').classList.add('hidden');
+        }
+
+        // --- AUTHENTICATION LOGIC ---
+
+        function showAuthMessage(msg, type) {
+            authMessage.textContent = msg;
+            authMessage.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700');
+            if (type === 'error') {
+                authMessage.classList.add('bg-red-100', 'text-red-700');
+            } else if (type === 'success') {
+                authMessage.classList.add('bg-green-100', 'text-green-700');
+            } else if (type === 'info') {
+                authMessage.classList.add('bg-blue-100', 'text-blue-700');
+            }
+        }
+
+        function clearAuthMessage() {
+            authMessage.classList.add('hidden');
+            authMessage.textContent = '';
+        }
+
+        window.showLoginModal = function(initialTab = 'login') {
+            openModal('loginModal');
+            clearAuthMessage();
+            showTab(initialTab);
+        }
+
+        window.hideLoginModal = function() {
+            closeModal('loginModal');
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+            clearAuthMessage();
+        }
+
+        function showTab(tabName) {
+            clearAuthMessage();
+            
+            loginTabBtn.classList.remove('border-indigo-600', 'text-indigo-600');
+            signupTabBtn.classList.remove('border-indigo-600', 'text-indigo-600');
+            loginTabBtn.classList.add('border-transparent', 'text-gray-500');
+            signupTabBtn.classList.add('border-transparent', 'text-gray-500');
+
+            if (tabName === 'login') {
+                loginForm.classList.remove('hidden');
+                signupForm.classList.add('hidden');
+                loginTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
+            } else if (tabName === 'signup') {
+                signupForm.classList.remove('hidden');
+                loginForm.classList.add('hidden');
+                signupTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
+            }
+        }
+        
+        function handleAuthSuccess(user) {
+            currentUserId = user.uid;
+            
+            // Auto-fill email in the shipping form
+            if (user.email) {
+                document.getElementById('email').value = user.email;
+            }
+            
+            // Proceed to shipping details if the quote has already been calculated
+            if (finalQuote > 0 && document.getElementById('pricing-input-section').classList.contains('hidden')) {
+                // If the user signed in on the payment gate, immediately proceed.
+                window.updateOverview();
+                window.closeModal('loginModal');
+            } else {
+                 window.closeModal('loginModal');
+            }
+        }
+        
+        // Event Listeners for Login/Sign Up buttons (added in DOMContentLoaded listener below)
+
+        // --- CORE FLOW LOGIC ---
+
+        async function initializeAppAndLoadBrands() {
+            populateStateSelect(); 
+            
+            // 1. Initial Anonymous Sign-in (Required for Firestore access)
+            try {
+                const userCredential = await signInAnonymously(auth);
+                currentUserId = userCredential.user.uid;
+                console.log("Firebase signed in anonymously for initial data loading.");
+                isAuthReady = true;
+                resetDeviceSelection();
+            } catch (error) {
+                console.error("Firebase anonymous authentication failed:", error);
+                showMessage("Authentication failed. Cannot load device data.", "Authentication Error");
+            }
+        }
+        
+        /** Loads an image with fallbacks and updates the preview area. */
+        function loadImagePreview(imageUrl) {
+            if (!imageUrl) {
+                deviceImagePreviewDiv.classList.add('hidden');
+                return;
+            }
+
+            const baseSrc = imageUrl.substring(0, imageUrl.lastIndexOf('.'));
+            const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+            let current = 0;
+            
+            function tryLoad() {
+                if (current >= extensions.length) {
+                    deviceImagePreviewDiv.classList.add('hidden');
+                    console.log("Image load failed for all extensions.");
+                    return;
+                }
+                const testSrc = baseSrc + extensions[current];
+                const img = new Image();
+                img.onload = () => { 
+                    devicePreviewImg.src = testSrc; 
+                    deviceImagePreviewDiv.classList.remove('hidden');
+                };
+                img.onerror = () => { 
+                    current++; 
+                    tryLoad(); 
+                };
+                img.src = testSrc;
+            }
+            tryLoad();
+        }
+
+        window.loadDevices = async function() {
+            const brand = document.getElementById('brand-select').value;
+            const deviceSelect = document.getElementById('device-select');
+            
+            if (!brand) {
+                resetDeviceSelection();
+                return;
+            }
+            
+            selectedBrand = brand;
+            deviceSelect.disabled = true;
+            deviceSelect.innerHTML = '<option value="">Fetching models...</option>';
+            
+            // Hide preview when changing brands/models
+            deviceImagePreviewDiv.classList.add('hidden');
+
+            const modelsCollectionPath = `${devicesCollectionPath}/${brand}/models`;
+            const modelsColRef = collection(db, modelsCollectionPath);
+            
+            try {
+                const modelsSnapshot = await getDocs(modelsColRef);
+                
+                const devices = modelsSnapshot.docs.map(doc => ({ 
+                    model: doc.id, 
+                    data: JSON.stringify(doc.data())
+                })).filter(d => d.model).sort((a, b) => a.model.localeCompare(b.model)); 
+                
+                if (devices.length === 0) {
+                    deviceSelect.innerHTML = '<option value="">No models found for this brand.</option>';
+                    return;
+                }
+
+                deviceSelect.disabled = false;
+                deviceSelect.innerHTML = '<option value="">Choose a device...</option>' + 
+                    devices.map(device => 
+                        `<option value="${device.model}" data-device-data='${device.data}'>${device.model.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</option>`
+                    ).join('');
+                
+            } catch (e) {
+                console.error(`Error loading models for brand ${brand}:`, e);
+                showMessage(`Failed to load models for ${brand}. Check Firestore structure. Error: ${e.message}`, "Data Loading Error");
+                deviceSelect.innerHTML = '<option value="">Error loading devices</option>';
+            }
+        }
+
+        window.loadStorage = function() {
+            const select = document.getElementById('device-select');
+            const option = select.options[select.selectedIndex];
+            
+            deviceData = null; 
+            
+            if (!option || !option.value) {
+                document.getElementById('storage-select').disabled = true;
+                deviceImagePreviewDiv.classList.add('hidden');
+                return;
+            }
+            
+            selectedDevice = option.value;
+            
+            const deviceDataString = option.getAttribute('data-device-data');
+            try {
+                deviceData = JSON.parse(deviceDataString);
+                
+                // ** NEW: Load Image Preview **
+                if (deviceData.imageUrl) {
+                    loadImagePreview(deviceData.imageUrl);
+                } else {
+                    deviceImagePreviewDiv.classList.add('hidden');
+                }
+                
+            } catch (e) {
+                console.error("Error parsing device data:", e);
+                showMessage("Could not parse pricing data for this device.", "Data Error");
+                return;
+            }
+
+            let storage = Object.keys(deviceData.prices || {});
+
+            if (storage.length === 0) {
+                 showMessage("Pricing data is missing storage options for this device.", "Data Error");
+                 storage = ['64GB', '128GB'];
+            }
+
+            const storageSelect = document.getElementById('storage-select');
+            storageSelect.disabled = false;
+            storageSelect.innerHTML = '<option value="">Select</option>' + 
+                storage.map(s => `<option value="${s}">${s}</option>`).join('');
+
+            window.checkFullForm();
+        }
+        
+        function resetDeviceSelection() {
+            const deviceSelect = document.getElementById('device-select');
+            const storageSelect = document.getElementById('storage-select');
+            
+            deviceSelect.disabled = true;
+            deviceSelect.innerHTML = '<option value="">Choose a device...</option>';
+            storageSelect.disabled = true;
+            storageSelect.innerHTML = '<option value="">Select</option>';
+            
+            selectedBrand = '';
+            selectedDevice = '';
+            deviceData = null;
+            conditions = { power: '', screen: '', cracks: '' };
+            
+            document.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+            document.getElementById('placeholder-summary').classList.remove('hidden');
+            document.getElementById('price-summary').classList.add('hidden');
+            deviceImagePreviewDiv.classList.add('hidden');
+        }
+
+        window.selectOption = function(type, value) {
+            conditions[type] = value;
+            
+            const container = document.getElementById(`${type}-options`);
+            if (container) {
+                container.querySelectorAll('.option-btn').forEach(btn => btn.classList.remove('selected'));
+                const selectedBtn = container.querySelector(`[onclick*="'${value}'"]`);
+                if (selectedBtn) {
+                    selectedBtn.classList.add('selected');
+                }
+            }
+            window.checkFullForm();
+        }
+        
+        window.checkFullForm = function() {
+            const storage = document.getElementById('storage-select').value;
+            const carrier = document.getElementById('carrier-select').value;
+            const calculateBtn = document.getElementById('calculatePriceBtn');
+
+            const isReady = selectedBrand && selectedDevice && deviceData && storage && carrier && conditions.power && conditions.screen && conditions.cracks;
+            
+            if(isReady) {
+                calculateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                calculateBtn.disabled = false;
+            } else {
+                calculateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                calculateBtn.disabled = true;
+            }
+        }
+        
+        window.calculatePrice = function() {
+            const storage = document.getElementById('storage-select').value;
+            const carrier = document.getElementById('carrier-select').value;
+
+            if (!selectedBrand || !selectedDevice || !deviceData || !storage || !carrier || !conditions.power || !conditions.screen || !conditions.cracks) {
+                showMessage('Please make a selection for Brand, Device, Storage, Carrier, and all Condition questions to get a price.', "Required Fields");
+                return;
+            }
+
+            const q1PowerOn = conditions.power; 
+            const q2Functional = conditions.screen; 
+            
+            let q3NoCracks = 'yes'; 
+            let q4Cosmetic = 'flawless'; 
+
+            switch (conditions.cracks) {
+                case 'flawless':
+                    q3NoCracks = 'yes';
+                    q4Cosmetic = 'flawless'; 
+                    break;
+                case 'scratched':
+                    q3NoCracks = 'yes'; 
+                    q4Cosmetic = 'good'; 
+                    break;
+                case 'damaged':
+                    q3NoCracks = 'no'; 
+                    q4Cosmetic = 'damaged'; 
+                    break;
+            }
+            
+            let selectedCarrierPricingKey = carrier;
+            if (['att', 'tmobile', 'verizon', 'other'].includes(carrier)) {
+                selectedCarrierPricingKey = 'locked'; 
+            } else if (carrier === 'unlocked') {
+                selectedCarrierPricingKey = 'unlocked';
+            }
+            
+            const basePrices = deviceData.prices[storage]?.[selectedCarrierPricingKey];
+            
+            if (!basePrices) {
+                showMessage(`Pricing data for ${storage} and ${carrier} is missing in Firebase.`, 'Data Error');
+                return;
+            }
+            
+            let calculatedPrice = 0;
+            let conditionDescription = '';
+            let iconClass = 'fa-check-circle text-green-400';
+
+            if (q1PowerOn === 'yes') {
+                if (q2Functional === 'yes') {
+                    if (q3NoCracks === 'yes') {
+                        calculatedPrice = basePrices[q4Cosmetic] || 0;
+                        conditionDescription = `Cosmetic: ${q4Cosmetic.charAt(0).toUpperCase() + q4Cosmetic.slice(1)}`;
+                        iconClass = (q4Cosmetic === 'flawless') ? 'fa-star text-yellow-400' : 'fa-check-circle text-green-400';
+                    } else {
+                        calculatedPrice = basePrices.damaged || 0;
+                        conditionDescription = 'Physical: Damaged/Cracked (Screen OK)';
+                        iconClass = 'fa-exclamation-triangle text-red-400';
+                    }
+                } else {
+                    calculatedPrice = basePrices.broken || 0;
+                    conditionDescription = 'Functional: Non-Functional/Defective';
+                    iconClass = 'fa-tools text-orange-400';
+                }
+            } else {
+                calculatedPrice = basePrices.noPower || 0;
+                conditionDescription = 'Functional: Does Not Power On';
+                iconClass = 'fa-power-off text-red-400';
+            }
+            
+            const basePrice = Math.max(0, calculatedPrice);
+            const promo = Math.floor(basePrice * 0.06); 
+            finalQuote = basePrice + promo;
+            
+            const displayedBrand = selectedBrand.charAt(0).toUpperCase() + selectedBrand.slice(1);
+            const displayedModel = selectedDevice.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+            document.getElementById('device-name').textContent = `${displayedBrand} ${displayedModel}`;
+            document.getElementById('device-specs').textContent = `${storage} | ${carrier.toUpperCase()}`;
+            document.getElementById('original-price').textContent = basePrice.toFixed(2);
+            document.getElementById('final-price').textContent = finalQuote.toFixed(2);
+            
+            document.getElementById('condition-power').classList.toggle('hidden', conditions.power !== 'yes');
+            document.getElementById('condition-screen').classList.toggle('hidden', conditions.screen !== 'yes');
+            
+            const cracksSummaryText = document.getElementById('cracks-summary-text');
+            const conditionCracksDiv = document.getElementById('condition-cracks');
+            conditionCracksDiv.classList.remove('hidden'); 
+            conditionCracksDiv.querySelector('i').className = `fas ${iconClass} mr-2`;
+            cracksSummaryText.textContent = conditionDescription;
+
+            document.getElementById('placeholder-summary').classList.add('hidden');
+            document.getElementById('price-summary').classList.remove('hidden');
+
+            document.getElementById('price-summary').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        window.lockPriceAndProceed = function() {
+            // ** NEW: AUTHENTICATION CHECK **
+            if (!auth.currentUser || auth.currentUser.isAnonymous) {
+                 window.showLoginModal('login');
+                 return;
+            }
+
+            // Hide the pricing questions and calculate button
+            document.getElementById('pricing-input-section').classList.add('hidden');
+            document.getElementById('calculatePriceBtn').classList.add('hidden');
+            document.getElementById('quote-message-box').classList.add('hidden');
+
+            // Show the shipping details section
+            const shippingSection = document.getElementById('shipping-details-section');
+            shippingSection.classList.remove('hidden');
+            
+            // Populate overview fields with quote data (Device, Carrier, Quote)
+            const displayedBrand = selectedBrand.charAt(0).toUpperCase() + selectedBrand.slice(1);
+            const displayedModel = selectedDevice.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            const carrier = document.getElementById('carrier-select').value.toUpperCase();
+
+            document.getElementById('overviewDevice').textContent = `${displayedBrand} ${displayedModel} - ${document.getElementById('storage-select').value}`;
+            document.getElementById('overviewCarrier').textContent = carrier;
+            document.getElementById('overviewQuote').textContent = `$${finalQuote.toFixed(2)}`;
+            
+            // Initial email population from auth (if available)
+            if (auth.currentUser && auth.currentUser.email) {
+                 document.getElementById('email').value = auth.currentUser.email;
+            }
+
+            // Initial call to update overview (for default shipping preference)
+            window.updateOverview();
+
+            // Scroll to the new section
+            shippingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        window.updateOverview = function() {
+            const shippingPreference = document.querySelector('input[name="shipping_preference"]:checked')?.value;
+            
+            let displayShippingText = 'Not Selected';
+            if (shippingPreference === 'ship_kit') {
+                displayShippingText = 'Shipping Kit Requested';
+            } else if (shippingPreference === 'email_label') {
+                displayShippingText = 'Email Label Requested';
+            }
+            document.getElementById('overviewShippingPreference').textContent = displayShippingText;
+
+            const fullName = document.getElementById('fullName')?.value || '';
+            const streetAddress = document.getElementById('street-address')?.value || '';
+            const city = document.getElementById('city')?.value || '';
+            const state = document.getElementById('state')?.value || '';
+            const zipCode = document.getElementById('zip-code')?.value || '';
+            
+            const address = [streetAddress, city, state, zipCode].filter(Boolean).join(', ');
+            document.getElementById('overviewAddress').textContent = (fullName && address) ? `${fullName}, ${address}` : 'Not Entered';
+        }
+
+        window.validateShippingAndOpenPayment = function() {
+            const shippingPref = document.querySelector('input[name="shipping_preference"]:checked');
+            const terms = document.getElementById('termsAccepted');
+            const requiredInputs = document.querySelectorAll('#shipping-address-card input[required], #shipping-address-card select[required]');
+            const messageBox = document.getElementById('quote-message-box');
+            
+            document.querySelectorAll('.highlight-missing').forEach(el => el.classList.remove('highlight-missing'));
+            messageBox.classList.add('hidden');
+
+            let isFormValid = true;
+            let firstMissing = null;
+
+            // 1. Address and Contact Validation
+            requiredInputs.forEach(input => {
+                let isValid = true;
+                if (!input.value) {
+                    isValid = false;
+                } else if (input.id === 'phone') {
+                    const cleanedPhone = input.value.replace(/\D/g, '');
+                    if (cleanedPhone.length !== 10) isValid = false;
+                }
+                
+                if (!isValid) {
+                    input.classList.add('highlight-missing');
+                    isFormValid = false;
+                    if (!firstMissing) firstMissing = input;
+                }
+            });
+            
+            // 2. Shipping Preference Validation
+            if (!shippingPref) {
+                document.getElementById('shippingOptions').classList.add('highlight-missing');
+                isFormValid = false;
+                if (!firstMissing) firstMissing = document.getElementById('shippingOptions');
+            }
+
+            // 3. Terms Acceptance Validation
+            if (!terms.checked) {
+                document.querySelector('.custom-checkbox .checkmark').classList.add('highlight-missing');
+                isFormValid = false;
+                if (!firstMissing) firstMissing = terms;
+            }
+
+            if (!isFormValid) {
+                messageBox.textContent = 'Please fill out all required fields and accept the terms.';
+                messageBox.classList.remove('hidden');
+                messageBox.classList.add('bg-red-100', 'text-red-700');
+                if (firstMissing) firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+
+            // If validation passes, open payment modal
+            openModal('paymentModal');
+            clearPaymentMessage();
+            updatePaymentButtonState();
+        }
+        
+        // --- Payment Modal Logic ---
+        
+        function validatePaymentFields() {
+            const selectedMethod = document.querySelector('input[name="payment_method"]:checked')?.value;
+            let isComplete = false;
+            
+            if (!selectedMethod) return false;
+            
+            // Logic to determine if fields are filled and match
+            const fields = document.querySelectorAll(`#${selectedMethod}Fields input`);
+            isComplete = Array.from(fields).every(input => input.value && input.value.trim() !== '');
+
+            // Check for matching values
+            if (isComplete && fields.length === 2 && fields[0].value !== fields[1].value) {
+                isComplete = false;
+            }
+            
+            return isComplete;
+        }
+
+        function updatePaymentButtonState() {
+            const submitBtn = document.getElementById('submitFinalOrderBtn');
+            const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
+            
+            // Hide all detail sections first
+            document.getElementById('venmoFields').classList.add('hidden');
+            document.getElementById('zelleFields').classList.add('hidden');
+            document.getElementById('paypalFields').classList.add('hidden');
+            
+            if (selectedMethod) {
+                const method = selectedMethod.value;
+                document.getElementById(`${method}Fields`).classList.remove('hidden');
+            }
+
+            if (validatePaymentFields()) {
+                submitBtn.classList.remove('btn-disabled');
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('bg-indigo-600');
+                submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+            } else {
+                submitBtn.classList.add('btn-disabled');
+                submitBtn.disabled = true;
+                submitBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                submitBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            }
+            // Clear all highlight errors in the modal when inputs change
+            document.querySelectorAll('#paymentModal input').forEach(input => input.classList.remove('highlight-missing'));
+        }
+
+        // Add listeners to payment radio buttons and inputs to update the state
+        document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
+            radio.addEventListener('change', updatePaymentButtonState);
+        });
+        document.querySelectorAll('#paymentModal input').forEach(input => {
+            input.addEventListener('input', () => {
+                clearPaymentMessage();
+                updatePaymentButtonState();
+            });
+        });
+
+
+        window.submitFinalOrder = async function() {
+            const submitBtn = document.getElementById('submitFinalOrderBtn');
+            const messageBox = document.getElementById('payment-message-box');
+            clearPaymentMessage();
+            
+            // 1. Re-validate payment fields
+            if (!validatePaymentFields()) {
+                showPaymentMessage('Please fill out all payment details and ensure they match.', 'error');
+                document.getElementById('paymentOptions').classList.add('highlight-missing');
+                
+                const selectedMethod = document.querySelector('input[name="payment_method"]:checked')?.value;
+                if (selectedMethod) {
+                    const fields = document.querySelectorAll(`#${selectedMethod}Fields input`);
+                    Array.from(fields).forEach(input => {
+                         if (!input.value || (fields.length === 2 && fields[0].value !== fields[1].value)) {
+                            input.classList.add('highlight-missing');
+                        }
+                    });
+                }
+                return;
+            }
+            
+            document.getElementById('paymentOptions').classList.remove('highlight-missing');
+            submitBtn.textContent = 'Submitting...';
+            submitBtn.classList.add('btn-disabled');
+
+            // --- 2. Construct Final Order Data ---
+            const selectedPayment = document.querySelector('input[name="payment_method"]:checked');
+            const phoneInput = document.getElementById('phone');
+            
+            const orderData = {
+                device: document.getElementById('overviewDevice').textContent,
+                brand: selectedBrand,
+                modelSlug: selectedDevice,
+                carrier: document.getElementById('carrier-select').value,
+                storage: document.getElementById('storage-select').value,
+                condition_power_on: conditions.power,
+                condition_functional: conditions.screen,
+                condition_cosmetic: conditions.cracks, // 3-tier value: flawless, scratched, damaged
+                estimatedQuote: finalQuote,
+                shippingPreference: document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+                paymentMethod: selectedPayment.value,
+                paymentDetails: {},
+                shippingInfo: {
+                    fullName: document.getElementById('fullName').value,
+                    email: document.getElementById('email').value,
+                    phone: phoneInput.value.replace(/\D/g, ''),
+                    streetAddress: document.getElementById('street-address').value,
+                    city: document.getElementById('city').value,
+                    state: document.getElementById('state').value,
+                    zipCode: document.getElementById('zip-code').value
+                },
+                termsAccepted: document.getElementById('termsAccepted').checked,
+                // Ensure we use the logged-in user ID if available, otherwise the anonymous ID
+                userId: auth.currentUser?.uid || currentUserId, 
+            };
+            
+            if (selectedPayment.value === 'venmo') {
+                orderData.paymentDetails.venmoUsername = document.getElementById('venmoUsername').value;
+            } else if (selectedPayment.value === 'zelle') {
+                orderData.paymentDetails.zelleIdentifier = document.getElementById('zelleIdentifier').value;
+            } else if (selectedPayment.value === 'paypal') {
+                orderData.paymentDetails.paypalEmail = document.getElementById('paypalEmail').value;
+            }
+
+            // --- 3. Send to Backend ---
+            try {
+                const response = await fetch(`${BACKEND_API_URL}/submit-order`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(orderData),
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to submit order. Server responded with error.');
+                }
+                
+                const orderId = result.orderId || 'N/A';
+
+                showPaymentMessage(`Order #${orderId} submitted successfully! You will receive an email confirmation shortly.`, 'success');
+                
+                // --- 4. Success Handling and Redirect Simulation ---
+                
+                setTimeout(() => {
+                     closeModal('paymentModal');
+                     showMessage(`Order #${orderId} submitted! Check the console for submission log.`, "Order Complete", "Success");
+                }, 3000);
+                
+                submitBtn.textContent = 'Submitted!';
+                submitBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                submitBtn.classList.add('btn-disabled');
+
+            } catch (e) {
+                console.error("Error submitting order: ", e);
+                const errorMessage = e.message.includes('Failed to fetch') 
+                                     ? 'Network Error: Could not connect to the backend server. Please check your deployment/network access.' 
+                                     : `Submission failed: ${e.message}`;
+                                     
+                showPaymentMessage(errorMessage, 'error');
+                
+                submitBtn.textContent = 'Submit Order & Finalize Payout';
+                submitBtn.classList.remove('btn-disabled');
+                submitBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                submitBtn.disabled = false;
+            }
+        }
+
+
+        // Start the application process
+        initializeAppAndLoadBrands();
+
+        // --- DOMContentLoaded / Setup Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // AUTH LISTENERS
+            const googleLoginBtn = document.getElementById('googleLoginBtn');
+            const googleSignupBtn = document.getElementById('googleSignupBtn');
+            const emailLoginBtn = document.getElementById('emailLoginBtn');
+            const emailSignupBtn = document.getElementById('emailSignupBtn');
+            const loginEmailInput = document.getElementById('loginEmail');
+            const loginPasswordInput = document.getElementById('loginPassword');
+            const signupNameInput = document.getElementById('signupName');
+            const signupEmailInput = document.getElementById('signupEmail');
+            const signupPasswordInput = document.getElementById('signupPassword');
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+            
+            // Tab switching
+            loginTabBtn.addEventListener('click', () => showTab('login'));
+            signupTabBtn.addEventListener('click', () => showTab('signup'));
+
+            // Google Sign-In
+            googleLoginBtn.addEventListener('click', async () => {
+                try {
+                    clearAuthMessage();
+                    showAuthMessage('Signing in with Google...', 'info');
+                    const result = await signInWithPopup(auth, googleProvider);
+                    handleAuthSuccess(result.user);
+                } catch (error) {
+                    console.error("Google login error:", error);
+                    showAuthMessage(`Google login failed: ${error.message}`, 'error');
+                }
+            });
+
+            // Google Sign-Up
+            googleSignupBtn.addEventListener('click', async () => {
+                try {
+                    clearAuthMessage();
+                    showAuthMessage('Signing up with Google...', 'info');
+                    const result = await signInWithPopup(auth, googleProvider);
+                    handleAuthSuccess(result.user);
+                } catch (error) {
+                    console.error("Google signup error:", error);
+                    showAuthMessage(`Google signup failed: ${error.message}`, 'error');
+                }
+            });
+            
+            // Email/Password Login
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = loginEmailInput.value;
+                const password = loginPasswordInput.value;
+                try {
+                    clearAuthMessage();
+                    showAuthMessage('Logging in...', 'info');
+                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                    handleAuthSuccess(userCredential.user);
+                } catch (error) {
+                    console.error("Email login error:", error);
+                    showAuthMessage(`Login failed: ${error.message}`, 'error');
+                }
+            });
+
+            // Email/Password Sign Up
+            signupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const name = signupNameInput.value;
+                const email = signupEmailInput.value;
+                const password = signupPasswordInput.value;
+
+                if (password.length < 6) {
+                    showAuthMessage('Password must be at least 6 characters.', 'error');
+                    return;
+                }
+
+                try {
+                    clearAuthMessage();
+                    showAuthMessage('Creating account...', 'info');
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                    await updateProfile(userCredential.user, {
+                        displayName: name
+                    });
+                    handleAuthSuccess(userCredential.user);
+                } catch (error) {
+                    console.error("Email signup error:", error);
+                    showAuthMessage(`Sign up failed: ${error.message}`, 'error');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

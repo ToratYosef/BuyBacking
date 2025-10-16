@@ -16,12 +16,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
         <script>
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
         
-          gtag('config', 'AW-17534255111');
-          gtag('config', 'G-8JYPJDKSP8');
+            gtag('config', 'AW-17534255111');
+            gtag('config', 'G-8JYPJDKSP8');
         </script>
 
 
@@ -41,8 +41,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             z-index: 50;
         }
         .main-content {
-            margin-left: 250px; 
-            flex-grow: 1; 
+            margin-left: 250px;
+            flex-grow: 1;
         }
         @media (max-width: 768px) {
             .sidebar {
@@ -100,7 +100,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <label for="search-orders" class="block text-gray-400 text-sm mb-2">Search Orders</label>
             <div class="relative">
                 <input type="text" id="search-orders" placeholder="Search by ID, Customer, or Tracking..."
-                       class="w-full pl-10 pr-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        class="w-full pl-10 pr-4 py-2 rounded-md bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <i class="fas fa-search text-gray-400"></i>
                 </div>
@@ -272,6 +272,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
     <div id="order-details-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            
+            <!-- NEW: Always visible Send Reminder Button (positioned in top corner) -->
+            <button id="send-reminder-btn" class="absolute top-4 right-12 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1 px-3 text-sm rounded-md transition-colors duration-200 shadow hidden">
+                <i class="fas fa-paper-plane mr-1"></i> Send Reminder
+            </button>
+            
             <button id="close-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">
                 <i class="fas fa-times"></i>
             </button>
@@ -297,6 +303,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </ul>
                 </p>
                 <p><strong>Current Status:</strong> <span id="modal-status" class="font-semibold px-2 py-1 rounded-full text-xs"></span></p>
+                <!-- NEW: Last Reminder Sent -->
+                <p><strong>Last Reminder Sent:</strong> <span id="modal-last-reminder-date">N/A</span></p>
                 
                 <!-- Updated label display for flexibility -->
                 <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
@@ -425,7 +433,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const searchInput = document.getElementById('search-orders');
         const statusLinks = document.querySelectorAll('.status-link');
         const displayUserId = document.getElementById('display-user-id');
-        const dashboardCards = document.querySelectorAll('.dashboard-cards');
+        const dashboardCards = document.querySelectorAll('.dashboard-card');
 
         // Updated count elements
         const orderPendingCount = document.getElementById('order-pending-count');
@@ -457,6 +465,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const modalConditionCracks = document.getElementById('modal-condition-cracks');
         const modalConditionCosmetic = document.getElementById('modal-condition-cosmetic');
         const modalStatus = document.getElementById('modal-status');
+        
+        // NEW: Element for Last Reminder Date
+        const modalLastReminderDate = document.getElementById('modal-last-reminder-date');
+
+        // NEW: Reminder Button reference
+        const sendReminderBtn = document.getElementById('send-reminder-btn');
         
         // New/Updated label elements in modal
         const modalLabelRow = document.getElementById('modal-label-row');
@@ -514,10 +528,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const USPS_TRACKING_URL = 'https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=';
 
         /**
-         * Converts a Firestore Timestamp object or Date into a string formatted as "Month Day, Year".
-         * @param {Object|Date} timestamp - The Firestore Timestamp object, Date object, or timestamp string.
-         * @returns {string} Formatted date string (e.g., 'October 24, 2024').
-         */
+          * Converts a Firestore Timestamp object or Date into a string formatted as "Month Day, Year".
+          * @param {Object|Date} timestamp - The Firestore Timestamp object, Date object, or timestamp string.
+          * @returns {string} Formatted date string (e.g., 'October 24, 2024').
+          */
         function formatDate(timestamp) {
             if (!timestamp) return 'N/A';
             
@@ -539,7 +553,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             // Check if parsing resulted in a valid date object
             if (isNaN(date.getTime())) {
                 console.error("Invalid date object generated for timestamp:", timestamp);
-                return 'Invalid Date'; 
+                return 'Invalid Date';  
             }
             
             // Format to the desired long date string: "Month Day, Year"
@@ -632,9 +646,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         /**
-         * Formats the order status text for display in the dashboard.
-         * @param {Object} order - The order object.
-         */
+          * Formats the order status text for display in the dashboard.
+          * @param {Object} order - The order object.
+          */
         function formatStatus(order) {
             const status = order.status;
             const preference = order.shippingPreference;
@@ -691,6 +705,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             modalLabelRow.classList.add('hidden');
             modalSecondaryLabelRow.classList.add('hidden');
             modalReturnLabelRow.classList.add('hidden');
+            
+            // NEW: Hide reminder button by default
+            sendReminderBtn.classList.add('hidden');
 
             orderDetailsModal.classList.remove('hidden');
 
@@ -738,6 +755,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 modalStatus.textContent = formatStatus(order);
                 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
 
+                // Display Last Reminder Sent date
+                modalLastReminderDate.textContent = order.lastReminderSentAt ? formatDate(order.lastReminderSentAt) : 'N/A';
+                
+                // NEW: Handle Reminder Button visibility and click
+                if (['order_pending', 'shipping_kit_requested', 'label_generated'].includes(order.status)) {
+                    sendReminderBtn.classList.remove('hidden');
+                    sendReminderBtn.onclick = () => handleAction(order.id, 'sendReminderEmail');
+                } else {
+                    sendReminderBtn.classList.add('hidden');
+                }
+
                 // --- START: UPDATED LABEL LOGIC FOR USPS HYPERLINKING IN MODAL ---
                 
                 // 1. Outbound Kit (if requested)
@@ -764,14 +792,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         modalSecondaryLabelDescription.textContent = 'Inbound Device Tracking';
                         modalSecondaryLabelRow.classList.remove('hidden');
                     } else if (order.inboundLabelUrl) {
-                         // Fallback: if no tracking number, but PDF link exists
+                           // Fallback: if no tracking number, but PDF link exists
                         modalSecondaryLabelLink.href = order.inboundLabelUrl;
                         modalSecondaryTrackingNumberDisplay.textContent = 'N/A';
                         modalSecondaryLabelDescription.textContent = 'Inbound Device Label (PDF)';
                         modalSecondaryLabelRow.classList.remove('hidden');
                     }
                 
-                } 
+                }
                 
                 // 2. Email Label Requested (single USPS label/inbound label)
                 else if (order.shippingPreference === 'Email Label Requested') {
@@ -832,10 +860,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 case 'order_pending': 
                 case 'shipping_kit_requested':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
-                    modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700')); // NEW Manual Fulfillment Button
+                    modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
+                    // Reminder button is now handled by sendReminderBtn at the top
                     break;
                 case 'label_generated':
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
+                    // Reminder button is now handled by sendReminderBtn at the top
                     break;
                 case 'received':
                     modalActionButtons.appendChild(createButton('Mark as Completed', () => handleAction(order.id, 'markCompleted', 'bg-gray-600 hover:bg-gray-700')));
@@ -867,20 +897,24 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         function showReofferForm(orderId) {
             modalActionButtons.classList.add('hidden');
             reofferFormContainer.classList.remove('hidden');
+            sendReminderBtn.classList.add('hidden'); // Hide reminder button when form is open
             submitReofferBtn.onclick = () => submitReOfferFromForm(orderId);
             cancelReofferBtn.onclick = () => {
                 reofferFormContainer.classList.add('hidden');
                 modalActionButtons.classList.remove('hidden');
+                // Re-evaluate visibility when form closes (by re-opening modal implicitly)
+                openOrderDetailsModal(orderId);
             };
         }
 
         /**
-         * Shows the form for manual tracking number input.
-         * @param {Object} order The current order object.
-         */
+          * Shows the form for manual tracking number input.
+          * @param {Object} order The current order object.
+          */
         function showManualFulfillmentForm(order) {
             modalActionButtons.classList.add('hidden');
             manualFulfillmentFormContainer.classList.remove('hidden');
+            sendReminderBtn.classList.add('hidden'); // Hide reminder button when form is open
             manualOutboundTracking.value = '';
             manualInboundTracking.value = '';
             manualLabelUrl.value = '';
@@ -902,6 +936,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             cancelManualFulfillmentBtn.onclick = () => {
                 manualFulfillmentFormContainer.classList.add('hidden');
                 modalActionButtons.classList.remove('hidden');
+                // Re-evaluate visibility when form closes (by re-opening modal implicitly)
+                openOrderDetailsModal(order.id);
             };
         }
 
@@ -922,6 +958,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             modalLoadingMessage.classList.remove('hidden');
             manualFulfillmentFormContainer.classList.add('hidden');
             modalMessage.classList.add('hidden');
+            sendReminderBtn.classList.add('hidden'); // Hide reminder button during processing
 
             try {
                 const url = `${BACKEND_BASE_URL}/manual-fulfill/${orderId}`;
@@ -933,7 +970,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         outboundTrackingNumber: isKitOrder ? outboundTracking : null,
                         inboundTrackingNumber: inboundTracking,
                         // Provide a placeholder URL if not given, as the backend needs a value
-                        inboundLabelUrl: labelUrl || 'https://placehold.co/1x1/ffffff/fff?text=N/A', 
+                        inboundLabelUrl: labelUrl || 'https://placehold.co/1x1/ffffff/fff?text=N/A',  
                     })
                 });
 
@@ -958,11 +995,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         function showDeleteConfirmation(orderId) {
             modalActionButtons.classList.add('hidden');
             deleteConfirmationContainer.classList.remove('hidden');
+            sendReminderBtn.classList.add('hidden'); // Hide reminder button when delete confirmation is open
             
             confirmDeleteBtn.onclick = () => handleAction(orderId, 'deleteOrder');
             cancelDeleteBtn.onclick = () => {
                 deleteConfirmationContainer.classList.add('hidden');
                 modalActionButtons.classList.remove('hidden');
+                // Re-evaluate visibility when form closes (by re-opening modal implicitly)
+                openOrderDetailsModal(orderId);
             };
         }
 
@@ -979,6 +1019,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             modalLoadingMessage.classList.remove('hidden');
             reofferFormContainer.classList.add('hidden');
             modalMessage.classList.add('hidden');
+            sendReminderBtn.classList.add('hidden'); // Hide reminder button during processing
 
             try {
                 const url = `${BACKEND_BASE_URL}/orders/${orderId}/re-offer`;
@@ -1016,6 +1057,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             deleteConfirmationContainer.classList.add('hidden');
             modalMessage.classList.add('hidden');
             modalMessage.textContent = '';
+            sendReminderBtn.classList.add('hidden'); // Hide reminder button during processing
 
             try {
                 let url;
@@ -1035,6 +1077,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
                         body = { status: 'completed' };
                         break;
+                    case 'sendReminderEmail': // NEW Case: Send Reminder Email
+                        url = `${BACKEND_BASE_URL}/send-reminder-email/${orderId}`;
+                        method = 'POST';
+                        break;
                     case 'payNow':
                         const order = allOrders.find(o => o.id === orderId);
                         if (!order) {
@@ -1052,9 +1098,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         modalActionButtons.classList.remove('hidden');
                         return;
                     case 'sendReturnLabel':
-                         url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
-                         method = 'POST';
-                         break;
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
+                        method = 'POST';
+                        break;
                     case 'deleteOrder': // NEW: Delete Order Logic
                         url = `${BACKEND_BASE_URL}/orders/${orderId}`;
                         method = 'DELETE';
@@ -1083,7 +1129,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     // Close the modal and rely on the snapshot listener to refresh the list
                     closeOrderDetailsModal();
                 } else {
-                    // For all other actions, re-open the modal to show the new status/data
+                    // For all other actions, re-open the modal to show the new status/data (like lastReminderSentAt)
                     openOrderDetailsModal(orderId);
                 }
 
@@ -1098,8 +1144,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                            ? order.reOffer.newPrice.toFixed(2)
-                            : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                ? order.reOffer.newPrice.toFixed(2)
+                                : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 

@@ -1783,11 +1783,63 @@ exports.onNewCustomerResponse = functions.firestore
     return null;
   });
 
-// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+// NEW FUNCTION: Triggers on new chat document creation to send email notification.
 exports.onNewChatCreated = functions.firestore
   .document("chats/{chatId}")
   .onCreate(async (snap, context) => {
-    // Removed all auto-response logic as chat notifications are removed.
+    const chatId = context.params.chatId;
+    const chatData = snap.data();
+    
+    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
+    
+    // Create email notification for admin
+    const adminEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
+            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>💬 New Chat Started</h2>
+            </div>
+            <div class="content">
+              <p>A new customer chat has been initiated on SecondHandCell.</p>
+              <div class="info">
+                <strong>Chat ID:</strong> ${chatId}<br>
+                <strong>User:</strong> ${userIdentifier}<br>
+                <strong>Time:</strong> ${new Date().toLocaleString()}
+              </div>
+              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
+              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin/chat" class="button">View Chat in Admin Panel</a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: 'sales@secondhandcell.com',
+        subject: `New Chat Started - ${userIdentifier}`,
+        html: adminEmailHtml,
+        bcc: ["saulsetton16@gmail.com"]
+      });
+      
+      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
+    } catch (error) {
+      console.error("Error sending email notification for new chat:", error);
+    }
+    
     return null;
   });
 
@@ -2141,11 +2193,63 @@ exports.onNewCustomerResponse = functions.firestore
     return null;
   });
 
-// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+// NEW FUNCTION: Triggers on new chat document creation to send email notification.
 exports.onNewChatCreated = functions.firestore
   .document("chats/{chatId}")
   .onCreate(async (snap, context) => {
-    // Removed all auto-response logic as chat notifications are removed.
+    const chatId = context.params.chatId;
+    const chatData = snap.data();
+    
+    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
+    
+    // Create email notification for admin
+    const adminEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
+            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>💬 New Chat Started</h2>
+            </div>
+            <div class="content">
+              <p>A new customer chat has been initiated on SecondHandCell.</p>
+              <div class="info">
+                <strong>Chat ID:</strong> ${chatId}<br>
+                <strong>User:</strong> ${userIdentifier}<br>
+                <strong>Time:</strong> ${new Date().toLocaleString()}
+              </div>
+              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
+              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: 'sales@secondhandcell.com',
+        subject: `New Chat Started - ${userIdentifier}`,
+        html: adminEmailHtml,
+        bcc: ["saulsetton16@gmail.com"]
+      });
+      
+      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
+    } catch (error) {
+      console.error("Error sending email notification for new chat:", error);
+    }
+    
     return null;
   });
 
@@ -2499,11 +2603,63 @@ exports.onNewCustomerResponse = functions.firestore
     return null;
   });
 
-// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+// NEW FUNCTION: Triggers on new chat document creation to send email notification.
 exports.onNewChatCreated = functions.firestore
   .document("chats/{chatId}")
   .onCreate(async (snap, context) => {
-    // Removed all auto-response logic as chat notifications are removed.
+    const chatId = context.params.chatId;
+    const chatData = snap.data();
+    
+    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
+    
+    // Create email notification for admin
+    const adminEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
+            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>💬 New Chat Started</h2>
+            </div>
+            <div class="content">
+              <p>A new customer chat has been initiated on SecondHandCell.</p>
+              <div class="info">
+                <strong>Chat ID:</strong> ${chatId}<br>
+                <strong>User:</strong> ${userIdentifier}<br>
+                <strong>Time:</strong> ${new Date().toLocaleString()}
+              </div>
+              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
+              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: 'sales@secondhandcell.com',
+        subject: `New Chat Started - ${userIdentifier}`,
+        html: adminEmailHtml,
+        bcc: ["saulsetton16@gmail.com"]
+      });
+      
+      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
+    } catch (error) {
+      console.error("Error sending email notification for new chat:", error);
+    }
+    
     return null;
   });
 
@@ -2857,11 +3013,63 @@ exports.onNewCustomerResponse = functions.firestore
     return null;
   });
 
-// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+// NEW FUNCTION: Triggers on new chat document creation to send email notification.
 exports.onNewChatCreated = functions.firestore
   .document("chats/{chatId}")
   .onCreate(async (snap, context) => {
-    // Removed all auto-response logic as chat notifications are removed.
+    const chatId = context.params.chatId;
+    const chatData = snap.data();
+    
+    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
+    
+    // Create email notification for admin
+    const adminEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
+            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>💬 New Chat Started</h2>
+            </div>
+            <div class="content">
+              <p>A new customer chat has been initiated on SecondHandCell.</p>
+              <div class="info">
+                <strong>Chat ID:</strong> ${chatId}<br>
+                <strong>User:</strong> ${userIdentifier}<br>
+                <strong>Time:</strong> ${new Date().toLocaleString()}
+              </div>
+              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
+              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: 'sales@secondhandcell.com',
+        subject: `New Chat Started - ${userIdentifier}`,
+        html: adminEmailHtml,
+        bcc: ["saulsetton16@gmail.com"]
+      });
+      
+      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
+    } catch (error) {
+      console.error("Error sending email notification for new chat:", error);
+    }
+    
     return null;
   });
 
@@ -3215,10 +3423,62 @@ exports.onNewCustomerResponse = functions.firestore
     return null;
   });
 
-// NEW FUNCTION: Triggers on new chat document creation to send an auto-response.
+// NEW FUNCTION: Triggers on new chat document creation to send email notification.
 exports.onNewChatCreated = functions.firestore
   .document("chats/{chatId}")
   .onCreate(async (snap, context) => {
-    // Removed all auto-response logic as chat notifications are removed.
+    const chatId = context.params.chatId;
+    const chatData = snap.data();
+    
+    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
+    
+    // Create email notification for admin
+    const adminEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
+            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h2>💬 New Chat Started</h2>
+            </div>
+            <div class="content">
+              <p>A new customer chat has been initiated on SecondHandCell.</p>
+              <div class="info">
+                <strong>Chat ID:</strong> ${chatId}<br>
+                <strong>User:</strong> ${userIdentifier}<br>
+                <strong>Time:</strong> ${new Date().toLocaleString()}
+              </div>
+              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
+              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: 'sales@secondhandcell.com',
+        subject: `New Chat Started - ${userIdentifier}`,
+        html: adminEmailHtml,
+        bcc: ["saulsetton16@gmail.com"]
+      });
+      
+      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
+    } catch (error) {
+      console.error("Error sending email notification for new chat:", error);
+    }
+    
     return null;
   });
