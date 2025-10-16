@@ -466,11 +466,11 @@
         }
 
         /* Samsung S24 Ultra (216x216 ratio, adjusting relative to iPhone size)
-            iPhone width (200) is 0.926 * Samsung width (216). 
-            We want the Samsung image to scale relative to the 500px wide iPhone image. 
-            New Samsung width should be roughly (500 / 0.8) * 0.926 * (216/216 ratio correction) ~ 578px at full height, but let's maintain a similar large, ghostly visual presence by using the same base width. 
-            Since the ratio is 216/216=1, the effective relative size should be slightly larger than the iPhone.
-            Let's use a 550px width for the Samsung to slightly increase its visual presence and maintain proportion. 
+           iPhone width (200) is 0.926 * Samsung width (216). 
+           We want the Samsung image to scale relative to the 500px wide iPhone image. 
+           New Samsung width should be roughly (500 / 0.8) * 0.926 * (216/216 ratio correction) ~ 578px at full height, but let's maintain a similar large, ghostly visual presence by using the same base width. 
+           Since the ratio is 216/216=1, the effective relative size should be slightly larger than the iPhone.
+           Let's use a 550px width for the Samsung to slightly increase its visual presence and maintain proportion. 
         */
         #samsung-ghost {
             width: 550px; /* Slightly wider than the iPhone image for presence */
@@ -731,7 +731,7 @@
         <div id="chat-window">
             <div class="bg-blue-700 text-white p-4 flex justify-between items-center">
                 <h3 class="font-bold text-lg">Customer Support</h3>
-                <div class="flex items-center space-x-2">    <button id="chat-order-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="View My Orders">
+                <div class="flex items-center space-x-2">  <button id="chat-order-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="View My Orders">
                         <i class="fa-solid fa-box-open text-xl"></i>
                     </button>
                     <button id="chat-minimize-btn" class="chat-header-button text-white hover:text-blue-200" data-tooltip-text="Minimize Chat">
@@ -969,10 +969,10 @@
         import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, runTransaction, increment, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        setLogLevel('debug');
+       // setLogLevel('debug');
         
-        // Use global variables provided by the platform
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        // --- START: USER'S EXPLICIT FIREBASE CONFIG ---
+        // Removed global variables based on user request.
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
             authDomain: "buyback-a0f05.firebaseapp.com",
@@ -983,18 +983,31 @@
             appId: "1:876430429098:web:f6dd64b1960d90461979d3",
             measurementId: "G-6WWQN44JHT"
         };
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // --- END: USER'S EXPLICIT FIREBASE CONFIG ---
 
         // Initialize Firebase with the provided config
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        
+        // This function would typically rely on the global initialAuthToken for immediate sign-in.
+        // Since we removed it, we'll ensure unauthenticated users are treated as guests/anonymous.
+        const getOrCreateGuestId = () => {
+            let id = localStorage.getItem('guestChatId');
+            if (!id) {
+                id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                localStorage.setItem('guestChatId', id);
+            }
+            return id;
+        };
+
 
         // --- Firebase Click Tracker Function ---
         const trackButtonClick = async (buttonName) => {
             const cleanedButtonName = buttonName.replace(/\s/g, '_').replace(/'/g, '');
             const buttonDocRef = doc(db, "button_clicks", cleanedButtonName);
-            const userId = auth.currentUser?.uid || getOrCreateGuestId();
+            // Updated to ensure userId is retrieved safely after auth state change.
+            const userId = auth.currentUser?.uid || getOrCreateGuestId(); 
             const now = new Date().toISOString();
 
             try {
@@ -1027,15 +1040,8 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Initial sign-in with custom token or anonymously
             onAuthStateChanged(auth, async (user) => {
-                if (initialAuthToken && !user) {
-                    try {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                        console.log("Signed in with custom token.");
-                    } catch (error) {
-                        console.error("Custom token sign-in failed:", error);
-                        try { await signInAnonymously(auth); } catch (e) { console.error("Anonymous sign-in failed:", e); }
-                    }
-                } else if (!user) {
+                // Since initialAuthToken is removed, we only check for existing user and sign in anonymously if none exists.
+                if (!user) {
                     try { await signInAnonymously(auth); } catch (e) { console.error("Anonymous sign-in failed:", e); }
                 }
             });
@@ -1319,6 +1325,7 @@
             const notificationSound = new Audio('https://cdn.freesound.org/previews/253/253887_3900531-lq.mp3');
             notificationSound.volume = 0.5;
 
+            // This function relies on local storage now that global vars are removed.
             const getOrCreateGuestId = () => {
                 let id = localStorage.getItem('guestChatId');
                 if (!id) {
@@ -1873,8 +1880,8 @@
 
                     continueBtn.addEventListener('click', () => {
                         const params = new URLSearchParams({
-                            brand: this.brand,
-                            device: this.device,
+                            // NEW: Combine brand and slug into a single 'device' parameter
+                            device: `${this.brand}-${this.device}`, 
                             storage: this.storage,
                             carrier: this.carrier,
                             power: this.conditions.power,
@@ -1882,7 +1889,8 @@
                             quality: this.conditions.quality,
                             price: document.getElementById('modal-estimated-price').textContent
                         });
-                        window.location.href = `sell/index.html?${params.toString()}`;
+                        // Use the 'sell/' path consistent with other links in the page body.
+                        window.location.href = `sell/?${params.toString()}`;
                     });
                 },
 

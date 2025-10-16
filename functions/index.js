@@ -2211,7 +2211,7 @@ exports.onNewChatCreated = functions.firestore
                 <strong>Time:</strong> ${new Date().toLocaleString()}
               </div>
               <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
-              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
+              <a href="https://secondhandcell.com/admin/chat" class="button">View Chat in Admin Panel</a>
             </div>
           </div>
         </body>
