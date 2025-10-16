@@ -1616,6 +1616,455 @@ exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
   }
 });
 
+// Send Reminder Email for label_generated orders
+exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
+  try {
+    // 1. Verify user is authenticated
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
+    }
+
+    // 2. Verify user is an admin by checking admins collection
+    const adminDoc = await adminsCollection.doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+      console.warn(`Unauthorized reminder email attempt by user: ${context.auth.uid}`);
+      throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+    }
+
+    const { orderId } = data;
+    
+    // 3. Validate orderId is provided
+    if (!orderId) {
+      throw new functions.https.HttpsError('invalid-argument', 'Order ID is required');
+    }
+
+    // 4. Validate orderId format (prevent injection attacks)
+    if (typeof orderId !== 'string' || orderId.trim().length === 0) {
+      throw new functions.https.HttpsError('invalid-argument', 'Invalid order ID format');
+    }
+
+    const sanitizedOrderId = orderId.trim();
+
+    // 5. Get order and verify it exists
+    const orderDoc = await ordersCollection.doc(sanitizedOrderId).get();
+    
+    if (!orderDoc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Order not found');
+    }
+
+    const order = orderDoc.data();
+    
+    // 6. Verify order status is label_generated
+    if (order.status !== 'label_generated') {
+      throw new functions.https.HttpsError('failed-precondition', 'Can only send reminders for orders with generated labels');
+    }
+
+    // Create super cool email template
+    const emailHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⏰ Reminder: We're Waiting for Your Device!</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f9fafb;
+      margin: 0;
+      padding: 0;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    
+    .email-container {
+      max-width: 600px;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ea580c 100%);
+      padding: 48px 32px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      animation: pulse 3s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.1); }
+    }
+    
+    .emoji-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      display: block;
+      animation: bounce 2s ease-in-out infinite;
+    }
+    
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: relative;
+      z-index: 1;
+    }
+    
+    .header p {
+      font-size: 16px;
+      color: rgba(255,255,255,0.95);
+      margin: 12px 0 0;
+      position: relative;
+      z-index: 1;
+    }
+    
+    .content {
+      padding: 40px 32px;
+      color: #374151;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    
+    .greeting {
+      font-size: 18px;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 24px;
+    }
+    
+    .message-box {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-left: 4px solid #f59e0b;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
+    }
+    
+    .message-box p {
+      margin: 0 0 12px;
+      color: #92400e;
+      font-weight: 600;
+      font-size: 17px;
+    }
+    
+    .message-box p:last-child {
+      margin-bottom: 0;
+    }
+    
+    .tracking-box {
+      background: #f3f4f6;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 24px 0;
+      text-align: center;
+    }
+    
+    .tracking-label {
+      font-size: 13px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .tracking-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1f2937;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+    }
+    
+    .cta-button {
+      display: inline-block;
+      background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+      color: #ffffff;
+      padding: 16px 32px;
+      text-decoration: none;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 16px;
+      margin: 24px auto;
+      display: block;
+      text-align: center;
+      max-width: 280px;
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+      transition: all 0.3s ease;
+    }
+    
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(245, 158, 11, 0.4);
+    }
+    
+    .urgency-text {
+      background: #fef2f2;
+      border: 2px solid #fecaca;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 24px 0;
+      text-align: center;
+    }
+    
+    .urgency-text p {
+      margin: 0;
+      color: #991b1b;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    
+    .urgency-text .icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+      display: block;
+    }
+    
+    .steps-list {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+    }
+    
+    .steps-list h3 {
+      color: #111827;
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 16px;
+    }
+    
+    .steps-list ol {
+      margin: 0;
+      padding-left: 20px;
+      color: #4b5563;
+    }
+    
+    .steps-list li {
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    
+    .steps-list li:last-child {
+      margin-bottom: 0;
+    }
+    
+    .footer {
+      background: #f9fafb;
+      padding: 32px;
+      text-align: center;
+      border-top: 1px solid #e5e7eb;
+    }
+    
+    .footer p {
+      margin: 8px 0;
+      color: #6b7280;
+      font-size: 14px;
+    }
+    
+    .footer a {
+      color: #f59e0b;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%);
+      margin: 32px 0;
+    }
+    
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        margin: 20px auto;
+        border-radius: 0;
+      }
+      
+      .header {
+        padding: 32px 24px;
+      }
+      
+      .header h1 {
+        font-size: 24px;
+      }
+      
+      .content {
+        padding: 32px 24px;
+      }
+      
+      .emoji-icon {
+        font-size: 48px;
+      }
+      
+      .tracking-number {
+        font-size: 18px;
+      }
+      
+      .cta-button {
+        padding: 14px 24px;
+        font-size: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <span class="emoji-icon">⏰</span>
+      <h1>Friendly Reminder!</h1>
+      <p>We're excited to complete your device trade-in</p>
+    </div>
+    
+    <div class="content">
+      <p class="greeting">Hi ${order.shippingInfo?.fullName || 'there'},</p>
+      
+      <p>We wanted to send you a quick reminder about your device trade-in for order <strong>#${orderId}</strong>!</p>
+      
+      <div class="message-box">
+        <p>📦 Your shipping label is ready and waiting!</p>
+        <p>We're excited to receive your <strong>${order.device}</strong> and complete your trade-in.</p>
+      </div>
+      
+      ${order.trackingNumber || order.inboundTrackingNumber ? `
+      <div class="tracking-box">
+        <div class="tracking-label">Your Tracking Number</div>
+        <div class="tracking-number">${order.trackingNumber || order.inboundTrackingNumber}</div>
+      </div>
+      ` : ''}
+      
+      <div class="steps-list">
+        <h3>📝 Quick Checklist Before Shipping:</h3>
+        <ol>
+          <li><strong>Back up your data</strong> - Save all photos, contacts, and files</li>
+          <li><strong>Factory reset your device</strong> - Remove all personal information</li>
+          <li><strong>Sign out of all accounts</strong> (iCloud, Google, etc.)</li>
+          <li><strong>Remove your SIM card</strong></li>
+          <li><strong>Pack securely</strong> and attach your shipping label</li>
+        </ol>
+      </div>
+      
+      ${order.trackingNumber || order.inboundTrackingNumber ? `
+      <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${order.trackingNumber || order.inboundTrackingNumber}" class="cta-button">
+        📍 Track Your Shipment
+      </a>
+      ` : ''}
+      
+      <div class="urgency-text">
+        <span class="icon">⚡</span>
+        <p>The sooner you ship, the sooner you get paid!</p>
+        <p>We typically process devices within 24-48 hours of receipt.</p>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <p style="text-align: center; color: #6b7280; font-size: 15px;">
+        Have questions? Just reply to this email - we're here to help! 💬
+      </p>
+    </div>
+    
+    <div class="footer">
+      <p><strong>SecondHandCell</strong></p>
+      <p>Making device trade-ins simple and rewarding</p>
+      <p style="margin-top: 16px;">
+        <a href="https://secondhandcell.com">Visit our website</a> • 
+        <a href="mailto:support@secondhandcell.com">Contact Support</a>
+      </p>
+      <p style="margin-top: 16px; font-size: 12px;">
+        This is an automated reminder for your trade-in order #${orderId}
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    // 7. Send the email
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: order.shippingInfo?.email,
+      subject: '⏰ Friendly Reminder: We\'re Waiting for Your Device! 📱',
+      html: emailHtml,
+      bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
+    });
+
+    // 8. Log admin action for audit trail
+    const auditLog = {
+      action: 'send_reminder_email',
+      adminUid: context.auth.uid,
+      adminEmail: context.auth.token.email || 'unknown',
+      orderId: sanitizedOrderId,
+      orderStatus: order.status,
+      recipientEmail: order.shippingInfo?.email,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      success: true
+    };
+    
+    await db.collection('adminAuditLogs').add(auditLog);
+    
+    console.log(`[AUDIT] Admin ${context.auth.uid} sent reminder email for order ${sanitizedOrderId} to ${order.shippingInfo?.email}`);
+    
+    return { 
+      success: true, 
+      message: 'Reminder email sent successfully' 
+    };
+  } catch (error) {
+    console.error('Error sending reminder email:', error);
+    
+    // Log failed attempts for security monitoring
+    if (context?.auth) {
+      try {
+        await db.collection('adminAuditLogs').add({
+          action: 'send_reminder_email',
+          adminUid: context.auth.uid,
+          adminEmail: context.auth.token?.email || 'unknown',
+          orderId: data?.orderId || 'unknown',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          success: false,
+          errorType: error.code || 'unknown',
+          errorMessage: error.message || 'Unknown error'
+        });
+      } catch (logError) {
+        console.error('Failed to log audit entry:', logError);
+      }
+    }
+    
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    
+    throw new functions.https.HttpsError('internal', 'Failed to send reminder email');
+  }
+});
+
 exports.onChatTransferUpdate = functions.firestore
   .document("chats/{chatId}")
   .onUpdate(async (change, context) => {
@@ -1623,14 +2072,14 @@ exports.onChatTransferUpdate = functions.firestore
     return null;
   });
 
-// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
+// FCM Push Notifications for New Chat Messages
 exports.onNewChatOpened = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
     const newMessage = snap.data();
     const chatId = context.params.chatId;
 
-    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
+    // Only process user messages
     if (newMessage.senderType !== "user") {
       return null;
     }
@@ -1638,40 +2087,70 @@ exports.onNewChatOpened = functions.firestore
     const chatDocRef = db.collection("chats").doc(chatId);
     const chatDoc = await chatDocRef.get();
     const chatData = chatDoc.data();
-
-    // 2. Check if the chat is already active or assigned
-    if (chatData.agentHasJoined) {
-      return null;
-    }
     
-    // 3. Check if this is the FIRST user message in the chat.
-    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
-      .where('senderType', '==', 'user')
-      .get();
+    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
+    const relatedUserId = chatData.ownerUid;
+    const assignedAdminUid = chatData.assignedAdminUid;
+    
+    // Truncate message to 100 characters for notification
+    const messageText = newMessage.text || "";
+    const truncatedMessage = messageText.length > 100 
+      ? messageText.substring(0, 100) + "..." 
+      : messageText;
 
-    if (userMessagesSnapshot.docs.length === 1) {
-      
-      const userIdentifier = chatData.ownerUid || chatData.guestId;
-      const relatedUserId = chatData.ownerUid;
-      
-      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
-      await chatDocRef.set({
-          lastMessageSender: newMessage.sender, // The user's ID/guest ID
-          lastMessageSeenByAdmin: false,
-      }, { merge: true });
+    // Update chat metadata
+    await chatDocRef.set({
+      lastMessageSender: newMessage.sender,
+      lastMessageSeenByAdmin: false,
+    }, { merge: true });
 
-      // Send notifications to ALL admins for a new UNASSIGNED chat.
+    // Notification data payload with all required fields for client
+    const notificationData = {
+      chatId: chatId,
+      message: truncatedMessage,
+      userIdentifier: userIdentifier,
+      userId: relatedUserId || "guest",
+      relatedDocType: "chat",
+      relatedDocId: chatId,
+      relatedUserId: relatedUserId || "guest",
+      timestamp: Date.now().toString(),
+    };
+
+    // Determine routing: assigned admin vs all admins
+    if (assignedAdminUid) {
+      // Chat is assigned - send to specific admin only
+      const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
+      const adminTokens = adminTokenSnapshot.docs.map(doc => {
+        const d = doc.data() || {};
+        return d.token || doc.id;
+      }).filter(token => token && typeof token === 'string');
+      
+      if (adminTokens.length > 0) {
+        await sendPushNotification(
+          adminTokens,
+          "💬 New Chat Message",
+          `Message from ${userIdentifier}: "${truncatedMessage}"`,
+          notificationData
+        ).catch((e) => console.error("FCM Send Error (Assigned Chat):", e));
+      }
+      
+      // Add Firestore Notification for the assigned admin
+      await addAdminFirestoreNotification(
+        assignedAdminUid,
+        `New message from ${userIdentifier}: "${truncatedMessage}"`,
+        "chat",
+        chatId,
+        relatedUserId
+      ).catch((e) => console.error("Firestore Notification Error:", e));
+      
+      console.log(`New message in assigned chat ${chatId}. Notification sent to admin ${assignedAdminUid}.`);
+    } else {
+      // Chat is unassigned - send to ALL admins
       const fcmPromise = sendAdminPushNotification(
-        "💬 New Customer Chat!",
-        `Chat started by ${userIdentifier}.`,
-        {
-          chatId: chatId,
-          userId: relatedUserId || "guest", // Use safe string fallback
-          relatedDocType: "chat",
-          relatedDocId: chatId,
-          relatedUserId: relatedUserId,
-        }
-      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
+        "💬 New Chat Message",
+        `Message from ${userIdentifier}: "${truncatedMessage}"`,
+        notificationData
+      ).catch((e) => console.error("FCM Send Error (Unassigned Chat):", e));
 
       // Add Firestore Notifications for each admin
       const firestoreNotificationPromises = [];
@@ -1680,104 +2159,17 @@ exports.onNewChatOpened = functions.firestore
         firestoreNotificationPromises.push(
           addAdminFirestoreNotification(
             adminDoc.id,
-            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
+            `New message from ${userIdentifier}: "${truncatedMessage}"`,
             "chat",
             chatId,
             relatedUserId
-          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
+          ).catch((e) => console.error("Firestore Notification Error:", e))
         );
       });
 
       await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
       
-      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
-    }
-
-    return null;
-  });
-
-
-// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
-exports.onNewCustomerResponse = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Only process user messages
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-    
-    const assignedAdminUid = chatData.assignedAdminUid;
-    const userIdentifier = chatData.ownerUid || chatData.guestId;
-
-    // We only proceed if an admin is assigned to this chat.
-    if (!assignedAdminUid) {
-        return null;
-    }
-    
-    // We explicitly check if chatData.ownerUid is available for the payload.
-    const relatedUserId = chatData.ownerUid;
-
-
-    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
-    // We look at the sender of the second-to-last message (0 is the current one).
-    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
-        .orderBy('timestamp', 'desc')
-        .limit(2)
-        .get();
-        
-    // The message that triggered this function is index 0. We want the one before it (index 1).
-    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
-        ? messageSnapshots.docs[1].data()
-        : null;
-
-    // Update chat metadata, marking the latest sender as the user and setting unread flag.
-    // This MUST happen regardless of notification sending.
-    await chatDocRef.set({
-        lastMessageSender: newMessage.sender, // The user's ID/guest ID
-        lastMessageSeenByAdmin: false,
-    }, { merge: true });
-
-    // 3. Only notify the assigned admin if the LAST message *before* this new one
-    // was sent by the assigned admin. This prevents notification spam from a user sending
-    // multiple messages in a row.
-    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
-        
-        // Send push notification to the specific assigned admin
-        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
-        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
-        
-        if (adminTokens.length > 0) {
-            await sendPushNotification(
-                adminTokens,
-                "💬 New Message in Your Chat!",
-                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
-                {
-                    chatId: chatId,
-                    userId: relatedUserId || "guest",
-                    relatedDocType: "chat",
-                    relatedDocId: chatId,
-                    relatedUserId: relatedUserId,
-                }
-            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
-        }
-        
-        // Add Firestore Notification for the assigned admin
-        await addAdminFirestoreNotification(
-            assignedAdminUid,
-            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
-            "chat",
-            chatId,
-            relatedUserId
-        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
-        
-        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
+      console.log(`New message in unassigned chat ${chatId}. Notifications sent to all admins.`);
     }
 
     return null;
@@ -2031,1454 +2423,5 @@ app.delete("/orders/:id", async (req, res) => {
 });
 
 
-exports.api = functions.https.onRequest(app);
-
-// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
-exports.onNewChatOpened = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-
-    // 2. Check if the chat is already active or assigned
-    if (chatData.agentHasJoined) {
-      return null;
-    }
-    
-    // 3. Check if this is the FIRST user message in the chat.
-    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
-      .where('senderType', '==', 'user')
-      .get();
-
-    if (userMessagesSnapshot.docs.length === 1) {
-      
-      const userIdentifier = chatData.ownerUid || chatData.guestId;
-      const relatedUserId = chatData.ownerUid;
-      
-      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
-      await chatDocRef.set({
-          lastMessageSender: newMessage.sender, // The user's ID/guest ID
-          lastMessageSeenByAdmin: false,
-      }, { merge: true });
-
-      // Send notifications to ALL admins for a new UNASSIGNED chat.
-      const fcmPromise = sendAdminPushNotification(
-        "💬 New Customer Chat!",
-        `Chat started by ${userIdentifier}.`,
-        {
-          chatId: chatId,
-          userId: relatedUserId || "guest", // Use safe string fallback
-          relatedDocType: "chat",
-          relatedDocId: chatId,
-          relatedUserId: relatedUserId,
-        }
-      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
-
-      // Add Firestore Notifications for each admin
-      const firestoreNotificationPromises = [];
-      const adminsSnapshot = await adminsCollection.get();
-      adminsSnapshot.docs.forEach((adminDoc) => {
-        firestoreNotificationPromises.push(
-          addAdminFirestoreNotification(
-            adminDoc.id,
-            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
-            "chat",
-            chatId,
-            relatedUserId
-          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
-        );
-      });
-
-      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
-      
-      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
-    }
-
-    return null;
-  });
-
-
-// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
-exports.onNewCustomerResponse = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Only process user messages
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-    
-    const assignedAdminUid = chatData.assignedAdminUid;
-    const userIdentifier = chatData.ownerUid || chatData.guestId;
-
-    // We only proceed if an admin is assigned to this chat.
-    if (!assignedAdminUid) {
-        return null;
-    }
-    
-    // We explicitly check if chatData.ownerUid is available for the payload.
-    const relatedUserId = chatData.ownerUid;
-
-
-    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
-    // We look at the sender of the second-to-last message (0 is the current one).
-    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
-        .orderBy('timestamp', 'desc')
-        .limit(2)
-        .get();
-        
-    // The message that triggered this function is index 0. We want the one before it (index 1).
-    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
-        ? messageSnapshots.docs[1].data()
-        : null;
-
-    // Update chat metadata, marking the latest sender as the user and setting unread flag.
-    // This MUST happen regardless of notification sending.
-    await chatDocRef.set({
-        lastMessageSender: newMessage.sender, // The user's ID/guest ID
-        lastMessageSeenByAdmin: false,
-    }, { merge: true });
-
-    // 3. Only notify the assigned admin if the LAST message *before* this new one
-    // was sent by the assigned admin. This prevents notification spam from a user sending
-    // multiple messages in a row.
-    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
-        
-        // Send push notification to the specific assigned admin
-        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
-        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
-        
-        if (adminTokens.length > 0) {
-            await sendPushNotification(
-                adminTokens,
-                "💬 New Message in Your Chat!",
-                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
-                {
-                    chatId: chatId,
-                    userId: relatedUserId || "guest",
-                    relatedDocType: "chat",
-                    relatedDocId: chatId,
-                    relatedUserId: relatedUserId,
-                }
-            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
-        }
-        
-        // Add Firestore Notification for the assigned admin
-        await addAdminFirestoreNotification(
-            assignedAdminUid,
-            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
-            "chat",
-            chatId,
-            relatedUserId
-        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
-        
-        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
-    }
-
-    return null;
-  });
-
-// NEW FUNCTION: Triggers on new chat document creation to send email notification.
-exports.onNewChatCreated = functions.firestore
-  .document("chats/{chatId}")
-  .onCreate(async (snap, context) => {
-    const chatId = context.params.chatId;
-    const chatData = snap.data();
-    
-    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
-    
-    // Create email notification for admin
-    const adminEmailHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
-            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h2>💬 New Chat Started</h2>
-            </div>
-            <div class="content">
-              <p>A new customer chat has been initiated on SecondHandCell.</p>
-              <div class="info">
-                <strong>Chat ID:</strong> ${chatId}<br>
-                <strong>User:</strong> ${userIdentifier}<br>
-                <strong>Time:</strong> ${new Date().toLocaleString()}
-              </div>
-              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
-              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: 'sales@secondhandcell.com',
-        subject: `New Chat Started - ${userIdentifier}`,
-        html: adminEmailHtml,
-        bcc: ["saulsetton16@gmail.com"]
-      });
-      
-      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
-    } catch (error) {
-      console.error("Error sending email notification for new chat:", error);
-    }
-    
-    return null;
-  });
-
-app.post("/test-emails", async (req, res) => {
-  const { email, emailTypes } = req.body;
-
-  if (!email || !emailTypes || !Array.isArray(emailTypes)) {
-    return res.status(400).json({ error: "Email and emailTypes array are required." });
-  }
-
-  try {
-    const testResult = await sendMultipleTestEmails(email, emailTypes);
-    console.log("Test emails sent. Types:", emailTypes);
-    res.status(200).json(testResult);
-  } catch (error) {
-    console.error("Failed to send test emails:", error);
-    res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
-  }
-});
-
-app.post("/check-esn", async (req, res) => {
-  try {
-    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
-    
-    console.log("Received request to /check-esn with payload:", req.body);
-
-    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
-      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
-    }
-
-    const apiUrl = "https://cloudportal.phonecheck.com/cloud/cloudDB/CheckEsn/";
-    const requestPayload = new URLSearchParams();
-    requestPayload.append("ApiKey", "308b6790-b767-4b43-9065-2c00e13cdbf7");
-    requestPayload.append("Username", "aecells1");
-    requestPayload.append("IMEI", imei);
-    requestPayload.append("carrier", carrier);
-    requestPayload.append("devicetype", devicetype);
-
-    console.log("Sending payload to PhoneChecks API:", requestPayload.toString());
-
-    const response = await axios.post(apiUrl, requestPayload.toString(), {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-
-    phoneCheckData = response.data;
-
-    let isBlacklisted = phoneCheckData.isBlacklisted || false;
-    let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
-    let financialStatus = phoneCheckData.financialStatus || "Clear";
-    
-    if (isBlacklisted) {
-      const legalText = `
-        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
-        ... (rest of your legal text)
-      `;
-      
-      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
-        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
-        
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      await updateOrderBoth(orderId, {
-        status: "blacklisted",
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (fmiStatus === "On") {
-      const confirmUrl = `${process.env.APP_FRONTEND_URL}/fmi-cleared.html?orderId=${orderId}`;
-      const customerEmailHtml = FMI_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "fmi_on_pending",
-        fmiAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
-      const customerEmailHtml = BAL_DUE_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "balance_due_pending",
-        balanceAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-      
-    } else {
-      await updateOrderBoth(orderId, {
-        status: "imei_checked",
-        phoneCheckData: phoneCheckData,
-      });
-    }
-
-    res.status(200).json(response.data);
-
-  } catch (error) {
-    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
-  }
-});
-
-app.post("/orders/:id/fmi-cleared", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const docRef = ordersCollection.doc(id);
-      const doc = await docRef.get();
-      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
-
-      const order = { id: doc.id, ...doc.data() };
-      
-      if (order.status !== "fmi_on_pending") {
-          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
-      }
-      
-      await updateOrderBoth(id, {
-          status: "fmi_cleared",
-          fmiAutoDowngradeDate: null,
-      });
-
-      res.json({ message: "FMI status updated successfully." });
-
-    } catch (err) {
-        console.error("Error clearing FMI status:", err);
-        res.status(500).json({ error: "Failed to clear FMI status" });
-    }
-});
-
-app.delete("/orders/:id", async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    const orderRef = ordersCollection.doc(orderId);
-    const orderDoc = await orderRef.get();
-
-    if (!orderDoc.exists) {
-      return res.status(404).json({ error: "Order not found." });
-    }
-
-    const orderData = orderDoc.data();
-    const userId = orderData.userId;
-
-    // Delete from the main collection
-    await orderRef.delete();
-
-    // If a userId is associated, delete from the user's subcollection as well
-    if (userId) {
-      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
-      await userOrderRef.delete();
-    }
-
-    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
-  } catch (err) {
-    console.error("Error deleting order:", err);
-    res.status(500).json({ error: "Failed to delete order." });
-  }
-});
-
 
 exports.api = functions.https.onRequest(app);
-
-// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
-exports.onNewChatOpened = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-
-    // 2. Check if the chat is already active or assigned
-    if (chatData.agentHasJoined) {
-      return null;
-    }
-    
-    // 3. Check if this is the FIRST user message in the chat.
-    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
-      .where('senderType', '==', 'user')
-      .get();
-
-    if (userMessagesSnapshot.docs.length === 1) {
-      
-      const userIdentifier = chatData.ownerUid || chatData.guestId;
-      const relatedUserId = chatData.ownerUid;
-      
-      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
-      await chatDocRef.set({
-          lastMessageSender: newMessage.sender, // The user's ID/guest ID
-          lastMessageSeenByAdmin: false,
-      }, { merge: true });
-
-      // Send notifications to ALL admins for a new UNASSIGNED chat.
-      const fcmPromise = sendAdminPushNotification(
-        "💬 New Customer Chat!",
-        `Chat started by ${userIdentifier}.`,
-        {
-          chatId: chatId,
-          userId: relatedUserId || "guest", // Use safe string fallback
-          relatedDocType: "chat",
-          relatedDocId: chatId,
-          relatedUserId: relatedUserId,
-        }
-      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
-
-      // Add Firestore Notifications for each admin
-      const firestoreNotificationPromises = [];
-      const adminsSnapshot = await adminsCollection.get();
-      adminsSnapshot.docs.forEach((adminDoc) => {
-        firestoreNotificationPromises.push(
-          addAdminFirestoreNotification(
-            adminDoc.id,
-            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
-            "chat",
-            chatId,
-            relatedUserId
-          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
-        );
-      });
-
-      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
-      
-      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
-    }
-
-    return null;
-  });
-
-
-// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
-exports.onNewCustomerResponse = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Only process user messages
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-    
-    const assignedAdminUid = chatData.assignedAdminUid;
-    const userIdentifier = chatData.ownerUid || chatData.guestId;
-
-    // We only proceed if an admin is assigned to this chat.
-    if (!assignedAdminUid) {
-        return null;
-    }
-    
-    // We explicitly check if chatData.ownerUid is available for the payload.
-    const relatedUserId = chatData.ownerUid;
-
-
-    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
-    // We look at the sender of the second-to-last message (0 is the current one).
-    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
-        .orderBy('timestamp', 'desc')
-        .limit(2)
-        .get();
-        
-    // The message that triggered this function is index 0. We want the one before it (index 1).
-    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
-        ? messageSnapshots.docs[1].data()
-        : null;
-
-    // Update chat metadata, marking the latest sender as the user and setting unread flag.
-    // This MUST happen regardless of notification sending.
-    await chatDocRef.set({
-        lastMessageSender: newMessage.sender, // The user's ID/guest ID
-        lastMessageSeenByAdmin: false,
-    }, { merge: true });
-
-    // 3. Only notify the assigned admin if the LAST message *before* this new one
-    // was sent by the assigned admin. This prevents notification spam from a user sending
-    // multiple messages in a row.
-    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
-        
-        // Send push notification to the specific assigned admin
-        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
-        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
-        
-        if (adminTokens.length > 0) {
-            await sendPushNotification(
-                adminTokens,
-                "💬 New Message in Your Chat!",
-                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
-                {
-                    chatId: chatId,
-                    userId: relatedUserId || "guest",
-                    relatedDocType: "chat",
-                    relatedDocId: chatId,
-                    relatedUserId: relatedUserId,
-                }
-            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
-        }
-        
-        // Add Firestore Notification for the assigned admin
-        await addAdminFirestoreNotification(
-            assignedAdminUid,
-            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
-            "chat",
-            chatId,
-            relatedUserId
-        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
-        
-        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
-    }
-
-    return null;
-  });
-
-// NEW FUNCTION: Triggers on new chat document creation to send email notification.
-exports.onNewChatCreated = functions.firestore
-  .document("chats/{chatId}")
-  .onCreate(async (snap, context) => {
-    const chatId = context.params.chatId;
-    const chatData = snap.data();
-    
-    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
-    
-    // Create email notification for admin
-    const adminEmailHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
-            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h2>💬 New Chat Started</h2>
-            </div>
-            <div class="content">
-              <p>A new customer chat has been initiated on SecondHandCell.</p>
-              <div class="info">
-                <strong>Chat ID:</strong> ${chatId}<br>
-                <strong>User:</strong> ${userIdentifier}<br>
-                <strong>Time:</strong> ${new Date().toLocaleString()}
-              </div>
-              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
-              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: 'sales@secondhandcell.com',
-        subject: `New Chat Started - ${userIdentifier}`,
-        html: adminEmailHtml,
-        bcc: ["saulsetton16@gmail.com"]
-      });
-      
-      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
-    } catch (error) {
-      console.error("Error sending email notification for new chat:", error);
-    }
-    
-    return null;
-  });
-
-app.post("/test-emails", async (req, res) => {
-  const { email, emailTypes } = req.body;
-
-  if (!email || !emailTypes || !Array.isArray(emailTypes)) {
-    return res.status(400).json({ error: "Email and emailTypes array are required." });
-  }
-
-  try {
-    const testResult = await sendMultipleTestEmails(email, emailTypes);
-    console.log("Test emails sent. Types:", emailTypes);
-    res.status(200).json(testResult);
-  } catch (error) {
-    console.error("Failed to send test emails:", error);
-    res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
-  }
-});
-
-app.post("/check-esn", async (req, res) => {
-  try {
-    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
-    
-    console.log("Received request to /check-esn with payload:", req.body);
-
-    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
-      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
-    }
-
-    const apiUrl = "https://cloudportal.phonecheck.com/cloud/cloudDB/CheckEsn/";
-    const requestPayload = new URLSearchParams();
-    requestPayload.append("ApiKey", "308b6790-b767-4b43-9065-2c00e13cdbf7");
-    requestPayload.append("Username", "aecells1");
-    requestPayload.append("IMEI", imei);
-    requestPayload.append("carrier", carrier);
-    requestPayload.append("devicetype", devicetype);
-
-    console.log("Sending payload to PhoneChecks API:", requestPayload.toString());
-
-    const response = await axios.post(apiUrl, requestPayload.toString(), {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-
-    phoneCheckData = response.data;
-
-    let isBlacklisted = phoneCheckData.isBlacklisted || false;
-    let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
-    let financialStatus = phoneCheckData.financialStatus || "Clear";
-    
-    if (isBlacklisted) {
-      const legalText = `
-        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
-        ... (rest of your legal text)
-      `;
-      
-      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
-        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
-        
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      await updateOrderBoth(orderId, {
-        status: "blacklisted",
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (fmiStatus === "On") {
-      const confirmUrl = `${process.env.APP_FRONTEND_URL}/fmi-cleared.html?orderId=${orderId}`;
-      const customerEmailHtml = FMI_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "fmi_on_pending",
-        fmiAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
-      const customerEmailHtml = BAL_DUE_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "balance_due_pending",
-        balanceAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-      
-    } else {
-      await updateOrderBoth(orderId, {
-        status: "imei_checked",
-        phoneCheckData: phoneCheckData,
-      });
-    }
-
-    res.status(200).json(response.data);
-
-  } catch (error) {
-    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
-  }
-});
-
-app.post("/orders/:id/fmi-cleared", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const docRef = ordersCollection.doc(id);
-      const doc = await docRef.get();
-      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
-
-      const order = { id: doc.id, ...doc.data() };
-      
-      if (order.status !== "fmi_on_pending") {
-          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
-      }
-      
-      await updateOrderBoth(id, {
-          status: "fmi_cleared",
-          fmiAutoDowngradeDate: null,
-      });
-
-      res.json({ message: "FMI status updated successfully." });
-
-    } catch (err) {
-        console.error("Error clearing FMI status:", err);
-        res.status(500).json({ error: "Failed to clear FMI status" });
-    }
-});
-
-app.delete("/orders/:id", async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    const orderRef = ordersCollection.doc(orderId);
-    const orderDoc = await orderRef.get();
-
-    if (!orderDoc.exists) {
-      return res.status(404).json({ error: "Order not found." });
-    }
-
-    const orderData = orderDoc.data();
-    const userId = orderData.userId;
-
-    // Delete from the main collection
-    await orderRef.delete();
-
-    // If a userId is associated, delete from the user's subcollection as well
-    if (userId) {
-      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
-      await userOrderRef.delete();
-    }
-
-    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
-  } catch (err) {
-    console.error("Error deleting order:", err);
-    res.status(500).json({ error: "Failed to delete order." });
-  }
-});
-
-
-exports.api = functions.https.onRequest(app);
-
-// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
-exports.onNewChatOpened = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-
-    // 2. Check if the chat is already active or assigned
-    if (chatData.agentHasJoined) {
-      return null;
-    }
-    
-    // 3. Check if this is the FIRST user message in the chat.
-    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
-      .where('senderType', '==', 'user')
-      .get();
-
-    if (userMessagesSnapshot.docs.length === 1) {
-      
-      const userIdentifier = chatData.ownerUid || chatData.guestId;
-      const relatedUserId = chatData.ownerUid;
-      
-      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
-      await chatDocRef.set({
-          lastMessageSender: newMessage.sender, // The user's ID/guest ID
-          lastMessageSeenByAdmin: false,
-      }, { merge: true });
-
-      // Send notifications to ALL admins for a new UNASSIGNED chat.
-      const fcmPromise = sendAdminPushNotification(
-        "💬 New Customer Chat!",
-        `Chat started by ${userIdentifier}.`,
-        {
-          chatId: chatId,
-          userId: relatedUserId || "guest", // Use safe string fallback
-          relatedDocType: "chat",
-          relatedDocId: chatId,
-          relatedUserId: relatedUserId,
-        }
-      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
-
-      // Add Firestore Notifications for each admin
-      const firestoreNotificationPromises = [];
-      const adminsSnapshot = await adminsCollection.get();
-      adminsSnapshot.docs.forEach((adminDoc) => {
-        firestoreNotificationPromises.push(
-          addAdminFirestoreNotification(
-            adminDoc.id,
-            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
-            "chat",
-            chatId,
-            relatedUserId
-          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
-        );
-      });
-
-      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
-      
-      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
-    }
-
-    return null;
-  });
-
-
-// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
-exports.onNewCustomerResponse = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Only process user messages
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-    
-    const assignedAdminUid = chatData.assignedAdminUid;
-    const userIdentifier = chatData.ownerUid || chatData.guestId;
-
-    // We only proceed if an admin is assigned to this chat.
-    if (!assignedAdminUid) {
-        return null;
-    }
-    
-    // We explicitly check if chatData.ownerUid is available for the payload.
-    const relatedUserId = chatData.ownerUid;
-
-
-    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
-    // We look at the sender of the second-to-last message (0 is the current one).
-    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
-        .orderBy('timestamp', 'desc')
-        .limit(2)
-        .get();
-        
-    // The message that triggered this function is index 0. We want the one before it (index 1).
-    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
-        ? messageSnapshots.docs[1].data()
-        : null;
-
-    // Update chat metadata, marking the latest sender as the user and setting unread flag.
-    // This MUST happen regardless of notification sending.
-    await chatDocRef.set({
-        lastMessageSender: newMessage.sender, // The user's ID/guest ID
-        lastMessageSeenByAdmin: false,
-    }, { merge: true });
-
-    // 3. Only notify the assigned admin if the LAST message *before* this new one
-    // was sent by the assigned admin. This prevents notification spam from a user sending
-    // multiple messages in a row.
-    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
-        
-        // Send push notification to the specific assigned admin
-        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
-        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
-        
-        if (adminTokens.length > 0) {
-            await sendPushNotification(
-                adminTokens,
-                "💬 New Message in Your Chat!",
-                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
-                {
-                    chatId: chatId,
-                    userId: relatedUserId || "guest",
-                    relatedDocType: "chat",
-                    relatedDocId: chatId,
-                    relatedUserId: relatedUserId,
-                }
-            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
-        }
-        
-        // Add Firestore Notification for the assigned admin
-        await addAdminFirestoreNotification(
-            assignedAdminUid,
-            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
-            "chat",
-            chatId,
-            relatedUserId
-        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
-        
-        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
-    }
-
-    return null;
-  });
-
-// NEW FUNCTION: Triggers on new chat document creation to send email notification.
-exports.onNewChatCreated = functions.firestore
-  .document("chats/{chatId}")
-  .onCreate(async (snap, context) => {
-    const chatId = context.params.chatId;
-    const chatData = snap.data();
-    
-    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
-    
-    // Create email notification for admin
-    const adminEmailHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
-            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h2>💬 New Chat Started</h2>
-            </div>
-            <div class="content">
-              <p>A new customer chat has been initiated on SecondHandCell.</p>
-              <div class="info">
-                <strong>Chat ID:</strong> ${chatId}<br>
-                <strong>User:</strong> ${userIdentifier}<br>
-                <strong>Time:</strong> ${new Date().toLocaleString()}
-              </div>
-              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
-              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: 'sales@secondhandcell.com',
-        subject: `New Chat Started - ${userIdentifier}`,
-        html: adminEmailHtml,
-        bcc: ["saulsetton16@gmail.com"]
-      });
-      
-      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
-    } catch (error) {
-      console.error("Error sending email notification for new chat:", error);
-    }
-    
-    return null;
-  });
-
-app.post("/test-emails", async (req, res) => {
-  const { email, emailTypes } = req.body;
-
-  if (!email || !emailTypes || !Array.isArray(emailTypes)) {
-    return res.status(400).json({ error: "Email and emailTypes array are required." });
-  }
-
-  try {
-    const testResult = await sendMultipleTestEmails(email, emailTypes);
-    console.log("Test emails sent. Types:", emailTypes);
-    res.status(200).json(testResult);
-  } catch (error) {
-    console.error("Failed to send test emails:", error);
-    res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
-  }
-});
-
-app.post("/check-esn", async (req, res) => {
-  try {
-    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
-    
-    console.log("Received request to /check-esn with payload:", req.body);
-
-    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
-      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
-    }
-
-    const apiUrl = "https://cloudportal.phonecheck.com/cloud/cloudDB/CheckEsn/";
-    const requestPayload = new URLSearchParams();
-    requestPayload.append("ApiKey", "308b6790-b767-4b43-9065-2c00e13cdbf7");
-    requestPayload.append("Username", "aecells1");
-    requestPayload.append("IMEI", imei);
-    requestPayload.append("carrier", carrier);
-    requestPayload.append("devicetype", devicetype);
-
-    console.log("Sending payload to PhoneChecks API:", requestPayload.toString());
-
-    const response = await axios.post(apiUrl, requestPayload.toString(), {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-
-    phoneCheckData = response.data;
-
-    let isBlacklisted = phoneCheckData.isBlacklisted || false;
-    let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
-    let financialStatus = phoneCheckData.financialStatus || "Clear";
-    
-    if (isBlacklisted) {
-      const legalText = `
-        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
-        ... (rest of your legal text)
-      `;
-      
-      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
-        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
-        
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      await updateOrderBoth(orderId, {
-        status: "blacklisted",
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (fmiStatus === "On") {
-      const confirmUrl = `${process.env.APP_FRONTEND_URL}/fmi-cleared.html?orderId=${orderId}`;
-      const customerEmailHtml = FMI_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "fmi_on_pending",
-        fmiAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
-      const customerEmailHtml = BAL_DUE_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com", "saulsetton16@gmail.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "balance_due_pending",
-        balanceAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-      
-    } else {
-      await updateOrderBoth(orderId, {
-        status: "imei_checked",
-        phoneCheckData: phoneCheckData,
-      });
-    }
-
-    res.status(200).json(response.data);
-
-  } catch (error) {
-    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
-  }
-});
-
-app.post("/orders/:id/fmi-cleared", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const docRef = ordersCollection.doc(id);
-      const doc = await docRef.get();
-      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
-
-      const order = { id: doc.id, ...doc.data() };
-      
-      if (order.status !== "fmi_on_pending") {
-          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
-      }
-      
-      await updateOrderBoth(id, {
-          status: "fmi_cleared",
-          fmiAutoDowngradeDate: null,
-      });
-
-      res.json({ message: "FMI status updated successfully." });
-
-    } catch (err) {
-        console.error("Error clearing FMI status:", err);
-        res.status(500).json({ error: "Failed to clear FMI status" });
-    }
-});
-
-app.delete("/orders/:id", async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    const orderRef = ordersCollection.doc(orderId);
-    const orderDoc = await orderRef.get();
-
-    if (!orderDoc.exists) {
-      return res.status(404).json({ error: "Order not found." });
-    }
-
-    const orderData = orderDoc.data();
-    const userId = orderData.userId;
-
-    // Delete from the main collection
-    await orderRef.delete();
-
-    // If a userId is associated, delete from the user's subcollection as well
-    if (userId) {
-      const userOrderRef = usersCollection.doc(userId).collection("orders").doc(orderId);
-      await userOrderRef.delete();
-    }
-
-    res.status(200).json({ message: `Order ${orderId} deleted successfully.` });
-  } catch (err) {
-    console.error("Error deleting order:", err);
-    res.status(500).json({ error: "Failed to delete order." });
-  }
-});
-
-
-exports.api = functions.https.onRequest(app);
-
-// RENAME and UPDATE: Trigger for the FIRST message in a new, unassigned chat.
-exports.onNewChatOpened = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Quick exit if it's not a user message (e.g., bot, system, or agent)
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-
-    // 2. Check if the chat is already active or assigned
-    if (chatData.agentHasJoined) {
-      return null;
-    }
-    
-    // 3. Check if this is the FIRST user message in the chat.
-    const userMessagesSnapshot = await db.collection(`chats/${chatId}/messages`)
-      .where('senderType', '==', 'user')
-      .get();
-
-    if (userMessagesSnapshot.docs.length === 1) {
-      
-      const userIdentifier = chatData.ownerUid || chatData.guestId;
-      const relatedUserId = chatData.ownerUid;
-      
-      // CRITICAL FIX: Mark that the user has sent a message and who sent the last message.
-      await chatDocRef.set({
-          lastMessageSender: newMessage.sender, // The user's ID/guest ID
-          lastMessageSeenByAdmin: false,
-      }, { merge: true });
-
-      // Send notifications to ALL admins for a new UNASSIGNED chat.
-      const fcmPromise = sendAdminPushNotification(
-        "💬 New Customer Chat!",
-        `Chat started by ${userIdentifier}.`,
-        {
-          chatId: chatId,
-          userId: relatedUserId || "guest", // Use safe string fallback
-          relatedDocType: "chat",
-          relatedDocId: chatId,
-          relatedUserId: relatedUserId,
-        }
-      ).catch((e) => console.error("FCM Send Error (New Chat):", e));
-
-      // Add Firestore Notifications for each admin
-      const firestoreNotificationPromises = [];
-      const adminsSnapshot = await adminsCollection.get();
-      adminsSnapshot.docs.forEach((adminDoc) => {
-        firestoreNotificationPromises.push(
-          addAdminFirestoreNotification(
-            adminDoc.id,
-            `New Chat: ID: ${chatId} from ${userIdentifier}.`,
-            "chat",
-            chatId,
-            relatedUserId
-          ).catch((e) => console.error("Firestore Notification Error (New Chat):", e))
-        );
-      });
-
-      await Promise.all([fcmPromise, ...firestoreNotificationPromises]);
-      
-      console.log(`New chat started by ${userIdentifier}. Notifications sent to all admins.`);
-    }
-
-    return null;
-  });
-
-
-// NEW FUNCTION: Trigger for subsequent customer messages in an ASSIGNED chat.
-exports.onNewCustomerResponse = functions.firestore
-  .document("chats/{chatId}/messages/{messageId}")
-  .onCreate(async (snap, context) => {
-    const newMessage = snap.data();
-    const chatId = context.params.chatId;
-
-    // 1. Only process user messages
-    if (newMessage.senderType !== "user") {
-      return null;
-    }
-
-    const chatDocRef = db.collection("chats").doc(chatId);
-    const chatDoc = await chatDocRef.get();
-    const chatData = chatDoc.data();
-    
-    const assignedAdminUid = chatData.assignedAdminUid;
-    const userIdentifier = chatData.ownerUid || chatData.guestId;
-
-    // We only proceed if an admin is assigned to this chat.
-    if (!assignedAdminUid) {
-        return null;
-    }
-    
-    // We explicitly check if chatData.ownerUid is available for the payload.
-    const relatedUserId = chatData.ownerUid;
-
-
-    // 2. CRITICAL FIX: Get the last message sender BEFORE this new message was recorded.
-    // We look at the sender of the second-to-last message (0 is the current one).
-    const messageSnapshots = await db.collection(`chats/${chatId}/messages`)
-        .orderBy('timestamp', 'desc')
-        .limit(2)
-        .get();
-        
-    // The message that triggered this function is index 0. We want the one before it (index 1).
-    const lastMessageBeforeThisOne = messageSnapshots.docs.length === 2 
-        ? messageSnapshots.docs[1].data()
-        : null;
-
-    // Update chat metadata, marking the latest sender as the user and setting unread flag.
-    // This MUST happen regardless of notification sending.
-    await chatDocRef.set({
-        lastMessageSender: newMessage.sender, // The user's ID/guest ID
-        lastMessageSeenByAdmin: false,
-    }, { merge: true });
-
-    // 3. Only notify the assigned admin if the LAST message *before* this new one
-    // was sent by the assigned admin. This prevents notification spam from a user sending
-    // multiple messages in a row.
-    if (lastMessageBeforeThisOne?.sender === assignedAdminUid) {
-        
-        // Send push notification to the specific assigned admin
-        const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
-        const adminTokens = adminTokenSnapshot.docs.map(doc => doc.id);
-        
-        if (adminTokens.length > 0) {
-            await sendPushNotification(
-                adminTokens,
-                "💬 New Message in Your Chat!",
-                `${userIdentifier}: ${newMessage.text.substring(0, 50)}...`,
-                {
-                    chatId: chatId,
-                    userId: relatedUserId || "guest",
-                    relatedDocType: "chat",
-                    relatedDocId: chatId,
-                    relatedUserId: relatedUserId,
-                }
-            ).catch((e) => console.error("FCM Send Error (Customer Response):", e));
-        }
-        
-        // Add Firestore Notification for the assigned admin
-        await addAdminFirestoreNotification(
-            assignedAdminUid,
-            `New Message in Chat ${userIdentifier}: "${newMessage.text.substring(0, 30)}..."`,
-            "chat",
-            chatId,
-            relatedUserId
-        ).catch((e) => console.error("Firestore Notification Error (Customer Response):", e));
-        
-        console.log(`New customer response in assigned chat ${chatId}. Notifications sent to ${assignedAdminUid}.`);
-    }
-
-    return null;
-  });
-
-// NEW FUNCTION: Triggers on new chat document creation to send email notification.
-exports.onNewChatCreated = functions.firestore
-  .document("chats/{chatId}")
-  .onCreate(async (snap, context) => {
-    const chatId = context.params.chatId;
-    const chatData = snap.data();
-    
-    const userIdentifier = chatData.ownerUid || chatData.guestId || "Unknown User";
-    
-    // Create email notification for admin
-    const adminEmailHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; }
-            .content { background: #f9fafb; padding: 20px; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background: #6366F1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px; }
-            .info { background: white; padding: 16px; border-radius: 6px; margin: 16px 0; border-left: 4px solid #6366F1; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h2>💬 New Chat Started</h2>
-            </div>
-            <div class="content">
-              <p>A new customer chat has been initiated on SecondHandCell.</p>
-              <div class="info">
-                <strong>Chat ID:</strong> ${chatId}<br>
-                <strong>User:</strong> ${userIdentifier}<br>
-                <strong>Time:</strong> ${new Date().toLocaleString()}
-              </div>
-              <p>Please respond to this chat as soon as possible to provide excellent customer service.</p>
-              <a href="${process.env.APP_FRONTEND_URL || "https://secondhandcell.com"}/admin" class="button">View Chat in Admin Panel</a>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
-    
-    try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: 'sales@secondhandcell.com',
-        subject: `New Chat Started - ${userIdentifier}`,
-        html: adminEmailHtml,
-        bcc: ["saulsetton16@gmail.com"]
-      });
-      
-      console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
-    } catch (error) {
-      console.error("Error sending email notification for new chat:", error);
-    }
-    
-    return null;
-  });
