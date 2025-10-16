@@ -88,11 +88,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         document.addEventListener('DOMContentLoaded', () => {
             const shippingInstruction = document.getElementById('shippingInstruction');
 
-            // This is a placeholder for the actual shipping preference data.
-            // In a real application, you'd get this from your order submission result or a query parameter.
-            // For now, we'll simulate it based on a query parameter.
+            // Get URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             const shippingPreference = urlParams.get('shipping') || 'email_label'; 
+            const transactionId = urlParams.get('orderId') || 'unknown';
+            const basketTotal = urlParams.get('price') || urlParams.get('total') || '0';
 
             if (shippingPreference === 'ship_kit') {
                 shippingInstruction.innerHTML = `
@@ -101,6 +101,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         We've shipped a prepaid, insured shipping kit to your address. Please use the provided materials to carefully package your device and drop it off at any USPS location.
                     </span>
                 `;
+            }
+
+            // Add tracking pixel for customer selling
+            // Format: <iframe src="https://scdcb.com/p.ashx?a=144&e=305&t=TRANSACTION_ID&p=BASKET_TOTAL" height="1" width="1" frameborder="0"></iframe>
+            if (transactionId && transactionId !== 'unknown' && basketTotal && parseFloat(basketTotal) > 0) {
+                const trackingPixel = document.createElement('iframe');
+                trackingPixel.src = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(transactionId)}&p=${parseFloat(basketTotal).toFixed(2)}`;
+                trackingPixel.height = '1';
+                trackingPixel.width = '1';
+                trackingPixel.frameBorder = '0';
+                trackingPixel.style.display = 'none';
+                document.body.appendChild(trackingPixel);
+                console.log('Tracking pixel loaded:', trackingPixel.src);
+            } else {
+                console.warn('Tracking pixel not loaded: Missing transaction ID or basket total');
             }
         });
     </script>
