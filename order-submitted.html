@@ -48,11 +48,80 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             
             <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Thank You for Your Order! 🎉</h1>
             
-            <p class="text-lg text-slate-600 mb-8 max-w-xl mx-auto">
-                Your order has been successfully submitted. An email with all the details has been sent to your inbox.
+            <p class="text-lg text-slate-600 mb-8 max-w-xl mx-auto" id="confirmationSummary">
+                Your order <span id="confirmationOrderId" class="font-semibold text-slate-900">has</span> been successfully submitted.
+                A confirmation email has been sent to <span id="confirmationEmail" class="font-semibold text-slate-900">your inbox</span>.
             </p>
-            
-            <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left mb-8">
+
+            <div id="orderSummaryWrapper" class="grid gap-6 mb-8 text-left md:grid-cols-2">
+                <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-sm">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4">Order Overview</h2>
+                    <dl class="space-y-3 text-sm text-slate-700">
+                        <div class="flex justify-between gap-4">
+                            <dt class="font-semibold text-slate-900">Order ID</dt>
+                            <dd id="summaryOrderId" class="text-right text-slate-600">Pending</dd>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <dt class="font-semibold text-slate-900">Device</dt>
+                            <dd class="text-right text-slate-600">
+                                <span id="summaryDeviceName">—</span>
+                                <span class="block text-xs text-slate-500" id="summaryDeviceStorage">&nbsp;</span>
+                            </dd>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <dt class="font-semibold text-slate-900">Carrier</dt>
+                            <dd id="summaryDeviceCarrier" class="text-right text-slate-600">—</dd>
+                        </div>
+                        <div class="flex justify-between gap-4">
+                            <dt class="font-semibold text-slate-900">Guaranteed Quote</dt>
+                            <dd id="summaryQuote" class="text-right text-emerald-600 font-semibold">—</dd>
+                        </div>
+                        <div class="pt-3 border-t border-slate-200">
+                            <h3 class="text-sm font-semibold text-slate-900 mb-2">Condition Highlights</h3>
+                            <ul class="space-y-1 text-xs text-slate-600">
+                                <li id="summaryConditionPower">• Power status: —</li>
+                                <li id="summaryConditionFunctional">• Functionality: —</li>
+                                <li id="summaryConditionCracks">• Screen & body: —</li>
+                                <li id="summaryConditionCosmetic">• Cosmetic detail: —</li>
+                            </ul>
+                        </div>
+                    </dl>
+                </div>
+                <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-6">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 mb-4">Contact & Shipping</h2>
+                        <dl class="space-y-3 text-sm text-slate-700">
+                            <div class="flex justify-between gap-4">
+                                <dt class="font-semibold text-slate-900">Customer</dt>
+                                <dd id="summaryCustomerName" class="text-right text-slate-600">—</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="font-semibold text-slate-900">Email</dt>
+                                <dd id="summaryCustomerEmail" class="text-right text-slate-600">—</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="font-semibold text-slate-900">Phone</dt>
+                                <dd id="summaryCustomerPhone" class="text-right text-slate-600">—</dd>
+                            </div>
+                            <div>
+                                <dt class="font-semibold text-slate-900">Mailing Address</dt>
+                                <dd id="summaryShippingAddress" class="mt-1 text-sm leading-relaxed text-slate-600">—</dd>
+                            </div>
+                            <div class="flex justify-between gap-4">
+                                <dt class="font-semibold text-slate-900">Shipping Preference</dt>
+                                <dd id="summaryShippingPreference" class="text-right text-slate-600">—</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 mb-4">Payment Method</h2>
+                        <p id="summaryPaymentMethod" class="text-sm text-slate-700">—</p>
+                        <p id="summaryPaymentDetails" class="text-xs text-slate-500 mt-2">Payment instructions will also be included in your confirmation email.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left mb-8 shadow-sm">
                 <h2 class="text-xl font-bold text-slate-800 mb-4">What Happens Next?</h2>
                 <ol class="list-decimal list-inside space-y-4 text-slate-700">
                     <li>
@@ -86,21 +155,215 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const summaryKey = 'secondhandcell:lastOrderSummary';
             const shippingInstruction = document.getElementById('shippingInstruction');
+            const summaryWrapper = document.getElementById('orderSummaryWrapper');
+            const confirmationOrderId = document.getElementById('confirmationOrderId');
+            const confirmationEmail = document.getElementById('confirmationEmail');
 
-            // Get URL parameters
+            const summaryElements = {
+                orderId: document.getElementById('summaryOrderId'),
+                deviceName: document.getElementById('summaryDeviceName'),
+                deviceStorage: document.getElementById('summaryDeviceStorage'),
+                deviceCarrier: document.getElementById('summaryDeviceCarrier'),
+                quote: document.getElementById('summaryQuote'),
+                conditionPower: document.getElementById('summaryConditionPower'),
+                conditionFunctional: document.getElementById('summaryConditionFunctional'),
+                conditionCracks: document.getElementById('summaryConditionCracks'),
+                conditionCosmetic: document.getElementById('summaryConditionCosmetic'),
+                customerName: document.getElementById('summaryCustomerName'),
+                customerEmail: document.getElementById('summaryCustomerEmail'),
+                customerPhone: document.getElementById('summaryCustomerPhone'),
+                shippingAddress: document.getElementById('summaryShippingAddress'),
+                shippingPreference: document.getElementById('summaryShippingPreference'),
+                paymentMethod: document.getElementById('summaryPaymentMethod'),
+                paymentDetails: document.getElementById('summaryPaymentDetails')
+            };
+
             const urlParams = new URLSearchParams(window.location.search);
-            const shippingPreference = urlParams.get('shipping') || 'email_label'; 
+            const shippingPreferenceParam = urlParams.get('shipping') || '';
             const transactionId = urlParams.get('orderId') || 'unknown';
             const basketTotal = urlParams.get('price') || urlParams.get('total') || '0';
 
-            if (shippingPreference === 'ship_kit') {
+            const storedSummary = localStorage.getItem(summaryKey);
+            let summaryData = null;
+            if (storedSummary) {
+                try {
+                    summaryData = JSON.parse(storedSummary);
+                } catch (error) {
+                    console.warn('Unable to parse stored order summary payload:', error);
+                }
+            }
+
+            const formatCurrency = (value) => {
+                const numericValue = Number(value);
+                if (Number.isFinite(numericValue) && numericValue > 0) {
+                    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(numericValue);
+                }
+                return '—';
+            };
+
+            const formatPhone = (value) => {
+                if (!value) return '—';
+                const digits = value.toString().replace(/\D/g, '');
+                if (digits.length === 10) {
+                    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+                }
+                return value;
+            };
+
+            const formatShippingPreference = (value) => {
+                if (!value) return 'Email Label';
+                const normalized = value.toLowerCase();
+                if (normalized.includes('kit')) return 'Prepaid Shipping Kit';
+                return 'Email Shipping Label';
+            };
+
+            const describeCondition = (label, value) => {
+                if (!value || value === 'N/A') {
+                    return `${label}: Not provided`;
+                }
+                const normalized = value.toLowerCase();
+                if (normalized === 'yes') {
+                    return `${label}: Yes`;
+                }
+                if (normalized === 'no') {
+                    return `${label}: No`;
+                }
+                return `${label}: ${value}`;
+            };
+
+            let resolvedShippingPreference = shippingPreferenceParam || 'email_label';
+            let displayQuote = basketTotal;
+
+            if (summaryData) {
+                const {
+                    orderId,
+                    quote,
+                    device,
+                    shippingPreference,
+                    shippingInfo,
+                    paymentMethod,
+                    paymentDetails
+                } = summaryData;
+
+                if (confirmationOrderId) {
+                    confirmationOrderId.textContent = orderId ? `#${orderId}` : 'your order';
+                }
+
+                const emailAddress = shippingInfo?.email || urlParams.get('email');
+                if (confirmationEmail) {
+                    confirmationEmail.textContent = emailAddress || 'your inbox';
+                }
+
+                if (summaryElements.orderId) {
+                    const displayId = orderId || (transactionId !== 'unknown' ? transactionId : 'Pending');
+                    summaryElements.orderId.textContent = displayId && displayId !== 'Pending' ? `#${displayId}` : 'Pending';
+                }
+
+                if (device) {
+                    if (summaryElements.deviceName) {
+                        summaryElements.deviceName.textContent = [device.brand, device.name].filter(Boolean).join(' ') || '—';
+                    }
+                    if (summaryElements.deviceStorage) {
+                        summaryElements.deviceStorage.textContent = device.storage ? `${device.storage} storage` : '';
+                    }
+                    if (summaryElements.deviceCarrier) {
+                        summaryElements.deviceCarrier.textContent = device.carrier ? device.carrier.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()) : '—';
+                    }
+                    if (summaryElements.conditionPower) {
+                        summaryElements.conditionPower.textContent = `• ${describeCondition('Power status', device.condition?.powerOn)}`;
+                    }
+                    if (summaryElements.conditionFunctional) {
+                        summaryElements.conditionFunctional.textContent = `• ${describeCondition('Functionality', device.condition?.functional)}`;
+                    }
+                    if (summaryElements.conditionCracks) {
+                        summaryElements.conditionCracks.textContent = `• ${describeCondition('Screen & body', device.condition?.cracks)}`;
+                    }
+                    if (summaryElements.conditionCosmetic) {
+                        summaryElements.conditionCosmetic.textContent = `• ${describeCondition('Cosmetic detail', device.condition?.cosmetic)}`;
+                    }
+                }
+
+                if (summaryElements.customerName) {
+                    summaryElements.customerName.textContent = shippingInfo?.fullName || '—';
+                }
+                if (summaryElements.customerEmail) {
+                    summaryElements.customerEmail.textContent = emailAddress || '—';
+                }
+                if (summaryElements.customerPhone) {
+                    summaryElements.customerPhone.textContent = formatPhone(shippingInfo?.phone);
+                }
+                if (summaryElements.shippingAddress) {
+                    const addressParts = [shippingInfo?.streetAddress, shippingInfo?.city, shippingInfo?.state, shippingInfo?.zipCode].filter(Boolean);
+                    summaryElements.shippingAddress.textContent = addressParts.length ? addressParts.join(', ') : '—';
+                }
+
+                resolvedShippingPreference = shippingPreference || shippingPreferenceParam;
+                if (summaryElements.shippingPreference) {
+                    summaryElements.shippingPreference.textContent = formatShippingPreference(resolvedShippingPreference);
+                }
+
+                if (summaryElements.paymentMethod) {
+                    const friendlyPayment = paymentMethod ? paymentMethod.replace(/_/g, ' ') : '—';
+                    summaryElements.paymentMethod.textContent = friendlyPayment.charAt(0).toUpperCase() + friendlyPayment.slice(1);
+                }
+
+                if (summaryElements.paymentDetails) {
+                    let detailMessage = 'Payment instructions will also be included in your confirmation email.';
+                    if (paymentMethod === 'venmo' && paymentDetails?.venmoUsername) {
+                        const venmoHandle = paymentDetails.venmoUsername.replace(/^@/, '');
+                        detailMessage = `Venmo Username: @${venmoHandle}`;
+                    } else if (paymentMethod === 'zelle' && paymentDetails?.zelleIdentifier) {
+                        detailMessage = `Zelle: ${paymentDetails.zelleIdentifier}`;
+                    } else if (paymentMethod === 'paypal' && paymentDetails?.paypalEmail) {
+                        detailMessage = `PayPal Email: ${paymentDetails.paypalEmail}`;
+                    }
+                    summaryElements.paymentDetails.textContent = detailMessage;
+                }
+
+                displayQuote = quote || basketTotal;
+
+                if (summaryElements.quote) {
+                    summaryElements.quote.textContent = formatCurrency(displayQuote);
+                }
+
+                localStorage.removeItem(summaryKey);
+            } else {
+                if (summaryWrapper) {
+                    summaryWrapper.classList.add('hidden');
+                }
+                if (confirmationOrderId) {
+                    confirmationOrderId.textContent = transactionId !== 'unknown' ? `#${transactionId}` : 'your order';
+                }
+                if (confirmationEmail) {
+                    confirmationEmail.textContent = 'your inbox';
+                }
+            }
+
+            if (!summaryData && summaryElements.quote) {
+                summaryElements.quote.textContent = formatCurrency(displayQuote);
+            }
+
+            if (summaryElements.shippingPreference) {
+                const currentPreference = summaryElements.shippingPreference.textContent.trim();
+                if (!currentPreference || currentPreference === '—') {
+                    summaryElements.shippingPreference.textContent = formatShippingPreference(resolvedShippingPreference);
+                }
+            }
+
+            const normalizedShipping = (resolvedShippingPreference || '').toLowerCase();
+            if (normalizedShipping.includes('ship_kit') || normalizedShipping.includes('kit')) {
                 shippingInstruction.innerHTML = `
                     <strong>Shipping Kit Instructions:</strong>
                     <span class="block mt-2">
                         We've shipped a prepaid, insured shipping kit to your address. Please use the provided materials to carefully package your device and drop it off at any USPS location.
                     </span>
                 `;
+            }
+
+            if (summaryElements.orderId && !summaryElements.orderId.textContent.trim()) {
+                summaryElements.orderId.textContent = transactionId !== 'unknown' ? `#${transactionId}` : 'Pending';
             }
 
             // Add tracking pixel for customer selling

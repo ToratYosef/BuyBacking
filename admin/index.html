@@ -502,13 +502,63 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             cursor: pointer;
             transition: background-color 0.2s ease;
         }
-        
+
         .notification-item:hover {
             background-color: #f8fafc;
         }
-        
+
         .notification-item:last-child {
             border-bottom: none;
+        }
+
+        .notification-empty {
+            padding: 24px 16px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .notification-empty p {
+            margin: 0;
+        }
+
+        .notification-layout {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .notification-copy {
+            flex: 1;
+        }
+
+        .notification-name {
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+
+        .notification-device {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 4px;
+        }
+
+        .notification-status {
+            font-size: 12px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .notification-meta {
+            text-align: right;
+        }
+
+        .notification-meta p {
+            font-size: 12px;
+            color: #94a3b8;
+            margin: 0;
         }
         
         .notification-dropdown-footer {
@@ -643,8 +693,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </a>
                 </li>
                 <li>
-                    <a href="#" data-status="shipping_kit_requested" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
-                        <i class="fas fa-box mr-3"></i> Shipping Kit Requested
+                    <a href="#" data-status="kit_needs_printing" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-print mr-3"></i> Needs Printing
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-status="kit_sent" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-truck-loading mr-3"></i> Kit Sent
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-status="kit_delivered" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-home mr-3"></i> Kit Delivered
                     </a>
                 </li>
                 <li>
@@ -743,11 +803,23 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <div id="order-pending-count" class="count">0</div>
                 <span class="accent-badge" style="background: #EEF2FF; color: #6366F1;">Active</span>
             </div>
-            <div id="card-shipping_kit_requested" data-status="shipping_kit_requested" class="dashboard-card" style="--icon-color: #8B5CF6;">
-                <i class="fas fa-box icon"></i>
-                <h3>Shipping Kit</h3>
-                <div id="shipping-kit-requested-count" class="count">0</div>
-                <span class="accent-badge" style="background: #F5F3FF; color: #8B5CF6;">In Progress</span>
+            <div id="card-kit_needs_printing" data-status="kit_needs_printing" class="dashboard-card" style="--icon-color: #8B5CF6;">
+                <i class="fas fa-print icon"></i>
+                <h3>Needs Printing</h3>
+                <div id="kit-needs-printing-count" class="count">0</div>
+                <span class="accent-badge" style="background: #F5F3FF; color: #8B5CF6;">Prep</span>
+            </div>
+            <div id="card-kit_sent" data-status="kit_sent" class="dashboard-card" style="--icon-color: #F97316;">
+                <i class="fas fa-truck-loading icon"></i>
+                <h3>Kit Sent</h3>
+                <div id="kit-sent-count" class="count">0</div>
+                <span class="accent-badge" style="background: #FFF7ED; color: #F97316;">On the Way</span>
+            </div>
+            <div id="card-kit_delivered" data-status="kit_delivered" class="dashboard-card" style="--icon-color: #10B981;">
+                <i class="fas fa-home icon"></i>
+                <h3>Kit Delivered</h3>
+                <div id="kit-delivered-count" class="count">0</div>
+                <span class="accent-badge" style="background: #ECFDF5; color: #10B981;">Delivered</span>
             </div>
             <div id="card-label_generated" data-status="label_generated" class="dashboard-card" style="--icon-color: #F59E0B;">
                 <i class="fas fa-file-invoice icon"></i>
@@ -849,6 +921,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
                 <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
                 <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
+
+                <div id="modal-kit-tracking-row" class="hidden bg-slate-50 border border-slate-200 rounded-md p-3 text-sm">
+                    <p class="font-semibold text-slate-700">Kit Delivery Status</p>
+                    <p id="modal-kit-tracking-status" class="mt-1 text-slate-600"></p>
+                    <p id="modal-kit-tracking-updated" class="mt-1 text-xs text-slate-500"></p>
+                </div>
 
                 <p id="modal-loading-message" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
             </div>
@@ -986,7 +1064,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         // Updated count elements
         const orderPendingCount = document.getElementById('order-pending-count');
-        const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count');
+        const kitNeedsPrintingCount = document.getElementById('kit-needs-printing-count');
+        const kitSentCount = document.getElementById('kit-sent-count');
+        const kitDeliveredCount = document.getElementById('kit-delivered-count');
         const labelGeneratedCount = document.getElementById('label-generated-count');
         const receivedCount = document.getElementById('received-count');
         const completedCount = document.getElementById('completed-count');
@@ -1030,6 +1110,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const modalReturnLabelDescription = document.getElementById('modal-return-label-description');
         const modalReturnLabelLink = document.getElementById('modal-return-label-link');
         const modalReturnTrackingNumberDisplay = document.getElementById('modal-return-tracking-number-display');
+        const modalKitTrackingRow = document.getElementById('modal-kit-tracking-row');
+        const modalKitTrackingStatus = document.getElementById('modal-kit-tracking-status');
+        const modalKitTrackingUpdated = document.getElementById('modal-kit-tracking-updated');
 
         const modalActionButtons = document.getElementById('modal-action-buttons');
         const modalLoadingMessage = document.getElementById('modal-loading-message');
@@ -1064,6 +1147,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         let allOrders = [];
         let currentActiveStatus = 'all';
         let refreshInterval = null;
+
+        window.addEventListener('message', (event) => {
+            if (!event.data || event.data.type !== 'kit-print-complete') {
+                return;
+            }
+            const printedOrderId = event.data.orderId;
+            if (!printedOrderId) {
+                return;
+            }
+            markKitAsPrinted(printedOrderId);
+        });
 
         orderDetailsModal.addEventListener('click', (event) => {
             if (event.target === orderDetailsModal) {
@@ -1181,197 +1275,101 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     console.warn("Could not load logo image:", e);
                 }
 
-                // 3. Create a custom packing slip PDF
+                // 3. Create a compact 4x6 packing slip PDF
                 const { PDFDocument, StandardFonts, rgb } = PDFLib;
                 const slip = await PDFDocument.create();
-                const pageWidth = 612; // 8.5 in
-                const pageHeight = 792; // 11 in
+                const pageWidth = 288; // 4 in
+                const pageHeight = 432; // 6 in
                 const page = slip.addPage([pageWidth, pageHeight]);
                 const font = await slip.embedFont(StandardFonts.Helvetica);
                 const boldFont = await slip.embedFont(StandardFonts.HelveticaBold);
-                
+
                 const c = order.shippingInfo || {};
                 const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
                 const finalPrice = order.reOffer?.newPrice || order.estimatedQuote || 0;
-                
-                // --- Drawing parameters ---
-                const PADDING = 40;
-                let y = pageHeight - PADDING;
-                const lineHeight = 15; // Tighter spacing for information blocks
-                const boxWidth = pageWidth - 2 * PADDING;
 
-                // Header: Title and Logo
+                const margin = 18;
+                let y = pageHeight - margin;
+
                 if (logoImage) {
-                    page.drawImage(logoImage, { x: PADDING, y: y - logoDims.height + 5, width: logoDims.width, height: logoDims.height });
+                    const scaledLogo = logoImage.scale(0.18);
+                    page.drawImage(logoImage, {
+                        x: margin,
+                        y: y - scaledLogo.height,
+                        width: scaledLogo.width,
+                        height: scaledLogo.height,
+                    });
+                    y -= scaledLogo.height + 6;
                 }
-                
-                // Calculate text positioning dynamically relative to logo
-                const logoOffset = logoImage ? logoDims.height / 2 : 15;
-                
-                page.drawText("PACKING SLIP / DOCUMENTATION", {
-                    x: (logoImage ? PADDING + logoDims.width + 10 : PADDING), 
-                    y: y - logoOffset,
-                    size: 18,
-                    font: boldFont, 
+
+                page.drawText('SecondHandCell Packing Slip', {
+                    x: margin,
+                    y,
+                    size: 12,
+                    font: boldFont,
                     color: rgb(0.1, 0.1, 0.1),
                 });
-                
-                page.drawText(`ORDER ID: ${order.id}`, { x: pageWidth - PADDING - 150, y: y - 30, size: 12, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
-                page.drawText(`DATE: ${formatDate(order.createdAt)}`, { x: pageWidth - PADDING - 150, y: y - 45, size: 12, font, color: rgb(0.3, 0.3, 0.3) });
-                
-                y -= 80;
-                
-                // --- Two-Column Layout for Details ---
-                const DETAIL_BOX_HEIGHT = 160;
-                const DETAIL_BOX_Y = y - DETAIL_BOX_HEIGHT;
-                const COLUMN_WIDTH = boxWidth / 2 - 5;
-                
-                // Outer Border
-                page.drawRectangle({
-                    x: PADDING, y: DETAIL_BOX_Y, width: boxWidth, height: DETAIL_BOX_HEIGHT,
-                    borderColor: rgb(0.7, 0.7, 0.7),
-                    borderWidth: 1,
-                    color: rgb(0.98, 0.98, 0.98),
-                });
-                
-                // Divider line (middle)
-                page.drawLine({
-                    start: { x: pageWidth / 2, y: DETAIL_BOX_Y },
-                    end: { x: pageWidth / 2, y: y },
-                    thickness: 1, color: rgb(0.7, 0.7, 0.7),
-                });
-                
-                // --- LEFT COLUMN: Customer Info (All Contacts) ---
-                let leftY = y - 10;
-                const leftX = PADDING + 10;
-                const lineSpacing = 15;
-                
-                page.drawText("CUSTOMER SHIPPING & CONTACTS", {
-                    x: leftX, y: leftY, size: 10, font: boldFont, color: rgb(0, 0.2, 0.6)
-                });
-                leftY -= 20;
+                y -= 14;
+                page.drawText(`Order: ${order.id}`, { x: margin, y, size: 9, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
+                page.drawText(`Date: ${formatDate(order.createdAt)}`, { x: margin + 140, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+                y -= 16;
+
+                const drawSection = (title, lines) => {
+                    page.drawText(title, { x: margin, y, size: 9, font: boldFont, color: rgb(0.2, 0.2, 0.6) });
+                    y -= 12;
+                    lines.forEach((line) => {
+                        page.drawText(line, { x: margin, y, size: 8, font, color: rgb(0.1, 0.1, 0.1) });
+                        y -= 11;
+                    });
+                    y -= 6;
+                };
 
                 const customerLines = [
-                    `Name: ${c.fullName || 'N/A'}`,
-                    `Email: ${c.email || 'N/A'}`,
-                    `Phone: ${c.phone || 'N/A'}`, // Added Phone
-                    `Address: ${c.streetAddress || ''}`,
-                    `${c.city || ''}, ${c.state || ''} ${c.zipCode || ''}`,
-                ];
-                
-                customerLines.forEach(line => {
-                    page.drawText(line, { x: leftX, y: leftY, size: 10, font, color: rgb(0.1, 0.1, 0.1) });
-                    leftY -= lineSpacing;
-                });
-                
-                // --- RIGHT COLUMN: Device & Payout Info (All Details) ---
-                let rightY = y - 10;
-                const rightX = pageWidth / 2 + 10;
-                const conditionXOffset = 100;
-                
-                page.drawText("DEVICE ATTRIBUTES & PAYOUT", {
-                    x: rightX, y: rightY, size: 10, font: boldFont, color: rgb(0.6, 0.2, 0)
-                });
-                rightY -= 20;
-                
-                // 1. Payment/Quote
-                page.drawText(`FINAL QUOTE: $${finalPrice.toFixed(2)}`, { x: rightX, y: rightY, size: 10, font: boldFont, color: rgb(0, 0.5, 0) });
-                rightY -= lineSpacing;
+                    c.fullName || 'Name: N/A',
+                    c.email ? `Email: ${c.email}` : 'Email: N/A',
+                    c.phone ? `Phone: ${c.phone}` : 'Phone: N/A',
+                    c.streetAddress ? `Addr: ${c.streetAddress}` : 'Addr: N/A',
+                    `${c.city || ''} ${c.state || ''} ${c.zipCode || ''}`.trim(),
+                ].filter(Boolean);
+                drawSection('Customer', customerLines);
 
-                page.drawText(`Payout Method:`, { x: rightX, y: rightY, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
-                page.drawText(order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A', { x: rightX + conditionXOffset, y: rightY, size: 10, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
-                rightY -= lineSpacing;
+                drawSection('Device & Quote', [
+                    `${(order.device || 'Device')} ${(order.storage || '')}`.trim(),
+                    `Carrier: ${order.carrier || 'N/A'}`,
+                    `Quote: $${finalPrice.toFixed(2)}`,
+                    `Payment: ${order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A'}`,
+                ]);
 
-                if (order.paymentMethod === 'venmo' && order.paymentDetails?.venmoUsername) {
-                    page.drawText(`Venmo User:`, { x: rightX, y: rightY, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
-                    page.drawText(`@${order.paymentDetails.venmoUsername}`, { x: rightX + conditionXOffset, y: rightY, size: 10, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
-                    rightY -= lineSpacing;
-                }
-                
-                rightY -= 5;
-                page.drawText("CUSTOMER REPORTED CONDITIONS:", { x: rightX, y: rightY, size: 10, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
-                rightY -= 15;
-                
-                // 2. Conditions
-                const conditionFields = [
-                    { label: "Powers On:", value: order.condition_power_on },
-                    { label: "Fully Functional:", value: order.condition_functional },
-                    { label: "No Cracks:", value: order.condition_cracks },
-                    { label: "Cosmetic Grade:", value: order.condition_cosmetic },
-                ];
-                
-                conditionFields.forEach(field => {
-                    const statusText = field.value ? formatCondition(field.value) : 'N/A';
-                    page.drawText(field.label, { x: rightX, y: rightY, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
-                    page.drawText(statusText, { x: rightX + conditionXOffset, y: rightY, size: 10, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
-                    rightY -= lineSpacing;
-                });
-                
-                y = DETAIL_BOX_Y - 20; // Reposition the flow pointer
+                drawSection('Condition Summary', [
+                    `Power: ${order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A'}`,
+                    `Functional: ${order.condition_functional ? formatCondition(order.condition_functional) : 'N/A'}`,
+                    `Cracks: ${order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A'}`,
+                    `Cosmetic: ${order.condition_cosmetic ? formatCondition(order.condition_cosmetic) : 'N/A'}`,
+                ]);
 
-                // --- Order Summary Table (Repositioned) ---
-                const TABLE_START_Y = y;
-                const TABLE_ROW_HEIGHT = 25;
-                const HEADER_Y = TABLE_START_Y - 15;
-                
-                // Table Headers
-                page.drawRectangle({
-                    x: PADDING, y: TABLE_START_Y - TABLE_ROW_HEIGHT, width: boxWidth, height: TABLE_ROW_HEIGHT,
-                    color: rgb(0.9, 0.95, 1),
-                });
-                
-                page.drawText("ITEM", { x: PADDING + 10, y: HEADER_Y, size: 12, font: boldFont, color: rgb(0, 0.2, 0.6) });
-                page.drawText("CARRIER", { x: PADDING + 300, y: HEADER_Y, size: 12, font: boldFont, color: rgb(0, 0.2, 0.6) });
-                page.drawText("QUOTE", { x: PADDING + boxWidth - 80, y: HEADER_Y, size: 12, font: boldFont, color: rgb(0, 0.2, 0.6) });
-
-                // Table Content
-                const contentY = TABLE_START_Y - 2 * TABLE_ROW_HEIGHT;
-                page.drawText(`${order.device} ${order.storage}`, { x: PADDING + 10, y: contentY + 10, size: 12, font, color: rgb(0.1, 0.1, 0.1) });
-                page.drawText(order.carrier || 'N/A', { x: PADDING + 300, y: contentY + 10, size: 12, font, color: rgb(0.1, 0.1, 0.1) });
-                page.drawText(`$${finalPrice.toFixed(2)}`, { x: PADDING + boxWidth - 80, y: contentY + 10, size: 12, font, color: rgb(0.1, 0.1, 0.1) });
-
-                // Table Borders (Internal)
-                page.drawLine({
-                    start: { x: PADDING, y: TABLE_START_Y - TABLE_ROW_HEIGHT },
-                    end: { x: pageWidth - PADDING, y: TABLE_START_Y - TABLE_ROW_HEIGHT },
-                    thickness: 1, color: rgb(0.7, 0.7, 0.7),
-                });
-                page.drawLine({
-                    start: { x: PADDING, y: contentY },
-                    end: { x: pageWidth - PADDING, y: contentY },
-                    thickness: 1, color: rgb(0.7, 0.7, 0.7),
-                });
-                
-                y = contentY - 30;
-
-                // --- Instructions ---
-                page.drawText("SHIPPING DOCUMENTS INCLUDED", {
-                    x: PADDING, y: y, size: 14, font: boldFont, color: rgb(0.1, 0.1, 0.1)
-                });
-                y -= 20;
-                
-                const instructions = isKitOrder
+                const instructionLines = isKitOrder
                     ? [
-                        "1. OUTBOUND LABEL: For shipping the empty kit to the customer (Page 1).",
-                        "2. INBOUND LABEL: For the customer to use when shipping the device back to us (Page 2).",
-                        "3. PACKING SLIP: This document - place it inside the kit package.",
+                        '1. OUTBOUND LABEL: affix to the empty kit (page 1).',
+                        '2. INBOUND LABEL: stays inside the kit for the customer (page 2).',
+                        '3. PACKING SLIP: include this slip with the kit.',
                     ]
                     : [
-                        "1. SHIPPING LABEL: For the customer to use when shipping the device to us (Page 1).",
-                        "2. PACKING SLIP: This document - place it inside the shipping package.",
+                        '1. SHIPPING LABEL: provide to customer (page 1).',
+                        '2. PACKING SLIP: include inside the shipment.',
                     ];
-                    
-                instructions.forEach(line => {
-                    page.drawText(line, { x: PADDING + 5, y: y, size: 12, font, color: rgb(0.3, 0.3, 0.3) });
-                    y -= lineHeight;
-                });
+                drawSection('Instructions', instructionLines);
 
-                // Footer Note
-                page.drawText("Thank you for choosing SecondHandCell! Please include this document with your shipment.", {
-                    x: PADDING, y: 50, size: 10, font: boldFont, color: rgb(0.5, 0.5, 0.5),
+                page.drawText('Thank you for choosing SecondHandCell!', {
+                    x: margin,
+                    y,
+                    size: 8,
+                    font: boldFont,
+                    color: rgb(0.4, 0.4, 0.4),
                 });
 
                 const packingBytes = await slip.save();
+
+
 
                 // 4. Merge all three PDFs
                 const mergedPdf = await PDFDocument.create();
@@ -1397,15 +1395,53 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 const copiedPacking = await mergedPdf.copyPages(packingPdfToMerge, packingPdfToMerge.getPageIndices());
                 copiedPacking.forEach(p => mergedPdf.addPage(p));
 
-                // 5. Display merged PDF in new tab
+                // 5. Display merged PDF in a dedicated print window
                 const mergedBytes = await mergedPdf.save();
                 const blob = new Blob([mergedBytes], { type: "application/pdf" });
                 const url = URL.createObjectURL(blob);
-                
-                window.open(url, "_blank"); // Open in a new tab for printing/viewing
-                
+
+                  const printWindow = window.open('', `print-${order.id}`, 'width=420,height=640');
+                  if (printWindow) {
+                      try {
+                          printWindow.focus();
+                      } catch (focusError) {
+                          console.warn('Unable to focus print window:', focusError);
+                      }
+                      printWindow.document.write(`<!DOCTYPE html>
+  <html><head><title>Print Kit ${order.id}</title>
+  <style>html,body{margin:0;height:100%;background:#0f172a;color:#fff;font-family:Arial, sans-serif;}iframe{width:100%;height:100%;border:0;}</style>
+  </head><body>
+  <iframe id="print-frame"></iframe>
+<script>
+const pdfUrl = ${JSON.stringify(url)};
+const shouldNotify = ${order.shippingPreference === 'Shipping Kit Requested'};
+const orderId = ${JSON.stringify(order.id)};
+const frame = document.getElementById('print-frame');
+frame.addEventListener('load', () => {
+  const frameWindow = frame.contentWindow;
+  if (!frameWindow) return;
+  frameWindow.focus();
+  frameWindow.print();
+});
+frame.src = pdfUrl;
+window.onafterprint = () => {
+  if (shouldNotify && window.opener) {
+    window.opener.postMessage({ type: 'kit-print-complete', orderId }, '*');
+  }
+  setTimeout(() => window.close(), 300);
+};
+  </script>
+  </body></html>`);
+                      printWindow.document.close();
+                  } else {
+                      displayModalMessage('Pop-up blocked. Allow pop-ups for this site to print shipping kits automatically.', 'error');
+                      window.open(url, '_blank');
+                  }
+
+                setTimeout(() => URL.revokeObjectURL(url), 60000);
+
                 // Show success message and re-enable buttons
-                displayModalMessage('Merged document (Labels + Slip) generated and opened in a new tab!', 'success');
+                displayModalMessage('Merged document (Labels + Slip) generated. Printing window opened.', 'success');
                 renderActionButtons(order);
 
             } catch (error) {
@@ -1420,7 +1456,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         function updateDashboardCounts(ordersData) {
             // Updated to 'order_pending'
             orderPendingCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
-            shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length;
+            kitNeedsPrintingCount.textContent = ordersData.filter(o => ['kit_needs_printing', 'shipping_kit_requested'].includes(o.status)).length;
+            kitSentCount.textContent = ordersData.filter(o => o.status === 'kit_sent').length;
+            kitDeliveredCount.textContent = ordersData.filter(o => o.status === 'kit_delivered').length;
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
             receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
             completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
@@ -1516,16 +1554,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             if (status === 'order_pending') {
                 return 'Order Pending';
             }
-            if (status === 'shipping_kit_requested') {
-                return 'Shipping Kit Requested';
+            if (status === 'shipping_kit_requested' || status === 'kit_needs_printing') {
+                return 'Needs Printing';
+            }
+            if (status === 'kit_sent') {
+                return 'Kit Sent';
+            }
+            if (status === 'kit_delivered') {
+                return 'Kit Delivered';
             }
             if (status === 'label_generated') {
                 // If the user requested an emailed label, display "Label Generated"
                 if (preference === 'Email Label Requested') {
                     return 'Label Generated';
                 }
-                // Otherwise (for Shipping Kit Requested), display "Shipping Kit on the Way"
-                return 'Shipping Kit on the Way';
+                // Otherwise (for Shipping Kit Requested), display "Kit Sent"
+                return 'Kit Sent';
             }
             // Fallback for other statuses
             return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -1538,7 +1582,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         function getStatusClass(status) {
             switch (status) {
                 case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble'; 
-                case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble';
+                case 'shipping_kit_requested':
+                case 'kit_needs_printing':
+                    return 'bg-indigo-100 text-indigo-800 status-bubble';
+                case 'kit_sent':
+                    return 'bg-orange-100 text-orange-800 status-bubble';
+                case 'kit_delivered':
+                    return 'bg-emerald-100 text-emerald-800 status-bubble';
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
@@ -1566,6 +1616,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             modalLabelRow.classList.add('hidden');
             modalSecondaryLabelRow.classList.add('hidden');
             modalReturnLabelRow.classList.add('hidden');
+            modalKitTrackingRow.classList.add('hidden');
 
             orderDetailsModal.classList.remove('hidden');
 
@@ -1645,8 +1696,19 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         modalSecondaryLabelDescription.textContent = 'Inbound Device Label (PDF)';
                         modalSecondaryLabelRow.classList.remove('hidden');
                     }
-                
-                } 
+
+                    const kitTrackingStatus = order.kitTrackingStatus;
+                    if (kitTrackingStatus && (kitTrackingStatus.statusDescription || kitTrackingStatus.statusCode)) {
+                        modalKitTrackingStatus.textContent = kitTrackingStatus.statusDescription || kitTrackingStatus.statusCode;
+                        modalKitTrackingUpdated.textContent = kitTrackingStatus.lastUpdated ? `Last update: ${formatDate(kitTrackingStatus.lastUpdated)}` : '';
+                        modalKitTrackingRow.classList.remove('hidden');
+                    } else if (order.outboundTrackingNumber) {
+                        modalKitTrackingStatus.textContent = 'Kit tracking available. Refresh to see the latest scans.';
+                        modalKitTrackingUpdated.textContent = '';
+                        modalKitTrackingRow.classList.remove('hidden');
+                    }
+
+                }
                 
                 // 2. Email Label Requested (single USPS label/inbound label)
                 else if (order.shippingPreference === 'Email Label Requested') {
@@ -1684,8 +1746,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 renderActionButtons(order);
                 modalActionButtons.classList.remove('hidden');
                 
-                // Show reminder button only for label_generated orders
-                if (order.status === 'label_generated') {
+                // Show reminder button for orders awaiting kit actions or label generation
+                if (['order_pending', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'label_generated'].includes(order.status)) {
                     sendReminderBtn.classList.remove('hidden');
                     sendReminderBtn.onclick = () => handleSendReminder(order.id);
                 }
@@ -1711,10 +1773,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             const currentStatus = order.status;
             switch (currentStatus) {
-                case 'order_pending': 
+                case 'order_pending':
                 case 'shipping_kit_requested':
+                case 'kit_needs_printing':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700')); // NEW Manual Fulfillment Button
+                    break;
+                case 'kit_sent':
+                    modalActionButtons.appendChild(createButton('Refresh Kit Tracking', () => handleAction(order.id, 'refreshKitTracking'), 'bg-orange-600 hover:bg-orange-700'));
+                    break;
+                case 'kit_delivered':
+                    modalActionButtons.appendChild(createButton('Refresh Kit Tracking', () => handleAction(order.id, 'refreshKitTracking'), 'bg-emerald-600 hover:bg-emerald-700'));
+                    modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;
                 case 'label_generated':
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
@@ -1747,9 +1817,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             const inboundLabelUrl = order.inboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
             
             // Only show if we have the necessary components
-            if ((order.status === 'label_generated' || order.status === 'shipping_kit_requested') && outboundLabelUrl && inboundLabelUrl) {
-                const slipButtonText = order.shippingPreference === 'Shipping Kit Requested' 
-                    ? 'Print Kit Docs (Outbound + Inbound + Slip)' 
+            const printEligibleStatuses = ['label_generated', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent'];
+            if (printEligibleStatuses.includes(order.status) && outboundLabelUrl && inboundLabelUrl) {
+                const slipButtonText = order.shippingPreference === 'Shipping Kit Requested'
+                    ? 'Print Kit Docs (Outbound + Inbound + Slip)'
                     : 'Print Document (Label + Slip)';
                 
                 // Create the button and insert it at the beginning of the action list
@@ -1955,9 +2026,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         modalActionButtons.classList.remove('hidden');
                         return;
                     case 'sendReturnLabel':
-                         url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
-                         method = 'POST';
-                         break;
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
+                        method = 'POST';
+                        break;
+                    case 'refreshKitTracking':
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/refresh-kit-tracking`;
+                        method = 'POST';
+                        break;
                     case 'deleteOrder': // NEW: Delete Order Logic
                         url = `${BACKEND_BASE_URL}/orders/${orderId}`;
                         method = 'DELETE';
@@ -1996,6 +2071,25 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             } finally {
                 modalLoadingMessage.classList.add('hidden');
                 modalActionButtons.classList.remove('hidden');
+            }
+        }
+
+        async function markKitAsPrinted(orderId) {
+            try {
+                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-printed`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to update kit status');
+                }
+
+                if (modalOrderId.textContent === orderId) {
+                    displayModalMessage(result.message, 'success');
+                    openOrderDetailsModal(orderId);
+                }
+            } catch (error) {
+                console.error('Failed to mark kit as printed:', error);
             }
         }
 
@@ -2129,7 +2223,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         const ordersRef = collection(db, 'orders');
                         const q = query(
                             ordersRef,
-                            where('status', 'in', ['order_pending', 'shipping_kit_requested']),
+                            where('status', 'in', ['order_pending', 'shipping_kit_requested', 'kit_needs_printing']),
                             orderBy('createdAt', 'desc'),
                             limit(5)
                         );
@@ -2139,7 +2233,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                             notificationList.innerHTML = '';
                             
                             if (snapshot.empty) {
-                                notificationList.innerHTML = '<div class="notification-item" style="text-align: center; color: #94a3b8;"><p>No new notifications</p></div>';
+                                const emptyState = document.createElement('div');
+                                emptyState.className = 'notification-item notification-empty';
+                                const emptyCopy = document.createElement('p');
+                                emptyCopy.textContent = 'No new notifications';
+                                emptyState.appendChild(emptyCopy);
+                                notificationList.appendChild(emptyState);
                                 return;
                             }
                             
@@ -2154,19 +2253,41 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                                 
                                 const statusText = order.status === 'order_pending' ? 'New Order' : 'Kit Requested';
                                 const statusColor = order.status === 'order_pending' ? '#3b82f6' : '#8b5cf6';
-                                
-                                item.innerHTML = `
-                                    <div style="display: flex; justify-content: space-between; align-items: start;">
-                                        <div style="flex: 1;">
-                                            <p style="font-weight: 600; color: #0f172a; margin-bottom: 4px;">${order.shippingInfo?.fullName || 'Unknown Customer'}</p>
-                                            <p style="font-size: 13px; color: #64748b; margin-bottom: 4px;">${order.device || 'Device'} - ${order.storage || 'Unknown'}</p>
-                                            <p style="font-size: 12px; color: ${statusColor}; font-weight: 600;">${statusText}</p>
-                                        </div>
-                                        <div style="text-align: right;">
-                                            <p style="font-size: 12px; color: #94a3b8;">${doc.id.substring(0, 8)}...</p>
-                                        </div>
-                                    </div>
-                                `;
+
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'notification-layout';
+
+                                const infoContainer = document.createElement('div');
+                                infoContainer.className = 'notification-copy';
+
+                                const nameText = document.createElement('p');
+                                nameText.className = 'notification-name';
+                                nameText.textContent = order.shippingInfo?.fullName || 'Unknown Customer';
+
+                                const deviceText = document.createElement('p');
+                                deviceText.className = 'notification-device';
+                                const deviceLabel = order.device || 'Device';
+                                const storageLabel = order.storage || 'Unknown';
+                                deviceText.textContent = `${deviceLabel} - ${storageLabel}`;
+
+                                const statusPill = document.createElement('p');
+                                statusPill.className = 'notification-status';
+                                statusPill.style.color = statusColor;
+                                statusPill.textContent = statusText;
+
+                                infoContainer.appendChild(nameText);
+                                infoContainer.appendChild(deviceText);
+                                infoContainer.appendChild(statusPill);
+
+                                const idContainer = document.createElement('div');
+                                idContainer.className = 'notification-meta';
+                                const idText = document.createElement('p');
+                                idText.textContent = `${doc.id.substring(0, 8)}...`;
+                                idContainer.appendChild(idText);
+
+                                wrapper.appendChild(infoContainer);
+                                wrapper.appendChild(idContainer);
+                                item.appendChild(wrapper);
                                 notificationList.appendChild(item);
                             });
                         });
@@ -2216,7 +2337,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             let filtered = allOrders;
 
             if (status !== 'all') {
-                filtered = filtered.filter(order => order.status === status);
+                if (status === 'kit_needs_printing') {
+                    filtered = filtered.filter(order => ['kit_needs_printing', 'shipping_kit_requested'].includes(order.status));
+                } else {
+                    filtered = filtered.filter(order => order.status === status);
+                }
             }
 
             if (searchTerm) {

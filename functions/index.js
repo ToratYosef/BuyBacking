@@ -599,7 +599,10 @@ async function createShipEngineLabel(fromAddress, toAddress, labelReference, pac
 
 function formatStatusForEmail(status) {
   if (status === "order_pending") return "Order Pending";
-  if (status === "shipping_kit_requested") return "Shipping Kit Requested";
+  if (status === "shipping_kit_requested" || status === "kit_needs_printing")
+    return "Needs Printing";
+  if (status === "kit_sent") return "Kit Sent";
+  if (status === "kit_delivered") return "Kit Delivered";
   return status
     .replace(/_/g, " ")
     .split(" ")
