@@ -16,14 +16,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
         <script>
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
         
-          gtag('config', 'AW-17534255111');
-          gtag('config', 'G-8JYPJDKSP8');
+            gtag('config', 'AW-17534255111');
+            gtag('config', 'G-8JYPJDKSP8');
         </script>
-
+    <!-- PDF-LIB LIBRARY FOR PDF GENERATION AND MERGING -->
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap');
@@ -575,7 +576,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         .loading-screen {
             position: fixed;
             inset: 0;
-            background: #f5f6f8;
+            background: #F5F6F8;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -961,6 +962,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         
         // Corrected to include the base path for Cloud Functions
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+        
+        // Custom logo URL for the packing slip header - UPDATED LOGO URL
+        const LOGO_URL = "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
@@ -1081,7 +1085,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             // 1. Check for the native Firestore Timestamp object {_seconds, _nanoseconds}
             if (typeof timestamp === 'object' && timestamp.seconds && typeof timestamp.seconds === 'number') {
-                 // Use .seconds property (Firestore convention)
+                // Use .seconds property (Firestore convention)
                 date = new Date(timestamp.seconds * 1000);
             } else if (typeof timestamp === 'object' && timestamp._seconds && typeof timestamp._seconds === 'number') {
                 // Use ._seconds property (Common legacy or specific SDK behavior)
@@ -1101,6 +1105,317 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             // Format to the desired long date string: "Month Day, Year"
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         }
+        
+        /**
+         * Generates and merges the custom packing slip with the ShipEngine labels.
+         * This function now uses the backend proxy to fetch PDF data.
+         * @param {Object} order - The full order object.
+         */
+        async function generateAndMergeShippingDocument(order) {
+            // Determine which labels to use based on shipping preference
+            const outboundUrl = order.outboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
+            const inboundUrl = order.inboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
+            
+            if (!outboundUrl || !inboundUrl) {
+                displayModalMessage("Missing required label URLs to generate merged document.", 'error');
+                return;
+            }
+            
+            modalLoadingMessage.classList.remove('hidden');
+            modalActionButtons.classList.add('hidden');
+            displayModalMessage('Fetching labels and generating packing slip...', 'info');
+
+            try {
+                // --- FETCH PDFs via Proxy ---
+                // Function to fetch PDF data as ArrayBuffer via the Cloud Function proxy
+                const fetchPdfProxy = async (url) => {
+                    if (!url) throw new Error("URL is null or empty.");
+                    
+                    const response = await fetch(`${BACKEND_BASE_URL}/fetch-pdf`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: url })
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `Failed to fetch PDF from proxy. Status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    // Decode Base64 back to ArrayBuffer
+                    const binaryString = atob(result.base64);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    return bytes.buffer;
+                };
+
+                // 1. Fetch ShipEngine labels using the proxy
+                const [outboundBytes, inboundBytes] = await Promise.all([
+                    fetchPdfProxy(outboundUrl),
+                    fetchPdfProxy(inboundUrl),
+                ]);
+
+                // 2. Fetch Logo (optional)
+                let logoImage = null;
+                let logoDims = { width: 0, height: 0 };
+                try {
+                    // This logo retrieval is done client-side since it's a generic public URL
+                    const logoResponse = await fetch(LOGO_URL);
+                    if (!logoResponse.ok) throw new Error("Logo fetch failed");
+                    
+                    const logoArrayBuffer = await logoResponse.arrayBuffer();
+                    
+                    // Embed image in a new PDFDocument temporarily to get the image object
+                    const tempPdf = await PDFLib.PDFDocument.create();
+                    const mimeType = LOGO_URL.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+                    
+                    logoImage = mimeType === 'image/png' 
+                        ? await tempPdf.embedPng(logoArrayBuffer) 
+                        : await tempPdf.embedJpg(logoArrayBuffer);
+                        
+                    logoDims = logoImage.scale(0.3); // Scale factor
+                } catch (e) {
+                    console.warn("Could not load logo image:", e);
+                }
+
+                // 3. Create a custom packing slip PDF
+                const { PDFDocument, StandardFonts, rgb } = PDFLib;
+                const slip = await PDFDocument.create();
+                const pageWidth = 612; // 8.5 in
+                const pageHeight = 792; // 11 in
+                const page = slip.addPage([pageWidth, pageHeight]);
+                const font = await slip.embedFont(StandardFonts.Helvetica);
+                const boldFont = await slip.embedFont(StandardFonts.HelveticaBold);
+                
+                const c = order.shippingInfo || {};
+                const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
+                const finalPrice = order.reOffer?.newPrice || order.estimatedQuote || 0;
+                
+                // --- Drawing parameters ---
+                const PADDING = 40;
+                let y = pageHeight - PADDING;
+                const lineHeight = 15; // Tighter spacing for information blocks
+                const boxWidth = pageWidth - 2 * PADDING;
+
+                // Header: Title and Logo
+                if (logoImage) {
+                    page.drawImage(logoImage, { x: PADDING, y: y - logoDims.height + 5, width: logoDims.width, height: logoDims.height });
+                }
+                
+                // Calculate text positioning dynamically relative to logo
+                const logoOffset = logoImage ? logoDims.height / 2 : 15;
+                
+                page.drawText("PACKING SLIP / DOCUMENTATION", {
+                    x: (logoImage ? PADDING + logoDims.width + 10 : PADDING), 
+                    y: y - logoOffset,
+                    size: 18,
+                    font: boldFont, 
+                    color: rgb(0.1, 0.1, 0.1),
+                });
+                
+                page.drawText(`ORDER ID: ${order.id}`, { x: pageWidth - PADDING - 150, y: y - 30, size: 12, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
+                page.drawText(`DATE: ${formatDate(order.createdAt)}`, { x: pageWidth - PADDING - 150, y: y - 45, size: 12, font, color: rgb(0.3, 0.3, 0.3) });
+                
+                y -= 80;
+                
+                // --- Two-Column Layout for Details ---
+                const DETAIL_BOX_HEIGHT = 160;
+                const DETAIL_BOX_Y = y - DETAIL_BOX_HEIGHT;
+                const COLUMN_WIDTH = boxWidth / 2 - 5;
+                
+                // Outer Border
+                page.drawRectangle({
+                    x: PADDING, y: DETAIL_BOX_Y, width: boxWidth, height: DETAIL_BOX_HEIGHT,
+                    borderColor: rgb(0.7, 0.7, 0.7),
+                    borderWidth: 1,
+                    color: rgb(0.98, 0.98, 0.98),
+                });
+                
+                // Divider line (middle)
+                page.drawLine({
+                    start: { x: pageWidth / 2, y: DETAIL_BOX_Y },
+                    end: { x: pageWidth / 2, y: y },
+                    thickness: 1, color: rgb(0.7, 0.7, 0.7),
+                });
+                
+                // --- LEFT COLUMN: Customer Info (All Contacts) ---
+                let leftY = y - 10;
+                const leftX = PADDING + 10;
+                const lineSpacing = 15;
+                
+                page.drawText("CUSTOMER SHIPPING & CONTACTS", {
+                    x: leftX, y: leftY, size: 10, font: boldFont, color: rgb(0, 0.2, 0.6)
+                });
+                leftY -= 20;
+
+                const customerLines = [
+                    `Name: ${c.fullName || 'N/A'}`,
+                    `Email: ${c.email || 'N/A'}`,
+                    `Phone: ${c.phone || 'N/A'}`, // Added Phone
+                    `Address: ${c.streetAddress || ''}`,
+                    `${c.city || ''}, ${c.state || ''} ${c.zipCode || ''}`,
+                ];
+                
+                customerLines.forEach(line => {
+                    page.drawText(line, { x: leftX, y: leftY, size: 10, font, color: rgb(0.1, 0.1, 0.1) });
+                    leftY -= lineSpacing;
+                });
+                
+                // --- RIGHT COLUMN: Device & Payout Info (All Details) ---
+                let rightY = y - 10;
+                const rightX = pageWidth / 2 + 10;
+                const conditionXOffset = 100;
+                
+                page.drawText("DEVICE ATTRIBUTES & PAYOUT", {
+                    x: rightX, y: rightY, size: 10, font: boldFont, color: rgb(0.6, 0.2, 0)
+                });
+                rightY -= 20;
+                
+                // 1. Payment/Quote
+                page.drawText(`FINAL QUOTE: $${finalPrice.toFixed(2)}`, { x: rightX, y: rightY, size: 10, font: boldFont, color: rgb(0, 0.5, 0) });
+                rightY -= lineSpacing;
+
+                page.drawText(`Payout Method:`, { x: rightX, y: rightY, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
+                page.drawText(order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A', { x: rightX + conditionXOffset, y: rightY, size: 10, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
+                rightY -= lineSpacing;
+
+                if (order.paymentMethod === 'venmo' && order.paymentDetails?.venmoUsername) {
+                    page.drawText(`Venmo User:`, { x: rightX, y: rightY, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
+                    page.drawText(`@${order.paymentDetails.venmoUsername}`, { x: rightX + conditionXOffset, y: rightY, size: 10, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
+                    rightY -= lineSpacing;
+                }
+                
+                rightY -= 5;
+                page.drawText("CUSTOMER REPORTED CONDITIONS:", { x: rightX, y: rightY, size: 10, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
+                rightY -= 15;
+                
+                // 2. Conditions
+                const conditionFields = [
+                    { label: "Powers On:", value: order.condition_power_on },
+                    { label: "Fully Functional:", value: order.condition_functional },
+                    { label: "No Cracks:", value: order.condition_cracks },
+                    { label: "Cosmetic Grade:", value: order.condition_cosmetic },
+                ];
+                
+                conditionFields.forEach(field => {
+                    const statusText = field.value ? formatCondition(field.value) : 'N/A';
+                    page.drawText(field.label, { x: rightX, y: rightY, size: 10, font, color: rgb(0.3, 0.3, 0.3) });
+                    page.drawText(statusText, { x: rightX + conditionXOffset, y: rightY, size: 10, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
+                    rightY -= lineSpacing;
+                });
+                
+                y = DETAIL_BOX_Y - 20; // Reposition the flow pointer
+
+                // --- Order Summary Table (Repositioned) ---
+                const TABLE_START_Y = y;
+                const TABLE_ROW_HEIGHT = 25;
+                const HEADER_Y = TABLE_START_Y - 15;
+                
+                // Table Headers
+                page.drawRectangle({
+                    x: PADDING, y: TABLE_START_Y - TABLE_ROW_HEIGHT, width: boxWidth, height: TABLE_ROW_HEIGHT,
+                    color: rgb(0.9, 0.95, 1),
+                });
+                
+                page.drawText("ITEM", { x: PADDING + 10, y: HEADER_Y, size: 12, font: boldFont, color: rgb(0, 0.2, 0.6) });
+                page.drawText("CARRIER", { x: PADDING + 300, y: HEADER_Y, size: 12, font: boldFont, color: rgb(0, 0.2, 0.6) });
+                page.drawText("QUOTE", { x: PADDING + boxWidth - 80, y: HEADER_Y, size: 12, font: boldFont, color: rgb(0, 0.2, 0.6) });
+
+                // Table Content
+                const contentY = TABLE_START_Y - 2 * TABLE_ROW_HEIGHT;
+                page.drawText(`${order.device} ${order.storage}`, { x: PADDING + 10, y: contentY + 10, size: 12, font, color: rgb(0.1, 0.1, 0.1) });
+                page.drawText(order.carrier || 'N/A', { x: PADDING + 300, y: contentY + 10, size: 12, font, color: rgb(0.1, 0.1, 0.1) });
+                page.drawText(`$${finalPrice.toFixed(2)}`, { x: PADDING + boxWidth - 80, y: contentY + 10, size: 12, font, color: rgb(0.1, 0.1, 0.1) });
+
+                // Table Borders (Internal)
+                page.drawLine({
+                    start: { x: PADDING, y: TABLE_START_Y - TABLE_ROW_HEIGHT },
+                    end: { x: pageWidth - PADDING, y: TABLE_START_Y - TABLE_ROW_HEIGHT },
+                    thickness: 1, color: rgb(0.7, 0.7, 0.7),
+                });
+                page.drawLine({
+                    start: { x: PADDING, y: contentY },
+                    end: { x: pageWidth - PADDING, y: contentY },
+                    thickness: 1, color: rgb(0.7, 0.7, 0.7),
+                });
+                
+                y = contentY - 30;
+
+                // --- Instructions ---
+                page.drawText("SHIPPING DOCUMENTS INCLUDED", {
+                    x: PADDING, y: y, size: 14, font: boldFont, color: rgb(0.1, 0.1, 0.1)
+                });
+                y -= 20;
+                
+                const instructions = isKitOrder
+                    ? [
+                        "1. OUTBOUND LABEL: For shipping the empty kit to the customer (Page 1).",
+                        "2. INBOUND LABEL: For the customer to use when shipping the device back to us (Page 2).",
+                        "3. PACKING SLIP: This document - place it inside the kit package.",
+                    ]
+                    : [
+                        "1. SHIPPING LABEL: For the customer to use when shipping the device to us (Page 1).",
+                        "2. PACKING SLIP: This document - place it inside the shipping package.",
+                    ];
+                    
+                instructions.forEach(line => {
+                    page.drawText(line, { x: PADDING + 5, y: y, size: 12, font, color: rgb(0.3, 0.3, 0.3) });
+                    y -= lineHeight;
+                });
+
+                // Footer Note
+                page.drawText("Thank you for choosing SecondHandCell! Please include this document with your shipment.", {
+                    x: PADDING, y: 50, size: 10, font: boldFont, color: rgb(0.5, 0.5, 0.5),
+                });
+
+                const packingBytes = await slip.save();
+
+                // 4. Merge all three PDFs
+                const mergedPdf = await PDFDocument.create();
+                
+                // Add ShipEngine label pages first
+                const labelBytesArray = [];
+                // If it's a kit order, add outbound then inbound
+                if (isKitOrder) {
+                    labelBytesArray.push(outboundBytes, inboundBytes);
+                } else {
+                    // If it's an email label, both URLs point to the same label, so only add once
+                    labelBytesArray.push(outboundBytes); 
+                }
+                
+                for (const bytes of labelBytesArray) {
+                    const pdf = await PDFLib.PDFDocument.load(bytes);
+                    const copied = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                    copied.forEach(p => mergedPdf.addPage(p));
+                }
+                
+                // Add the custom packing slip last
+                const packingPdfToMerge = await PDFLib.PDFDocument.load(packingBytes);
+                const copiedPacking = await mergedPdf.copyPages(packingPdfToMerge, packingPdfToMerge.getPageIndices());
+                copiedPacking.forEach(p => mergedPdf.addPage(p));
+
+                // 5. Display merged PDF in new tab
+                const mergedBytes = await mergedPdf.save();
+                const blob = new Blob([mergedBytes], { type: "application/pdf" });
+                const url = URL.createObjectURL(blob);
+                
+                window.open(url, "_blank"); // Open in a new tab for printing/viewing
+                
+                // Show success message and re-enable buttons
+                displayModalMessage('Merged document (Labels + Slip) generated and opened in a new tab!', 'success');
+                renderActionButtons(order);
+
+            } catch (error) {
+                console.error("Error during PDF generation and merging:", error);
+                displayModalMessage(`Failed to generate PDF document: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
+        }
+
 
         function updateDashboardCounts(ordersData) {
             // Updated to 'order_pending'
@@ -1170,8 +1485,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <td class="px-3 py-4 whitespace-normal text-sm text-gray-500">${itemDescription}</td>
                     <td class="px-3 py-4 whitespace-normal text-sm">
                         <span class="${getStatusClass(order.status)}">
-                           <span class="status-bubble-text">${statusText}</span>
-                           ${reofferTimer}
+                            <span class="status-bubble-text">${statusText}</span>
+                            ${reofferTimer}
                         </span>
                     </td>
                     <td class="px-3 py-4 whitespace-normal text-sm text-gray-500">${trackingCellContent}</td>
@@ -1324,7 +1639,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         modalSecondaryLabelDescription.textContent = 'Inbound Device Label';
                         modalSecondaryLabelRow.classList.remove('hidden');
                     } else if (order.inboundLabelUrl) {
-                         // Fallback: if no tracking number, but PDF link exists
+                           // Fallback: if no tracking number, but PDF link exists
                         modalSecondaryLabelLink.href = order.inboundLabelUrl;
                         modalSecondaryTrackingNumberDisplay.textContent = 'N/A';
                         modalSecondaryLabelDescription.textContent = 'Inbound Device Label (PDF)';
@@ -1411,8 +1726,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 case 're-offered-pending':
                     if (order.reOffer && order.reOffer.newPrice) {
                         const reOfferDiv = document.createElement('div');
-                        reOfferDiv.className = 'p-3 bg-gray-100 rounded-md';
-                        reOfferDiv.innerHTML = `<p><strong>Proposed New Price:</strong> $${order.reOffer.newPrice.toFixed(2)}</p><p><strong>Reasons:</strong> ${order.reOffer.reasons.join(', ')}</p><p><strong>Comments:</strong> ${order.reOffer.comments}</p>`;
+                        reOfferDiv.className = 'p-3 bg-gray-100 rounded-md w-full';
+                        reOfferDiv.innerHTML = `<p class="text-sm"><strong>Proposed New Price:</strong> $${order.reOffer.newPrice.toFixed(2)}</p><p class="text-sm"><strong>Reasons:</strong> ${order.reOffer.reasons.join(', ')}</p><p class="text-sm"><strong>Comments:</strong> ${order.reOffer.comments}</p>`;
                         modalActionButtons.appendChild(reOfferDiv);
                     }
                     break;
@@ -1426,6 +1741,27 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 case 'completed':
                     break;
             }
+
+            // --- NEW: PDF Merging Button Logic ---
+            const outboundLabelUrl = order.outboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
+            const inboundLabelUrl = order.inboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
+            
+            // Only show if we have the necessary components
+            if ((order.status === 'label_generated' || order.status === 'shipping_kit_requested') && outboundLabelUrl && inboundLabelUrl) {
+                const slipButtonText = order.shippingPreference === 'Shipping Kit Requested' 
+                    ? 'Print Kit Docs (Outbound + Inbound + Slip)' 
+                    : 'Print Document (Label + Slip)';
+                
+                // Create the button and insert it at the beginning of the action list
+                const mergeButton = createButton(slipButtonText, () => generateAndMergeShippingDocument(order), 'bg-fuchsia-600 hover:bg-fuchsia-700');
+                
+                // Get existing buttons, if any
+                const existingButtons = Array.from(modalActionButtons.children);
+                modalActionButtons.innerHTML = '';
+                modalActionButtons.appendChild(mergeButton);
+                existingButtons.forEach(btn => modalActionButtons.appendChild(btn));
+            }
+            // --- END: PDF Merging Button Logic ---
 
             // Always add Delete Button, visually separated
             modalActionButtons.appendChild(createButton('Delete Order', () => showDeleteConfirmation(order.id), 'bg-red-500 hover:bg-red-600'));
@@ -1665,8 +2001,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         function generatePaymentLink(order) {
             const amount = order.reOffer?.newPrice
-                            ? order.reOffer.newPrice.toFixed(2)
-                            : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+                                ? order.reOffer.newPrice.toFixed(2)
+                                : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             const venmoUsername = order.paymentDetails?.venmoUsername;
 
@@ -1708,6 +2044,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 modalMessage.classList.add('bg-green-100', 'text-green-700');
             } else if (type === 'error') {
                 modalMessage.classList.add('bg-red-100', 'text-red-700');
+            } else if (type === 'info') { // New color for info messages
+                modalMessage.classList.add('bg-blue-100', 'text-blue-700');
             }
             modalMessage.classList.remove('hidden');
         }
@@ -1731,7 +2069,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             });
         });
         
-        dashboardCards.forEach(card => {
+        document.querySelectorAll('.dashboard-card').forEach(card => {
             card.addEventListener('click', () => {
                 const statusToFilter = card.dataset.status;
                 const targetLink = document.querySelector(`.status-link[data-status="${statusToFilter}"]`);
@@ -1762,7 +2100,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     try {
                         await signOut(auth);
                         console.log('User signed out successfully');
-                        window.location.href = '/login.html';
+                        window.location.href = '/index.html';
                     } catch (error) {
                         console.error('Error signing out:', error);
                         alert('Failed to logout. Please try again.');
@@ -1840,7 +2178,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 onAuthStateChanged(auth, (user) => {
                     if (!user || user.isAnonymous) {
                         console.log('Auth state changed: No authenticated user or anonymous user detected, redirecting...');
-                        window.location.href = '/login.html';
+                        window.location.href = '/index.html';
                         return;
                     }
                     
