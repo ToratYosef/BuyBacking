@@ -829,7 +829,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <div id="errorDisplay" class="loading-container hidden">
                     <i class="fa-solid fa-triangle-exclamation text-4xl text-red-500 mb-4"></i>
                     <p class="text-lg text-red-500 font-semibold mb-4">Error: Device not found or invalid URL.</p>
-                    <p class="text-slate-600 text-center">Please ensure you have navigated to this page from our device selection list, or the URL format is correct (e.g., `?device=iphone-15-pro`).</p>
+                    <p class="text-slate-600 text-center">Please ensure you have navigated to this page from our device selection list.</p>
                     <a href="https://secondhandcell.com/index.html" class="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">Go to Home Page</a>
                 </div>
 
@@ -1328,23 +1328,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             selectElement.appendChild(fragment);
         }
 
-        // NEW: Function to extract brand and slug from a single URL parameter
-        function getBrandAndSlug(param) {
-            if (!param || typeof param !== 'string') return null;
-            const parts = param.split('-');
-            // Define supported brands for Firestore subcollection lookup
-            const brands = ['iphone', 'samsung', 'google', 'ipad'];
-            const brand = parts[0];
-            
-            if (brands.includes(brand) && parts.length > 1) {
-                return {
-                    brand: brand,
-                    slug: parts.slice(1).join('-') // Rejoin the rest of the parts as the slug
-                };
-            }
-            // If the brand is missing or unrecognized, or if there's no slug part, return null
-            return null;
-        }
 
         // Global variable to hold the autocomplete instance
         let autocomplete;
@@ -1423,7 +1406,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         }
         
         let device = null;
-        let deviceInfo = null; // Declare globally to hold parsed info
 
         /**
          * Formats the phone number as the user types: (###) ###-####.
@@ -1504,58 +1486,42 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const fullyFunctionalModal = document.getElementById('fullyFunctionalModal');
 
 
-            // Get device parameter from the URL query string
+            // Get the device slug from the URL query parameter
             const urlParams = new URLSearchParams(window.location.search);
-            // This is the combined parameter (e.g., 'iphone-15-pro')
-            const deviceParam = urlParams.get('device'); 
+            const deviceParam = urlParams.get('device');
             
-            // The following parameters are kept for compatibility with the old link format
-            // which might still pass them, but they are generally ignored if deviceParam is used
-            const storageParam = urlParams.get('storage');
-            const carrierParam = urlParams.get('carrier');
-            const powerParam = urlParams.get('power');
-            const functionalityParam = urlParams.get('functionality');
-            const qualityParam = urlParams.get('quality');
-            const priceParam = urlParams.get('price');
-            
-            // Use the new robust parsing logic
-            deviceInfo = getBrandAndSlug(deviceParam);
+            function getBrandAndSlug(param) {
+                if (!param || typeof param !== 'string') return null;
+                const parts = param.split('-');
+                const brands = ['iphone', 'samsung', 'google', 'ipad'];
+                const brand = parts[0];
+                if (brands.includes(brand)) {
+                    return {
+                        brand: brand,
+                        slug: parts.slice(1).join('-')
+                    };
+                }
+                return null;
+            }
 
-            // Log the URL parameters for debugging
-            console.log('URL Parameters:', {
-                deviceParam: deviceParam,
-                parsedInfo: deviceInfo,
-                storage: storageParam,
-                carrier: carrierParam,
-                //... rest of params
-            });
+            const deviceInfo = getBrandAndSlug(deviceParam);
 
-            // Validate required parameters: We only need a successfully parsed brand and slug
-            if (!deviceInfo || !deviceInfo.brand || !deviceInfo.slug) {
+            if (!deviceInfo || !deviceInfo.slug) {
                 loadingIndicator.classList.add('hidden');
                 errorDisplay.classList.remove('hidden');
-                console.error("Missing required parameters (device=brand-slug) or invalid URL format.");
+                console.error("Invalid device parameter in URL.");
                 return;
             }
 
-            // Populate remaining properties for initial form state loading if provided in URL (old behavior)
-            deviceInfo.storage = storageParam;
-            deviceInfo.carrier = carrierParam;
-            deviceInfo.power = powerParam;
-            deviceInfo.functionality = functionalityParam;
-            deviceInfo.quality = qualityParam;
-            deviceInfo.estimatedPrice = priceParam;
-
             async function fetchDevicePricing(brand, slug) {
                 try {
-                    // Use the parsed brand and slug for the Firestore path
                     const docRef = doc(db, `devices/${brand}/models`, slug);
                     const docSnap = await getDoc(docRef);
                     
                     if (docSnap.exists()) {
                         return docSnap.data();
                     } else {
-                        console.error(`Device data for slug "${slug}" not found in brand "${brand}".`);
+                        console.error(`Device data for slug "${slug}" not found.`);
                         return null;
                     }
                 } catch (error) {
@@ -1569,8 +1535,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             if (!device) {
                 loadingIndicator.classList.add('hidden');
                 errorDisplay.classList.remove('hidden');
-                // Update error message for clarity based on new structure
-                document.querySelector('#errorDisplay p:nth-child(2)').textContent = 'Error: Device data not found.';
                 return;
             }
 
@@ -1581,15 +1545,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             
             // --- IMAGE LOADING LOGIC ---
             function loadImageWithFallback(imgElement) {
-                const baseSrc = device.imageUrl; // Use the image URL retrieved from Firestore
-                if (!baseSrc) {
-                     imgElement.src = 'https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';
-                     return;
-                }
-                // Use data-base-src to test extensions, but for single-file systems, direct set is cleaner
-                // However, since the function uses new Image() and load/error, we keep it this way
-                imgElement.dataset.baseSrc = baseSrc; 
-                
+                const baseSrc = imgElement.dataset.baseSrc;
+                if (!baseSrc) return;
                 const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
                 let current = 0;
                 function tryLoad() {
@@ -1603,16 +1560,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     img.onerror = () => { current++; tryLoad(); };
                     img.src = testSrc;
                 }
-                // Call the loading function only if a base URL is provided by Firestore
                 tryLoad();
             }
 
             // Find the device image element
             const deviceImageElement = document.getElementById('deviceImage');
             if (deviceImageElement && device.imageUrl) {
+                // Set the data-base-src attribute to the image path from Firestore
+                deviceImageElement.dataset.baseSrc = device.imageUrl;
+                // Call the loading function
                 loadImageWithFallback(deviceImageElement);
             } else {
-                deviceImageElement.src = 'https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';
+                console.error("Device image element not found or device.imageUrl is missing.");
             }
             
             document.getElementById('deviceImage').alt = device.name;
@@ -1635,93 +1594,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
             storageSelect.innerHTML = '<option value="">Select Storage</option>';
             storageSelect.appendChild(fragment);
-            
-            // Auto-populate form from URL parameters if present (retains original functionality)
-            if (deviceInfo.storage && deviceInfo.carrier && deviceInfo.power && deviceInfo.functionality && deviceInfo.quality) {
-                console.log('Auto-populating form from URL parameters...');
-                
-                // Set storage
-                storageSelect.value = deviceInfo.storage;
-                
-                // Show carrier section and set carrier
-                setTimeout(() => {
-                    const carrierSection = document.getElementById('carrierSection');
-                    const powerOnSection = document.getElementById('powerOnSection');
-                    const functionalSection = document.getElementById('functionalSection');
-                    const cracksSection = document.getElementById('cracksSection');
-                    const cosmeticSection = document.getElementById('cosmeticSection');
-                    const getQuoteBtn = document.getElementById('getQuoteBtn');
-                    
-                    if (carrierSection) carrierSection.classList.remove('hidden');
-                    
-                    // Set carrier
-                    const carrierMapping = {
-                        'unlocked': 'unlocked',
-                        'verizon': 'verizon',
-                        'att': 'att',
-                        'tmobile': 'tmobile',
-                        'other': 'other-carrier'
-                    };
-                    const carrierValue = carrierMapping[deviceInfo.carrier] || deviceInfo.carrier;
-                    const carrierRadio = document.querySelector(`input[name="carrier"][value="${deviceInfo.carrier}"]`) || 
-                                         document.getElementById(carrierValue);
-                    if (carrierRadio) carrierRadio.checked = true;
-                    
-                    // Show power section and set power
-                    if (powerOnSection) powerOnSection.classList.remove('hidden');
-                    const powerRadio = document.querySelector(`input[name="q1_power_on"][value="${deviceInfo.power}"]`);
-                    if (powerRadio) powerRadio.checked = true;
-                    
-                    // Map functionality to the functional question
-                    if (deviceInfo.power === 'yes') {
-                        if (functionalSection) functionalSection.classList.remove('hidden');
-                        const functionalValue = deviceInfo.functionality === 'working' ? 'yes' : 'no';
-                        const functionalRadio = document.querySelector(`input[name="q2_fully_functional"][value="${functionalValue}"]`);
-                        if (functionalRadio) functionalRadio.checked = true;
-                        
-                        // Map quality to cracks and cosmetic
-                        if (functionalValue === 'yes') {
-                            if (cracksSection) cracksSection.classList.remove('hidden');
-                            
-                            // Quality mapping: flawless/scratched = no cracks, damaged = cracks
-                            const hasCracks = deviceInfo.quality === 'damaged' ? 'no' : 'yes';
-                            const cracksRadio = document.querySelector(`input[name="q3_no_cracks"][value="${hasCracks}"]`);
-                            if (cracksRadio) cracksRadio.checked = true;
-                            
-                            if (hasCracks === 'yes') {
-                                if (cosmeticSection) cosmeticSection.classList.remove('hidden');
-                                
-                                // Map quality to cosmetic condition
-                                const cosmeticMapping = {
-                                    'flawless': 'flawless',
-                                    'scratched': 'good'
-                                };
-                                const cosmeticValue = cosmeticMapping[deviceInfo.quality] || 'fair';
-                                const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${cosmeticValue}"]`);
-                                if (cosmeticRadio) cosmeticRadio.checked = true;
-                            } else {
-                                if (cosmeticSection) cosmeticSection.classList.add('hidden');
-                            }
-                        } else {
-                            if (cracksSection) cracksSection.classList.add('hidden');
-                            if (cosmeticSection) cosmeticSection.classList.add('hidden');
-                        }
-                    } else {
-                        if (functionalSection) functionalSection.classList.add('hidden');
-                        if (cracksSection) cracksSection.classList.add('hidden');
-                        if (cosmeticSection) cosmeticSection.classList.add('hidden');
-                    }
-                    
-                    // Show get quote button and auto-click it
-                    if (getQuoteBtn) {
-                        getQuoteBtn.classList.remove('hidden');
-                        // Auto-calculate quote
-                        setTimeout(() => {
-                            getQuoteBtn.click();
-                        }, 100);
-                    }
-                }, 100);
-            }
             
             // --- REST OF THE CODE ---
             const getQuoteBtn = document.getElementById('getQuoteBtn');
@@ -1842,9 +1714,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
 
             onAuthStateChanged(auth, (user) => {
-                const isRealUser = user && !user.isAnonymous;
-                
-                if (isRealUser) {
+                if (user) {
                     isUserLoggedIn = true;
                     currentUserId = user.uid;
                     console.log("User is logged in:", user.uid);
@@ -2692,7 +2562,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 
                 const orderData = {
                     device: device.name,
-                    brand: deviceInfo.brand, // FIXED: Use parsed brand from deviceInfo
+                    brand: deviceInfo.brand,
                     modelSlug: deviceInfo.slug,
                     carrier: document.querySelector('input[name="carrier"]:checked').value,
                     storage: document.getElementById('storage').value,
@@ -2777,7 +2647,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     }
 
                     setTimeout(() => {
-                        window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${orderData.shippingPreference === 'Shipping Kit Requested' ? 'ship_kit' : 'email_label'}&orderId=${encodeURIComponent(orderId)}&price=${encodeURIComponent(totalPrice)}`;
+                        window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${orderData.shippingPreference === 'Shipping Kit Requested' ? 'ship_kit' : 'email_label'}`;
                     }, 2000);
                     
                 } catch (e) {
@@ -2801,7 +2671,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     q4_cosmetic_condition: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value,
                 };
                 // We're using localStorage for state persistence during page navigation or refresh.
-                // Use the device brand and slug for the key since device info is now reliable
+                // In a real-world app, this might be a Firestore document specific to the user.
                 localStorage.setItem(`${deviceInfo.brand}-${deviceInfo.slug}-FormState`, JSON.stringify(formState));
             }
 
@@ -2905,10 +2775,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 });
             }
 
-            // Only attempt to load form state if device data loaded successfully
-            if (device) {
-                 loadFormState();
-            }
+            loadFormState();
         });
     </script>
 </body>
