@@ -9,6 +9,245 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --dashboard-bg: radial-gradient(120% 120% at 0% 0%, #1e1b4b 0%, #0f172a 38%, #020617 100%);
+            --surface-glass: rgba(255, 255, 255, 0.92);
+            --ink-900: #0f172a;
+            --ink-600: #475569;
+            --accent-iris: #6366f1;
+            --accent-cobalt: #2563eb;
+            --accent-lilac: #a855f7;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+        }
+
+        .pricing-body {
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
+            background: var(--dashboard-bg);
+            color: var(--ink-900);
+            padding: 4rem 1.5rem 6rem;
+        }
+
+        @media (max-width: 768px) {
+            .pricing-body {
+                padding: 3rem 1rem 4rem;
+            }
+        }
+
+        .dashboard-shell {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+        }
+
+        .hero-panel {
+            position: relative;
+            overflow: hidden;
+            border-radius: 2rem;
+            padding: 2.75rem;
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.92) 0%, rgba(79, 70, 229, 0.92) 55%, rgba(59, 130, 246, 0.9) 100%);
+            color: #f8fafc;
+            box-shadow: 0 30px 60px -30px rgba(15, 23, 42, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            isolation: isolate;
+        }
+
+        .hero-panel::before,
+        .hero-panel::after {
+            content: '';
+            position: absolute;
+            border-radius: 999px;
+            filter: blur(60px);
+            opacity: 0.55;
+            z-index: -1;
+        }
+
+        .hero-panel::before {
+            width: 360px;
+            height: 360px;
+            bottom: -120px;
+            left: -60px;
+            background: radial-gradient(circle at center, rgba(244, 114, 182, 0.7) 0%, rgba(125, 211, 252, 0) 70%);
+        }
+
+        .hero-panel::after {
+            width: 320px;
+            height: 320px;
+            top: -140px;
+            right: -60px;
+            background: radial-gradient(circle at center, rgba(59, 130, 246, 0.65) 0%, rgba(59, 130, 246, 0) 70%);
+        }
+
+        .hero-content {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 2.5rem;
+        }
+
+        @media (min-width: 1024px) {
+            .hero-content {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+            }
+        }
+
+        .hero-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            max-width: 420px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.32em;
+            padding: 0.55rem 1.4rem;
+            border-radius: 9999px;
+            background: rgba(15, 23, 42, 0.28);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(8px);
+            width: fit-content;
+        }
+
+        .hero-headline {
+            font-size: 2.6rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+
+        @media (max-width: 640px) {
+            .hero-headline {
+                font-size: 2.2rem;
+            }
+        }
+
+        .hero-subcopy {
+            color: rgba(226, 232, 240, 0.88);
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .hero-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .hero-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 0.35rem 0.8rem;
+            border-radius: 9999px;
+            background: rgba(248, 250, 252, 0.14);
+            color: rgba(248, 250, 252, 0.9);
+        }
+
+        .hero-controls {
+            flex: 1;
+        }
+
+        .control-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        @media (min-width: 768px) {
+            .control-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .control-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                align-items: center;
+            }
+        }
+
+        .control-card {
+            position: relative;
+            border-radius: 1.25rem;
+            background: rgba(15, 23, 42, 0.38);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(14px);
+        }
+
+        .control-card input,
+        .control-card select {
+            background: transparent;
+            color: #f8fafc;
+            border: none;
+            width: 100%;
+            font-size: 0.95rem;
+            padding: 0.85rem 1rem 0.85rem 2.75rem;
+            font-weight: 500;
+        }
+
+        .control-card select option {
+            color: var(--ink-900);
+        }
+
+        .control-card input::placeholder {
+            color: rgba(226, 232, 240, 0.75);
+        }
+
+        .control-card input:focus,
+        .control-card select:focus {
+            outline: none;
+        }
+
+        .control-icon {
+            position: absolute;
+            left: 1.15rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(226, 232, 240, 0.8);
+            font-size: 1rem;
+        }
+
+        .action-stack {
+            display: flex;
+            gap: 0.75rem;
+            background: rgba(15, 23, 42, 0.32);
+            border-radius: 1.25rem;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 0.6rem;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            backdrop-filter: blur(14px);
+        }
+
+        .action-stack .btn {
+            flex: 1;
+        }
+
+        @media (max-width: 767px) {
+            .action-stack {
+                flex-direction: column;
+            }
+        }
+
         body { font-family: 'Poppins', sans-serif; background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%); }
         .table-container { max-height: 70vh; overflow-y: auto; border-radius: 1rem; border: 1px solid rgba(15, 23, 42, 0.08); box-shadow: 0 20px 45px -30px rgba(15, 23, 42, 0.45); }
         .table-container table { border-collapse: separate; border-spacing: 0; }
@@ -21,6 +260,443 @@
             justify-content: center;
             gap: 0.5rem;
             font-weight: 600;
+            border-radius: 0.95rem;
+            padding: 0.75rem 1.6rem;
+            letter-spacing: 0.02em;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.25);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+            color: #ffffff;
+            box-shadow: 0 18px 35px -20px rgba(79, 70, 229, 0.9);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 24px 40px -18px rgba(79, 70, 229, 0.95);
+        }
+
+        .btn-secondary {
+            background: rgba(226, 232, 240, 0.7);
+            color: var(--ink-900);
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            box-shadow: inset 0 -2px 0 rgba(148, 163, 184, 0.4);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-1px);
+            background: rgba(226, 232, 240, 0.9);
+        }
+
+        .btn-ghost {
+            background: rgba(248, 250, 252, 0.1);
+            color: #f8fafc;
+            border: 1px solid rgba(248, 250, 252, 0.38);
+            box-shadow: inset 0 1px 0 rgba(248, 250, 252, 0.2);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(248, 250, 252, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: rgba(248, 113, 113, 0.18);
+            color: #b91c1c;
+            border-radius: 9999px;
+            padding: 0.35rem 0.85rem;
+        }
+
+        .btn-danger:hover {
+            background: rgba(248, 113, 113, 0.25);
+            transform: scale(1.05);
+        }
+
+        .overview-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 768px) {
+            .overview-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1200px) {
+            .overview-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+
+        .glow-card {
+            position: relative;
+            overflow: hidden;
+            padding: 1.8rem;
+            border-radius: 1.75rem;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            box-shadow: 0 30px 60px -38px rgba(15, 23, 42, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .glow-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(56, 189, 248, 0.08));
+            opacity: 0.7;
+            z-index: -1;
+        }
+
+        .glow-card-label {
+            font-size: 0.75rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 700;
+        }
+
+        .glow-card-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--ink-900);
+            margin: 0;
+        }
+
+        .glow-card-caption {
+            font-size: 0.85rem;
+            color: var(--ink-600);
+            line-height: 1.5;
+        }
+
+        .glow-card-footer {
+            margin-top: auto;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .glow-card-footer-copy {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .glow-card-footer-copy span:first-child {
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .event-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(129, 140, 248, 0.22));
+            border: 1px solid rgba(99, 102, 241, 0.28);
+            color: #0f172a;
+        }
+
+        .event-card::before {
+            background: linear-gradient(135deg, rgba(244, 114, 182, 0.18), rgba(129, 140, 248, 0.18));
+        }
+
+        .event-chip {
+            align-self: flex-start;
+            font-size: 0.7rem;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            padding: 0.35rem 0.9rem;
+            border-radius: 9999px;
+            background: rgba(99, 102, 241, 0.15);
+            color: #4338ca;
+            font-weight: 700;
+        }
+
+        .ghost-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #1d4ed8;
+            text-decoration: none;
+        }
+
+        .ghost-link:hover {
+            text-decoration: underline;
+        }
+
+        .glass-board {
+            background: var(--surface-glass);
+            border-radius: 2rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            box-shadow: 0 35px 70px -55px rgba(15, 23, 42, 0.65);
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.75rem;
+        }
+
+        @media (max-width: 640px) {
+            .glass-board {
+                padding: 1.75rem;
+            }
+        }
+
+        #statusMessage {
+            border-radius: 1rem;
+            font-weight: 600;
+            backdrop-filter: blur(8px);
+        }
+
+        #loadingIndicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+            color: var(--ink-600);
+            padding: 2.5rem 0;
+        }
+
+        #loadingIndicator i {
+            font-size: 2.5rem;
+        }
+
+        .table-container {
+            border-radius: 1.75rem;
+            border: 1px solid rgba(15, 23, 42, 0.1);
+            background: rgba(248, 250, 252, 0.92);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            overflow: hidden;
+        }
+
+        .table-scroll {
+            max-height: 68vh;
+            overflow-y: auto;
+        }
+
+        .pricing-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.95rem;
+            color: var(--ink-900);
+        }
+
+        .pricing-table thead th {
+            position: sticky;
+            top: 0;
+            background: rgba(226, 232, 240, 0.95);
+            backdrop-filter: blur(12px);
+            padding: 0.9rem 1rem;
+            text-align: left;
+            font-size: 0.7rem;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            font-weight: 700;
+            color: #475569;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+        }
+
+        .pricing-table tbody tr {
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .pricing-table tbody tr:nth-child(even) {
+            background: rgba(241, 245, 249, 0.55);
+        }
+
+        .pricing-table tbody tr:hover {
+            background: rgba(219, 234, 254, 0.6);
+        }
+
+        .pricing-table td {
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+            vertical-align: top;
+        }
+
+        .pricing-table td:first-child {
+            font-weight: 600;
+            width: 16rem;
+        }
+
+        .pricing-table td:nth-child(2),
+        .pricing-table td:nth-child(3) {
+            font-weight: 500;
+            color: var(--ink-600);
+        }
+
+        .pricing-table input.price-input {
+            width: 6rem;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            padding: 0.45rem 0.55rem;
+            text-align: center;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .pricing-table input.price-input:focus {
+            outline: none;
+            border-color: var(--accent-iris);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+        }
+
+        .storage-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.8rem;
+        }
+
+        @media (min-width: 1024px) {
+            .storage-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+            }
+        }
+
+        .storage-row {
+            position: relative;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 1.2rem;
+            padding: 1.25rem;
+            background: rgba(248, 250, 252, 0.96);
+            box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.12);
+        }
+
+        .storage-remove {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            color: #dc2626;
+            background: rgba(254, 226, 226, 0.75);
+            border-radius: 9999px;
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease, background 0.2s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .storage-remove:hover {
+            background: rgba(254, 202, 202, 0.95);
+            transform: scale(1.05);
+        }
+
+        .storage-remove.opacity-40 {
+            opacity: 0.4;
+        }
+
+        .storage-remove.cursor-not-allowed {
+            cursor: not-allowed;
+        }
+
+        .form-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        @media (min-width: 768px) {
+            .form-grid.md\:grid-cols-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .form-grid.lg\:grid-cols-3 {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        .field-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--ink-600);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .field-input {
+            width: 100%;
+            border-radius: 0.9rem;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+            background: rgba(255, 255, 255, 0.96);
+        }
+
+        .field-input:focus {
+            outline: none;
+            border-color: var(--accent-cobalt);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+        }
+
+        .price-input {
+            width: 6rem;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            padding: 0.45rem 0.55rem;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.96);
+        }
+
+        .price-input:focus {
+            outline: none;
+            border-color: var(--accent-iris);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+        }
+
+        .status-message {
+            border-radius: 0.9rem;
+            font-weight: 600;
+        }
+
+        .table-footnote {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1.5rem 1.75rem;
+            border-radius: 1.5rem;
+            background: rgba(226, 232, 240, 0.35);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+
+        @media (min-width: 768px) {
+            .table-footnote {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+            }
+        }
+
+        .table-footnote h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin: 0;
+            color: var(--ink-900);
+        }
+
+        .table-footnote p {
+            margin: 0.35rem 0 0;
+            color: var(--ink-600);
+            font-size: 0.9rem;
+        }
+
             border-radius: 0.75rem;
             padding: 0.65rem 1.5rem;
             transition: transform 0.25s ease, box-shadow 0.25s ease;
@@ -50,10 +726,34 @@
         }
         .modal {
             transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
-            opacity: 0; visibility: hidden;
+            opacity: 0;
+            visibility: hidden;
         }
+
         .modal.is-visible {
-            opacity: 1; visibility: visible;
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-card {
+            border-radius: 1.75rem;
+            box-shadow: 0 35px 90px -45px rgba(15, 23, 42, 0.55);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            background: rgba(255, 255, 255, 0.98);
+        }
+
+        .modal h2 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--ink-900);
+        }
+
+        .modal p {
+            color: var(--ink-600);
+        }
+
+        .modal .table-container {
+            background: rgba(255, 255, 255, 0.96);
         }
         .modal-card { border-radius: 1rem; box-shadow: 0 30px 80px -40px rgba(15, 23, 42, 0.45); border: 1px solid rgba(15, 23, 42, 0.08); }
         .form-grid { display: grid; gap: 1rem; }
@@ -68,6 +768,130 @@
         .status-message { border-radius: 0.75rem; font-weight: 600; }
     </style>
 </head>
+<body class="pricing-body">
+    <div class="dashboard-shell">
+        <header class="hero-panel">
+            <div class="hero-content">
+                <div class="hero-copy">
+                    <span class="hero-badge"><i class="fa-solid fa-sparkles"></i> Live Pricing Suite</span>
+                    <h1 class="hero-headline">Price Management Studio</h1>
+                    <p class="hero-subcopy">Craft payouts, tune limited-time bonuses, and sync seasonal promos without leaving this dashboard.</p>
+                    <div class="hero-tags">
+                        <span class="hero-tag"><i class="fa-solid fa-bolt"></i> Realtime</span>
+                        <span class="hero-tag"><i class="fa-solid fa-shield-check"></i> Audit Trail</span>
+                        <span class="hero-tag"><i class="fa-solid fa-gift"></i> Seasonal Boost</span>
+                    </div>
+                </div>
+                <div class="hero-controls">
+                    <div class="control-grid">
+                        <div class="control-card">
+                            <i class="fas fa-search control-icon"></i>
+                            <input type="search" id="searchInput" placeholder="Search for device...">
+                        </div>
+                        <div class="control-card">
+                            <i class="fas fa-layer-group control-icon"></i>
+                            <select id="brandFilter">
+                                <option value="all">All Brands</option>
+                                <option value="iphone">iPhone</option>
+                                <option value="samsung">Samsung</option>
+                                <option value="google_pixel">Google</option>
+                                <option value="ipad">iPad</option>
+                                <option value="macbook">MacBook</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="action-stack">
+                            <button id="importBtn" class="btn btn-ghost"><i class="fas fa-file-excel"></i> Import Prices</button>
+                            <button id="addDeviceBtn" class="btn btn-primary"><i class="fas fa-plus"></i> Add Pricing</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <section class="overview-grid">
+            <article class="glow-card">
+                <span class="glow-card-label">Visible Models</span>
+                <p class="glow-card-value" id="summaryTotalDevices">0</p>
+                <p class="glow-card-caption">Devices matching your filters</p>
+                <div class="glow-card-footer">
+                    <i class="fa-solid fa-bolt text-blue-500"></i>
+                    <div class="glow-card-footer-copy">
+                        <span id="summaryFilterLabel">All brands in view</span>
+                        <span id="summaryLastRefresh">Waiting for sync…</span>
+                    </div>
+                </div>
+            </article>
+            <article class="glow-card">
+                <span class="glow-card-label">Storage Tiers</span>
+                <p class="glow-card-value" id="summaryStorageVariants">0</p>
+                <p class="glow-card-caption" id="summaryTierLabel">Lock combinations ready for quoting</p>
+                <div class="glow-card-footer">
+                    <i class="fa-solid fa-layer-group text-indigo-500"></i>
+                    <div class="glow-card-footer-copy">
+                        <span>Tier Coverage</span>
+                        <span id="summaryTierFooter">Awaiting data…</span>
+                    </div>
+                </div>
+            </article>
+            <article class="glow-card">
+                <span class="glow-card-label">Top Offer</span>
+                <p class="glow-card-value" id="summaryHighestOffer">$0</p>
+                <p class="glow-card-caption">Highest payout inside the visible set</p>
+                <div class="glow-card-footer">
+                    <i class="fa-solid fa-fire text-orange-500"></i>
+                    <div class="glow-card-footer-copy">
+                        <span>Hot Device</span>
+                        <span id="summaryHotDevice">Awaiting data…</span>
+                    </div>
+                </div>
+            </article>
+            <article class="glow-card event-card">
+                <span class="event-chip">Halloween Blitz</span>
+                <p class="glow-card-value" id="summaryEventCountdown">--</p>
+                <p class="glow-card-caption" id="summaryEventCaption">Bonus payouts go live soon.</p>
+                <a href="#deviceTableContainer" class="ghost-link" id="previewEventDetails"><i class="fa-solid fa-calendar-days"></i> View event playbook</a>
+            </article>
+        </section>
+
+        <main class="glass-board">
+            <div id="statusMessage" class="hidden status-message mb-4 p-3 text-sm text-center"></div>
+            <div id="loadingIndicator" class="loading-container">
+                <i class="fa-solid fa-spinner fa-spin text-4xl text-blue-600"></i>
+                <p class="text-slate-500">Loading device data...</p>
+            </div>
+            <div id="deviceTableContainer" class="table-container hidden">
+                <div class="table-scroll">
+                    <table class="pricing-table">
+                        <thead>
+                            <tr>
+                                <th>Device</th>
+                                <th>Storage</th>
+                                <th>Lock Status</th>
+                                <th>Flawless</th>
+                                <th>Good</th>
+                                <th>Fair</th>
+                                <th>Damaged</th>
+                                <th>Broken</th>
+                                <th>No Power</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deviceTableBody">
+                            <!-- Table rows will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="table-footnote">
+                <div>
+                    <h3>Seasonal Bonus Builder</h3>
+                    <p>Queue limited-time multipliers and broadcast them across the quote funnel in seconds.</p>
+                </div>
+                <button type="button" id="launchBonusBuilderBtn" class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Launch Bonus Builder</button>
+            </div>
+        </main>
+    </div>
 <body class="bg-gray-100 p-8">
 
     <!-- Header and Controls -->
@@ -237,6 +1061,18 @@
         const searchInput = document.getElementById('searchInput');
         const brandFilter = document.getElementById('brandFilter');
         const statusMessage = document.getElementById('statusMessage');
+        const summaryTotalDevices = document.getElementById('summaryTotalDevices');
+        const summaryFilterLabel = document.getElementById('summaryFilterLabel');
+        const summaryLastRefresh = document.getElementById('summaryLastRefresh');
+        const summaryStorageVariants = document.getElementById('summaryStorageVariants');
+        const summaryTierLabel = document.getElementById('summaryTierLabel');
+        const summaryTierFooter = document.getElementById('summaryTierFooter');
+        const summaryHighestOffer = document.getElementById('summaryHighestOffer');
+        const summaryHotDevice = document.getElementById('summaryHotDevice');
+        const summaryEventCountdown = document.getElementById('summaryEventCountdown');
+        const summaryEventCaption = document.getElementById('summaryEventCaption');
+        const previewEventDetails = document.getElementById('previewEventDetails');
+        const launchBonusBuilderBtn = document.getElementById('launchBonusBuilderBtn');
         const importModal = document.getElementById('importModal');
         const importBtn = document.getElementById('importBtn');
         const closeModalBtn = document.getElementById('closeModalBtn');
@@ -256,6 +1092,7 @@
         const addStorageRowBtn = document.getElementById('addStorageRowBtn');
         const storageRowsContainer = document.getElementById('storageRows');
         let slugManuallyEdited = false;
+        let lastRefreshedAt = null;
 
         const conditionConfig = [
             { key: 'flawless', label: 'Flawless' },
@@ -276,6 +1113,50 @@
             .toLowerCase()
             .replace(/\s+/g, '')
             .trim();
+
+        const toTitleCase = (value = '') => value
+            .toString()
+            .replace(/[_-]/g, ' ')
+            .replace(/([a-z])([A-Z])/g, '$1 $2')
+            .toLowerCase()
+            .replace(/\b\w/g, (char) => char.toUpperCase())
+            .trim();
+
+        const computeUpcomingEventDate = () => {
+            const now = new Date();
+            let eventDate = new Date(`${now.getFullYear()}-10-31T23:59:59`);
+            if (now > eventDate) {
+                eventDate = new Date(`${now.getFullYear() + 1}-10-31T23:59:59`);
+            }
+            return eventDate;
+        };
+
+        const eventTargetDate = computeUpcomingEventDate();
+
+        const updateEventCountdown = () => {
+            if (!summaryEventCountdown || !summaryEventCaption) {
+                return;
+            }
+
+            const now = new Date();
+            const diff = eventTargetDate - now;
+
+            if (diff <= 0) {
+                summaryEventCountdown.textContent = 'Live Now';
+                summaryEventCaption.textContent = 'The Halloween Blitz bonus is active—queue fresh promos!';
+                return;
+            }
+
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const minutes = Math.floor((diff / (1000 * 60)) % 60);
+
+            summaryEventCountdown.textContent = `${days}d ${hours}h ${minutes}m`;
+            summaryEventCaption.textContent = `Bonus drops ${eventTargetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        };
+
+        updateEventCountdown();
+        setInterval(updateEventCountdown, 60000);
 
         const toggleAddModal = (shouldShow) => {
             if (shouldShow) {
@@ -312,6 +1193,7 @@
                         <input type="text" class="field-input connectivity-input" placeholder="unlocked" required>
                     </label>
                 </div>
+                <div class="storage-grid grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     ${conditionConfig.map(condition => `
                         <label class="flex flex-col gap-2">
@@ -376,6 +1258,21 @@
             storageRowsContainer.appendChild(createStorageRow());
             refreshStorageRemoveButtons();
         });
+
+        if (previewEventDetails) {
+            previewEventDetails.addEventListener('click', (event) => {
+                event.preventDefault();
+                showStatus('Halloween Blitz bonus: apply multipliers via the Seasonal Bonus Builder below.', 'info');
+                document.getElementById('deviceTableContainer').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        }
+
+        if (launchBonusBuilderBtn) {
+            launchBonusBuilderBtn.addEventListener('click', () => {
+                resetAddForm();
+                toggleAddModal(true);
+            });
+        }
 
         addDeviceForm.addEventListener('submit', async (event) => {
             event.preventDefault();
@@ -514,6 +1411,7 @@
                         allDevices.push({ ...data, brand: brand, docId: doc.id, documentPath: collectionPath });
                     });
                 }
+                lastRefreshedAt = new Date();
             } catch (error) {
                 console.error("Error fetching devices from Firestore:", error);
                 showStatus("Failed to load device data. Check console for details.", "error");
@@ -583,6 +1481,82 @@
             });
         };
 
+        const updateSummaryStats = () => {
+            if (!summaryTotalDevices) {
+                return;
+            }
+
+            const visibleCount = filteredDevices.length;
+            summaryTotalDevices.textContent = visibleCount.toLocaleString();
+
+            if (summaryFilterLabel) {
+                const selectedOption = brandFilter?.options?.[brandFilter.selectedIndex] || null;
+                summaryFilterLabel.textContent = (!brandFilter || brandFilter.value === 'all')
+                    ? 'All brands in view'
+                    : `Filtered by ${selectedOption?.textContent || toTitleCase(brandFilter.value)}`;
+            }
+
+            if (summaryLastRefresh) {
+                summaryLastRefresh.textContent = lastRefreshedAt
+                    ? `Updated ${lastRefreshedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+                    : 'Waiting for sync…';
+            }
+
+            const uniqueStorage = new Set();
+            let totalCombos = 0;
+            let highestOffer = 0;
+            let highestLabel = 'Awaiting data…';
+
+            filteredDevices.forEach(device => {
+                const priceMatrix = device.prices || {};
+                Object.entries(priceMatrix).forEach(([storage, lockMap = {}]) => {
+                    uniqueStorage.add(`${device.docId}:${storage}`);
+                    Object.entries(lockMap).forEach(([connectivity, conditionMap = {}]) => {
+                        let comboHasPricing = false;
+                        Object.entries(conditionMap).forEach(([condition, price]) => {
+                            if (typeof price === 'number') {
+                                comboHasPricing = true;
+                                if (price > highestOffer) {
+                                    highestOffer = price;
+                                    highestLabel = `${device.name} · ${storage} · ${toTitleCase(connectivity)} (${toTitleCase(condition)})`;
+                                }
+                            }
+                        });
+
+                        if (comboHasPricing) {
+                            totalCombos += 1;
+                        }
+                    });
+                });
+            });
+
+            if (summaryStorageVariants) {
+                summaryStorageVariants.textContent = uniqueStorage.size.toLocaleString();
+            }
+
+            if (summaryTierLabel) {
+                summaryTierLabel.textContent = uniqueStorage.size
+                    ? 'Distinct storage tiers in play'
+                    : 'No tiers available yet';
+            }
+
+            if (summaryTierFooter) {
+                summaryTierFooter.textContent = totalCombos
+                    ? `${totalCombos.toLocaleString()} lock variations ready`
+                    : 'Add storage tiers to unlock offers';
+            }
+
+            if (summaryHighestOffer) {
+                summaryHighestOffer.textContent = highestOffer
+                    ? `$${highestOffer.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                    : '$0';
+            }
+
+            if (summaryHotDevice) {
+                summaryHotDevice.textContent = highestLabel;
+            }
+        };
+
         const applyFilters = () => {
             const searchText = searchInput.value.toLowerCase();
             const brand = brandFilter.value;
@@ -594,10 +1568,13 @@
             });
 
             renderTable(filteredDevices);
+            updateSummaryStats();
         };
         
         searchInput.addEventListener('input', applyFilters);
         brandFilter.addEventListener('change', applyFilters);
+
+        updateSummaryStats();
 
         // --- UPDATE PRICE LOGIC ---
         window.handlePriceUpdate = async (element) => {

@@ -502,13 +502,63 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             cursor: pointer;
             transition: background-color 0.2s ease;
         }
-        
+
         .notification-item:hover {
             background-color: #f8fafc;
         }
-        
+
         .notification-item:last-child {
             border-bottom: none;
+        }
+
+        .notification-empty {
+            padding: 24px 16px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .notification-empty p {
+            margin: 0;
+        }
+
+        .notification-layout {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .notification-copy {
+            flex: 1;
+        }
+
+        .notification-name {
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+
+        .notification-device {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 4px;
+        }
+
+        .notification-status {
+            font-size: 12px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .notification-meta {
+            text-align: right;
+        }
+
+        .notification-meta p {
+            font-size: 12px;
+            color: #94a3b8;
+            margin: 0;
         }
         
         .notification-dropdown-footer {
@@ -2183,7 +2233,12 @@ window.onafterprint = () => {
                             notificationList.innerHTML = '';
                             
                             if (snapshot.empty) {
-                                notificationList.innerHTML = '<div class="notification-item" style="text-align: center; color: #94a3b8;"><p>No new notifications</p></div>';
+                                const emptyState = document.createElement('div');
+                                emptyState.className = 'notification-item notification-empty';
+                                const emptyCopy = document.createElement('p');
+                                emptyCopy.textContent = 'No new notifications';
+                                emptyState.appendChild(emptyCopy);
+                                notificationList.appendChild(emptyState);
                                 return;
                             }
                             
@@ -2198,19 +2253,41 @@ window.onafterprint = () => {
                                 
                                 const statusText = order.status === 'order_pending' ? 'New Order' : 'Kit Requested';
                                 const statusColor = order.status === 'order_pending' ? '#3b82f6' : '#8b5cf6';
-                                
-                                item.innerHTML = `
-                                    <div style="display: flex; justify-content: space-between; align-items: start;">
-                                        <div style="flex: 1;">
-                                            <p style="font-weight: 600; color: #0f172a; margin-bottom: 4px;">${order.shippingInfo?.fullName || 'Unknown Customer'}</p>
-                                            <p style="font-size: 13px; color: #64748b; margin-bottom: 4px;">${order.device || 'Device'} - ${order.storage || 'Unknown'}</p>
-                                            <p style="font-size: 12px; color: ${statusColor}; font-weight: 600;">${statusText}</p>
-                                        </div>
-                                        <div style="text-align: right;">
-                                            <p style="font-size: 12px; color: #94a3b8;">${doc.id.substring(0, 8)}...</p>
-                                        </div>
-                                    </div>
-                                `;
+
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'notification-layout';
+
+                                const infoContainer = document.createElement('div');
+                                infoContainer.className = 'notification-copy';
+
+                                const nameText = document.createElement('p');
+                                nameText.className = 'notification-name';
+                                nameText.textContent = order.shippingInfo?.fullName || 'Unknown Customer';
+
+                                const deviceText = document.createElement('p');
+                                deviceText.className = 'notification-device';
+                                const deviceLabel = order.device || 'Device';
+                                const storageLabel = order.storage || 'Unknown';
+                                deviceText.textContent = `${deviceLabel} - ${storageLabel}`;
+
+                                const statusPill = document.createElement('p');
+                                statusPill.className = 'notification-status';
+                                statusPill.style.color = statusColor;
+                                statusPill.textContent = statusText;
+
+                                infoContainer.appendChild(nameText);
+                                infoContainer.appendChild(deviceText);
+                                infoContainer.appendChild(statusPill);
+
+                                const idContainer = document.createElement('div');
+                                idContainer.className = 'notification-meta';
+                                const idText = document.createElement('p');
+                                idText.textContent = `${doc.id.substring(0, 8)}...`;
+                                idContainer.appendChild(idText);
+
+                                wrapper.appendChild(infoContainer);
+                                wrapper.appendChild(idContainer);
+                                item.appendChild(wrapper);
                                 notificationList.appendChild(item);
                             });
                         });
