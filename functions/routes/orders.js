@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { getFirestore } = require('firebase-admin/firestore');
 const admin = require("firebase-admin");
+const axios = require('axios');
+const functions = require('firebase-functions');
 
 // Corrected import from the helpers module
 const {
@@ -15,6 +17,7 @@ const { sendAdminPushNotification, addAdminFirestoreNotification, sendEmail } = 
 const { sendZendeskComment } = require('../services/zendesk');
 const { generateNextOrderNumber, formatStatusForEmail } = require('../helpers/order');
 const { ORDER_RECEIVED_EMAIL_HTML, DEVICE_RECEIVED_EMAIL_HTML } = require('../helpers/templates');
+const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('../helpers/shipengine');
 
 // Get all orders (Admin only)
 router.get("/orders", async (req, res) => {
@@ -118,7 +121,7 @@ router.post("/submit-order", async (req, res) => {
                 <p style="margin-top: 24px;">Please note: You requested a shipping kit, which will be sent to you shortly. When it arrives, you'll find a return label inside to send us your device.</p>
                 <p>If you have any questions, please reply to this email.</p>
             `;
-            newOrderStatus = "shipping_kit_requested";
+            newOrderStatus = "kit_needs_printing";
         } else {
             shippingInstructions = `
                 <p style="margin-top: 24px;">We will send your shipping label in a separate email shortly.</p>
@@ -195,6 +198,76 @@ router.post("/submit-order", async (req, res) => {
     } catch (err) {
         console.error("Error submitting order:", err);
         res.status(500).json({ error: "Failed to submit order" });
+    }
+});
+
+router.post("/orders/:id/mark-kit-printed", async (req, res) => {
+    try {
+        const docRef = ordersCollection.doc(req.params.id);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        const order = doc.data();
+        if (order.shippingPreference !== "Shipping Kit Requested") {
+            return res.status(400).json({ error: "Order does not require a shipping kit" });
+        }
+
+        await updateOrderBoth(req.params.id, {
+            status: "kit_sent",
+            kitPrintedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        res.json({ message: "Order marked as kit sent after printing." });
+    } catch (err) {
+        console.error("Error marking kit as printed:", err);
+        res.status(500).json({ error: "Failed to update kit status" });
+    }
+});
+
+router.post("/orders/:id/refresh-kit-tracking", async (req, res) => {
+    try {
+        const docRef = ordersCollection.doc(req.params.id);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        const order = doc.data();
+        if (!order.outboundTrackingNumber) {
+            return res.status(400).json({ error: "Outbound tracking number not available for this order" });
+        }
+
+        const shipengineKey = functions.config().shipengine?.key || process.env.SHIPENGINE_KEY;
+        if (!shipengineKey) {
+            return res.status(500).json({ error: "ShipEngine API key not configured" });
+        }
+
+        const { updatePayload, delivered } = await buildKitTrackingUpdate(order, {
+            axiosClient: axios,
+            shipengineKey,
+            defaultCarrierCode: DEFAULT_CARRIER_CODE,
+            serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        await updateOrderBoth(req.params.id, updatePayload);
+
+        res.json({
+            message: delivered ? "Kit marked as delivered." : "Kit tracking status refreshed.",
+            delivered,
+            tracking: updatePayload.kitTrackingStatus,
+        });
+    } catch (err) {
+        console.error("Error refreshing kit tracking:", err.response?.data || err);
+        const errorMessage = err.response?.data?.error || err.message || "Failed to refresh kit tracking";
+        const statusCode =
+            errorMessage === 'Outbound tracking number not available for this order'
+                ? 400
+                : errorMessage === 'ShipEngine API key not configured'
+                    ? 500
+                    : 500;
+        res.status(statusCode).json({ error: errorMessage });
     }
 });
 
@@ -438,3 +511,4 @@ router.post("/return-phone-action", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.buildKitTrackingUpdate = buildKitTrackingUpdate;
