@@ -352,6 +352,49 @@ const ORDER_COMPLETED_EMAIL_HTML = `
 </html>
 `;
 
+const LABEL_CANCELED_EMAIL_HTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your SecondHandCell Shipping Label Update</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+    .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12); overflow: hidden; border: 1px solid #e2e8f0; }
+    .header { background: linear-gradient(135deg, #0f172a, #1e40af); color: #ffffff; padding: 28px; text-align: center; }
+    .header h1 { font-size: 24px; margin: 0; }
+    .content { padding: 26px 28px 30px; color: #1f2937; font-size: 16px; line-height: 1.7; }
+    .content p { margin: 0 0 18px; }
+    .order-id { color: #1d4ed8; font-weight: 600; }
+    .callout { background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 18px 20px; border-radius: 10px; margin: 24px 0; }
+    .footer { padding: 22px; text-align: center; color: #6b7280; font-size: 14px; border-top: 1px solid #e2e8f0; }
+    .button { display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 22px; text-decoration: none; border-radius: 9999px; font-weight: 600; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <h1>Shipping Label Canceled</h1>
+    </div>
+    <div class="content">
+      <p>Hello **CUSTOMER_NAME**,</p>
+      <p>We wanted to let you know that the prepaid shipping label for order <strong class="order-id">#**ORDER_ID**</strong> has been canceled because the device was not placed in transit.</p>
+      <div class="callout">
+        <p>If you still plan on sending your device, reply to this email and we'll generate a fresh label right away. We're happy to reactivate your order whenever you are ready.</p>
+      </div>
+      <p>No further action is needed from you at this time. When you're ready to continue, just reach out so we can get a new kit or label issued.</p>
+      <p>Thank you for choosing SecondHandCell.</p>
+      <p style="margin-bottom:0;">&mdash; The SecondHandCell Team</p>
+    </div>
+    <div class="footer">
+      <p>If you have any questions, simply reply to this email and our team will assist you.</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
 
 const stateAbbreviations = {
   "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
@@ -1139,11 +1182,16 @@ app.post("/generate-label/:id", async (req, res) => {
         ...updateData,
         outboundLabelUrl: outboundLabelData.label_download?.pdf,
         outboundTrackingNumber: outboundLabelData.tracking_number,
+        outboundLabelId: outboundLabelData.label_id,
         inboundLabelUrl: inboundLabelData.label_download?.pdf,
         inboundTrackingNumber: inboundLabelData.tracking_number,
+        inboundLabelId: inboundLabelData.label_id,
         // The uspsLabelUrl and trackingNumber fields will hold the INBOUND label data
         uspsLabelUrl: inboundLabelData.label_download?.pdf,
         trackingNumber: inboundLabelData.tracking_number,
+        labelCancellationReason: admin.firestore.FieldValue.delete(),
+        labelCanceledAt: admin.firestore.FieldValue.delete(),
+        labelCancellationSummary: admin.firestore.FieldValue.delete(),
       };
 
       customerEmailSubject = `Your SecondHandCell Shipping Kit for Order #${order.id} is on its Way!`;
@@ -1183,6 +1231,10 @@ app.post("/generate-label/:id", async (req, res) => {
         ...updateData,
         uspsLabelUrl: labelDownloadLink,
         trackingNumber: customerLabelData.tracking_number,
+        inboundLabelId: customerLabelData.label_id,
+        labelCancellationReason: admin.firestore.FieldValue.delete(),
+        labelCanceledAt: admin.firestore.FieldValue.delete(),
+        labelCancellationSummary: admin.firestore.FieldValue.delete(),
       };
 
       customerEmailSubject = `Your SecondHandCell Shipping Label for Order #${order.id}`;
@@ -1211,6 +1263,123 @@ app.post("/generate-label/:id", async (req, res) => {
   } catch (err) {
     console.error("Error generating label:", err.response?.data || err.message || err);
     res.status(500).json({ error: "Failed to generate label" });
+  }
+});
+
+app.post("/orders/:id/cancel-label", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const doc = await ordersCollection.doc(orderId).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const orderData = { id: doc.id, ...doc.data() };
+    const allowableStatuses = new Set([
+      "order_pending",
+      "shipping_kit_requested",
+      "kit_needs_printing",
+      "kit_sent",
+      "label_generated",
+    ]);
+
+    if (!allowableStatuses.has(orderData.status)) {
+      return res.status(409).json({ error: "Only labels for unshipped orders can be canceled." });
+    }
+
+    const labelIds = [orderData.outboundLabelId, orderData.inboundLabelId].filter(Boolean);
+    if (labelIds.length === 0) {
+      return res.status(400).json({ error: "No ShipEngine label IDs are stored for this order." });
+    }
+
+    const shipengineKey = process.env.SHIPENGINE_KEY;
+    if (!shipengineKey) {
+      return res.status(500).json({ error: "ShipEngine API key not configured" });
+    }
+
+    const cancellationResults = [];
+
+    for (const labelId of labelIds) {
+      try {
+        await axios.post(
+          `https://api.shipengine.com/v1/labels/${labelId}/void`,
+          {},
+          {
+            headers: { "API-Key": shipengineKey },
+            timeout: 20000,
+          }
+        );
+        cancellationResults.push({ labelId, status: "voided" });
+      } catch (error) {
+        const responseData = error.response?.data;
+        const alreadyVoided =
+          error.response?.status === 422 &&
+          Array.isArray(responseData?.errors) &&
+          responseData.errors.some((err) => err.error_code === "label_already_voided");
+
+        if (alreadyVoided) {
+          cancellationResults.push({ labelId, status: "already_voided" });
+          continue;
+        }
+
+        console.error("Error canceling ShipEngine label", labelId, responseData || error.message || error);
+        const message =
+          responseData?.errors?.[0]?.message ||
+          error.response?.statusText ||
+          error.message ||
+          "Unknown ShipEngine error";
+        return res.status(error.response?.status || 500).json({
+          error: `Failed to cancel label ${labelId}: ${message}`,
+        });
+      }
+    }
+
+    const FieldValue = admin.firestore.FieldValue;
+    const cancellationReason = req.body?.reason || "not_shipped";
+    const clientTimestamp = Date.now();
+    const updatePayload = {
+      status: "label_canceled",
+      labelCanceledAt: FieldValue.serverTimestamp(),
+      labelCancellationReason: cancellationReason,
+      labelCancellationSummary: cancellationResults,
+      outboundLabelUrl: FieldValue.delete(),
+      outboundTrackingNumber: FieldValue.delete(),
+      outboundLabelId: FieldValue.delete(),
+      inboundLabelUrl: FieldValue.delete(),
+      inboundTrackingNumber: FieldValue.delete(),
+      inboundLabelId: FieldValue.delete(),
+      uspsLabelUrl: FieldValue.delete(),
+      trackingNumber: FieldValue.delete(),
+    };
+
+    await updateOrderBoth(orderId, updatePayload);
+
+    const customer = orderData.shippingInfo?.fullName || "there";
+    const customerEmail = orderData.shippingInfo?.email;
+
+    if (customerEmail) {
+      const cancelHtml = LABEL_CANCELED_EMAIL_HTML
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, customer)
+        .replace(/\*\*ORDER_ID\*\*/g, orderData.id);
+
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: customerEmail,
+        subject: `Shipping label canceled for Order #${orderData.id}`,
+        html: cancelHtml,
+        bcc: ["sales@secondhandcell.com"],
+      });
+    }
+
+    res.json({
+      message: "Label canceled successfully and the customer has been notified.",
+      cancellationResults,
+      reason: cancellationReason,
+      canceledAt: clientTimestamp,
+    });
+  } catch (err) {
+    console.error("Error canceling label:", err.response?.data || err.message || err);
+    res.status(500).json({ error: "Failed to cancel label" });
   }
 });
 
