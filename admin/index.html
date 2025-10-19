@@ -46,6 +46,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             color: #e2e8f0;
             padding-bottom: 48px;
         }
+
+        body.sidebar-open {
+            overflow: hidden;
+        }
         
         .sidebar {
             width: 280px;
@@ -98,9 +102,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         
         .main-content {
             margin-left: 280px;
-            padding: 36px;
+            margin-right: auto;
+            padding: 40px 56px 56px;
             color: #e2e8f0;
             position: relative;
+            max-width: 1400px;
+        }
+
+        .main-sections {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
         }
         
         .admin-header {
@@ -205,6 +217,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             backdrop-filter: blur(18px);
         }
 
+        .top-nav-primary {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
         .top-nav h1 {
             font-size: 28px;
             font-weight: 700;
@@ -218,6 +236,25 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             margin-top: 2px;
         }
         
+        .mobile-nav-toggle {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(15, 23, 42, 0.65);
+            color: #e2e8f0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .mobile-nav-toggle:hover {
+            background: rgba(37, 99, 235, 0.25);
+            border-color: rgba(59, 130, 246, 0.45);
+        }
+
         .dashboard-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -552,9 +589,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         .intelligence-grid {
             display: grid;
-            grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 1.2fr);
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 24px;
-            margin-bottom: 32px;
         }
 
         .pipeline-panel,
@@ -689,9 +725,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         .operations-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 24px;
-            margin-bottom: 36px;
         }
 
         .control-panel,
@@ -907,34 +942,172 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             box-shadow: 0 18px 35px -18px rgba(37, 99, 235, 0.35);
         }
         
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-                border-right: none;
-                border-bottom: 1px solid #e2e8f0;
+        .content-module {
+            border-radius: 20px;
+            border: 1px solid rgba(96, 165, 250, 0.22);
+            background: linear-gradient(155deg, rgba(15, 23, 42, 0.8), rgba(30, 64, 175, 0.24));
+            box-shadow: 0 40px 80px -48px rgba(15, 23, 42, 0.8);
+            overflow: hidden;
+        }
+
+        .content-module summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 22px 28px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(226, 232, 240, 0.85);
+            background: rgba(15, 23, 42, 0.5);
+        }
+
+        .content-module summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .content-module summary::after {
+            content: '\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 12px;
+            color: rgba(148, 163, 184, 0.75);
+            transition: transform 0.2s ease;
+        }
+
+        .content-module[open] summary::after {
+            transform: rotate(180deg);
+        }
+
+        .summary-meta {
+            font-size: 12px;
+            color: rgba(148, 163, 184, 0.7);
+            letter-spacing: 0.08em;
+        }
+
+        .module-body {
+            padding: 24px 28px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        #mobile-nav-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(2, 6, 23, 0.68);
+            backdrop-filter: blur(2px);
+            display: none;
+            z-index: 45;
+        }
+
+        #mobile-nav-overlay.show {
+            display: block;
+        }
+
+        @media (max-width: 1440px) {
+            .main-content {
+                padding: 36px 44px 48px;
             }
+        }
+
+        @media (max-width: 1280px) {
+            .main-content {
+                padding: 32px 32px 44px;
+            }
+
+            .top-nav {
+                margin: -32px -32px 28px -32px;
+                padding: 24px 32px;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease, opacity 0.3s ease;
+                opacity: 0;
+                pointer-events: none;
+                width: 280px;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+                opacity: 1;
+                pointer-events: auto;
+            }
+
             .main-content {
                 margin-left: 0;
-                padding: 24px;
+                padding: 28px 24px 44px;
             }
-            .dashboard-grid {
-                grid-template-columns: 1fr;
+
+            .top-nav {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 18px;
+                margin: -28px -24px 24px -24px;
+                padding: 22px 24px;
             }
+
+            .top-nav-primary {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .mobile-nav-toggle {
+                display: flex;
+            }
+
             .top-nav-actions {
                 flex-wrap: wrap;
-                gap: 8px;
+                gap: 10px;
                 width: 100%;
-                justify-content: flex-start;
             }
+
             .top-nav-actions .time-display {
                 display: none;
             }
+
+            .hero-band {
+                grid-template-columns: 1fr;
+                padding: 24px;
+            }
+
+            .dashboard-grid,
+            .executive-metrics,
+            .intelligence-grid,
+            .operations-grid {
+                grid-template-columns: 1fr;
+            }
+
             .chat-dashboard-btn span,
             .logout-btn span {
                 display: none;
             }
+        }
+
+        @media (max-width: 640px) {
+            .main-content {
+                padding: 24px 20px 40px;
+            }
+
+            .top-nav {
+                margin: -24px -20px 20px -20px;
+                padding: 18px 20px;
+            }
+
+            .hero-band {
+                padding: 20px;
+            }
+
+            .module-body {
+                padding: 20px;
+            }
+
             .floating-chat-btn {
                 width: 56px;
                 height: 56px;
@@ -1293,11 +1466,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         </div>
     </aside>
 
+    <div id="mobile-nav-overlay"></div>
+
     <main class="main-content">
         <div class="top-nav">
-            <div>
-                <h1>Operations Command</h1>
-                <p>Mission control for every buyback lifecycle</p>
+            <div class="top-nav-primary">
+                <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle navigation">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div>
+                    <h1>Operations Command</h1>
+                    <p>Mission control for every buyback lifecycle</p>
+                </div>
             </div>
             <div class="top-nav-actions">
                 <div class="time-display" id="current-time-date"></div>
@@ -1329,6 +1509,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </div>
         </div>
 
+        <div class="main-sections">
         <section class="hero-band glass-card">
             <div class="hero-left">
                 <div class="eyebrow">Operations Mission Control</div>
@@ -1376,6 +1557,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </article>
         </section>
 
+        <details class="content-module" open>
+            <summary>
+                <span>Lifecycle Intelligence</span>
+                <span class="summary-meta">Pipeline health, activity pulses, and alerts</span>
+            </summary>
+            <div class="module-body">
         <section class="intelligence-grid">
             <article class="pipeline-panel glass-card">
                 <div class="panel-header">
@@ -1471,6 +1658,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </article>
         </section>
 
+            </div>
+        </details>
+
+        <details class="content-module" open>
+            <summary>
+                <span>Automation &amp; Team Operations</span>
+                <span class="summary-meta">Controls, staffing insights, and priorities</span>
+            </summary>
+            <div class="module-body">
         <section class="operations-grid">
             <article class="control-panel glass-card">
                 <div class="panel-header">
@@ -1529,12 +1725,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <div class="panel-footer" id="priority-summary"><i class="fas fa-check-circle" style="color: #34d399;"></i> You're clear for launch.</div>
             </article>
         </section>
+            </div>
+        </details>
 
-        <div class="panel-header" style="margin-bottom: 16px;">
-            <h3 class="panel-title">Status Overview</h3>
-            <span class="panel-subtitle">Tap any card to filter the orders table</span>
-        </div>
-
+        <details class="content-module" open>
+            <summary>
+                <span>Status Overview</span>
+                <span class="summary-meta">Tap any card to filter the orders table</span>
+            </summary>
+            <div class="module-body">
         <div class="dashboard-grid">
             <div class="dashboard-card" onclick="window.location.href='chat/index.html'" style="--icon-color: #3b82f6; cursor: pointer;">
                 <i class="fas fa-comments icon"></i>
@@ -1609,12 +1808,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <span class="accent-badge" style="background: #F9FAFB; color: #6B7280;">Return</span>
             </div>
         </div>
+            </div>
+        </details>
 
-        <div class="panel-header" style="margin: 36px 0 16px;">
-            <h3 class="panel-title">Orders Intelligence</h3>
-            <span class="panel-subtitle">Open an order to trigger advanced workflows</span>
-        </div>
-
+        <details class="content-module" open>
+            <summary>
+                <span>Orders Intelligence</span>
+                <span class="summary-meta">Open an order to trigger advanced workflows</span>
+            </summary>
+            <div class="module-body">
         <div class="orders-table-container">
             <h3 class="orders-table-header">Orders List</h3>
                 <div class="overflow-x-auto">
@@ -1636,6 +1838,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </table>
                 </div>
             <div id="no-orders-message" class="text-center text-gray-500 py-8 hidden">No orders found for this status.</div>
+        </div>
+            </div>
+        </details>
         </div>
     </main>
 
@@ -1811,6 +2016,65 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const statusLinks = document.querySelectorAll('.status-link');
         const displayUserId = document.getElementById('display-user-id');
         const dashboardCards = document.querySelectorAll('.dashboard-card');
+        const sidebarElement = document.querySelector('.sidebar');
+        const mobileNavToggle = document.getElementById('mobile-nav-toggle');
+        const mobileNavOverlay = document.getElementById('mobile-nav-overlay');
+
+        const setMobileToggleState = (isOpen) => {
+            if (mobileNavToggle) {
+                mobileNavToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            }
+        };
+
+        const closeMobileSidebar = () => {
+            if (!sidebarElement) return;
+            sidebarElement.classList.remove('open');
+            document.body.classList.remove('sidebar-open');
+            if (mobileNavOverlay) {
+                mobileNavOverlay.classList.remove('show');
+            }
+            setMobileToggleState(false);
+        };
+
+        const openMobileSidebar = () => {
+            if (!sidebarElement) return;
+            sidebarElement.classList.add('open');
+            document.body.classList.add('sidebar-open');
+            if (mobileNavOverlay) {
+                mobileNavOverlay.classList.add('show');
+            }
+            setMobileToggleState(true);
+        };
+
+        if (mobileNavToggle) {
+            mobileNavToggle.addEventListener('click', () => {
+                if (sidebarElement && sidebarElement.classList.contains('open')) {
+                    closeMobileSidebar();
+                } else {
+                    openMobileSidebar();
+                }
+            });
+        }
+
+        if (mobileNavOverlay) {
+            mobileNavOverlay.addEventListener('click', closeMobileSidebar);
+        }
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 1024) {
+                closeMobileSidebar();
+            }
+        });
+
+        statusLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 1024) {
+                    closeMobileSidebar();
+                }
+            });
+        });
+
+        setMobileToggleState(false);
 
         // Updated count elements
         const orderPendingCount = document.getElementById('order-pending-count');
