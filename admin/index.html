@@ -1242,7 +1242,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         let allOrders = [];
         let currentActiveStatus = 'all';
         let refreshInterval = null;
-        const autoRefreshedTracking = new Set();
 
         window.addEventListener('message', (event) => {
             if (!event.data || event.data.type !== 'kit-print-complete') {
@@ -1841,18 +1840,7 @@ window.onafterprint = () => {
 
                 renderActionButtons(order);
                 modalActionButtons.classList.remove('hidden');
-
-                if (
-                    order.status === 'kit_sent' &&
-                    order.shippingPreference === 'Shipping Kit Requested' &&
-                    order.outboundTrackingNumber &&
-                    !autoRefreshedTracking.has(order.id) &&
-                    (!order.kitTrackingStatus || !order.kitTrackingStatus.statusDescription)
-                ) {
-                    autoRefreshedTracking.add(order.id);
-                    setTimeout(() => handleAction(order.id, 'refreshKitTracking'), 150);
-                }
-
+                
                 // Show reminder button for orders awaiting kit actions or label generation
                 if (['order_pending', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'label_generated'].includes(order.status)) {
                     sendReminderBtn.classList.remove('hidden');
