@@ -2304,7 +2304,35 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     // Get order ID from response and estimated price from deviceInfo or orderData
                     const orderId = result.orderId || result.id || Date.now().toString();
                     const totalPrice = deviceInfo.estimatedPrice || orderData.estimatedQuote || finalQuote || '0';
-                    
+
+                    try {
+                        const summaryPayload = {
+                            orderId,
+                            quote: parseFloat(totalPrice) || 0,
+                            device: {
+                                name: orderData.device,
+                                brand: orderData.brand,
+                                storage: orderData.storage,
+                                carrier: orderData.carrier,
+                                condition: {
+                                    powerOn: orderData.condition_power_on,
+                                    functional: orderData.condition_functional,
+                                    cracks: orderData.condition_cracks,
+                                    cosmetic: orderData.condition_cosmetic
+                                }
+                            },
+                            shippingPreference: orderData.shippingPreference,
+                            shippingInfo: orderData.shippingInfo,
+                            paymentMethod: orderData.paymentMethod,
+                            paymentDetails: orderData.paymentDetails,
+                            submittedAt: new Date().toISOString()
+                        };
+
+                        localStorage.setItem('secondhandcell:lastOrderSummary', JSON.stringify(summaryPayload));
+                    } catch (storageError) {
+                        console.warn('Unable to persist order summary for confirmation view:', storageError);
+                    }
+
                     setTimeout(() => {
                         window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${orderData.shippingPreference === 'Shipping Kit Requested' ? 'ship_kit' : 'email_label'}&orderId=${encodeURIComponent(orderId)}&price=${encodeURIComponent(totalPrice)}`;
                     }, 2000);
