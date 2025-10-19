@@ -126,6 +126,9 @@
         .status-re-offered-declined { background-color: #fee2e2; color: #991b1b; } /* red-100, red-800 */
         .status-order_pending { background-color: #dbeafe; color: #1e40af; } /* blue-100, blue-800 */
         .status-shipping_kit_requested { background-color: #e0e7ff; color: #3730a3; } /* indigo-100, indigo-800 */
+        .status-kit_needs_printing { background-color: #e0e7ff; color: #3730a3; }
+        .status-kit_sent { background-color: #fef3c7; color: #92400e; }
+        .status-kit_delivered { background-color: #d1fae5; color: #065f46; }
         .status-label_generated { background-color: #fef9c3; color: #854d0e; } /* yellow-100, yellow-800 */
         .status-received { background-color: #e5e7eb; color: #374151; } /* gray-200, gray-800 */
         .status-return-label-generated { background-color: #e5e7eb; color: #374151; } /* gray-200, gray-800 */
@@ -749,7 +752,13 @@
                 case 're-offered-pending': return 'status-re-offered-pending';
                 case 're-offered-declined': return 'status-re-offered-declined';
                 case 'order_pending': return 'status-order_pending';
-                case 'shipping_kit_requested': return 'status-shipping_kit_requested';
+                case 'shipping_kit_requested':
+                case 'kit_needs_printing':
+                    return 'status-kit_needs_printing';
+                case 'kit_sent':
+                    return 'status-kit_sent';
+                case 'kit_delivered':
+                    return 'status-kit_delivered';
                 case 'label_generated': return 'status-label_generated';
                 case 'received': return 'status-received';
                 case 'return-label-generated': return 'status-return-label-generated';
@@ -761,8 +770,14 @@
             if (status === 'order_pending') {
                 return 'Order Pending';
             }
-            if (status === 'shipping_kit_requested') {
-                return 'Shipping Kit Requested';
+            if (status === 'shipping_kit_requested' || status === 'kit_needs_printing') {
+                return 'Needs Printing';
+            }
+            if (status === 'kit_sent') {
+                return 'Kit Sent';
+            }
+            if (status === 'kit_delivered') {
+                return 'Kit Delivered';
             }
             if (status === 'label_generated') {
                 return 'Shipping Kit on the Way';
@@ -1054,7 +1069,7 @@
                 modalActionButtons.appendChild(createButton('Return My Phone', () => handleModalAction(order.id, 'returnPhone'), 'bg-red-600 hover:bg-red-700'));
             } else if (order.status === 'label_generated' && order.uspsLabelUrl) {
                 modalActionButtons.appendChild(createButton('Print Shipping Label', () => window.open(order.uspsLabelUrl, '_blank')));
-            } else if (order.status === 'shipping_kit_requested' && order.outboundTrackingNumber) {
+            } else if (['shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'kit_delivered'].includes(order.status) && order.outboundTrackingNumber) {
                 modalActionButtons.appendChild(createButton('Track Shipping Kit', () => window.open(`https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${order.outboundTrackingNumber}`, '_blank')));
             } else if (order.status === 're-offered-declined' && order.returnLabelUrl) {
                 modalActionButtons.appendChild(createButton('Print Return Label', () => window.open(order.returnLabelUrl, '_blank'), 'bg-red-600 hover:bg-red-700'));
