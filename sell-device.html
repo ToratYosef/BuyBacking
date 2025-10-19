@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/halloween-theme.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9evSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
         
     <!-- Google tag (gtag.js) -->
@@ -361,7 +362,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <div id="order-selection-container" class="p-4 border-t hidden"><div class="flex justify-between items-center mb-3"><p class="text-sm font-semibold">Please select your order:</p><button id="close-order-selection-btn" class="text-slate-400"><i class="fa-solid fa-xmark text-xl"></i></button></div><div id="order-list" class="space-y-2 max-h-48 overflow-y-auto"></div></div>
             <div id="typing-indicator-container" class="p-2 hidden"><div class="p-3 rounded-lg"><div class="typing-indicator"><span></span><span></span><span></span></div></div></div>
             <div id="chat-input-container" class="p-4 border-t flex items-center"><input type="text" id="chat-input" placeholder="Type your message..." class="flex-grow border p-3 rounded-lg mr-2"><button id="send-message-btn" class="bg-blue-600 text-white p-3 rounded-lg"><i class="fa-solid fa-paper-plane"></i></button></div>
-            <div id="guest-prompt-container" class="p-4 border-t hidden"><p class="text-center text-sm mb-3">Please log in or continue as a guest.</p><div class="space-y-2"><button id="guest-login-btn" class="btn-dark-slate">Login / Sign Up</button><button id="guest-continue-btn" class="w-full bg-slate-200 p-3 rounded-lg font-semibold">Ask a General Question</button></div></div>
+            <div id="guest-prompt-container" class="p-4 border-t hidden bg-slate-900/60"><p class="text-center text-sm text-orange-200 mb-4 flex items-center justify-center gap-2"><i class="fa-solid fa-ghost text-orange-400"></i>Sign in to unlock live chat support.</p><button id="guest-login-btn" class="btn-dark-slate">Sign In to Chat</button><p class="text-center text-xs text-orange-100 mt-3 opacity-90">No tricks—creating an account takes less than a minute.</p></div>
             <div id="chat-survey-container" class="p-4 border-t hidden overflow-y-auto"><p class="text-center font-semibold mb-4">Please rate your experience.</p><form id="chat-survey-form"><div class="mb-4"><label class="font-semibold block mb-2 text-center">Overall Rating:</label><div id="star-rating" class="star-rating text-3xl flex justify-center" data-rating="0"><i class="fa-solid fa-star" data-value="1"></i><i class="fa-solid fa-star" data-value="2"></i><i class="fa-solid fa-star" data-value="3"></i><i class="fa-solid fa-star" data-value="4"></i><i class="fa-solid fa-star" data-value="5"></i></div></div><button type="submit" class="btn-dark-slate">Submit Feedback</button></form></div>
             <div id="end-chat-confirm-modal" class="hidden absolute inset-0 bg-white/90 flex flex-col items-center justify-center p-4 z-10"><div class="bg-white rounded-lg shadow-2xl p-6 text-center"><p class="text-lg font-semibold mb-4">End this chat session?</p><div class="flex gap-4 justify-center"><button id="end-chat-yes" class="px-6 py-2 font-semibold text-white bg-red-500 rounded-lg">Yes</button><button id="end-chat-no" class="px-6 py-2 font-semibold bg-slate-200 rounded-lg">No</button></div></div></div>
         </div>
@@ -442,7 +443,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
 
             onAuthStateChanged(auth, user => {
-                if (user) {
+                const isLoggedIn = !!user && !user.isAnonymous;
+                if (isLoggedIn) {
                     loginNavBtn.classList.add('hidden');
                     userMonogram.classList.remove('hidden');
                     const initials = (user.displayName || user.email || 'N/A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -506,6 +508,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             });
 
             logoutBtn.addEventListener('click', () => {
+                clearStoredChatSession();
+                currentChatId = null;
                 signOut(auth);
             });
             
@@ -530,7 +534,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const chatInputContainer = document.getElementById('chat-input-container');
             const guestPromptContainer = document.getElementById('guest-prompt-container');
             const guestLoginBtn = document.getElementById('guest-login-btn');
-            const guestContinueBtn = document.getElementById('guest-continue-btn');
             const unreadCounter = document.getElementById('unread-counter');
             const typingIndicatorContainer = document.getElementById('typing-indicator-container');
             const surveyContainer = document.getElementById('chat-survey-container');
@@ -544,18 +547,78 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const closeOrderSelectionBtn = document.getElementById('close-order-selection-btn');
             const sendMessageBtn = document.getElementById('send-message-btn');
             const globalTooltip = document.getElementById('globalTooltip');
-            
-            let currentChatId = null;
+
+            const CHAT_STORAGE_KEY = 'chatSessionState';
+
+            const storeChatSession = (chatId) => {
+                const user = auth.currentUser;
+                if (!user || user.isAnonymous || !chatId) return;
+                localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify({ chatId, uid: user.uid }));
+            };
+
+            const getStoredChatSession = () => {
+                const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+                if (!raw) return null;
+                try {
+                    const parsed = JSON.parse(raw);
+                    const user = auth.currentUser;
+                    if (!user || user.isAnonymous || parsed.uid !== user.uid) return null;
+                    return parsed;
+                } catch (error) {
+                    console.error('Failed to parse stored chat session', error);
+                    return null;
+                }
+            };
+
+            const clearStoredChatSession = () => {
+                localStorage.removeItem(CHAT_STORAGE_KEY);
+            };
+
+            let currentChatId = getStoredChatSession()?.chatId || null;
             let unsubscribeFromMessages = null;
             let unsubscribeFromChatSession = null;
             let isChatMinimized = true;
             let unreadCount = 0;
-            let hasUserTypedFirstMessage = false;
             let userTypingTimeout = null;
             let initialWelcomeRendered = {};
 
             const notificationSound = new Audio('https://cdn.freesound.org/previews/253/253887_3900531-lq.mp3');
             notificationSound.volume = 0.5;
+
+            const ensureUserAuthenticatedForChat = () => {
+                const user = auth.currentUser;
+                const isAuthenticated = !!user && !user.isAnonymous;
+                if (!isAuthenticated) {
+                    guestPromptContainer.classList.remove('hidden');
+                    chatInputContainer.classList.add('hidden');
+                    surveyContainer.classList.add('hidden');
+                    orderSelectionContainer.classList.add('hidden');
+                } else {
+                    guestPromptContainer.classList.add('hidden');
+                    chatInputContainer.classList.remove('hidden');
+                }
+                return isAuthenticated;
+            };
+
+            onAuthStateChanged(auth, (user) => {
+                const isLoggedIn = !!user && !user.isAnonymous;
+                if (isLoggedIn) {
+                    currentChatId = getStoredChatSession()?.chatId || currentChatId;
+                    if (chatWindow.classList.contains('is-visible')) {
+                        ensureUserAuthenticatedForChat();
+                        if (currentChatId) {
+                            listenForMessages(currentChatId);
+                            listenForChatSessionChanges(currentChatId);
+                        }
+                    }
+                } else {
+                    clearStoredChatSession();
+                    currentChatId = null;
+                    if (chatWindow.classList.contains('is-visible')) {
+                        ensureUserAuthenticatedForChat();
+                    }
+                }
+            });
 
             const getOrCreateGuestId = () => {
                 let id = localStorage.getItem('guestChatId');
@@ -567,15 +630,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             };
 
             const getOrCreateChatSession = async () => {
-                let chatId = localStorage.getItem('chatSessionId');
-                if (chatId) return chatId;
-                
                 const user = auth.currentUser;
-                const currentGuestId = getOrCreateGuestId();
+                if (!user || user.isAnonymous) return null;
+
+                const storedSession = getStoredChatSession();
+                if (storedSession?.chatId) {
+                    return storedSession.chatId;
+                }
+
                 const chatSessionData = {
                     createdAt: serverTimestamp(),
-                    ownerUid: user ? user.uid : null,
-                    guestId: user ? null : currentGuestId,
+                    ownerUid: user.uid,
+                    guestId: null,
                     status: 'active',
                     agentName: null,
                     isAgentTyping: false,
@@ -583,16 +649,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     agentAskingForOrderId: false
                 };
                 const docRef = await addDoc(collection(db, "chats"), chatSessionData);
-                chatId = docRef.id;
-                localStorage.setItem('chatSessionId', chatId);
+                const chatId = docRef.id;
+                storeChatSession(chatId);
                 return chatId;
             };
             
             const renderMessage = (msg) => {
                 const messageDiv = document.createElement('div');
                 const user = auth.currentUser;
-                const currentGuestId = localStorage.getItem('guestChatId');
-                const isMyMessage = (user && msg.sender === user.uid) || (!user && msg.sender === currentGuestId);
+                const isMyMessage = !!user && !user.isAnonymous && msg.sender === user.uid;
                 
                 let classes = 'p-3 rounded-lg max-w-[85%] mb-2 break-words';
                 if (msg.type === 'system') {
@@ -636,7 +701,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         guestPromptContainer.classList.add('hidden');
                         surveyContainer.classList.remove('hidden');
                         orderSelectionContainer.classList.add('hidden');
-                        localStorage.removeItem('chatSessionId');
+                        clearStoredChatSession();
                         localStorage.removeItem(`agentJoined_${chatId}`);
                     }
                     if (data.agentAskingForOrderId) {
@@ -665,8 +730,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         const msgData = doc.data();
                         renderMessage(msgData);
                         const user = auth.currentUser;
-                        const currentGuestId = localStorage.getItem('guestChatId');
-                        const isMyMessage = (user && msgData.sender === user.uid) || (!user && msgData.sender === currentGuestId);
+                        const isMyMessage = !!user && !user.isAnonymous && msgData.sender === user.uid;
                         if (!isMyMessage && isChatMinimized) {
                             unreadCount++;
                             unreadCounter.textContent = unreadCount;
@@ -695,10 +759,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 isChatMinimized = false;
                 unreadCount = 0;
                 unreadCounter.classList.remove('visible');
-                const chatId = await getOrCreateChatSession();
-                if (chatId) {
-                    listenForMessages(chatId);
-                    listenForChatSessionChanges(chatId);
+                if (!ensureUserAuthenticatedForChat()) {
+                    currentChatId = null;
+                    return;
+                }
+
+                if (!currentChatId) {
+                    currentChatId = await getOrCreateChatSession();
+                }
+
+                if (currentChatId) {
+                    listenForMessages(currentChatId);
+                    listenForChatSessionChanges(currentChatId);
                 }
             };
             chatOpenBtn.addEventListener('click', openChat);
@@ -729,30 +801,32 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     });
                     await updateDoc(doc(db, "chats", currentChatId), { status: 'ended_by_user' });
                 }
-                localStorage.removeItem('chatSessionId');
+                clearStoredChatSession();
                 localStorage.removeItem(`agentJoined_${currentChatId}`);
                 currentChatId = null;
-                hasUserTypedFirstMessage = false;
                 chatMessages.innerHTML = '';
                 endChatConfirmModal.classList.add('hidden');
                 endChatConfirmModal.classList.remove('flex');
             });
 
             const sendMessage = async (text) => {
-                if (text.trim() === '' || !currentChatId) return;
-                const user = auth.currentUser;
-                if (!user && !hasUserTypedFirstMessage) {
-                    hasUserTypedFirstMessage = true;
-                    chatInputContainer.classList.add('hidden');
-                    guestPromptContainer.classList.remove('hidden');
-                    return;
+                if (text.trim() === '') return;
+
+                if (!ensureUserAuthenticatedForChat()) return;
+
+                if (!currentChatId) {
+                    currentChatId = await getOrCreateChatSession();
+                    if (!currentChatId) return;
                 }
-                const currentGuestId = getOrCreateGuestId();
-                const messageData = { text, timestamp: serverTimestamp(), sender: user ? user.uid : currentGuestId };
+
+                const user = auth.currentUser;
+                if (!user || user.isAnonymous) return;
+
+                const messageData = { text, timestamp: serverTimestamp(), sender: user.uid };
                 await addDoc(collection(db, `chats/${currentChatId}/messages`), messageData);
                 chatInput.value = '';
-                await updateDoc(doc(db, "chats", currentChatId), { 
-                    userTypingText: '', 
+                await updateDoc(doc(db, "chats", currentChatId), {
+                    userTypingText: '',
                     lastMessage: `User: ${text}`,
                     lastMessageTimestamp: serverTimestamp() 
                 });
@@ -771,18 +845,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             chatInput.addEventListener('keyup', () => {
                 clearTimeout(userTypingTimeout);
                 userTypingTimeout = setTimeout(async () => {
-                    if (currentChatId) {
+                    const user = auth.currentUser;
+                    if (currentChatId && user && !user.isAnonymous) {
                         await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
                     }
                 }, 300);
             });
 
             guestLoginBtn.addEventListener('click', () => openModal('loginModal'));
-            guestContinueBtn.addEventListener('click', () => {
-                guestPromptContainer.classList.add('hidden');
-                chatInputContainer.classList.remove('hidden');
-                chatInput.focus();
-            });
 
             starRatingContainer.addEventListener('mouseover', e => {
                 if (e.target.tagName === 'I') {
@@ -813,7 +883,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 return new Promise((resolve) => {
                     const unsubscribe = onAuthStateChanged(auth, async (user) => {
                         unsubscribe();
-                        if (!user) {
+                        if (!user || user.isAnonymous) {
                             resolve({ requiresLogin: true });
                             return;
                         }
