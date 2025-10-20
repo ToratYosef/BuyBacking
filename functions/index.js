@@ -915,6 +915,156 @@ app.get("/orders/by-user/:userId", async (req, res) => {
   }
 });
 
+app.get("/feeds/pricing.xml", async (req, res) => {
+  try {
+    const manufacturerMap = {
+      iphone: "Apple",
+      ipad: "Apple",
+      samsung: "Samsung",
+      google: "Google",
+    };
+
+    const brandSnapshot = await db.collection("devices").get();
+    const feedItems = [];
+
+    await Promise.all(
+      brandSnapshot.docs.map(async (brandDoc) => {
+        const brandId = brandDoc.id;
+        const manufacturer =
+          manufacturerMap[brandId] ||
+          brandId.charAt(0).toUpperCase() + brandId.slice(1);
+
+        const modelsSnapshot = await brandDoc.ref.collection("models").get();
+
+        modelsSnapshot.forEach((modelDoc) => {
+          const modelData = modelDoc.data() || {};
+          const priceTable = modelData.prices;
+
+          if (!priceTable || typeof priceTable !== "object") {
+            return;
+          }
+
+          const slug = modelData.slug || modelDoc.id;
+          const modelName = modelData.name || slug;
+          const imageUrlBase = modelData.imageUrl || "";
+          const imageUrl = imageUrlBase
+            ? /\.(webp|png|jpe?g|avif)$/i.test(imageUrlBase)
+              ? imageUrlBase
+              : `${imageUrlBase}.webp`
+            : null;
+
+          Object.entries(priceTable).forEach(([storage, carrierPricing]) => {
+            if (!carrierPricing || typeof carrierPricing !== "object") {
+              return;
+            }
+
+            const unlockedPricing = carrierPricing.unlocked || {};
+            const usedCashPriceValue =
+              unlockedPricing.flawless ??
+              unlockedPricing.good ??
+              unlockedPricing.fair ??
+              null;
+
+            if (usedCashPriceValue == null) {
+              return;
+            }
+
+            const usedCashNumber = Number(usedCashPriceValue);
+            if (!Number.isFinite(usedCashNumber)) {
+              return;
+            }
+
+            const nonWorkingValue =
+              unlockedPricing.noPower ?? unlockedPricing.broken ?? null;
+            const nonWorkingNumber = Number(nonWorkingValue);
+
+            const params = new URLSearchParams({
+              device: `${brandId}-${slug}`,
+              carrier: "unlocked",
+              power: "yes",
+            });
+
+            if (storage && storage !== "default") {
+              params.set("storage", storage);
+            }
+
+            const deepLink = `https://secondhandcell.com/sell/?${params.toString()}`;
+
+            feedItems.push({
+              manufacturer,
+              model:
+                storage && storage !== "default"
+                  ? `${modelName} ${storage}`
+                  : modelName,
+              usedCashPrice: usedCashNumber.toFixed(2),
+              deepLink,
+              imageUrl,
+              nonWorkingPrice:
+                Number.isFinite(nonWorkingNumber)
+                  ? nonWorkingNumber.toFixed(2)
+                  : null,
+            });
+          });
+        });
+      })
+    );
+
+    feedItems.sort((a, b) => {
+      const manufacturerCompare = a.manufacturer.localeCompare(b.manufacturer);
+      if (manufacturerCompare !== 0) {
+        return manufacturerCompare;
+      }
+      return a.model.localeCompare(b.model);
+    });
+
+    const escapeXml = (value) =>
+      String(value).replace(/[<>&'\"]/g, (char) => {
+        switch (char) {
+          case "<":
+            return "&lt;";
+          case ">":
+            return "&gt;";
+          case "&":
+            return "&amp;";
+          case "'":
+            return "&apos;";
+          case '"':
+            return "&quot;";
+          default:
+            return char;
+        }
+      });
+
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<pricingFeed generatedAt="${new Date().toISOString()}">`;
+
+    feedItems.forEach((item) => {
+      xml += `\n  <device>`;
+      xml += `\n    <manufacturer>${escapeXml(item.manufacturer)}</manufacturer>`;
+      xml += `\n    <model>${escapeXml(item.model)}</model>`;
+      xml += `\n    <usedCashPrice>${escapeXml(item.usedCashPrice)}</usedCashPrice>`;
+      xml += `\n    <deepLink>${escapeXml(item.deepLink)}</deepLink>`;
+      if (item.imageUrl) {
+        xml += `\n    <imageUrl>${escapeXml(item.imageUrl)}</imageUrl>`;
+      }
+      if (item.nonWorkingPrice) {
+        xml += `\n    <nonWorkingPrice>${escapeXml(item.nonWorkingPrice)}</nonWorkingPrice>`;
+      }
+      xml += `\n  </device>`;
+    });
+
+    xml += "\n</pricingFeed>";
+
+    res.set("Content-Type", "application/xml");
+    res.set("Cache-Control", "public, max-age=3600");
+    res.status(200).send(xml);
+  } catch (error) {
+    console.error("Error generating pricing feed:", error);
+    const errorXml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n<error>Unable to generate pricing feed.</error>';
+    res.status(500).type("application/xml").send(errorXml);
+  }
+});
+
 app.post("/submit-order", async (req, res) => {
   try {
     const orderData = req.body;
@@ -992,6 +1142,33 @@ app.post("/submit-order", async (req, res) => {
         }
       ).catch((e) => console.error("FCM Send Error (New Order):", e)),
     ];
+
+    const estimatedQuoteNumber = Number(orderData.estimatedQuote);
+    if (Number.isFinite(estimatedQuoteNumber) && estimatedQuoteNumber > 0) {
+      const trackingUrl = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(
+        orderId
+      )}&p=${estimatedQuoteNumber.toFixed(2)}`;
+
+      notificationPromises.push(
+        axios
+          .get(trackingUrl)
+          .then(() =>
+            console.log("Server-side tracking pixel fired successfully:", trackingUrl)
+          )
+          .catch((error) => {
+            const status = error?.response?.status;
+            const errorMessage = status ? `status ${status}` : error.message;
+            console.error(
+              "Failed to send server-side tracking pixel:",
+              errorMessage
+            );
+          })
+      );
+    } else {
+      console.warn(
+        `Tracking pixel not triggered for order ${orderId}: missing or invalid estimated quote.`
+      );
+    }
 
     const adminsSnapshot = await adminsCollection.get();
     adminsSnapshot.docs.forEach((adminDoc) => {
