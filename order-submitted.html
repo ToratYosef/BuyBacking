@@ -91,9 +91,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // Get URL parameters
             const urlParams = new URLSearchParams(window.location.search);
             const shippingPreference = urlParams.get('shipping') || 'email_label'; 
-            const transactionId = urlParams.get('orderId') || 'unknown';
-            const basketTotal = urlParams.get('price') || urlParams.get('total') || '0';
-
             if (shippingPreference === 'ship_kit') {
                 shippingInstruction.innerHTML = `
                     <strong>Shipping Kit Instructions:</strong>
@@ -103,20 +100,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 `;
             }
 
-            // Add tracking pixel for customer selling
-            // Format: <iframe src="https://scdcb.com/p.ashx?a=144&e=305&t=TRANSACTION_ID&p=BASKET_TOTAL" height="1" width="1" frameborder="0"></iframe>
-            if (transactionId && transactionId !== 'unknown' && basketTotal && parseFloat(basketTotal) > 0) {
-                const trackingPixel = document.createElement('iframe');
-                trackingPixel.src = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(transactionId)}&p=${parseFloat(basketTotal).toFixed(2)}`;
-                trackingPixel.height = '1';
-                trackingPixel.width = '1';
-                trackingPixel.frameBorder = '0';
-                trackingPixel.style.display = 'none';
-                document.body.appendChild(trackingPixel);
-                console.log('Tracking pixel loaded:', trackingPixel.src);
-            } else {
-                console.warn('Tracking pixel not loaded: Missing transaction ID or basket total');
-            }
         });
     </script>
 
