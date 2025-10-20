@@ -915,7 +915,7 @@ app.get("/orders/by-user/:userId", async (req, res) => {
   }
 });
 
-app.get("/feeds/pricing.xml", async (req, res) => {
+app.get(["/feeds/pricing.xml", "/api/feeds/pricing.xml"], async (req, res) => {
   try {
     const manufacturerMap = {
       iphone: "Apple",
