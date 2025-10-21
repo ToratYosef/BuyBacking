@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const admin = require('firebase-admin');
 const { getStorage } = require('firebase-admin/storage');
 const { getFirestore } = require('firebase-admin/firestore');
 const admin = require('firebase-admin');
@@ -46,9 +47,7 @@ router.post("/generate-label/:id", async (req, res) => {
             country: "US",
         };
 
-        let updateData = {
-            status: order.shippingPreference === "Shipping Kit Requested" ? "kit_needs_printing" : "label_generated"
-        };
+        let updateData = { status: "label_generated" };
         let internalHtmlBody = "";
         let customerEmailSubject = "";
         let customerMailOptions;

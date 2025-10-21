@@ -5,6 +5,7 @@ const admin = require("firebase-admin");
 const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { URLSearchParams } = require('url');
+const { generateCustomLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -433,6 +434,36 @@ function stringifyData(obj = {}) {
     out[String(k)] = typeof v === 'string' ? v : String(v);
   }
   return out;
+}
+
+const kitStatusOrder = ['needs_printing', 'kit_sent', 'kit_in_transit', 'kit_delivered'];
+
+function mapShipEngineStatus(code) {
+  if (!code) return null;
+  const normalized = String(code).toUpperCase();
+  switch (normalized) {
+    case 'DELIVERED':
+    case 'DELIVERED_TO_AGENT':
+      return 'kit_delivered';
+    case 'OUT_FOR_DELIVERY':
+    case 'IN_TRANSIT':
+    case 'ACCEPTED':
+    case 'SHIPMENT_ACCEPTED':
+    case 'LABEL_CREATED':
+    case 'UNKNOWN':
+      return 'kit_in_transit';
+    default:
+      return null;
+  }
+}
+
+function shouldPromoteKitStatus(currentStatus, nextStatus) {
+  if (!nextStatus) return false;
+  const currentIndex = kitStatusOrder.indexOf(currentStatus);
+  const nextIndex = kitStatusOrder.indexOf(nextStatus);
+  if (nextIndex === -1) return false;
+  if (currentIndex === -1) return true;
+  return nextIndex > currentIndex;
 }
 
 // Custom function to send FCM push notification to a specific token or list of tokens
@@ -1073,6 +1104,10 @@ app.post("/generate-label/:id", async (req, res) => {
     const order = { id: doc.id, ...doc.data() };
     const buyerShippingInfo = order.shippingInfo;
     const orderIdForLabel = order.id || "N/A";
+    const statusTimestamp = admin.firestore.FieldValue.serverTimestamp();
+    const generatedStatus = order.shippingPreference === "Shipping Kit Requested"
+      ? "needs_printing"
+      : "label_generated";
 
     // Define package data for the outbound and return labels
     // Outbound label is for the shipping kit (box + padding)
@@ -1111,7 +1146,14 @@ app.post("/generate-label/:id", async (req, res) => {
     };
 
     let customerLabelData;
-    let updateData = { status: "label_generated" };
+    let updateData = {
+      status: generatedStatus,
+      labelGeneratedAt: statusTimestamp,
+      lastStatusUpdateAt: statusTimestamp,
+    };
+    if (generatedStatus === 'needs_printing') {
+      updateData.needsPrintingAt = statusTimestamp;
+    }
     let customerEmailSubject = "";
     let customerEmailHtml = "";
     let customerMailOptions;
@@ -1214,13 +1256,94 @@ app.post("/generate-label/:id", async (req, res) => {
   }
 });
 
+app.get('/packing-slip/:id', async (req, res) => {
+  try {
+    const doc = await ordersCollection.doc(req.params.id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const pdfData = await generateCustomLabelPdf(order);
+    const buffer = Buffer.isBuffer(pdfData) ? pdfData : Buffer.from(pdfData);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="packing-slip-${order.id}.pdf"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Failed to generate packing slip PDF:', error);
+    res.status(500).json({ error: 'Failed to generate packing slip PDF' });
+  }
+});
+
+app.get('/print-bundle/:id', async (req, res) => {
+  try {
+    const doc = await ordersCollection.doc(req.params.id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const pdfParts = [];
+
+    const slipData = await generateCustomLabelPdf(order);
+    pdfParts.push(Buffer.isBuffer(slipData) ? slipData : Buffer.from(slipData));
+
+    const labelUrls = [];
+
+    if (order.shippingPreference === 'Shipping Kit Requested') {
+      if (order.inboundLabelUrl) labelUrls.push(order.inboundLabelUrl);
+      if (order.outboundLabelUrl) labelUrls.push(order.outboundLabelUrl);
+    } else if (order.uspsLabelUrl) {
+      labelUrls.push(order.uspsLabelUrl);
+    }
+
+    if (order.returnLabelUrl && !labelUrls.includes(order.returnLabelUrl)) {
+      labelUrls.push(order.returnLabelUrl);
+    }
+
+    const downloadedLabels = await Promise.all(
+      labelUrls.map(async (url) => {
+        try {
+          const response = await axios.get(url, { responseType: 'arraybuffer' });
+          return Buffer.from(response.data);
+        } catch (downloadError) {
+          console.error(`Failed to download label from ${url}:`, downloadError.message || downloadError);
+          return null;
+        }
+      })
+    );
+
+    pdfParts.push(...downloadedLabels.filter(Boolean));
+
+    const merged = await mergePdfBuffers(pdfParts);
+    const mergedBuffer = Buffer.isBuffer(merged) ? merged : Buffer.from(merged);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="print-bundle-${order.id}.pdf"`);
+    res.send(mergedBuffer);
+  } catch (error) {
+    console.error('Failed to generate print bundle:', error);
+    res.status(500).json({ error: 'Failed to prepare print bundle' });
+  }
+});
+
 app.put("/orders/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
     const orderId = req.params.id;
     if (!status) return res.status(400).json({ error: "Status is required" });
 
-    const { order } = await updateOrderBoth(orderId, { status });
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const statusUpdate = { status, lastStatusUpdateAt: timestamp };
+    if (status === 'kit_sent') {
+      statusUpdate.kitSentAt = timestamp;
+    }
+    if (status === 'needs_printing') {
+      statusUpdate.needsPrintingAt = timestamp;
+    }
+
+    const { order } = await updateOrderBoth(orderId, statusUpdate);
 
     let customerNotificationPromise = Promise.resolve();
     let customerEmailHtml = "";
@@ -1281,6 +1404,97 @@ app.put("/orders/:id/status", async (req, res) => {
   } catch (err) {
     console.error("Error updating status:", err);
     res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+app.post('/orders/:id/mark-kit-sent', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    const { order } = await updateOrderBoth(orderId, {
+      status: 'kit_sent',
+      kitSentAt: timestamp,
+      lastStatusUpdateAt: timestamp,
+    });
+
+    res.json({
+      message: `Order ${orderId} marked as kit sent`,
+      orderId,
+      status: order.status,
+    });
+  } catch (error) {
+    console.error('Error marking kit as sent:', error);
+    res.status(500).json({ error: 'Failed to mark kit as sent' });
+  }
+});
+
+app.post('/orders/:id/sync-outbound-tracking', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const doc = await ordersCollection.doc(orderId).get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const trackingNumber = order.outboundTrackingNumber;
+    if (!trackingNumber) {
+      return res.status(400).json({ error: 'No outbound tracking number on file.' });
+    }
+
+    const shipEngineKey = process.env.SHIPENGINE_KEY;
+    if (!shipEngineKey) {
+      return res.status(500).json({ error: 'ShipEngine API key not configured.' });
+    }
+
+    const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
+    const { data: trackingData } = await axios.get(trackingUrl, {
+      headers: { 'API-Key': shipEngineKey },
+    });
+
+    const normalizedStatus = mapShipEngineStatus(trackingData.status_code || trackingData.statusCode);
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const updatePayload = {
+      outboundTrackingStatus: trackingData.status_code || trackingData.statusCode || null,
+      outboundTrackingStatusDescription: trackingData.status_description || trackingData.statusDescription || null,
+      outboundTrackingCarrierCode: trackingData.carrier_code || trackingData.carrierCode || null,
+      outboundTrackingCarrierStatusCode: trackingData.carrier_status_code || trackingData.carrierStatusCode || null,
+      outboundTrackingCarrierStatusDescription: trackingData.carrier_status_description || trackingData.carrierStatusDescription || null,
+      outboundTrackingEstimatedDelivery: trackingData.estimated_delivery_date || trackingData.estimatedDeliveryDate || null,
+      outboundTrackingLastSyncedAt: timestamp,
+    };
+
+    if (Array.isArray(trackingData.events)) {
+      updatePayload.outboundTrackingEvents = trackingData.events;
+    } else if (Array.isArray(trackingData.activities)) {
+      updatePayload.outboundTrackingEvents = trackingData.activities;
+    }
+
+    if (normalizedStatus && shouldPromoteKitStatus(order.status, normalizedStatus)) {
+      updatePayload.status = normalizedStatus;
+      updatePayload.lastStatusUpdateAt = timestamp;
+
+      if (normalizedStatus === 'kit_delivered') {
+        updatePayload.kitDeliveredAt = timestamp;
+      }
+      if (normalizedStatus === 'kit_in_transit' && !order.kitSentAt) {
+        updatePayload.kitSentAt = timestamp;
+      }
+    }
+
+    const { order: updatedOrder } = await updateOrderBoth(orderId, updatePayload);
+
+    res.json({
+      message: 'Outbound tracking synchronized.',
+      orderId,
+      status: updatedOrder.status,
+      tracking: trackingData,
+    });
+  } catch (error) {
+    console.error('Error syncing outbound tracking:', error.response?.data || error);
+    res.status(500).json({ error: 'Failed to sync outbound tracking' });
   }
 });
 
