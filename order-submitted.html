@@ -123,6 +123,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const expectedPathSegment = '/sell/';
+            const referrer = document.referrer;
+            const homepageUrl = 'https://secondhandcell.com/index.html';
+
+            // --- Access Control Check (NEW LOGIC) ---
+            // If the referrer is empty (direct access) or doesn't contain the expected path, redirect to the homepage.
+            if (!referrer || !referrer.includes(expectedPathSegment)) {
+                console.error("Access denied: Not referred from the required selling page.");
+                // Prevent content from flashing and immediately redirect
+                window.location.replace(homepageUrl);
+                return; // Stop execution of the rest of the script
+            }
+            // --- End Access Control Check ---
+
             const shippingInstruction = document.getElementById('shippingInstruction');
             const urlParams = new URLSearchParams(window.location.search);
 
