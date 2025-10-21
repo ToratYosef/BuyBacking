@@ -46,12 +46,48 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <i class="fa-solid fa-circle-check text-7xl text-green-500"></i>
             </div>
             
-            <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Thank You for Your Order! 🎉</h1>
-            
-            <p class="text-lg text-slate-600 mb-8 max-w-xl mx-auto">
-                Your order has been successfully submitted. An email with all the details has been sent to your inbox.
+            <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Thank You for Your Order, <span id="heroName">Friend</span>! 🎉</h1>
+
+            <p class="text-lg text-slate-600 mb-6 max-w-xl mx-auto">
+                We've locked in your quote of <span id="heroPrice" class="font-semibold text-slate-900">$0.00</span> for your <span id="heroDevice" class="font-semibold text-slate-900">device</span>. Look out for confirmation emails from us shortly.
             </p>
-            
+
+            <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left mb-6">
+                <h2 class="text-xl font-bold text-slate-800 mb-4">Order Summary</h2>
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-slate-700">
+                    <div>
+                        <dt class="font-semibold text-slate-600">Order Number</dt>
+                        <dd id="summaryOrderId" class="mt-1 text-slate-900">Pending</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-600">Customer</dt>
+                        <dd id="summaryName" class="mt-1 text-slate-900">Your Name</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-600">Device</dt>
+                        <dd id="summaryDevice" class="mt-1 text-slate-900">Device details</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-600">Estimated Payout</dt>
+                        <dd id="summaryPrice" class="mt-1 text-slate-900">$0.00</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-600">Payment Method</dt>
+                        <dd id="summaryPaymentMethod" class="mt-1 text-slate-900">Not specified</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="text-center mb-8 space-y-3">
+                <a id="trustpilotTextLink" href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block text-lg font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">Review us on Trustpilot</a>
+                <div>
+                    <a id="trustpilotStarsLink" href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block">
+                        <img src="https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.svg" alt="Rate us five stars on Trustpilot" class="h-12 mx-auto">
+                    </a>
+                </div>
+                <p class="text-sm text-slate-500 max-w-lg mx-auto">Your feedback helps other sellers feel confident working with us. It only takes a few seconds!</p>
+            </div>
+
             <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left mb-8">
                 <h2 class="text-xl font-bold text-slate-800 mb-4">What Happens Next?</h2>
                 <ol class="list-decimal list-inside space-y-4 text-slate-700">
@@ -87,10 +123,79 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const shippingInstruction = document.getElementById('shippingInstruction');
-
-            // Get URL parameters
             const urlParams = new URLSearchParams(window.location.search);
-            const shippingPreference = urlParams.get('shipping') || 'email_label'; 
+
+            let sessionSummary = null;
+            try {
+                const stored = sessionStorage.getItem('shcOrderSummary');
+                if (stored) {
+                    sessionSummary = JSON.parse(stored);
+                    sessionStorage.removeItem('shcOrderSummary');
+                }
+            } catch (error) {
+                console.warn('Unable to read stored order summary:', error);
+            }
+
+            const coalesceValue = (key) => {
+                const paramValue = urlParams.get(key);
+                if (paramValue !== null && paramValue !== undefined && paramValue.toString().trim() !== '') {
+                    return paramValue;
+                }
+                if (sessionSummary && sessionSummary[key] !== undefined && sessionSummary[key] !== null) {
+                    return String(sessionSummary[key]);
+                }
+                return '';
+            };
+
+            const formatDisplayText = (value) => {
+                if (!value) return '';
+                return value
+                    .toString()
+                    .replace(/[_-]+/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim()
+                    .replace(/\b\w/g, (char) => char.toUpperCase());
+            };
+
+            const heroNameEl = document.getElementById('heroName');
+            const heroPriceEl = document.getElementById('heroPrice');
+            const heroDeviceEl = document.getElementById('heroDevice');
+            const summaryOrderIdEl = document.getElementById('summaryOrderId');
+            const summaryNameEl = document.getElementById('summaryName');
+            const summaryDeviceEl = document.getElementById('summaryDevice');
+            const summaryPriceEl = document.getElementById('summaryPrice');
+            const summaryPaymentMethodEl = document.getElementById('summaryPaymentMethod');
+
+            const name = coalesceValue('name').trim();
+            const orderId = coalesceValue('orderId').trim();
+            const rawPrice = coalesceValue('price');
+            const priceNumber = Number(rawPrice);
+            const formattedPrice = Number.isFinite(priceNumber)
+                ? priceNumber.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                : '$0.00';
+
+            const deviceParts = [];
+            const deviceName = coalesceValue('device').trim();
+            if (deviceName) deviceParts.push(deviceName);
+            const storage = coalesceValue('storage').trim();
+            if (storage) deviceParts.push(storage);
+            const carrier = coalesceValue('carrier').trim();
+            if (carrier) deviceParts.push(formatDisplayText(carrier));
+            const deviceSummary = deviceParts.length ? deviceParts.join(' • ') : 'Device details on file';
+
+            const paymentMethod = coalesceValue('paymentMethod').trim();
+            const paymentSummary = paymentMethod ? formatDisplayText(paymentMethod) : 'Not specified';
+
+            heroNameEl.textContent = name || 'Friend';
+            heroPriceEl.textContent = formattedPrice;
+            heroDeviceEl.textContent = deviceSummary;
+            summaryOrderIdEl.textContent = orderId || 'Pending';
+            summaryNameEl.textContent = name || 'Your Name';
+            summaryDeviceEl.textContent = deviceSummary;
+            summaryPriceEl.textContent = formattedPrice;
+            summaryPaymentMethodEl.textContent = paymentSummary;
+
+            const shippingPreference = urlParams.get('shipping') || 'email_label';
             if (shippingPreference === 'ship_kit') {
                 shippingInstruction.innerHTML = `
                     <strong>Shipping Kit Instructions:</strong>
@@ -99,7 +204,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     </span>
                 `;
             }
-
         });
     </script>
 

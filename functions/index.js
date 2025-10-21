@@ -310,7 +310,9 @@ const DOWNGRADE_EMAIL_HTML = `
   </html>
 `;
 
-// NEW COMPLETED ORDER EMAIL TEMPLATE WITH TRUSTBOX PLACEHOLDER
+const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
+const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.svg";
+
 const ORDER_COMPLETED_EMAIL_HTML = `
 <!DOCTYPE html>
 <html lang="en">
@@ -320,18 +322,16 @@ const ORDER_COMPLETED_EMAIL_HTML = `
   <title>Your SecondHandCell Order is Complete!</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-    .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
-    .header { background-color: #4CAF50; color: #ffffff; padding: 24px; text-align: center; }
-    .header h1 { font-size: 24px; margin: 0; }
-    .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
-    .content p { margin: 0 0 16px; }
-    .order-id { color: #4CAF50; font-weight: bold; }
-    .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
-    .trustpilot-widget { margin-top: 24px; margin-bottom: 24px; text-align: center; }
+    .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 10px; box-shadow: 0 4px 6px rgba(15,23,42,0.12); overflow: hidden; border: 1px solid #e2e8f0; }
+    .header { background-color: #22c55e; color: #ffffff; padding: 28px 24px; text-align: center; }
+    .header h1 { font-size: 26px; margin: 0; }
+    .content { padding: 28px 24px; color: #334155; font-size: 16px; line-height: 1.6; }
+    .content p { margin: 0 0 18px; }
+    .order-summary { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin: 20px 0; }
+    .order-summary p { margin: 8px 0; color: #0f172a; }
+    .order-summary strong { color: #1e293b; }
+    .footer { padding: 24px; text-align: center; color: #94a3b8; font-size: 14px; border-top: 1px solid #e2e8f0; background-color: #f8fafc; }
   </style>
-  <!-- TrustBox script -->
-  <script type="text/javascript" src="//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js" async></script>
-  <!-- End TrustBox script -->
 </head>
 <body>
   <div class="email-container">
@@ -340,10 +340,52 @@ const ORDER_COMPLETED_EMAIL_HTML = `
     </div>
     <div class="content">
       <p>Hello **CUSTOMER_NAME**,</p>
-      <p>Great news! Your order <strong>#**ORDER_ID**</strong> has been completed and your payment has been processed.</p>
-      <p>If you have any questions, please feel free to reply to this email.</p>
-      <p>Thank you for choosing SecondHandCell!</p>
-      **TRUSTBOX_WIDGET**
+      <p>Great news! Your order <strong>#**ORDER_ID**</strong> is complete and your payout is on the way.</p>
+      <div class="order-summary">
+        <p><strong>Device:</strong> **DEVICE_SUMMARY**</p>
+        <p><strong>Payout:</strong> $**ORDER_TOTAL**</p>
+        <p><strong>Payment Method:</strong> **PAYMENT_METHOD**</p>
+      </div>
+      <p>If you have any questions, simply reply to this email—we're here to help.</p>
+      <p>Thank you again for choosing SecondHandCell!</p>
+      **TRUSTPILOT_SECTION**
+    </div>
+    <div class="footer">
+      <p>The SecondHandCell Team</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+const REVIEW_REQUEST_EMAIL_HTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Share Your Experience with SecondHandCell</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+    .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 10px; box-shadow: 0 4px 6px rgba(15,23,42,0.12); overflow: hidden; border: 1px solid #e2e8f0; }
+    .header { background-color: #0ea5e9; color: #ffffff; padding: 28px 24px; text-align: center; }
+    .header h1 { font-size: 24px; margin: 0; }
+    .content { padding: 28px 24px; color: #334155; font-size: 16px; line-height: 1.6; }
+    .content p { margin: 0 0 18px; }
+    .footer { padding: 24px; text-align: center; color: #94a3b8; font-size: 14px; border-top: 1px solid #e2e8f0; background-color: #f8fafc; }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <h1>We'd Love Your Feedback</h1>
+    </div>
+    <div class="content">
+      <p>Hello **CUSTOMER_NAME**,</p>
+      <p>Thank you for trusting us with your **DEVICE_SUMMARY** (Order #**ORDER_ID**). We just completed your payout of <strong>$**ORDER_TOTAL**</strong>.</p>
+      <p>Could you take a few seconds to share how everything went? Your review helps other sellers feel confident working with us.</p>
+      **TRUSTPILOT_SECTION**
+      <p>We appreciate you being part of the SecondHandCell family!</p>
     </div>
     <div class="footer">
       <p>The SecondHandCell Team</p>
@@ -424,6 +466,81 @@ async function updateOrderBoth(orderId, partialData) {
   }
 
   return { order: { id: orderId, ...base, ...partialData }, userId };
+}
+
+function applyTemplate(template, replacements = {}) {
+  let output = template;
+  for (const [key, value] of Object.entries(replacements)) {
+    output = output.split(key).join(value);
+  }
+  return output;
+}
+
+function formatDisplayText(value, fallback = "Not specified") {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+  return String(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getOrderPayout(order = {}) {
+  const potentialValues = [
+    order.finalPayoutAmount,
+    order.finalPayout,
+    order.finalOfferAmount,
+    order.finalOffer,
+    order.payoutAmount,
+    order.payout,
+    order.reOffer?.newPrice,
+    order.estimatedQuote
+  ];
+
+  for (const value of potentialValues) {
+    if (value === undefined || value === null) continue;
+    const numericValue = Number(value);
+    if (!Number.isNaN(numericValue)) {
+      return numericValue;
+    }
+  }
+
+  return 0;
+}
+
+function formatCurrencyValue(value) {
+  const numericValue = Number(value);
+  if (Number.isNaN(numericValue)) {
+    return "0.00";
+  }
+  return numericValue.toFixed(2);
+}
+
+function buildDeviceSummary(order = {}) {
+  const parts = [];
+  if (order.device) {
+    parts.push(String(order.device));
+  }
+  if (order.storage) {
+    parts.push(String(order.storage));
+  }
+  if (order.carrier) {
+    parts.push(formatDisplayText(order.carrier));
+  }
+  return parts.length ? parts.join(" • ") : "Device details on file";
+}
+
+function buildTrustpilotSection() {
+  return `
+      <div style="text-align:center; margin: 32px 0 0;">
+        <a href="${TRUSTPILOT_REVIEW_LINK}" style="display:inline-block; font-weight:600; color:#0f766e; text-decoration:none; font-size:18px; margin-bottom:12px;">Review us on Trustpilot</a>
+        <a href="${TRUSTPILOT_REVIEW_LINK}" style="display:inline-block;">
+          <img src="${TRUSTPILOT_STARS_IMAGE_URL}" alt="Rate us five stars on Trustpilot" style="height:48px; max-width:220px; border:0; display:block; margin:0 auto;">
+        </a>
+      </div>
+    `;
 }
 
 // NEW HELPER: Sanitizes data to ensure all values are strings for FCM payload compliance.
@@ -679,6 +796,11 @@ async function sendMultipleTestEmails(email, emailTypes) {
       fullName: "Test User 2",
       email: email,
     },
+    device: "iPhone 15 Pro",
+    storage: "256GB",
+    carrier: "unlocked",
+    estimatedQuote: 875,
+    paymentMethod: "paypal",
     reOffer: null,
     returnLabelUrl: null,
   };
@@ -829,24 +951,15 @@ async function sendMultipleTestEmails(email, emailTypes) {
       case "completed":
         orderToUse = mockOrderDataWithoutReoffer;
         subject = `[TEST] Your SecondHandCell Order is Complete!`;
-        const TRUSTBOX_WIDGET = `
-          <!-- TrustBox widget - Review Collector -->
-          <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5271f986-aa8e-4797-b776-ad18270086fd">
-            <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
-          </div>
-          <!-- End TrustBox widget -->
-        `;
-        
-        let trustboxHtml = "";
-        // Check if there was no re-offer and no return
-        if (!orderToUse.reOffer && !orderToUse.returnLabelUrl) {
-          trustboxHtml = TRUSTBOX_WIDGET;
-        }
-
-        htmlBody = ORDER_COMPLETED_EMAIL_HTML
-          .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
-          .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
-          .replace(/\*\*TRUSTBOX_WIDGET\*\*/g, trustboxHtml);
+        const mockPayout = getOrderPayout(orderToUse);
+        htmlBody = applyTemplate(ORDER_COMPLETED_EMAIL_HTML, {
+          "**CUSTOMER_NAME**": orderToUse.shippingInfo.fullName,
+          "**ORDER_ID**": orderToUse.id,
+          "**DEVICE_SUMMARY**": buildDeviceSummary(orderToUse),
+          "**ORDER_TOTAL**": formatCurrencyValue(mockPayout),
+          "**PAYMENT_METHOD**": formatDisplayText(orderToUse.paymentMethod, "Not specified"),
+          "**TRUSTPILOT_SECTION**": buildTrustpilotSection()
+        });
         break;
       default:
         return Promise.resolve();
@@ -1365,24 +1478,15 @@ app.put("/orders/:id/status", async (req, res) => {
         break;
       }
       case "completed": {
-        const TRUSTBOX_WIDGET = `
-          <!-- TrustBox widget - Review Collector -->
-          <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5271f986-aa8e-4797-b776-ad18270086fd">
-            <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
-          </div>
-          <!-- End TrustBox widget -->
-        `;
-        
-        let trustboxHtml = "";
-        // Check if there was no re-offer and no return
-        if (!order.reOffer && !order.returnLabelUrl) {
-          trustboxHtml = TRUSTBOX_WIDGET;
-        }
-
-        customerEmailHtml = ORDER_COMPLETED_EMAIL_HTML
-          .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-          .replace(/\*\*ORDER_ID\*\*/g, order.id)
-          .replace(/\*\*TRUSTBOX_WIDGET\*\*/g, trustboxHtml);
+        const payoutAmount = getOrderPayout(order);
+        customerEmailHtml = applyTemplate(ORDER_COMPLETED_EMAIL_HTML, {
+          "**CUSTOMER_NAME**": customerName,
+          "**ORDER_ID**": order.id,
+          "**DEVICE_SUMMARY**": buildDeviceSummary(order),
+          "**ORDER_TOTAL**": formatCurrencyValue(payoutAmount),
+          "**PAYMENT_METHOD**": formatDisplayText(order.paymentMethod, "Not specified"),
+          "**TRUSTPILOT_SECTION**": buildTrustpilotSection()
+        });
 
         customerNotificationPromise = transporter.sendMail({
           from: process.env.EMAIL_USER,
@@ -1404,6 +1508,52 @@ app.put("/orders/:id/status", async (req, res) => {
   } catch (err) {
     console.error("Error updating status:", err);
     res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
+app.post('/orders/:id/send-review-request', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const docRef = ordersCollection.doc(orderId);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const customerEmail = order.shippingInfo?.email;
+    if (!customerEmail) {
+      return res.status(400).json({ error: 'Order does not have a customer email on file.' });
+    }
+
+    const customerName = order.shippingInfo?.fullName || 'there';
+    const payoutAmount = getOrderPayout(order);
+
+    const reviewEmailHtml = applyTemplate(REVIEW_REQUEST_EMAIL_HTML, {
+      "**CUSTOMER_NAME**": customerName,
+      "**ORDER_ID**": order.id,
+      "**DEVICE_SUMMARY**": buildDeviceSummary(order),
+      "**ORDER_TOTAL**": formatCurrencyValue(payoutAmount),
+      "**TRUSTPILOT_SECTION**": buildTrustpilotSection()
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: customerEmail,
+      subject: 'Quick review? Share your SecondHandCell experience',
+      html: reviewEmailHtml,
+      bcc: ['sales@secondhandcell.com']
+    });
+
+    await updateOrderBoth(orderId, {
+      reviewRequestSentAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    res.json({ message: 'Review request email sent successfully.' });
+  } catch (error) {
+    console.error('Error sending review request:', error);
+    res.status(500).json({ error: 'Failed to send review request email.' });
   }
 });
 

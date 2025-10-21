@@ -2374,9 +2374,35 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     // Get order ID from response and estimated price from deviceInfo or orderData
                     const orderId = result.orderId || result.id || Date.now().toString();
                     const totalPrice = deviceInfo.estimatedPrice || orderData.estimatedQuote || finalQuote || '0';
-                    
+
+                    try {
+                        const summaryPayload = {
+                            orderId,
+                            name: orderData.shippingInfo.fullName,
+                            device: orderData.device,
+                            storage: orderData.storage,
+                            carrier: orderData.carrier,
+                            price: Number(totalPrice) || 0,
+                            paymentMethod: orderData.paymentMethod
+                        };
+                        sessionStorage.setItem('shcOrderSummary', JSON.stringify(summaryPayload));
+                    } catch (storageError) {
+                        console.warn('Unable to persist order summary to session storage:', storageError);
+                    }
+
+                    const queryParams = new URLSearchParams({
+                        shipping: orderData.shippingPreference === 'Shipping Kit Requested' ? 'ship_kit' : 'email_label',
+                        orderId,
+                        price: totalPrice,
+                        name: orderData.shippingInfo.fullName,
+                        device: orderData.device,
+                        storage: orderData.storage,
+                        carrier: orderData.carrier,
+                        paymentMethod: orderData.paymentMethod || ''
+                    });
+
                     setTimeout(() => {
-                        window.location.href = `https://secondhandcell.com/order-submitted.html?shipping=${orderData.shippingPreference === 'Shipping Kit Requested' ? 'ship_kit' : 'email_label'}&orderId=${encodeURIComponent(orderId)}&price=${encodeURIComponent(totalPrice)}`;
+                        window.location.href = `https://secondhandcell.com/order-submitted.html?${queryParams.toString()}`;
                     }, 2000);
                     
                 } catch (e) {
