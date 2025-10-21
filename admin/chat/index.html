@@ -26,72 +26,185 @@
             font-family: 'Inter', sans-serif;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            min-height: 100vh;
+            background: radial-gradient(circle at 0% -25%, rgba(56, 189, 248, 0.32), rgba(15, 23, 42, 0.95));
         }
+
+        .dashboard-shell {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 24px 16px 48px;
+        }
+
+        .chat-shell {
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 40px 120px -70px rgba(15, 23, 42, 0.8);
+            background: rgba(248, 250, 252, 0.94);
+            display: flex;
+            flex-direction: column;
+        }
+
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #eef2f5; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
         .chat-bubble-user { background-color: #f1f5f9; color: #1e293b; }
-        .chat-bubble-admin { background-color: #3b82f6; color: #ffffff; }
+        .chat-bubble-admin { background: linear-gradient(135deg, #2563eb, #0ea5e9); color: #ffffff; }
         .chat-bubble-system { background-color: #fef08a; color: #a16207; }
         .chat-bubble-bot { background-color: #e2e8f0; color: #475569; }
+
         .modal { transition: opacity 0.3s ease, visibility 0.3s ease; }
         .modal-content { transition: transform 0.3s ease; }
-        .tab-btn.active { border-color: #2563eb; color: #2563eb; font-weight: 600; }
-        .notification-item { padding: 12px; border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: background-color 0.2s; }
-        .notification-item:hover { background-color: #f8fafc; }
-        .notification-item.unread { background-color: #eff6ff; font-weight: 500; }
-        .notification-item p:first-child { font-weight: 600; }
+
+        .tab-btn.active {
+            border-color: #2563eb;
+            color: #2563eb;
+            font-weight: 600;
+            background: rgba(37, 99, 235, 0.1);
+        }
+
+        .tab-count {
+            margin-left: 6px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            background: rgba(37, 99, 235, 0.12);
+            color: #2563eb;
+        }
+
+        .chat-search { position: relative; }
+        .chat-search input {
+            width: 100%;
+            border-radius: 12px;
+            border: 1px solid #cbd5f5;
+            padding: 12px 40px 12px 44px;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+        .chat-search input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        .chat-search i {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+        }
+        .chat-search button {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #64748b;
+        }
+
+        .chat-empty-state {
+            padding: 32px 20px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+        .chat-empty-state.hidden { display: none; }
+
+        .chat-card {
+            background: rgba(248, 250, 252, 0.95);
+        }
+
+        .presence-panel {
+            border-top: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.05), rgba(59, 130, 246, 0.08));
+        }
+        .presence-panel h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .presence-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            padding: 6px 0;
+            color: #475569;
+        }
+        .presence-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+        }
+
+        .hidden-by-filter {
+            display: none !important;
+        }
+
         .emoji-picker { position: absolute; bottom: 100%; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); max-height: 300px; overflow-y: auto; width: 280px; z-index: 100; }
         .emoji-item { display: inline-block; padding: 8px; cursor: pointer; font-size: 24px; transition: transform 0.2s; }
         .emoji-item:hover { transform: scale(1.3); }
+
         .message-timestamp { opacity: 0; transition: opacity 0.2s; position: absolute; bottom: -20px; right: 0; font-size: 10px; color: #94a3b8; white-space: nowrap; background: rgba(255,255,255,0.9); padding: 2px 6px; border-radius: 4px; }
         .chat-bubble-wrapper:hover .message-timestamp { opacity: 1; }
+
         .unread-badge { position: absolute; top: 2px; right: 2px; background: #ef4444; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; }
+
         .read-receipt { font-size: 10px; margin-left: 4px; }
         .read-receipt.sent { color: #cbd5e1; }
         .read-receipt.delivered { color: #cbd5e1; }
         .read-receipt.read { color: #60a5fa; }
+
         .search-highlight { background-color: #fef08a; padding: 2px 4px; border-radius: 2px; }
-        
+
         @media (max-width: 768px) {
+            .dashboard-shell { padding: 16px 0 32px; }
+            .chat-shell { border-radius: 0; }
             .tab-btn { padding: 8px; font-size: 12px; }
             #active-chat-messages { padding: 12px; }
             .chat-bubble-admin, .chat-bubble-user, .chat-bubble-bot { max-width: 90%; }
             .emoji-picker { width: 240px; right: -10px; }
+            .presence-panel { display: none; }
+            .chat-search input { padding: 10px 38px; }
+            .chat-search button { right: 10px; }
         }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-800">
-    <!-- Notification Sound -->
-    <audio id="chat-notification-sound" src="https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3" preload="auto"></audio>
+<body class="text-slate-800">
+    <div class="dashboard-shell">
+        <!-- Notification Sound -->
+        <audio id="chat-notification-sound" src="https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3" preload="auto"></audio>
 
-    <!-- LOGIN SCREEN -->
-    <div id="login-screen" class="flex items-center justify-center min-h-screen">
-        <div class="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl shadow-xl">
-            <div class="text-center">
-                <h2 class="text-4xl font-extrabold text-slate-900">Admin Login</h2>
-                <p class="mt-2 text-sm text-slate-500">Access the SecondHandCell Dashboard</p>
+        <!-- LOGIN SCREEN -->
+        <div id="login-screen" class="flex items-center justify-center min-h-[70vh]">
+            <div class="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl shadow-xl">
+                <div class="text-center">
+                    <h2 class="text-4xl font-extrabold text-slate-900">Admin Login</h2>
+                    <p class="mt-2 text-sm text-slate-500">Access the SecondHandCell Dashboard</p>
+                </div>
+                <form id="login-form" class="space-y-6">
+                    <div>
+                        <label for="login-email" class="sr-only">Email</label>
+                        <input type="email" id="login-email" required class="w-full px-5 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" placeholder="Email Address">
+                    </div>
+                    <div>
+                        <label for="login-password" class="sr-only">Password</label>
+                        <input type="password" id="login-password" required class="w-full px-5 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" placeholder="Password">
+                    </div>
+                    <button type="submit" class="w-full px-4 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-lg transform hover:scale-[1.01]">
+                        <i class="fa-solid fa-right-to-bracket mr-2"></i>Login
+                    </button>
+                    <p id="login-error" class="text-sm text-center text-red-500 h-4"></p>
+                </form>
             </div>
-            <form id="login-form" class="space-y-6">
-                <div>
-                    <label for="login-email" class="sr-only">Email</label>
-                    <input type="email" id="login-email" required class="w-full px-5 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" placeholder="Email Address">
-                </div>
-                <div>
-                    <label for="login-password" class="sr-only">Password</label>
-                    <input type="password" id="login-password" required class="w-full px-5 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" placeholder="Password">
-                </div>
-                <button type="submit" class="w-full px-4 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-lg transform hover:scale-[1.01]">
-                    <i class="fa-solid fa-right-to-bracket mr-2"></i>Login
-                </button>
-                <p id="login-error" class="text-sm text-center text-red-500 h-4"></p>
-            </form>
         </div>
-    </div>
 
-    <!-- MAIN DASHBOARD -->
-    <div id="dashboard-screen" class="hidden h-screen w-screen flex-col md:flex-row overflow-hidden">
+        <!-- MAIN DASHBOARD -->
+        <div id="dashboard-screen" class="chat-shell hidden flex-1 flex-col md:flex-row overflow-hidden">
         <!-- Left Sidebar: Chat Queue -->
         <aside class="w-full md:w-[400px] bg-white border-r border-slate-200 flex flex-col h-full shadow-lg">
             <div class="p-5 border-b border-slate-200 flex justify-between items-center">
@@ -116,12 +229,19 @@
                     <button id="logout-btn" class="px-3 py-1 text-sm text-slate-600 hover:text-red-500 font-semibold flex items-center gap-2 transition-colors">Logout <i class="fa-solid fa-right-from-bracket"></i></button>
                 </div>
             </div>
+            <div class="px-5 py-3 bg-slate-50 border-b border-slate-200">
+                <div class="chat-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="chat-search" placeholder="Search chats, customers, or notes">
+                    <button type="button" id="chat-search-clear" class="hidden" aria-label="Clear chat search"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
             <!-- TABS -->
             <div class="p-3 border-b border-slate-200 bg-slate-100">
                 <div class="grid grid-cols-3 gap-2">
-                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent transition-all active" data-tab="open">Open</button>
-                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent" data-tab="my">My Chats</button>
-                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent" data-tab="closed">Closed</button>
+                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent transition-all active" data-tab="open">Open <span class="tab-count" id="open-tab-count">0</span></button>
+                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent" data-tab="my">My Chats <span class="tab-count" id="my-tab-count">0</span></button>
+                    <button class="tab-btn p-3 text-center text-sm font-medium text-slate-600 rounded-lg border-b-2 border-transparent" data-tab="closed">Closed <span class="tab-count" id="closed-tab-count">0</span></button>
                 </div>
             </div>
             <!-- CHAT LISTS -->
@@ -136,6 +256,13 @@
                     <button id="assign-selected-btn" class="px-4 py-3 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors">Assign to Me</button>
                     <button id="delete-selected-btn" class="px-4 py-3 text-sm font-bold text-white bg-red-500 rounded-lg hover:bg-red-600 disabled:bg-red-300 disabled:cursor-not-allowed transition-colors">Delete Selected</button>
                 </div>
+            </div>
+            <div class="presence-panel p-5 mt-auto">
+                <div class="flex items-center justify-between mb-3">
+                    <h4>Online team</h4>
+                    <span id="online-admin-count" class="text-xs font-semibold text-blue-600">0</span>
+                </div>
+                <div id="admin-presence-list" class="space-y-2 max-h-32 overflow-y-auto custom-scrollbar"></div>
             </div>
         </aside>
 
@@ -219,6 +346,7 @@
                 </div>
             </div>
         </main>
+    </div>
     </div>
 
     <!-- Order Details Modal -->
@@ -366,6 +494,19 @@
         const closeSearchBtn = document.getElementById('close-search-btn');
         const userInfoDisplay = document.getElementById('user-info-display');
         const userInfoContent = document.getElementById('user-info-content');
+        const chatSearchInput = document.getElementById('chat-search');
+        const chatSearchClearBtn = document.getElementById('chat-search-clear');
+        const openTabCount = document.getElementById('open-tab-count');
+        const myTabCount = document.getElementById('my-tab-count');
+        const closedTabCount = document.getElementById('closed-tab-count');
+        const adminPresenceList = document.getElementById('admin-presence-list');
+        const onlineAdminCountDisplay = document.getElementById('online-admin-count');
+        const chatLists = {
+            open: document.getElementById('open-chats-list'),
+            my: document.getElementById('my-chats-list'),
+            closed: document.getElementById('closed-chats-list')
+        };
+        const tabCountMap = { open: openTabCount, my: myTabCount, closed: closedTabCount };
 
         // --- State Variables ---
         let currentAdmin = null;
@@ -484,6 +625,7 @@
 
             onValue(ref(rtdb, '/status'), (snapshot) => {
                 onlineAdmins = snapshot.val() || {};
+                renderAdminPresence();
             });
         }
         
@@ -510,12 +652,101 @@
             }
         }
 
+        function ensureEmptyStateElement(listKey) {
+            const listEl = chatLists[listKey];
+            if (!listEl) return null;
+            let emptyEl = listEl.querySelector('.chat-empty-state');
+            if (!emptyEl) {
+                emptyEl = document.createElement('div');
+                emptyEl.className = 'chat-empty-state hidden';
+                emptyEl.dataset.defaultMessage = listKey === 'open'
+                    ? 'No open chats yet.'
+                    : listKey === 'my'
+                        ? 'Nothing assigned to you yet.'
+                        : 'No closed chats yet.';
+                listEl.appendChild(emptyEl);
+            }
+            return emptyEl;
+        }
+
+        function updateEmptyState(listKey, totalItems, visibleItems, hasSearch) {
+            const emptyEl = ensureEmptyStateElement(listKey);
+            if (!emptyEl) return;
+            if (totalItems === 0) {
+                emptyEl.textContent = emptyEl.dataset.defaultMessage;
+                emptyEl.classList.remove('hidden');
+            } else if (visibleItems === 0) {
+                emptyEl.textContent = hasSearch ? 'No chats match your search.' : emptyEl.dataset.defaultMessage;
+                emptyEl.classList.remove('hidden');
+            } else {
+                emptyEl.classList.add('hidden');
+            }
+        }
+
+        function updateTabCounts() {
+            Object.entries(chatLists).forEach(([key, listEl]) => {
+                const countEl = tabCountMap[key];
+                if (!countEl || !listEl) return;
+                const items = Array.from(listEl.children).filter(child => !child.classList.contains('chat-empty-state'));
+                countEl.textContent = items.length;
+            });
+        }
+
+        function applyChatSearchFilter() {
+            if (!chatLists) return;
+            const term = (chatSearchInput?.value || '').trim().toLowerCase();
+            const hasTerm = term.length > 0;
+            if (chatSearchClearBtn) {
+                chatSearchClearBtn.classList.toggle('hidden', !hasTerm);
+            }
+
+            Object.entries(chatLists).forEach(([key, listEl]) => {
+                if (!listEl) return;
+                const items = Array.from(listEl.children).filter(child => !child.classList.contains('chat-empty-state'));
+                let visibleCount = 0;
+                items.forEach(item => {
+                    const isActive = activeChatIdState && item.id === `chat-item-${activeChatIdState}`;
+                    const matches = !hasTerm || item.textContent.toLowerCase().includes(term);
+                    const shouldHide = !matches && !isActive;
+                    item.classList.toggle('hidden-by-filter', shouldHide);
+                    if (!shouldHide) visibleCount++;
+                });
+                updateEmptyState(key, items.length, visibleCount, hasTerm);
+            });
+        }
+
+        function renderAdminPresence() {
+            if (!adminPresenceList || !onlineAdminCountDisplay) return;
+            adminPresenceList.innerHTML = '';
+            const entries = Object.entries(onlineAdmins || {}).filter(([, data]) => data?.state === 'online');
+            entries.sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
+
+            if (entries.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'text-xs text-slate-500';
+                empty.textContent = 'No teammates online right now.';
+                adminPresenceList.appendChild(empty);
+            } else {
+                entries.forEach(([, data]) => {
+                    const item = document.createElement('div');
+                    item.className = 'presence-item';
+                    item.innerHTML = `
+                        <span class="font-medium text-slate-700">${data?.name || 'Team member'}</span>
+                        <span class="flex items-center gap-2 text-xs text-slate-500"><span class="presence-dot"></span>Online</span>
+                    `;
+                    adminPresenceList.appendChild(item);
+                });
+            }
+
+            onlineAdminCountDisplay.textContent = entries.length;
+        }
+
         function loadChatQueue() {
             const q = query(collection(db, "chats"), orderBy("createdAt", "desc"));
             unsubscribeFromChats = onSnapshot(q, (snapshot) => {
-                const openList = document.getElementById('open-chats-list');
-                const myList = document.getElementById('my-chats-list');
-                const closedList = document.getElementById('closed-chats-list');
+                const openList = chatLists.open;
+                const myList = chatLists.my;
+                const closedList = chatLists.closed;
                 openList.innerHTML = '';
                 myList.innerHTML = '';
                 closedList.innerHTML = '';
@@ -530,13 +761,13 @@
 
                     // Play sound for new message if not already viewing this chat
                     if (hasUnread && chatId !== activeChatIdState) {
-                        chatNotificationSound.play();
+                        chatNotificationSound.play().catch(() => {});
                     }
 
                     const newItem = document.createElement('div');
                     newItem.id = `chat-item-${chatId}`;
-                    newItem.className = `p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors ${activeChatIdState === chatId ? 'bg-blue-50' : ''} ${hasUnread ? 'font-semibold' : ''}`;
-                    
+                    newItem.className = `chat-card p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors ${activeChatIdState === chatId ? 'bg-blue-50' : ''} ${hasUnread ? 'font-semibold' : ''}`;
+
                     // Determine the correct user identifier for display and passing to openChat
                     const userIdentifier = chatData.ownerUid || chatData.guestId;
 
@@ -573,8 +804,10 @@
                         }
                     });
                 });
-                
+
                 document.querySelectorAll('.chat-checkbox').forEach(cb => cb.addEventListener('change', updateMultiSelectActions));
+                updateTabCounts();
+                applyChatSearchFilter();
             });
         }
 
@@ -608,7 +841,8 @@
             
             document.querySelectorAll('[id^="chat-item-"]').forEach(el => el.classList.remove('bg-blue-50', 'font-semibold'));
             document.getElementById(`chat-item-${chatId}`)?.classList.add('bg-blue-50');
-            
+            applyChatSearchFilter();
+
             const agentName = currentAdmin.displayName || currentAdmin.email.split('@')[0];
             const chatRef = doc(db, "chats", chatId);
 
@@ -1197,15 +1431,30 @@ Current Status: ${order.status}`;
                 const tab = btn.dataset.tab;
                 document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                
+
                 document.getElementById('open-chats-list').classList.toggle('hidden', tab !== 'open');
                 document.getElementById('my-chats-list').classList.toggle('hidden', tab !== 'my');
                 document.getElementById('closed-chats-list').classList.toggle('hidden', tab !== 'closed');
-                
+
                 multiSelectActions.classList.toggle('hidden', tab !== 'open');
                 updateMultiSelectActions();
+                applyChatSearchFilter();
             });
         });
+
+        if (chatSearchInput) {
+            chatSearchInput.addEventListener('input', () => applyChatSearchFilter());
+        }
+
+        if (chatSearchClearBtn) {
+            chatSearchClearBtn.addEventListener('click', () => {
+                chatSearchInput.value = '';
+                chatSearchInput.focus();
+                applyChatSearchFilter();
+            });
+        }
+
+        renderAdminPresence();
         function getSelectedChatIds() {
             const selected = [];
             document.querySelectorAll('#open-chats-list .chat-checkbox:checked').forEach(cb => {
