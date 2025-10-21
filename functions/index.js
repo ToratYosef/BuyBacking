@@ -1263,6 +1263,58 @@ app.get('/packing-slip/:id', async (req, res) => {
   }
 });
 
+app.get('/print-bundle/:id', async (req, res) => {
+  try {
+    const doc = await ordersCollection.doc(req.params.id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const pdfParts = [];
+
+    const slipData = await generateCustomLabelPdf(order);
+    pdfParts.push(Buffer.isBuffer(slipData) ? slipData : Buffer.from(slipData));
+
+    const labelUrls = [];
+
+    if (order.shippingPreference === 'Shipping Kit Requested') {
+      if (order.inboundLabelUrl) labelUrls.push(order.inboundLabelUrl);
+      if (order.outboundLabelUrl) labelUrls.push(order.outboundLabelUrl);
+    } else if (order.uspsLabelUrl) {
+      labelUrls.push(order.uspsLabelUrl);
+    }
+
+    if (order.returnLabelUrl && !labelUrls.includes(order.returnLabelUrl)) {
+      labelUrls.push(order.returnLabelUrl);
+    }
+
+    const downloadedLabels = await Promise.all(
+      labelUrls.map(async (url) => {
+        try {
+          const response = await axios.get(url, { responseType: 'arraybuffer' });
+          return Buffer.from(response.data);
+        } catch (downloadError) {
+          console.error(`Failed to download label from ${url}:`, downloadError.message || downloadError);
+          return null;
+        }
+      })
+    );
+
+    pdfParts.push(...downloadedLabels.filter(Boolean));
+
+    const merged = await mergePdfBuffers(pdfParts);
+    const mergedBuffer = Buffer.isBuffer(merged) ? merged : Buffer.from(merged);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="print-bundle-${order.id}.pdf"`);
+    res.send(mergedBuffer);
+  } catch (error) {
+    console.error('Failed to generate print bundle:', error);
+    res.status(500).json({ error: 'Failed to prepare print bundle' });
+  }
+});
+
 app.put("/orders/:id/status", async (req, res) => {
   try {
     const { status } = req.body;

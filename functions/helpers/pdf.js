@@ -188,4 +188,26 @@ function wrapText(text, maxWidth, font, fontSize) {
     return lines.length ? lines : [''];
 }
 
-module.exports = { generateCustomLabelPdf };
+async function mergePdfBuffers(buffers = []) {
+    const pdfBuffers = buffers.filter(Boolean);
+
+    if (!pdfBuffers.length) {
+        throw new Error('No PDF buffers provided for merging');
+    }
+
+    if (pdfBuffers.length === 1) {
+        return pdfBuffers[0];
+    }
+
+    const mergedPdf = await PDFDocument.create();
+
+    for (const buffer of pdfBuffers) {
+        const document = await PDFDocument.load(buffer);
+        const copiedPages = await mergedPdf.copyPages(document, document.getPageIndices());
+        copiedPages.forEach((page) => mergedPdf.addPage(page));
+    }
+
+    return mergedPdf.save();
+}
+
+module.exports = { generateCustomLabelPdf, mergePdfBuffers };

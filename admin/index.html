@@ -1463,6 +1463,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             };
 
             const currentStatus = order.status;
+            const suppressedStatuses = new Set(['received', 'completed', 'return-label-generated']);
+            if (!suppressedStatuses.has(currentStatus)) {
+                const printText = order.shippingPreference === 'Shipping Kit Requested'
+                    ? 'Print Kit Documents'
+                    : 'Print Documents';
+                modalActionButtons.appendChild(
+                    createButton(printText, () => openPackingSlip(order), 'bg-indigo-600 hover:bg-indigo-700')
+                );
+            }
             switch (currentStatus) {
                 case 'order_pending':
                 case 'shipping_kit_requested':
@@ -1470,7 +1479,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700')); // NEW Manual Fulfillment Button
                     break;
                 case 'needs_printing':
-                    modalActionButtons.appendChild(createButton('Print Packing Slip', () => openPackingSlip(order), 'bg-indigo-600 hover:bg-indigo-700'));
                     if (order.outboundLabelUrl) {
                         modalActionButtons.appendChild(createButton('Open Outbound Label', () => window.open(order.outboundLabelUrl, '_blank', 'noopener'), 'bg-slate-600 hover:bg-slate-700'));
                     }
@@ -1479,7 +1487,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 case 'kit_sent':
                 case 'kit_in_transit':
                 case 'kit_delivered':
-                    modalActionButtons.appendChild(createButton('Reprint Packing Slip', () => openPackingSlip(order), 'bg-indigo-600 hover:bg-indigo-700'));
                     modalActionButtons.appendChild(createButton('Sync Kit Tracking', () => syncOutboundTracking(order.id), 'bg-sky-600 hover:bg-sky-700'));
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;

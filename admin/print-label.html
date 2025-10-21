@@ -116,6 +116,13 @@
             transform: translateY(-2px);
             box-shadow: 0 18px 36px rgba(79, 70, 229, 0.45);
         }
+        .actions button:disabled,
+        .actions a:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+            box-shadow: none;
+            transform: none;
+        }
         .error-box {
             border: 1px solid rgba(239, 68, 68, 0.45);
             background: rgba(239, 68, 68, 0.12);
@@ -173,6 +180,12 @@
                     <span id="statusText">Preparing your 4x6 packing slip…</span>
                 </div>
                 <p id="orderSummary">Fetching order data…</p>
+                <div class="actions">
+                    <button id="printBundleBtn" class="primary" type="button" disabled>
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        Preparing Documents…
+                    </button>
+                </div>
             </div>
             <div class="info-card" id="labelActions" hidden>
                 <h2>Shipping Kit Label</h2>
@@ -217,9 +230,12 @@
         const errorMessage = document.getElementById('errorMessage');
         const retryBtn = document.getElementById('retryBtn');
         const syncTrackingBtn = document.getElementById('syncTrackingBtn');
+        const printBundleBtn = document.getElementById('printBundleBtn');
 
         let printHasRun = false;
         let latestOrder = null;
+        let printReady = false;
+        let currentBundleUrl = null;
 
         if (!orderId) {
             showError('Missing orderId query parameter.');
@@ -230,6 +246,11 @@
         retryBtn.addEventListener('click', () => {
             errorCard.hidden = true;
             bootstrap();
+        });
+
+        printBundleBtn.addEventListener('click', () => {
+            if (!printReady) return;
+            requestPrint(false);
         });
 
         syncTrackingBtn.addEventListener('click', async () => {
@@ -258,7 +279,7 @@
                 latestOrder = await fetchOrder(orderId);
                 updateOrderSummary(null, latestOrder.status);
                 await hydrateOutboundLabel(latestOrder);
-                await loadPackingSlip(orderId);
+                await loadPrintBundle(orderId);
             } catch (error) {
                 console.error('Failed to initialise print page:', error);
                 showError(error.message || 'Unable to load packing slip.');
@@ -284,46 +305,76 @@
             outboundLabelLink.href = order.outboundLabelUrl;
         }
 
-        async function loadPackingSlip(id) {
-            statusText.textContent = 'Rendering packing slip…';
-            const response = await fetch(`${BACKEND_URL}/packing-slip/${encodeURIComponent(id)}`);
+        async function loadPrintBundle(id) {
+            statusText.textContent = 'Preparing combined documents…';
+            setPrintButtonState(false);
+            printReady = false;
+            if (currentBundleUrl) {
+                URL.revokeObjectURL(currentBundleUrl);
+                currentBundleUrl = null;
+            }
+
+            const response = await fetch(`${BACKEND_URL}/print-bundle/${encodeURIComponent(id)}`);
             if (!response.ok) {
-                throw new Error(`Packing slip failed to generate (${response.status})`);
+                throw new Error(`Print bundle failed to generate (${response.status})`);
             }
             const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            packingFrame.src = blobUrl;
+            currentBundleUrl = URL.createObjectURL(blob);
+            packingFrame.src = currentBundleUrl;
             packingFrame.onload = () => {
-                triggerPrint();
+                printReady = true;
+                setPrintButtonState(true);
+                if (!printHasRun) {
+                    requestPrint(true);
+                }
             };
         }
 
-        function triggerPrint() {
-            if (printHasRun) return;
-            printHasRun = true;
-            statusLine.innerHTML = '<i class="fa-solid fa-print"></i><span>Printing packing slip…</span>';
+        function requestPrint(auto = false) {
+            if (auto && printHasRun) return;
+            const delay = auto ? 250 : 0;
+            if (auto) {
+                printHasRun = true;
+            }
+            statusLine.innerHTML = '<i class="fa-solid fa-print"></i><span>Printing documents…</span>';
             setTimeout(() => {
                 window.print();
-            }, 250);
+            }, delay);
         }
 
-        window.addEventListener('afterprint', () => {
-            markKitAsSent().finally(() => {
+        window.addEventListener('afterprint', async () => {
+            try {
+                if (shouldMarkKitSent()) {
+                    await markKitAsSent();
+                } else if (latestOrder) {
+                    updateOrderSummary(null, latestOrder.status);
+                }
+            } finally {
                 setTimeout(() => window.close(), 600);
-            });
+            }
         });
 
         async function markKitAsSent() {
             try {
-                if (!latestOrder) return;
-                await fetch(`${BACKEND_URL}/orders/${encodeURIComponent(latestOrder.id)}/mark-kit-sent`, {
+                const response = await fetch(`${BACKEND_URL}/orders/${encodeURIComponent(latestOrder.id)}/mark-kit-sent`, {
                     method: 'POST',
                 });
+                if (!response.ok) {
+                    throw new Error(`Failed with status ${response.status}`);
+                }
+                latestOrder.status = 'kit_sent';
+                updateOrderSummary(null, latestOrder.status);
                 statusLine.innerHTML = '<i class="fa-solid fa-check" style="color:#34d399"></i><span>Marked as Kit Sent</span>';
             } catch (error) {
                 console.error('Failed to mark kit sent:', error);
                 statusLine.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#fbbf24"></i><span>Printed but status update failed — update manually.</span>';
             }
+        }
+
+        function shouldMarkKitSent() {
+            if (!latestOrder) return false;
+            if (latestOrder.shippingPreference !== 'Shipping Kit Requested') return false;
+            return latestOrder.status === 'needs_printing';
         }
 
         function updateOrderSummary(trackingData, statusOverride) {
@@ -367,6 +418,7 @@
             statusLine.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i><span>Unable to prepare slip</span>';
             orderSummary.textContent = '';
             errorMessage.textContent = message;
+            setPrintButtonState(false, true);
         }
 
         function toggleSyncButton(disabled) {
@@ -375,6 +427,21 @@
                 syncTrackingBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Syncing…';
             } else {
                 syncTrackingBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i>Sync Tracking';
+            }
+        }
+
+        function setPrintButtonState(enabled, isError = false) {
+            if (isError) {
+                printBundleBtn.disabled = true;
+                printBundleBtn.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i>Unavailable';
+                return;
+            }
+
+            printBundleBtn.disabled = !enabled;
+            if (enabled) {
+                printBundleBtn.innerHTML = '<i class="fa-solid fa-print"></i>Print Documents';
+            } else {
+                printBundleBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Preparing Documents…';
             }
         }
     </script>
