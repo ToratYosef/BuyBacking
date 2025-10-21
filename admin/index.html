@@ -647,6 +647,26 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </a>
                 </li>
                 <li>
+                    <a href="#" data-status="needs_printing" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-print mr-3"></i> Needs Printing
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-status="kit_sent" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-truck-loading mr-3"></i> Kit Sent
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-status="kit_in_transit" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-shipping-fast mr-3"></i> Kit In Transit
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-status="kit_delivered" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
+                        <i class="fas fa-house-user mr-3"></i> Kit Delivered
+                    </a>
+                </li>
+                <li>
                     <a href="#" data-status="label_generated" class="status-link block py-2 px-4 rounded-md text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-200">
                         <i class="fas fa-file-invoice mr-3"></i> Label Generated
                     </a>
@@ -747,6 +767,30 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <h3>Shipping Kit</h3>
                 <div id="shipping-kit-requested-count" class="count">0</div>
                 <span class="accent-badge" style="background: #F5F3FF; color: #8B5CF6;">In Progress</span>
+            </div>
+            <div id="card-needs_printing" data-status="needs_printing" class="dashboard-card" style="--icon-color: #F59E0B;">
+                <i class="fas fa-print icon"></i>
+                <h3>Needs Printing</h3>
+                <div id="needs-printing-count" class="count">0</div>
+                <span class="accent-badge" style="background: #FFFBEB; color: #F59E0B;">Action Required</span>
+            </div>
+            <div id="card-kit_sent" data-status="kit_sent" class="dashboard-card" style="--icon-color: #2563EB;">
+                <i class="fas fa-truck-loading icon"></i>
+                <h3>Kit Sent</h3>
+                <div id="kit-sent-count" class="count">0</div>
+                <span class="accent-badge" style="background: #DBEAFE; color: #2563EB;">On the Way</span>
+            </div>
+            <div id="card-kit_in_transit" data-status="kit_in_transit" class="dashboard-card" style="--icon-color: #0EA5E9;">
+                <i class="fas fa-shipping-fast icon"></i>
+                <h3>Kit In Transit</h3>
+                <div id="kit-in-transit-count" class="count">0</div>
+                <span class="accent-badge" style="background: #E0F2FE; color: #0EA5E9;">Tracking</span>
+            </div>
+            <div id="card-kit_delivered" data-status="kit_delivered" class="dashboard-card" style="--icon-color: #10B981;">
+                <i class="fas fa-house-user icon"></i>
+                <h3>Kit Delivered</h3>
+                <div id="kit-delivered-count" class="count">0</div>
+                <span class="accent-badge" style="background: #ECFDF5; color: #10B981;">Arrived</span>
             </div>
             <div id="card-label_generated" data-status="label_generated" class="dashboard-card" style="--icon-color: #F59E0B;">
                 <i class="fas fa-file-invoice icon"></i>
@@ -983,6 +1027,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         // Updated count elements
         const orderPendingCount = document.getElementById('order-pending-count');
         const shippingKitRequestedCount = document.getElementById('shipping-kit-requested-count');
+        const needsPrintingCount = document.getElementById('needs-printing-count');
+        const kitSentCount = document.getElementById('kit-sent-count');
+        const kitInTransitCount = document.getElementById('kit-in-transit-count');
+        const kitDeliveredCount = document.getElementById('kit-delivered-count');
         const labelGeneratedCount = document.getElementById('label-generated-count');
         const receivedCount = document.getElementById('received-count');
         const completedCount = document.getElementById('completed-count');
@@ -1106,6 +1154,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             // Updated to 'order_pending'
             orderPendingCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
             shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length;
+            needsPrintingCount.textContent = ordersData.filter(o => o.status === 'needs_printing').length;
+            kitSentCount.textContent = ordersData.filter(o => o.status === 'kit_sent').length;
+            kitInTransitCount.textContent = ordersData.filter(o => o.status === 'kit_in_transit').length;
+            kitDeliveredCount.textContent = ordersData.filter(o => o.status === 'kit_delivered').length;
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
             receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
             completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
@@ -1201,6 +1253,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             if (status === 'order_pending') {
                 return 'Order Pending';
             }
+            if (status === 'needs_printing') {
+                return 'Needs Printing';
+            }
+            if (status === 'kit_sent') {
+                return 'Kit Sent';
+            }
+            if (status === 'kit_in_transit') {
+                return 'Kit In Transit';
+            }
+            if (status === 'kit_delivered') {
+                return 'Kit Delivered';
+            }
             if (status === 'shipping_kit_requested') {
                 return 'Shipping Kit Requested';
             }
@@ -1222,8 +1286,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         function getStatusClass(status) {
             switch (status) {
-                case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble'; 
+                case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble';
+                case 'needs_printing': return 'bg-amber-100 text-amber-800 status-bubble';
                 case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble';
+                case 'kit_sent': return 'bg-indigo-50 text-indigo-700 status-bubble';
+                case 'kit_in_transit': return 'bg-sky-100 text-sky-800 status-bubble';
+                case 'kit_delivered': return 'bg-emerald-100 text-emerald-800 status-bubble';
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
@@ -1395,11 +1463,32 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             };
 
             const currentStatus = order.status;
+            const suppressedStatuses = new Set(['received', 'completed', 'return-label-generated']);
+            if (!suppressedStatuses.has(currentStatus)) {
+                const printText = order.shippingPreference === 'Shipping Kit Requested'
+                    ? 'Print Kit Documents'
+                    : 'Print Documents';
+                modalActionButtons.appendChild(
+                    createButton(printText, () => openPackingSlip(order), 'bg-indigo-600 hover:bg-indigo-700')
+                );
+            }
             switch (currentStatus) {
-                case 'order_pending': 
+                case 'order_pending':
                 case 'shipping_kit_requested':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700')); // NEW Manual Fulfillment Button
+                    break;
+                case 'needs_printing':
+                    if (order.outboundLabelUrl) {
+                        modalActionButtons.appendChild(createButton('Open Outbound Label', () => window.open(order.outboundLabelUrl, '_blank', 'noopener'), 'bg-slate-600 hover:bg-slate-700'));
+                    }
+                    modalActionButtons.appendChild(createButton('Mark Kit Sent', () => markKitAsSent(order.id), 'bg-emerald-600 hover:bg-emerald-700'));
+                    break;
+                case 'kit_sent':
+                case 'kit_in_transit':
+                case 'kit_delivered':
+                    modalActionButtons.appendChild(createButton('Sync Kit Tracking', () => syncOutboundTracking(order.id), 'bg-sky-600 hover:bg-sky-700'));
+                    modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;
                 case 'label_generated':
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
@@ -1430,7 +1519,49 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             // Always add Delete Button, visually separated
             modalActionButtons.appendChild(createButton('Delete Order', () => showDeleteConfirmation(order.id), 'bg-red-500 hover:bg-red-600'));
         }
-        
+
+        function openPackingSlip(order) {
+            if (!order || !order.id) return;
+            const url = `print-label.html?orderId=${encodeURIComponent(order.id)}`;
+            window.open(url, '_blank', 'noopener');
+        }
+
+        async function markKitAsSent(orderId) {
+            try {
+                modalLoadingMessage.classList.remove('hidden');
+                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-sent`, { method: 'POST' });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `Failed with status ${response.status}`);
+                }
+                await openOrderDetailsModal(orderId);
+                displayModalMessage('Kit marked as sent.', 'success');
+            } catch (error) {
+                console.error('Mark kit sent error:', error);
+                displayModalMessage(`Failed to mark kit as sent: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
+        }
+
+        async function syncOutboundTracking(orderId) {
+            try {
+                modalLoadingMessage.classList.remove('hidden');
+                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/sync-outbound-tracking`, { method: 'POST' });
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `Failed with status ${response.status}`);
+                }
+                await openOrderDetailsModal(orderId);
+                displayModalMessage('Outbound tracking refreshed.', 'success');
+            } catch (error) {
+                console.error('Sync outbound tracking error:', error);
+                displayModalMessage(`Failed to sync outbound tracking: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
+        }
+
         function showReofferForm(orderId) {
             modalActionButtons.classList.add('hidden');
             reofferFormContainer.classList.remove('hidden');
