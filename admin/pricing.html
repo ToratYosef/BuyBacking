@@ -9,26 +9,112 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Poppins', sans-serif; }
-        .table-container { max-height: 70vh; overflow-y: auto; }
-        .sticky-header th { position: sticky; top: 0; background-color: #f1f5f9; z-index: 10; }
-        .btn-primary { @apply bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300; }
-        .btn-secondary { @apply bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300; }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 35%, #0f172a 100%);
+            min-height: 100vh;
+            color: #0f172a;
+        }
+
+        .table-container {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.6);
+            border-radius: 999px;
+        }
+
+        .sticky-header th {
+            position: sticky;
+            top: 0;
+            background-color: rgba(248, 250, 252, 0.95);
+            z-index: 10;
+            backdrop-filter: blur(8px);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4f46e5, #06b6d4);
+            color: #fff;
+            padding: 0.6rem 1.4rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 12px 24px rgba(79, 70, 229, 0.25);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 16px 32px rgba(79, 70, 229, 0.35);
+        }
+
+        .btn-secondary {
+            background: rgba(148, 163, 184, 0.2);
+            color: #1e293b;
+            padding: 0.6rem 1.4rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(148, 163, 184, 0.35);
+        }
+
+        .modern-surface {
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 24px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            box-shadow: 0 24px 45px rgba(15, 23, 42, 0.18);
+            backdrop-filter: blur(18px);
+        }
+
         .modal {
             transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
-            opacity: 0; visibility: hidden;
+            opacity: 0;
+            visibility: hidden;
         }
+
         .modal.is-visible {
-            opacity: 1; visibility: visible;
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .storage-row {
+            background: rgba(248, 250, 252, 0.95);
+            border-radius: 18px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            padding: 1.25rem;
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.1);
+        }
+
+        .remove-storage-row {
+            font-weight: 600;
+            color: #f97316;
+        }
+
+        .remove-storage-row:hover {
+            color: #ea580c;
         }
     </style>
 </head>
-<body class="bg-gray-100 p-8">
+<body class="p-8">
 
     <!-- Header and Controls -->
-    <header class="bg-white rounded-xl shadow-lg p-6 mb-8 flex flex-col md:flex-row justify-between items-center">
+    <header class="modern-surface p-6 mb-8 flex flex-col md:flex-row justify-between items-center">
         <h1 class="text-3xl font-bold text-gray-800 mb-4 md:mb-0">Price Management Dashboard</h1>
-        <div class="flex items-center space-x-4">
+        <div class="flex flex-wrap items-center gap-3 justify-end">
             <div class="relative">
                 <input type="search" id="searchInput" placeholder="Search for device..." class="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
@@ -42,12 +128,13 @@
                 <option value="macbook">MacBook</option>
                 <option value="other">Other</option>
             </select>
-            <button id="importBtn" class="btn-primary"><i class="fas fa-file-excel mr-2"></i>Import Prices</button>
+            <button id="addDeviceBtn" class="btn-primary"><i class="fas fa-plus"></i> Add Pricing</button>
+            <button id="importBtn" class="btn-secondary"><i class="fas fa-file-excel"></i> Import Prices</button>
         </div>
     </header>
 
     <!-- Main Content Area -->
-    <main class="bg-white rounded-xl shadow-lg p-6">
+    <main class="modern-surface p-6">
         <div id="statusMessage" class="hidden mb-4 p-3 rounded-lg text-sm text-center"></div>
         <div id="loadingIndicator" class="text-center py-12">
             <i class="fa-solid fa-spinner fa-spin text-4xl text-blue-600"></i>
@@ -75,6 +162,48 @@
             </table>
         </div>
     </main>
+
+    <!-- Add Device Modal -->
+    <div id="addDeviceModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-4xl shadow-2xl p-6 relative">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h2 class="text-2xl font-semibold text-slate-900">Add Device Pricing</h2>
+                    <p class="text-sm text-slate-500 mt-1">Create or update a device with one or more storage options and condition pricing.</p>
+                </div>
+                <button id="closeAddDeviceBtn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="addDeviceForm" class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Brand</label>
+                        <select id="newDeviceBrand" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required></select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Device Name</label>
+                        <input type="text" id="newDeviceName" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., iPhone 16 Pro" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Slug</label>
+                        <input type="text" id="newDeviceSlug" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="iphone-16-pro" required>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-semibold text-slate-900">Storage &amp; Pricing</h3>
+                        <button type="button" id="addStorageRowBtn" class="btn-secondary text-sm"><i class="fas fa-layer-group"></i> Add Storage Row</button>
+                    </div>
+                    <div id="storageRows" class="space-y-4"></div>
+                </div>
+                <div class="flex justify-end gap-3 pt-4">
+                    <button type="button" id="cancelAddDeviceBtn" class="btn-secondary">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Pricing</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Excel Import Modal -->
     <div id="importModal" class="modal fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4">
@@ -104,7 +233,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, getDocs, updateDoc, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, updateDoc, doc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Firebase Config (your provided credentials)
         const firebaseConfig = {
@@ -127,6 +256,9 @@
         const supportedBrands = ['iphone', 'samsung', 'google_pixel', 'ipad', 'macbook', 'other'];
         const conditions = ['flawless', 'good', 'fair', 'damaged', 'broken', 'noPower'];
 
+        let brandOptionsInitialized = false;
+        let slugManuallyEdited = false;
+
         // DOM elements
         const loadingIndicator = document.getElementById('loadingIndicator');
         const deviceTableContainer = document.getElementById('deviceTableContainer');
@@ -142,6 +274,17 @@
         const processImportBtn = document.getElementById('processImportBtn');
         const cancelImportBtn = document.getElementById('cancelImportBtn');
         const importStatus = document.getElementById('importStatus');
+
+        const addDeviceModal = document.getElementById('addDeviceModal');
+        const addDeviceBtn = document.getElementById('addDeviceBtn');
+        const closeAddDeviceBtn = document.getElementById('closeAddDeviceBtn');
+        const cancelAddDeviceBtn = document.getElementById('cancelAddDeviceBtn');
+        const addDeviceForm = document.getElementById('addDeviceForm');
+        const addStorageRowBtn = document.getElementById('addStorageRowBtn');
+        const storageRows = document.getElementById('storageRows');
+        const newDeviceBrand = document.getElementById('newDeviceBrand');
+        const newDeviceName = document.getElementById('newDeviceName');
+        const newDeviceSlug = document.getElementById('newDeviceSlug');
 
         function showStatus(message, type) {
             statusMessage.textContent = message;
@@ -210,6 +353,8 @@
                 const deviceData = device.prices;
                 for (const storage in deviceData) {
                     const storageData = deviceData[storage];
+                    const storageCount = Object.keys(deviceData).length;
+                    const connectivityTotal = Object.keys(storageData).length;
                     for (const connectivity in storageData) {
                         const prices = storageData[connectivity];
                         const row = `
@@ -239,8 +384,13 @@
                                     </td>
                                 `).join('')}
                                 <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900">
-                                    <button class="text-red-500 hover:text-red-700" 
-                                            onclick="showStatus('Deletion is not yet supported in this version.', 'error')">
+                                    <button class="delete-row-btn text-red-500 hover:text-red-700"
+                                            data-doc-id="${device.docId}"
+                                            data-doc-path="${device.documentPath}"
+                                            data-storage="${storage}"
+                                            data-connectivity="${connectivity}"
+                                            data-storage-count="${storageCount}"
+                                            data-connectivity-count="${connectivityTotal}">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
@@ -250,6 +400,7 @@
                     }
                 }
             });
+            attachDeleteHandlers();
         };
 
         const applyFilters = () => {
@@ -304,6 +455,223 @@
                 element.value = element.defaultValue; // Revert on error
             }
         };
+
+        function attachDeleteHandlers() {
+            document.querySelectorAll('.delete-row-btn').forEach(button => {
+                button.addEventListener('click', handleRowDeletion);
+            });
+        }
+
+        async function handleRowDeletion(event) {
+            const button = event.currentTarget;
+            const docId = button.dataset.docId;
+            const docPath = button.dataset.docPath;
+            const storage = button.dataset.storage;
+            const connectivity = button.dataset.connectivity;
+            const storageCount = parseInt(button.dataset.storageCount || '0', 10);
+            const connectivityCount = parseInt(button.dataset.connectivityCount || '0', 10);
+
+            if (!docId || !docPath || !storage || !connectivity) {
+                showStatus('Missing metadata for deletion.', 'error');
+                return;
+            }
+
+            const deviceLabel = `${storage} (${connectivity})`;
+            if (!confirm(`Remove pricing for ${deviceLabel}?`)) {
+                return;
+            }
+
+            try {
+                const docRef = doc(db, docPath, docId);
+                const payload = {
+                    [`prices.${storage}.${connectivity}`]: deleteField()
+                };
+
+                if (connectivityCount <= 1) {
+                    payload[`prices.${storage}`] = deleteField();
+                }
+                if (storageCount <= 1 && connectivityCount <= 1) {
+                    payload['prices'] = deleteField();
+                }
+
+                await updateDoc(docRef, payload);
+                showStatus(`Removed ${deviceLabel}.`, 'success');
+                fetchDevices();
+            } catch (error) {
+                console.error('Failed to delete pricing row:', error);
+                showStatus('Failed to delete pricing entry. Check console for details.', 'error');
+            }
+        }
+
+        function openAddDeviceModal() {
+            populateBrandOptions();
+            resetAddDeviceForm();
+            addDeviceModal.classList.add('is-visible');
+        }
+
+        function closeAddDeviceModal() {
+            addDeviceModal.classList.remove('is-visible');
+        }
+
+        function populateBrandOptions() {
+            if (brandOptionsInitialized) {
+                return;
+            }
+            newDeviceBrand.innerHTML = supportedBrands
+                .map(brand => `<option value="${brand}">${formatBrandLabel(brand)}</option>`)
+                .join('');
+            brandOptionsInitialized = true;
+        }
+
+        function resetAddDeviceForm() {
+            addDeviceForm.reset();
+            slugManuallyEdited = false;
+            storageRows.innerHTML = '';
+            storageRows.appendChild(createStorageRow({ connectivity: 'unlocked' }));
+        }
+
+        function formatBrandLabel(brand) {
+            return brand.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        function createStorageRow(initial = {}) {
+            const row = document.createElement('div');
+            row.className = 'storage-row';
+            const storageValue = initial.storage || '';
+            const connectivityValue = initial.connectivity || 'unlocked';
+            const priceMap = initial.prices || {};
+            row.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Storage</label>
+                        <input type="text" class="storage-input w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., 128GB" value="${storageValue}" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-600 mb-1">Connectivity</label>
+                        <input type="text" class="connectivity-input w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., unlocked" value="${connectivityValue}" required>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                    ${conditions.map(condition => `
+                        <div>
+                            <label class="block text-sm font-medium text-slate-600 mb-1">${formatCondition(condition)}</label>
+                            <input type="number" min="0" step="1" class="price-input w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" data-condition="${condition}" value="${priceMap[condition] ?? ''}" required>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="text-right mt-4">
+                    <button type="button" class="remove-storage-row text-sm">Remove storage</button>
+                </div>
+            `;
+            return row;
+        }
+
+        async function handleAddDeviceSubmit(event) {
+            event.preventDefault();
+
+            const brand = newDeviceBrand.value;
+            const name = newDeviceName.value.trim();
+            let slug = newDeviceSlug.value.trim();
+
+            if (!slug) {
+                slug = slugify(name);
+            }
+
+            if (!brand || !name || !slug) {
+                showStatus('Please complete all device fields before saving.', 'error');
+                return;
+            }
+
+            const pricingPayload = {};
+            let hasPricing = false;
+
+            storageRows.querySelectorAll('.storage-row').forEach(row => {
+                const storageInput = row.querySelector('.storage-input');
+                const connectivityInput = row.querySelector('.connectivity-input');
+                if (!storageInput || !connectivityInput) {
+                    return;
+                }
+                const storageValue = storageInput.value.trim();
+                const connectivityValue = connectivityInput.value.trim().toLowerCase();
+                if (!storageValue || !connectivityValue) {
+                    return;
+                }
+                if (!pricingPayload[storageValue]) {
+                    pricingPayload[storageValue] = {};
+                }
+                const conditionPrices = {};
+                row.querySelectorAll('.price-input').forEach(input => {
+                    const condition = input.dataset.condition;
+                    const price = parseFloat(input.value);
+                    conditionPrices[condition] = Number.isNaN(price) ? 0 : price;
+                });
+                pricingPayload[storageValue][connectivityValue] = conditionPrices;
+                hasPricing = true;
+            });
+
+            if (!hasPricing) {
+                showStatus('Add at least one storage row with pricing before saving.', 'error');
+                return;
+            }
+
+            const docPath = `devices/${brand}/models`;
+            const docRef = doc(db, docPath, slug);
+
+            try {
+                showStatus(`Saving pricing for ${name}…`, 'info');
+                await setDoc(docRef, {
+                    name,
+                    slug,
+                    brand,
+                    prices: pricingPayload
+                }, { merge: true });
+                showStatus(`Pricing for ${name} saved successfully.`, 'success');
+                closeAddDeviceModal();
+                fetchDevices();
+            } catch (error) {
+                console.error('Error saving pricing:', error);
+                showStatus('Failed to save pricing. Check console for details.', 'error');
+            }
+        }
+
+        function slugify(value) {
+            return value
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+
+        addDeviceBtn.addEventListener('click', openAddDeviceModal);
+        closeAddDeviceBtn.addEventListener('click', closeAddDeviceModal);
+        cancelAddDeviceBtn.addEventListener('click', closeAddDeviceModal);
+        addDeviceModal.addEventListener('click', (event) => {
+            if (event.target === addDeviceModal) {
+                closeAddDeviceModal();
+            }
+        });
+        addStorageRowBtn.addEventListener('click', () => {
+            storageRows.appendChild(createStorageRow());
+        });
+        storageRows.addEventListener('click', (event) => {
+            const removeButton = event.target.closest('.remove-storage-row');
+            if (!removeButton) return;
+            const rows = storageRows.querySelectorAll('.storage-row');
+            if (rows.length === 1) {
+                rows[0].querySelectorAll('input').forEach(input => input.value = '');
+            } else {
+                removeButton.closest('.storage-row').remove();
+            }
+        });
+        newDeviceName.addEventListener('input', () => {
+            if (!slugManuallyEdited) {
+                newDeviceSlug.value = slugify(newDeviceName.value);
+            }
+        });
+        newDeviceSlug.addEventListener('input', () => {
+            slugManuallyEdited = newDeviceSlug.value.trim().length > 0;
+        });
+        addDeviceForm.addEventListener('submit', handleAddDeviceSubmit);
 
         // --- EXCEL IMPORT LOGIC ---
         importBtn.addEventListener('click', () => importModal.classList.add('is-visible'));
