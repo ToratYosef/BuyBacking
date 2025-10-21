@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Submitted - secondhandcell</title>
     
+    <!-- IMMEDIATE ACCESS CONTROL CHECK -->
+    <script>
+        const expectedPathSegment = '/sell/';
+        const referrer = document.referrer;
+        const homepageUrl = 'https://secondhandcell.com/index.html';
+
+        // If the referrer is empty (direct access) or doesn't contain the expected path, redirect immediately.
+        if (!referrer || !referrer.includes(expectedPathSegment)) {
+            // Redirect immediately. Accessing document.body here causes a 'null' error.
+            window.location.replace(homepageUrl);
+            // Stop further script execution
+            throw new Error("Unauthorized access attempt redirected."); 
+        }
+    </script>
+    <!-- END IMMEDIATE ACCESS CONTROL CHECK -->
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -123,19 +139,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const expectedPathSegment = '/sell/';
-            const referrer = document.referrer;
-            const homepageUrl = 'https://secondhandcell.com/index.html';
-
-            // --- Access Control Check (NEW LOGIC) ---
-            // If the referrer is empty (direct access) or doesn't contain the expected path, redirect to the homepage.
-            if (!referrer || !referrer.includes(expectedPathSegment)) {
-                console.error("Access denied: Not referred from the required selling page.");
-                // Prevent content from flashing and immediately redirect
-                window.location.replace(homepageUrl);
-                return; // Stop execution of the rest of the script
-            }
-            // --- End Access Control Check ---
+            // NOTE: The Access Control Check was moved to the <head> for immediate execution.
+            // This script now only handles content loading once the page is confirmed accessible.
 
             const shippingInstruction = document.getElementById('shippingInstruction');
             const urlParams = new URLSearchParams(window.location.search);
