@@ -1,101 +1,191 @@
-const { PDFDocument, rgb } = require('pdf-lib');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const bwipjs = require('bwip-js');
 
+const PAGE_WIDTH = 288; // 4 inches (72 pts per inch)
+const PAGE_HEIGHT = 432; // 6 inches
+const MARGIN = 20;
+const LINE_HEIGHT = 14;
+
 /**
- * NEW: Helper function to generate a custom 4x6 PDF label with device details and a barcode.
- * @param {Object} order - The order document from Firestore.
- * @returns {Promise<Buffer>} The PDF document as a Buffer.
+ * Helper function to generate a branded 4x6 packing slip label.
+ * @param {Object} order - Firestore order payload.
+ * @returns {Promise<Buffer>} PDF buffer ready for download/print.
  */
 async function generateCustomLabelPdf(order) {
-    // Create a new PDF document (4x6 inches)
     const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([432, 288]); // 4x6 inches in points (72 points per inch)
-    const { width, height } = page.getSize();
-    const fontSize = 12;
+    const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    // Title
-    page.drawText('SecondHandCell', {
-        x: 30,
-        y: height - 40,
-        size: 24,
-        color: rgb(0, 0, 0),
-    });
+    let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    let { width, height } = page.getSize();
+    let cursorY = height - MARGIN;
 
-    // Customer and Order Info
-    page.drawText(`Order ID: ${order.id}`, {
-        x: 30,
-        y: height - 70,
-        size: 16,
-        color: rgb(0, 0, 0),
-    });
-    page.drawText(`Customer: ${order.shippingInfo.fullName}`, {
-        x: 30,
-        y: height - 90,
-        size: fontSize,
-        color: rgb(0, 0, 0),
-    });
-    page.drawText(`Email: ${order.shippingInfo.email}`, {
-        x: 30,
-        y: height - 110,
-        size: fontSize,
-        color: rgb(0, 0, 0),
-    });
-    page.drawText(`Device: ${order.device} - ${order.storage}`, {
-        x: 30,
-        y: height - 130,
-        size: fontSize,
-        color: rgb(0, 0, 0),
-    });
-
-    // Device Details (Answers)
-    const deviceDetails = order.answers || {};
-    let yOffset = height - 150;
-    for (const [question, answer] of Object.entries(deviceDetails)) {
-        // Format question nicely
-        const formattedQuestion = question.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
-        page.drawText(`${formattedQuestion}: ${answer}`, {
-            x: 30,
-            y: yOffset,
-            size: fontSize,
-            color: rgb(0, 0, 0),
-        });
-        yOffset -= 15;
-        if (yOffset < 80) { // Add a new page if content overflows
-            page = pdfDoc.addPage([432, 288]);
-            yOffset = height - 40;
+    const ensureSpace = (requiredLines = 1) => {
+        if (cursorY - requiredLines * LINE_HEIGHT < MARGIN + 60) {
+            page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+            ({ width, height } = page.getSize());
+            cursorY = height - MARGIN;
         }
+    };
+
+    const drawText = (text, options = {}) => {
+        const { font = regularFont, size = 11, color = rgb(0, 0, 0) } = options;
+        const lines = wrapText(text, width - MARGIN * 2, font, size);
+        lines.forEach((line) => {
+            ensureSpace();
+            page.drawText(line, {
+                x: MARGIN,
+                y: cursorY,
+                size,
+                font,
+                color,
+            });
+            cursorY -= LINE_HEIGHT;
+        });
+        cursorY -= 2; // small gap after block
+    };
+
+    const drawSectionTitle = (title) => {
+        ensureSpace();
+        page.drawText(title, {
+            x: MARGIN,
+            y: cursorY,
+            size: 14,
+            font: boldFont,
+            color: rgb(0.16, 0.16, 0.16),
+        });
+        cursorY -= LINE_HEIGHT;
+    };
+
+    // Header
+    drawSectionTitle('SecondHandCell Packing Slip');
+    drawText(`Order #${order.id}`, { font: boldFont, size: 12 });
+
+    const shippingInfo = order.shippingInfo || {};
+    const customerLines = [
+        shippingInfo.fullName,
+        shippingInfo.streetAddress,
+        [shippingInfo.city, shippingInfo.state].filter(Boolean).join(', '),
+        shippingInfo.zipCode,
+    ].filter(Boolean);
+
+    drawSectionTitle('Ship To');
+    customerLines.forEach((line) => drawText(line, { size: 10 }));
+
+    drawSectionTitle('Contact');
+    drawText(`Email: ${shippingInfo.email || '—'}`, { size: 10 });
+    drawText(`Phone: ${shippingInfo.phone || shippingInfo.phoneNumber || '—'}`, { size: 10 });
+
+    drawSectionTitle('Device Details');
+    drawText(`${order.device || 'Device'} • ${order.storage || 'Storage'} • ${order.carrier || 'Carrier'}`, {
+        size: 10,
+    });
+    drawText(`Quoted: $${Number(order.estimatedQuote || 0).toFixed(2)}`, { size: 10 });
+    drawText(`Shipping Preference: ${formatValue(order.shippingPreference)}`, { size: 10 });
+
+    if (order.paymentMethod) {
+        drawText(`Payment: ${formatValue(order.paymentMethod)}`, { size: 10 });
     }
 
-    // Barcode
-    const barcodeData = order.id;
-    const barcodeSvg = await new Promise((resolve, reject) => {
-        bwipjs.toSVG({
-            bcid: 'code128', // Barcode type
-            text: barcodeData, // The text to encode
-            scale: 3,
-            height: 10,
-            includetext: false,
-            textxalign: 'center',
-        }, (err, svg) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(svg);
-            }
+    const answers = order.answers || {};
+    const answerEntries = Object.entries(answers);
+    if (answerEntries.length) {
+        drawSectionTitle('Condition Notes');
+        answerEntries.forEach(([question, answer]) => {
+            const label = formatLabel(question);
+            drawText(`${label}: ${answer}`, { size: 9 });
         });
-    });
+    }
 
+    drawSectionTitle('Prep Checklist');
+    [
+        'Remove SIM cards and accessories.',
+        'Factory reset the device & sign out of iCloud/Google.',
+        'Place device in provided protective sleeve.',
+        'Insert this slip inside the kit before sealing.',
+    ].forEach((item) => drawText(`• ${item}`, { size: 9 }));
+
+    ensureSpace(4);
+    const barcodeSvg = await buildBarcode(order.id);
     const barcodeImage = await pdfDoc.embedSvg(barcodeSvg);
-    const barcodeDims = barcodeImage.scale(0.5);
+    const svgWidth = barcodeImage.width;
+    const barcodeScale = Math.min(
+        (width - MARGIN * 2) / svgWidth,
+        1.2
+    );
+    const dims = barcodeImage.scale(barcodeScale);
 
     page.drawImage(barcodeImage, {
-        x: (width - barcodeDims.width) / 2,
-        y: 30,
-        width: barcodeDims.width,
-        height: barcodeDims.height,
+        x: (width - dims.width) / 2,
+        y: Math.max(MARGIN, cursorY - dims.height - 10),
+        width: dims.width,
+        height: dims.height,
     });
 
-    return await pdfDoc.save();
+    cursorY = Math.max(MARGIN, cursorY - dims.height - 18);
+    drawText('Scan to view order in dashboard', { size: 8, font: boldFont });
+
+    return pdfDoc.save();
+}
+
+function formatValue(value) {
+    if (!value) return '—';
+    return String(value)
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatLabel(label = '') {
+    return label
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+async function buildBarcode(data) {
+    return new Promise((resolve, reject) => {
+        bwipjs.toSVG(
+            {
+                bcid: 'code128',
+                text: data,
+                scale: 2.8,
+                height: 12,
+                includetext: false,
+                textxalign: 'center',
+            },
+            (err, svg) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(svg);
+                }
+            }
+        );
+    });
+}
+
+function wrapText(text, maxWidth, font, fontSize) {
+    if (!text) return [''];
+    const words = String(text).split(/\s+/);
+    const lines = [];
+    let currentLine = '';
+
+    words.forEach((word) => {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        const width = font.widthOfTextAtSize(testLine, fontSize);
+        if (width <= maxWidth) {
+            currentLine = testLine;
+        } else {
+            if (currentLine) lines.push(currentLine);
+            currentLine = word;
+        }
+    });
+
+    if (currentLine) {
+        lines.push(currentLine);
+    }
+
+    return lines.length ? lines : [''];
 }
 
 module.exports = { generateCustomLabelPdf };
