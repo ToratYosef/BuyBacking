@@ -246,6 +246,7 @@
         const auth = getAuth(app);
         
         const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+        const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
         let countdownInterval = null;
         let pendingAction = null;
         
@@ -299,6 +300,40 @@
             const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((ms % (1000 * 60)) / 1000);
             return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+        };
+
+        const extractTimestampMillis = (timestamp) => {
+            if (!timestamp) return null;
+            if (typeof timestamp === 'number') {
+                return timestamp > 1e12 ? timestamp : timestamp * 1000;
+            }
+            if (typeof timestamp === 'string') {
+                const parsed = Date.parse(timestamp);
+                return Number.isNaN(parsed) ? null : parsed;
+            }
+            if (timestamp instanceof Date) {
+                return timestamp.getTime();
+            }
+            if (typeof timestamp === 'object') {
+                if (typeof timestamp._seconds === 'number') {
+                    return timestamp._seconds * 1000;
+                }
+                if (typeof timestamp.seconds === 'number') {
+                    return timestamp.seconds * 1000;
+                }
+                if (typeof timestamp.toDate === 'function') {
+                    return timestamp.toDate().getTime();
+                }
+            }
+            return null;
+        };
+
+        const getAutoAcceptDeadline = (order) => {
+            if (!order?.reOffer) return null;
+            const explicit = extractTimestampMillis(order.reOffer.autoAcceptDate);
+            if (explicit) return explicit;
+            const created = extractTimestampMillis(order.reOffer.createdAt);
+            return created ? created + AUTO_ACCEPT_WINDOW_MS : null;
         };
         
         const renderConfirmationState = (status, orderId) => {
@@ -364,29 +399,35 @@
         
                 loadingState.classList.add('hidden');
         
-                if (currentOrderData.status === 're-offered-pending' && currentOrderData.reOffer?.autoAcceptDate) {
+                const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData);
+
+                if (currentOrderData.status === 're-offered-pending' && autoAcceptDeadline) {
                     offerDetailsState.classList.remove('hidden');
                     replySection.classList.remove('hidden');
                     actionButtonsDiv.classList.remove('hidden');
                     countdownContainer.classList.remove('hidden');
-        
-                    const autoAcceptDate = new Date(currentOrderData.reOffer.autoAcceptDate._seconds * 1000);
-                    
+
                     if (countdownInterval) clearInterval(countdownInterval);
-        
-                    countdownInterval = setInterval(() => {
-                        const now = new Date();
-                        const timeRemaining = autoAcceptDate.getTime() - now.getTime();
-        
+
+                    const updateCountdown = () => {
+                        const timeRemaining = autoAcceptDeadline - Date.now();
                         if (timeRemaining <= 0) {
                             clearInterval(countdownInterval);
                             countdownTimer.textContent = 'Offer expired, auto-accepted.';
-                            location.reload(); 
+                            location.reload();
                         } else {
                             countdownTimer.textContent = formatTimeRemaining(timeRemaining);
                         }
-                    }, 1000);
-        
+                    };
+
+                    updateCountdown();
+                    countdownInterval = setInterval(updateCountdown, 1000);
+                } else if (currentOrderData.status === 're-offered-pending') {
+                    offerDetailsState.classList.remove('hidden');
+                    replySection.classList.remove('hidden');
+                    actionButtonsDiv.classList.remove('hidden');
+                    countdownContainer.classList.add('hidden');
+
                 } else if (currentOrderData.status === 're-offered-accepted' || currentOrderData.status === 're-offered-auto-accepted') {
                     renderConfirmationState('re-offered-accepted', orderId);
                 } else if (currentOrderData.status === 're-offered-declined') {
