@@ -5,7 +5,7 @@ const admin = require("firebase-admin");
 const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { URLSearchParams } = require('url');
-const { generateCustomLabelPdf } = require('./helpers/pdf');
+const { generateCustomLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();

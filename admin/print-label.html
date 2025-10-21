@@ -3,254 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Print Packing Slip</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <title>Print Shipping Documents</title>
     <style>
         :root {
             color-scheme: light dark;
         }
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: radial-gradient(circle at top, #1f2937, #0f172a 55%);
-            color: #e2e8f0;
             margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-        .print-shell {
-            width: min(960px, 100%);
-            display: grid;
-            gap: 1.5rem;
-            grid-template-columns: 1fr 1fr;
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            border-radius: 24px;
-            padding: 2rem;
-            box-shadow: 0 30px 60px rgba(15, 23, 42, 0.45);
-            backdrop-filter: blur(16px);
-        }
-        .print-shell.single-column {
-            grid-template-columns: 1fr;
-            text-align: center;
-        }
-        .frame-wrapper {
-            background: rgba(15, 23, 42, 0.55);
-            border-radius: 18px;
-            border: 1px solid rgba(99, 102, 241, 0.3);
-            padding: 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 480px;
-        }
-        iframe {
-            width: calc(4in + 10px);
-            height: calc(6in + 10px);
-            border: none;
-            background: #fff;
-            box-shadow: 0 20px 35px rgba(79, 70, 229, 0.25);
-            border-radius: 12px;
-        }
-        .info-panel {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f3f4f6;
+            color: #111827;
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
         }
-        .info-card {
-            background: rgba(15, 23, 42, 0.6);
-            border-radius: 16px;
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            padding: 1.5rem;
-        }
-        .info-card h2 {
-            margin: 0 0 0.75rem;
-            font-size: 1.5rem;
-            color: #fff;
-        }
-        .info-card p {
-            margin: 0.35rem 0;
-            color: rgba(226, 232, 240, 0.85);
-            font-size: 0.95rem;
-        }
-        .status-line {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-weight: 600;
-            color: #fbbf24;
-        }
-        .actions {
+        .toolbar {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.75rem;
-        }
-        .actions a,
-        .actions button {
-            appearance: none;
-            border: none;
-            border-radius: 999px;
-            padding: 0.6rem 1.4rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            background: #ffffff;
+            border-bottom: 1px solid #d1d5db;
         }
-        .actions a.primary,
-        .actions button.primary {
-            background: linear-gradient(135deg, #6366f1, #22d3ee);
-            color: #fff;
-            box-shadow: 0 15px 30px rgba(79, 70, 229, 0.35);
+        .toolbar button,
+        .toolbar a {
+            font-size: 0.9rem;
+            border-radius: 6px;
+            padding: 0.45rem 0.85rem;
+            border: 1px solid #d1d5db;
+            background: #f9fafb;
+            color: inherit;
+            text-decoration: none;
+            cursor: pointer;
         }
-        .actions a.secondary,
-        .actions button.secondary {
-            background: rgba(148, 163, 184, 0.18);
-            color: #e2e8f0;
+        .toolbar a {
+            color: #1d4ed8;
         }
-        .actions a:hover,
-        .actions button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 18px 36px rgba(79, 70, 229, 0.45);
-        }
-        .actions button:disabled,
-        .actions a:disabled {
-            cursor: not-allowed;
+        .toolbar button[disabled] {
             opacity: 0.6;
-            box-shadow: none;
-            transform: none;
+            cursor: not-allowed;
         }
-        .error-box {
-            border: 1px solid rgba(239, 68, 68, 0.45);
-            background: rgba(239, 68, 68, 0.12);
-            color: #fecaca;
-            padding: 1rem;
-            border-radius: 12px;
+        .toolbar .status {
+            margin-left: auto;
+            font-weight: 600;
         }
-        @media (max-width: 900px) {
-            .print-shell {
-                grid-template-columns: 1fr;
-            }
-            iframe {
-                width: 100%;
-                height: min(600px, 80vh);
-            }
+        .summary {
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            background: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
         }
-        @page {
-            size: 4in 6in;
-            margin: 0;
+        .viewer {
+            flex: 1;
+            position: relative;
+            background: #ffffff;
         }
-        @media print {
-            body {
-                background: #fff;
-                padding: 0;
-            }
-            .print-shell,
-            .info-panel {
-                display: block;
-            }
-            .info-panel {
-                display: none !important;
-            }
-            .frame-wrapper {
-                padding: 0;
-                border: none;
-            }
-            iframe {
-                width: 4in;
-                height: 6in;
-                box-shadow: none;
-                border-radius: 0;
-            }
+        .viewer iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #ffffff;
+        }
+        #errorPanel {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            background: #ffffff;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        #errorPanel button {
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            background: #f9fafb;
+            padding: 0.45rem 0.85rem;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <div id="shell" class="print-shell single-column">
-        <div class="frame-wrapper">
-            <iframe id="packingFrame" title="Packing Slip Preview"></iframe>
+    <header class="toolbar">
+        <button id="printBundleBtn" type="button" disabled>Preparing…</button>
+        <a id="outboundLabelLink" target="_blank" rel="noopener" hidden>Open Outbound Label</a>
+        <button id="syncTrackingBtn" type="button" hidden>Sync Tracking</button>
+        <span id="statusText" class="status">Loading…</span>
+    </header>
+    <section class="summary">
+        <div id="orderSummary">Fetching order data…</div>
+    </section>
+    <main class="viewer">
+        <iframe id="pdfFrame" title="Shipping documents" hidden></iframe>
+        <div id="errorPanel" hidden>
+            <p id="errorMessage"></p>
+            <button id="retryBtn" type="button">Try Again</button>
         </div>
-        <div class="info-panel">
-            <div class="info-card">
-                <div class="status-line" id="statusLine">
-                    <i class="fa-solid fa-spinner fa-spin"></i>
-                    <span id="statusText">Preparing your 4x6 packing slip…</span>
-                </div>
-                <p id="orderSummary">Fetching order data…</p>
-                <div class="actions">
-                    <button id="printBundleBtn" class="primary" type="button" disabled>
-                        <i class="fa-solid fa-spinner fa-spin"></i>
-                        Preparing Documents…
-                    </button>
-                </div>
-            </div>
-            <div class="info-card" id="labelActions" hidden>
-                <h2>Shipping Kit Label</h2>
-                <p>Print the USPS outbound label after this slip to include in the box.</p>
-                <div class="actions">
-                    <a id="outboundLabelLink" class="secondary" target="_blank" rel="noopener">
-                        <i class="fa-solid fa-up-right-from-square"></i>
-                        Open Outbound Label
-                    </a>
-                    <button id="syncTrackingBtn" class="secondary" type="button">
-                        <i class="fa-solid fa-arrows-rotate"></i>
-                        Sync Tracking
-                    </button>
-                </div>
-            </div>
-            <div class="info-card" id="errorCard" hidden>
-                <h2>Something went wrong</h2>
-                <div class="error-box" id="errorMessage"></div>
-                <div class="actions">
-                    <button type="button" class="secondary" id="retryBtn">
-                        <i class="fa-solid fa-rotate-right"></i>
-                        Try Again
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
+    </main>
     <script>
         const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
         const urlParams = new URLSearchParams(window.location.search);
         const orderId = urlParams.get('orderId');
-        const shell = document.getElementById('shell');
-        const frameWrapper = document.querySelector('.frame-wrapper');
-        const packingFrame = document.getElementById('packingFrame');
+
+        const pdfFrame = document.getElementById('pdfFrame');
         const statusText = document.getElementById('statusText');
-        const statusLine = document.getElementById('statusLine');
         const orderSummary = document.getElementById('orderSummary');
-        const labelActions = document.getElementById('labelActions');
         const outboundLabelLink = document.getElementById('outboundLabelLink');
-        const errorCard = document.getElementById('errorCard');
-        const errorMessage = document.getElementById('errorMessage');
-        const retryBtn = document.getElementById('retryBtn');
         const syncTrackingBtn = document.getElementById('syncTrackingBtn');
         const printBundleBtn = document.getElementById('printBundleBtn');
+        const errorPanel = document.getElementById('errorPanel');
+        const errorMessage = document.getElementById('errorMessage');
+        const retryBtn = document.getElementById('retryBtn');
 
-        let printHasRun = false;
         let latestOrder = null;
+        let printHasRun = false;
         let printReady = false;
         let currentBundleUrl = null;
+        let handlingAfterPrint = false;
 
         if (!orderId) {
             showError('Missing orderId query parameter.');
+            setStatus('Missing order');
         } else {
             bootstrap();
         }
 
         retryBtn.addEventListener('click', () => {
-            errorCard.hidden = true;
+            clearError();
             bootstrap();
         });
 
         printBundleBtn.addEventListener('click', () => {
-            if (!printReady) return;
-            requestPrint(false);
+            if (printReady) {
+                requestPrint(false);
+            }
         });
 
         syncTrackingBtn.addEventListener('click', async () => {
@@ -265,6 +154,7 @@
                 }
                 const payload = await response.json();
                 updateOrderSummary(payload.tracking, payload.status);
+                setStatus('Tracking refreshed');
             } catch (error) {
                 console.error('Tracking sync failed:', error);
                 alert('Unable to sync tracking. Please try again later.');
@@ -273,16 +163,25 @@
             }
         });
 
+        window.addEventListener('afterprint', handleAfterPrint);
+        window.addEventListener('beforeunload', () => {
+            if (currentBundleUrl) {
+                URL.revokeObjectURL(currentBundleUrl);
+            }
+        });
+
         async function bootstrap() {
             try {
-                statusText.textContent = 'Loading order details…';
+                setStatus('Loading order…');
+                pdfFrame.hidden = true;
+                printReady = false;
                 latestOrder = await fetchOrder(orderId);
                 updateOrderSummary(null, latestOrder.status);
                 await hydrateOutboundLabel(latestOrder);
                 await loadPrintBundle(orderId);
             } catch (error) {
                 console.error('Failed to initialise print page:', error);
-                showError(error.message || 'Unable to load packing slip.');
+                showError(error.message || 'Unable to load documents.');
             }
         }
 
@@ -291,24 +190,27 @@
             if (!response.ok) {
                 throw new Error(`Failed to load order (${response.status})`);
             }
-            const order = await response.json();
-            shell.classList.remove('single-column');
-            return order;
+            return response.json();
         }
 
         async function hydrateOutboundLabel(order) {
-            if (!order.outboundLabelUrl) {
-                labelActions.hidden = true;
-                return;
+            if (order.outboundLabelUrl) {
+                outboundLabelLink.hidden = false;
+                outboundLabelLink.href = order.outboundLabelUrl;
+                syncTrackingBtn.hidden = false;
+            } else {
+                outboundLabelLink.hidden = true;
+                outboundLabelLink.removeAttribute('href');
+                syncTrackingBtn.hidden = true;
             }
-            labelActions.hidden = false;
-            outboundLabelLink.href = order.outboundLabelUrl;
         }
 
         async function loadPrintBundle(id) {
-            statusText.textContent = 'Preparing combined documents…';
+            setStatus('Preparing documents…');
             setPrintButtonState(false);
+            clearError();
             printReady = false;
+
             if (currentBundleUrl) {
                 URL.revokeObjectURL(currentBundleUrl);
                 currentBundleUrl = null;
@@ -318,44 +220,64 @@
             if (!response.ok) {
                 throw new Error(`Print bundle failed to generate (${response.status})`);
             }
+
             const blob = await response.blob();
             currentBundleUrl = URL.createObjectURL(blob);
-            packingFrame.src = currentBundleUrl;
-            packingFrame.onload = () => {
+            pdfFrame.src = currentBundleUrl;
+            pdfFrame.hidden = false;
+
+            const onLoad = () => {
+                pdfFrame.removeEventListener('load', onLoad);
+                attachFrameAfterPrint();
                 printReady = true;
                 setPrintButtonState(true);
+                setStatus('Ready to print');
                 if (!printHasRun) {
                     requestPrint(true);
                 }
             };
+
+            pdfFrame.addEventListener('load', onLoad, { once: true });
         }
 
         function requestPrint(auto = false) {
+            if (!printReady) return;
             if (auto && printHasRun) return;
-            const delay = auto ? 250 : 0;
             if (auto) {
                 printHasRun = true;
             }
-            statusLine.innerHTML = '<i class="fa-solid fa-print"></i><span>Printing documents…</span>';
-            setTimeout(() => {
+            setStatus('Opening print dialog…');
+            const frameWindow = pdfFrame.contentWindow;
+            if (frameWindow && typeof frameWindow.print === 'function') {
+                frameWindow.focus();
+                frameWindow.print();
+            } else {
                 window.print();
-            }, delay);
+            }
         }
 
-        window.addEventListener('afterprint', async () => {
+        async function handleAfterPrint() {
+            if (handlingAfterPrint) return;
+            handlingAfterPrint = true;
             try {
                 if (shouldMarkKitSent()) {
                     await markKitAsSent();
                 } else if (latestOrder) {
                     updateOrderSummary(null, latestOrder.status);
+                    setStatus('Print complete');
                 }
+            } catch (error) {
+                console.error('Failed to handle post-print updates:', error);
+                setStatus('Printed — update status manually');
             } finally {
                 setTimeout(() => window.close(), 600);
+                handlingAfterPrint = false;
             }
-        });
+        }
 
         async function markKitAsSent() {
             try {
+                setStatus('Marking kit as sent…');
                 const response = await fetch(`${BACKEND_URL}/orders/${encodeURIComponent(latestOrder.id)}/mark-kit-sent`, {
                     method: 'POST',
                 });
@@ -364,10 +286,10 @@
                 }
                 latestOrder.status = 'kit_sent';
                 updateOrderSummary(null, latestOrder.status);
-                statusLine.innerHTML = '<i class="fa-solid fa-check" style="color:#34d399"></i><span>Marked as Kit Sent</span>';
+                setStatus('Kit marked as sent');
             } catch (error) {
                 console.error('Failed to mark kit sent:', error);
-                statusLine.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#fbbf24"></i><span>Printed but status update failed — update manually.</span>';
+                setStatus('Printed — update status manually');
             }
         }
 
@@ -379,22 +301,25 @@
 
         function updateOrderSummary(trackingData, statusOverride) {
             if (!latestOrder) return;
-            const status = statusOverride || latestOrder.status;
+            if (statusOverride) {
+                latestOrder.status = statusOverride;
+            }
+            const status = latestOrder.status;
             const trackingLine = trackingData?.status_description || trackingData?.statusDescription || '';
-            const summary = [
-                `Order <strong>#${latestOrder.id}</strong>`
-            ];
+            const summaryParts = [`<strong>Order #${latestOrder.id}</strong>`];
+            if (status) {
+                summaryParts.push(`Status: ${formatStatus(status)}`);
+            }
             if (latestOrder.device) {
-                summary.push(`${latestOrder.device} (${latestOrder.storage || 'storage'})`);
+                summaryParts.push(`${latestOrder.device}${latestOrder.storage ? ` (${latestOrder.storage})` : ''}`);
             }
             if (latestOrder.outboundTrackingNumber) {
-                summary.push(`Outbound tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${latestOrder.outboundTrackingNumber}" target="_blank" rel="noopener">${latestOrder.outboundTrackingNumber}</a>`);
+                summaryParts.push(`Outbound tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${latestOrder.outboundTrackingNumber}" target="_blank" rel="noopener">${latestOrder.outboundTrackingNumber}</a>`);
             }
             if (trackingLine) {
-                summary.push(trackingLine);
+                summaryParts.push(trackingLine);
             }
-            orderSummary.innerHTML = summary.join('<br>');
-            statusLine.innerHTML = `<i class="fa-solid fa-ticket"></i><span>${formatStatus(status)}</span>`;
+            orderSummary.innerHTML = summaryParts.join(' · ');
         }
 
         function formatStatus(status) {
@@ -407,42 +332,51 @@
                 label_generated: 'Label Generated',
                 order_pending: 'Order Pending',
             };
-            return labels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            return labels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
         }
 
         function showError(message) {
-            errorCard.hidden = false;
-            shell.classList.add('single-column');
-            frameWrapper.style.display = 'none';
-            labelActions.hidden = true;
-            statusLine.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i><span>Unable to prepare slip</span>';
+            setStatus('Unable to load documents');
             orderSummary.textContent = '';
             errorMessage.textContent = message;
+            errorPanel.hidden = false;
+            pdfFrame.hidden = true;
             setPrintButtonState(false, true);
+        }
+
+        function clearError() {
+            errorPanel.hidden = true;
         }
 
         function toggleSyncButton(disabled) {
             syncTrackingBtn.disabled = disabled;
             if (disabled) {
-                syncTrackingBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Syncing…';
+                syncTrackingBtn.textContent = 'Syncing…';
             } else {
-                syncTrackingBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i>Sync Tracking';
+                syncTrackingBtn.textContent = 'Sync Tracking';
             }
         }
 
         function setPrintButtonState(enabled, isError = false) {
             if (isError) {
                 printBundleBtn.disabled = true;
-                printBundleBtn.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i>Unavailable';
+                printBundleBtn.textContent = 'Unavailable';
                 return;
             }
 
             printBundleBtn.disabled = !enabled;
-            if (enabled) {
-                printBundleBtn.innerHTML = '<i class="fa-solid fa-print"></i>Print Documents';
-            } else {
-                printBundleBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Preparing Documents…';
-            }
+            printBundleBtn.textContent = enabled ? 'Print Documents' : 'Preparing…';
+        }
+
+        function setStatus(text) {
+            statusText.textContent = text;
+        }
+
+        function attachFrameAfterPrint() {
+            const frameWindow = pdfFrame.contentWindow;
+            if (!frameWindow) return;
+            frameWindow.removeEventListener('afterprint', handleAfterPrint);
+            frameWindow.addEventListener('afterprint', handleAfterPrint);
         }
     </script>
 </body>
