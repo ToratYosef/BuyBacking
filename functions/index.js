@@ -41,9 +41,146 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// --- HTML TEMPLATE FOR SERVER-SIDE RENDERING ---
+// NOTE: Client-side JS for populating content has been removed.
+const THANK_YOU_HTML_TEMPLATE = (
+  orderId,
+  name,
+  deviceSummary,
+  formattedPrice,
+  paymentMethod,
+  shippingInstructionHtml,
+  trackingPixel
+) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Submitted - secondhandcell</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-W3BM2JC8');</script>
+    
+    <!-- End Google Tag Manager -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+        
+            gtag('config', 'AW-17534255111');
+            gtag('config', 'G-8JYPJDKSP8');
+        
+            gtag('event', 'conversion', {'send_to': 'AW-17534255111/09vcCOjI85QbEIeA_qhB'});
+        </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col items-center justify-center">
+<!-- TRACKING PIXEL INJECTED SERVER-SIDE -->
+${trackingPixel}
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
+    <main class="flex-grow container mx-auto px-4 py-12 flex items-center justify-center">
+        <div class="bg-white p-8 md:p-12 rounded-3xl shadow-xl max-w-2xl text-center w-full">
+            <div class="mb-6">
+                <i class="fa-solid fa-circle-check text-7xl text-green-500"></i>
+            </div>
+            
+            <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Thank You for Your Order, <span id="heroName">${name}</span>! 🎉</h1>
+
+            <p class="text-lg text-slate-600 mb-6 max-w-xl mx-auto">
+                We've locked in your quote of <span id="heroPrice" class="font-semibold text-slate-900">${formattedPrice}</span> for your <span id="heroDevice" class="font-semibold text-slate-900">${deviceSummary}</span>. Look out for confirmation emails from us shortly.
+            </p>
+
+            <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left mb-6">
+                <h2 class="text-xl font-bold text-slate-800 mb-4">Order Summary</h2>
+                <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-slate-700">
+                    <div>
+                        <dt class="font-semibold text-slate-600">Order Number</dt>
+                        <dd id="summaryOrderId" class="mt-1 text-slate-900">${orderId}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-600">Customer</dt>
+                        <dd id="summaryName" class="mt-1 text-slate-900">${name}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-600">Device</dt>
+                        <dd id="summaryDevice" class="mt-1 text-slate-900">${deviceSummary}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-600">Estimated Payout</dt>
+                        <dd id="summaryPrice" class="mt-1 text-slate-900">${formattedPrice}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-600">Payment Method</dt>
+                        <dd id="summaryPaymentMethod" class="mt-1 text-slate-900">${paymentMethod}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="text-center mb-8 space-y-3">
+                <a id="trustpilotTextLink" href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block text-lg font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">Review us on Trustpilot</a>
+                <div>
+                    <a id="trustpilotStarsLink" href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block">
+                        <img src="https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.svg" alt="Rate us five stars on Trustpilot" class="h-12 mx-auto">
+                    </a>
+                </div>
+                <p class="text-sm text-slate-500 max-w-lg mx-auto">Your feedback helps other sellers feel confident working with us. It only takes a few seconds!</p>
+            </div>
+
+            <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left mb-8">
+                <h2 class="text-xl font-bold text-slate-800 mb-4">What Happens Next?</h2>
+                <ol class="list-decimal list-inside space-y-4 text-slate-700">
+                    <li>
+                        <strong>Check Your Email:</strong> We've just sent you a confirmation email containing your order summary and the next steps. Please check your spam folder if you don't see it within a few minutes.
+                    </li>
+                    <li id="shippingInstruction">
+                        ${shippingInstructionHtml}
+                    </li>
+                    <li>
+                        <strong>Device Inspection:</strong> Once we receive your device, our certified technicians will inspect it to confirm the condition.
+                    </li>
+                    <li>
+                        <strong>Get Paid:</strong> After the inspection, we'll send your payment via the method you selected. You'll receive a final payment confirmation email when the funds are on their way.
+                    </li>
+                </ol>
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-center items-center gap-4">
+                <a href="https://secondhandcell.com/index.html" class="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-full text-indigo-700 bg-indigo-100 hover:bg-indigo-200 transition duration-300">
+                    <i class="fa-solid fa-house mr-2"></i> Return to Homepage
+                </a>
+                <a href="https://secondhandcell.com/my-account.html" class="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-full text-white bg-indigo-600 hover:bg-indigo-700 transition duration-300">
+                    <i class="fa-solid fa-user-circle mr-2"></i> View My Account
+                </a>
+            </div>
+        </div>
+    </main>
+    
+</body>
+</html>`;
+// --- END HTML TEMPLATE ---
+
+
 // --- EMAIL HTML Templates (unchanged from your version) ---
 const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
-const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
+const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 const ORDER_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Order Has Been Received!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content h2{color:#333333;font-size:20px;margin-top:24px;margin-bottom:8px}.order-id{color:#007bff;font-weight:bold}ul{list-style-type:disc;padding-left:20px;margin:0 0 16px}ul li{margin-bottom:8px}.important-note{background-color:#fff3cd;border-left:4px solid #ffc107;padding:16px;margin-top:24px;font-size:14px;color:#856404}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1>Your SecondHandCell Order #**ORDER_ID** Has Been Received!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for choosing SecondHandCell! We've successfully received your order request for your **DEVICE_NAME**.</p><p>Your Order ID is <strong class="order-id">#**ORDER_ID**</strong>.</p><h2>Next Steps: Preparing Your Device for Shipment</h2><p>Before you send us your device, it's crucial to prepare it correctly. Please follow these steps:</p><ul><li><strong>Backup Your Data:</strong> Ensure all important photos, contacts, and files are backed up to a cloud service or another device.</li><li><strong>Factory Reset:</strong> Perform a full factory reset on your device to erase all personal data. This is vital for your privacy and security.</li><li><strong>Remove Accounts:</strong> Sign out of all accounts (e.g., Apple ID/iCloud, Google Account, Samsung Account).<ul><li>For Apple devices, turn off "Find My iPhone" (FMI).</li><li>For Android devices, ensure Factory Reset Protection (FRP) is disabled.</li></ul></li><li><strong>Remove SIM Card:</strong> Take out any physical SIM cards from the device.</li><li><strong>Remove Accessories:</strong> Do not include cases, screen protectors, or chargers unless specifically instructed.</li></ul><div class="important-note"><p><strong>Important:</strong> We cannot process devices with <strong>Find My iPhone (FMI)</strong>, <strong>Factory Reset Protection (FRP)</strong>, <strong>stolen/lost status</strong>, <strong>outstanding balance due</strong>, or <strong>blacklisted IMEI</strong>. Please ensure your device meets these conditions to avoid delays or rejection.</p></div>**SHIPPING_INSTRUCTION**</div><div class="footer"><p>The SecondHandCell Team</p></div></div></body></html>`;
 const DEVICE_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Device Has Arrived!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}.order-id{color:#007bff;font-weight:bold}</style></head><body><div class="email-container"><div class="header"><h1>Your Device Has Arrived!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p><p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p></div><div class="footer"><p>Thank thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 const ORDER_PLACED_ADMIN_EMAIL_HTML = `
@@ -189,7 +326,6 @@ const FMI_EMAIL_HTML = `
   <!DOCTYPE html>
   <html lang="en">
   <head>
-    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Action Required for Order #**ORDER_ID**</title>
     <style>
@@ -988,7 +1124,6 @@ async function sendMultipleTestEmails(email, emailTypes) {
                             <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderToUse.id}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
                               Return Phone Now
                             </a>
-                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -1046,7 +1181,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
         htmlBody = BAL_DUE_EMAIL_HTML
           .replace(/\*\*CUSTOMER_NAME\*\*/g, orderToUse.shippingInfo.fullName)
           .replace(/\*\*ORDER_ID\*\*/g, orderToUse.id)
-          .replace(/\*\*FINANCIAL_STATUS\*\*/g, orderToUse.financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
+          .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
         break;
       case "completed":
         orderToUse = mockOrderDataWithoutReoffer;
@@ -1083,7 +1218,96 @@ async function sendMultipleTestEmails(email, emailTypes) {
 // ROUTES
 // ------------------------------
 
-// NEW ENDPOINT: PDF Fetching Proxy for CORS Bypass
+// NEW ENDPOINT: Server-Side Confirmation Page with Tracking Pixel
+app.get("/order-submitted", async (req, res) => {
+  const { orderId } = req.query;
+
+  if (!orderId) {
+    return res.status(400).send("Order ID is missing in the request.");
+  }
+
+  try {
+    const orderDoc = await ordersCollection.doc(orderId).get();
+
+    if (!orderDoc.exists) {
+      // NOTE: We don't want to error out on the client, so we fall back to a generic message.
+      const genericBody = THANK_YOU_HTML_TEMPLATE(
+        "Pending", "Friend", "Device", "$0.00", "Not Specified",
+        `
+        <strong>Order Status:</strong>
+        <span class="block mt-2">
+            We've received your order confirmation, but we couldn't find the details right now. Please check your email for the full summary.
+        </span>
+        `,
+        ''
+      );
+      return res.status(200).send(genericBody);
+    }
+
+    const order = { id: orderDoc.id, ...orderDoc.data() };
+    const orderPrice = getOrderPayout(order); // Assuming estimatedQuote is the relevant value here
+    const name = order.shippingInfo?.fullName || 'Friend';
+    
+    const deviceParts = [];
+    if (order.device) deviceParts.push(String(order.device));
+    if (order.storage) deviceParts.push(String(order.storage));
+    if (order.carrier) deviceParts.push(formatDisplayText(order.carrier));
+    const deviceSummary = deviceParts.length ? deviceParts.join(' • ') : 'Device details on file';
+
+    const formattedPrice = orderPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    const paymentMethod = formatDisplayText(order.paymentMethod, 'Not specified');
+    const shippingPreference = order.shippingPreference || 'Email Label Requested';
+
+    // 1. CONSTRUCT TRACKING PIXEL (Server-Side Injection)
+    const transactionId = orderId;
+    const basketTotal = formatCurrencyValue(orderPrice); // e.g., "250.00"
+
+    const trackingPixel = `
+<!-- SERVER-SIDE TRACKING PIXEL FOR AFFILIATE -->
+<iframe src="https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(transactionId)}&p=${encodeURIComponent(basketTotal)}" 
+height="1" width="1" frameborder="0" style="display:none; position:absolute; visibility:hidden;"></iframe>
+<!-- END TRACKING PIXEL -->
+    `;
+    
+    // 2. CONSTRUCT SHIPPING INSTRUCTION HTML
+    let shippingInstructionHtml;
+    if (shippingPreference.toLowerCase().includes('kit')) {
+        shippingInstructionHtml = `
+            <strong>Shipping Kit Instructions:</strong>
+            <span class="block mt-2">
+                We've shipped a prepaid, insured shipping kit to your address. Please use the provided materials to carefully package your device and drop it off at any USPS location.
+            </span>
+        `;
+    } else {
+        shippingInstructionHtml = `
+            <strong>Shipping Instructions:</strong>
+            <span class="block mt-2">
+                A prepaid shipping label will arrive in your inbox shortly. Please use your own packaging, carefully wrap your device, and drop it off at any USPS location.
+            </span>
+        `;
+    }
+
+    // 3. RENDER THE TEMPLATE
+    const htmlResponse = THANK_YOU_HTML_TEMPLATE(
+      orderId,
+      name,
+      deviceSummary,
+      formattedPrice,
+      paymentMethod,
+      shippingInstructionHtml,
+      trackingPixel
+    );
+
+    // Set the Content-Type and send the rendered HTML
+    res.setHeader('Content-Type', 'text/html');
+    res.status(200).send(htmlResponse);
+
+  } catch (err) {
+    console.error("Error serving order confirmation page:", err);
+    res.status(500).send("Internal Server Error. Could not load order details.");
+  }
+});
+
 app.post("/fetch-pdf", async (req, res) => {
     const { url } = req.body;
 
@@ -1094,7 +1318,6 @@ app.post("/fetch-pdf", async (req, res) => {
     try {
         const response = await axios.get(url, {
             responseType: 'arraybuffer', // Crucial for binary data (PDF)
-            // Add necessary headers if the remote server requires them (e.g., ShipEngine sometimes needs API-Key for direct label downloads, though usually not)
         });
 
         // Convert the ArrayBuffer to a Base64 string for safe JSON transfer
@@ -1302,7 +1525,10 @@ app.post("/submit-order", async (req, res) => {
     };
     await writeOrderBoth(orderId, toSave);
 
-    res.status(201).json({ message: "Order submitted", orderId: orderId });
+    // CRITICAL CHANGE: Redirect to the new server-rendered page instead of returning JSON
+    const redirectUrl = `/order-submitted?orderId=${orderId}`;
+    res.status(302).redirect(redirectUrl);
+
   } catch (err) {
     console.error("Error submitting order:", err);
     res.status(500).json({ error: "Failed to submit order" });
@@ -2325,7 +2551,6 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       font-size: 16px;
       margin: 24px auto;
       display: block;
-      text-align: center;
       max-width: 280px;
       box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
       transition: all 0.3s ease;
