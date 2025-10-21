@@ -966,6 +966,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                                 <label for="reason-deep-scratches" class="ml-2 block text-sm text-gray-900">Deep Scratches</label>
                             </div>
                             <div class="flex items-center">
+                                <input id="reason-wrong-device" name="reoffer-reasons" type="checkbox" value="wrong-device" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                                <label for="reason-wrong-device" class="ml-2 block text-sm text-gray-900">Wrong Device Sent</label>
+                            </div>
+                            <div class="flex items-center">
                                 <input id="reason-non-functional" name="reoffer-reasons" type="checkbox" value="non-functional" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
                                 <label for="reason-non-functional" class="ml-2 block text-sm text-gray-900">Non-Functional Component</label>
                             </div>
@@ -974,6 +978,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                                 <label for="reason-other" class="ml-2 block text-sm text-gray-900">Other</label>
                             </div>
                         </div>
+                    </div>
+                    <div id="reoffer-pricing-helper" class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg hidden">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                            <p class="text-sm font-semibold text-slate-700">Feed Pricing Suggestions</p>
+                            <span id="reoffer-pricing-model" class="text-xs uppercase tracking-wide text-slate-500"></span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Click a value below to populate the new offer amount.</p>
+                        <div id="reoffer-pricing-values" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+                        <p id="reoffer-pricing-message" class="mt-2 text-xs text-red-500 hidden"></p>
                     </div>
                     <div>
                         <label for="reoffer-comments" class="block text-sm font-medium text-gray-700">Additional Comments</label>
@@ -1056,6 +1069,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         
         // Corrected to include the base path for Cloud Functions
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+        const FEED_PRICING_URL = '/feeds/feed.xml';
+        const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
         
         // Custom logo URL for the packing slip header - UPDATED LOGO URL
         const LOGO_URL = "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
@@ -1152,6 +1167,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const reofferComments = document.getElementById('reoffer-comments');
         const submitReofferBtn = document.getElementById('submit-reoffer-btn');
         const cancelReofferBtn = document.getElementById('cancel-reoffer-btn');
+        const reofferPricingHelper = document.getElementById('reoffer-pricing-helper');
+        const reofferPricingValues = document.getElementById('reoffer-pricing-values');
+        const reofferPricingMessage = document.getElementById('reoffer-pricing-message');
+        const reofferPricingModel = document.getElementById('reoffer-pricing-model');
 
         // New Manual Fulfillment Form Elements
         const manualFulfillmentFormContainer = document.getElementById('manual-fulfillment-form-container');
@@ -1177,6 +1196,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         let allOrders = [];
         let currentActiveStatus = 'all';
         let refreshInterval = null;
+        let currentOrderDetails = null;
+        let feedPricingDataCache = null;
+        let feedPricingDataPromise = null;
         const autoRefreshedTracking = new Set();
 
         window.addEventListener('message', (event) => {
@@ -1205,12 +1227,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
          */
         function formatDate(timestamp) {
             if (!timestamp) return 'N/A';
-            
+
             let date;
 
             // 1. Check for the native Firestore Timestamp object {_seconds, _nanoseconds}
             if (typeof timestamp === 'object' && timestamp.seconds && typeof timestamp.seconds === 'number') {
-                // Use .seconds property (Firestore convention)
+                 // Use .seconds property (Firestore convention)
                 date = new Date(timestamp.seconds * 1000);
             } else if (typeof timestamp === 'object' && timestamp._seconds && typeof timestamp._seconds === 'number') {
                 // Use ._seconds property (Common legacy or specific SDK behavior)
@@ -1224,11 +1246,413 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             // Check if parsing resulted in a valid date object
             if (isNaN(date.getTime())) {
                 console.error("Invalid date object generated for timestamp:", timestamp);
-                return 'Invalid Date'; 
+                return 'Invalid Date';
             }
-            
+
             // Format to the desired long date string: "Month Day, Year"
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+
+        function normalizeFeedKey(value) {
+            if (!value && value !== 0) return '';
+            return value.toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        }
+
+        function normalizeStorageKey(value) {
+            if (!value && value !== 0) return '';
+            return value.toString().trim().toUpperCase().replace(/\s+/g, '');
+        }
+
+        function getNodeText(parent, tagName) {
+            if (!parent) return '';
+            const node = parent.getElementsByTagName(tagName)[0];
+            return node && node.textContent ? node.textContent.trim() : '';
+        }
+
+        function formatCarrierLabel(carrierKey) {
+            if (!carrierKey) return 'Carrier';
+            const normalized = carrierKey.toLowerCase();
+            if (normalized === 'att') return 'AT&T';
+            if (normalized === 'tmobile') return 'T-Mobile';
+            if (normalized === 'nopreference') return 'No Preference';
+            return carrierKey.replace(/-/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        function formatConditionLabel(conditionKey) {
+            if (!conditionKey) return '';
+            const normalized = conditionKey.toLowerCase();
+            if (normalized === 'nopower') return 'No Power';
+            return normalized.replace(/[-_]/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        function deriveCarrierKey(carrierValue) {
+            if (!carrierValue) return 'unlocked';
+            const normalized = carrierValue.toString().trim().toLowerCase();
+            if (!normalized) return 'unlocked';
+            if (normalized.includes('unlock') || normalized.includes('sim-free')) {
+                return 'unlocked';
+            }
+            if (normalized.includes('locked')) {
+                return 'locked';
+            }
+            if (normalized.includes('att') || normalized.includes('at&t')) return 'locked';
+            if (normalized.includes('tmobile') || normalized.includes('t-mobile')) return 'locked';
+            if (normalized.includes('verizon')) return 'locked';
+            if (normalized.includes('sprint')) return 'locked';
+            if (normalized.includes('other')) return 'locked';
+            return normalized.replace(/\s+/g, '-');
+        }
+
+        function extractTimestampMillis(timestamp) {
+            if (!timestamp) return null;
+            if (typeof timestamp === 'number') {
+                return timestamp > 1e12 ? timestamp : timestamp * 1000;
+            }
+            if (typeof timestamp === 'string') {
+                const parsed = Date.parse(timestamp);
+                return Number.isNaN(parsed) ? null : parsed;
+            }
+            if (timestamp instanceof Date) {
+                return timestamp.getTime();
+            }
+            if (typeof timestamp === 'object') {
+                if (typeof timestamp._seconds === 'number') {
+                    return timestamp._seconds * 1000;
+                }
+                if (typeof timestamp.seconds === 'number') {
+                    return timestamp.seconds * 1000;
+                }
+                if (typeof timestamp.toDate === 'function') {
+                    return timestamp.toDate().getTime();
+                }
+            }
+            return null;
+        }
+
+        function getAutoAcceptDeadline(order) {
+            if (!order || order.status !== 're-offered-pending' || !order.reOffer) return null;
+            const explicit = extractTimestampMillis(order.reOffer.autoAcceptDate);
+            if (explicit) return explicit;
+            const created = extractTimestampMillis(order.reOffer.createdAt);
+            return created ? created + AUTO_ACCEPT_WINDOW_MS : null;
+        }
+
+        function formatAutoAcceptTimer(order) {
+            const deadline = getAutoAcceptDeadline(order);
+            if (!deadline) return '';
+            const timeLeft = deadline - Date.now();
+            if (timeLeft <= 0) {
+                return `<span class="status-bubble-subtext text-red-500">Auto-accept overdue</span>`;
+            }
+
+            const totalSeconds = Math.ceil(timeLeft / 1000);
+            const days = Math.floor(totalSeconds / 86400);
+            const hours = Math.floor((totalSeconds % 86400) / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+            const parts = [];
+            if (days > 0) {
+                parts.push(`${days} day${days !== 1 ? 's' : ''}`);
+                if (hours > 0) {
+                    parts.push(`${hours} hr${hours !== 1 ? 's' : ''}`);
+                }
+            } else if (hours > 0) {
+                parts.push(`${hours} hr${hours !== 1 ? 's' : ''}`);
+                if (minutes > 0) {
+                    parts.push(`${minutes} min${minutes !== 1 ? 's' : ''}`);
+                }
+            } else if (minutes > 0) {
+                parts.push(`${minutes} min${minutes !== 1 ? 's' : ''}`);
+            }
+
+            if (parts.length === 0) {
+                parts.push('less than a minute');
+            }
+
+            return `<span class="status-bubble-subtext text-slate-500">Auto-accept in ${parts.join(' ')}</span>`;
+        }
+
+        async function loadFeedPricingData() {
+            if (feedPricingDataCache) {
+                return feedPricingDataCache;
+            }
+            if (feedPricingDataPromise) {
+                return feedPricingDataPromise;
+            }
+
+            feedPricingDataPromise = fetch(FEED_PRICING_URL)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch pricing feed: ${response.status}`);
+                    }
+                    return response.text();
+                })
+                .then(xmlText => {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+                    if (xmlDoc.querySelector('parsererror')) {
+                        throw new Error('Invalid XML structure in pricing feed.');
+                    }
+
+                    const lookup = {};
+                    const models = Array.from(xmlDoc.getElementsByTagName('model'));
+                    models.forEach(modelNode => {
+                        const brand = getNodeText(modelNode, 'brand') || getNodeText(modelNode, 'parentDevice');
+                        const slug = getNodeText(modelNode, 'slug') || getNodeText(modelNode, 'modelID');
+                        const modelId = getNodeText(modelNode, 'modelID');
+                        const name = getNodeText(modelNode, 'name');
+
+                        const storageMap = {};
+                        const priceGroups = Array.from(modelNode.getElementsByTagName('prices'));
+                        priceGroups.forEach(priceGroup => {
+                            const storageSize = getNodeText(priceGroup, 'storageSize');
+                            const normalizedStorage = normalizeStorageKey(storageSize);
+                            if (!normalizedStorage) return;
+
+                            const priceValueNode = priceGroup.getElementsByTagName('priceValue')[0];
+                            if (!priceValueNode) return;
+
+                            const carriers = {};
+                            Array.from(priceValueNode.children).forEach(carrierNode => {
+                                const carrierKey = carrierNode.tagName.toLowerCase();
+                                const conditionMap = {};
+                                Array.from(carrierNode.children).forEach(conditionNode => {
+                                    const value = parseFloat(conditionNode.textContent);
+                                    if (!Number.isNaN(value)) {
+                                        conditionMap[conditionNode.tagName.toLowerCase()] = value;
+                                    }
+                                });
+                                if (Object.keys(conditionMap).length > 0) {
+                                    carriers[carrierKey] = conditionMap;
+                                }
+                            });
+
+                            if (Object.keys(carriers).length > 0) {
+                                storageMap[normalizedStorage] = {
+                                    label: storageSize ? storageSize.trim() : '',
+                                    carriers
+                                };
+                            }
+                        });
+
+                        if (Object.keys(storageMap).length === 0) {
+                            return;
+                        }
+
+                        const entry = {
+                            modelName: name || slug || modelId || 'Unknown Model',
+                            brand: brand || '',
+                            storageMap
+                        };
+
+                        const rawKeys = [
+                            slug,
+                            modelId,
+                            name,
+                            `${brand}-${modelId}`,
+                            `${brand}-${slug}`,
+                            `${brand}-${name}`,
+                            `${brand} ${modelId}`,
+                            `${brand} ${slug}`,
+                            `${brand} ${name}`
+                        ];
+
+                        rawKeys.forEach(rawKey => {
+                            const normalizedKey = normalizeFeedKey(rawKey);
+                            if (normalizedKey) {
+                                lookup[normalizedKey] = entry;
+                            }
+                        });
+                    });
+
+                    feedPricingDataCache = lookup;
+                    return lookup;
+                })
+                .catch(error => {
+                    console.error('Failed to load feed pricing data:', error);
+                    feedPricingDataCache = {};
+                    return {};
+                })
+                .finally(() => {
+                    feedPricingDataPromise = null;
+                });
+
+            return feedPricingDataPromise;
+        }
+
+        function getPricingEntryForOrder(pricingData, order) {
+            if (!order) return null;
+
+            const candidates = new Set();
+            const pushCandidate = (value) => {
+                const key = normalizeFeedKey(value);
+                if (key) {
+                    candidates.add(key);
+                }
+            };
+
+            pushCandidate(order.modelSlug);
+            pushCandidate(order.modelId);
+            pushCandidate(order.slug);
+            pushCandidate(order.device);
+            pushCandidate(order.model?.slug);
+            pushCandidate(order.model?.id);
+
+            if (order.brand) {
+                pushCandidate(`${order.brand}-${order.modelSlug}`);
+                pushCandidate(`${order.brand}-${order.device}`);
+                pushCandidate(`${order.brand} ${order.modelSlug}`);
+                pushCandidate(`${order.brand} ${order.device}`);
+            }
+
+            if (order.parentDevice) {
+                pushCandidate(`${order.parentDevice}-${order.modelSlug}`);
+                pushCandidate(`${order.parentDevice}-${order.device}`);
+            }
+
+            for (const key of candidates) {
+                if (pricingData[key]) {
+                    return pricingData[key];
+                }
+            }
+
+            return null;
+        }
+
+        async function populateReofferPricing(order) {
+            if (!reofferPricingHelper || !reofferPricingValues || !reofferPricingMessage || !reofferPricingModel) {
+                return;
+            }
+
+            reofferPricingValues.innerHTML = '';
+            reofferPricingMessage.textContent = '';
+            reofferPricingMessage.classList.add('hidden');
+
+            const modelLabelParts = [];
+            if (order?.device) {
+                modelLabelParts.push(order.device);
+            } else if (order?.modelSlug) {
+                modelLabelParts.push(order.modelSlug);
+            }
+            if (order?.storage) {
+                modelLabelParts.push(order.storage);
+            }
+            reofferPricingModel.textContent = modelLabelParts.join(' • ').toUpperCase();
+
+            if (!order) {
+                reofferPricingHelper.classList.remove('hidden');
+                reofferPricingMessage.textContent = 'Device details unavailable for pricing lookup.';
+                reofferPricingMessage.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const pricingData = await loadFeedPricingData();
+                const entry = getPricingEntryForOrder(pricingData, order);
+
+                if (!entry) {
+                    reofferPricingHelper.classList.remove('hidden');
+                    reofferPricingMessage.textContent = 'No pricing found in the feed for this device.';
+                    reofferPricingMessage.classList.remove('hidden');
+                    return;
+                }
+
+                const storageCandidates = [];
+                if (order.storage) {
+                    storageCandidates.push(normalizeStorageKey(order.storage));
+                    const numericMatch = order.storage.match(/\d+/);
+                    if (numericMatch) {
+                        storageCandidates.push(normalizeStorageKey(`${numericMatch[0]}GB`));
+                    }
+                }
+
+                let storageEntry = null;
+                for (const candidate of storageCandidates) {
+                    if (candidate && entry.storageMap[candidate]) {
+                        storageEntry = entry.storageMap[candidate];
+                        break;
+                    }
+                }
+
+                if (!storageEntry) {
+                    reofferPricingHelper.classList.remove('hidden');
+                    reofferPricingMessage.textContent = 'No pricing found in the feed for this storage capacity.';
+                    reofferPricingMessage.classList.remove('hidden');
+                    return;
+                }
+
+                const carriers = storageEntry.carriers;
+                if (!carriers || Object.keys(carriers).length === 0) {
+                    reofferPricingHelper.classList.remove('hidden');
+                    reofferPricingMessage.textContent = 'Carrier pricing is missing for this device in the feed.';
+                    reofferPricingMessage.classList.remove('hidden');
+                    return;
+                }
+
+                const preferredCarrier = deriveCarrierKey(order.carrier);
+                reofferPricingHelper.classList.remove('hidden');
+
+                Object.entries(carriers).forEach(([carrierKey, conditionMap]) => {
+                    const carrierCard = document.createElement('div');
+                    const highlight = carrierKey === preferredCarrier;
+                    carrierCard.className = `rounded-md border p-3 text-sm bg-white shadow-sm ${highlight ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200'}`;
+
+                    const header = document.createElement('div');
+                    header.className = 'flex items-center justify-between mb-2';
+
+                    const label = document.createElement('span');
+                    label.className = 'font-semibold text-slate-700';
+                    label.textContent = formatCarrierLabel(carrierKey);
+                    header.appendChild(label);
+
+                    if (highlight) {
+                        const badge = document.createElement('span');
+                        badge.className = 'text-xs uppercase tracking-wide text-blue-600';
+                        badge.textContent = 'Order Carrier';
+                        header.appendChild(badge);
+                    }
+
+                    carrierCard.appendChild(header);
+
+                    const priceList = document.createElement('div');
+                    priceList.className = 'space-y-2';
+
+                    Object.entries(conditionMap).forEach(([conditionKey, value]) => {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.dataset.price = value;
+                        button.className = 'w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-md bg-white text-left hover:border-blue-400 hover:text-blue-600 transition';
+
+                        const conditionLabel = document.createElement('span');
+                        conditionLabel.textContent = formatConditionLabel(conditionKey);
+                        const amount = document.createElement('span');
+                        amount.className = 'font-semibold';
+                        amount.textContent = `$${Number(value).toFixed(2)}`;
+
+                        button.appendChild(conditionLabel);
+                        button.appendChild(amount);
+
+                        button.addEventListener('click', () => {
+                            reofferNewPrice.value = Number(value).toFixed(2);
+                            reofferPricingValues.querySelectorAll('button[data-price]').forEach(btn => {
+                                btn.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-50', 'text-blue-700');
+                            });
+                            button.classList.add('ring-2', 'ring-blue-400', 'bg-blue-50', 'text-blue-700');
+                        });
+
+                        priceList.appendChild(button);
+                    });
+
+                    carrierCard.appendChild(priceList);
+                    reofferPricingValues.appendChild(carrierCard);
+                });
+
+            } catch (error) {
+                console.error('Error populating re-offer pricing:', error);
+                reofferPricingHelper.classList.remove('hidden');
+                reofferPricingMessage.textContent = 'Unable to load feed pricing at this time.';
+                reofferPricingMessage.classList.remove('hidden');
+            }
         }
         
         /**
@@ -1579,19 +2003,9 @@ if (printWindow) {
                 const displayId = order.id;
                 const orderDate = formatDate(order.createdAt); // NEW: Get formatted date
                 
-                let reofferTimer = '';
+                const reofferTimer = formatAutoAcceptTimer(order);
                 // Pass the entire order object to formatStatus for conditional logic
-                let statusText = formatStatus(order); 
-                if (order.status === 're-offered-pending' && order.reOffer && order.reOffer.autoAcceptDate) {
-                    const autoAcceptDate = new Date(order.reOffer.autoAcceptDate._seconds * 1000);
-                    const timeLeft = autoAcceptDate.getTime() - Date.now();
-                    if (timeLeft > 0) {
-                        const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-                        reofferTimer = `<span class="status-bubble-subtext text-slate-500">Auto-accept in ${days} days</span>`;
-                    } else {
-                        reofferTimer = `<span class="status-bubble-subtext text-red-500">Auto-accept overdue</span>`;
-                    }
-                }
+                let statusText = formatStatus(order);
 
                 // --- START: MODIFIED TRACKING NUMBER LOGIC FOR MAIN LIST ---
                 const trackingNumber = order.trackingNumber;
@@ -1727,6 +2141,7 @@ if (printWindow) {
                     throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
                 }
                 const order = await response.json();
+                currentOrderDetails = order;
 
                 modalOrderId.textContent = order.id;
                 modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
@@ -1965,11 +2380,40 @@ if (printWindow) {
         function showReofferForm(orderId) {
             modalActionButtons.classList.add('hidden');
             reofferFormContainer.classList.remove('hidden');
+            reofferNewPrice.value = '';
+            reofferComments.value = '';
+            if (reofferPricingHelper) {
+                reofferPricingHelper.classList.add('hidden');
+            }
+            if (reofferPricingValues) {
+                reofferPricingValues.innerHTML = '';
+            }
+            if (reofferPricingMessage) {
+                reofferPricingMessage.textContent = '';
+                reofferPricingMessage.classList.add('hidden');
+            }
+            document.querySelectorAll('input[name="reoffer-reasons"]').forEach(cb => {
+                cb.checked = false;
+            });
+
             submitReofferBtn.onclick = () => submitReOfferFromForm(orderId);
             cancelReofferBtn.onclick = () => {
                 reofferFormContainer.classList.add('hidden');
                 modalActionButtons.classList.remove('hidden');
             };
+
+            const orderForPricing = (currentOrderDetails && currentOrderDetails.id === orderId)
+                ? currentOrderDetails
+                : allOrders.find(o => o.id === orderId);
+
+            populateReofferPricing(orderForPricing).catch(error => {
+                console.error('Unable to populate re-offer pricing from feed:', error);
+                if (reofferPricingHelper && reofferPricingMessage) {
+                    reofferPricingHelper.classList.remove('hidden');
+                    reofferPricingMessage.textContent = 'Unable to load feed pricing at this time.';
+                    reofferPricingMessage.classList.remove('hidden');
+                }
+            });
         }
 
         /**
