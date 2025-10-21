@@ -205,6 +205,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     </span>
                 `;
             }
+
+            const transactionId = orderId;
+            const basketTotal = Number.isFinite(priceNumber) ? priceNumber : null;
+
+            if (transactionId && transactionId !== 'unknown' && basketTotal && basketTotal > 0) {
+                const trackingPixel = document.createElement('iframe');
+                trackingPixel.src = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(transactionId)}&p=${basketTotal.toFixed(2)}`;
+                trackingPixel.height = '1';
+                trackingPixel.width = '1';
+                trackingPixel.frameBorder = '0';
+                trackingPixel.style.display = 'none';
+                document.body.appendChild(trackingPixel);
+                console.log('Tracking pixel loaded:', trackingPixel.src);
+            } else {
+                console.warn('Tracking pixel not loaded: Missing transaction ID or basket total');
+            }
         });
     </script>
 
