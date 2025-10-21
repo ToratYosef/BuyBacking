@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getStorage } = require('firebase-admin/storage');
 const { getFirestore } = require('firebase-admin/firestore');
+const admin = require('firebase-admin');
 const { createShipStationLabel } = require('../services/shipstation');
 const { sendZendeskComment } = require('../services/zendesk');
 const { sendEmail } = require('../services/notifications');
@@ -45,7 +46,9 @@ router.post("/generate-label/:id", async (req, res) => {
             country: "US",
         };
 
-        let updateData = { status: "label_generated" };
+        let updateData = {
+            status: order.shippingPreference === "Shipping Kit Requested" ? "kit_needs_printing" : "label_generated"
+        };
         let internalHtmlBody = "";
         let customerEmailSubject = "";
         let customerMailOptions;
@@ -92,6 +95,9 @@ router.post("/generate-label/:id", async (req, res) => {
                 outboundTrackingNumber: outboundLabelData.trackingNumber,
                 inboundTrackingNumber: inboundLabelData.trackingNumber,
                 trackingNumber: inboundLabelData.trackingNumber, // Set primary tracking for simplicity
+                outboundCarrierCode: 'stamps_com',
+                inboundCarrierCode: 'stamps_com',
+                kitLabelGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
             };
 
             customerEmailSubject = `Your SecondHandCell Shipping Kit for Order #${order.id} is on its Way!`;

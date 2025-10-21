@@ -178,6 +178,7 @@ const BLACKLISTED_EMAIL_HTML = `
       </div>
       <div class="footer">
         <p>The SecondHandCell Team</p>
+        <p style="font-size: 12px; margin-top: 10px;">New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property. We must comply with all local and federal laws regarding stolen property.</p>
       </div>
     </div>
   </body>
@@ -598,7 +599,10 @@ async function createShipEngineLabel(fromAddress, toAddress, labelReference, pac
 
 function formatStatusForEmail(status) {
   if (status === "order_pending") return "Order Pending";
-  if (status === "shipping_kit_requested") return "Shipping Kit Requested";
+  if (status === "shipping_kit_requested" || status === "kit_needs_printing")
+    return "Needs Printing";
+  if (status === "kit_sent") return "Kit Sent";
+  if (status === "kit_delivered") return "Kit Delivered";
   return status
     .replace(/_/g, " ")
     .split(" ")
@@ -835,6 +839,42 @@ async function sendMultipleTestEmails(email, emailTypes) {
 // ROUTES
 // ------------------------------
 
+// NEW ENDPOINT: PDF Fetching Proxy for CORS Bypass
+app.post("/fetch-pdf", async (req, res) => {
+    const { url } = req.body;
+
+    if (!url) {
+        return res.status(400).json({ error: "PDF URL is required." });
+    }
+
+    try {
+        const response = await axios.get(url, {
+            responseType: 'arraybuffer', // Crucial for binary data (PDF)
+            // Add necessary headers if the remote server requires them (e.g., ShipEngine sometimes needs API-Key for direct label downloads, though usually not)
+        });
+
+        // Convert the ArrayBuffer to a Base64 string for safe JSON transfer
+        const base64Data = Buffer.from(response.data).toString('base64');
+        
+        res.json({ 
+            base64: base64Data,
+            mimeType: response.headers['content-type'] || 'application/pdf'
+        });
+    } catch (error) {
+        console.error("Error fetching external PDF:", error.message);
+        if (error.response) {
+             console.error("External API Response Status:", error.response.status);
+             console.error("External API Response Data (partial):", error.response.data ? Buffer.from(error.response.data).toString('utf-8').substring(0, 200) : 'No data');
+            return res.status(error.response.status).json({ 
+                error: `Failed to fetch PDF from external service. Status: ${error.response.status}`,
+                details: error.message
+            });
+        }
+        res.status(500).json({ error: "Internal server error during PDF proxy fetch." });
+    }
+});
+
+
 app.get("/orders", async (req, res) => {
   try {
     const snapshot = await ordersCollection.get();
@@ -921,7 +961,7 @@ app.post("/submit-order", async (req, res) => {
     if (!orderData?.shippingInfo || !orderData?.estimatedQuote) {
       return res.status(400).json({ error: "Invalid order data" });
     }
-n
+
     const fullStateName = orderData.shippingInfo.state;
     if (fullStateName && stateAbbreviations[fullStateName]) {
       orderData.shippingInfo.state = stateAbbreviations[fullStateName];
@@ -992,33 +1032,6 @@ n
         }
       ).catch((e) => console.error("FCM Send Error (New Order):", e)),
     ];
-
-    const estimatedQuoteNumber = Number(orderData.estimatedQuote);
-    if (Number.isFinite(estimatedQuoteNumber) && estimatedQuoteNumber > 0) {
-      const trackingUrl = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(
-        orderId
-      )}&p=${estimatedQuoteNumber.toFixed(2)}`;
-
-      notificationPromises.push(
-        axios
-          .get(trackingUrl)
-          .then(() =>
-            console.log("Server-side tracking pixel fired successfully:", trackingUrl)
-          )
-          .catch((error) => {
-            const status = error?.response?.status;
-            const errorMessage = status ? `status ${status}` : error.message;
-            console.error(
-              "Failed to send server-side tracking pixel:",
-              errorMessage
-            );
-          })
-      );
-    } else {
-      console.warn(
-        `Tracking pixel not triggered for order ${orderId}: missing or invalid estimated quote.`
-      );
-    }
 
     const adminsSnapshot = await adminsCollection.get();
     adminsSnapshot.docs.forEach((adminDoc) => {
@@ -1392,11 +1405,20 @@ app.post("/orders/:id/return-label", async (req, res) => {
       postal_code: buyerShippingInfo.zipCode,
       country_code: "US",
     };
+    
+    // Package data for the return label (phone inside kit)
+    const returnPackageData = {
+      service_code: "usps_first_class_mail",
+      dimensions: { unit: "inch", height: 2, width: 4, length: 6 },
+      weight: { ounces: 8, unit: "ounce" }, // Phone weighs 8oz
+    };
+
 
     const returnLabelData = await createShipEngineLabel(
-      swiftBuyBackAddress,
       buyerAddress,
-      `${orderIdForLabel}-RETURN`
+      swiftBuyBackAddress,
+      `${orderIdForLabel}-RETURN`,
+      returnPackageData
     );
 
     const returnTrackingNumber = returnLabelData.tracking_number;
@@ -1870,35 +1892,6 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       font-size: 24px;
       margin-bottom: 8px;
       display: block;
-    }
-    
-    .steps-list {
-      background: #f9fafb;
-      border-radius: 12px;
-      padding: 24px;
-      margin: 24px 0;
-    }
-    
-    .steps-list h3 {
-      color: #111827;
-      font-size: 18px;
-      font-weight: 700;
-      margin: 0 0 16px;
-    }
-    
-    .steps-list ol {
-      margin: 0;
-      padding-left: 20px;
-      color: #4b5563;
-    }
-    
-    .steps-list li {
-      margin-bottom: 12px;
-      line-height: 1.6;
-    }
-    
-    .steps-list li:last-child {
-      margin-bottom: 0;
     }
     
     .footer {
@@ -2448,7 +2441,5 @@ app.delete("/orders/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete order." });
   }
 });
-
-
 
 exports.api = functions.https.onRequest(app);
