@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Order Submitted - secondhandcell</title>
     
-    <!-- IMMEDIATE ACCESS CONTROL CHECK -->
+    <!-- IMMEDIATE ACCESS CONTROL CHECK (MUST RUN FIRST) -->
     <script>
         const expectedPathSegment = '/sell/';
         const referrer = document.referrer;
@@ -13,37 +13,42 @@
 
         // If the referrer is empty (direct access) or doesn't contain the expected path, redirect immediately.
         if (!referrer || !referrer.includes(expectedPathSegment)) {
-            // Redirect immediately. Accessing document.body here causes a 'null' error.
+            // Redirect immediately, preventing the browser from loading subsequent scripts (including analytics).
             window.location.replace(homepageUrl);
             // Stop further script execution
             throw new Error("Unauthorized access attempt redirected."); 
         }
     </script>
     <!-- END IMMEDIATE ACCESS CONTROL CHECK -->
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-        <!-- Google Tag Manager -->
+
+    <!-- AUTHORIZED ANALYTICS SCRIPTS (ONLY RUNS IF ACCESS CHECK PASSES) -->
+    <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
     j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-W3BM2JC8');</script>
-    
     <!-- End Google Tag Manager -->
+
+    <!-- Google Global Site Tag (gtag.js) and Conversion Event -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+    
+        gtag('config', 'AW-17534255111');
+        gtag('config', 'G-8JYPJDKSP8');
+    
+        gtag('event', 'conversion', {'send_to': 'AW-17534255111/09vcCOjI85QbEIeA_qhB'});
+    </script>
+    <!-- END AUTHORIZED ANALYTICS SCRIPTS -->
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/brands.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
         
-            gtag('config', 'AW-17534255111');
-            gtag('config', 'G-8JYPJDKSP8');
-        
-            gtag('event', 'conversion', {'send_to': 'AW-17534255111/09vcCOjI85QbEIeA_qhB'});
-        </script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -228,6 +233,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const transactionId = orderId;
             const basketTotal = Number.isFinite(priceNumber) ? priceNumber : null;
 
+            // Tracking pixel for affiliate conversion
             if (transactionId && transactionId !== 'unknown' && basketTotal && basketTotal > 0) {
                 const trackingPixel = document.createElement('iframe');
                 trackingPixel.src = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(transactionId)}&p=${basketTotal.toFixed(2)}`;
