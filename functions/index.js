@@ -366,27 +366,114 @@ const REVIEW_REQUEST_EMAIL_HTML = `
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Share Your Experience with SecondHandCell</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-    .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 10px; box-shadow: 0 4px 6px rgba(15,23,42,0.12); overflow: hidden; border: 1px solid #e2e8f0; }
-    .header { background-color: #0ea5e9; color: #ffffff; padding: 28px 24px; text-align: center; }
-    .header h1 { font-size: 24px; margin: 0; }
-    .content { padding: 28px 24px; color: #334155; font-size: 16px; line-height: 1.6; }
-    .content p { margin: 0 0 18px; }
-    .footer { padding: 24px; text-align: center; color: #94a3b8; font-size: 14px; border-top: 1px solid #e2e8f0; background-color: #f8fafc; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+      background-color: #f3f4f6;
+      margin: 0;
+      padding: 0;
+    }
+    .email-container {
+      max-width: 620px;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    .logo {
+      text-align: center;
+      background-color: #ffffff;
+      padding: 24px 0 12px 0;
+    }
+    .logo img {
+      width: 160px;
+      height: auto;
+    }
+    .header {
+      background-color: #0072ce; /* Trustpilot blue */
+      color: #ffffff;
+      padding: 26px 24px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 24px;
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .content {
+      padding: 32px 24px;
+      color: #111827;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+    .content p {
+      margin: 0 0 18px;
+    }
+    .trustpilot-section {
+      text-align: center;
+      margin: 40px auto 0;
+      padding-top: 24px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .trustpilot-section h2 {
+      color: #0072ce;
+      font-weight: 700;
+      margin: 0 0 12px 0;
+      font-size: 20px;
+    }
+    .trustpilot-section a {
+      display: inline-block;
+      text-decoration: none;
+      border: none;
+      outline: none;
+    }
+    .trustpilot-section img {
+      height: 56px;
+      width: auto;
+      display: block;
+      margin: 0 auto 14px auto;
+    }
+    .trustpilot-section p {
+      color: #111827;
+      font-size: 14px;
+      margin: 0;
+    }
+    .footer {
+      padding: 24px;
+      text-align: center;
+      color: #6b7280;
+      font-size: 14px;
+      border-top: 1px solid #e5e7eb;
+      background-color: #f9fafb;
+    }
   </style>
 </head>
 <body>
   <div class="email-container">
+    <div class="logo">
+      <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo">
+    </div>
+
     <div class="header">
       <h1>We'd Love Your Feedback</h1>
     </div>
+
     <div class="content">
-      <p>Hello **CUSTOMER_NAME**,</p>
-      <p>Thank you for trusting us with your **DEVICE_SUMMARY** (Order #**ORDER_ID**). We just completed your payout of <strong>$**ORDER_TOTAL**</strong>.</p>
+      <p>Hello <strong>**CUSTOMER_NAME**</strong>,</p>
+      <p>Thank you for trusting us with your <strong>**DEVICE_SUMMARY**</strong> (Order #**ORDER_ID**). We just completed your payout of <strong>$**ORDER_TOTAL**</strong>.</p>
       <p>Could you take a few seconds to share how everything went? Your review helps other sellers feel confident working with us.</p>
-      **TRUSTPILOT_SECTION**
-      <p>We appreciate you being part of the SecondHandCell family!</p>
+
+      <div class="trustpilot-section">
+        <h2>Review us on Trustpilot</h2>
+        <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank">
+          <img src="https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png" alt="Rate us five stars on Trustpilot">
+        </a>
+        <p>We appreciate you being part of the <strong>SecondHandCell</strong> family!</p>
+      </div>
     </div>
+
     <div class="footer">
       <p>The SecondHandCell Team</p>
     </div>
