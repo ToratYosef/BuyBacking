@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Packing Slip</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        :root {
+            color-scheme: light dark;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top, #1f2937, #0f172a 55%);
+            color: #e2e8f0;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+        .print-shell {
+            width: min(960px, 100%);
+            display: grid;
+            gap: 1.5rem;
+            grid-template-columns: 1fr 1fr;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 30px 60px rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(16px);
+        }
+        .print-shell.single-column {
+            grid-template-columns: 1fr;
+            text-align: center;
+        }
+        .frame-wrapper {
+            background: rgba(15, 23, 42, 0.55);
+            border-radius: 18px;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 480px;
+        }
+        iframe {
+            width: calc(4in + 10px);
+            height: calc(6in + 10px);
+            border: none;
+            background: #fff;
+            box-shadow: 0 20px 35px rgba(79, 70, 229, 0.25);
+            border-radius: 12px;
+        }
+        .info-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+        .info-card {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            padding: 1.5rem;
+        }
+        .info-card h2 {
+            margin: 0 0 0.75rem;
+            font-size: 1.5rem;
+            color: #fff;
+        }
+        .info-card p {
+            margin: 0.35rem 0;
+            color: rgba(226, 232, 240, 0.85);
+            font-size: 0.95rem;
+        }
+        .status-line {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-weight: 600;
+            color: #fbbf24;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .actions a,
+        .actions button {
+            appearance: none;
+            border: none;
+            border-radius: 999px;
+            padding: 0.6rem 1.4rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .actions a.primary,
+        .actions button.primary {
+            background: linear-gradient(135deg, #6366f1, #22d3ee);
+            color: #fff;
+            box-shadow: 0 15px 30px rgba(79, 70, 229, 0.35);
+        }
+        .actions a.secondary,
+        .actions button.secondary {
+            background: rgba(148, 163, 184, 0.18);
+            color: #e2e8f0;
+        }
+        .actions a:hover,
+        .actions button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 36px rgba(79, 70, 229, 0.45);
+        }
+        .error-box {
+            border: 1px solid rgba(239, 68, 68, 0.45);
+            background: rgba(239, 68, 68, 0.12);
+            color: #fecaca;
+            padding: 1rem;
+            border-radius: 12px;
+        }
+        @media (max-width: 900px) {
+            .print-shell {
+                grid-template-columns: 1fr;
+            }
+            iframe {
+                width: 100%;
+                height: min(600px, 80vh);
+            }
+        }
+        @page {
+            size: 4in 6in;
+            margin: 0;
+        }
+        @media print {
+            body {
+                background: #fff;
+                padding: 0;
+            }
+            .print-shell,
+            .info-panel {
+                display: block;
+            }
+            .info-panel {
+                display: none !important;
+            }
+            .frame-wrapper {
+                padding: 0;
+                border: none;
+            }
+            iframe {
+                width: 4in;
+                height: 6in;
+                box-shadow: none;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="shell" class="print-shell single-column">
+        <div class="frame-wrapper">
+            <iframe id="packingFrame" title="Packing Slip Preview"></iframe>
+        </div>
+        <div class="info-panel">
+            <div class="info-card">
+                <div class="status-line" id="statusLine">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    <span id="statusText">Preparing your 4x6 packing slip…</span>
+                </div>
+                <p id="orderSummary">Fetching order data…</p>
+            </div>
+            <div class="info-card" id="labelActions" hidden>
+                <h2>Shipping Kit Label</h2>
+                <p>Print the USPS outbound label after this slip to include in the box.</p>
+                <div class="actions">
+                    <a id="outboundLabelLink" class="secondary" target="_blank" rel="noopener">
+                        <i class="fa-solid fa-up-right-from-square"></i>
+                        Open Outbound Label
+                    </a>
+                    <button id="syncTrackingBtn" class="secondary" type="button">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        Sync Tracking
+                    </button>
+                </div>
+            </div>
+            <div class="info-card" id="errorCard" hidden>
+                <h2>Something went wrong</h2>
+                <div class="error-box" id="errorMessage"></div>
+                <div class="actions">
+                    <button type="button" class="secondary" id="retryBtn">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        Try Again
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+        const urlParams = new URLSearchParams(window.location.search);
+        const orderId = urlParams.get('orderId');
+        const shell = document.getElementById('shell');
+        const frameWrapper = document.querySelector('.frame-wrapper');
+        const packingFrame = document.getElementById('packingFrame');
+        const statusText = document.getElementById('statusText');
+        const statusLine = document.getElementById('statusLine');
+        const orderSummary = document.getElementById('orderSummary');
+        const labelActions = document.getElementById('labelActions');
+        const outboundLabelLink = document.getElementById('outboundLabelLink');
+        const errorCard = document.getElementById('errorCard');
+        const errorMessage = document.getElementById('errorMessage');
+        const retryBtn = document.getElementById('retryBtn');
+        const syncTrackingBtn = document.getElementById('syncTrackingBtn');
+
+        let printHasRun = false;
+        let latestOrder = null;
+
+        if (!orderId) {
+            showError('Missing orderId query parameter.');
+        } else {
+            bootstrap();
+        }
+
+        retryBtn.addEventListener('click', () => {
+            errorCard.hidden = true;
+            bootstrap();
+        });
+
+        syncTrackingBtn.addEventListener('click', async () => {
+            if (!latestOrder) return;
+            toggleSyncButton(true);
+            try {
+                const response = await fetch(`${BACKEND_URL}/orders/${latestOrder.id}/sync-outbound-tracking`, {
+                    method: 'POST',
+                });
+                if (!response.ok) {
+                    throw new Error(`Sync failed (${response.status})`);
+                }
+                const payload = await response.json();
+                updateOrderSummary(payload.tracking, payload.status);
+            } catch (error) {
+                console.error('Tracking sync failed:', error);
+                alert('Unable to sync tracking. Please try again later.');
+            } finally {
+                toggleSyncButton(false);
+            }
+        });
+
+        async function bootstrap() {
+            try {
+                statusText.textContent = 'Loading order details…';
+                latestOrder = await fetchOrder(orderId);
+                updateOrderSummary(null, latestOrder.status);
+                await hydrateOutboundLabel(latestOrder);
+                await loadPackingSlip(orderId);
+            } catch (error) {
+                console.error('Failed to initialise print page:', error);
+                showError(error.message || 'Unable to load packing slip.');
+            }
+        }
+
+        async function fetchOrder(id) {
+            const response = await fetch(`${BACKEND_URL}/orders/${encodeURIComponent(id)}`);
+            if (!response.ok) {
+                throw new Error(`Failed to load order (${response.status})`);
+            }
+            const order = await response.json();
+            shell.classList.remove('single-column');
+            return order;
+        }
+
+        async function hydrateOutboundLabel(order) {
+            if (!order.outboundLabelUrl) {
+                labelActions.hidden = true;
+                return;
+            }
+            labelActions.hidden = false;
+            outboundLabelLink.href = order.outboundLabelUrl;
+        }
+
+        async function loadPackingSlip(id) {
+            statusText.textContent = 'Rendering packing slip…';
+            const response = await fetch(`${BACKEND_URL}/packing-slip/${encodeURIComponent(id)}`);
+            if (!response.ok) {
+                throw new Error(`Packing slip failed to generate (${response.status})`);
+            }
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            packingFrame.src = blobUrl;
+            packingFrame.onload = () => {
+                triggerPrint();
+            };
+        }
+
+        function triggerPrint() {
+            if (printHasRun) return;
+            printHasRun = true;
+            statusLine.innerHTML = '<i class="fa-solid fa-print"></i><span>Printing packing slip…</span>';
+            setTimeout(() => {
+                window.print();
+            }, 250);
+        }
+
+        window.addEventListener('afterprint', () => {
+            markKitAsSent().finally(() => {
+                setTimeout(() => window.close(), 600);
+            });
+        });
+
+        async function markKitAsSent() {
+            try {
+                if (!latestOrder) return;
+                await fetch(`${BACKEND_URL}/orders/${encodeURIComponent(latestOrder.id)}/mark-kit-sent`, {
+                    method: 'POST',
+                });
+                statusLine.innerHTML = '<i class="fa-solid fa-check" style="color:#34d399"></i><span>Marked as Kit Sent</span>';
+            } catch (error) {
+                console.error('Failed to mark kit sent:', error);
+                statusLine.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#fbbf24"></i><span>Printed but status update failed — update manually.</span>';
+            }
+        }
+
+        function updateOrderSummary(trackingData, statusOverride) {
+            if (!latestOrder) return;
+            const status = statusOverride || latestOrder.status;
+            const trackingLine = trackingData?.status_description || trackingData?.statusDescription || '';
+            const summary = [
+                `Order <strong>#${latestOrder.id}</strong>`
+            ];
+            if (latestOrder.device) {
+                summary.push(`${latestOrder.device} (${latestOrder.storage || 'storage'})`);
+            }
+            if (latestOrder.outboundTrackingNumber) {
+                summary.push(`Outbound tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${latestOrder.outboundTrackingNumber}" target="_blank" rel="noopener">${latestOrder.outboundTrackingNumber}</a>`);
+            }
+            if (trackingLine) {
+                summary.push(trackingLine);
+            }
+            orderSummary.innerHTML = summary.join('<br>');
+            statusLine.innerHTML = `<i class="fa-solid fa-ticket"></i><span>${formatStatus(status)}</span>`;
+        }
+
+        function formatStatus(status) {
+            if (!status) return 'Status unavailable';
+            const labels = {
+                needs_printing: 'Needs Printing',
+                kit_sent: 'Kit Sent',
+                kit_in_transit: 'Kit In Transit',
+                kit_delivered: 'Kit Delivered',
+                label_generated: 'Label Generated',
+                order_pending: 'Order Pending',
+            };
+            return labels[status] || status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function showError(message) {
+            errorCard.hidden = false;
+            shell.classList.add('single-column');
+            frameWrapper.style.display = 'none';
+            labelActions.hidden = true;
+            statusLine.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i><span>Unable to prepare slip</span>';
+            orderSummary.textContent = '';
+            errorMessage.textContent = message;
+        }
+
+        function toggleSyncButton(disabled) {
+            syncTrackingBtn.disabled = disabled;
+            if (disabled) {
+                syncTrackingBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>Syncing…';
+            } else {
+                syncTrackingBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i>Sync Tracking';
+            }
+        }
+    </script>
+</body>
+</html>

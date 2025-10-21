@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const admin = require('firebase-admin');
 const { getStorage } = require('firebase-admin/storage');
 const { getFirestore } = require('firebase-admin/firestore');
 const { createShipStationLabel } = require('../services/shipstation');
@@ -45,7 +46,15 @@ router.post("/generate-label/:id", async (req, res) => {
             country: "US",
         };
 
-        let updateData = { status: "label_generated" };
+        const statusTimestamp = admin.firestore.FieldValue.serverTimestamp();
+        const isKitOrder = order.shippingPreference === "Shipping Kit Requested";
+        let updateData = {
+            status: isKitOrder ? "needs_printing" : "label_generated",
+            labelGeneratedAt: statusTimestamp,
+        };
+        if (isKitOrder) {
+            updateData.needsPrintingAt = statusTimestamp;
+        }
         let internalHtmlBody = "";
         let customerEmailSubject = "";
         let customerMailOptions;
