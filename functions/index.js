@@ -311,7 +311,7 @@ const DOWNGRADE_EMAIL_HTML = `
 `;
 
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
-const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.svg";
+const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
 const ORDER_COMPLETED_EMAIL_HTML = `
 <!DOCTYPE html>
@@ -534,14 +534,27 @@ function buildDeviceSummary(order = {}) {
 
 function buildTrustpilotSection() {
   return `
-      <div style="text-align:center; margin: 32px 0 0;">
-        <a href="${TRUSTPILOT_REVIEW_LINK}" style="display:inline-block; font-weight:600; color:#0f766e; text-decoration:none; font-size:18px; margin-bottom:12px;">Review us on Trustpilot</a>
-        <a href="${TRUSTPILOT_REVIEW_LINK}" style="display:inline-block;">
-          <img src="${TRUSTPILOT_STARS_IMAGE_URL}" alt="Rate us five stars on Trustpilot" style="height:48px; max-width:220px; border:0; display:block; margin:0 auto;">
-        </a>
-      </div>
-    `;
+    <div style="text-align:center; margin: 40px auto 0; padding: 24px 0; max-width: 500px; border-top: 1px solid #e5e7eb;">
+      <p style="font-weight:600; color:#0f766e; font-size:20px; margin: 0 0 16px 0; line-height: 1.4;">
+        Review us on Trustpilot
+      </p>
+      
+      <a href="${TRUSTPILOT_REVIEW_LINK}" 
+         style="display:inline-block; text-decoration:none; border:none; outline:none;">
+        <img 
+          src="${TRUSTPILOT_STARS_IMAGE_URL}" 
+          alt="Rate us on Trustpilot" 
+          style="height:52px; width:auto; display:block; margin: 0 auto 12px auto; border:0;"
+        >
+      </a>
+
+      <p style="font-size:14px; color:#374151; margin: 0; line-height:1.4;">
+        We appreciate you being part of the <strong>SecondHandCell</strong> family!
+      </p>
+    </div>
+  `;
 }
+
 
 // NEW HELPER: Sanitizes data to ensure all values are strings for FCM payload compliance.
 function stringifyData(obj = {}) {
