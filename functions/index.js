@@ -42,6 +42,343 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const SHIPENGINE_API_BASE_URL = "https://api.shipengine.com/v1";
+const AUTO_VOID_DELAY_MS =
+  27 * 24 * 60 * 60 * 1000 + // 27 days
+  12 * 60 * 60 * 1000; // 12 hours
+const AUTO_VOID_QUERY_LIMIT = 50;
+const AUTO_VOID_RETRY_DELAY_MS = 12 * 60 * 60 * 1000; // 12 hours between automatic retry attempts
+
+function getShipEngineApiKey() {
+  try {
+    if (functions.config().shipengine && functions.config().shipengine.key) {
+      return functions.config().shipengine.key;
+    }
+  } catch (error) {
+    console.warn("Unable to read functions.config().shipengine.key:", error.message);
+  }
+  return process.env.SHIPENGINE_KEY || null;
+}
+
+function getLabelVoidNotificationEmail() {
+  try {
+    if (
+      functions.config().notifications &&
+      functions.config().notifications.void_labels_to
+    ) {
+      return functions.config().notifications.void_labels_to;
+    }
+    if (functions.config().email && functions.config().email.user) {
+      return functions.config().email.user;
+    }
+  } catch (error) {
+    console.warn("Unable to read notification email config:", error.message);
+  }
+  return (
+    process.env.LABEL_VOID_NOTIFICATIONS_TO ||
+    process.env.VOID_NOTIFICATION_EMAIL ||
+    process.env.EMAIL_USER ||
+    null
+  );
+}
+
+function toDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === "function") return value.toDate();
+  if (typeof value === "number") return new Date(value);
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value === "object") {
+    if (typeof value.seconds === "number") {
+      return new Date(value.seconds * 1000 + Math.floor((value.nanoseconds || 0) / 1e6));
+    }
+    if (typeof value._seconds === "number") {
+      return new Date(
+        value._seconds * 1000 + Math.floor((value._nanoseconds || 0) / 1e6)
+      );
+    }
+  }
+  return null;
+}
+
+function cloneShipEngineLabelMap(labels) {
+  const clone = {};
+  if (!labels || typeof labels !== "object") {
+    return clone;
+  }
+  Object.entries(labels).forEach(([key, value]) => {
+    clone[key] = value && typeof value === "object" ? { ...value } : value;
+  });
+  return clone;
+}
+
+function formatLabelDisplayNameFromKey(key) {
+  if (!key) return "Shipping Label";
+  const normalizedKey = key.toString().toLowerCase();
+  if (normalizedKey === "inbound") return "Inbound Shipping Label";
+  if (normalizedKey === "outbound") return "Outbound Shipping Label";
+  if (normalizedKey === "primary") return "Primary Shipping Label";
+  if (normalizedKey === "email") return "Email Shipping Label";
+  return key
+    .toString()
+    .replace(/([A-Z])/g, " $1")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeShipEngineLabelMap(order) {
+  const labels = cloneShipEngineLabelMap(order.shipEngineLabels);
+  if (!Object.keys(labels).length && order.shipEngineLabelId) {
+    labels.primary = {
+      id: order.shipEngineLabelId,
+      status: order.labelVoidStatus || "active",
+      message: order.labelVoidMessage || null,
+      trackingNumber: order.trackingNumber || null,
+      generatedAt:
+        order.labelGeneratedAt || order.kitLabelGeneratedAt || order.createdAt || null,
+      displayName: "Primary Shipping Label",
+    };
+  }
+  return labels;
+}
+
+function getLabelStatus(entry) {
+  if (!entry) return "";
+  const status = entry.status || entry.voidStatus || entry.state || "active";
+  return status.toString().toLowerCase();
+}
+
+function isLabelPendingVoid(entry) {
+  const status = getLabelStatus(entry);
+  return !["voided", "void_denied"].includes(status);
+}
+
+function buildLabelIdList(labelMap) {
+  return Object.values(labelMap)
+    .map((entry) => (entry && entry.id ? entry.id : null))
+    .filter(Boolean);
+}
+
+async function requestShipEngineVoid(labelId, shipengineKey) {
+  const url = `${SHIPENGINE_API_BASE_URL}/labels/${encodeURIComponent(labelId)}/void`;
+  const response = await axios.put(
+    url,
+    {},
+    {
+      headers: {
+        "API-Key": shipengineKey,
+        "Content-Type": "application/json",
+      },
+      timeout: 30000,
+    }
+  );
+  return response.data || {};
+}
+
+async function sendVoidNotificationEmail(order, results, options = {}) {
+  const recipient = getLabelVoidNotificationEmail();
+  if (!recipient) {
+    console.warn("Void notification email skipped: no recipient configured.");
+    return;
+  }
+
+  const approvedResults = results.filter((result) => result.approved);
+  if (!approvedResults.length) {
+    return;
+  }
+
+  const createdAtDate = toDate(order.createdAt);
+  let ageDescription = "Unknown";
+  if (createdAtDate) {
+    const diffMs = Date.now() - createdAtDate.getTime();
+    const days = diffMs / (24 * 60 * 60 * 1000);
+    ageDescription = `${days.toFixed(1)} days`;
+  }
+
+  const reason = options.reason === "automatic" ? "Automatic" : "Manual";
+  const subject = `${reason} label void for order ${order.id}`;
+  const lines = approvedResults.map((result) => {
+    const labelName = formatLabelDisplayNameFromKey(result.key);
+    return `• ${labelName} (ID: ${result.labelId})${
+      result.message ? ` – ${result.message}` : ""
+    }`;
+  });
+
+  const textBody = [
+    `${reason} label void processed for order #${order.id}.`,
+    `Order age: ${ageDescription}.`,
+    "",
+    "Voided label(s):",
+    ...lines,
+  ].join("\n");
+
+  const htmlBody = `
+    <p>${reason} label void processed for order <strong>#${order.id}</strong>.</p>
+    <p>Order age: <strong>${ageDescription}</strong>.</p>
+    <p>Voided label(s):</p>
+    <ul>
+      ${lines.map((line) => `<li>${line.substring(2)}</li>`).join("\n")}
+    </ul>
+  `;
+
+  await transporter.sendMail({
+    from: `SecondHandCell <${process.env.EMAIL_USER}>`,
+    to: recipient,
+    subject,
+    text: textBody,
+    html: htmlBody,
+  });
+}
+
+async function handleLabelVoid(order, selections, options = {}) {
+  if (!order || !order.id) {
+    throw new Error("Order context is required to void labels.");
+  }
+
+  if (!Array.isArray(selections) || selections.length === 0) {
+    throw new Error("At least one label must be selected for voiding.");
+  }
+
+  const shipengineKey = options.shipengineKey || getShipEngineApiKey();
+  if (!shipengineKey) {
+    throw new Error(
+      "ShipEngine API key not configured. Please set 'shipengine.key' or SHIPENGINE_KEY."
+    );
+  }
+
+  const nowTimestamp = admin.firestore.Timestamp.now();
+  const labels = normalizeShipEngineLabelMap(order);
+  const results = [];
+  let changed = false;
+
+  for (const selection of selections) {
+    const key = selection && selection.key ? selection.key : null;
+    if (!key) {
+      results.push({
+        key: null,
+        labelId: null,
+        approved: false,
+        message: "Invalid label selection.",
+      });
+      continue;
+    }
+
+    const entry = labels[key] && typeof labels[key] === "object" ? { ...labels[key] } : {};
+    const labelId = selection.id || entry.id || order.shipEngineLabelId || null;
+
+    if (!labelId) {
+      results.push({
+        key,
+        labelId: null,
+        approved: false,
+        message: "No label identifier found for selection.",
+      });
+      continue;
+    }
+
+    entry.displayName = entry.displayName || formatLabelDisplayNameFromKey(key);
+    entry.id = labelId;
+
+    const status = getLabelStatus(entry);
+    if (["voided", "void_denied"].includes(status)) {
+      results.push({
+        key,
+        labelId,
+        approved: status === "voided",
+        message:
+          entry.message ||
+          entry.voidMessage ||
+          (status === "voided"
+            ? "Label has already been voided."
+            : "Label void request was previously denied."),
+      });
+      labels[key] = entry;
+      continue;
+    }
+
+    try {
+      const response = await requestShipEngineVoid(labelId, shipengineKey);
+      const approved = Boolean(response.approved);
+      const message = response.message || response.response_message || null;
+
+      entry.status = approved ? "voided" : "void_denied";
+      entry.voidStatus = entry.status;
+      entry.message = message;
+      entry.voidMessage = message;
+      entry.voidedAt = approved ? nowTimestamp : entry.voidedAt || null;
+      entry.lastVoidAttemptAt = nowTimestamp;
+      if (options.reason === "automatic") {
+        entry.autoVoidAttemptedAt = nowTimestamp;
+      } else {
+        entry.manualVoidAttemptedAt = nowTimestamp;
+      }
+      if (!entry.generatedAt) {
+        entry.generatedAt =
+          entry.createdAt || order.labelGeneratedAt || order.kitLabelGeneratedAt || order.createdAt || nowTimestamp;
+      }
+
+      labels[key] = entry;
+      changed = true;
+      results.push({ key, labelId, approved, message });
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.response?.data?.errors?.[0]?.message ||
+        error.message ||
+        "Failed to void label.";
+
+      entry.status = "void_error";
+      entry.voidStatus = entry.status;
+      entry.message = message;
+      entry.voidMessage = message;
+      entry.lastVoidAttemptAt = nowTimestamp;
+      if (options.reason === "automatic") {
+        entry.autoVoidAttemptedAt = nowTimestamp;
+      } else {
+        entry.manualVoidAttemptedAt = nowTimestamp;
+      }
+      if (!entry.generatedAt) {
+        entry.generatedAt =
+          entry.createdAt || order.labelGeneratedAt || order.kitLabelGeneratedAt || order.createdAt || nowTimestamp;
+      }
+
+      labels[key] = entry;
+      changed = true;
+      results.push({ key, labelId, approved: false, message, error: true });
+    }
+  }
+
+  const pendingCount = Object.values(labels).filter((entry) => entry && entry.id && isLabelPendingVoid(entry)).length;
+  const labelIds = buildLabelIdList(labels);
+
+  const updates = {
+    shipEngineLabels: labels,
+    shipEngineLabelsLastUpdatedAt: nowTimestamp,
+    hasShipEngineLabel: labelIds.length > 0,
+    hasActiveShipEngineLabel: pendingCount > 0,
+    shipEngineLabelIds: labelIds,
+  };
+
+  if (labels.primary) {
+    updates.shipEngineLabelId = labels.primary.id || null;
+    updates.labelVoidStatus = labels.primary.status || null;
+    updates.labelVoidMessage = labels.primary.message || null;
+    if (labels.primary.voidedAt) {
+      updates.labelVoidedAt = labels.primary.voidedAt;
+    }
+  }
+
+  if (changed) {
+    await updateOrderBoth(order.id, updates);
+  }
+
+  return { results, updates, changed };
+}
+
 // --- EMAIL HTML Templates (unchanged from your version) ---
 const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
 const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
@@ -830,7 +1167,7 @@ async function createShipEngineLabel(fromAddress, toAddress, labelReference, pac
   };
   if (isSandbox) payload.testLabel = true;
 
-  const shipEngineApiKey = process.env.SHIPENGINE_KEY;
+  const shipEngineApiKey = getShipEngineApiKey();
   if (!shipEngineApiKey) {
     throw new Error(
       "ShipEngine API key not configured. Please set 'shipengine.key' environment variable."
@@ -1318,7 +1655,9 @@ app.post("/generate-label/:id", async (req, res) => {
     const order = { id: doc.id, ...doc.data() };
     const buyerShippingInfo = order.shippingInfo;
     const orderIdForLabel = order.id || "N/A";
-    const statusTimestamp = admin.firestore.FieldValue.serverTimestamp();
+    const nowTimestamp = admin.firestore.Timestamp.now();
+    const statusTimestamp = nowTimestamp;
+    const labelRecords = cloneShipEngineLabelMap(order.shipEngineLabels);
     const generatedStatus = order.shippingPreference === "Shipping Kit Requested"
       ? "needs_printing"
       : "label_generated";
@@ -1391,6 +1730,56 @@ app.post("/generate-label/:id", async (req, res) => {
 
       customerLabelData = outboundLabelData;
 
+      labelRecords.outbound = {
+        id:
+          outboundLabelData.label_id ||
+          outboundLabelData.labelId ||
+          outboundLabelData.shipengine_label_id ||
+          null,
+        trackingNumber: outboundLabelData.tracking_number || null,
+        downloadUrl: outboundLabelData.label_download?.pdf || null,
+        carrierCode:
+          outboundLabelData.shipment?.carrier_id ||
+          outboundLabelData.carrier_code ||
+          null,
+        serviceCode:
+          outboundLabelData.shipment?.service_code ||
+          outboundPackageData.service_code ||
+          null,
+        generatedAt: nowTimestamp,
+        createdAt: nowTimestamp,
+        status: "active",
+        voidStatus: "active",
+        message: null,
+        displayName: "Outbound Shipping Label",
+        labelReference: `${orderIdForLabel}-OUTBOUND-KIT`,
+      };
+
+      labelRecords.inbound = {
+        id:
+          inboundLabelData.label_id ||
+          inboundLabelData.labelId ||
+          inboundLabelData.shipengine_label_id ||
+          null,
+        trackingNumber: inboundLabelData.tracking_number || null,
+        downloadUrl: inboundLabelData.label_download?.pdf || null,
+        carrierCode:
+          inboundLabelData.shipment?.carrier_id ||
+          inboundLabelData.carrier_code ||
+          null,
+        serviceCode:
+          inboundLabelData.shipment?.service_code ||
+          inboundPackageData.service_code ||
+          null,
+        generatedAt: nowTimestamp,
+        createdAt: nowTimestamp,
+        status: "active",
+        voidStatus: "active",
+        message: null,
+        displayName: "Inbound Shipping Label",
+        labelReference: `${orderIdForLabel}-INBOUND-DEVICE`,
+      };
+
       updateData = {
         ...updateData,
         outboundLabelUrl: outboundLabelData.label_download?.pdf,
@@ -1435,6 +1824,31 @@ app.post("/generate-label/:id", async (req, res) => {
         throw new Error("Label PDF link not available from ShipEngine.");
       }
 
+      labelRecords.email = {
+        id:
+          customerLabelData.label_id ||
+          customerLabelData.labelId ||
+          customerLabelData.shipengine_label_id ||
+          null,
+        trackingNumber: customerLabelData.tracking_number || null,
+        downloadUrl: labelDownloadLink,
+        carrierCode:
+          customerLabelData.shipment?.carrier_id ||
+          customerLabelData.carrier_code ||
+          null,
+        serviceCode:
+          customerLabelData.shipment?.service_code ||
+          inboundPackageData.service_code ||
+          null,
+        generatedAt: nowTimestamp,
+        createdAt: nowTimestamp,
+        status: "active",
+        voidStatus: "active",
+        message: null,
+        displayName: "Email Shipping Label",
+        labelReference: `${orderIdForLabel}-INBOUND-DEVICE`,
+      };
+
       updateData = {
         ...updateData,
         uspsLabelUrl: labelDownloadLink,
@@ -1459,6 +1873,27 @@ app.post("/generate-label/:id", async (req, res) => {
       throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
     }
 
+    const labelIds = buildLabelIdList(labelRecords);
+    const hasActive = Object.values(labelRecords).some((entry) =>
+      entry && entry.id ? isLabelPendingVoid(entry) : false
+    );
+
+    updateData = {
+      ...updateData,
+      shipEngineLabels: labelRecords,
+      shipEngineLabelIds: labelIds,
+      shipEngineLabelsLastUpdatedAt: nowTimestamp,
+      hasShipEngineLabel: labelIds.length > 0,
+      hasActiveShipEngineLabel: hasActive,
+      shipEngineLabelId:
+        labelRecords.inbound?.id ||
+        labelRecords.email?.id ||
+        labelIds[0] ||
+        null,
+      labelVoidStatus: labelIds.length ? "active" : order.labelVoidStatus || null,
+      labelVoidMessage: null,
+    };
+
     await updateOrderBoth(req.params.id, updateData);
 
     await transporter.sendMail(customerMailOptions);
@@ -1467,6 +1902,44 @@ app.post("/generate-label/:id", async (req, res) => {
   } catch (err) {
     console.error("Error generating label:", err.response?.data || err.message || err);
     res.status(500).json({ error: "Failed to generate label" });
+  }
+});
+
+app.post("/orders/:id/void-label", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const labels = Array.isArray(req.body?.labels) ? req.body.labels : [];
+    if (!labels.length) {
+      return res
+        .status(400)
+        .json({ error: "Please select at least one label to void." });
+    }
+
+    const doc = await ordersCollection.doc(orderId).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const { results } = await handleLabelVoid(order, labels, {
+      reason: "manual",
+    });
+
+    try {
+      await sendVoidNotificationEmail(order, results, { reason: "manual" });
+    } catch (notificationError) {
+      console.error(
+        `Failed to send manual void notification for order ${orderId}:`,
+        notificationError
+      );
+    }
+
+    res.json({ orderId, results });
+  } catch (error) {
+    console.error("Error voiding label(s):", error);
+    res.status(500).json({
+      error: error.message || "Failed to void the selected label(s).",
+    });
   }
 });
 
@@ -2110,6 +2583,108 @@ app.post("/send-email", async (req, res) => {
         res.status(500).json({ error: "Failed to send email." });
     }
 });
+
+async function runAutomaticLabelVoidSweep() {
+  const shipengineKey = getShipEngineApiKey();
+  if (!shipengineKey) {
+    console.warn(
+      "Skipping automatic label void sweep because ShipEngine API key is not configured."
+    );
+    return;
+  }
+
+  const primarySnapshot = await ordersCollection
+    .where("hasActiveShipEngineLabel", "==", true)
+    .limit(AUTO_VOID_QUERY_LIMIT)
+    .get();
+
+  const docsToProcess = primarySnapshot.docs ? [...primarySnapshot.docs] : [];
+
+  if (docsToProcess.length < AUTO_VOID_QUERY_LIMIT) {
+    const fallbackLimit = AUTO_VOID_QUERY_LIMIT - docsToProcess.length;
+    const fallbackSnapshot = await ordersCollection
+      .where("hasActiveShipEngineLabel", "==", null)
+      .limit(fallbackLimit)
+      .get();
+
+    fallbackSnapshot.forEach((doc) => {
+      docsToProcess.push(doc);
+    });
+  }
+
+  if (!docsToProcess.length) {
+    return;
+  }
+
+  const processedIds = new Set();
+
+  for (const doc of docsToProcess) {
+    if (processedIds.has(doc.id)) continue;
+    processedIds.add(doc.id);
+    const order = { id: doc.id, ...doc.data() };
+    const labels = normalizeShipEngineLabelMap(order);
+    const selections = [];
+
+    for (const [key, entry] of Object.entries(labels)) {
+      if (!entry || !entry.id) continue;
+      if (!isLabelPendingVoid(entry)) continue;
+
+      const generatedDate =
+        toDate(entry.generatedAt || entry.createdAt) ||
+        toDate(order.labelGeneratedAt || order.kitLabelGeneratedAt || order.createdAt);
+      if (!generatedDate) continue;
+
+      const ageMs = Date.now() - generatedDate.getTime();
+      if (ageMs < AUTO_VOID_DELAY_MS) continue;
+
+      const lastAttempt =
+        toDate(entry.autoVoidAttemptedAt || entry.lastVoidAttemptAt) || null;
+      if (lastAttempt) {
+        const sinceLastAttempt = Date.now() - lastAttempt.getTime();
+        if (sinceLastAttempt < AUTO_VOID_RETRY_DELAY_MS) {
+          continue;
+        }
+      }
+
+      selections.push({ key, id: entry.id });
+    }
+
+    if (!selections.length) {
+      continue;
+    }
+
+    try {
+      const { results } = await handleLabelVoid(order, selections, {
+        reason: "automatic",
+        shipengineKey,
+      });
+      try {
+        await sendVoidNotificationEmail(order, results, { reason: "automatic" });
+      } catch (notificationError) {
+        console.error(
+          `Failed to send automatic void notification for order ${order.id}:`,
+          notificationError
+        );
+      }
+    } catch (error) {
+      console.error(
+        `Automatic label void failed for order ${order.id}:`,
+        error
+      );
+    }
+  }
+}
+
+exports.autoVoidExpiredLabels = functions.pubsub
+  .schedule("every 60 minutes")
+  .onRun(async () => {
+    try {
+      await runAutomaticLabelVoidSweep();
+    } catch (error) {
+      console.error("Automatic label void sweep failed:", error);
+    }
+    return null;
+  });
 
 exports.autoAcceptOffers = functions.pubsub
   .schedule("every 24 hours")
