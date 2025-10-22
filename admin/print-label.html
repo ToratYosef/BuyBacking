@@ -296,7 +296,7 @@
         function shouldMarkKitSent() {
             if (!latestOrder) return false;
             if (latestOrder.shippingPreference !== 'Shipping Kit Requested') return false;
-            return latestOrder.status === 'needs_printing';
+            return ['needs_printing', 'kit_needs_printing', 'shipping_kit_requested'].includes(latestOrder.status);
         }
 
         function updateOrderSummary(trackingData, statusOverride) {
@@ -325,7 +325,9 @@
         function formatStatus(status) {
             if (!status) return 'Status unavailable';
             const labels = {
+                shipping_kit_requested: 'Needs Printing',
                 needs_printing: 'Needs Printing',
+                kit_needs_printing: 'Needs Printing',
                 kit_sent: 'Kit Sent',
                 kit_in_transit: 'Kit In Transit',
                 kit_delivered: 'Kit Delivered',

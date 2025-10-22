@@ -1431,6 +1431,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         let feedPricingDataPromise = null;
         const autoRefreshedTracking = new Set();
 
+        const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printing', 'needs_printing'];
+        const REMINDER_ELIGIBLE_STATUSES = ['order_pending', ...KIT_PRINT_PENDING_STATUSES, 'kit_sent', 'label_generated'];
+
         window.addEventListener('message', (event) => {
             if (!event.data || event.data.type !== 'kit-print-complete') {
                 return;
@@ -2146,7 +2149,7 @@ if (printWindow) {
         function updateDashboardCounts(ordersData) {
             // Updated to 'order_pending'
             orderPendingCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
-            kitNeedsPrintingCount.textContent = ordersData.filter(o => ['kit_needs_printing', 'shipping_kit_requested'].includes(o.status)).length;
+            kitNeedsPrintingCount.textContent = ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length;
             kitSentCount.textContent = ordersData.filter(o => o.status === 'kit_sent').length;
             kitDeliveredCount.textContent = ordersData.filter(o => o.status === 'kit_delivered').length;
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
@@ -2247,8 +2250,7 @@ if (printWindow) {
                 // Pass the entire order object to formatStatus for conditional logic
                 let statusText = formatStatus(order);
 
-                const shouldShowLabelButton =
-                    ['shipping_kit_requested', 'kit_needs_printing'].includes(order.status);
+                const shouldShowLabelButton = KIT_PRINT_PENDING_STATUSES.includes(order.status);
 
                 const actionButtons = [];
 
@@ -2323,7 +2325,7 @@ if (printWindow) {
             if (status === 'order_pending') {
                 return 'Order Pending';
             }
-            if (status === 'shipping_kit_requested' || status === 'kit_needs_printing') {
+            if (KIT_PRINT_PENDING_STATUSES.includes(status)) {
                 return 'Needs Printing';
             }
             if (status === 'kit_sent') {
@@ -2401,6 +2403,7 @@ if (printWindow) {
                 case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble'; 
                 case 'shipping_kit_requested':
                 case 'kit_needs_printing':
+                case 'needs_printing':
                     return 'bg-indigo-100 text-indigo-800 status-bubble';
                 case 'kit_sent':
                     return 'bg-orange-100 text-orange-800 status-bubble';
@@ -2597,7 +2600,7 @@ if (printWindow) {
                 }
 
                 // Show reminder button for orders awaiting kit actions or label generation
-                if (['order_pending', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'label_generated'].includes(order.status)) {
+                if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
                     sendReminderBtn.classList.remove('hidden');
                     sendReminderBtn.onclick = () => handleSendReminder(order.id);
                 }
@@ -2626,6 +2629,7 @@ if (printWindow) {
                 case 'order_pending':
                 case 'shipping_kit_requested':
                 case 'kit_needs_printing':
+                case 'needs_printing':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
                     break;
@@ -2669,7 +2673,7 @@ if (printWindow) {
             const inboundLabelUrl = order.inboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
             
             // Only show if we have the necessary components
-            const printEligibleStatuses = ['label_generated', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent'];
+            const printEligibleStatuses = ['label_generated', 'shipping_kit_requested', 'kit_needs_printing', 'needs_printing', 'kit_sent'];
             if (printEligibleStatuses.includes(order.status) && outboundLabelUrl && inboundLabelUrl) {
                 const slipButtonText = order.shippingPreference === 'Shipping Kit Requested'
                     ? 'Print Kit Docs (Outbound + Inbound + Slip)'
@@ -2907,7 +2911,7 @@ if (printWindow) {
                         modalLoadingMessage.classList.add('hidden');
                         modalActionButtons.classList.remove('hidden');
                         // Bring back the reminder button if applicable after markCompleted status check
-                        if (['order_pending', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'label_generated'].includes(order.status)) {
+                        if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
                             sendReminderBtn.classList.remove('hidden');
                         }
                         return;
@@ -2967,7 +2971,7 @@ if (printWindow) {
                     if (orderToReRender) {
                         renderActionButtons(orderToReRender);
                         modalActionButtons.classList.remove('hidden');
-                        if (['order_pending', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'label_generated'].includes(orderToReRender.status)) {
+                        if (REMINDER_ELIGIBLE_STATUSES.includes(orderToReRender.status)) {
                             sendReminderBtn.classList.remove('hidden');
                         }
                     }
@@ -3235,7 +3239,7 @@ if (printWindow) {
 
             if (status !== 'all') {
                 if (status === 'kit_needs_printing') {
-                    filtered = filtered.filter(order => ['kit_needs_printing', 'shipping_kit_requested'].includes(order.status));
+                    filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
                 } else {
                     filtered = filtered.filter(order => order.status === status);
                 }
@@ -3306,8 +3310,8 @@ if (printWindow) {
 
         // Update notification badge for new orders
         function updateNotificationBadge(orders) {
-            const newOrders = orders.filter(order => 
-                order.status === 'order_pending' || order.status === 'shipping_kit_requested'
+            const newOrders = orders.filter(order =>
+                order.status === 'order_pending' || KIT_PRINT_PENDING_STATUSES.includes(order.status)
             ).length;
             
             const notificationBadge = document.getElementById('notification-badge');
