@@ -250,7 +250,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         <tr>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Order ID</th>
                             <!-- START: NEW COLUMN FOR DATE -->
-                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Order Date</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Order Date / Age</th>
                             <!-- END: NEW COLUMN FOR DATE -->
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-2/12">Customer Name</th>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Item</th>
@@ -305,7 +305,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <p><strong>Current Status:</strong> <span id="modal-status" class="font-semibold px-2 py-1 rounded-full text-xs"></span></p>
                 <!-- NEW: Last Reminder Sent -->
                 <p><strong>Last Reminder Sent:</strong> <span id="modal-last-reminder-date">N/A</span></p>
-                
+                <p><strong>Order Age:</strong> <span id="modal-order-age">Calculating...</span></p>
+
                 <!-- Updated label display for flexibility -->
                 <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
                 <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
@@ -399,6 +400,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 </div>
             </div>
 
+            <!-- Void Label Form -->
+            <div id="void-label-form-container" class="mt-6 p-4 border border-red-200 bg-red-50 rounded-lg hidden">
+                <h4 class="text-lg font-semibold text-gray-800 mb-2">Void Shipping Labels</h4>
+                <p class="text-sm text-gray-600">Select the labels you would like to cancel. Carrier approval may vary based on label age and usage.</p>
+                <div id="void-label-options" class="mt-4 space-y-3"></div>
+                <p id="void-label-message" class="mt-3 text-sm hidden"></p>
+                <div class="mt-4 flex justify-end gap-3">
+                    <button id="cancel-void-label-btn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                        Cancel
+                    </button>
+                    <button id="submit-void-label-btn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
+                        Void Selected Labels
+                    </button>
+                </div>
+            </div>
+
             <!-- Delete Confirmation UI (Simple overlay within modal) -->
             <div id="delete-confirmation-container" class="mt-6 p-4 bg-red-100 border border-red-300 rounded-lg hidden">
                 <p class="text-sm font-semibold text-red-800 mb-3">⚠️ Are you sure you want to permanently delete this order? This action cannot be undone.</p>
@@ -433,6 +450,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
         const FEED_PRICING_URL = '/feeds/feed.xml';
         const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+        const LABEL_NAME_OVERRIDES = {
+            primary: 'Primary Shipping Label',
+            inbounddevice: 'Inbound Device Label',
+            outboundkit: 'Outbound Shipping Kit Label',
+            return: 'Return Label',
+        };
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
@@ -480,7 +503,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const modalConditionCracks = document.getElementById('modal-condition-cracks');
         const modalConditionCosmetic = document.getElementById('modal-condition-cosmetic');
         const modalStatus = document.getElementById('modal-status');
-        
+        const modalOrderAge = document.getElementById('modal-order-age');
+
         // NEW: Element for Last Reminder Date
         const modalLastReminderDate = document.getElementById('modal-last-reminder-date');
 
@@ -525,6 +549,12 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const manualOutboundTrackingGroup = document.getElementById('manual-outbound-tracking-group');
         const submitManualFulfillmentBtn = document.getElementById('submit-manual-fulfillment-btn');
         const cancelManualFulfillmentBtn = document.getElementById('cancel-manual-fulfillment-btn');
+
+        const voidLabelFormContainer = document.getElementById('void-label-form-container');
+        const voidLabelOptionsContainer = document.getElementById('void-label-options');
+        const voidLabelMessage = document.getElementById('void-label-message');
+        const submitVoidLabelBtn = document.getElementById('submit-void-label-btn');
+        const cancelVoidLabelBtn = document.getElementById('cancel-void-label-btn');
 
         // New Delete Confirmation Elements
         const deleteConfirmationContainer = document.getElementById('delete-confirmation-container');
@@ -580,6 +610,106 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             // Format to the desired long date string: "Month Day, Year"
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+
+        function toDateSafe(timestamp) {
+            if (!timestamp) return null;
+            if (timestamp instanceof Date) return timestamp;
+            if (typeof timestamp === 'number') {
+                return new Date(timestamp > 1e12 ? timestamp : timestamp * 1000);
+            }
+            if (typeof timestamp === 'string') {
+                const parsed = new Date(timestamp);
+                return isNaN(parsed.getTime()) ? null : parsed;
+            }
+            if (typeof timestamp === 'object') {
+                if (typeof timestamp.seconds === 'number') {
+                    return new Date(timestamp.seconds * 1000);
+                }
+                if (typeof timestamp._seconds === 'number') {
+                    return new Date(timestamp._seconds * 1000);
+                }
+                if (typeof timestamp.toDate === 'function') {
+                    return timestamp.toDate();
+                }
+            }
+            return null;
+        }
+
+        function formatOrderAge(timestamp) {
+            const date = toDateSafe(timestamp);
+            if (!date) return 'N/A';
+            const diffMs = Date.now() - date.getTime();
+            if (diffMs <= 0) return '0.0 days old';
+            const days = diffMs / (24 * 60 * 60 * 1000);
+            return `${days.toFixed(1)} days old`;
+        }
+
+        function formatLabelAge(timestamp) {
+            const date = toDateSafe(timestamp);
+            if (!date) return 'Unknown age';
+            const diffMs = Date.now() - date.getTime();
+            if (diffMs <= 0) return 'Generated today';
+            const days = diffMs / (24 * 60 * 60 * 1000);
+            return `${days.toFixed(1)} days old`;
+        }
+
+        function formatLabelDisplayNameKey(key) {
+            if (!key) return 'Shipping Label';
+            const normalizedKey = key.toString().toLowerCase();
+            if (LABEL_NAME_OVERRIDES[normalizedKey]) {
+                return LABEL_NAME_OVERRIDES[normalizedKey];
+            }
+            return key
+                .toString()
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/[_-]+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        function getLabelOptions(order) {
+            const options = [];
+            const labels = order.shipEngineLabels && typeof order.shipEngineLabels === 'object'
+                ? order.shipEngineLabels
+                : {};
+
+            Object.entries(labels).forEach(([key, info]) => {
+                if (!info) return;
+                const labelId = info.id || info.labelId || info.shipEngineLabelId;
+                if (!labelId) return;
+                const status = (info.status || info.voidStatus || 'active').toLowerCase();
+                options.push({
+                    key,
+                    labelId,
+                    displayName: info.displayName || formatLabelDisplayNameKey(key),
+                    status,
+                    trackingNumber: info.trackingNumber || info.tracking_number || null,
+                    generatedAt: info.generatedAt || null,
+                    message: info.message || info.voidMessage || null,
+                    isVoidable: !['voided', 'void_denied'].includes(status),
+                });
+            });
+
+            if (!options.length && order.shipEngineLabelId) {
+                const topLevelStatus = (order.labelVoidStatus || 'active').toLowerCase();
+                options.push({
+                    key: 'primary',
+                    labelId: order.shipEngineLabelId,
+                    displayName: 'Primary Shipping Label',
+                    status: topLevelStatus,
+                    trackingNumber: order.trackingNumber || null,
+                    generatedAt: order.labelGeneratedAt || order.createdAt || null,
+                    message: order.labelVoidMessage || null,
+                    isVoidable: !['voided', 'void_denied'].includes(topLevelStatus),
+                });
+            }
+
+            return options;
+        }
+
+        function hasVoidableLabels(order) {
+            return getLabelOptions(order).some(option => option.isVoidable);
         }
 
         function normalizeFeedKey(value) {
@@ -1014,7 +1144,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 const itemDescription = `${order.device} ${order.storage}`;
                 const displayId = order.id;
                 const orderDate = formatDate(order.createdAt); // NEW: Get formatted date
-                
+                const orderAge = formatOrderAge(order.createdAt);
+
                 const reofferTimer = formatAutoAcceptTimer(order);
                 // Pass the entire order object to formatStatus for conditional logic
                 let statusText = formatStatus(order);
@@ -1034,7 +1165,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 row.innerHTML = `
                     <td class="px-3 py-4 whitespace-normal text-sm font-medium text-gray-900">${displayId}</td>
                     <!-- ADDED ORDER DATE CELL -->
-                    <td class="px-3 py-4 whitespace-normal text-sm text-gray-500">${orderDate}</td>
+                    <td class="px-3 py-4 whitespace-normal text-sm text-gray-500">
+                        <div>${orderDate}</div>
+                        <div class="text-xs text-gray-400">${orderAge}</div>
+                    </td>
                     <td class="px-3 py-4 whitespace-normal text-sm text-gray-500">${customerName}</td>
                     <td class="px-3 py-4 whitespace-normal text-sm text-gray-500">${itemDescription}</td>
                     <td class="px-3 py-4 whitespace-normal text-sm">
@@ -1114,6 +1248,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             reofferFormContainer.classList.add('hidden');
             manualFulfillmentFormContainer.classList.add('hidden');
             deleteConfirmationContainer.classList.add('hidden');
+            voidLabelFormContainer.classList.add('hidden');
+            voidLabelMessage.classList.add('hidden');
+            voidLabelMessage.textContent = '';
 
             // Hide all label rows initially
             modalLabelRow.classList.add('hidden');
@@ -1147,6 +1284,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 modalStorage.textContent = order.storage;
                 modalCarrier.textContent = order.carrier;
                 modalPrice.textContent = order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00';
+                modalOrderAge.textContent = formatOrderAge(order.createdAt);
 
                 modalPaymentMethod.textContent = order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A';
                 if (order.paymentMethod === 'venmo' && order.paymentDetails && order.paymentDetails.venmoUsername) {
@@ -1271,8 +1409,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             };
 
             const currentStatus = order.status;
+            const labelOptions = getLabelOptions(order);
             switch (currentStatus) {
-                case 'order_pending': 
+                case 'order_pending':
                 case 'shipping_kit_requested':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
@@ -1305,8 +1444,131 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     break;
             }
 
+            if (labelOptions.length > 0) {
+                modalActionButtons.appendChild(
+                    createButton('Void Shipping Labels', () => showVoidLabelForm(order), 'bg-red-600 hover:bg-red-700')
+                );
+            }
+
             // Always add Delete Button, visually separated
             modalActionButtons.appendChild(createButton('Delete Order', () => showDeleteConfirmation(order.id), 'bg-red-500 hover:bg-red-600'));
+        }
+
+        function showVoidLabelForm(order) {
+            const options = getLabelOptions(order);
+            if (!options.length) {
+                displayModalMessage('No shipping label information is available for this order.', 'error');
+                return;
+            }
+
+            voidLabelOptionsContainer.innerHTML = '';
+            voidLabelMessage.classList.add('hidden');
+            voidLabelMessage.textContent = '';
+
+            options.forEach(option => {
+                const optionId = `void-label-${option.key}`;
+                const isDisabled = !option.isVoidable;
+                const labelAge = formatLabelAge(option.generatedAt);
+                const statusText = option.status ? option.status.replace(/_/g, ' ') : 'active';
+                const statusClass = isDisabled ? 'text-red-600' : 'text-green-600';
+                const trackingText = option.trackingNumber ? `Tracking: ${option.trackingNumber}` : 'Tracking: N/A';
+
+                const wrapper = document.createElement('label');
+                wrapper.className = `flex items-start gap-3 p-3 border rounded-md ${isDisabled ? 'bg-gray-100 border-gray-200 opacity-70 cursor-not-allowed' : 'bg-white border-gray-200 hover:border-red-300 transition-colors duration-150'}`;
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'mt-1 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded void-label-checkbox';
+                checkbox.dataset.labelKey = option.key;
+                checkbox.dataset.labelId = option.labelId;
+                checkbox.id = optionId;
+                checkbox.disabled = isDisabled;
+
+                const content = document.createElement('div');
+                content.className = 'flex-1';
+                content.innerHTML = `
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-semibold text-sm text-gray-800">${option.displayName || formatLabelDisplayNameKey(option.key)}</span>
+                        <span class="text-xs font-semibold uppercase tracking-wide ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">${trackingText}</div>
+                    <div class="text-xs text-gray-500">${labelAge}</div>
+                    ${option.message ? `<div class="text-xs text-red-500 mt-1">${option.message}</div>` : ''}
+                `;
+
+                wrapper.appendChild(checkbox);
+                wrapper.appendChild(content);
+                voidLabelOptionsContainer.appendChild(wrapper);
+            });
+
+            modalActionButtons.classList.add('hidden');
+            reofferFormContainer.classList.add('hidden');
+            manualFulfillmentFormContainer.classList.add('hidden');
+            deleteConfirmationContainer.classList.add('hidden');
+            voidLabelFormContainer.classList.remove('hidden');
+
+            submitVoidLabelBtn.onclick = () => handleVoidLabelSubmit(order.id);
+            cancelVoidLabelBtn.onclick = () => {
+                voidLabelFormContainer.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
+                voidLabelMessage.classList.add('hidden');
+                voidLabelMessage.textContent = '';
+                openOrderDetailsModal(order.id);
+            };
+        }
+
+        async function handleVoidLabelSubmit(orderId) {
+            const selected = Array.from(document.querySelectorAll('.void-label-checkbox:checked')).map(checkbox => ({
+                key: checkbox.dataset.labelKey,
+                id: checkbox.dataset.labelId,
+            }));
+
+            if (!selected.length) {
+                voidLabelMessage.textContent = 'Please select at least one label to void.';
+                voidLabelMessage.className = 'mt-3 text-sm text-red-600';
+                voidLabelMessage.classList.remove('hidden');
+                return;
+            }
+
+            modalLoadingMessage.classList.remove('hidden');
+            voidLabelFormContainer.classList.add('hidden');
+
+            try {
+                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/void-label`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ labels: selected }),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `Failed to void labels: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const approvedCount = (result.results || []).filter(item => item.approved).length;
+                const deniedCount = (result.results || []).filter(item => !item.approved).length;
+
+                let summaryMessage = '';
+                if (approvedCount > 0) {
+                    summaryMessage += `${approvedCount} label${approvedCount > 1 ? 's' : ''} voided successfully.`;
+                }
+                if (deniedCount > 0) {
+                    summaryMessage += ` ${deniedCount} label${deniedCount > 1 ? 's' : ''} could not be voided.`;
+                }
+                if (!summaryMessage.trim()) {
+                    summaryMessage = 'Void request processed.';
+                }
+
+                displayModalMessage(summaryMessage.trim(), approvedCount > 0 ? 'success' : 'error');
+                openOrderDetailsModal(orderId);
+            } catch (error) {
+                console.error('Error voiding labels:', error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
+                modalActionButtons.classList.remove('hidden');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
         }
         
         function showReofferForm(orderId) {
@@ -1499,6 +1761,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             reofferFormContainer.classList.add('hidden');
             manualFulfillmentFormContainer.classList.add('hidden');
             deleteConfirmationContainer.classList.add('hidden');
+            voidLabelFormContainer.classList.add('hidden');
             modalMessage.classList.add('hidden');
             modalMessage.textContent = '';
             sendReminderBtn.classList.add('hidden'); // Hide reminder button during processing
