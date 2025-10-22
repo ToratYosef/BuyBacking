@@ -2242,10 +2242,26 @@ if (printWindow) {
                 const itemDescription = `${order.device} ${order.storage}`;
                 const displayId = order.id;
                 const orderDate = formatDate(order.createdAt); // NEW: Get formatted date
-                
+
                 const reofferTimer = formatAutoAcceptTimer(order);
                 // Pass the entire order object to formatStatus for conditional logic
                 let statusText = formatStatus(order);
+
+                const shouldShowLabelButton =
+                    ['shipping_kit_requested', 'kit_needs_printing'].includes(order.status) &&
+                    order.shippingPreference === 'Shipping Kit Requested';
+
+                const actionButtons = [];
+
+                if (shouldShowLabelButton) {
+                    actionButtons.push(`
+                        <button data-order-id="${order.id}" class="label-btn bg-indigo-600 hover:bg-indigo-700 text-white rounded-md py-1 px-3 transition-colors duration-200">Label</button>
+                    `.trim());
+                }
+
+                actionButtons.push(`
+                    <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
+                `.trim());
 
                 // --- START: MODIFIED TRACKING NUMBER LOGIC FOR MAIN LIST ---
                 const trackingNumber = order.trackingNumber;
@@ -2272,8 +2288,8 @@ if (printWindow) {
                         </span>
                     </td>
                     <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
-                    <td class="px-3 py-4 whitespace-normal text-sm font-medium">
-                        <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
+                    <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
+                        ${actionButtons.join(' ')}
                     </td>
                 `;
                 ordersTableBody.appendChild(row);
@@ -2283,6 +2299,16 @@ if (printWindow) {
                 button.addEventListener('click', (event) => {
                     const orderId = event.target.dataset.orderId;
                     openOrderDetailsModal(orderId);
+                });
+            });
+
+            document.querySelectorAll('.label-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const orderId = event.currentTarget.dataset.orderId;
+                    const order = allOrders.find(o => o.id === orderId);
+                    if (order) {
+                        handleLabelButtonClick(order);
+                    }
                 });
             });
         }
@@ -2317,6 +2343,54 @@ if (printWindow) {
             }
             // Fallback for other statuses
             return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+
+        async function handleLabelButtonClick(order) {
+            const printUrl = new URL('print-label.html', window.location.href);
+            printUrl.searchParams.set('orderId', order.id);
+
+            const printWindow = window.open(printUrl.toString(), '_blank');
+            if (!printWindow) {
+                alert('Please allow pop-ups to open the shipping documents.');
+            }
+
+            let updateSucceeded = false;
+
+            if (order.shippingPreference === 'Shipping Kit Requested') {
+                updateSucceeded = await markKitAsPrinted(order.id);
+                if (!updateSucceeded) {
+                    updateSucceeded = await updateOrderStatusInline(order.id, 'kit_sent');
+                }
+            } else {
+                updateSucceeded = await updateOrderStatusInline(order.id, 'kit_sent');
+            }
+
+            if (updateSucceeded) {
+                order.status = 'kit_sent';
+                updateDashboardCounts(allOrders);
+                filterAndRenderOrders(currentActiveStatus, searchInput.value);
+            }
+        }
+
+        async function updateOrderStatusInline(orderId, status) {
+            try {
+                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `Failed to update order status to ${status}.`);
+                }
+
+                return true;
+            } catch (error) {
+                console.error(`Failed to update status for order ${orderId}:`, error);
+                alert('Unable to update the order status. Please open the order and try again.');
+                return false;
+            }
         }
 
         function formatCondition(condition) {
@@ -2907,17 +2981,36 @@ if (printWindow) {
                 const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-printed`, {
                     method: 'POST'
                 });
-                const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to update kit status');
+
+                const rawBody = await response.text();
+                let result = {};
+
+                if (rawBody) {
+                    try {
+                        result = JSON.parse(rawBody);
+                    } catch (parseError) {
+                        result = { message: rawBody };
+                    }
                 }
 
-                if (modalOrderId.textContent === orderId) {
-                    displayModalMessage(result.message, 'success');
+                if (!response.ok) {
+                    throw new Error(result.error || result.message || 'Failed to update kit status');
+                }
+
+                if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
+                    displayModalMessage(result.message || 'Kit marked as sent.', 'success');
                     openOrderDetailsModal(orderId);
                 }
+
+                return true;
             } catch (error) {
                 console.error('Failed to mark kit as printed:', error);
+
+                if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
+                    displayModalMessage(`Error: ${error.message}`, 'error');
+                }
+
+                return false;
             }
         }
 
