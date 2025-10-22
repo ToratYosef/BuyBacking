@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildKitTrackingUpdate } = require('../helpers/shipengine');
+const { buildKitTrackingUpdate } = require('../../../helpers/shipengine');
 
 function createAxiosStub(responseData, tracker = []) {
     return {
