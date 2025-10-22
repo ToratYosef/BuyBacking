@@ -6,6 +6,7 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { URLSearchParams } = require('url');
 const { generateCustomLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
+const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -1676,6 +1677,54 @@ app.post('/orders/:id/mark-kit-sent', async (req, res) => {
   } catch (error) {
     console.error('Error marking kit as sent:', error);
     res.status(500).json({ error: 'Failed to mark kit as sent' });
+  }
+});
+
+app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const doc = await ordersCollection.doc(orderId).get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+
+    if (!order.outboundTrackingNumber) {
+      return res.status(400).json({ error: 'Outbound tracking number not available for this order' });
+    }
+
+    const shipengineKey = process.env.SHIPENGINE_KEY;
+    if (!shipengineKey) {
+      return res.status(500).json({ error: 'ShipEngine API key not configured.' });
+    }
+
+    const { updatePayload, delivered } = await buildKitTrackingUpdate(order, {
+      axiosClient: axios,
+      shipengineKey,
+      defaultCarrierCode: DEFAULT_CARRIER_CODE,
+      serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const { order: updatedOrder } = await updateOrderBoth(orderId, {
+      ...updatePayload,
+      kitTrackingLastRefreshedAt: timestamp,
+    });
+
+    res.json({
+      message: delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.',
+      delivered,
+      tracking: updatePayload.kitTrackingStatus,
+      order: {
+        id: updatedOrder.id,
+        status: updatedOrder.status,
+      },
+    });
+  } catch (error) {
+    console.error('Error refreshing kit tracking:', error);
+    res.status(500).json({ error: 'Failed to refresh kit tracking' });
   }
 });
 
