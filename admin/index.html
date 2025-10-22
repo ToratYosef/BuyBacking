@@ -1431,6 +1431,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         let feedPricingDataPromise = null;
         const autoRefreshedTracking = new Set();
 
+        const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printing', 'needs_printing'];
+        const REMINDER_ELIGIBLE_STATUSES = ['order_pending', ...KIT_PRINT_PENDING_STATUSES, 'kit_sent', 'label_generated'];
+
         window.addEventListener('message', (event) => {
             if (!event.data || event.data.type !== 'kit-print-complete') {
                 return;
@@ -2146,7 +2149,7 @@ if (printWindow) {
         function updateDashboardCounts(ordersData) {
             // Updated to 'order_pending'
             orderPendingCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
-            kitNeedsPrintingCount.textContent = ordersData.filter(o => ['kit_needs_printing', 'shipping_kit_requested'].includes(o.status)).length;
+            kitNeedsPrintingCount.textContent = ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length;
             kitSentCount.textContent = ordersData.filter(o => o.status === 'kit_sent').length;
             kitDeliveredCount.textContent = ordersData.filter(o => o.status === 'kit_delivered').length;
             labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
@@ -2242,10 +2245,24 @@ if (printWindow) {
                 const itemDescription = `${order.device} ${order.storage}`;
                 const displayId = order.id;
                 const orderDate = formatDate(order.createdAt); // NEW: Get formatted date
-                
+
                 const reofferTimer = formatAutoAcceptTimer(order);
                 // Pass the entire order object to formatStatus for conditional logic
                 let statusText = formatStatus(order);
+
+                const shouldShowLabelButton = KIT_PRINT_PENDING_STATUSES.includes(order.status);
+
+                const actionButtons = [];
+
+                if (shouldShowLabelButton) {
+                    actionButtons.push(`
+                        <button data-order-id="${order.id}" class="label-btn bg-indigo-600 hover:bg-indigo-700 text-white rounded-md py-1 px-3 transition-colors duration-200">Label</button>
+                    `.trim());
+                }
+
+                actionButtons.push(`
+                    <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
+                `.trim());
 
                 // --- START: MODIFIED TRACKING NUMBER LOGIC FOR MAIN LIST ---
                 const trackingNumber = order.trackingNumber;
@@ -2272,8 +2289,8 @@ if (printWindow) {
                         </span>
                     </td>
                     <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
-                    <td class="px-3 py-4 whitespace-normal text-sm font-medium">
-                        <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
+                    <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
+                        ${actionButtons.join(' ')}
                     </td>
                 `;
                 ordersTableBody.appendChild(row);
@@ -2283,6 +2300,16 @@ if (printWindow) {
                 button.addEventListener('click', (event) => {
                     const orderId = event.target.dataset.orderId;
                     openOrderDetailsModal(orderId);
+                });
+            });
+
+            document.querySelectorAll('.label-btn').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const orderId = event.currentTarget.dataset.orderId;
+                    const order = allOrders.find(o => o.id === orderId);
+                    if (order) {
+                        handleLabelButtonClick(order);
+                    }
                 });
             });
         }
@@ -2298,7 +2325,7 @@ if (printWindow) {
             if (status === 'order_pending') {
                 return 'Order Pending';
             }
-            if (status === 'shipping_kit_requested' || status === 'kit_needs_printing') {
+            if (KIT_PRINT_PENDING_STATUSES.includes(status)) {
                 return 'Needs Printing';
             }
             if (status === 'kit_sent') {
@@ -2319,6 +2346,54 @@ if (printWindow) {
             return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
 
+        async function handleLabelButtonClick(order) {
+            const printUrl = new URL('print-label.html', window.location.href);
+            printUrl.searchParams.set('orderId', order.id);
+
+            const printWindow = window.open(printUrl.toString(), '_blank');
+            if (!printWindow) {
+                alert('Please allow pop-ups to open the shipping documents.');
+            }
+
+            let updateSucceeded = false;
+
+            if (order.shippingPreference === 'Shipping Kit Requested') {
+                updateSucceeded = await markKitAsPrinted(order.id);
+                if (!updateSucceeded) {
+                    updateSucceeded = await updateOrderStatusInline(order.id, 'kit_sent');
+                }
+            } else {
+                updateSucceeded = await updateOrderStatusInline(order.id, 'kit_sent');
+            }
+
+            if (updateSucceeded) {
+                order.status = 'kit_sent';
+                updateDashboardCounts(allOrders);
+                filterAndRenderOrders(currentActiveStatus, searchInput.value);
+            }
+        }
+
+        async function updateOrderStatusInline(orderId, status) {
+            try {
+                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `Failed to update order status to ${status}.`);
+                }
+
+                return true;
+            } catch (error) {
+                console.error(`Failed to update status for order ${orderId}:`, error);
+                alert('Unable to update the order status. Please open the order and try again.');
+                return false;
+            }
+        }
+
         function formatCondition(condition) {
             return condition.charAt(0).toUpperCase() + condition.slice(1);
         }
@@ -2328,6 +2403,7 @@ if (printWindow) {
                 case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble'; 
                 case 'shipping_kit_requested':
                 case 'kit_needs_printing':
+                case 'needs_printing':
                     return 'bg-indigo-100 text-indigo-800 status-bubble';
                 case 'kit_sent':
                     return 'bg-orange-100 text-orange-800 status-bubble';
@@ -2524,7 +2600,7 @@ if (printWindow) {
                 }
 
                 // Show reminder button for orders awaiting kit actions or label generation
-                if (['order_pending', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'label_generated'].includes(order.status)) {
+                if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
                     sendReminderBtn.classList.remove('hidden');
                     sendReminderBtn.onclick = () => handleSendReminder(order.id);
                 }
@@ -2553,6 +2629,7 @@ if (printWindow) {
                 case 'order_pending':
                 case 'shipping_kit_requested':
                 case 'kit_needs_printing':
+                case 'needs_printing':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
                     break;
@@ -2596,7 +2673,7 @@ if (printWindow) {
             const inboundLabelUrl = order.inboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
             
             // Only show if we have the necessary components
-            const printEligibleStatuses = ['label_generated', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent'];
+            const printEligibleStatuses = ['label_generated', 'shipping_kit_requested', 'kit_needs_printing', 'needs_printing', 'kit_sent'];
             if (printEligibleStatuses.includes(order.status) && outboundLabelUrl && inboundLabelUrl) {
                 const slipButtonText = order.shippingPreference === 'Shipping Kit Requested'
                     ? 'Print Kit Docs (Outbound + Inbound + Slip)'
@@ -2834,7 +2911,7 @@ if (printWindow) {
                         modalLoadingMessage.classList.add('hidden');
                         modalActionButtons.classList.remove('hidden');
                         // Bring back the reminder button if applicable after markCompleted status check
-                        if (['order_pending', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'label_generated'].includes(order.status)) {
+                        if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
                             sendReminderBtn.classList.remove('hidden');
                         }
                         return;
@@ -2894,7 +2971,7 @@ if (printWindow) {
                     if (orderToReRender) {
                         renderActionButtons(orderToReRender);
                         modalActionButtons.classList.remove('hidden');
-                        if (['order_pending', 'shipping_kit_requested', 'kit_needs_printing', 'kit_sent', 'label_generated'].includes(orderToReRender.status)) {
+                        if (REMINDER_ELIGIBLE_STATUSES.includes(orderToReRender.status)) {
                             sendReminderBtn.classList.remove('hidden');
                         }
                     }
@@ -2907,17 +2984,36 @@ if (printWindow) {
                 const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-printed`, {
                     method: 'POST'
                 });
-                const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to update kit status');
+
+                const rawBody = await response.text();
+                let result = {};
+
+                if (rawBody) {
+                    try {
+                        result = JSON.parse(rawBody);
+                    } catch (parseError) {
+                        result = { message: rawBody };
+                    }
                 }
 
-                if (modalOrderId.textContent === orderId) {
-                    displayModalMessage(result.message, 'success');
+                if (!response.ok) {
+                    throw new Error(result.error || result.message || 'Failed to update kit status');
+                }
+
+                if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
+                    displayModalMessage(result.message || 'Kit marked as sent.', 'success');
                     openOrderDetailsModal(orderId);
                 }
+
+                return true;
             } catch (error) {
                 console.error('Failed to mark kit as printed:', error);
+
+                if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
+                    displayModalMessage(`Error: ${error.message}`, 'error');
+                }
+
+                return false;
             }
         }
 
@@ -3143,7 +3239,7 @@ if (printWindow) {
 
             if (status !== 'all') {
                 if (status === 'kit_needs_printing') {
-                    filtered = filtered.filter(order => ['kit_needs_printing', 'shipping_kit_requested'].includes(order.status));
+                    filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
                 } else {
                     filtered = filtered.filter(order => order.status === status);
                 }
@@ -3214,8 +3310,8 @@ if (printWindow) {
 
         // Update notification badge for new orders
         function updateNotificationBadge(orders) {
-            const newOrders = orders.filter(order => 
-                order.status === 'order_pending' || order.status === 'shipping_kit_requested'
+            const newOrders = orders.filter(order =>
+                order.status === 'order_pending' || KIT_PRINT_PENDING_STATUSES.includes(order.status)
             ).length;
             
             const notificationBadge = document.getElementById('notification-badge');
