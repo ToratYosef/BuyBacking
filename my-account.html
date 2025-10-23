@@ -129,6 +129,19 @@
         .status-label_generated { background-color: #fef9c3; color: #854d0e; } /* yellow-100, yellow-800 */
         .status-received { background-color: #e5e7eb; color: #374151; } /* gray-200, gray-800 */
         .status-return-label-generated { background-color: #e5e7eb; color: #374151; } /* gray-200, gray-800 */
+        .progress-timeline { position: relative; padding-left: 1.75rem; margin-top: 0.75rem; }
+        .progress-timeline::before { content: ""; position: absolute; left: 0.75rem; top: 0.5rem; bottom: 0.5rem; width: 2px; background-image: linear-gradient(to bottom, #e2e8f0, rgba(226, 232, 240, 0)); }
+        .progress-step { position: relative; padding-left: 1rem; }
+        .progress-step::before { content: ""; position: absolute; left: -1.2rem; top: 0.4rem; width: 0.75rem; height: 0.75rem; border-radius: 9999px; background-color: #cbd5f5; box-shadow: 0 0 0 3px #e2e8f0; }
+        .progress-step.is-complete::before { background-color: #22c55e; box-shadow: 0 0 0 3px #bbf7d0; }
+        .progress-step.is-current::before { background-color: #2563eb; box-shadow: 0 0 0 3px #bfdbfe, 0 0 0 6px rgba(59, 130, 246, 0.25); }
+        .progress-step-title { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-weight: 600; color: #1e293b; }
+        .progress-step-desc { font-size: 0.85rem; color: #64748b; margin-top: 0.25rem; }
+        .progress-step-time { font-size: 0.75rem; color: #94a3b8; font-weight: 500; }
+        .progress-state { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+        .progress-state.complete { background-color: #dcfce7; color: #166534; }
+        .progress-state.current { background-color: #dbeafe; color: #1d4ed8; }
+        .progress-meta { display: inline-flex; align-items: center; gap: 0.5rem; }
         .prose {
             max-width: 65ch;
             color: #334155; /* slate-700 */
@@ -605,6 +618,17 @@
                     <p id="returnLabelRow" class="hidden"><strong>Return Label:</strong> <a id="returnLabelLink" href="#" target="_blank" class="text-red-600 hover:underline">View Label</a> (<span id="returnTrackingNumber"></span>)</p>
                 </div>
 
+                <div id="orderProgressSection" class="mt-6 space-y-6 hidden">
+                    <div>
+                        <h4 class="text-lg font-semibold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-truck-fast text-blue-600"></i> Shipping progress</h4>
+                        <ol id="shippingTimeline" class="progress-timeline space-y-4"></ol>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-semibold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-hand-holding-dollar text-emerald-500"></i> Payout progress</h4>
+                        <ol id="payoutTimeline" class="progress-timeline space-y-4"></ol>
+                    </div>
+                </div>
+
                 <p id="modalLoadingMessage" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
             </div>
 
@@ -702,6 +726,9 @@
         const returnLabelRow = document.getElementById('returnLabelRow');
         const returnLabelLink = document.getElementById('returnLabelLink');
         const returnTrackingNumber = document.getElementById('returnTrackingNumber');
+        const orderProgressSection = document.getElementById('orderProgressSection');
+        const shippingTimeline = document.getElementById('shippingTimeline');
+        const payoutTimeline = document.getElementById('payoutTimeline');
         const modalLoadingMessage = document.getElementById('modalLoadingMessage');
         const modalActionButtons = document.getElementById('modalActionButtons');
         const modalMessage = document.getElementById('modalMessage');
@@ -727,6 +754,13 @@
         const sendResetEmailBtn = document.getElementById('sendResetEmailBtn');
 
         let currentUserId = null;
+        const initialTab = (() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('tab') === 'orders') return 'orderHistory';
+            const hash = window.location.hash.replace('#', '').toLowerCase();
+            if (hash === 'orders' || hash === 'orderhistory') return 'orderHistory';
+            return 'accountInfo';
+        })();
 
         // --- Helper Functions ---
         
@@ -779,6 +813,223 @@
         function formatCondition(condition) {
             return condition.charAt(0).toUpperCase() + condition.slice(1);
         }
+
+        const STATUS_FLOW = [
+            'order_pending',
+            'shipping_kit_requested',
+            'needs_printing',
+            'label_generated',
+            'kit_sent',
+            'kit_in_transit',
+            'kit_delivered',
+            'received',
+            're-offered-pending',
+            're-offered-accepted',
+            're-offered-auto-accepted',
+            're-offered-declined',
+            'return-label-generated',
+            'completed'
+        ];
+
+        function getStatusIndex(status) {
+            if (!status) return -1;
+            const index = STATUS_FLOW.indexOf(status);
+            return index === -1 ? STATUS_FLOW.length : index;
+        }
+
+        function resolvePath(object, path) {
+            if (!object || !path) return null;
+            return path.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : null), object);
+        }
+
+        function formatTimelineTimestamp(value) {
+            if (!value) return null;
+            let date = null;
+            if (value instanceof Date) {
+                date = value;
+            } else if (typeof value.toDate === 'function') {
+                date = value.toDate();
+            } else if (typeof value === 'object' && typeof value.seconds === 'number') {
+                date = new Date(value.seconds * 1000);
+            } else if (typeof value === 'string' || typeof value === 'number') {
+                const parsed = new Date(value);
+                if (!Number.isNaN(parsed)) {
+                    date = parsed;
+                }
+            }
+            if (!date || Number.isNaN(date.getTime())) return null;
+            return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        }
+
+        function buildTimeline(definition, order) {
+            const currentStatus = order.status || 'order_pending';
+            const currentIndex = getStatusIndex(currentStatus);
+            let allPreviousComplete = true;
+
+            return definition.map((step) => {
+                let stepComplete = false;
+                if (typeof step.isComplete === 'function') {
+                    stepComplete = step.isComplete(order, currentStatus, currentIndex);
+                } else if (step.completedFromStatus) {
+                    stepComplete = currentIndex >= getStatusIndex(step.completedFromStatus);
+                }
+                if (!stepComplete && Array.isArray(step.extraCompleteStatuses)) {
+                    stepComplete = step.extraCompleteStatuses.some(status => currentIndex >= getStatusIndex(status));
+                }
+
+                let state = 'pending';
+                if (stepComplete) {
+                    state = 'complete';
+                } else if (allPreviousComplete) {
+                    state = 'current';
+                }
+
+                allPreviousComplete = allPreviousComplete && stepComplete;
+
+                const timestamp = (() => {
+                    if (typeof step.timestampResolver === 'function') {
+                        return step.timestampResolver(order, currentStatus);
+                    }
+                    if (Array.isArray(step.timestampFields)) {
+                        for (const field of step.timestampFields) {
+                            const rawValue = resolvePath(order, field);
+                            const formatted = formatTimelineTimestamp(rawValue);
+                            if (formatted) {
+                                return formatted;
+                            }
+                        }
+                    }
+                    return null;
+                })();
+
+                return {
+                    id: step.id,
+                    title: step.title,
+                    description: step.description,
+                    state,
+                    timestamp
+                };
+            });
+        }
+
+        function renderTimeline(container, steps) {
+            if (!container) return;
+            container.innerHTML = '';
+            steps.forEach((step) => {
+                const item = document.createElement('li');
+                item.className = 'progress-step';
+                if (step.state === 'complete') {
+                    item.classList.add('is-complete');
+                } else if (step.state === 'current') {
+                    item.classList.add('is-current');
+                }
+
+                const titleRow = document.createElement('div');
+                titleRow.className = 'progress-step-title';
+
+                const titleText = document.createElement('span');
+                titleText.textContent = step.title;
+                titleRow.appendChild(titleText);
+
+                const meta = document.createElement('span');
+                meta.className = 'progress-meta';
+
+                if (step.state === 'complete') {
+                    const badge = document.createElement('span');
+                    badge.className = 'progress-state complete';
+                    badge.textContent = 'Done';
+                    meta.appendChild(badge);
+                } else if (step.state === 'current') {
+                    const badge = document.createElement('span');
+                    badge.className = 'progress-state current';
+                    badge.textContent = 'In progress';
+                    meta.appendChild(badge);
+                }
+
+                if (step.timestamp) {
+                    const time = document.createElement('span');
+                    time.className = 'progress-step-time';
+                    time.textContent = step.timestamp;
+                    meta.appendChild(time);
+                }
+
+                if (meta.childNodes.length) {
+                    titleRow.appendChild(meta);
+                }
+
+                item.appendChild(titleRow);
+
+                if (step.description) {
+                    const desc = document.createElement('p');
+                    desc.className = 'progress-step-desc';
+                    desc.textContent = step.description;
+                    item.appendChild(desc);
+                }
+
+                container.appendChild(item);
+            });
+        }
+
+        const SHIPPING_TIMELINE_DEFINITION = [
+            {
+                id: 'order-placed',
+                title: 'Order placed',
+                description: 'We saved your device details and generated the initial quote.',
+                completedFromStatus: 'order_pending',
+                timestampFields: ['createdAt']
+            },
+            {
+                id: 'kit-prepared',
+                title: 'Kit or label prepared',
+                description: 'Your shipping kit or email label is ready to go.',
+                completedFromStatus: 'label_generated',
+                timestampFields: ['labelGeneratedAt', 'needsPrintingAt', 'kitSentAt']
+            },
+            {
+                id: 'in-transit',
+                title: 'On the way to us',
+                description: 'Track your package as it travels to our lab.',
+                completedFromStatus: 'kit_in_transit',
+                timestampFields: ['kitSentAt', 'kitTrackingStatus.lastUpdated', 'kitTrackingLastRefreshedAt']
+            },
+            {
+                id: 'device-received',
+                title: 'Device received',
+                description: 'Our technicians will inspect your device and follow up.',
+                completedFromStatus: 'received',
+                timestampFields: ['deviceReceivedAt', 'receivedAt', 'lastStatusUpdateAt']
+            }
+        ];
+
+        const PAYOUT_TIMELINE_DEFINITION = [
+            {
+                id: 'inspection',
+                title: 'Inspection in progress',
+                description: 'We are verifying the condition details you provided.',
+                completedFromStatus: 'received',
+                timestampFields: ['receivedAt', 'lastStatusUpdateAt']
+            },
+            {
+                id: 'offer',
+                title: 'Offer decision',
+                description: 'Any adjustments are shared for your approval.',
+                completedFromStatus: 're-offered-accepted',
+                extraCompleteStatuses: ['re-offered-auto-accepted', 're-offered-declined', 'completed', 'return-label-generated'],
+                timestampFields: ['reOffer.updatedAt', 'reOffer.createdAt', 'reOffer.autoAcceptDate']
+            },
+            {
+                id: 'payout',
+                title: 'Payout or return arranged',
+                description: 'We send your payout or prepare a return label once everything is finalized.',
+                completedFromStatus: 'completed',
+                extraCompleteStatuses: ['return-label-generated'],
+                isComplete(order, status, currentIndex) {
+                    if (order.returnLabelUrl) return true;
+                    return currentIndex >= getStatusIndex('completed');
+                },
+                timestampFields: ['payoutReleasedAt', 'completedAt', 'returnLabelIssuedAt', 'lastStatusUpdateAt']
+            }
+        ];
 
         // --- Tab and UI Logic ---
 
@@ -952,6 +1203,15 @@
             inboundLabelRow.classList.add('hidden');
             uspsLabelRow.classList.add('hidden');
             returnLabelRow.classList.add('hidden');
+            if (orderProgressSection) {
+                orderProgressSection.classList.add('hidden');
+            }
+            if (shippingTimeline) {
+                shippingTimeline.innerHTML = '';
+            }
+            if (payoutTimeline) {
+                payoutTimeline.innerHTML = '';
+            }
 
             openModal(orderDetailsModal);
             modalLoadingMessage.classList.remove('hidden');
@@ -1027,6 +1287,14 @@
                     returnLabelLink.href = order.returnLabelUrl;
                     returnTrackingNumber.textContent = order.returnTrackingNumber || 'N/A';
                     returnLabelRow.classList.remove('hidden');
+                }
+
+                if (orderProgressSection && shippingTimeline && payoutTimeline) {
+                    const shippingSteps = buildTimeline(SHIPPING_TIMELINE_DEFINITION, order);
+                    const payoutSteps = buildTimeline(PAYOUT_TIMELINE_DEFINITION, order);
+                    renderTimeline(shippingTimeline, shippingSteps);
+                    renderTimeline(payoutTimeline, payoutSteps);
+                    orderProgressSection.classList.remove('hidden');
                 }
 
                 renderModalActionButtons(order);
@@ -1264,7 +1532,7 @@
                     showMessage('Could not load phone number.', 'error');
                 }
                 
-                showTab('accountInfo');
+                showTab(initialTab);
                 closeModal(loginModal);
                 
             } else {

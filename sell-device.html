@@ -522,8 +522,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
     <!-- HEADER -->
     <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex-1">
+        <div class="container mx-auto px-4 py-3 flex flex-wrap items-center gap-3 md:gap-6">
+            <div class="flex-1 min-w-[180px]">
                 <a href="https://secondhandcell.com/index.html" class="h-12 inline-block">
                     <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
                 </a>
@@ -532,7 +532,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <div class="text-2xl font-extrabold text-slate-800 fancy-header-text">SecondHandCell</div>
                 <p class="text-sm text-slate-500 -mt-1 fancy-header-text">Sell Your Device</p>
             </div>
-            <nav class="flex items-center space-x-4 flex-1 justify-end">
+            <nav class="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 w-full md:w-auto md:flex-1 md:justify-end">
+                <form id="headerDeviceSearchForm" class="flex items-stretch gap-2 w-full md:w-80" autocomplete="off">
+                    <label for="headerDeviceSearchInput" class="sr-only">Find my device</label>
+                    <input id="headerDeviceSearchInput" type="search" placeholder="Search model (e.g., iPhone 14 Pro)" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                    <button type="submit" class="bg-blue-600 text-white px-3 md:px-4 py-2 text-sm font-semibold rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-colors">Find</button>
+                </form>
+                <button id="resumeQuoteBtn" class="w-full md:w-auto bg-slate-900 text-white px-4 py-2 text-sm font-semibold rounded-lg shadow-sm hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 transition-colors">Resume my quote</button>
                 <div id="authStatusContainer" class="relative inline-block">
                     <a href="#" id="loginNavBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Login/Sign Up</a>
                     <div id="userMonogram" class="user-monogram hidden"></div>
@@ -542,6 +548,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     </div>
                 </div>
             </nav>
+            <p id="headerSearchMessage" class="w-full text-xs text-slate-500 hidden md:text-right" aria-live="polite"></p>
         </div>
     </header>
 
@@ -703,7 +710,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 </div>
 
                 <div class="mb-6">
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Does it turn on?</label>
+                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">Does it turn on?
+                        <button type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:underline" data-condition-guidance="power">See tips</button>
+                    </label>
+                    <p class="text-xs text-slate-500 mb-3">Pick "Yes" when the screen lights up and you can reach the home screen. Choose "No" for dead batteries, devices stuck in a boot loop, or screens that never power on.</p>
                     <div class="grid grid-cols-2 gap-4">
                         <button type="button" data-condition="power" data-value="yes" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
                             <i class="fas fa-power-off text-3xl text-green-500 mb-2"></i>
@@ -717,7 +727,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 </div>
 
                 <div class="mb-6">
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Device Functionality</label>
+                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">Device Functionality
+                        <button type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:underline" data-condition-guidance="functionality">See examples</button>
+                    </label>
+                    <p class="text-xs text-slate-500 mb-3">"Working" covers buttons, cameras, speakers, Face ID/Touch ID, and charging. Select "Not working" if any major feature is broken or disabled.</p>
                     <div class="grid grid-cols-2 gap-4">
                         <button type="button" data-condition="functionality" data-value="working" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
                             <i class="fas fa-check-circle text-3xl text-green-500 mb-2"></i>
@@ -731,7 +744,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 </div>
 
                 <div class="mb-6">
-                    <label class="block text-sm font-semibold text-gray-700 mb-3">Device Quality</label>
+                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">Device Quality
+                        <button type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:underline" data-condition-guidance="quality">See examples</button>
+                    </label>
+                    <p class="text-xs text-slate-500 mb-3">Use these options to describe the exterior: "Flawless" is like-new, "Scratched" covers light wear, and "Damaged" means cracks, deep dents, or missing pieces.</p>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <button type="button" data-condition="quality" data-value="flawless" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
                             <i class="fas fa-star text-3xl text-green-500 mb-2"></i>
@@ -757,6 +773,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Condition Guidance Modal -->
+    <div id="conditionGuidanceModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 relative modal-content">
+            <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600" aria-label="Close condition tips">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <div class="space-y-4">
+                <div>
+                    <h3 id="conditionGuidanceTitle" class="text-xl font-bold text-slate-800">How to grade your device</h3>
+                    <p id="conditionGuidanceDescription" class="text-sm text-slate-600 mt-2"></p>
+                </div>
+                <ul id="conditionGuidanceList" class="list-disc list-inside space-y-2 text-sm text-slate-600"></ul>
+                <p id="conditionGuidanceExtra" class="text-xs text-slate-400 hidden"></p>
             </div>
         </div>
     </div>
@@ -827,6 +860,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const devicePromoCountdown = document.getElementById('devicePromoCountdown');
             const catalogDepthStat = document.getElementById('catalogDepthStat');
             const bundleBonusStat = document.getElementById('bundleBonusStat');
+            const headerSearchForm = document.getElementById('headerDeviceSearchForm');
+            const headerSearchInput = document.getElementById('headerDeviceSearchInput');
+            const headerSearchMessage = document.getElementById('headerSearchMessage');
+            const resumeQuoteBtn = document.getElementById('resumeQuoteBtn');
+            const conditionGuidanceModal = document.getElementById('conditionGuidanceModal');
+            const conditionGuidanceButtons = document.querySelectorAll('[data-condition-guidance]');
+            const conditionGuidanceTitle = document.getElementById('conditionGuidanceTitle');
+            const conditionGuidanceDescription = document.getElementById('conditionGuidanceDescription');
+            const conditionGuidanceList = document.getElementById('conditionGuidanceList');
+            const conditionGuidanceExtra = document.getElementById('conditionGuidanceExtra');
 
             const animateLandingStat = (element, target, formatter = (value) => Math.round(value).toLocaleString()) => {
                 if (!element) return;
@@ -899,6 +942,101 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
             }
 
+            const setHeaderSearchMessage = (message, tone = 'info') => {
+                if (!headerSearchMessage) return;
+                headerSearchMessage.textContent = message;
+                headerSearchMessage.classList.remove('hidden', 'text-red-600', 'text-emerald-600', 'text-slate-500');
+                if (tone === 'error') {
+                    headerSearchMessage.classList.add('text-red-600');
+                } else if (tone === 'success') {
+                    headerSearchMessage.classList.add('text-emerald-600');
+                } else {
+                    headerSearchMessage.classList.add('text-slate-500');
+                }
+            };
+
+            const clearHeaderSearchMessage = () => {
+                if (!headerSearchMessage) return;
+                headerSearchMessage.textContent = '';
+                headerSearchMessage.classList.add('hidden');
+                headerSearchMessage.classList.remove('text-red-600', 'text-emerald-600');
+                if (!headerSearchMessage.classList.contains('text-slate-500')) {
+                    headerSearchMessage.classList.add('text-slate-500');
+                }
+            };
+
+            clearHeaderSearchMessage();
+
+            const conditionGuidanceCopy = {
+                power: {
+                    title: 'Power & startup tips',
+                    description: 'Select the option that matches how your device powers on and holds a charge.',
+                    examples: [
+                        'Yes — the phone reaches the lock or home screen and charges normally.',
+                        'No — it stays black, needs wall power to wake up, or is stuck on the logo.',
+                        'No — the battery is swollen or the device shuts down by itself.'
+                    ],
+                    note: 'If the screen never lights up, choose "No" even if you still hear notification sounds.'
+                },
+                functionality: {
+                    title: 'Functionality guidance',
+                    description: 'Mark the device as working only when every core feature responds the way it should.',
+                    examples: [
+                        'Working — cameras, speakers, microphones, Face/Touch ID, and buttons respond without glitches.',
+                        'Not working — any major sensor, button, or port is broken, sticky, or missing.',
+                        'Not working — the device shows activation lock, MDM, or other software blocks.'
+                    ],
+                    note: 'Minor cosmetic wear is fine here — we only use this choice for functional issues.'
+                },
+                quality: {
+                    title: 'Cosmetic condition cues',
+                    description: 'Compare your device to these quick examples to choose the closest exterior grade.',
+                    examples: [
+                        'Flawless — looks new with no visible marks on the screen or frame.',
+                        'Scratched — light pocket wear, hairline marks, or gentle scuffs.',
+                        'Damaged — cracks, chips, bent corners, deep dents, or missing pieces.'
+                    ],
+                    note: 'If the glass is cracked anywhere, pick "Damaged" so we can send accurate shipping instructions.'
+                }
+            };
+
+            if (conditionGuidanceButtons.length > 0 && conditionGuidanceModal) {
+                conditionGuidanceButtons.forEach((button) => {
+                    button.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        const key = button.dataset.conditionGuidance;
+                        const copy = conditionGuidanceCopy[key];
+                        if (!copy) return;
+
+                        if (conditionGuidanceTitle) {
+                            conditionGuidanceTitle.textContent = copy.title;
+                        }
+                        if (conditionGuidanceDescription) {
+                            conditionGuidanceDescription.textContent = copy.description;
+                        }
+                        if (conditionGuidanceList) {
+                            conditionGuidanceList.innerHTML = '';
+                            copy.examples.forEach(example => {
+                                const li = document.createElement('li');
+                                li.textContent = example;
+                                conditionGuidanceList.appendChild(li);
+                            });
+                        }
+                        if (conditionGuidanceExtra) {
+                            if (copy.note) {
+                                conditionGuidanceExtra.textContent = copy.note;
+                                conditionGuidanceExtra.classList.remove('hidden');
+                            } else {
+                                conditionGuidanceExtra.textContent = '';
+                                conditionGuidanceExtra.classList.add('hidden');
+                            }
+                        }
+
+                        openModal('conditionGuidanceModal');
+                    });
+                });
+            }
+
             onAuthStateChanged(auth, user => {
                 const isLoggedIn = !!user && !user.isAnonymous;
                 if (isLoggedIn) {
@@ -906,6 +1044,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     userMonogram.classList.remove('hidden');
                     const initials = (user.displayName || user.email || 'N/A').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
                     userMonogram.textContent = initials;
+
+                    const resumeIntent = sessionStorage.getItem('resumeQuoteIntent');
+                    if (resumeIntent) {
+                        sessionStorage.removeItem('resumeQuoteIntent');
+                        window.location.href = '/my-account.html?tab=orders';
+                    }
                 } else {
                     loginNavBtn.classList.remove('hidden');
                     userMonogram.classList.add('hidden');
@@ -969,6 +1113,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 currentChatId = null;
                 signOut(auth);
             });
+
+            if (resumeQuoteBtn) {
+                resumeQuoteBtn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const user = auth.currentUser;
+                    if (user && !user.isAnonymous) {
+                        window.location.href = '/my-account.html?tab=orders';
+                        return;
+                    }
+                    sessionStorage.setItem('resumeQuoteIntent', 'true');
+                    openModal('loginModal');
+                    showTab('login');
+                });
+            }
             
             document.getElementById('loginNavBtn').addEventListener('click', (e) => { e.preventDefault(); openModal('loginModal'); showTab('login'); });
             document.getElementById('aboutUsLink').addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
@@ -997,6 +1155,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 carrier: 'unlocked',
                 conditions: { power: null, functionality: null, quality: null },
                 deviceData: null,
+                deviceCache: new Map(),
+                formatDeviceLabel(value = '') {
+                    if (!value) return '';
+                    return value
+                        .replace(/[-_]+/g, ' ')
+                        .split(' ')
+                        .filter(Boolean)
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ');
+                },
                 setContinueState(enabled) {
                     if (!continueBtn) return;
                     continueBtn.disabled = !enabled;
@@ -1067,17 +1235,30 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     try {
                         const devicesCol = collection(db, `devices/${this.brand}/models`);
                         const devicesSnapshot = await getDocs(devicesCol);
+                        const availableDevices = [];
+
+                        devicesSnapshot.forEach((docSnap) => {
+                            const data = docSnap.data() || {};
+                            availableDevices.push({
+                                id: docSnap.id,
+                                data,
+                                label: data.name || this.formatDeviceLabel(docSnap.id)
+                            });
+                        });
+
+                        availableDevices.sort((a, b) => a.label.localeCompare(b.label));
+                        this.deviceCache.set(this.brand, availableDevices);
 
                         if (deviceSelect) {
                             deviceSelect.innerHTML = '<option value="">Choose a device...</option>';
                             deviceSelect.disabled = false;
 
-                            devicesSnapshot.forEach((docSnap) => {
-                                const data = docSnap.data();
+                            availableDevices.forEach(({ id, data, label }) => {
                                 const option = document.createElement('option');
-                                option.value = docSnap.id;
-                                option.textContent = data.name || docSnap.id;
+                                option.value = id;
+                                option.textContent = label;
                                 option.dataset.deviceData = JSON.stringify(data);
+                                option.dataset.deviceLabel = label;
                                 deviceSelect.appendChild(option);
                             });
                         }
@@ -1119,6 +1300,76 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                     this.storage = '';
                     this.checkComplete();
+                },
+                async fetchDevicesForBrand(brand) {
+                    if (!brand) return [];
+                    if (this.deviceCache.has(brand)) {
+                        return this.deviceCache.get(brand);
+                    }
+
+                    const devicesCol = collection(db, `devices/${brand}/models`);
+                    const snapshot = await getDocs(devicesCol);
+                    const devices = snapshot.docs.map((docSnap) => {
+                        const data = docSnap.data() || {};
+                        return {
+                            id: docSnap.id,
+                            data,
+                            label: data.name || this.formatDeviceLabel(docSnap.id)
+                        };
+                    }).sort((a, b) => a.label.localeCompare(b.label));
+
+                    this.deviceCache.set(brand, devices);
+                    return devices;
+                },
+                async searchAndPrefill(query) {
+                    const normalizedQuery = (query || '').trim().toLowerCase();
+                    if (!normalizedQuery) return null;
+
+                    const brandOptions = Array.from(brandSelect?.options || []).filter(option => option.value);
+                    if (brandOptions.length === 0) return null;
+
+                    const matches = [];
+
+                    for (const option of brandOptions) {
+                        const brand = option.value;
+                        try {
+                            const devices = await this.fetchDevicesForBrand(brand);
+                            devices.forEach((device) => {
+                                const searchTarget = `${device.label} ${device.id}`.toLowerCase();
+                                if (searchTarget.includes(normalizedQuery)) {
+                                    matches.push({
+                                        brand,
+                                        deviceId: device.id,
+                                        deviceName: device.label
+                                    });
+                                }
+                            });
+                        } catch (error) {
+                            console.error(`Failed to search devices for brand ${brand}:`, error);
+                        }
+                    }
+
+                    if (!matches.length) {
+                        return null;
+                    }
+
+                    const bestMatch = matches.sort((a, b) => a.deviceName.localeCompare(b.deviceName))[0];
+
+                    this.brand = bestMatch.brand;
+                    if (brandSelect) {
+                        brandSelect.value = bestMatch.brand;
+                        this.updateBrandIcon(brandSelect.options[brandSelect.selectedIndex]);
+                    }
+
+                    await this.loadDevices();
+
+                    if (deviceSelect) {
+                        deviceSelect.value = bestMatch.deviceId;
+                        deviceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        deviceSelect.focus({ preventScroll: false });
+                    }
+
+                    return bestMatch;
                 },
                 checkComplete() {
                     const ready = this.brand && this.device && this.storage &&
@@ -1239,6 +1490,39 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             });
 
             pricingModal.reset();
+
+            if (headerSearchForm) {
+                headerSearchForm.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    const query = headerSearchInput?.value?.trim();
+                    if (!query) {
+                        clearHeaderSearchMessage();
+                        return;
+                    }
+
+                    setHeaderSearchMessage('Searching device catalog…');
+                    try {
+                        pricingModal.open();
+                        const match = await pricingModal.searchAndPrefill(query);
+                        if (match) {
+                            setHeaderSearchMessage(`Showing "${match.deviceName}" in the quote wizard.`, 'success');
+                        } else {
+                            setHeaderSearchMessage(`We couldn't find a device matching "${query}". Try another model name.`, 'error');
+                        }
+                    } catch (error) {
+                        console.error('Header device search failed:', error);
+                        setHeaderSearchMessage('Something went wrong while searching. Please try again.', 'error');
+                    }
+                });
+            }
+
+            if (headerSearchInput) {
+                headerSearchInput.addEventListener('input', () => {
+                    if (!headerSearchInput.value.trim()) {
+                        clearHeaderSearchMessage();
+                    }
+                });
+            }
 
             loginTabBtn.addEventListener('click', () => showTab('login'));
             signupTabBtn.addEventListener('click', () => showTab('signup'));

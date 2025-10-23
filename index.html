@@ -529,21 +529,28 @@
 <body class="bg-slate-50">
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-40 shadow-sm">
-        <div class="container mx-auto px-4 py-3 flex items-center md:py-5 justify-between">
-            <div class="flex-1 flex justify-start items-center logo-container-left">
-                <a href="#" class="h-12 md:h-20 w-auto">
+        <div class="container mx-auto px-4 py-3 flex flex-wrap items-center gap-3 md:gap-6 md:py-5">
+            <div class="flex-1 min-w-[180px]">
+                <a href="#" class="h-12 md:h-20 inline-block">
                     <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="h-full w-auto" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
                 </a>
             </div>
-            <div class="flex-none flex-col items-center hidden md:flex logo-text-container-center">
+            <div class="hidden md:flex flex-col items-center flex-1 logo-text-container-center">
                 <div class="text-xl md:text-2xl font-extrabold whitespace-nowrap">
                     <span class="text-black">Second</span><span class="text-green-500">HandCell</span>
                 </div>
                 <p class="text-[0.6rem] md:text-sm -mt-1 whitespace-nowrap text-green-500">Turn Your Old<span class="text-black"> Phone Into Cash!</span></p>
             </div>
-            <nav class="flex-1 flex justify-end items-center space-x-4">
-                <div id="authStatusContainer" class="relative inline-block">
-                    <a href="#" id="loginNavBtn" class="bg-indigo-600 text-white px-2.5 py-1.5 md:px-4 md:py-2 rounded-full font-semibold hover:bg-indigo-700 transition-colors duration-300 shadow-sm text-xs md:text-base">Login/Sign Up</a>
+            <nav class="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 w-full md:w-auto md:flex-1 md:justify-end">
+                <form id="headerDeviceSearchForm" class="flex items-stretch gap-2 w-full md:w-80" autocomplete="off">
+                    <label for="headerDeviceSearchInput" class="sr-only">Find my device</label>
+                    <input id="headerDeviceSearchInput" type="search" placeholder="Search model (e.g., iPhone 14 Pro)" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+                    <button type="submit" class="bg-indigo-600 text-white px-3 md:px-4 py-2 text-sm font-semibold rounded-lg shadow-sm hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 transition-colors">Find</button>
+                </form>
+                <button data-open-quote-wizard class="w-full md:w-auto bg-green-500 text-white px-4 py-2 text-sm font-semibold rounded-lg shadow-sm hover:bg-green-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 transition-colors">Start quick quote</button>
+                <button id="resumeQuoteBtn" class="w-full md:w-auto bg-slate-900 text-white px-4 py-2 text-sm font-semibold rounded-lg shadow-sm hover:bg-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-2 transition-colors">Resume my quote</button>
+                <div id="authStatusContainer" class="relative inline-block w-full md:w-auto">
+                    <a href="#" id="loginNavBtn" class="w-full md:w-auto inline-flex items-center justify-center bg-indigo-600 text-white px-4 py-2 text-sm md:text-base font-semibold rounded-full hover:bg-indigo-700 transition-colors duration-300 shadow-sm">Login/Sign Up</a>
                     <div id="userMonogram" class="user-monogram hidden"></div>
                     <div id="authDropdown" class="auth-dropdown hidden rounded-lg shadow-xl">
                         <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg">My Account</a>
@@ -551,6 +558,7 @@
                     </div>
                 </div>
             </nav>
+            <p id="headerSearchMessage" class="w-full text-xs text-slate-500 hidden md:text-right" aria-live="polite"></p>
         </div>
     </header>
     <main>
@@ -728,6 +736,134 @@
             <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
         </div>
     </footer>
+
+
+    <!-- Pricing Modal -->
+    <div id="pricingModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative modal-content">
+            <button type="button" class="close-modal-btn absolute top-4 right-4 z-10 text-slate-400 hover:text-slate-600 transition-colors duration-200" aria-label="Close quote wizard">
+                <i class="fa-solid fa-xmark text-2xl"></i>
+            </button>
+            <div class="p-6 md:p-8 space-y-6">
+                <div>
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Get Your Instant Quote</h2>
+                    <p class="text-gray-600">Answer a few quick questions to see what your device is worth.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-3">Select Brand</label>
+                    <div class="relative">
+                        <img id="brand-icon" src="" alt="" class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 hidden pointer-events-none">
+                        <select id="modal-brand-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-900 focus:outline-none focus:border-indigo-500 bg-white" style="padding-left: 2.5rem;">
+                            <option value="">Choose a brand...</option>
+                            <option value="iphone" data-icon="https://cdn-icons-png.flaticon.com/512/0/747.png">Apple iPhone</option>
+                            <option value="samsung" data-icon="https://www.samsung.com/etc.clientlibs/samsung/clientlibs/consumer/global/clientlib-common/resources/images/Favicon.png">Samsung</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-3">Select Device</label>
+                    <select id="modal-device-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-900 focus:outline-none focus:border-indigo-500 bg-white" disabled>
+                        <option value="">Choose a device...</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Storage</label>
+                        <select id="modal-storage-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-900 focus:outline-none focus:border-indigo-500 bg-white" disabled>
+                            <option value="">Select storage...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-3">Carrier</label>
+                        <select id="modal-carrier-select" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg font-medium text-gray-900 focus:outline-none focus:border-indigo-500 bg-white">
+                            <option value="unlocked">Unlocked</option>
+                            <option value="verizon">Verizon</option>
+                            <option value="att">AT&amp;T</option>
+                            <option value="tmobile">T-Mobile</option>
+                            <option value="other">Other/Locked</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">Does it turn on?
+                        <button type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:underline" data-condition-guidance="power">See tips</button>
+                    </label>
+                    <p class="text-xs text-slate-500 mb-3">Pick "Yes" when the screen lights up and you can reach the home screen. Choose "No" for dead batteries, devices stuck in a boot loop, or screens that never power on.</p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button type="button" data-condition="power" data-value="yes" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
+                            <i class="fas fa-power-off text-3xl text-green-500 mb-2"></i>
+                            <span class="font-medium text-gray-900">Yes</span>
+                        </button>
+                        <button type="button" data-condition="power" data-value="no" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
+                            <i class="fas fa-power-off text-3xl text-red-500 mb-2"></i>
+                            <span class="font-medium text-gray-900">No</span>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">Device Functionality
+                        <button type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:underline" data-condition-guidance="functionality">See examples</button>
+                    </label>
+                    <p class="text-xs text-slate-500 mb-3">"Working" covers buttons, cameras, speakers, Face ID/Touch ID, and charging. Select "Not working" if any major feature is broken or disabled.</p>
+                    <div class="grid grid-cols-2 gap-4">
+                        <button type="button" data-condition="functionality" data-value="working" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
+                            <i class="fas fa-check-circle text-3xl text-green-500 mb-2"></i>
+                            <span class="font-medium text-gray-900">Working</span>
+                        </button>
+                        <button type="button" data-condition="functionality" data-value="not-working" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
+                            <i class="fas fa-times-circle text-3xl text-red-500 mb-2"></i>
+                            <span class="font-medium text-gray-900">Not Working</span>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">Device Quality
+                        <button type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-700 focus:outline-none focus:underline" data-condition-guidance="quality">See examples</button>
+                    </label>
+                    <p class="text-xs text-slate-500 mb-3">Use these options to describe the exterior: "Flawless" is like-new, "Scratched" covers light wear, and "Damaged" means cracks, deep dents, or missing pieces.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <button type="button" data-condition="quality" data-value="flawless" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
+                            <i class="fas fa-star text-3xl text-green-500 mb-2"></i>
+                            <span class="font-medium text-gray-900 text-sm">Flawless</span>
+                        </button>
+                        <button type="button" data-condition="quality" data-value="scratched" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
+                            <i class="fas fa-exclamation-circle text-3xl text-yellow-500 mb-2"></i>
+                            <span class="font-medium text-gray-900 text-sm">Scratched</span>
+                        </button>
+                        <button type="button" data-condition="quality" data-value="damaged" class="condition-btn border-2 border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center transition-all hover:border-indigo-500 hover:bg-indigo-50">
+                            <i class="fas fa-exclamation-triangle text-3xl text-red-500 mb-2"></i>
+                            <span class="font-medium text-gray-900 text-sm">Damaged</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="modal-price-estimate" class="hidden bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-xl p-6 text-white">
+                    <div class="text-center">
+                        <p class="text-sm font-medium mb-2">Your Device is Worth</p>
+                        <p class="text-5xl font-bold mb-4">$<span id="modal-estimated-price">0</span></p>
+                        <button id="modal-continue-btn" class="bg-white text-indigo-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+                            Continue to Sell
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Condition Guidance Modal -->
+    <div id="conditionGuidanceModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 relative modal-content">
+            <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600" aria-label="Close condition tips">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <div class="space-y-4">
+                <div>
+                    <h3 id="conditionGuidanceTitle" class="text-xl font-bold text-slate-800">How to grade your device</h3>
+                    <p id="conditionGuidanceDescription" class="text-sm text-slate-600 mt-2"></p>
+                </div>
+                <ul id="conditionGuidanceList" class="list-disc list-inside space-y-2 text-sm text-slate-600"></ul>
+                <p id="conditionGuidanceExtra" class="text-xs text-slate-400 hidden"></p>
+            </div>
+        </div>
+    </div>
 
     <div id="loginModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2><div class="flex border-b border-slate-200 mb-6"><button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Login</button><button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Sign Up</button></div><form id="loginForm" class="space-y-4"><p class="text-slate-600 text-center">Log in to continue with your order.</p><button type="button" id="googleLoginBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Login with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="loginEmail" class="sr-only">Email Address</label><input type="email" id="loginEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="loginPassword" class="sr-only">Password</label><input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="current-password"></div><button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button><p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-blue-600 font-semibold hover:underline">Reset it here</a></p></form><form id="signupForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Create an account to complete your order.</p><button type="button" id="googleSignupBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Sign Up with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="signupName" class="sr-only">Full Name</label><input type="text" id="signupName" placeholder="Full Name" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><div><label for="signupEmail" class="sr-only">Email Address</label><input type="email" id="signupEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email"></div><div><label for="signupPassword" class="sr-only">Password</label><input type="password" id="signupPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="new-password"></div><button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button><p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-blue-600 font-semibold hover:underline">Log in here</a></p></form><form id="forgotPasswordForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Enter your email to receive a password reset link.</p><div><label for="forgotEmail" class="sr-only">Email Address</label><input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></div><button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button><p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-blue-600 font-semibold hover:underline">Return to Login</a></p></form><div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div></div></div>
     <div id="aboutUsModal" class="modal fixed inset-0 z-[1001] flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2><p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p></div></div>
@@ -998,6 +1134,505 @@
             const signupForm = document.getElementById('signupForm');
             const forgotPasswordForm = document.getElementById('forgotPasswordForm');
             const authMessage = document.getElementById('authMessage');
+            const headerSearchForm = document.getElementById('headerDeviceSearchForm');
+            const headerSearchInput = document.getElementById('headerDeviceSearchInput');
+            const headerSearchMessage = document.getElementById('headerSearchMessage');
+            const resumeQuoteBtn = document.getElementById('resumeQuoteBtn');
+            const conditionGuidanceModal = document.getElementById('conditionGuidanceModal');
+            const conditionGuidanceButtons = document.querySelectorAll('[data-condition-guidance]');
+            const conditionGuidanceTitle = document.getElementById('conditionGuidanceTitle');
+            const conditionGuidanceDescription = document.getElementById('conditionGuidanceDescription');
+            const conditionGuidanceList = document.getElementById('conditionGuidanceList');
+            const conditionGuidanceExtra = document.getElementById('conditionGuidanceExtra');
+
+            const setHeaderSearchMessage = (message, tone = 'info') => {
+                if (!headerSearchMessage) return;
+                headerSearchMessage.textContent = message;
+                headerSearchMessage.classList.remove('hidden', 'text-red-600', 'text-emerald-600', 'text-slate-500');
+                if (tone === 'error') {
+                    headerSearchMessage.classList.add('text-red-600');
+                } else if (tone === 'success') {
+                    headerSearchMessage.classList.add('text-emerald-600');
+                } else {
+                    headerSearchMessage.classList.add('text-slate-500');
+                }
+            };
+
+            const clearHeaderSearchMessage = () => {
+                if (!headerSearchMessage) return;
+                headerSearchMessage.textContent = '';
+                headerSearchMessage.classList.add('hidden');
+                headerSearchMessage.classList.remove('text-red-600', 'text-emerald-600');
+                if (!headerSearchMessage.classList.contains('text-slate-500')) {
+                    headerSearchMessage.classList.add('text-slate-500');
+                }
+            };
+
+            clearHeaderSearchMessage();
+
+            const conditionGuidanceCopy = {
+                power: {
+                    title: 'Power & startup tips',
+                    description: 'Select the option that matches how your device powers on and holds a charge.',
+                    examples: [
+                        'Yes — the phone reaches the lock or home screen and charges normally.',
+                        'No — it stays black, needs wall power to wake up, or is stuck on the logo.',
+                        'No — the battery is swollen or the device shuts down by itself.'
+                    ],
+                    note: 'If the screen never lights up, choose "No" even if you still hear notification sounds.'
+                },
+                functionality: {
+                    title: 'Functionality guidance',
+                    description: 'Mark the device as working only when every core feature responds the way it should.',
+                    examples: [
+                        'Working — cameras, speakers, microphones, Face/Touch ID, and buttons respond without glitches.',
+                        'Not working — any major sensor, button, or port is broken, sticky, or missing.',
+                        'Not working — the device shows activation lock, MDM, or other software blocks.'
+                    ],
+                    note: 'Minor cosmetic wear is fine here — we only use this choice for functional issues.'
+                },
+                quality: {
+                    title: 'Cosmetic condition cues',
+                    description: 'Compare your device to these quick examples to choose the closest exterior grade.',
+                    examples: [
+                        'Flawless — looks new with no visible marks on the screen or frame.',
+                        'Scratched — light pocket wear, hairline marks, or gentle scuffs.',
+                        'Damaged — cracks, chips, bent corners, deep dents, or missing pieces.'
+                    ],
+                    note: 'If the glass is cracked anywhere, pick "Damaged" so we can send accurate shipping instructions.'
+                }
+            };
+
+            if (conditionGuidanceButtons.length > 0 && conditionGuidanceModal) {
+                conditionGuidanceButtons.forEach((button) => {
+                    button.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        const key = button.dataset.conditionGuidance;
+                        const copy = conditionGuidanceCopy[key];
+                        if (!copy) return;
+
+                        if (conditionGuidanceTitle) {
+                            conditionGuidanceTitle.textContent = copy.title;
+                        }
+                        if (conditionGuidanceDescription) {
+                            conditionGuidanceDescription.textContent = copy.description;
+                        }
+                        if (conditionGuidanceList) {
+                            conditionGuidanceList.innerHTML = '';
+                            copy.examples.forEach(example => {
+                                const li = document.createElement('li');
+                                li.textContent = example;
+                                conditionGuidanceList.appendChild(li);
+                            });
+                        }
+                        if (conditionGuidanceExtra) {
+                            if (copy.note) {
+                                conditionGuidanceExtra.textContent = copy.note;
+                                conditionGuidanceExtra.classList.remove('hidden');
+                            } else {
+                                conditionGuidanceExtra.textContent = '';
+                                conditionGuidanceExtra.classList.add('hidden');
+                            }
+                        }
+
+                        openModal('conditionGuidanceModal');
+                    });
+                });
+            }
+
+            const modalPriceEstimate = document.getElementById('modal-price-estimate');
+            const modalEstimatedPrice = document.getElementById('modal-estimated-price');
+            const brandSelect = document.getElementById('modal-brand-select');
+            const deviceSelect = document.getElementById('modal-device-select');
+            const storageSelect = document.getElementById('modal-storage-select');
+            const carrierSelect = document.getElementById('modal-carrier-select');
+            const continueBtn = document.getElementById('modal-continue-btn');
+            const brandIcon = document.getElementById('brand-icon');
+            const quoteWizardTriggers = document.querySelectorAll('[data-open-quote-wizard]');
+            const conditionButtons = Array.from(document.querySelectorAll('.condition-btn'));
+
+            const pricingModal = {
+                brand: '',
+                device: '',
+                deviceSlug: '',
+                storage: '',
+                carrier: 'unlocked',
+                conditions: { power: null, functionality: null, quality: null },
+                deviceData: null,
+                deviceCache: new Map(),
+                formatDeviceLabel(value = '') {
+                    if (!value) return '';
+                    return value
+                        .replace(/[-_]+/g, ' ')
+                        .split(' ')
+                        .filter(Boolean)
+                        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                        .join(' ');
+                },
+                setContinueState(enabled) {
+                    if (!continueBtn) return;
+                    continueBtn.disabled = !enabled;
+                    continueBtn.classList.toggle('opacity-50', !enabled);
+                    continueBtn.classList.toggle('cursor-not-allowed', !enabled);
+                },
+                reset() {
+                    this.brand = '';
+                    this.device = '';
+                    this.deviceSlug = '';
+                    this.storage = '';
+                    this.carrier = 'unlocked';
+                    this.conditions = { power: null, functionality: null, quality: null };
+
+                    if (brandSelect) brandSelect.value = '';
+                    if (deviceSelect) {
+                        deviceSelect.innerHTML = '<option value="">Choose a device...</option>';
+                        deviceSelect.disabled = true;
+                    }
+                    if (storageSelect) {
+                        storageSelect.innerHTML = '<option value="">Select storage...</option>';
+                        storageSelect.disabled = true;
+                    }
+                    if (carrierSelect) {
+                        carrierSelect.value = 'unlocked';
+                    }
+                    if (brandIcon) {
+                        brandIcon.classList.add('hidden');
+                        brandIcon.removeAttribute('src');
+                    }
+
+                    conditionButtons.forEach(btn => {
+                        btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'ring-2', 'ring-indigo-200');
+                    });
+
+                    if (modalEstimatedPrice) {
+                        modalEstimatedPrice.textContent = '0';
+                    }
+                    modalPriceEstimate?.classList.add('hidden');
+                    this.setContinueState(false);
+                },
+                open() {
+                    this.reset();
+                    openModal('pricingModal');
+                },
+                updateBrandIcon(option) {
+                    if (!brandIcon) return;
+                    const iconUrl = option?.dataset?.icon;
+                    if (iconUrl) {
+                        brandIcon.src = iconUrl;
+                        brandIcon.classList.remove('hidden');
+                    } else {
+                        brandIcon.classList.add('hidden');
+                        brandIcon.removeAttribute('src');
+                    }
+                },
+                async loadDevices() {
+                    if (!this.brand) return;
+
+                    if (deviceSelect) {
+                        deviceSelect.innerHTML = '<option value="">Loading devices...</option>';
+                        deviceSelect.disabled = true;
+                    }
+                    if (storageSelect) {
+                        storageSelect.innerHTML = '<option value="">Select storage...</option>';
+                        storageSelect.disabled = true;
+                    }
+
+                    try {
+                        const devicesCol = collection(db, `devices/${this.brand}/models`);
+                        const devicesSnapshot = await getDocs(devicesCol);
+                        const availableDevices = [];
+
+                        devicesSnapshot.forEach((docSnap) => {
+                            const data = docSnap.data() || {};
+                            availableDevices.push({
+                                id: docSnap.id,
+                                data,
+                                label: data.name || this.formatDeviceLabel(docSnap.id)
+                            });
+                        });
+
+                        availableDevices.sort((a, b) => a.label.localeCompare(b.label));
+                        this.deviceCache.set(this.brand, availableDevices);
+
+                        if (deviceSelect) {
+                            deviceSelect.innerHTML = '<option value="">Choose a device...</option>';
+                            deviceSelect.disabled = false;
+
+                            availableDevices.forEach(({ id, data, label }) => {
+                                const option = document.createElement('option');
+                                option.value = id;
+                                option.textContent = label;
+                                option.dataset.deviceData = JSON.stringify(data);
+                                option.dataset.deviceLabel = label;
+                                deviceSelect.appendChild(option);
+                            });
+                        }
+                    } catch (error) {
+                        console.error('Error loading devices:', error);
+                        if (deviceSelect) {
+                            deviceSelect.innerHTML = '<option value="">Error loading devices</option>';
+                        }
+                    }
+
+                    this.device = '';
+                    this.storage = '';
+                    this.deviceData = null;
+                    this.checkComplete();
+                },
+                loadStorage() {
+                    if (!deviceSelect || !storageSelect) return;
+
+                    storageSelect.innerHTML = '<option value="">Select storage...</option>';
+
+                    const selectedOption = deviceSelect.options[deviceSelect.selectedIndex];
+                    if (this.device && selectedOption && selectedOption.dataset.deviceData) {
+                        this.deviceData = JSON.parse(selectedOption.dataset.deviceData);
+                        this.deviceSlug = this.device;
+
+                        const prices = this.deviceData.prices;
+                        if (prices) {
+                            storageSelect.disabled = false;
+                            Object.keys(prices).forEach(storage => {
+                                const option = document.createElement('option');
+                                option.value = storage;
+                                option.textContent = storage;
+                                storageSelect.appendChild(option);
+                            });
+                        }
+                    } else {
+                        storageSelect.disabled = true;
+                    }
+
+                    this.storage = '';
+                    this.checkComplete();
+                },
+                async fetchDevicesForBrand(brand) {
+                    if (!brand) return [];
+                    if (this.deviceCache.has(brand)) {
+                        return this.deviceCache.get(brand);
+                    }
+
+                    const devicesCol = collection(db, `devices/${brand}/models`);
+                    const snapshot = await getDocs(devicesCol);
+                    const devices = snapshot.docs.map((docSnap) => {
+                        const data = docSnap.data() || {};
+                        return {
+                            id: docSnap.id,
+                            data,
+                            label: data.name || this.formatDeviceLabel(docSnap.id)
+                        };
+                    }).sort((a, b) => a.label.localeCompare(b.label));
+
+                    this.deviceCache.set(brand, devices);
+                    return devices;
+                },
+                async searchAndPrefill(query) {
+                    const normalizedQuery = (query || '').trim().toLowerCase();
+                    if (!normalizedQuery) return null;
+
+                    const brandOptions = Array.from(brandSelect?.options || []).filter(option => option.value);
+                    if (brandOptions.length === 0) return null;
+
+                    const matches = [];
+
+                    for (const option of brandOptions) {
+                        const brand = option.value;
+                        try {
+                            const devices = await this.fetchDevicesForBrand(brand);
+                            devices.forEach((device) => {
+                                const searchTarget = `${device.label} ${device.id}`.toLowerCase();
+                                if (searchTarget.includes(normalizedQuery)) {
+                                    matches.push({
+                                        brand,
+                                        deviceId: device.id,
+                                        deviceName: device.label
+                                    });
+                                }
+                            });
+                        } catch (error) {
+                            console.error(`Failed to search devices for brand ${brand}:`, error);
+                        }
+                    }
+
+                    if (!matches.length) {
+                        return null;
+                    }
+
+                    const bestMatch = matches.sort((a, b) => a.deviceName.localeCompare(b.deviceName))[0];
+
+                    this.brand = bestMatch.brand;
+                    if (brandSelect) {
+                        brandSelect.value = bestMatch.brand;
+                        this.updateBrandIcon(brandSelect.options[brandSelect.selectedIndex]);
+                    }
+
+                    await this.loadDevices();
+
+                    if (deviceSelect) {
+                        deviceSelect.value = bestMatch.deviceId;
+                        deviceSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        deviceSelect.focus({ preventScroll: false });
+                    }
+
+                    return bestMatch;
+                },
+                checkComplete() {
+                    const ready = this.brand && this.device && this.storage &&
+                        this.conditions.power && this.conditions.functionality && this.conditions.quality;
+
+                    if (!ready) {
+                        modalPriceEstimate?.classList.add('hidden');
+                        this.setContinueState(false);
+                        return;
+                    }
+
+                    const storageKey = this.storage;
+                    const carrierKey = ['att', 'tmobile', 'verizon', 'other'].includes(this.carrier) ? 'locked' : 'unlocked';
+
+                    let conditionKey = 'flawless';
+                    if (this.conditions.power === 'no') {
+                        conditionKey = 'broken';
+                    } else if (this.conditions.functionality === 'not-working') {
+                        conditionKey = 'broken';
+                    } else if (this.conditions.quality === 'damaged') {
+                        conditionKey = 'damaged';
+                    } else if (this.conditions.quality === 'scratched') {
+                        conditionKey = 'good';
+                    }
+
+                    const price = this.deviceData?.prices?.[storageKey]?.[carrierKey]?.[conditionKey];
+                    if (price) {
+                        if (modalEstimatedPrice) {
+                            modalEstimatedPrice.textContent = price;
+                        }
+                        modalPriceEstimate?.classList.remove('hidden');
+                        this.setContinueState(true);
+                    } else {
+                        modalPriceEstimate?.classList.add('hidden');
+                        this.setContinueState(false);
+                    }
+                }
+            };
+
+            if (brandSelect) {
+                brandSelect.addEventListener('change', (event) => {
+                    pricingModal.brand = event.target.value;
+                    pricingModal.updateBrandIcon(event.target.options[event.target.selectedIndex]);
+
+                    if (!pricingModal.brand) {
+                        pricingModal.reset();
+                        return;
+                    }
+
+                    pricingModal.loadDevices();
+                });
+            }
+
+            if (deviceSelect) {
+                deviceSelect.addEventListener('change', (event) => {
+                    pricingModal.device = event.target.value;
+                    pricingModal.loadStorage();
+                });
+            }
+
+            if (storageSelect) {
+                storageSelect.addEventListener('change', (event) => {
+                    pricingModal.storage = event.target.value;
+                    pricingModal.checkComplete();
+                });
+            }
+
+            if (carrierSelect) {
+                carrierSelect.addEventListener('change', (event) => {
+                    pricingModal.carrier = event.target.value || 'unlocked';
+                    pricingModal.checkComplete();
+                });
+            }
+
+            conditionButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const condition = btn.dataset.condition;
+                    const value = btn.dataset.value;
+
+                    conditionButtons
+                        .filter(button => button.dataset.condition === condition)
+                        .forEach(button => button.classList.remove('border-indigo-500', 'bg-indigo-50', 'ring-2', 'ring-indigo-200'));
+
+                    btn.classList.add('border-indigo-500', 'bg-indigo-50', 'ring-2', 'ring-indigo-200');
+                    pricingModal.conditions[condition] = value;
+                    pricingModal.checkComplete();
+                });
+            });
+
+            if (continueBtn) {
+                continueBtn.addEventListener('click', () => {
+                    const params = new URLSearchParams({
+                        device: `${pricingModal.brand}-${pricingModal.device}`,
+                        storage: pricingModal.storage,
+                        carrier: pricingModal.carrier,
+                        power: pricingModal.conditions.power,
+                        functionality: pricingModal.conditions.functionality,
+                        quality: pricingModal.conditions.quality,
+                        price: modalEstimatedPrice?.textContent || ''
+                    });
+
+                    window.location.href = `sell/?${params.toString()}`;
+                });
+            }
+
+            quoteWizardTriggers.forEach(trigger => {
+                trigger.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    pricingModal.open();
+                });
+            });
+
+            if (headerSearchForm) {
+                headerSearchForm.addEventListener('submit', async (event) => {
+                    event.preventDefault();
+                    const query = headerSearchInput?.value?.trim();
+                    if (!query) {
+                        clearHeaderSearchMessage();
+                        return;
+                    }
+
+                    setHeaderSearchMessage('Searching device catalog…');
+                    try {
+                        pricingModal.open();
+                        const match = await pricingModal.searchAndPrefill(query);
+                        if (match) {
+                            setHeaderSearchMessage(`Showing "${match.deviceName}" in the quote wizard.`, 'success');
+                        } else {
+                            setHeaderSearchMessage(`We couldn't find a device matching "${query}". Try another model name.`, 'error');
+                        }
+                    } catch (error) {
+                        console.error('Header device search failed:', error);
+                        setHeaderSearchMessage('Something went wrong while searching. Please try again.', 'error');
+                    }
+                });
+            }
+
+            if (headerSearchInput) {
+                headerSearchInput.addEventListener('input', () => {
+                    if (!headerSearchInput.value.trim()) {
+                        clearHeaderSearchMessage();
+                    }
+                });
+            }
+
+            if (resumeQuoteBtn) {
+                resumeQuoteBtn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const user = auth.currentUser;
+                    if (user && !user.isAnonymous) {
+                        window.location.href = '/my-account.html?tab=orders';
+                        return;
+                    }
+                    sessionStorage.setItem('resumeQuoteIntent', 'true');
+                    openModal('loginModal');
+                    showTab('login');
+                });
+            }
 
             const showTab = (tabName) => {
                 authMessage.classList.add('hidden');
@@ -1107,6 +1742,11 @@
                     currentActiveUserId = user.uid;
                     currentChatId = getStoredChatSession()?.chatId || currentChatId;
                     console.log("Auth state changed: User logged in, UID:", currentActiveUserId);
+                    const resumeIntent = sessionStorage.getItem('resumeQuoteIntent');
+                    if (resumeIntent) {
+                        sessionStorage.removeItem('resumeQuoteIntent');
+                        window.location.href = '/my-account.html?tab=orders';
+                    }
                     if (chatWindow.classList.contains('is-visible')) {
                         ensureUserAuthenticatedForChat();
                         if (currentChatId) {
