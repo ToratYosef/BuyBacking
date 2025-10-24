@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wholesale Admin Console | SecondHandCell</title>
+    <link rel="icon" href="/favicon/favicon.ico" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            background: linear-gradient(160deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.94));
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="text-slate-100">
+    <header class="border-b border-white/10 bg-slate-950/80 backdrop-blur">
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-5">
+            <div>
+                <p class="text-xs uppercase tracking-[0.4em] text-emerald-200">Admin · Wholesale Ops</p>
+                <h1 class="text-2xl font-semibold">Wholesale Control Tower</h1>
+            </div>
+            <div class="flex items-center gap-3 text-sm">
+                <a href="/buy/" class="rounded-full border border-white/10 px-4 py-2 font-semibold text-slate-200 transition hover:border-emerald-400 hover:text-emerald-200"><i class="fa-solid fa-arrow-left mr-2"></i>Back to buyer view</a>
+                <button id="syncState" class="rounded-full bg-emerald-500 px-4 py-2 font-semibold text-slate-900 transition hover:bg-emerald-400"><i class="fa-solid fa-arrows-rotate mr-2"></i>Force sync</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto flex max-w-7xl flex-col gap-12 px-6 py-12">
+        <section class="grid gap-6 lg:grid-cols-4" id="adminMetrics"></section>
+
+        <section class="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
+            <div class="space-y-6 rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-black/30">
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-semibold">Inventory &amp; Staging</h2>
+                        <p class="text-sm text-slate-300/80">Live device counts by grade with fast adjustments for holds, reservations, and staging.</p>
+                    </div>
+                    <button id="openInventoryDrawer" class="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:bg-emerald-400/10"><i class="fa-solid fa-plus mr-2"></i>Add lot</button>
+                </div>
+                <div class="overflow-hidden rounded-2xl border border-white/5">
+                    <table class="min-w-full divide-y divide-white/5 text-left text-sm">
+                        <thead class="bg-white/5 text-xs uppercase tracking-[0.3em] text-slate-300">
+                            <tr>
+                                <th class="px-4 py-3">Device</th>
+                                <th class="px-4 py-3">Grade</th>
+                                <th class="px-4 py-3">Available</th>
+                                <th class="px-4 py-3">Reserved</th>
+                                <th class="px-4 py-3">Avg price</th>
+                                <th class="px-4 py-3">Location</th>
+                                <th class="px-4 py-3">Controls</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminInventoryTable" class="divide-y divide-white/5 text-slate-200"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="space-y-6 rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-black/30">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold">Operational Alerts</h2>
+                    <button id="clearAlerts" class="text-xs uppercase tracking-[0.3em] text-slate-300 transition hover:text-emerald-200">Clear</button>
+                </div>
+                <ul id="alertFeed" class="space-y-4 text-sm"></ul>
+                <div class="rounded-2xl border border-white/5 bg-white/5 p-4 text-xs text-slate-200">
+                    <p class="font-semibold text-emerald-200">Automation status</p>
+                    <ul class="mt-3 space-y-2">
+                        <li class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>EDI feed to ERP · Active</li>
+                        <li class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-cyan-400"></span>Warehouse robotics queue · Balanced</li>
+                        <li class="flex items-center gap-2"><span class="h-2 w-2 rounded-full bg-amber-400"></span>Freight tendering · Requires review</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+            <div class="space-y-6 rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-black/30">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold">Offer Pipeline</h2>
+                    <button id="exportOffers" class="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-200 transition hover:border-emerald-400 hover:text-emerald-200"><i class="fa-solid fa-file-export mr-2"></i>Export</button>
+                </div>
+                <div class="overflow-hidden rounded-2xl border border-white/5">
+                    <table class="min-w-full divide-y divide-white/5 text-left text-sm">
+                        <thead class="bg-white/5 text-xs uppercase tracking-[0.3em] text-slate-300">
+                            <tr>
+                                <th class="px-4 py-3">Offer</th>
+                                <th class="px-4 py-3">Partner</th>
+                                <th class="px-4 py-3">Qty</th>
+                                <th class="px-4 py-3">Grade mix</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminOfferTable" class="divide-y divide-white/5 text-slate-200"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="space-y-6 rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-black/30">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xl font-semibold">Partner Health</h2>
+                    <button id="refreshPartnerHealth" class="text-xs uppercase tracking-[0.3em] text-slate-300 transition hover:text-emerald-200">Refresh</button>
+                </div>
+                <div id="partnerHealth" class="space-y-4 text-sm"></div>
+                <div class="rounded-2xl border border-white/5 bg-white/5 p-4 text-xs text-slate-200">
+                    <p class="font-semibold text-emerald-200">Engagement triggers</p>
+                    <ul class="mt-3 space-y-2">
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-bell text-emerald-300"></i>Auto email when engagement < 60%</li>
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-bell text-emerald-300"></i>Weekly business review digest</li>
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-bell text-emerald-300"></i>Escalate salvage lanes to compliance</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid gap-6 lg:grid-cols-3">
+            <div class="rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-black/30">
+                <h2 class="text-xl font-semibold">Grade Pricing Matrix</h2>
+                <p class="mt-2 text-sm text-slate-300/80">Use guardrail adjustments to maintain blended margin targets.</p>
+                <div id="pricingMatrix" class="mt-5 space-y-4 text-sm"></div>
+            </div>
+            <div class="rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-black/30">
+                <h2 class="text-xl font-semibold">Logistics Checklist</h2>
+                <ul id="logisticsTasks" class="mt-4 space-y-3 text-sm"></ul>
+            </div>
+            <div class="rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-black/30">
+                <h2 class="text-xl font-semibold">Compliance &amp; Documentation</h2>
+                <ul class="mt-4 space-y-3 text-sm text-slate-200">
+                    <li class="flex items-center gap-3"><i class="fa-solid fa-shield-halved text-emerald-300"></i>R2 audit trail auto-synced</li>
+                    <li class="flex items-center gap-3"><i class="fa-solid fa-file-signature text-emerald-300"></i>Digital chain-of-custody with DocuSign</li>
+                    <li class="flex items-center gap-3"><i class="fa-solid fa-database text-emerald-300"></i>IMEI scrubbing log retained 12 months</li>
+                    <li class="flex items-center gap-3"><i class="fa-solid fa-microchip text-emerald-300"></i>Battery health telemetry stored in Snowflake</li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <div id="inventoryDrawer" class="fixed inset-0 z-30 hidden">
+        <div class="absolute inset-0 bg-slate-900/80" id="closeInventoryDrawer"></div>
+        <div class="absolute right-0 top-0 h-full w-full max-w-lg overflow-y-auto border-l border-white/10 bg-slate-950 p-8 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-semibold">Add inventory lot</h2>
+                <button class="text-slate-300 transition hover:text-emerald-300" id="closeInventoryDrawerBtn"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <p class="mt-2 text-sm text-slate-300/80">Capture device attributes to stage pallets and release to buyers instantly.</p>
+            <form id="inventoryForm" class="mt-6 space-y-4 text-sm">
+                <div class="grid grid-cols-2 gap-4">
+                    <label class="font-medium text-slate-300">Brand
+                        <input required name="brand" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Apple" />
+                    </label>
+                    <label class="font-medium text-slate-300">Model
+                        <input required name="model" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="iPhone 14" />
+                    </label>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <label class="font-medium text-slate-300">Storage
+                        <input required name="storage" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="256GB" />
+                    </label>
+                    <label class="font-medium text-slate-300">Carrier
+                        <input required name="carrier" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Unlocked" />
+                    </label>
+                </div>
+                <label class="font-medium text-slate-300">Grade
+                    <select required name="grade" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none">
+                        <option value="A">Grade A</option>
+                        <option value="B">Grade B</option>
+                        <option value="C">Grade C</option>
+                        <option value="F">Grade F</option>
+                    </select>
+                </label>
+                <div class="grid grid-cols-2 gap-4">
+                    <label class="font-medium text-slate-300">Quantity available
+                        <input required type="number" min="0" name="quantity" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                    </label>
+                    <label class="font-medium text-slate-300">Reserved holds
+                        <input required type="number" min="0" name="reserved" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                    </label>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <label class="font-medium text-slate-300">Average price (USD)
+                        <input required type="number" min="0" name="price" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                    </label>
+                    <label class="font-medium text-slate-300">Location
+                        <input required name="location" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Dallas, TX" />
+                    </label>
+                </div>
+                <label class="font-medium text-slate-300">Notes
+                    <textarea name="notes" rows="3" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="QC highlight or buyer restrictions"></textarea>
+                </label>
+                <button class="w-full rounded-2xl bg-emerald-500 px-6 py-3 text-base font-semibold text-slate-900 transition hover:bg-emerald-400">Create inventory lot</button>
+            </form>
+        </div>
+    </div>
+
+    <template id="logisticsTaskTemplate">
+        <li class="flex items-start gap-3 rounded-2xl border border-white/5 bg-white/5 p-3">
+            <input type="checkbox" class="mt-1 h-4 w-4 rounded border border-white/20 bg-transparent text-emerald-400 focus:ring-emerald-400" />
+            <div class="flex-1">
+                <p class="font-semibold text-slate-100 task-title"></p>
+                <p class="mt-1 text-xs text-slate-300 task-meta"></p>
+            </div>
+            <button class="text-xs uppercase tracking-[0.3em] text-emerald-300 mark-done">Done</button>
+        </li>
+    </template>
+
+    <script>
+        const STORAGE_KEY = 'shc-wholesale-state';
+
+        const fallbackState = {
+            inventory: [
+                { id: 'INV-1001', brand: 'Apple', model: 'iPhone 14 Pro', storage: '256GB', carrier: 'Unlocked', grade: 'A', quantity: 480, reserved: 120, price: 865, location: 'Dallas, TX' },
+                { id: 'INV-1002', brand: 'Apple', model: 'iPhone 13', storage: '128GB', carrier: 'Verizon', grade: 'B', quantity: 620, reserved: 80, price: 540, location: 'Miami, FL' },
+                { id: 'INV-1003', brand: 'Samsung', model: 'Galaxy S23 Ultra', storage: '256GB', carrier: 'Unlocked', grade: 'A', quantity: 320, reserved: 140, price: 790, location: 'Dallas, TX' },
+                { id: 'INV-1004', brand: 'Samsung', model: 'Galaxy A54', storage: '128GB', carrier: 'T-Mobile', grade: 'C', quantity: 1100, reserved: 200, price: 230, location: 'Los Angeles, CA' },
+                { id: 'INV-1005', brand: 'Google', model: 'Pixel 8', storage: '128GB', carrier: 'Unlocked', grade: 'A', quantity: 240, reserved: 60, price: 510, location: 'Chicago, IL' },
+                { id: 'INV-1006', brand: 'Apple', model: 'iPhone 11', storage: '64GB', carrier: 'AT&T', grade: 'C', quantity: 860, reserved: 150, price: 190, location: 'Savannah, GA' },
+                { id: 'INV-1007', brand: 'Apple', model: 'iPhone SE (2022)', storage: '128GB', carrier: 'Unlocked', grade: 'B', quantity: 450, reserved: 90, price: 260, location: 'Dallas, TX' },
+                { id: 'INV-1008', brand: 'Samsung', model: 'Galaxy S21 FE', storage: '128GB', carrier: 'Unlocked', grade: 'B', quantity: 700, reserved: 140, price: 310, location: 'Phoenix, AZ' },
+                { id: 'INV-1009', brand: 'Motorola', model: 'Moto G Power', storage: '64GB', carrier: 'Unlocked', grade: 'C', quantity: 960, reserved: 180, price: 120, location: 'Memphis, TN' },
+                { id: 'INV-1010', brand: 'Apple', model: 'iPhone XR', storage: '64GB', carrier: 'Unlocked', grade: 'F', quantity: 520, reserved: 50, price: 95, location: 'Los Angeles, CA' }
+            ],
+            partners: [
+                { id: 'PRT-01', company: 'Nova Wireless', contact: 'Clara Mendes', email: 'clara@novawireless.com', region: 'North America', commitment: 3500, grades: ['A', 'B'], notes: 'Focus on retail-ready iPhones', engagement: 92 },
+                { id: 'PRT-02', company: 'BlueOrbit GSM', contact: 'Ravi Patel', email: 'ravi@blueorbitgsm.com', region: 'Europe', commitment: 1800, grades: ['B', 'C'], notes: 'Prefers Samsung mix', engagement: 86 },
+                { id: 'PRT-03', company: 'Atlas Refurb', contact: 'Daniela Ortiz', email: 'daniela@atlasrefurb.com', region: 'Latin America', commitment: 2200, grades: ['C', 'F'], notes: 'Strong salvage buyer', engagement: 74 },
+                { id: 'PRT-04', company: 'Helios Mobile', contact: 'Jordan Ng', email: 'jordan@heliosmobile.com', region: 'APAC', commitment: 900, grades: ['A'], notes: 'Needs IMEI reports', engagement: 81 }
+            ],
+            offers: [
+                { id: 'OFF-5001', partner: 'Nova Wireless', device: 'iPhone 14 Pro | Dallas', quantity: 240, price: 845, gradeMix: { A: 70, B: 20, C: 10, F: 0 }, status: 'Negotiation', logistics: 'Air', closeDate: '2025-02-02', notes: 'Requesting IMEI audit + drop test sample', createdAt: '2025-01-26T13:20:00Z' },
+                { id: 'OFF-5002', partner: 'BlueOrbit GSM', device: 'Galaxy S23 Ultra | Dallas', quantity: 300, price: 760, gradeMix: { A: 60, B: 30, C: 10, F: 0 }, status: 'Committed', logistics: 'Freight', closeDate: '2025-02-05', notes: 'Requires pallet photos before pickup', createdAt: '2025-01-25T15:45:00Z' },
+                { id: 'OFF-5003', partner: 'Atlas Refurb', device: 'iPhone XR | Los Angeles', quantity: 500, price: 115, gradeMix: { A: 0, B: 20, C: 50, F: 30 }, status: 'QC Hold', logistics: 'Freight', closeDate: '2025-01-31', notes: 'Hold pending additional salvage diagnostics', createdAt: '2025-01-24T19:10:00Z' }
+            ]
+        };
+
+        const clone = (object) => (typeof structuredClone === 'function' ? structuredClone(object) : JSON.parse(JSON.stringify(object)));
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(fallbackState));
+                    return clone(fallbackState);
+                }
+                const parsed = JSON.parse(raw);
+                if (!parsed.inventory || !parsed.partners || !parsed.offers) {
+                    throw new Error('Malformed state');
+                }
+                return parsed;
+            } catch (error) {
+                console.warn('Resetting wholesale admin state', error);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(fallbackState));
+                return clone(fallbackState);
+            }
+        }
+
+        const state = loadState();
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function formatNumber(value) {
+            return new Intl.NumberFormat('en-US').format(value);
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+        }
+
+        function gradeBadgeClass(grade) {
+            switch (grade) {
+                case 'A':
+                    return 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40';
+                case 'B':
+                    return 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/40';
+                case 'C':
+                    return 'bg-amber-500/20 text-amber-200 border border-amber-400/40';
+                case 'F':
+                    return 'bg-rose-500/20 text-rose-200 border border-rose-400/40';
+                default:
+                    return 'bg-slate-500/20 text-slate-200 border border-slate-400/40';
+            }
+        }
+
+        function renderMetrics() {
+            const metricsContainer = document.getElementById('adminMetrics');
+            metricsContainer.innerHTML = '';
+            const totalUnits = state.inventory.reduce((sum, item) => sum + item.quantity, 0);
+            const reserved = state.inventory.reduce((sum, item) => sum + item.reserved, 0);
+            const liveValue = state.inventory.reduce((sum, item) => sum + item.quantity * item.price, 0);
+            const salvageShare = state.inventory.reduce((sum, item) => sum + (item.grade === 'F' ? item.quantity : 0), 0) / (totalUnits || 1);
+
+            const metrics = [
+                { label: 'Total units on floor', value: formatNumber(totalUnits), icon: 'fa-boxes-stacked', accent: 'from-emerald-500/20 to-emerald-400/10' },
+                { label: 'Reserved & holds', value: formatNumber(reserved), icon: 'fa-lock', accent: 'from-cyan-500/20 to-cyan-400/10' },
+                { label: 'Inventory value', value: formatCurrency(liveValue), icon: 'fa-sack-dollar', accent: 'from-fuchsia-500/20 to-fuchsia-400/10' },
+                { label: 'Salvage share', value: `${Math.round(salvageShare * 100)}%`, icon: 'fa-recycle', accent: 'from-amber-500/20 to-amber-400/10' }
+            ];
+
+            metrics.forEach((metric) => {
+                const card = document.createElement('article');
+                card.className = 'rounded-3xl border border-white/10 bg-gradient-to-br ' + metric.accent + ' p-6 shadow-xl shadow-black/30 backdrop-blur';
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs uppercase tracking-[0.4em] text-slate-300/90">${metric.label}</p>
+                        <i class="fa-solid ${metric.icon} text-lg text-emerald-300"></i>
+                    </div>
+                    <p class="mt-4 text-3xl font-semibold text-slate-50">${metric.value}</p>
+                `;
+                metricsContainer.appendChild(card);
+            });
+        }
+
+        function renderInventoryTable() {
+            const tbody = document.getElementById('adminInventoryTable');
+            tbody.innerHTML = '';
+            state.inventory.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-4 py-4">
+                        <p class="font-semibold text-slate-50">${item.brand} ${item.model}</p>
+                        <p class="text-xs text-slate-400">${item.storage} · ${item.carrier}</p>
+                        ${item.notes ? `<p class="mt-2 text-xs text-slate-300/70">${item.notes}</p>` : ''}
+                    </td>
+                    <td class="px-4 py-4"><span class="rounded-full px-3 py-1 text-xs font-semibold ${gradeBadgeClass(item.grade)}">${item.grade}</span></td>
+                    <td class="px-4 py-4">
+                        <div class="flex items-center gap-2">
+                            <button class="rounded-full border border-white/10 px-2 text-xs adjust" data-id="${item.id}" data-field="quantity" data-direction="-1"><i class="fa-solid fa-minus"></i></button>
+                            <span class="w-16 text-center font-semibold">${formatNumber(item.quantity)}</span>
+                            <button class="rounded-full border border-white/10 px-2 text-xs adjust" data-id="${item.id}" data-field="quantity" data-direction="1"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                    </td>
+                    <td class="px-4 py-4">
+                        <div class="flex items-center gap-2">
+                            <button class="rounded-full border border-white/10 px-2 text-xs adjust" data-id="${item.id}" data-field="reserved" data-direction="-1"><i class="fa-solid fa-minus"></i></button>
+                            <span class="w-16 text-center font-semibold">${formatNumber(item.reserved)}</span>
+                            <button class="rounded-full border border-white/10 px-2 text-xs adjust" data-id="${item.id}" data-field="reserved" data-direction="1"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                    </td>
+                    <td class="px-4 py-4">${formatCurrency(item.price)}</td>
+                    <td class="px-4 py-4 text-slate-300">${item.location}</td>
+                    <td class="px-4 py-4 space-y-2 text-xs">
+                        <button class="w-full rounded-full border border-emerald-400/60 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:bg-emerald-400/10" data-stage="${item.id}">Stage</button>
+                        <button class="w-full rounded-full border border-white/10 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-300 transition hover:border-rose-400 hover:text-rose-200" data-remove="${item.id}">Remove</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            tbody.querySelectorAll('.adjust').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const { id, field, direction } = button.dataset;
+                    const item = state.inventory.find((inv) => inv.id === id);
+                    if (!item) return;
+                    const delta = Number(direction) * (field === 'quantity' ? 25 : 10);
+                    item[field] = Math.max(0, item[field] + delta);
+                    saveState();
+                    renderMetrics();
+                    renderInventoryTable();
+                });
+            });
+
+            tbody.querySelectorAll('[data-stage]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const item = state.inventory.find((inv) => inv.id === button.dataset.stage);
+                    if (!item) return;
+                    pushAlert(`${item.brand} ${item.model} staged for outbound QA.`, 'emerald');
+                });
+            });
+
+            tbody.querySelectorAll('[data-remove]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const index = state.inventory.findIndex((inv) => inv.id === button.dataset.remove);
+                    if (index === -1) return;
+                    if (confirm('Remove this lot from availability?')) {
+                        state.inventory.splice(index, 1);
+                        saveState();
+                        renderMetrics();
+                        renderInventoryTable();
+                    }
+                });
+            });
+        }
+
+        function renderOfferTable() {
+            const tbody = document.getElementById('adminOfferTable');
+            tbody.innerHTML = '';
+            state.offers.forEach((offer) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-4 py-4">
+                        <p class="font-semibold text-slate-50">${offer.device}</p>
+                        <p class="text-xs text-slate-400">${offer.id}</p>
+                    </td>
+                    <td class="px-4 py-4 text-slate-300">${offer.partner}</td>
+                    <td class="px-4 py-4">${formatNumber(offer.quantity)}</td>
+                    <td class="px-4 py-4 text-xs text-slate-300">A ${offer.gradeMix.A}% · B ${offer.gradeMix.B}% · C ${offer.gradeMix.C}% · F ${offer.gradeMix.F}%</td>
+                    <td class="px-4 py-4">
+                        <select class="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-xs font-semibold text-slate-200 focus:border-emerald-400 focus:outline-none" data-offer-status="${offer.id}">
+                            ${['Negotiation', 'Committed', 'QC Hold', 'Closed'].map((status) => `<option value="${status}" ${offer.status === status ? 'selected' : ''}>${status}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="px-4 py-4 space-y-2 text-xs">
+                        <button class="w-full rounded-full border border-emerald-400/60 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:bg-emerald-400/10" data-advance="${offer.id}">Advance stage</button>
+                        <button class="w-full rounded-full border border-white/10 px-3 py-2 font-semibold uppercase tracking-[0.3em] text-slate-300 transition hover:border-cyan-400 hover:text-cyan-200" data-note="${offer.id}">Add note</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            tbody.querySelectorAll('[data-offer-status]').forEach((select) => {
+                select.addEventListener('change', () => {
+                    const offer = state.offers.find((item) => item.id === select.dataset.offerStatus);
+                    if (!offer) return;
+                    offer.status = select.value;
+                    offer.createdAt = new Date().toISOString();
+                    saveState();
+                    pushAlert(`Offer ${offer.id} moved to ${offer.status}.`, 'cyan');
+                });
+            });
+
+            tbody.querySelectorAll('[data-advance]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const offer = state.offers.find((item) => item.id === button.dataset.advance);
+                    if (!offer) return;
+                    const flow = ['Negotiation', 'Committed', 'QC Hold', 'Closed'];
+                    const nextStatus = flow[Math.min(flow.indexOf(offer.status) + 1, flow.length - 1)];
+                    offer.status = nextStatus;
+                    offer.createdAt = new Date().toISOString();
+                    saveState();
+                    renderOfferTable();
+                    pushAlert(`Offer ${offer.id} advanced to ${offer.status}.`, 'emerald');
+                });
+            });
+
+            tbody.querySelectorAll('[data-note]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const offer = state.offers.find((item) => item.id === button.dataset.note);
+                    if (!offer) return;
+                    const note = prompt('Append operational note:', offer.notes || '');
+                    if (note !== null) {
+                        offer.notes = note;
+                        offer.createdAt = new Date().toISOString();
+                        saveState();
+                        pushAlert(`Offer ${offer.id} note updated.`, 'fuchsia');
+                    }
+                });
+            });
+        }
+
+        function renderPartnerHealth() {
+            const container = document.getElementById('partnerHealth');
+            container.innerHTML = '';
+            state.partners.forEach((partner) => {
+                const card = document.createElement('div');
+                card.className = 'rounded-2xl border border-white/10 bg-white/5 p-4';
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <p class="font-semibold text-slate-50">${partner.company}</p>
+                        <span class="text-xs font-semibold text-emerald-200">${partner.engagement}%</span>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-400">${partner.region} · ${formatNumber(partner.commitment)} units/mo</p>
+                    <div class="mt-3 h-1.5 rounded-full bg-slate-800">
+                        <div class="h-full rounded-full bg-emerald-400" style="width: ${partner.engagement}%"></div>
+                    </div>
+                    <p class="mt-3 text-xs text-slate-300/70">Prefers grades: ${partner.grades.join(', ')}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderPricingMatrix() {
+            const container = document.getElementById('pricingMatrix');
+            container.innerHTML = '';
+            const gradeTargets = {
+                A: { floor: 0.92, ceiling: 1.04 },
+                B: { floor: 0.78, ceiling: 0.92 },
+                C: { floor: 0.55, ceiling: 0.72 },
+                F: { floor: 0.18, ceiling: 0.32 }
+            };
+
+            ['A', 'B', 'C', 'F'].forEach((grade) => {
+                const card = document.createElement('div');
+                card.className = 'rounded-2xl border border-white/10 bg-white/5 p-4';
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <p class="font-semibold text-slate-50">Grade ${grade}</p>
+                        <span class="rounded-full px-3 py-1 text-xs font-semibold ${gradeBadgeClass(grade)}">${grade}</span>
+                    </div>
+                    <p class="mt-3 text-xs text-slate-300/80">Maintain blended deals between ${(gradeTargets[grade].floor * 100).toFixed(0)}% and ${(gradeTargets[grade].ceiling * 100).toFixed(0)}% of MSRP.</p>
+                    <div class="mt-3 flex items-center gap-3">
+                        <label class="flex flex-1 flex-col text-xs text-slate-300/80">Floor multiplier
+                            <input type="number" step="0.01" min="0" value="${gradeTargets[grade].floor}" data-matrix="${grade}-floor" class="mt-1 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                        </label>
+                        <label class="flex flex-1 flex-col text-xs text-slate-300/80">Ceiling multiplier
+                            <input type="number" step="0.01" min="0" value="${gradeTargets[grade].ceiling}" data-matrix="${grade}-ceiling" class="mt-1 rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                        </label>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderLogisticsTasks() {
+            const container = document.getElementById('logisticsTasks');
+            container.innerHTML = '';
+            const template = document.getElementById('logisticsTaskTemplate');
+            const tasks = [
+                { title: 'Allocate pallets for Nova Wireless (Dallas)', meta: 'Due today · 240 units · Freight pickup 4 PM CST' },
+                { title: 'Book air freight for Helios Mobile', meta: 'Due tomorrow · 120 units · Deliver to DFW cargo terminal' },
+                { title: 'QC hold release for Atlas Refurb', meta: 'Due Friday · 500 salvage units · awaiting diagnostic upload' }
+            ];
+
+            tasks.forEach((task) => {
+                const clone = template.content.cloneNode(true);
+                clone.querySelector('.task-title').textContent = task.title;
+                clone.querySelector('.task-meta').textContent = task.meta;
+                clone.querySelector('.mark-done').addEventListener('click', (event) => {
+                    event.preventDefault();
+                    pushAlert(`${task.title} completed.`, 'emerald');
+                });
+                clone.querySelector('input[type="checkbox"]').addEventListener('change', (event) => {
+                    if (event.target.checked) {
+                        pushAlert(`${task.title} marked complete.`, 'emerald');
+                    }
+                });
+                container.appendChild(clone);
+            });
+        }
+
+        function pushAlert(message, tone = 'emerald') {
+            const colors = {
+                emerald: 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100',
+                cyan: 'border-cyan-400/40 bg-cyan-500/10 text-cyan-100',
+                fuchsia: 'border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-100',
+                amber: 'border-amber-400/40 bg-amber-500/10 text-amber-100'
+            };
+            const feed = document.getElementById('alertFeed');
+            const li = document.createElement('li');
+            li.className = `rounded-2xl border px-4 py-3 text-xs ${colors[tone] || colors.emerald}`;
+            li.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <span>${message}</span>
+                    <span class="text-[10px] uppercase tracking-[0.3em] text-white/60">${new Date().toLocaleTimeString()}</span>
+                </div>
+            `;
+            feed.prepend(li);
+            if (feed.children.length > 6) {
+                feed.removeChild(feed.lastElementChild);
+            }
+        }
+
+        document.getElementById('clearAlerts').addEventListener('click', () => {
+            document.getElementById('alertFeed').innerHTML = '';
+        });
+
+        document.getElementById('syncState').addEventListener('click', () => {
+            saveState();
+            pushAlert('State synchronized across buyer view and admin console.', 'cyan');
+        });
+
+        document.getElementById('exportOffers').addEventListener('click', () => {
+            const header = ['Offer ID', 'Partner', 'Device', 'Quantity', 'Price', 'Status'];
+            const rows = state.offers.map((offer) => [offer.id, offer.partner, offer.device, offer.quantity, offer.price, offer.status]);
+            const csv = [header, ...rows].map((row) => row.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `offer-dashboard-${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        document.getElementById('refreshPartnerHealth').addEventListener('click', () => {
+            state.partners.forEach((partner) => {
+                partner.engagement = Math.min(100, Math.max(40, partner.engagement + Math.floor(Math.random() * 11 - 5)));
+            });
+            saveState();
+            renderPartnerHealth();
+            pushAlert('Partner engagement scores recalculated.', 'fuchsia');
+        });
+
+        document.getElementById('openInventoryDrawer').addEventListener('click', () => toggleInventoryDrawer(true));
+        document.getElementById('closeInventoryDrawer').addEventListener('click', () => toggleInventoryDrawer(false));
+        document.getElementById('closeInventoryDrawerBtn').addEventListener('click', () => toggleInventoryDrawer(false));
+
+        function toggleInventoryDrawer(show) {
+            const drawer = document.getElementById('inventoryDrawer');
+            drawer.classList.toggle('hidden', !show);
+        }
+
+        document.getElementById('inventoryForm').addEventListener('submit', (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const newInventory = {
+                id: `INV-${Math.floor(Math.random() * 9000 + 2000)}`,
+                brand: formData.get('brand'),
+                model: formData.get('model'),
+                storage: formData.get('storage'),
+                carrier: formData.get('carrier'),
+                grade: formData.get('grade'),
+                quantity: Number(formData.get('quantity')),
+                reserved: Number(formData.get('reserved')),
+                price: Number(formData.get('price')),
+                location: formData.get('location'),
+                notes: formData.get('notes')
+            };
+            state.inventory.push(newInventory);
+            saveState();
+            renderMetrics();
+            renderInventoryTable();
+            toggleInventoryDrawer(false);
+            event.target.reset();
+            pushAlert(`${newInventory.brand} ${newInventory.model} lot created.`, 'emerald');
+        });
+
+        renderMetrics();
+        renderInventoryTable();
+        renderOfferTable();
+        renderPartnerHealth();
+        renderPricingMatrix();
+        renderLogisticsTasks();
+    </script>
+</body>
+</html>
