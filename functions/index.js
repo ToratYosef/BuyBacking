@@ -7,6 +7,7 @@ const nodemailer = require("nodemailer");
 const { URLSearchParams } = require('url');
 const { generateCustomLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
 const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
+const wholesaleRouter = require('./routes/wholesale');
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -33,6 +34,7 @@ app.use(
   })
 );
 app.use(express.json());
+app.use('/wholesale', wholesaleRouter);
 
 const transporter = nodemailer.createTransport({
   service: "gmail",

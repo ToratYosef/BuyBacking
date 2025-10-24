@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wholesale Checkout | SecondHandCell</title>
+    <link rel="icon" href="/favicon/favicon.ico" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+    />
+    <style>
+        body {
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    <div id="toast" class="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
+        <div id="toastContent" class="hidden w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg"></div>
+    </div>
+
+    <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <nav class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-5">
+            <a href="/buy/" class="flex items-center gap-3 text-slate-900">
+                <img src="/assets/logo.png" alt="SecondHandCell" class="h-12 w-12 rounded-full border border-slate-200 bg-white p-2" />
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-600">SecondHandCell</p>
+                    <h1 class="text-2xl font-semibold tracking-tight">Wholesale checkout</h1>
+                </div>
+            </a>
+            <div class="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
+                <a href="/buy/" class="transition hover:text-emerald-600">Home</a>
+                <a href="/buy/buy-device.html" class="transition hover:text-emerald-600">Devices</a>
+                <a href="/buy/cart.html" class="transition hover:text-emerald-600">Cart</a>
+                <a href="/buy/my-account.html" class="transition hover:text-emerald-600">My account</a>
+            </div>
+            <div class="flex items-center gap-3">
+                <button
+                    id="accountButton"
+                    class="relative flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-emerald-300 hover:text-emerald-600"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                >
+                    <span id="accountInitial" class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-500"></span>
+                </button>
+                <div class="relative">
+                    <button
+                        id="cartButton"
+                        class="relative flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400"
+                        aria-haspopup="true"
+                    >
+                        <i class="fa-solid fa-cart-shopping"></i>
+                        Cart
+                        <span
+                            id="cartBadge"
+                            class="absolute -right-2 -top-2 hidden h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white"
+                        >
+                            0
+                        </span>
+                    </button>
+                    <div id="cartPreview" class="absolute right-0 top-14 hidden w-80 rounded-3xl border border-slate-200 bg-white p-5 shadow-xl">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm font-semibold text-slate-900">Cart preview</p>
+                            <button class="text-xs font-medium uppercase tracking-[0.3em] text-slate-400 hover:text-emerald-600" data-close-cart-preview>
+                                Close
+                            </button>
+                        </div>
+                        <div id="cartPreviewEmpty" class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
+                            Add more inventory from the catalog if you need changes.
+                        </div>
+                        <div id="cartPreviewList" class="mt-4 space-y-3"></div>
+                        <div class="mt-5 flex items-center justify-between">
+                            <a id="openCartLink" href="/buy/cart.html" class="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-emerald-400">Open cart</a>
+                            <a href="/buy/buy-device.html" class="text-xs font-medium text-emerald-600 underline">Browse catalog</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <div id="accountDropdown" class="absolute right-6 top-20 hidden w-72 rounded-3xl border border-slate-200 bg-white p-5 text-sm shadow-2xl">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-base font-semibold text-white">
+                    <span id="accountInitialClone">SC</span>
+                </div>
+                <div>
+                    <p data-account-name class="font-semibold text-slate-900">SecondHandCell buyer</p>
+                    <p data-account-email class="text-xs text-slate-500"></p>
+                </div>
+            </div>
+            <div class="mt-5 grid gap-2 text-sm text-slate-600">
+                <a href="/buy/my-account.html#pending" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Pending offers</a>
+                <a href="/buy/my-account.html#history" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Recent orders</a>
+                <a href="/buy/my-account.html#completed" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Completed orders</a>
+                <a href="/buy/my-account.html#imeis" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Order IMEIs</a>
+                <a href="/buy/cart.html" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Cart</a>
+                <button
+                    data-sign-out
+                    class="mt-2 flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 transition hover:border-rose-300 hover:text-rose-500"
+                >
+                    Sign out
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto flex max-w-7xl flex-col gap-16 px-6 py-16">
+        <section class="space-y-6">
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <span class="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Checkout</span>
+                    <h2 class="mt-4 text-4xl font-bold tracking-tight text-slate-900">Finalize your wholesale order.</h2>
+                    <p class="mt-3 max-w-2xl text-sm text-slate-600">Confirm shipping preferences, generate a ShipEngine rate, and complete secure payment through Stripe so our logistics team can release the inventory.</p>
+                </div>
+                <div id="checkoutStatus" class="rounded-3xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm"></div>
+            </div>
+            <p id="signInMessage" class="hidden rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">Sign in to view checkout details for this offer.</p>
+            <p id="offerMessage" class="hidden rounded-3xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600"></p>
+        </section>
+
+        <section id="checkoutContent" class="hidden space-y-10">
+            <div class="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+                <div class="flex flex-col gap-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Offer ID</p>
+                        <p id="offerId" class="text-sm font-semibold text-slate-900">&mdash;</p>
+                    </div>
+                    <div class="grid gap-3 text-sm text-slate-600">
+                        <p>Submitted: <span id="offerSubmitted" class="font-semibold text-slate-900">&mdash;</span></p>
+                        <p>Accepted: <span id="offerAccepted" class="font-semibold text-slate-900">&mdash;</span></p>
+                        <p>Total units: <span id="offerUnits" class="font-semibold text-slate-900">0</span></p>
+                        <p>Offer value: <span id="offerValue" class="font-semibold text-slate-900">$0.00</span></p>
+                    </div>
+                    <div class="overflow-hidden rounded-2xl border border-slate-200">
+                        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                            <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                                <tr>
+                                    <th class="px-4 py-3">Device</th>
+                                    <th class="px-4 py-3">Qty</th>
+                                    <th class="px-4 py-3">Accepted price</th>
+                                </tr>
+                            </thead>
+                            <tbody id="offerLines" class="divide-y divide-slate-100 bg-white"></tbody>
+                        </table>
+                    </div>
+                    <div id="checkoutNotes" class="text-sm text-slate-600"></div>
+                </div>
+                <div class="flex flex-col gap-6">
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <h3 class="text-base font-semibold text-slate-900">Shipping &amp; fulfillment</h3>
+                        <form id="shippingForm" class="mt-4 space-y-4 text-sm">
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <label class="block font-medium text-slate-600">Contact name
+                                    <input name="contactName" type="text" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Buyer contact" />
+                                </label>
+                                <label class="block font-medium text-slate-600">Contact email
+                                    <input name="contactEmail" type="email" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="you@company.com" />
+                                </label>
+                            </div>
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <label class="block font-medium text-slate-600">Contact phone
+                                    <input name="contactPhone" type="tel" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="(555) 555-5555" />
+                                </label>
+                                <label class="block font-medium text-slate-600">Company name
+                                    <input name="company" type="text" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Your business" />
+                                </label>
+                            </div>
+                            <label class="block font-medium text-slate-600">Address line 1
+                                <input name="address1" type="text" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Street address" />
+                            </label>
+                            <label class="block font-medium text-slate-600">Address line 2 (optional)
+                                <input name="address2" type="text" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Suite, unit, etc." />
+                            </label>
+                            <div class="grid gap-4 sm:grid-cols-3">
+                                <label class="block font-medium text-slate-600">City
+                                    <input name="city" type="text" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                                <label class="block font-medium text-slate-600">State / Province
+                                    <input name="state" type="text" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                                <label class="block font-medium text-slate-600">Postal code
+                                    <input name="postalCode" type="text" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                            </div>
+                            <label class="block font-medium text-slate-600">Country
+                                <input name="country" type="text" value="US" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                            </label>
+                            <label class="block font-medium text-slate-600">Fulfillment method
+                                <select name="preference" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none">
+                                    <option value="">Select a method</option>
+                                    <option value="parcel">Parcel (UPS/FedEx)</option>
+                                    <option value="ltl">LTL Freight / Pallet</option>
+                                    <option value="pickup">Will call pickup</option>
+                                </select>
+                            </label>
+                            <div class="grid gap-4 sm:grid-cols-3">
+                                <label class="block font-medium text-slate-600">Boxes / pallets
+                                    <input name="boxCount" type="number" min="1" value="1" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                                <label class="block font-medium text-slate-600">Weight per box (lbs)
+                                    <input name="weightPerBox" type="number" min="1" step="0.1" value="40" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                                <label class="block font-medium text-slate-600">Length (in)
+                                    <input name="length" type="number" min="1" step="0.1" value="20" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                            </div>
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <label class="block font-medium text-slate-600">Width (in)
+                                    <input name="width" type="number" min="1" step="0.1" value="16" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                                <label class="block font-medium text-slate-600">Height (in)
+                                    <input name="height" type="number" min="1" step="0.1" value="12" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                            </div>
+                            <label class="block font-medium text-slate-600">Fulfillment notes (optional)
+                                <textarea name="notes" rows="4" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Dock hours, pallet requirements, liftgate, etc."></textarea>
+                            </label>
+                        </form>
+                    </div>
+                    <div class="rounded-3xl border border-emerald-200 bg-emerald-50 p-6 text-sm text-emerald-700">
+                        <p class="font-semibold text-emerald-900">What's next?</p>
+                        <ol class="mt-3 list-decimal space-y-2 pl-5">
+                            <li>Submit payment to lock pricing and reserve inventory.</li>
+                            <li>Admin reviews the order, prints ShipEngine labels, and shares tracking.</li>
+                            <li>IMEI manifests publish to your account as soon as devices leave the warehouse.</li>
+                        </ol>
+                    </div>
+                    <button id="completeOrder" class="rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400">
+                        Pay &amp; finalize order
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white/90">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>Checkout confirmations sync to your account and the admin console instantly.</p>
+            <div class="flex items-center gap-3">
+                <a href="mailto:wholesale@secondhandcell.com" class="font-medium text-emerald-600">Contact</a>
+                <span>&bull;</span>
+                <a href="/terms.html" class="hover:text-emerald-600">Terms</a>
+                <span>&bull;</span>
+                <a href="/privacy.html" class="hover:text-emerald-600">Privacy</a>
+            </div>
+        </div>
+    </footer>
+
+    <div id="authBackdrop" class="fixed inset-0 z-50 hidden bg-slate-900/60"></div>
+    <div id="authModal" class="fixed inset-0 z-50 hidden items-center justify-center px-4 py-10">
+        <div class="mx-auto w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-8 shadow-2xl">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Wholesale access</p>
+                    <h2 data-auth-title class="mt-2 text-2xl font-semibold text-slate-900">Sign in</h2>
+                </div>
+                <button class="text-slate-400 transition hover:text-slate-600" data-close-auth-modal>
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="mt-6 flex items-center gap-4 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                <button data-auth-mode="signIn" class="rounded-full border border-slate-200 px-4 py-2">Sign in</button>
+                <button data-auth-mode="signUp" class="rounded-full border border-slate-200 px-4 py-2">Sign up</button>
+            </div>
+            <form id="authForm" class="mt-6 space-y-4">
+                <div id="authNameRow" class="hidden">
+                    <label class="text-sm font-medium text-slate-600">Full name
+                        <input name="displayName" type="text" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Wholesale buyer" />
+                    </label>
+                </div>
+                <label class="block text-sm font-medium text-slate-600">Email address
+                    <input name="email" type="email" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="you@company.com" />
+                </label>
+                <label class="block text-sm font-medium text-slate-600">Password
+                    <input name="password" type="password" required minlength="6" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="••••••••" />
+                </label>
+                <p id="authError" class="hidden rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-600"></p>
+                <button type="submit" class="w-full rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400">
+                    Continue
+                </button>
+                <button type="button" data-google-signin class="flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">
+                    <i class="fa-brands fa-google"></i>
+                    Continue with Google
+                </button>
+                <button id="forgotPassword" type="button" class="w-full text-center text-xs font-semibold uppercase tracking-[0.3em] text-slate-400 hover:text-emerald-600">
+                    Forgot password
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeBuyHeader, requireAuthOrPrompt, auth } from "./buy-header.js";
+        import { getUserOffers, saveUserOffers, formatCurrency, summarizeOffer, API_BASE } from "./buy-shared.js";
+
+        initializeBuyHeader();
+
+        const toastContent = document.getElementById("toastContent");
+        const signInMessage = document.getElementById("signInMessage");
+        const offerMessage = document.getElementById("offerMessage");
+        const checkoutStatus = document.getElementById("checkoutStatus");
+        const checkoutContent = document.getElementById("checkoutContent");
+        const offerIdLabel = document.getElementById("offerId");
+        const offerSubmitted = document.getElementById("offerSubmitted");
+        const offerAccepted = document.getElementById("offerAccepted");
+        const offerUnits = document.getElementById("offerUnits");
+        const offerValue = document.getElementById("offerValue");
+        const offerLines = document.getElementById("offerLines");
+        const checkoutNotes = document.getElementById("checkoutNotes");
+        const completeOrderButton = document.getElementById("completeOrder");
+        const shippingForm = document.getElementById("shippingForm");
+
+        const params = new URLSearchParams(window.location.search);
+        const offerIdParam = params.get("offer");
+        let activeOffer = null;
+
+        function showToast(message, tone = "emerald") {
+            if (!toastContent) return;
+            toastContent.textContent = message;
+            toastContent.className = `w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg ${
+                tone === "rose"
+                    ? "border-rose-200 bg-rose-50 text-rose-600"
+                    : tone === "amber"
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+            }`;
+            toastContent.classList.remove("hidden");
+            setTimeout(() => {
+                toastContent.classList.add("hidden");
+            }, 2800);
+        }
+
+        function renderOfferDetails(offer) {
+            if (!offer) {
+                checkoutContent.classList.add("hidden");
+                return;
+            }
+            checkoutContent.classList.remove("hidden");
+            offerIdLabel.textContent = offer.id;
+            offerSubmitted.textContent = offer.createdAt ? new Date(offer.createdAt).toLocaleString() : "—";
+            offerAccepted.textContent = offer.acceptedAt ? new Date(offer.acceptedAt).toLocaleString() : "Awaiting acceptance";
+            const { units, total } = summarizeOffer(offer);
+            offerUnits.textContent = units;
+            offerValue.textContent = formatCurrency(total);
+            offerLines.innerHTML = offer.items
+                .map(
+                    (item) => `
+                        <tr>
+                            <td class="px-4 py-3">
+                                <p class="font-semibold text-slate-900">${item.brand} ${item.model}</p>
+                                <p class="text-xs uppercase tracking-[0.3em] text-slate-400">${item.storageVariant} · Grade ${item.grade}</p>
+                            </td>
+                            <td class="px-4 py-3 text-sm text-slate-600">${item.quantity}</td>
+                            <td class="px-4 py-3 text-sm text-slate-600">${formatCurrency(item.counterPrice || item.offerPrice)}</td>
+                        </tr>
+                    `
+                )
+                .join("");
+            const noteText = offer.counter?.note || offer.note;
+            checkoutNotes.textContent = noteText ? `Notes: ${noteText}` : "";
+
+            if (offer.status === "completed") {
+                checkoutStatus.innerHTML = `<span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-900 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white">Completed</span>`;
+                completeOrderButton.textContent = "Order already completed";
+                completeOrderButton.disabled = true;
+            } else if (offer.status === "processing") {
+                checkoutStatus.innerHTML = `<span class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-sky-700">Payment pending</span>`;
+                completeOrderButton.textContent = "Resume payment";
+                completeOrderButton.disabled = false;
+            } else {
+                checkoutStatus.innerHTML = `<span class="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700">Ready for checkout</span>`;
+                completeOrderButton.textContent = "Pay &amp; finalize order";
+                completeOrderButton.disabled = false;
+            }
+
+            const shippingAmount = offer.payment?.shippingEstimate?.shipping_amount?.amount;
+            if (shippingAmount) {
+                const boxes = offer.payment?.boxCount || offer.shipping?.boxCount || 1;
+                const perBox = shippingAmount / boxes;
+                checkoutStatus.innerHTML += `<div class="mt-2 text-xs text-slate-500">Estimated shipping: ${formatCurrency(shippingAmount)} (${formatCurrency(perBox)} per box)</div>`;
+            }
+        }
+
+        function loadOfferForUser(user) {
+            if (!offerIdParam) {
+                offerMessage.textContent = "No offer ID provided. Go back to your account to choose an offer.";
+                offerMessage.classList.remove("hidden");
+                return;
+            }
+            const offers = getUserOffers(user.uid);
+            const offer = offers.find((entry) => entry.id === offerIdParam);
+            if (!offer) {
+                offerMessage.textContent = "We couldn't find that offer under your account.";
+                offerMessage.classList.remove("hidden");
+                return;
+            }
+            if (!(["accepted", "completed"].includes(offer.status))) {
+                offerMessage.textContent = "This offer is not ready for checkout yet. Accept the counter or wait for approval.";
+                offerMessage.classList.remove("hidden");
+                return;
+            }
+            offerMessage.classList.add("hidden");
+            activeOffer = offer;
+            renderOfferDetails(offer);
+            if (shippingForm) {
+                if (offer.shipping) {
+                    shippingForm.contactName.value = offer.shipping.contact?.name || shippingForm.contactName.value;
+                    shippingForm.contactEmail.value = offer.shipping.contact?.email || shippingForm.contactEmail.value;
+                    shippingForm.contactPhone.value = offer.shipping.contact?.phone || shippingForm.contactPhone.value;
+                    shippingForm.company.value = offer.shipping.company || shippingForm.company.value;
+                    shippingForm.address1.value = offer.shipping.address?.line1 || shippingForm.address1.value;
+                    shippingForm.address2.value = offer.shipping.address?.line2 || "";
+                    shippingForm.city.value = offer.shipping.address?.city || shippingForm.city.value;
+                    shippingForm.state.value = offer.shipping.address?.state || shippingForm.state.value;
+                    shippingForm.postalCode.value = offer.shipping.address?.postalCode || shippingForm.postalCode.value;
+                    shippingForm.country.value = offer.shipping.address?.country || shippingForm.country.value;
+                    shippingForm.preference.value = offer.shipping.preference || shippingForm.preference.value;
+                    shippingForm.boxCount.value = offer.shipping.boxCount || shippingForm.boxCount.value;
+                    shippingForm.weightPerBox.value = offer.shipping.weightPerBox || shippingForm.weightPerBox.value;
+                    shippingForm.length.value = offer.shipping.dimensions?.length || shippingForm.length.value;
+                    shippingForm.width.value = offer.shipping.dimensions?.width || shippingForm.width.value;
+                    shippingForm.height.value = offer.shipping.dimensions?.height || shippingForm.height.value;
+                    shippingForm.notes.value = offer.shipping.notes || "";
+                } else if (auth.currentUser) {
+                    shippingForm.contactName.value = auth.currentUser.displayName || shippingForm.contactName.value;
+                    shippingForm.contactEmail.value = auth.currentUser.email || shippingForm.contactEmail.value;
+                }
+            }
+        }
+
+        completeOrderButton.addEventListener("click", async () => {
+            if (activeOffer?.status === "processing" && activeOffer?.payment?.checkoutUrl) {
+                window.location.href = activeOffer.payment.checkoutUrl;
+                return;
+            }
+            if (!auth.currentUser) {
+                requireAuthOrPrompt();
+                showToast("Sign in to complete the order.", "rose");
+                return;
+            }
+            if (!activeOffer) {
+                showToast("No offer loaded.", "rose");
+                return;
+            }
+            const formData = new FormData(shippingForm);
+            const requiredFields = [
+                "contactName",
+                "contactEmail",
+                "contactPhone",
+                "address1",
+                "city",
+                "state",
+                "postalCode",
+                "country",
+                "preference"
+            ];
+            const missing = requiredFields.some((field) => !(formData.get(field) || "").toString().trim());
+            if (missing) {
+                showToast("Provide full contact and shipping details.", "rose");
+                return;
+            }
+
+            const shippingPayload = {
+                preference: formData.get("preference"),
+                notes: formData.get("notes")?.toString().trim() || "",
+                boxCount: Number(formData.get("boxCount") || 1),
+                weightPerBox: Number(formData.get("weightPerBox") || 1),
+                dimensions: {
+                    length: Number(formData.get("length") || 0),
+                    width: Number(formData.get("width") || 0),
+                    height: Number(formData.get("height") || 0)
+                },
+                company: formData.get("company")?.toString().trim() || "",
+                contact: {
+                    name: formData.get("contactName")?.toString().trim() || "",
+                    email: formData.get("contactEmail")?.toString().trim() || auth.currentUser.email || "",
+                    phone: formData.get("contactPhone")?.toString().trim() || ""
+                },
+                address: {
+                    line1: formData.get("address1")?.toString().trim() || "",
+                    line2: formData.get("address2")?.toString().trim() || "",
+                    city: formData.get("city")?.toString().trim() || "",
+                    state: formData.get("state")?.toString().trim() || "",
+                    postalCode: formData.get("postalCode")?.toString().trim() || "",
+                    country: formData.get("country")?.toString().trim() || "US"
+                },
+                successUrl: `${window.location.origin}/buy/order-submitted.html?order={ORDER_ID}`,
+                cancelUrl: `${window.location.origin}/buy/checkout.html?offer=${activeOffer.id}`
+            };
+
+            const offers = getUserOffers(auth.currentUser.uid);
+            const offerIndex = offers.findIndex((entry) => entry.id === activeOffer.id);
+            if (offerIndex === -1) {
+                showToast("We couldn't find that offer in your account.", "rose");
+                return;
+            }
+
+            const { units, total } = summarizeOffer(activeOffer);
+            const payload = {
+                offerId: activeOffer.id,
+                items: activeOffer.items.map((item) => ({
+                    ...item,
+                    acceptedPrice: item.counterPrice || item.offerPrice
+                })),
+                totals: {
+                    units,
+                    offerTotal: total
+                },
+                shipping: shippingPayload,
+                buyer: {
+                    email: auth.currentUser.email,
+                    name: auth.currentUser.displayName || shippingPayload.contact.name
+                },
+                saveOfferSnapshot: {
+                    ...activeOffer,
+                    status: "processing",
+                    shipping: shippingPayload,
+                    paymentRequestedAt: new Date().toISOString()
+                }
+            };
+
+            try {
+                completeOrderButton.disabled = true;
+                completeOrderButton.textContent = "Connecting to Stripe…";
+                const token = await auth.currentUser.getIdToken();
+                const response = await fetch(`${API_BASE}/orders/checkout`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) {
+                    throw new Error(`Checkout failed: ${response.status}`);
+                }
+                const data = await response.json();
+                offers[offerIndex] = {
+                    ...activeOffer,
+                    status: "processing",
+                    payment: {
+                        orderId: data.orderId,
+                        checkoutUrl: data.checkoutUrl,
+                        shippingEstimate: data.shippingEstimate || null,
+                        boxCount: shippingPayload.boxCount
+                    },
+                    shipping: shippingPayload
+                };
+                saveUserOffers(auth.currentUser.uid, offers);
+                activeOffer = offers[offerIndex];
+                renderOfferDetails(activeOffer);
+                if (data.shippingEstimate?.shipping_amount?.amount) {
+                    const perBox = data.shippingEstimate.shipping_amount.amount / (shippingPayload.boxCount || 1);
+                    checkoutStatus.innerHTML = `
+                        <div class="space-y-1">
+                            <span class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-sky-700">Payment pending</span>
+                            <p class="text-xs text-slate-500">Estimated shipping: ${formatCurrency(data.shippingEstimate.shipping_amount.amount)} (${formatCurrency(perBox)} per box)</p>
+                        </div>
+                    `;
+                }
+                showToast("Redirecting to secure checkout…");
+                setTimeout(() => {
+                    window.location.href = data.checkoutUrl;
+                }, 800);
+            } catch (error) {
+                console.error("Wholesale checkout error", error);
+                completeOrderButton.disabled = false;
+                completeOrderButton.textContent = "Pay & finalize order";
+                renderOfferDetails(activeOffer);
+                showToast("Unable to start checkout. Verify your details and admin approval.", "rose");
+            }
+        });
+
+        document.addEventListener("wholesale-auth-changed", (event) => {
+            const user = event.detail?.user;
+            if (!user) {
+                signInMessage.classList.remove("hidden");
+                checkoutContent.classList.add("hidden");
+                return;
+            }
+            signInMessage.classList.add("hidden");
+            loadOfferForUser(user);
+        });
+
+        if (auth.currentUser) {
+            signInMessage.classList.add("hidden");
+            loadOfferForUser(auth.currentUser);
+        } else {
+            signInMessage.classList.remove("hidden");
+        }
+    </script>
+</body>
+</html>
