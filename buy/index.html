@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wholesale Device Exchange | SecondHandCell</title>
+    <link rel="icon" href="/favicon/favicon.ico" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            background: radial-gradient(circle at top, rgba(29, 78, 216, 0.05), transparent 55%),
+                       radial-gradient(circle at bottom, rgba(16, 185, 129, 0.05), transparent 55%),
+                       #0f172a;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100">
+    <header class="sticky top-0 z-20 backdrop-blur bg-slate-900/80 border-b border-slate-700/60">
+        <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+            <a href="/" class="flex items-center gap-3 font-semibold text-slate-100">
+                <img src="/assets/logo.svg" alt="SecondHandCell" class="h-9 w-9" onerror="this.style.display='none'" />
+                <span class="text-lg tracking-wide">SecondHandCell Wholesale Hub</span>
+            </a>
+            <nav class="hidden gap-6 text-sm font-medium text-slate-200 md:flex">
+                <a href="#inventory" class="transition hover:text-emerald-300">Inventory</a>
+                <a href="#offers" class="transition hover:text-emerald-300">Live Offers</a>
+                <a href="#partners" class="transition hover:text-emerald-300">Partner Network</a>
+                <a href="#quality" class="transition hover:text-emerald-300">Quality Matrix</a>
+            </nav>
+            <div class="flex items-center gap-3 text-sm">
+                <a href="/buy/admin.html" class="rounded-full border border-emerald-400/60 px-4 py-2 font-semibold text-emerald-300 transition hover:bg-emerald-400/10 hover:text-emerald-100">
+                    Admin Console
+                </a>
+                <a href="mailto:wholesale@secondhandcell.com" class="hidden rounded-full bg-emerald-500/90 px-4 py-2 font-semibold text-slate-900 transition hover:bg-emerald-400 md:block">
+                    Talk to Sales
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto flex max-w-7xl flex-col gap-16 px-6 py-16">
+        <section class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+            <div class="space-y-8">
+                <span class="inline-flex items-center gap-2 rounded-full border border-emerald-400/60 bg-emerald-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">
+                    Wholesale Marketplace
+                </span>
+                <h1 class="text-4xl font-bold tracking-tight text-slate-50 sm:text-5xl">
+                    Bulk-ready device inventory with transparent grading and real-time offer orchestration.
+                </h1>
+                <p class="text-lg leading-relaxed text-slate-300/90">
+                    Build long-term partnerships with access to high quality certified pre-owned devices. Grade at the pallet level, negotiate blended price tiers, and orchestrate shipping labels without ever leaving this workspace.
+                </p>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="rounded-2xl border border-white/5 bg-slate-900/70 p-6 shadow-xl shadow-emerald-500/5">
+                        <p class="text-sm uppercase tracking-[0.3em] text-emerald-200">Instant Liquidity</p>
+                        <p class="mt-3 text-lg text-slate-200">Locked pricing matrices and guaranteed fulfillment windows for A/B/C/F stock.</p>
+                    </div>
+                    <div class="rounded-2xl border border-white/5 bg-slate-900/70 p-6 shadow-xl shadow-cyan-500/5">
+                        <p class="text-sm uppercase tracking-[0.3em] text-cyan-200">Operational Control</p>
+                        <p class="mt-3 text-lg text-slate-200">Automated packing lists, inspection checklists, and compliance-ready audit trails.</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-4 text-sm text-slate-300">
+                    <div class="flex items-center gap-2 rounded-full border border-white/5 bg-white/5 px-4 py-2"><i class="fa-solid fa-shield-check text-emerald-300"></i>R2 certified workflows</div>
+                    <div class="flex items-center gap-2 rounded-full border border-white/5 bg-white/5 px-4 py-2"><i class="fa-solid fa-truck-fast text-emerald-300"></i>Same-day freight handoff</div>
+                    <div class="flex items-center gap-2 rounded-full border border-white/5 bg-white/5 px-4 py-2"><i class="fa-solid fa-sitemap text-emerald-300"></i>Multi-location staging</div>
+                </div>
+            </div>
+            <div class="relative">
+                <div class="absolute inset-0 -translate-x-10 -translate-y-8 rotate-6 rounded-3xl bg-emerald-500/5 blur-3xl"></div>
+                <div class="relative flex h-full flex-col gap-6 rounded-3xl border border-white/5 bg-slate-900/70 p-6 shadow-xl shadow-emerald-500/10">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-lg font-semibold text-slate-100">Current Trading Snapshot</h2>
+                        <span class="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-200" id="snapshotTimestamp">Updated now</span>
+                    </div>
+                    <dl class="grid gap-4 sm:grid-cols-2">
+                        <div class="rounded-2xl border border-white/5 bg-white/5 p-4 text-slate-100">
+                            <dt class="text-xs uppercase tracking-[0.2em] text-emerald-200">Total Units Ready</dt>
+                            <dd class="mt-2 text-2xl font-semibold" id="metricUnits">0</dd>
+                        </div>
+                        <div class="rounded-2xl border border-white/5 bg-white/5 p-4 text-slate-100">
+                            <dt class="text-xs uppercase tracking-[0.2em] text-cyan-200">Average Offer (USD)</dt>
+                            <dd class="mt-2 text-2xl font-semibold" id="metricOffer">$0</dd>
+                        </div>
+                        <div class="rounded-2xl border border-white/5 bg-white/5 p-4 text-slate-100">
+                            <dt class="text-xs uppercase tracking-[0.2em] text-fuchsia-200">Pending Pallets</dt>
+                            <dd class="mt-2 text-2xl font-semibold" id="metricPallets">0</dd>
+                        </div>
+                        <div class="rounded-2xl border border-white/5 bg-white/5 p-4 text-slate-100">
+                            <dt class="text-xs uppercase tracking-[0.2em] text-amber-200">Grade A Coverage</dt>
+                            <dd class="mt-2 text-2xl font-semibold" id="metricGradeA">0%</dd>
+                        </div>
+                    </dl>
+                    <div class="rounded-2xl border border-white/5 bg-white/5 p-4 text-sm text-slate-100">
+                        <p class="font-semibold text-emerald-200">This week's focus</p>
+                        <ul class="mt-3 space-y-2 text-slate-200">
+                            <li class="flex items-center gap-3"><span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>Consolidate Dallas inventory for Friday air freight</li>
+                            <li class="flex items-center gap-3"><span class="h-2.5 w-2.5 rounded-full bg-cyan-400"></span>Finalize blended offer with Nova Wireless (3,500 units)</li>
+                            <li class="flex items-center gap-3"><span class="h-2.5 w-2.5 rounded-full bg-fuchsia-400"></span>Launch grade F liquidation lane with salvage buyer cohort</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="inventory" class="space-y-8">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-3xl font-semibold text-slate-50">Available Inventory</h2>
+                    <p class="mt-2 text-slate-300/80">Curated lots ready for immediate purchase. Filter by grade, brand, and location.</p>
+                </div>
+                <div class="flex flex-wrap gap-3 text-sm">
+                    <select id="filterBrand" class="rounded-full border border-white/10 bg-slate-950/80 px-4 py-2 focus:border-emerald-400 focus:outline-none">
+                        <option value="all">All brands</option>
+                    </select>
+                    <select id="filterGrade" class="rounded-full border border-white/10 bg-slate-950/80 px-4 py-2 focus:border-emerald-400 focus:outline-none">
+                        <option value="all">All grades</option>
+                        <option value="A">Grade A</option>
+                        <option value="B">Grade B</option>
+                        <option value="C">Grade C</option>
+                        <option value="F">Grade F</option>
+                    </select>
+                    <select id="filterLocation" class="rounded-full border border-white/10 bg-slate-950/80 px-4 py-2 focus:border-emerald-400 focus:outline-none">
+                        <option value="all">All locations</option>
+                    </select>
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input id="searchModel" type="text" placeholder="Search model" class="w-56 rounded-full border border-white/10 bg-slate-950/80 pl-10 pr-4 py-2 focus:border-emerald-400 focus:outline-none" />
+                    </div>
+                </div>
+            </div>
+            <div class="overflow-hidden rounded-3xl border border-white/5 bg-slate-900/60 shadow-2xl shadow-black/40">
+                <table class="min-w-full divide-y divide-white/5 text-left text-sm">
+                    <thead class="bg-white/5 text-xs uppercase tracking-[0.3em] text-slate-300">
+                        <tr>
+                            <th class="px-6 py-4">Device</th>
+                            <th class="px-6 py-4">Storage</th>
+                            <th class="px-6 py-4">Carrier</th>
+                            <th class="px-6 py-4">Grade</th>
+                            <th class="px-6 py-4">Qty Available</th>
+                            <th class="px-6 py-4">Reserved</th>
+                            <th class="px-6 py-4">Avg Price</th>
+                            <th class="px-6 py-4">Location</th>
+                            <th class="px-6 py-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTable" class="divide-y divide-white/5 text-slate-200"></tbody>
+                </table>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4" id="gradeBreakdown"></div>
+        </section>
+
+        <section id="offers" class="space-y-10">
+            <div class="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+                <div class="space-y-6 rounded-3xl border border-white/5 bg-slate-900/70 p-8 shadow-2xl shadow-black/40">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-3xl font-semibold text-slate-50">Initiate a Purchase Offer</h2>
+                        <span class="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-200" id="pendingOffers">0 pending</span>
+                    </div>
+                    <p class="text-slate-300/90">We orchestrate device allocation, palletization, QC, and shipping. Submit your ideal mix and we will respond with a blended counter-offer in under an hour.</p>
+                    <form id="offerForm" class="grid gap-4 md:grid-cols-2">
+                        <label class="text-sm font-medium text-slate-300">Partner company
+                            <select required name="partner" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none"></select>
+                        </label>
+                        <label class="text-sm font-medium text-slate-300">Device lot
+                            <select required name="device" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none"></select>
+                        </label>
+                        <label class="text-sm font-medium text-slate-300">Requested grade mix
+                            <div class="mt-1 flex gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-200">
+                                <label class="flex flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2">
+                                    <span>A</span>
+                                    <input type="number" min="0" max="100" value="60" name="gradeA" class="w-full rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-right focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                                <label class="flex flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2">
+                                    <span>B</span>
+                                    <input type="number" min="0" max="100" value="30" name="gradeB" class="w-full rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-right focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                                <label class="flex flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2">
+                                    <span>C</span>
+                                    <input type="number" min="0" max="100" value="10" name="gradeC" class="w-full rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-right focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                                <label class="flex flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-2">
+                                    <span>F</span>
+                                    <input type="number" min="0" max="100" value="0" name="gradeF" class="w-full rounded-lg border border-white/10 bg-slate-900 px-2 py-1 text-right focus:border-emerald-400 focus:outline-none" />
+                                </label>
+                            </div>
+                        </label>
+                        <label class="text-sm font-medium text-slate-300">Quantity
+                            <input required type="number" name="quantity" min="25" step="25" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="500" />
+                        </label>
+                        <label class="text-sm font-medium text-slate-300">Target blended price (USD)
+                            <input required type="number" name="price" step="10" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="235" />
+                        </label>
+                        <label class="text-sm font-medium text-slate-300">Preferred logistics
+                            <select required name="logistics" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none">
+                                <option value="Freight">Freight (LTL)</option>
+                                <option value="Air">Air (Next day)</option>
+                                <option value="Pickup">Partner-arranged pickup</option>
+                            </select>
+                        </label>
+                        <label class="text-sm font-medium text-slate-300">Close window
+                            <input required type="date" name="closeDate" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                        </label>
+                        <label class="md:col-span-2 text-sm font-medium text-slate-300">Special instructions
+                            <textarea name="notes" rows="3" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Need IMEI audit report and graded photos."></textarea>
+                        </label>
+                        <button type="submit" class="md:col-span-2 rounded-2xl bg-emerald-500 px-6 py-3 text-base font-semibold text-slate-900 transition hover:bg-emerald-400">
+                            Submit wholesale offer
+                        </button>
+                    </form>
+                </div>
+                <div class="space-y-6 rounded-3xl border border-white/5 bg-slate-900/70 p-8 shadow-2xl shadow-black/40">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-2xl font-semibold text-slate-50">Offer Decision Board</h3>
+                        <button id="downloadPipeline" class="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:bg-emerald-400/10">Export CSV</button>
+                    </div>
+                    <div id="offerTimeline" class="space-y-4 overflow-y-auto pr-2" style="max-height: 520px"></div>
+                </div>
+            </div>
+            <div class="grid gap-6 lg:grid-cols-3">
+                <div class="rounded-3xl border border-white/5 bg-slate-900/70 p-6 shadow-xl shadow-black/40">
+                    <h3 class="text-xl font-semibold text-slate-50">Certified inspection</h3>
+                    <p class="mt-3 text-sm text-slate-300/80">Every pallet ships with audit-grade inspection sheets, high-resolution photo proofs, and functional test logs backed by our in-house diagnostics lab.</p>
+                    <ul class="mt-4 space-y-2 text-sm text-emerald-200">
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>IMEI blacklist verification</li>
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>Battery cycle count tracking</li>
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>Accessories &amp; packaging QC</li>
+                    </ul>
+                </div>
+                <div class="rounded-3xl border border-white/5 bg-slate-900/70 p-6 shadow-xl shadow-black/40">
+                    <h3 class="text-xl font-semibold text-slate-50">Volume-based incentives</h3>
+                    <p class="mt-3 text-sm text-slate-300/80">Unlock rebates, extended payment terms, and dedicated logistics windows as you scale your monthly commitments.</p>
+                    <ul class="mt-4 space-y-2 text-sm text-emerald-200">
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>Net-15 or escrow release</li>
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>Dedicated account strategist</li>
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>Live pallet tracking portal</li>
+                    </ul>
+                </div>
+                <div class="rounded-3xl border border-white/5 bg-slate-900/70 p-6 shadow-xl shadow-black/40">
+                    <h3 class="text-xl font-semibold text-slate-50">Data-rich reporting</h3>
+                    <p class="mt-3 text-sm text-slate-300/80">Forecast availability, plan promotions, and reconcile payments with export-ready CSV and API feeds.</p>
+                    <ul class="mt-4 space-y-2 text-sm text-emerald-200">
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>SKU &amp; grade forecasting</li>
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>Margin scenario planning</li>
+                        <li class="flex items-center gap-2"><i class="fa-solid fa-circle-check"></i>Automated dispute resolution</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="partners" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-3xl font-semibold text-slate-50">Wholesale Partner Network</h2>
+                <button id="addPartnerBtn" class="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-emerald-400 hover:text-emerald-200">Invite partner</button>
+            </div>
+            <div class="overflow-hidden rounded-3xl border border-white/5 bg-slate-900/70 shadow-2xl shadow-black/40">
+                <table class="min-w-full divide-y divide-white/5 text-left text-sm">
+                    <thead class="bg-white/5 text-xs uppercase tracking-[0.3em] text-slate-300">
+                        <tr>
+                            <th class="px-6 py-4">Company</th>
+                            <th class="px-6 py-4">Primary contact</th>
+                            <th class="px-6 py-4">Region</th>
+                            <th class="px-6 py-4">Monthly commitment</th>
+                            <th class="px-6 py-4">Preferred grades</th>
+                            <th class="px-6 py-4">Engagement score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="partnerTable" class="divide-y divide-white/5 text-slate-200"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="quality" class="space-y-8">
+            <h2 class="text-3xl font-semibold text-slate-50">Grade Intelligence &amp; Pricing Guardrails</h2>
+            <div class="grid gap-6 lg:grid-cols-2">
+                <div class="rounded-3xl border border-white/5 bg-slate-900/70 p-8 shadow-2xl shadow-black/40">
+                    <h3 class="text-xl font-semibold text-slate-50">Quality breakdown</h3>
+                    <p class="mt-2 text-sm text-slate-300/80">Live visibility into unit distribution and suggested pricing adjustments by grade.</p>
+                    <div id="qualityBars" class="mt-6 space-y-4"></div>
+                </div>
+                <div class="rounded-3xl border border-white/5 bg-slate-900/70 p-8 shadow-2xl shadow-black/40">
+                    <h3 class="text-xl font-semibold text-slate-50">Readiness playbook</h3>
+                    <ul class="mt-4 space-y-4 text-sm text-slate-300/80">
+                        <li class="rounded-2xl border border-white/5 bg-white/5 p-4"><strong class="text-slate-100">Grade A</strong>: Retail-ready. Include OEM boxes when available, provide 10% photo sampling.</li>
+                        <li class="rounded-2xl border border-white/5 bg-white/5 p-4"><strong class="text-slate-100">Grade B</strong>: Minor wear, ensure minimum 85% battery health and accessories mix sheets.</li>
+                        <li class="rounded-2xl border border-white/5 bg-white/5 p-4"><strong class="text-slate-100">Grade C</strong>: Heavy wear, include refurbishment estimates and triage plan.</li>
+                        <li class="rounded-2xl border border-white/5 bg-white/5 p-4"><strong class="text-slate-100">Grade F</strong>: Salvage only. Bundle for parts-out partners and include diagnostic failure codes.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="partnerModal" class="fixed inset-0 z-30 hidden items-center justify-center bg-slate-900/80 px-6">
+        <div class="w-full max-w-2xl rounded-3xl border border-white/10 bg-slate-950 p-8 shadow-2xl">
+            <div class="flex items-center justify-between">
+                <h3 class="text-2xl font-semibold text-slate-50">Invite wholesale partner</h3>
+                <button id="closePartnerModal" class="text-slate-400 transition hover:text-emerald-300"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <p class="mt-2 text-sm text-slate-300/80">Capture partner preferences so the operations team can pre-stage matching inventory.</p>
+            <form id="partnerForm" class="mt-6 grid gap-4 md:grid-cols-2">
+                <label class="text-sm font-medium text-slate-300">Company name
+                    <input required name="company" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                </label>
+                <label class="text-sm font-medium text-slate-300">Primary contact
+                    <input required name="contact" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                </label>
+                <label class="text-sm font-medium text-slate-300">Email
+                    <input required type="email" name="email" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                </label>
+                <label class="text-sm font-medium text-slate-300">Region
+                    <input required name="region" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="North America" />
+                </label>
+                <label class="text-sm font-medium text-slate-300">Monthly commitment (units)
+                    <input required type="number" min="0" name="commitment" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" />
+                </label>
+                <label class="text-sm font-medium text-slate-300">Preferred grades
+                    <select name="grades" multiple class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none">
+                        <option value="A">Grade A</option>
+                        <option value="B">Grade B</option>
+                        <option value="C">Grade C</option>
+                        <option value="F">Grade F</option>
+                    </select>
+                </label>
+                <label class="md:col-span-2 text-sm font-medium text-slate-300">Notes
+                    <textarea name="notes" rows="3" class="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Looking for premium A/B mix for unlocked iPhones."></textarea>
+                </label>
+                <div class="md:col-span-2 flex justify-end gap-3">
+                    <button type="button" id="cancelPartnerModal" class="rounded-full border border-white/10 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">Cancel</button>
+                    <button class="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-emerald-400">Save partner</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer class="border-t border-slate-800/80 bg-slate-950/80 py-10">
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 text-sm text-slate-400">
+            <p>© <span id="year"></span> SecondHandCell Wholesale Division. All rights reserved.</p>
+            <div class="flex gap-4">
+                <a href="mailto:wholesale@secondhandcell.com" class="transition hover:text-emerald-300">wholesale@secondhandcell.com</a>
+                <a href="tel:+18885551234" class="transition hover:text-emerald-300">(888) 555-1234</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const STORAGE_KEY = 'shc-wholesale-state';
+
+        const defaultState = {
+            inventory: [
+                { id: 'INV-1001', brand: 'Apple', model: 'iPhone 14 Pro', storage: '256GB', carrier: 'Unlocked', grade: 'A', quantity: 480, reserved: 120, price: 865, location: 'Dallas, TX' },
+                { id: 'INV-1002', brand: 'Apple', model: 'iPhone 13', storage: '128GB', carrier: 'Verizon', grade: 'B', quantity: 620, reserved: 80, price: 540, location: 'Miami, FL' },
+                { id: 'INV-1003', brand: 'Samsung', model: 'Galaxy S23 Ultra', storage: '256GB', carrier: 'Unlocked', grade: 'A', quantity: 320, reserved: 140, price: 790, location: 'Dallas, TX' },
+                { id: 'INV-1004', brand: 'Samsung', model: 'Galaxy A54', storage: '128GB', carrier: 'T-Mobile', grade: 'C', quantity: 1100, reserved: 200, price: 230, location: 'Los Angeles, CA' },
+                { id: 'INV-1005', brand: 'Google', model: 'Pixel 8', storage: '128GB', carrier: 'Unlocked', grade: 'A', quantity: 240, reserved: 60, price: 510, location: 'Chicago, IL' },
+                { id: 'INV-1006', brand: 'Apple', model: 'iPhone 11', storage: '64GB', carrier: 'AT&T', grade: 'C', quantity: 860, reserved: 150, price: 190, location: 'Savannah, GA' },
+                { id: 'INV-1007', brand: 'Apple', model: 'iPhone SE (2022)', storage: '128GB', carrier: 'Unlocked', grade: 'B', quantity: 450, reserved: 90, price: 260, location: 'Dallas, TX' },
+                { id: 'INV-1008', brand: 'Samsung', model: 'Galaxy S21 FE', storage: '128GB', carrier: 'Unlocked', grade: 'B', quantity: 700, reserved: 140, price: 310, location: 'Phoenix, AZ' },
+                { id: 'INV-1009', brand: 'Motorola', model: 'Moto G Power', storage: '64GB', carrier: 'Unlocked', grade: 'C', quantity: 960, reserved: 180, price: 120, location: 'Memphis, TN' },
+                { id: 'INV-1010', brand: 'Apple', model: 'iPhone XR', storage: '64GB', carrier: 'Unlocked', grade: 'F', quantity: 520, reserved: 50, price: 95, location: 'Los Angeles, CA' }
+            ],
+            partners: [
+                { id: 'PRT-01', company: 'Nova Wireless', contact: 'Clara Mendes', email: 'clara@novawireless.com', region: 'North America', commitment: 3500, grades: ['A', 'B'], notes: 'Focus on retail-ready iPhones', engagement: 92 },
+                { id: 'PRT-02', company: 'BlueOrbit GSM', contact: 'Ravi Patel', email: 'ravi@blueorbitgsm.com', region: 'Europe', commitment: 1800, grades: ['B', 'C'], notes: 'Prefers Samsung mix', engagement: 86 },
+                { id: 'PRT-03', company: 'Atlas Refurb', contact: 'Daniela Ortiz', email: 'daniela@atlasrefurb.com', region: 'Latin America', commitment: 2200, grades: ['C', 'F'], notes: 'Strong salvage buyer', engagement: 74 },
+                { id: 'PRT-04', company: 'Helios Mobile', contact: 'Jordan Ng', email: 'jordan@heliosmobile.com', region: 'APAC', commitment: 900, grades: ['A'], notes: 'Needs IMEI reports', engagement: 81 }
+            ],
+            offers: [
+                { id: 'OFF-5001', partner: 'Nova Wireless', device: 'iPhone 14 Pro | Dallas', quantity: 240, price: 845, gradeMix: { A: 70, B: 20, C: 10, F: 0 }, status: 'Negotiation', logistics: 'Air', closeDate: '2025-02-02', notes: 'Requesting IMEI audit + drop test sample', createdAt: '2025-01-26T13:20:00Z' },
+                { id: 'OFF-5002', partner: 'BlueOrbit GSM', device: 'Galaxy S23 Ultra | Dallas', quantity: 300, price: 760, gradeMix: { A: 60, B: 30, C: 10, F: 0 }, status: 'Committed', logistics: 'Freight', closeDate: '2025-02-05', notes: 'Requires pallet photos before pickup', createdAt: '2025-01-25T15:45:00Z' },
+                { id: 'OFF-5003', partner: 'Atlas Refurb', device: 'iPhone XR | Los Angeles', quantity: 500, price: 115, gradeMix: { A: 0, B: 20, C: 50, F: 30 }, status: 'QC Hold', logistics: 'Freight', closeDate: '2025-01-31', notes: 'Hold pending additional salvage diagnostics', createdAt: '2025-01-24T19:10:00Z' }
+            ]
+        };
+
+        const clone = (object) => (typeof structuredClone === 'function' ? structuredClone(object) : JSON.parse(JSON.stringify(object)));
+
+        function loadState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultState));
+                    return clone(defaultState);
+                }
+                const parsed = JSON.parse(raw);
+                if (!parsed.inventory || !parsed.partners || !parsed.offers) {
+                    throw new Error('Incomplete state');
+                }
+                return parsed;
+            } catch (error) {
+                console.warn('Resetting wholesale state', error);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultState));
+                return clone(defaultState);
+            }
+        }
+
+        const state = loadState();
+
+        function saveState() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function formatNumber(value) {
+            return new Intl.NumberFormat('en-US').format(value);
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+        }
+
+        function renderInventory() {
+            const tbody = document.getElementById('inventoryTable');
+            const gradeFilter = document.getElementById('filterGrade').value;
+            const brandFilter = document.getElementById('filterBrand').value;
+            const locationFilter = document.getElementById('filterLocation').value;
+            const searchValue = document.getElementById('searchModel').value.toLowerCase();
+
+            tbody.innerHTML = '';
+
+            const filtered = state.inventory.filter((item) => {
+                const matchesGrade = gradeFilter === 'all' || item.grade === gradeFilter;
+                const matchesBrand = brandFilter === 'all' || item.brand === brandFilter;
+                const matchesLocation = locationFilter === 'all' || item.location === locationFilter;
+                const matchesSearch = !searchValue || `${item.brand} ${item.model}`.toLowerCase().includes(searchValue);
+                return matchesGrade && matchesBrand && matchesLocation && matchesSearch;
+            });
+
+            filtered.forEach((item) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="font-semibold text-slate-50">${item.brand} ${item.model}</div>
+                        <div class="text-xs uppercase tracking-[0.3em] text-slate-400">${item.id}</div>
+                    </td>
+                    <td class="px-6 py-4">${item.storage}</td>
+                    <td class="px-6 py-4">${item.carrier}</td>
+                    <td class="px-6 py-4">
+                        <span class="rounded-full px-3 py-1 text-xs font-semibold ${gradeBadgeClass(item.grade)}">${item.grade}</span>
+                    </td>
+                    <td class="px-6 py-4">${formatNumber(item.quantity)}</td>
+                    <td class="px-6 py-4 text-slate-300">${formatNumber(item.reserved)}</td>
+                    <td class="px-6 py-4">${formatCurrency(item.price)}</td>
+                    <td class="px-6 py-4 text-slate-300">${item.location}</td>
+                    <td class="px-6 py-4">
+                        <button class="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:bg-emerald-400/10" data-inventory="${item.id}">Request hold</button>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+
+            document.querySelectorAll('[data-inventory]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const item = state.inventory.find((inv) => inv.id === button.dataset.inventory);
+                    if (!item) return;
+                    alert(`Hold requested for ${item.brand} ${item.model}. Our logistics team will confirm staging within 15 minutes.`);
+                });
+            });
+
+            renderGradeBreakdown(filtered);
+        }
+
+        function gradeBadgeClass(grade) {
+            switch (grade) {
+                case 'A':
+                    return 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40';
+                case 'B':
+                    return 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/40';
+                case 'C':
+                    return 'bg-amber-500/20 text-amber-200 border border-amber-400/40';
+                case 'F':
+                    return 'bg-rose-500/20 text-rose-200 border border-rose-400/40';
+                default:
+                    return 'bg-slate-500/20 text-slate-200 border border-slate-400/40';
+            }
+        }
+
+        function renderGradeBreakdown(list = state.inventory) {
+            const container = document.getElementById('gradeBreakdown');
+            container.innerHTML = '';
+            const gradeTotals = list.reduce((acc, item) => {
+                acc[item.grade] = (acc[item.grade] || 0) + item.quantity;
+                return acc;
+            }, {});
+
+            ['A', 'B', 'C', 'F'].forEach((grade) => {
+                const quantity = gradeTotals[grade] || 0;
+                const element = document.createElement('div');
+                element.className = 'rounded-3xl border border-white/5 bg-slate-900/60 p-6 shadow-xl shadow-black/40';
+                element.innerHTML = `
+                    <div class="flex items-center justify-between text-sm text-slate-300">
+                        <span class="font-semibold text-slate-100">Grade ${grade}</span>
+                        <span>${formatNumber(quantity)} units</span>
+                    </div>
+                    <div class="mt-4 h-2 rounded-full bg-slate-800">
+                        <div class="h-full rounded-full ${gradeBarClass(grade)}" style="width: ${Math.min(100, quantity / 12)}%"></div>
+                    </div>
+                    <p class="mt-3 text-xs text-slate-400">${gradeDescription(grade)}</p>`;
+                container.appendChild(element);
+            });
+        }
+
+        function gradeBarClass(grade) {
+            switch (grade) {
+                case 'A':
+                    return 'bg-emerald-400';
+                case 'B':
+                    return 'bg-cyan-400';
+                case 'C':
+                    return 'bg-amber-400';
+                case 'F':
+                    return 'bg-rose-400';
+                default:
+                    return 'bg-slate-500';
+            }
+        }
+
+        function gradeDescription(grade) {
+            return {
+                A: 'Cosmetically flawless or like-new. Includes 90-day device assurance.',
+                B: 'Minor wear & tear. 80%+ battery health, includes mixed accessories.',
+                C: 'Heavy cosmetic wear. Functional devices ready for refurbishment.',
+                F: 'Parts-only or BER units. Optimized for salvage and parts harvesting.'
+            }[grade] || '';
+        }
+
+        function populateFilters() {
+            const brandSelect = document.getElementById('filterBrand');
+            const locationSelect = document.getElementById('filterLocation');
+            const deviceSelect = document.querySelector('#offerForm select[name="device"]');
+
+            const brands = Array.from(new Set(state.inventory.map((item) => item.brand))).sort();
+            const locations = Array.from(new Set(state.inventory.map((item) => item.location))).sort();
+
+            brands.forEach((brand) => {
+                const option = document.createElement('option');
+                option.value = brand;
+                option.textContent = brand;
+                brandSelect.appendChild(option);
+            });
+
+            locations.forEach((location) => {
+                const option = document.createElement('option');
+                option.value = location;
+                option.textContent = location;
+                locationSelect.appendChild(option);
+            });
+
+            deviceSelect.innerHTML = '';
+            state.inventory.forEach((item) => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = `${item.brand} ${item.model} · ${item.grade} · ${item.location}`;
+                deviceSelect.appendChild(option);
+            });
+        }
+
+        function renderPartners() {
+            const partnerTable = document.getElementById('partnerTable');
+            partnerTable.innerHTML = '';
+            const partnerSelect = document.querySelector('#offerForm select[name="partner"]');
+            partnerSelect.innerHTML = '';
+
+            state.partners.forEach((partner) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="font-semibold text-slate-50">${partner.company}</div>
+                        <div class="text-xs text-slate-400">${partner.email}</div>
+                    </td>
+                    <td class="px-6 py-4 text-slate-300">${partner.contact}</td>
+                    <td class="px-6 py-4 text-slate-300">${partner.region}</td>
+                    <td class="px-6 py-4">${formatNumber(partner.commitment)} units</td>
+                    <td class="px-6 py-4 text-slate-300">${partner.grades.join(', ')}</td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-2">
+                            <div class="h-2 w-24 rounded-full bg-slate-800">
+                                <div class="h-full rounded-full bg-emerald-400" style="width: ${partner.engagement}%"></div>
+                            </div>
+                            <span class="text-xs font-semibold text-emerald-200">${partner.engagement}%</span>
+                        </div>
+                    </td>`;
+                partnerTable.appendChild(tr);
+
+                const option = document.createElement('option');
+                option.value = partner.company;
+                option.textContent = partner.company;
+                partnerSelect.appendChild(option);
+            });
+        }
+
+        function renderOffers() {
+            const timeline = document.getElementById('offerTimeline');
+            const pendingBadge = document.getElementById('pendingOffers');
+            timeline.innerHTML = '';
+
+            const sortedOffers = [...state.offers].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            const pendingCount = sortedOffers.filter((offer) => offer.status !== 'Closed').length;
+            pendingBadge.textContent = `${pendingCount} active`;
+
+            sortedOffers.forEach((offer) => {
+                const card = document.createElement('article');
+                card.className = 'rounded-2xl border border-white/5 bg-white/5 p-4 text-sm text-slate-200';
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-lg font-semibold text-slate-50">${offer.partner}</h4>
+                            <p class="text-xs uppercase tracking-[0.3em] text-slate-400">${offer.id}</p>
+                        </div>
+                        <span class="rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(offer.status)}">${offer.status}</span>
+                    </div>
+                    <dl class="mt-4 grid gap-3 text-xs text-slate-300 sm:grid-cols-2">
+                        <div><dt class="font-semibold text-slate-200">Lot</dt><dd>${offer.device}</dd></div>
+                        <div><dt class="font-semibold text-slate-200">Quantity</dt><dd>${formatNumber(offer.quantity)} units</dd></div>
+                        <div><dt class="font-semibold text-slate-200">Target price</dt><dd>${formatCurrency(offer.price)}</dd></div>
+                        <div><dt class="font-semibold text-slate-200">Logistics</dt><dd>${offer.logistics}</dd></div>
+                        <div class="sm:col-span-2"><dt class="font-semibold text-slate-200">Grade mix</dt><dd>A ${offer.gradeMix.A}% · B ${offer.gradeMix.B}% · C ${offer.gradeMix.C}% · F ${offer.gradeMix.F}%</dd></div>
+                        <div><dt class="font-semibold text-slate-200">Close target</dt><dd>${new Date(offer.closeDate).toLocaleDateString()}</dd></div>
+                        <div><dt class="font-semibold text-slate-200">Updated</dt><dd>${new Date(offer.createdAt).toLocaleString()}</dd></div>
+                    </dl>
+                    ${offer.notes ? `<p class="mt-3 text-xs text-slate-300/80">${offer.notes}</p>` : ''}
+                `;
+                timeline.appendChild(card);
+            });
+        }
+
+        function statusBadgeClass(status) {
+            switch (status) {
+                case 'Committed':
+                    return 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40';
+                case 'Negotiation':
+                    return 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/40';
+                case 'QC Hold':
+                    return 'bg-amber-500/20 text-amber-200 border border-amber-400/40';
+                case 'Closed':
+                    return 'bg-slate-500/20 text-slate-200 border border-slate-400/40';
+                default:
+                    return 'bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-400/40';
+            }
+        }
+
+        function renderMetrics() {
+            const totalUnits = state.inventory.reduce((sum, item) => sum + item.quantity, 0);
+            const avgOffer = state.offers.length ? state.offers.reduce((sum, offer) => sum + offer.price, 0) / state.offers.length : 0;
+            const pallets = Math.ceil(totalUnits / 60);
+            const gradeAShare = state.inventory.reduce((sum, item) => sum + (item.grade === 'A' ? item.quantity : 0), 0) / totalUnits || 0;
+
+            document.getElementById('metricUnits').textContent = formatNumber(totalUnits);
+            document.getElementById('metricOffer').textContent = formatCurrency(avgOffer);
+            document.getElementById('metricPallets').textContent = formatNumber(pallets);
+            document.getElementById('metricGradeA').textContent = `${Math.round(gradeAShare * 100)}%`;
+            document.getElementById('snapshotTimestamp').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+        }
+
+        function renderQualityBars() {
+            const container = document.getElementById('qualityBars');
+            container.innerHTML = '';
+            const totals = state.inventory.reduce((acc, item) => {
+                acc[item.grade] = (acc[item.grade] || 0) + item.quantity;
+                return acc;
+            }, {});
+            const totalUnits = Object.values(totals).reduce((sum, value) => sum + value, 0) || 1;
+
+            ['A', 'B', 'C', 'F'].forEach((grade) => {
+                const units = totals[grade] || 0;
+                const percent = Math.round((units / totalUnits) * 100);
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = `
+                    <div class="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-slate-400">
+                        <span>Grade ${grade}</span>
+                        <span>${percent}% (${formatNumber(units)} units)</span>
+                    </div>
+                    <div class="mt-2 h-2 rounded-full bg-slate-800">
+                        <div class="h-full rounded-full ${gradeBarClass(grade)}" style="width: ${percent}%"></div>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-400">${gradeDescription(grade)}</p>`;
+                container.appendChild(wrapper);
+            });
+        }
+
+        function populateOfferFormDefaults() {
+            const dateInput = document.querySelector('#offerForm input[name="closeDate"]');
+            const today = new Date();
+            const nextWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
+            dateInput.value = nextWeek.toISOString().split('T')[0];
+        }
+
+        document.getElementById('offerForm').addEventListener('submit', (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const deviceId = formData.get('device');
+            const device = state.inventory.find((item) => item.id === deviceId);
+            const quantity = Number(formData.get('quantity'));
+
+            if (!device) {
+                alert('Selected device lot no longer available.');
+                return;
+            }
+
+            const gradeMix = {
+                A: Number(formData.get('gradeA')),
+                B: Number(formData.get('gradeB')),
+                C: Number(formData.get('gradeC')),
+                F: Number(formData.get('gradeF'))
+            };
+            const mixTotal = gradeMix.A + gradeMix.B + gradeMix.C + gradeMix.F;
+            if (mixTotal !== 100) {
+                alert('Grade mix must total 100%.');
+                return;
+            }
+
+            const newOffer = {
+                id: `OFF-${Math.floor(Math.random() * 9000 + 1000)}`,
+                partner: formData.get('partner'),
+                device: `${device.brand} ${device.model} | ${device.location}`,
+                quantity,
+                price: Number(formData.get('price')),
+                gradeMix,
+                status: 'Negotiation',
+                logistics: formData.get('logistics'),
+                closeDate: formData.get('closeDate'),
+                notes: formData.get('notes'),
+                createdAt: new Date().toISOString()
+            };
+
+            state.offers.push(newOffer);
+            saveState();
+            renderOffers();
+            renderMetrics();
+            event.target.reset();
+            populateOfferFormDefaults();
+            alert('Offer submitted! Your account strategist will confirm within the hour.');
+        });
+
+        document.getElementById('downloadPipeline').addEventListener('click', () => {
+            const header = ['Offer ID', 'Partner', 'Device', 'Quantity', 'Price', 'Grade A', 'Grade B', 'Grade C', 'Grade F', 'Status', 'Logistics', 'Close Date'];
+            const rows = state.offers.map((offer) => [
+                offer.id,
+                offer.partner,
+                offer.device,
+                offer.quantity,
+                offer.price,
+                offer.gradeMix.A,
+                offer.gradeMix.B,
+                offer.gradeMix.C,
+                offer.gradeMix.F,
+                offer.status,
+                offer.logistics,
+                offer.closeDate
+            ]);
+
+            const csv = [header, ...rows].map((row) => row.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `wholesale-pipeline-${Date.now()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        ['filterBrand', 'filterGrade', 'filterLocation'].forEach((id) => {
+            document.getElementById(id).addEventListener('change', renderInventory);
+        });
+        document.getElementById('searchModel').addEventListener('input', renderInventory);
+
+        document.getElementById('addPartnerBtn').addEventListener('click', () => togglePartnerModal(true));
+        document.getElementById('closePartnerModal').addEventListener('click', () => togglePartnerModal(false));
+        document.getElementById('cancelPartnerModal').addEventListener('click', () => togglePartnerModal(false));
+
+        function togglePartnerModal(show) {
+            const modal = document.getElementById('partnerModal');
+            modal.classList.toggle('hidden', !show);
+            if (show) {
+                modal.classList.add('flex');
+            } else {
+                modal.classList.remove('flex');
+            }
+        }
+
+        document.getElementById('partnerForm').addEventListener('submit', (event) => {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const grades = Array.from(formData.getAll('grades'));
+            const newPartner = {
+                id: `PRT-${Math.floor(Math.random() * 90 + 10)}`,
+                company: formData.get('company'),
+                contact: formData.get('contact'),
+                email: formData.get('email'),
+                region: formData.get('region'),
+                commitment: Number(formData.get('commitment')),
+                grades: grades.length ? grades : ['A', 'B'],
+                notes: formData.get('notes'),
+                engagement: 70
+            };
+            state.partners.push(newPartner);
+            saveState();
+            renderPartners();
+            togglePartnerModal(false);
+            event.target.reset();
+        });
+
+        function init() {
+            document.getElementById('year').textContent = new Date().getFullYear();
+            populateFilters();
+            renderInventory();
+            renderPartners();
+            renderOffers();
+            renderMetrics();
+            renderQualityBars();
+            populateOfferFormDefaults();
+        }
+
+        init();
+    </script>
+</body>
+</html>
