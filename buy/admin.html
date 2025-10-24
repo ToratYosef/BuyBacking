@@ -14,59 +14,88 @@
     />
     <style>
         body {
-            background: linear-gradient(160deg, rgba(2, 6, 23, 0.96), rgba(15, 23, 42, 0.98));
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f1f5f9;
+            color: #0f172a;
         }
     </style>
 </head>
-<body class="min-h-screen text-slate-100">
+<body class="min-h-screen">
     <div id="notificationBar" class="fixed inset-x-0 top-0 z-40 hidden px-4 py-3 text-sm">
-        <div class="mx-auto flex max-w-4xl items-center justify-between rounded-2xl px-4 py-3">
-            <span id="notificationMessage" class="font-medium"></span>
+        <div class="mx-auto flex max-w-4xl items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-lg">
+            <span id="notificationMessage" class="font-medium text-slate-700"></span>
             <button
                 type="button"
                 id="dismissNotification"
-                class="rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-white/90 transition hover:bg-white/20"
+                class="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 transition hover:border-emerald-300 hover:text-emerald-600"
             >
                 Close
             </button>
         </div>
     </div>
 
-    <header class="border-b border-white/10 bg-slate-950/80 backdrop-blur">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+    <header class="border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-6">
             <div>
-                <p class="text-xs uppercase tracking-[0.4em] text-emerald-200/80">SecondHandCell · Admin</p>
-                <h1 class="text-2xl font-semibold text-slate-50">Wholesale inventory control</h1>
+                <p class="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-600">SecondHandCell · Admin</p>
+                <h1 class="text-2xl font-semibold text-slate-900">Wholesale inventory control</h1>
             </div>
             <div class="flex flex-wrap items-center gap-3 text-sm">
-                <a href="/buy/" class="rounded-full border border-white/10 px-4 py-2 font-medium text-slate-200 transition hover:border-emerald-400 hover:text-emerald-200">
+                <a href="/buy/" class="rounded-full border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:border-emerald-300 hover:text-emerald-600">
                     <i class="fa-solid fa-arrow-left mr-2"></i>Back to buyer view
                 </a>
-                <button id="resetInventory" class="rounded-full border border-rose-400/60 px-4 py-2 font-semibold text-rose-200 transition hover:bg-rose-500/10">
+                <button id="resetInventory" class="rounded-full border border-rose-300 px-4 py-2 font-semibold text-rose-500 transition hover:bg-rose-50">
                     Reset to defaults
                 </button>
             </div>
         </div>
     </header>
 
-    <main class="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12">
+    <main class="mx-auto flex max-w-7xl flex-col gap-12 px-6 py-12">
         <section>
-            <h2 class="text-xl font-semibold text-slate-50">At a glance</h2>
-            <div class="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4" id="metricCards"></div>
+            <h2 class="text-xl font-semibold text-slate-900">At a glance</h2>
+            <div class="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-4" id="metricCards"></div>
+        </section>
+
+        <section class="space-y-6" id="offerSection">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-900">Recent offers &amp; orders</h2>
+                    <p class="text-sm text-slate-600">Track wholesale submissions from the buy experience and mark their status as you work them.</p>
+                </div>
+                <div class="flex items-center gap-2 text-sm">
+                    <button data-offer-filter="all" class="offer-filter rounded-full border border-slate-300 px-3 py-1 font-medium text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">
+                        All
+                    </button>
+                    <button data-offer-filter="new" class="offer-filter rounded-full border border-slate-300 px-3 py-1 font-medium text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">
+                        New
+                    </button>
+                    <button data-offer-filter="in-review" class="offer-filter rounded-full border border-slate-300 px-3 py-1 font-medium text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">
+                        In Review
+                    </button>
+                    <button data-offer-filter="completed" class="offer-filter rounded-full border border-slate-300 px-3 py-1 font-medium text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">
+                        Completed
+                    </button>
+                </div>
+            </div>
+            <div id="offerList" class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3"></div>
+            <p id="emptyOffers" class="hidden rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">No offers yet. Submissions from the buy experience will appear here.</p>
         </section>
 
         <section class="space-y-6">
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <h2 class="text-xl font-semibold text-slate-50">Device &amp; grade matrix</h2>
-                    <p class="text-sm text-slate-300/80">Update stock levels, rename grade labels, or adjust asking prices for each SKU you own.</p>
+                    <h2 class="text-xl font-semibold text-slate-900">Device &amp; grade matrix</h2>
+                    <p class="text-sm text-slate-600">Update stock levels, rename grade labels, or adjust asking prices for each SKU you own.</p>
                 </div>
-                <p class="text-xs text-slate-500">Changes are saved to your browser and power the /buy page instantly.</p>
+                <p class="text-xs text-slate-500">Changes persist to your browser and power the buy pages instantly.</p>
             </div>
-            <div class="overflow-hidden rounded-3xl border border-white/10 bg-slate-900/70">
+            <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-white/10 text-left text-sm">
-                        <thead class="bg-white/5 text-xs uppercase tracking-[0.3em] text-slate-300">
+                    <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
                             <tr>
                                 <th class="px-5 py-4">Device</th>
                                 <th class="px-5 py-4">Grade label</th>
@@ -75,68 +104,68 @@
                                 <th class="px-5 py-4">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="inventoryTableBody" class="divide-y divide-white/5 text-slate-200"></tbody>
+                        <tbody id="inventoryTableBody" class="divide-y divide-slate-100 bg-white"></tbody>
                     </table>
                 </div>
             </div>
         </section>
 
-        <section class="rounded-3xl border border-white/10 bg-slate-900/60 p-8">
+        <section class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                    <h2 class="text-xl font-semibold text-slate-50">Add a new device</h2>
-                    <p class="text-sm text-slate-300/80">Define the SKU once and keep grades updated as stock moves through your warehouse.</p>
+                    <h2 class="text-xl font-semibold text-slate-900">Add a new device</h2>
+                    <p class="text-sm text-slate-600">Define the SKU once and keep grades updated as stock moves through your warehouse.</p>
                 </div>
-                <button id="addGradeRow" class="rounded-full border border-emerald-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 transition hover:bg-emerald-400/10">
+                <button id="addGradeRow" class="rounded-full border border-emerald-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 transition hover:bg-emerald-50">
                     <i class="fa-solid fa-plus mr-2"></i>Add grade row
                 </button>
             </div>
             <form id="addDeviceForm" class="mt-6 space-y-6 text-sm">
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <label class="font-medium text-slate-300">Brand
-                        <input required name="brand" class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Apple" />
+                    <label class="font-medium text-slate-700">Brand
+                        <input required name="brand" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Apple" />
                     </label>
-                    <label class="font-medium text-slate-300">Model
-                        <input required name="model" class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="iPhone 14" />
+                    <label class="font-medium text-slate-700">Model
+                        <input required name="model" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="iPhone 14" />
                     </label>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
-                    <label class="font-medium text-slate-300">Storage &amp; variant
-                        <input required name="storage" class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="128GB · Midnight" />
+                    <label class="font-medium text-slate-700">Storage &amp; variant
+                        <input required name="storage" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="128GB · Midnight" />
                     </label>
-                    <label class="font-medium text-slate-300">Tagline (optional)
-                        <input name="tagline" class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Unlocked GSM/CDMA" />
+                    <label class="font-medium text-slate-700">Tagline (optional)
+                        <input name="tagline" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Unlocked GSM/CDMA" />
                     </label>
                 </div>
-                <label class="block font-medium text-slate-300">Image URL (optional)
-                    <input name="image" class="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="https://..." />
+                <label class="block font-medium text-slate-700">Image URL (optional)
+                    <input name="image" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="https://..." />
+                </label>
+                <label class="block font-medium text-slate-700">Highlights (comma separated, optional)
+                    <input name="highlights" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Battery 90%+,Unlocked,45-point tested" />
                 </label>
                 <div>
-                    <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Grades</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Grades</p>
                     <div id="gradeEntryList" class="mt-4 space-y-4"></div>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
-                    <button type="submit" class="rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
-                        Save device
-                    </button>
-                    <button type="reset" class="rounded-full border border-white/10 px-4 py-3 text-sm font-medium text-slate-300 transition hover:border-emerald-400 hover:text-emerald-200">
-                        Clear form
-                    </button>
+                    <button type="submit" class="rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-400">Save device</button>
+                    <button type="reset" class="rounded-full border border-slate-300 px-4 py-3 text-sm font-medium text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">Clear form</button>
                 </div>
             </form>
         </section>
     </main>
 
-    <footer class="border-t border-white/10 bg-slate-950/70">
-        <div class="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-6 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+    <footer class="border-t border-slate-200 bg-white/90">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
             <p>Inventory data is stored locally in your browser under <code>wholesaleInventoryV1</code>.</p>
-            <p class="text-slate-500">Questions? <a href="mailto:wholesale@secondhandcell.com" class="text-emerald-300 underline">Email the wholesale desk</a>.</p>
+            <p class="text-slate-500">Questions? <a href="mailto:wholesale@secondhandcell.com" class="text-emerald-600 underline">Email the wholesale desk</a>.</p>
         </div>
     </footer>
 
     <script>
         (function () {
             const storageKey = "wholesaleInventoryV1";
+            const offerStorageKey = "wholesaleOffersV1";
             const defaultInventory = [
                 {
                     id: "iphone-14-128",
@@ -145,6 +174,7 @@
                     storage: "128GB · Midnight",
                     tagline: "Unlocked GSM/CDMA — 12-month warranty",
                     image: "https://images.unsplash.com/photo-1661961110671-80d19bca82d5?auto=format&fit=crop&w=600&q=80",
+                    highlights: ["Battery 88%+", "Unlocked", "Next-day ship"],
                     grades: {
                         A: { label: "Like New", stock: 42, price: 525 },
                         B: { label: "Light Wear", stock: 63, price: 495 },
@@ -158,37 +188,73 @@
                     model: "iPhone 13 Pro",
                     storage: "256GB · Graphite",
                     tagline: "Includes MagSafe + OEM accessories on request",
-                    image: "https://images.unsplash.com/photo-1611472173362-3f53db8bbcbb?auto=format&fit=crop&w=600&q=80",
+                    image: "https://images.unsplash.com/photo-1512499776141-4a2465434fe2?auto=format&fit=crop&w=600&q=80",
+                    highlights: ["MagSafe ready", "Unlocked", "OEM accessories"],
                     grades: {
-                        A: { label: "Retail Ready", stock: 28, price: 610 },
-                        B: { label: "Refurbished", stock: 51, price: 565 },
-                        C: { label: "Value", stock: 14, price: 475 }
+                        A: { label: "Pristine", stock: 28, price: 515 },
+                        B: { label: "Retail Return", stock: 46, price: 485 },
+                        C: { label: "Budget Grade", stock: 37, price: 430 },
+                        F: { label: "Certified Parts", stock: 14, price: 190 }
                     }
                 },
                 {
-                    id: "s23-128",
-                    brand: "Samsung",
-                    model: "Galaxy S23",
-                    storage: "128GB · Phantom Black",
-                    tagline: "North American variant with 12-month warranty",
-                    image: "https://images.unsplash.com/photo-1674710645957-9fef8a329565?auto=format&fit=crop&w=600&q=80",
-                    grades: {
-                        A: { label: "Pristine", stock: 36, price: 490 },
-                        B: { label: "Gently Used", stock: 44, price: 455 },
-                        C: { label: "Operational", stock: 22, price: 390 }
-                    }
-                },
-                {
-                    id: "ipad-air-5",
+                    id: "iphone-12-64",
                     brand: "Apple",
-                    model: "iPad Air 5",
-                    storage: "256GB · Wi-Fi",
-                    tagline: "Includes OEM USB-C cable and charger",
-                    image: "https://images.unsplash.com/photo-1610792516305-cb4c9c736d72?auto=format&fit=crop&w=600&q=80",
+                    model: "iPhone 12",
+                    storage: "64GB · Blue",
+                    tagline: "Unlocked + face ID verified",
+                    image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80",
+                    highlights: ["Face ID", "Unlocked", "45-point tested"],
                     grades: {
-                        A: { label: "Like New", stock: 24, price: 540 },
-                        B: { label: "Retail Return", stock: 33, price: 505 },
-                        F: { label: "Housing/Battery", stock: 11, price: 180 }
+                        A: { label: "Premium", stock: 35, price: 345 },
+                        B: { label: "Excellent", stock: 52, price: 325 },
+                        C: { label: "Value", stock: 40, price: 285 },
+                        F: { label: "Parts", stock: 22, price: 120 }
+                    }
+                },
+                {
+                    id: "galaxy-s22-128",
+                    brand: "Samsung",
+                    model: "Galaxy S22",
+                    storage: "128GB · Phantom Black",
+                    tagline: "Unlocked + OEM charger options",
+                    image: "https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=600&q=80",
+                    highlights: ["Unlocked", "Battery 85%+", "Knox verified"],
+                    grades: {
+                        A: { label: "Like New", stock: 31, price: 425 },
+                        B: { label: "Light Wear", stock: 55, price: 395 },
+                        C: { label: "Wholesale", stock: 48, price: 345 },
+                        F: { label: "Salvage", stock: 17, price: 150 }
+                    }
+                },
+                {
+                    id: "ipad-pro-11",
+                    brand: "Apple",
+                    model: "iPad Pro 11\"",
+                    storage: "128GB · Wi-Fi",
+                    tagline: "Silver &amp; Space Gray mix",
+                    image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80",
+                    highlights: ["iPadOS 17", "Battery 90%+", "Accessories optional"],
+                    grades: {
+                        A: { label: "Like New", stock: 18, price: 625 },
+                        B: { label: "Excellent", stock: 27, price: 585 },
+                        C: { label: "Retail Return", stock: 24, price: 545 },
+                        F: { label: "For Parts", stock: 8, price: 310 }
+                    }
+                },
+                {
+                    id: "pixel-8-128",
+                    brand: "Google",
+                    model: "Pixel 8",
+                    storage: "128GB · Obsidian",
+                    tagline: "Unlocked + OEM charger options",
+                    image: "https://images.unsplash.com/photo-1602837385561-37cae6c07b2b?auto=format&fit=crop&w=600&q=80",
+                    highlights: ["Unlocked", "Battery 90%+", "OEM charger"],
+                    grades: {
+                        A: { label: "Like New", stock: 25, price: 475 },
+                        B: { label: "Great", stock: 40, price: 445 },
+                        C: { label: "Fair", stock: 34, price: 395 },
+                        F: { label: "Repair", stock: 12, price: 210 }
                     }
                 }
             ];
@@ -202,55 +268,83 @@
             const addGradeRowButton = document.getElementById("addGradeRow");
             const gradeEntryList = document.getElementById("gradeEntryList");
             const addDeviceForm = document.getElementById("addDeviceForm");
-            const gradeLetters = ["A", "B", "C", "F"];
+            const offerList = document.getElementById("offerList");
+            const emptyOffers = document.getElementById("emptyOffers");
+            const offerFilterButtons = document.querySelectorAll(".offer-filter");
 
-            const storedInventory = (() => {
+            const gradeLetters = ["A", "B", "C", "F"];
+            const notificationStyles = {
+                info: "border border-slate-200 bg-white text-slate-700",
+                success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+                warning: "border border-amber-200 bg-amber-50 text-amber-700",
+                error: "border border-rose-200 bg-rose-50 text-rose-700"
+            };
+
+            let inventory = loadInventory();
+            let offers = loadOffers();
+            let activeOfferFilter = "all";
+
+            function loadInventory() {
                 try {
                     const value = localStorage.getItem(storageKey);
-                    const parsed = value ? JSON.parse(value) : null;
-                    return Array.isArray(parsed) && parsed.length ? parsed : null;
+                    if (!value) {
+                        localStorage.setItem(storageKey, JSON.stringify(defaultInventory));
+                        return JSON.parse(JSON.stringify(defaultInventory));
+                    }
+                    const parsed = JSON.parse(value);
+                    if (!Array.isArray(parsed) || !parsed.length) {
+                        localStorage.setItem(storageKey, JSON.stringify(defaultInventory));
+                        return JSON.parse(JSON.stringify(defaultInventory));
+                    }
+                    return parsed;
                 } catch (error) {
-                    console.warn("Unable to read inventory", error);
-                    return null;
+                    console.warn("Unable to read inventory from localStorage", error);
+                    return JSON.parse(JSON.stringify(defaultInventory));
                 }
-            })();
+            }
 
             function persistInventory() {
                 try {
                     localStorage.setItem(storageKey, JSON.stringify(inventory));
                 } catch (error) {
-                    console.warn("Unable to save inventory", error);
+                    console.warn("Unable to store inventory", error);
                 }
             }
 
-            let inventory = storedInventory || JSON.parse(JSON.stringify(defaultInventory));
-            if (!storedInventory) {
-                persistInventory();
+            function loadOffers() {
+                try {
+                    const value = localStorage.getItem(offerStorageKey);
+                    if (!value) return [];
+                    const parsed = JSON.parse(value);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (error) {
+                    console.warn("Unable to load offers", error);
+                    return [];
+                }
+            }
+
+            function persistOffers() {
+                try {
+                    localStorage.setItem(offerStorageKey, JSON.stringify(offers));
+                } catch (error) {
+                    console.warn("Unable to persist offers", error);
+                }
             }
 
             function showNotification(message, tone = "info") {
-                const toneConfig = {
-                    info: "bg-slate-800/95 border border-white/10",
-                    success: "bg-emerald-600/10 border border-emerald-400/40 text-emerald-100",
-                    warning: "bg-amber-600/20 border border-amber-400/40 text-amber-100",
-                    error: "bg-rose-600/20 border border-rose-400/40 text-rose-100"
-                };
                 notificationMessage.textContent = message;
-                notificationBar.className = `fixed inset-x-0 top-0 z-40 px-4 py-3 text-sm ${toneConfig[tone] || toneConfig.info}`;
+                const toneClass = notificationStyles[tone] || notificationStyles.info;
+                notificationBar.className = `fixed inset-x-0 top-0 z-40 px-4 py-3 text-sm ${toneClass}`;
                 notificationBar.classList.remove("hidden");
             }
 
-            function hideNotification() {
-                notificationBar.classList.add("hidden");
-            }
-
-            dismissNotification.addEventListener("click", hideNotification);
+            dismissNotification.addEventListener("click", () => notificationBar.classList.add("hidden"));
 
             function formatCurrency(value) {
                 return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
             }
 
-            function calculateTotals() {
+            function calculateInventoryTotals() {
                 const totals = {
                     sku: inventory.length,
                     units: 0,
@@ -260,44 +354,142 @@
 
                 inventory.forEach((device) => {
                     Object.entries(device.grades || {}).forEach(([gradeKey, grade]) => {
-                        totals.units += grade.stock;
-                        totals.askingValue += grade.stock * grade.price;
+                        totals.units += grade.stock || 0;
+                        totals.askingValue += (grade.stock || 0) * (grade.price || 0);
                         if (totals.gradeMix[gradeKey] !== undefined) {
-                            totals.gradeMix[gradeKey] += grade.stock;
+                            totals.gradeMix[gradeKey] += grade.stock || 0;
                         }
                     });
                 });
+
+                return totals;
+            }
+
+            function calculateOfferTotals() {
+                const totals = {
+                    newCount: 0,
+                    totalCount: offers.length,
+                    unitsRequested: 0,
+                    offerValue: 0
+                };
+
+                offers.forEach((offer) => {
+                    if ((offer.status || "new") === "new") {
+                        totals.newCount += 1;
+                    }
+                    const units = offer.totals?.units || 0;
+                    const offerAmount = offer.totals?.offer || 0;
+                    totals.unitsRequested += units;
+                    totals.offerValue += offerAmount;
+                });
+
                 return totals;
             }
 
             function renderMetrics() {
-                const totals = calculateTotals();
-                const gradeEntries = Object.entries(totals.gradeMix)
+                const inventoryTotals = calculateInventoryTotals();
+                const offerTotals = calculateOfferTotals();
+                const gradeEntries = Object.entries(inventoryTotals.gradeMix)
                     .filter(([, qty]) => qty > 0)
-                    .map(([grade, qty]) => `<span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs">${grade}: ${qty}</span>`)
+                    .map(([grade, qty]) => `<span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">${grade}: ${qty}</span>`)
                     .join(" ");
 
                 metricCards.innerHTML = `
-                    <div class="rounded-3xl border border-white/10 bg-slate-900/70 p-6">
-                        <p class="text-xs uppercase tracking-[0.3em] text-emerald-200">SKUs</p>
-                        <p class="mt-3 text-3xl font-semibold text-slate-50">${totals.sku}</p>
-                        <p class="mt-2 text-xs text-slate-400">Unique devices currently active</p>
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">SKUs</p>
+                        <p class="mt-3 text-3xl font-semibold text-slate-900">${inventoryTotals.sku}</p>
+                        <p class="mt-2 text-xs text-slate-500">Unique devices currently active</p>
                     </div>
-                    <div class="rounded-3xl border border-white/10 bg-slate-900/70 p-6">
-                        <p class="text-xs uppercase tracking-[0.3em] text-emerald-200">Total units</p>
-                        <p class="mt-3 text-3xl font-semibold text-slate-50">${totals.units}</p>
-                        <p class="mt-2 text-xs text-slate-400">Across all grades</p>
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Total units</p>
+                        <p class="mt-3 text-3xl font-semibold text-slate-900">${inventoryTotals.units}</p>
+                        <p class="mt-2 text-xs text-slate-500">Across all grades</p>
                     </div>
-                    <div class="rounded-3xl border border-white/10 bg-slate-900/70 p-6">
-                        <p class="text-xs uppercase tracking-[0.3em] text-emerald-200">Asking value</p>
-                        <p class="mt-3 text-3xl font-semibold text-slate-50">${formatCurrency(totals.askingValue)}</p>
-                        <p class="mt-2 text-xs text-slate-400">Value if sold at current pricing</p>
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Asking value</p>
+                        <p class="mt-3 text-3xl font-semibold text-slate-900">${formatCurrency(inventoryTotals.askingValue)}</p>
+                        <p class="mt-2 text-xs text-slate-500">Value if sold at current pricing</p>
                     </div>
-                    <div class="rounded-3xl border border-white/10 bg-slate-900/70 p-6">
-                        <p class="text-xs uppercase tracking-[0.3em] text-emerald-200">Grade mix</p>
-                        <p class="mt-3 flex flex-wrap gap-2">${gradeEntries || "<span class=\"text-xs text-slate-500\">No grades defined</span>"}</p>
+                    <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Offers queue</p>
+                        <div class="mt-3 space-y-2 text-sm text-slate-600">
+                            <p><span class="font-semibold text-slate-900">${offerTotals.newCount}</span> new / <span class="font-semibold text-slate-900">${offerTotals.totalCount}</span> total</p>
+                            <p><span class="font-semibold text-slate-900">${offerTotals.unitsRequested}</span> units requested</p>
+                            <p>Offer value ${formatCurrency(offerTotals.offerValue)}</p>
+                        </div>
                     </div>
                 `;
+            }
+
+            function renderOffers() {
+                const filtered = offers.filter((offer) => {
+                    if (activeOfferFilter === "all") return true;
+                    return (offer.status || "new") === activeOfferFilter;
+                });
+
+                offerList.innerHTML = "";
+                if (!filtered.length) {
+                    emptyOffers.classList.remove("hidden");
+                    return;
+                }
+                emptyOffers.classList.add("hidden");
+
+                filtered.forEach((offer) => {
+                    const card = document.createElement("article");
+                    card.className = "rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm";
+                    const created = offer.createdAt ? new Date(offer.createdAt).toLocaleString() : "Unknown";
+                    const itemsMarkup = (offer.items || [])
+                        .map((item) => {
+                            const device = inventory.find((device) => device.id === item.deviceId);
+                            const name = device ? `${device.model} (${device.storage})` : item.deviceId;
+                            return `<li class=\"flex items-center justify-between\"><span>${item.quantity}× ${name} · Grade ${item.grade}</span><span class=\"text-xs text-slate-500\">Offer ${formatCurrency(item.offer || 0)} ea</span></li>`;
+                        })
+                        .join("");
+
+                    card.innerHTML = `
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">${offer.companyName || "Direct offer"}</p>
+                                <h3 class="text-lg font-semibold text-slate-900">${offer.contactName || "Wholesale buyer"}</h3>
+                                <p class="text-xs text-slate-500">${offer.contactEmail || "No email provided"}</p>
+                            </div>
+                            <div class="text-right text-xs text-slate-500">
+                                <p>${created}</p>
+                                <span class="mt-1 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs">${offer.source || "buy-device"}</span>
+                            </div>
+                        </div>
+                        <dl class="mt-4 grid gap-3 text-sm text-slate-600">
+                            <div class="flex justify-between"><dt>Units</dt><dd class="font-semibold text-slate-900">${offer.totals?.units || 0}</dd></div>
+                            <div class="flex justify-between"><dt>Offer value</dt><dd class="font-semibold text-emerald-600">${formatCurrency(offer.totals?.offer || 0)}</dd></div>
+                            <div class="flex justify-between"><dt>Asking ref</dt><dd class="font-semibold text-slate-900">${formatCurrency(offer.totals?.asking || 0)}</dd></div>
+                        </dl>
+                        <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+                            <p class="font-semibold text-slate-800">Line items</p>
+                            <ul class="mt-2 space-y-1">${itemsMarkup || "<li>No items captured</li>"}</ul>
+                        </div>
+                        <p class="mt-4 text-xs text-slate-500">${offer.notes ? offer.notes : "No additional notes."}</p>
+                        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                            <label class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                                Status
+                                <select data-offer-id="${offer.id}" class="mt-2 rounded-full border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none">
+                                    <option value="new" ${offer.status === "new" || !offer.status ? "selected" : ""}>New</option>
+                                    <option value="in-review" ${offer.status === "in-review" ? "selected" : ""}>In Review</option>
+                                    <option value="completed" ${offer.status === "completed" ? "selected" : ""}>Completed</option>
+                                </select>
+                            </label>
+                            <div class="flex items-center gap-2 text-xs">
+                                <button class="rounded-full border border-slate-300 px-3 py-2 font-medium text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600" data-action="copy-offer" data-offer-id="${offer.id}">
+                                    Copy summary
+                                </button>
+                                <button class="rounded-full border border-rose-300 px-3 py-2 font-medium text-rose-500 transition hover:bg-rose-50" data-action="delete-offer" data-offer-id="${offer.id}">
+                                    Archive
+                                </button>
+                            </div>
+                        </div>
+                    `;
+
+                    offerList.appendChild(card);
+                });
             }
 
             function renderInventoryTable() {
@@ -309,32 +501,30 @@
                         rows.push(`
                             <tr data-device-id="${device.id}" data-grade="${gradeKey}" class="align-top">
                                 <td class="px-5 py-4">
-                                    <p class="text-xs uppercase tracking-[0.3em] text-emerald-200/80">${device.brand}</p>
-                                    <p class="text-base font-semibold text-slate-50">${device.model}</p>
-                                    <p class="text-xs text-slate-400">${device.storage}</p>
-                                    <p class="mt-2 inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-slate-300">
+                                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">${device.brand}</p>
+                                    <p class="text-base font-semibold text-slate-900">${device.model}</p>
+                                    <p class="text-xs text-slate-500">${device.storage}</p>
+                                    <p class="mt-2 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
                                         Grade ${gradeKey}
                                         <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                                     </p>
-                                    ${index === 0
-                                        ? `<button data-action="remove-device" class="mt-3 text-xs text-rose-300 underline underline-offset-2 transition hover:text-rose-200">Remove device</button>`
-                                        : ""}
+                                    ${index === 0 ? `<button data-action="remove-device" class="mt-3 text-xs text-rose-500 underline underline-offset-2 transition hover:text-rose-400">Remove device</button>` : ""}
                                 </td>
                                 <td class="px-5 py-4">
                                     <input
                                         type="text"
-                                        value="${grade.label}"
+                                        value="${grade.label || ""}"
                                         data-field="label"
-                                        class="w-full rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none"
+                                        class="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none"
                                     />
                                 </td>
                                 <td class="px-5 py-4">
                                     <input
                                         type="number"
                                         min="0"
-                                        value="${grade.stock}"
+                                        value="${grade.stock || 0}"
                                         data-field="stock"
-                                        class="w-28 rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none"
+                                        class="w-28 rounded-2xl border border-slate-300 px-3 py-2 text-right text-sm text-slate-900 focus:border-emerald-400 focus:outline-none"
                                     />
                                 </td>
                                 <td class="px-5 py-4">
@@ -342,15 +532,15 @@
                                         type="number"
                                         min="0"
                                         step="1"
-                                        value="${grade.price}"
+                                        value="${grade.price || 0}"
                                         data-field="price"
-                                        class="w-32 rounded-2xl border border-white/10 bg-slate-950 px-3 py-2 text-right text-sm text-slate-100 focus:border-emerald-400 focus:outline-none"
+                                        class="w-32 rounded-2xl border border-slate-300 px-3 py-2 text-right text-sm text-slate-900 focus:border-emerald-400 focus:outline-none"
                                     />
                                 </td>
                                 <td class="px-5 py-4">
                                     <div class="flex flex-wrap gap-2">
-                                        <button data-action="save-grade" class="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 transition hover:bg-emerald-400">Save</button>
-                                        <button data-action="remove-grade" class="rounded-full border border-white/10 px-4 py-2 text-xs font-medium text-slate-300 transition hover:border-rose-400 hover:text-rose-200">Remove grade</button>
+                                        <button data-action="save-grade" class="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-400">Save</button>
+                                        <button data-action="remove-grade" class="rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 transition hover:border-rose-300 hover:text-rose-500">Remove grade</button>
                                     </div>
                                 </td>
                             </tr>
@@ -361,7 +551,7 @@
                 if (!rows.length) {
                     inventoryTableBody.innerHTML = `
                         <tr>
-                            <td colspan="5" class="px-5 py-6 text-center text-sm text-slate-400">No devices configured yet. Use the form below to add your first SKU.</td>
+                            <td colspan="5" class="px-5 py-6 text-center text-sm text-slate-500">No devices configured yet. Use the form below to add your first SKU.</td>
                         </tr>
                     `;
                 } else {
@@ -382,33 +572,33 @@
                 const usedGrades = Array.from(gradeEntryList.querySelectorAll("[data-grade-select]")).map((select) => select.value);
                 const defaultGrade = initial.grade || gradeLetters.find((grade) => !usedGrades.includes(grade)) || gradeLetters[0];
                 const row = document.createElement("div");
-                row.className = "grid gap-3 rounded-2xl border border-white/10 bg-slate-950/80 p-4 sm:grid-cols-[120px_1fr_1fr_40px] sm:items-end";
+                row.className = "grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-[120px_1fr_1fr_40px] sm:items-end";
                 row.dataset.gradeEntry = "true";
                 row.innerHTML = `
-                    <label class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                    <label class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
                         Grade
-                        <select class="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" data-grade-select>
+                        <select class="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" data-grade-select>
                             ${gradeLetters
                                 .map((grade) => `<option value="${grade}" ${defaultGrade === grade ? "selected" : ""}>${grade}</option>`)
                                 .join("")}
                         </select>
                     </label>
-                    <label class="text-xs text-slate-300">
+                    <label class="text-xs text-slate-600">
                         Label
-                        <input type="text" value="${initial.label || ""}" data-grade-label class="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="Like New" />
+                        <input type="text" value="${initial.label || ""}" data-grade-label class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Like New" />
                     </label>
-                    <label class="text-xs text-slate-300">
+                    <label class="text-xs text-slate-600">
                         Stock
-                        <input type="number" min="0" value="${initial.stock ?? ""}" data-grade-stock class="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="25" />
+                        <input type="number" min="0" value="${initial.stock ?? ""}" data-grade-stock class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="25" />
                     </label>
                     <div class="flex items-end justify-end">
-                        <button type="button" data-remove-grade-row class="rounded-full border border-white/10 px-3 py-2 text-xs text-slate-300 transition hover:border-rose-400 hover:text-rose-200">
+                        <button type="button" data-remove-grade-row class="rounded-full border border-slate-300 px-3 py-2 text-xs text-slate-600 transition hover:border-rose-300 hover:text-rose-500">
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
-                    <label class="text-xs text-slate-300 sm:col-span-4">
+                    <label class="text-xs text-slate-600 sm:col-span-4">
                         Asking price (per unit)
-                        <input type="number" min="0" step="1" value="${initial.price ?? ""}" data-grade-price class="mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none" placeholder="500" />
+                        <input type="number" min="0" step="1" value="${initial.price ?? ""}" data-grade-price class="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="500" />
                     </label>
                 `;
                 gradeEntryList.appendChild(row);
@@ -440,6 +630,7 @@
                 const storage = formData.get("storage").trim();
                 const tagline = formData.get("tagline").trim();
                 const image = formData.get("image").trim();
+                const highlightsInput = formData.get("highlights").trim();
 
                 if (!brand || !model || !storage) {
                     showNotification("Brand, model, and storage are required.", "warning");
@@ -490,6 +681,7 @@
                     storage,
                     tagline,
                     image,
+                    highlights: highlightsInput ? highlightsInput.split(",").map((value) => value.trim()).filter(Boolean) : [],
                     grades
                 };
 
@@ -563,6 +755,60 @@
                 }
             });
 
+            offerList.addEventListener("change", (event) => {
+                const select = event.target.closest("select[data-offer-id]");
+                if (!select) return;
+                const offerId = select.dataset.offerId;
+                const offerIndex = offers.findIndex((offer) => offer.id === offerId);
+                if (offerIndex === -1) return;
+                offers[offerIndex].status = select.value;
+                persistOffers();
+                renderMetrics();
+                renderOffers();
+                showNotification("Offer status updated.", "success");
+            });
+
+            offerList.addEventListener("click", (event) => {
+                const button = event.target.closest("[data-action]");
+                if (!button) return;
+                const offerId = button.dataset.offerId;
+                const offerIndex = offers.findIndex((offer) => offer.id === offerId);
+                if (offerIndex === -1) return;
+
+                if (button.dataset.action === "delete-offer") {
+                    offers.splice(offerIndex, 1);
+                    persistOffers();
+                    renderMetrics();
+                    renderOffers();
+                    showNotification("Offer archived.", "info");
+                }
+
+                if (button.dataset.action === "copy-offer") {
+                    const offer = offers[offerIndex];
+                    const summary = [
+                        `Company: ${offer.companyName || "Unknown"}`,
+                        `Contact: ${offer.contactName || "N/A"} (${offer.contactEmail || "no email"})`,
+                        `Units: ${offer.totals?.units || 0}`,
+                        `Offer total: ${formatCurrency(offer.totals?.offer || 0)}`,
+                        `Notes: ${offer.notes || "None"}`,
+                        `Items: ${(offer.items || []).map((item) => `${item.quantity}x ${item.grade} @ ${formatCurrency(item.offer || 0)}`).join("; ")}`
+                    ].join("\n");
+                    navigator.clipboard.writeText(summary).then(() => {
+                        showNotification("Offer summary copied to clipboard.", "success");
+                    });
+                }
+            });
+
+            offerFilterButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    activeOfferFilter = button.dataset.offerFilter;
+                    offerFilterButtons.forEach((btn) => btn.classList.remove("bg-emerald-500", "text-white", "border-emerald-500"));
+                    button.classList.add("bg-emerald-500", "text-white", "border-emerald-500");
+                    renderOffers();
+                });
+            });
+            offerFilterButtons[0].classList.add("bg-emerald-500", "text-white", "border-emerald-500");
+
             resetInventoryButton.addEventListener("click", () => {
                 inventory = JSON.parse(JSON.stringify(defaultInventory));
                 persistInventory();
@@ -573,6 +819,7 @@
 
             function init() {
                 renderMetrics();
+                renderOffers();
                 renderInventoryTable();
                 ensureGradeRows();
             }
