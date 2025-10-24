@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Wholesale Device Shop | SecondHandCell</title>
+    <link rel="icon" href="/favicon/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        .gradient-border {
+            position: relative;
+            border-radius: 1.5rem;
+        }
+        .gradient-border::before {
+            content: "";
+            position: absolute;
+            inset: -2px;
+            border-radius: inherit;
+            background: linear-gradient(135deg, rgba(45, 212, 191, 0.8), rgba(59, 130, 246, 0.7));
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+        .gradient-border:hover::before,
+        .gradient-border:focus-within::before {
+            opacity: 1;
+        }
+        .grade-pill {
+            border-radius: 9999px;
+            padding: 0.25rem 0.75rem;
+        }
+        .grade-a { background-color: rgba(74, 222, 128, 0.14); color: #15803d; }
+        .grade-b { background-color: rgba(45, 212, 191, 0.14); color: #0f766e; }
+        .grade-c { background-color: rgba(59, 130, 246, 0.14); color: #1d4ed8; }
+        .grade-f { background-color: rgba(248, 113, 113, 0.14); color: #b91c1c; }
+        @keyframes toast-in {
+            from {
+                opacity: 0;
+                transform: translateY(-12px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        .animate-slide-in {
+            animation: toast-in 0.3s ease-out;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <header class="border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-5">
+            <a href="/" class="flex items-center gap-3 text-slate-900">
+                <img src="/assets/logo.png" alt="SecondHandCell" class="h-12 w-12 rounded-full border border-slate-200 bg-white object-contain p-2">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-500">SecondHandCell</p>
+                    <h1 class="text-2xl font-semibold tracking-tight">Wholesale Device Shop</h1>
+                </div>
+            </a>
+            <div class="flex items-center gap-3 text-sm">
+                <a href="/sell/index.html" class="rounded-full border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:border-emerald-400 hover:text-emerald-600">Sell devices</a>
+                <button id="openCart" class="relative flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2 font-semibold text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    Cart
+                    <span id="cartCount" class="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-slate-400 text-xs font-bold text-white">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-6xl px-6 py-16">
+        <section class="grid gap-10 lg:grid-cols-[1fr_0.85fr]">
+            <div class="space-y-6">
+                <span class="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Our inventory</span>
+                <h2 class="text-4xl font-bold tracking-tight text-slate-900">Browse, cart, and submit offers on ready-to-ship devices.</h2>
+                <p class="text-lg leading-relaxed text-slate-600">Every device listed below is owned by SecondHandCell and processed in-house with diagnostic testing, cleaning, and grading. Build your order across grades, then propose the pricing that works for your business.</p>
+                <div class="grid gap-4 sm:grid-cols-3">
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-500">R2 tested</p>
+                        <p class="mt-2 text-sm text-slate-600">IMEI cleared devices with complete diagnostics and cosmetic grading.</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-500">Flexible quantities</p>
+                        <p class="mt-2 text-sm text-slate-600">Mix and match grades and SKUs to match your downstream demand.</p>
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-amber-500">Fast turnaround</p>
+                        <p class="mt-2 text-sm text-slate-600">Same-day reservation and 2 business day shipping after offer approval.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="relative">
+                <div class="absolute inset-0 -translate-x-6 -translate-y-6 rounded-3xl bg-gradient-to-br from-emerald-100/60 via-sky-100/60 to-white blur-3xl"></div>
+                <div class="relative h-full rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
+                    <h3 class="text-lg font-semibold text-slate-900">How checkout works</h3>
+                    <ol class="mt-6 space-y-5 text-sm text-slate-600">
+                        <li class="flex gap-4">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-600">1</span>
+                            <div>
+                                <p class="font-semibold text-slate-800">Add quantities</p>
+                                <p>Choose the mix of A, B, C, or F stock per device you need.</p>
+                            </div>
+                        </li>
+                        <li class="flex gap-4">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-600">2</span>
+                            <div>
+                                <p class="font-semibold text-slate-800">Name your price</p>
+                                <p>Provide a per-unit offer inside the cart for each grade you selected.</p>
+                            </div>
+                        </li>
+                        <li class="flex gap-4">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-sm font-semibold text-emerald-600">3</span>
+                            <div>
+                                <p class="font-semibold text-slate-800">Submit &amp; confirm</p>
+                                <p>We lock the inventory, send a confirmation, and coordinate shipping.</p>
+                            </div>
+                        </li>
+                    </ol>
+                    <p class="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-700">Need IMEI lists, specific carriers, or custom packaging? Add a note in checkout and our wholesale desk will reply within one business day.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-16 space-y-8">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-3xl font-semibold text-slate-900">Available devices</h2>
+                    <p class="mt-2 text-slate-600">Select quantities for each cosmetic grade and add them to your wholesale cart.</p>
+                </div>
+                <button id="clearSelections" class="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-rose-300 hover:text-rose-500">Clear cart</button>
+            </div>
+            <div id="deviceGrid" class="grid gap-6 md:grid-cols-2 xl:grid-cols-3"></div>
+        </section>
+
+        <section class="mt-20 rounded-3xl border border-slate-200 bg-white p-8 text-sm text-slate-600">
+            <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <h3 class="text-xl font-semibold text-slate-900">Need serialized inventory or other OEMs?</h3>
+                    <p class="mt-2 max-w-2xl">Email <a class="font-medium text-emerald-600 underline" href="mailto:wholesale@secondhandcell.com">wholesale@secondhandcell.com</a> with your request. We own all stock onsite and can accommodate pallet builds and recurring deliveries.</p>
+                </div>
+                <a href="mailto:wholesale@secondhandcell.com" class="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200/80 transition hover:bg-emerald-400">
+                    <i class="fa-solid fa-envelope"></i>
+                    Contact wholesale desk
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white/90">
+        <div class="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-8 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>&copy; <span id="currentYear"></span> SecondHandCell. All devices owned and processed in-house.</p>
+            <p>Warehouse hubs: Dallas · Phoenix · Newark</p>
+        </div>
+    </footer>
+
+    <div id="cartPanel" class="fixed inset-0 z-50 hidden">
+        <div id="cartBackdrop" class="absolute inset-0 bg-slate-900/70"></div>
+        <div class="absolute inset-y-0 right-0 flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Wholesale offer</p>
+                    <h2 class="text-2xl font-semibold text-slate-900">Review cart &amp; submit pricing</h2>
+                </div>
+                <button id="closeCart" class="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:border-emerald-300 hover:text-emerald-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto px-6 py-6" id="cartBody">
+                <div id="cartItems" class="space-y-6"></div>
+                <div id="emptyCart" class="hidden rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
+                    Your cart is empty. Add quantities from the catalog to build your wholesale offer.
+                </div>
+                <form id="offerForm" class="mt-10 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+                    <div class="space-y-4">
+                        <label class="block text-sm font-medium text-slate-700">
+                            Company name
+                            <input type="text" id="companyName" class="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Wholesale company" required>
+                        </label>
+                        <label class="block text-sm font-medium text-slate-700">
+                            Contact name
+                            <input type="text" id="contactName" class="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Full name" required>
+                        </label>
+                        <label class="block text-sm font-medium text-slate-700">
+                            Email address
+                            <input type="email" id="contactEmail" class="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="you@company.com" required>
+                        </label>
+                        <label class="block text-sm font-medium text-slate-700">
+                            Offer notes (optional)
+                            <textarea id="offerNotes" rows="4" class="mt-1 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Share testing requirements, pallet preferences, or ship timing"></textarea>
+                        </label>
+                    </div>
+                    <div class="space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-700">
+                        <h3 class="text-base font-semibold text-slate-900">Offer summary</h3>
+                        <dl class="space-y-3">
+                            <div class="flex justify-between">
+                                <dt>Total units</dt>
+                                <dd id="totalUnits" class="font-semibold text-slate-900">0</dd>
+                            </div>
+                            <div class="flex justify-between">
+                                <dt>Asking value</dt>
+                                <dd id="askingValue" class="font-semibold text-slate-900">$0.00</dd>
+                            </div>
+                            <div class="flex justify-between">
+                                <dt>Your blended offer</dt>
+                                <dd id="offerValue" class="font-semibold text-emerald-600">$0.00</dd>
+                            </div>
+                        </dl>
+                        <p class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">We respond to offers within one business day. Inventory is reserved upon confirmation.</p>
+                        <button type="submit" class="w-full rounded-full bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200/70 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-300">Submit offer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="pointer-events-none fixed inset-x-0 top-5 z-50 flex justify-center px-4">
+        <div class="hidden max-w-md rounded-full border border-emerald-300 bg-white px-6 py-3 text-sm font-medium text-emerald-700 shadow-lg shadow-emerald-200/60" role="status"></div>
+    </div>
+
+    <script>
+        (function () {
+            const storageKey = 'wholesaleInventoryV1';
+            const offerStorageKey = 'wholesaleOffersV1';
+            const defaultInventory = [
+                {
+                    id: 'iphone-14-128',
+                    brand: 'Apple',
+                    model: 'iPhone 14',
+                    storage: '128GB · Midnight',
+                    tagline: 'Unlocked GSM/CDMA — 12-month warranty',
+                    image: 'https://images.unsplash.com/photo-1661961110671-80d19bca82d5?auto=format&fit=crop&w=600&q=80',
+                    highlights: ['Battery 88%+', 'Unlocked', 'Next-day ship'],
+                    grades: {
+                        A: { label: 'Like New', stock: 42, price: 525 },
+                        B: { label: 'Light Wear', stock: 63, price: 495 },
+                        C: { label: 'Heavy Wear', stock: 18, price: 435 },
+                        F: { label: 'For Parts', stock: 9, price: 160 }
+                    }
+                },
+                {
+                    id: 'iphone-13-pro-256',
+                    brand: 'Apple',
+                    model: 'iPhone 13 Pro',
+                    storage: '256GB · Graphite',
+                    tagline: 'Includes MagSafe + OEM accessories on request',
+                    image: 'https://images.unsplash.com/photo-1512499776141-4a2465434fe2?auto=format&fit=crop&w=600&q=80',
+                    highlights: ['MagSafe ready', 'Unlocked', 'OEM accessories'],
+                    grades: {
+                        A: { label: 'Pristine', stock: 28, price: 515 },
+                        B: { label: 'Retail Return', stock: 46, price: 485 },
+                        C: { label: 'Budget Grade', stock: 37, price: 430 },
+                        F: { label: 'Certified Parts', stock: 14, price: 190 }
+                    }
+                },
+                {
+                    id: 'iphone-12-64',
+                    brand: 'Apple',
+                    model: 'iPhone 12',
+                    storage: '64GB · Blue',
+                    tagline: 'Unlocked + face ID verified',
+                    image: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=600&q=80',
+                    highlights: ['Face ID', 'Unlocked', '45-point tested'],
+                    grades: {
+                        A: { label: 'Premium', stock: 35, price: 345 },
+                        B: { label: 'Excellent', stock: 52, price: 325 },
+                        C: { label: 'Value', stock: 40, price: 285 },
+                        F: { label: 'Parts', stock: 22, price: 120 }
+                    }
+                },
+                {
+                    id: 'galaxy-s22-128',
+                    brand: 'Samsung',
+                    model: 'Galaxy S22',
+                    storage: '128GB · Phantom Black',
+                    tagline: 'Unlocked + OEM charger options',
+                    image: 'https://images.unsplash.com/photo-1526045612212-70caf35c14df?auto=format&fit=crop&w=600&q=80',
+                    highlights: ['Unlocked', 'Battery 85%+', 'Knox verified'],
+                    grades: {
+                        A: { label: 'Like New', stock: 31, price: 425 },
+                        B: { label: 'Light Wear', stock: 55, price: 395 },
+                        C: { label: 'Wholesale', stock: 48, price: 345 },
+                        F: { label: 'Salvage', stock: 17, price: 150 }
+                    }
+                },
+                {
+                    id: 'ipad-pro-11',
+                    brand: 'Apple',
+                    model: 'iPad Pro 11"',
+                    storage: '128GB · Wi-Fi',
+                    tagline: 'Silver &amp; Space Gray mix',
+                    image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80',
+                    highlights: ['iPadOS 17', 'Battery 90%+', 'Accessories optional'],
+                    grades: {
+                        A: { label: 'Like New', stock: 18, price: 625 },
+                        B: { label: 'Excellent', stock: 27, price: 585 },
+                        C: { label: 'Retail Return', stock: 24, price: 545 },
+                        F: { label: 'For Parts', stock: 8, price: 310 }
+                    }
+                },
+                {
+                    id: 'pixel-8-128',
+                    brand: 'Google',
+                    model: 'Pixel 8',
+                    storage: '128GB · Obsidian',
+                    tagline: 'Unlocked + OEM charger options',
+                    image: 'https://images.unsplash.com/photo-1602837385561-37cae6c07b2b?auto=format&fit=crop&w=600&q=80',
+                    highlights: ['Unlocked', 'Battery 90%+', 'OEM charger'],
+                    grades: {
+                        A: { label: 'Like New', stock: 25, price: 475 },
+                        B: { label: 'Great', stock: 40, price: 445 },
+                        C: { label: 'Fair', stock: 34, price: 395 },
+                        F: { label: 'Repair', stock: 12, price: 210 }
+                    }
+                }
+            ];
+
+            const gradeFallbackLabels = { A: 'Grade A', B: 'Grade B', C: 'Grade C', F: 'Grade F' };
+            const gradeColors = { A: 'grade-a', B: 'grade-b', C: 'grade-c', F: 'grade-f' };
+
+            const deviceGrid = document.getElementById('deviceGrid');
+            const cartPanel = document.getElementById('cartPanel');
+            const cartBackdrop = document.getElementById('cartBackdrop');
+            const openCartBtn = document.getElementById('openCart');
+            const closeCartBtn = document.getElementById('closeCart');
+            const cartCount = document.getElementById('cartCount');
+            const clearSelectionsBtn = document.getElementById('clearSelections');
+            const cartItemsContainer = document.getElementById('cartItems');
+            const emptyCart = document.getElementById('emptyCart');
+            const offerForm = document.getElementById('offerForm');
+            const totalUnits = document.getElementById('totalUnits');
+            const askingValue = document.getElementById('askingValue');
+            const offerValue = document.getElementById('offerValue');
+            const toast = document.querySelector('#toast > div');
+
+            let cart = [];
+            let toastTimeout;
+            let inventory = loadInventory();
+
+            function loadInventory() {
+                try {
+                    const stored = localStorage.getItem(storageKey);
+                    if (!stored) {
+                        localStorage.setItem(storageKey, JSON.stringify(defaultInventory));
+                        return JSON.parse(JSON.stringify(defaultInventory));
+                    }
+                    const parsed = JSON.parse(stored);
+                    if (!Array.isArray(parsed) || !parsed.length) {
+                        localStorage.setItem(storageKey, JSON.stringify(defaultInventory));
+                        return JSON.parse(JSON.stringify(defaultInventory));
+                    }
+                    return parsed;
+                } catch (error) {
+                    console.warn('Unable to read inventory from localStorage', error);
+                    return JSON.parse(JSON.stringify(defaultInventory));
+                }
+            }
+
+            function readOffers() {
+                try {
+                    const stored = localStorage.getItem(offerStorageKey);
+                    if (!stored) return [];
+                    const parsed = JSON.parse(stored);
+                    return Array.isArray(parsed) ? parsed : [];
+                } catch (error) {
+                    console.warn('Unable to load offers', error);
+                    return [];
+                }
+            }
+
+            function saveOffers(offers) {
+                try {
+                    localStorage.setItem(offerStorageKey, JSON.stringify(offers));
+                } catch (error) {
+                    console.warn('Unable to save offers', error);
+                }
+            }
+
+            function gradeLabel(device, gradeKey) {
+                const grade = device?.grades?.[gradeKey];
+                return grade?.label || gradeFallbackLabels[gradeKey] || `Grade ${gradeKey}`;
+            }
+
+            function renderDevices() {
+                deviceGrid.innerHTML = '';
+                inventory.forEach((device) => {
+                    const card = document.createElement('article');
+                    card.className = 'gradient-border flex h-full flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm';
+                    const highlights = Array.isArray(device.highlights) && device.highlights.length
+                        ? device.highlights
+                        : ['Owned inventory', 'Ready to ship', '45-point tested'];
+                    card.innerHTML = `
+                        <div class="flex items-start gap-4">
+                            <img src="${device.image || '/assets/apple.png'}" alt="${device.model}" class="h-24 w-24 rounded-2xl border border-slate-200 object-cover" onerror="this.src='/assets/apple.png'" />
+                            <div>
+                                <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">${device.brand}</p>
+                                <h3 class="text-xl font-semibold text-slate-900">${device.model}</h3>
+                                <p class="text-sm text-slate-500">${device.storage}</p>
+                                <div class="mt-3 flex flex-wrap gap-2 text-xs font-medium text-slate-600">
+                                    ${highlights.map((text) => `<span class="grade-pill bg-slate-100 text-slate-600">${text}</span>`).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-6 space-y-3">
+                            ${Object.entries(device.grades || {}).map(([grade, info]) => `
+                                <div class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <div class="flex flex-col text-sm">
+                                        <span class="grade-pill ${gradeColors[grade]} text-xs font-semibold">${gradeLabel(device, grade)}</span>
+                                        <span class="mt-1 text-xs text-slate-500">Asking $${Number(info.price || 0).toLocaleString()} · ${info.stock ?? 0} available</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" class="decrement rounded-full border border-slate-300 px-2 py-1 text-slate-500 transition hover:border-emerald-300 hover:text-emerald-600" data-device="${device.id}" data-grade="${grade}">
+                                            <i class="fa-solid fa-minus"></i>
+                                        </button>
+                                        <input type="number" min="0" max="${info.stock ?? 0}" value="0" data-device="${device.id}" data-grade="${grade}" class="quantity-input w-16 rounded-xl border border-slate-300 px-3 py-2 text-center text-sm text-slate-900 focus:border-emerald-400 focus:outline-none">
+                                        <button type="button" class="increment rounded-full border border-slate-300 px-2 py-1 text-slate-500 transition hover:border-emerald-300 hover:text-emerald-600" data-device="${device.id}" data-grade="${grade}" data-max="${info.stock ?? 0}">
+                                            <i class="fa-solid fa-plus"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button type="button" class="mt-6 w-full rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-200/70 transition hover:bg-emerald-400" data-add-to-cart="${device.id}">
+                            Add selections to cart
+                        </button>
+                    `;
+                    deviceGrid.appendChild(card);
+                });
+            }
+
+            function syncCartBadge() {
+                const totalUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
+                cartCount.textContent = totalUnits;
+            }
+
+            function showToast(message) {
+                toast.textContent = message;
+                toast.classList.remove('hidden');
+                toast.classList.add('animate-slide-in');
+                clearTimeout(toastTimeout);
+                toastTimeout = setTimeout(() => {
+                    toast.classList.add('hidden');
+                    toast.classList.remove('animate-slide-in');
+                }, 2500);
+            }
+
+            function renderCart() {
+                cartItemsContainer.innerHTML = '';
+
+                if (!cart.length) {
+                    emptyCart.classList.remove('hidden');
+                    offerForm.classList.add('pointer-events-none', 'opacity-40');
+                    offerForm.querySelector('button[type="submit"]').disabled = true;
+                    totalUnits.textContent = '0';
+                    askingValue.textContent = '$0.00';
+                    offerValue.textContent = '$0.00';
+                    return;
+                }
+
+                emptyCart.classList.add('hidden');
+                offerForm.classList.remove('pointer-events-none', 'opacity-40');
+                offerForm.querySelector('button[type="submit"]').disabled = false;
+
+                cart.forEach((line, index) => {
+                    const device = inventory.find((item) => item.id === line.deviceId);
+                    const lineTotalAsk = line.quantity * line.askPrice;
+                    const lineOfferValue = line.offerPrice ? line.quantity * line.offerPrice : 0;
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'rounded-3xl border border-slate-200 bg-white p-5 shadow-sm';
+                    wrapper.innerHTML = `
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="flex flex-1 gap-4">
+                                <img src="${device?.image || '/assets/apple.png'}" alt="${device?.model || ''}" class="h-20 w-20 rounded-2xl border border-slate-200 object-cover" onerror="this.src='/assets/apple.png'" />
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-900">${device?.model || ''} · ${gradeLabel(device, line.grade)}</p>
+                                    <p class="text-xs text-slate-500">${device?.storage || ''}</p>
+                                    <p class="mt-2 text-xs text-slate-500">Asking $${line.askPrice.toLocaleString()} per unit · ${line.available} remaining</p>
+                                    <div class="mt-3 flex items-center gap-3 text-sm">
+                                        <label class="flex items-center gap-2">
+                                            <span class="text-slate-600">Qty</span>
+                                            <input type="number" min="1" max="${line.available}" value="${line.quantity}" data-cart-index="${index}" class="cart-quantity w-20 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none">
+                                        </label>
+                                        <button type="button" class="remove-line text-sm font-medium text-rose-500" data-remove-index="${index}">Remove</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-3 text-sm text-slate-600">
+                                <label class="flex flex-col gap-1">
+                                    <span class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">Your offer</span>
+                                    <div class="relative flex items-center">
+                                        <span class="pointer-events-none absolute left-3 text-slate-400">$</span>
+                                        <input type="number" min="0" step="1" value="${line.offerPrice ?? ''}" data-offer-index="${index}" class="offer-input w-32 rounded-xl border border-slate-300 px-3 py-2 pl-6 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="0">
+                                    </div>
+                                </label>
+                                <p class="text-xs text-slate-500">Ask total: <span class="font-semibold text-slate-900">$${lineTotalAsk.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                                <p class="text-xs text-slate-500">Offer total: <span class="font-semibold text-emerald-600">$${lineOfferValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
+                            </div>
+                        </div>
+                    `;
+                    cartItemsContainer.appendChild(wrapper);
+                });
+
+                const totals = cart.reduce(
+                    (acc, line) => {
+                        acc.units += line.quantity;
+                        acc.asking += line.quantity * line.askPrice;
+                        acc.offer += line.offerPrice ? line.quantity * line.offerPrice : 0;
+                        return acc;
+                    },
+                    { units: 0, asking: 0, offer: 0 }
+                );
+
+                totalUnits.textContent = totals.units.toLocaleString();
+                askingValue.textContent = `$${totals.asking.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                offerValue.textContent = `$${totals.offer.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+
+            function resetSelections() {
+                document.querySelectorAll('.quantity-input').forEach((input) => {
+                    input.value = 0;
+                });
+            }
+
+            function openCart() {
+                cartPanel.classList.remove('hidden');
+                cartPanel.classList.add('flex');
+                renderCart();
+            }
+
+            function closeCart() {
+                cartPanel.classList.add('hidden');
+                cartPanel.classList.remove('flex');
+            }
+
+            deviceGrid.addEventListener('click', (event) => {
+                const addButton = event.target.closest('button[data-add-to-cart]');
+                const incButton = event.target.closest('.increment');
+                const decButton = event.target.closest('.decrement');
+
+                if (addButton) {
+                    const deviceId = addButton.dataset.addToCart;
+                    const device = inventory.find((item) => item.id === deviceId);
+                    if (!device) return;
+                    const selections = Array.from(document.querySelectorAll(`input.quantity-input[data-device="${deviceId}"]`));
+
+                    const linesToAdd = selections
+                        .map((input) => ({ grade: input.dataset.grade, quantity: parseInt(input.value, 10) || 0 }))
+                        .filter((line) => line.quantity > 0);
+
+                    if (!linesToAdd.length) {
+                        showToast('Select at least one quantity before adding to cart.');
+                        return;
+                    }
+
+                    linesToAdd.forEach((line) => {
+                        const existingLine = cart.find((item) => item.deviceId === deviceId && item.grade === line.grade);
+                        const gradeData = device.grades?.[line.grade];
+                        const available = gradeData?.stock ?? 0;
+
+                        if (!available) {
+                            showToast(`No stock available for grade ${line.grade}.`);
+                            return;
+                        }
+
+                        if (existingLine) {
+                            existingLine.quantity = Math.min(existingLine.quantity + line.quantity, available);
+                        } else {
+                            cart.push({
+                                deviceId,
+                                grade: line.grade,
+                                quantity: Math.min(line.quantity, available),
+                                askPrice: gradeData.price,
+                                available,
+                                offerPrice: gradeData.price
+                            });
+                        }
+                    });
+
+                    syncCartBadge();
+                    renderCart();
+                    resetSelections();
+                    showToast('Added selections to your cart.');
+                }
+
+                if (incButton) {
+                    const max = parseInt(incButton.dataset.max, 10) || 0;
+                    const input = document.querySelector(`input.quantity-input[data-device="${incButton.dataset.device}"][data-grade="${incButton.dataset.grade}"]`);
+                    const current = parseInt(input.value, 10) || 0;
+                    input.value = Math.min(current + 1, max);
+                }
+
+                if (decButton) {
+                    const input = document.querySelector(`input.quantity-input[data-device="${decButton.dataset.device}"][data-grade="${decButton.dataset.grade}"]`);
+                    const current = parseInt(input.value, 10) || 0;
+                    input.value = Math.max(current - 1, 0);
+                }
+            });
+
+            cartPanel.addEventListener('click', (event) => {
+                if (event.target === cartBackdrop) {
+                    closeCart();
+                }
+            });
+
+            cartItemsContainer.addEventListener('click', (event) => {
+                const removeBtn = event.target.closest('[data-remove-index]');
+                if (!removeBtn) return;
+                const index = parseInt(removeBtn.dataset.removeIndex, 10);
+                cart.splice(index, 1);
+                syncCartBadge();
+                renderCart();
+            });
+
+            cartItemsContainer.addEventListener('input', (event) => {
+                if (event.target.classList.contains('cart-quantity')) {
+                    const index = parseInt(event.target.dataset.cartIndex, 10);
+                    const line = cart[index];
+                    let value = parseInt(event.target.value, 10) || 1;
+                    value = Math.max(1, Math.min(value, line.available));
+                    line.quantity = value;
+                    event.target.value = value;
+                    renderCart();
+                }
+
+                if (event.target.classList.contains('offer-input')) {
+                    const index = parseInt(event.target.dataset.offerIndex, 10);
+                    const line = cart[index];
+                    const offer = parseFloat(event.target.value);
+                    line.offerPrice = Number.isFinite(offer) && offer >= 0 ? offer : 0;
+                    renderCart();
+                }
+            });
+
+            offerForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                if (!cart.length) {
+                    showToast('Add at least one line item to submit an offer.');
+                    return;
+                }
+
+                if (!offerForm.reportValidity()) {
+                    showToast('Company, contact name, and email are required.');
+                    return;
+                }
+
+                const companyName = document.getElementById('companyName').value.trim();
+                const contactName = document.getElementById('contactName').value.trim();
+                const contactEmail = document.getElementById('contactEmail').value.trim();
+                const offerNotes = document.getElementById('offerNotes').value.trim();
+
+                const totals = cart.reduce(
+                    (acc, line) => {
+                        acc.units += line.quantity;
+                        acc.asking += line.quantity * line.askPrice;
+                        acc.offer += line.offerPrice ? line.quantity * line.offerPrice : 0;
+                        return acc;
+                    },
+                    { units: 0, asking: 0, offer: 0 }
+                );
+
+                const offers = readOffers();
+                offers.unshift({
+                    id: `offer-${Date.now()}`,
+                    createdAt: new Date().toISOString(),
+                    source: 'buy-device',
+                    companyName,
+                    contactName,
+                    contactEmail,
+                    contactPhone: '',
+                    notes: offerNotes,
+                    totals,
+                    items: cart.map((line) => ({
+                        deviceId: line.deviceId,
+                        grade: line.grade,
+                        quantity: line.quantity,
+                        askingPrice: line.askPrice,
+                        offer: line.offerPrice ?? 0
+                    })),
+                    status: 'new'
+                });
+                saveOffers(offers);
+
+                showToast('Offer submitted. We will follow up shortly.');
+                offerForm.reset();
+                cart = [];
+                syncCartBadge();
+                renderCart();
+                closeCart();
+            });
+
+            openCartBtn.addEventListener('click', openCart);
+            closeCartBtn.addEventListener('click', closeCart);
+
+            clearSelectionsBtn.addEventListener('click', () => {
+                cart = [];
+                syncCartBadge();
+                renderCart();
+                showToast('Cart cleared.');
+            });
+
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+            renderDevices();
+            renderCart();
+        })();
+    </script>
+</body>
+</html>
