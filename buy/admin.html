@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wholesale Admin Console | SecondHandCell</title>
+    <link rel="icon" href="/favicon/favicon.ico" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+    />
+    <style>
+        body {
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    <div id="toast" class="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
+        <div id="toastContent" class="hidden w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg"></div>
+    </div>
+
+    <header class="border-b border-slate-200 bg-white/90 backdrop-blur">
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-6">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-600">SecondHandCell · Admin</p>
+                <h1 class="text-2xl font-semibold text-slate-900">Wholesale inventory &amp; offers</h1>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 text-sm">
+                <a href="/buy/" class="rounded-full border border-slate-300 px-4 py-2 font-medium text-slate-700 transition hover:border-emerald-300 hover:text-emerald-600">
+                    <i class="fa-solid fa-arrow-left mr-2"></i>Buyer view
+                </a>
+                <button id="resetInventory" class="rounded-full border border-rose-300 px-4 py-2 font-semibold text-rose-500 transition hover:bg-rose-50">
+                    Reset inventory defaults
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto flex max-w-7xl flex-col gap-16 px-6 py-16">
+        <section class="space-y-6">
+            <h2 class="text-xl font-semibold text-slate-900">At a glance</h2>
+            <div id="metricCards" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
+        </section>
+
+        <section class="space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-900">Offer management</h2>
+                    <p class="text-sm text-slate-600">Review submissions from authenticated buyers, approve or counter pricing, and mark completed orders.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 text-sm" id="offerFilters"></div>
+            </div>
+            <div id="offerList" class="grid gap-6 lg:grid-cols-2"></div>
+            <p id="emptyOffers" class="hidden rounded-3xl border border-dashed border-slate-300 bg-white/70 p-10 text-center text-sm text-slate-500">No offers yet. Submissions from the buy flow will appear here.</p>
+        </section>
+
+        <section class="space-y-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-900">Inventory matrix</h2>
+                    <p class="text-sm text-slate-600">Update stock counts and asking prices per storage/grade. Changes sync instantly to the buyer experience.</p>
+                </div>
+            </div>
+            <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                        <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                            <tr>
+                                <th class="px-5 py-4">Brand &amp; model</th>
+                                <th class="px-5 py-4">Storage</th>
+                                <th class="px-5 py-4">Grade</th>
+                                <th class="px-5 py-4">Stock</th>
+                                <th class="px-5 py-4">Asking price</th>
+                                <th class="px-5 py-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTable" class="divide-y divide-slate-100 bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section class="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-900">Add or update device</h2>
+                    <p class="text-sm text-slate-600">Add new SKUs or append storage configurations to an existing model.</p>
+                </div>
+            </div>
+            <form id="addDeviceForm" class="mt-6 space-y-6 text-sm">
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="font-medium text-slate-700">Brand
+                        <input name="brand" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Apple" />
+                    </label>
+                    <label class="font-medium text-slate-700">Model
+                        <input name="model" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="iPhone 15" />
+                    </label>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="font-medium text-slate-700">Tagline (optional)
+                        <input name="tagline" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Unlocked · Clean IMEI" />
+                    </label>
+                    <label class="font-medium text-slate-700">Image URL (optional)
+                        <input name="image" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="https://..." />
+                    </label>
+                </div>
+                <label class="block font-medium text-slate-700">Highlights (comma separated, optional)
+                    <input name="highlights" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Unlocked,45-point tested" />
+                </label>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="font-medium text-slate-700">Storage variant
+                        <input name="storage" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="128GB · Midnight" />
+                    </label>
+                    <label class="font-medium text-slate-700">Grade to seed
+                        <select name="grade" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none">
+                            <option value="A">Grade A</option>
+                            <option value="B">Grade B</option>
+                            <option value="C">Grade C</option>
+                            <option value="F">Grade F</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <label class="font-medium text-slate-700">Stock
+                        <input name="stock" type="number" min="0" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="25" />
+                    </label>
+                    <label class="font-medium text-slate-700">Asking price (USD)
+                        <input name="price" type="number" min="0" step="0.01" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="599" />
+                    </label>
+                </div>
+                <p class="text-xs text-slate-500">To seed other grades, submit additional entries for the same storage variant.</p>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="submit" class="rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-emerald-400">Save</button>
+                    <button type="reset" class="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">Clear</button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white/90">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>Inventory data stores under <code>wholesaleInventoryV2</code>. Offers persist per buyer under <code>wholesaleOffersV2</code>.</p>
+            <div class="flex items-center gap-3">
+                <a href="mailto:wholesale@secondhandcell.com" class="font-medium text-emerald-600">Contact</a>
+                <span>&bull;</span>
+                <a href="/terms.html" class="hover:text-emerald-600">Terms</a>
+                <span>&bull;</span>
+                <a href="/privacy.html" class="hover:text-emerald-600">Privacy</a>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module">
+        import {
+            loadInventory,
+            saveInventory,
+            resetInventory,
+            loadOffers,
+            saveOffers,
+            GRADE_ORDER,
+            GRADE_LABELS,
+            formatCurrency
+        } from "./buy-shared.js";
+
+        const toastContent = document.getElementById("toastContent");
+        const metricCards = document.getElementById("metricCards");
+        const offerFilters = document.getElementById("offerFilters");
+        const offerList = document.getElementById("offerList");
+        const emptyOffers = document.getElementById("emptyOffers");
+        const inventoryTable = document.getElementById("inventoryTable");
+        const resetInventoryButton = document.getElementById("resetInventory");
+        const addDeviceForm = document.getElementById("addDeviceForm");
+
+        const statusFilters = [
+            { id: "all", label: "All" },
+            { id: "pending", label: "Pending" },
+            { id: "counter", label: "Counter" },
+            { id: "accepted", label: "Accepted" },
+            { id: "declined", label: "Declined" },
+            { id: "completed", label: "Completed" }
+        ];
+
+        let inventoryState = loadInventory();
+        let offersByUser = loadOffers();
+        let activeOfferFilter = "all";
+
+        function showToast(message, tone = "emerald") {
+            if (!toastContent) return;
+            toastContent.textContent = message;
+            toastContent.className = `w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg ${
+                tone === "rose"
+                    ? "border-rose-200 bg-rose-50 text-rose-600"
+                    : tone === "amber"
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+            }`;
+            toastContent.classList.remove("hidden");
+            setTimeout(() => {
+                toastContent.classList.add("hidden");
+            }, 2800);
+        }
+
+        function persistOffers() {
+            saveOffers(offersByUser);
+        }
+
+        function getAllOffers() {
+            return Object.entries(offersByUser).flatMap(([userId, offers]) =>
+                (Array.isArray(offers) ? offers : []).map((offer) => ({ ...offer, userId }))
+            );
+        }
+
+        function renderMetrics() {
+            const offers = getAllOffers();
+            const pending = offers.filter((offer) => offer.status === "pending").length;
+            const counter = offers.filter((offer) => offer.status === "counter" || offer.status === "declined").length;
+            const completed = offers.filter((offer) => offer.status === "completed").length;
+            const units = offers.reduce((sum, offer) => sum + offer.items.reduce((lineSum, item) => lineSum + (Number(item.quantity) || 0), 0), 0);
+
+            const cards = [
+                { label: "Total offers", value: offers.length.toString(), tone: "text-slate-900" },
+                { label: "Pending review", value: pending.toString(), tone: "text-amber-600" },
+                { label: "Counters / declines", value: counter.toString(), tone: "text-sky-600" },
+                { label: "Completed", value: completed.toString(), tone: "text-emerald-600" },
+                { label: "Units in pipeline", value: units.toString(), tone: "text-slate-900" }
+            ];
+
+            metricCards.innerHTML = "";
+            cards.forEach((card) => {
+                const wrapper = document.createElement("div");
+                wrapper.className = "rounded-3xl border border-slate-200 bg-white p-6 shadow-sm";
+                wrapper.innerHTML = `
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">${card.label}</p>
+                    <p class="mt-2 text-3xl font-semibold ${card.tone}">${card.value}</p>
+                `;
+                metricCards.appendChild(wrapper);
+            });
+        }
+
+        function renderOfferFilters() {
+            offerFilters.innerHTML = "";
+            statusFilters.forEach((status) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.dataset.filter = status.id;
+                button.textContent = status.label;
+                button.className = `rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
+                    activeOfferFilter === status.id
+                        ? "border-emerald-400 bg-emerald-500 text-white"
+                        : "border-slate-300 text-slate-600 hover:border-emerald-300 hover:text-emerald-600"
+                }`;
+                offerFilters.appendChild(button);
+            });
+        }
+
+        function statusBadge(status) {
+            const tones = {
+                pending: "bg-amber-100 text-amber-700 border-amber-200",
+                counter: "bg-sky-100 text-sky-700 border-sky-200",
+                declined: "bg-rose-100 text-rose-700 border-rose-200",
+                accepted: "bg-emerald-100 text-emerald-700 border-emerald-200",
+                completed: "bg-slate-900 text-white border-slate-900"
+            };
+            const classes = tones[status] || "bg-slate-100 text-slate-600 border-slate-200";
+            return `<span class="inline-flex items-center gap-2 rounded-full border ${classes} px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em]">${status}</span>`;
+        }
+
+        function renderOfferCards() {
+            const offers = getAllOffers();
+            const filtered = activeOfferFilter === "all" ? offers : offers.filter((offer) => offer.status === activeOfferFilter);
+            offerList.innerHTML = "";
+            filtered.forEach((offer) => {
+                const { userId } = offer;
+                const card = document.createElement("article");
+                card.className = "flex flex-col gap-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm";
+                card.dataset.offerId = offer.id;
+                card.dataset.userId = userId;
+                const submitted = offer.createdAt ? new Date(offer.createdAt).toLocaleString() : "—";
+                const updated = offer.updatedAt ? new Date(offer.updatedAt).toLocaleString() : submitted;
+
+                card.innerHTML = `
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-xs uppercase tracking-[0.3em] text-slate-400">${offer.buyer?.email || "Unknown buyer"}</p>
+                            <p class="text-sm font-semibold text-slate-900">${offer.id}</p>
+                        </div>
+                        ${statusBadge(offer.status)}
+                    </div>
+                    <div class="grid gap-3 text-xs text-slate-500">
+                        <p>Submitted: <span class="font-semibold text-slate-900">${submitted}</span></p>
+                        <p>Last update: <span class="font-semibold text-slate-900">${updated}</span></p>
+                        <p>Units: <span class="font-semibold text-slate-900">${offer.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)}</span></p>
+                    </div>
+                    <div class="overflow-hidden rounded-2xl border border-slate-200">
+                        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                            <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                                <tr>
+                                    <th class="px-4 py-3">Device</th>
+                                    <th class="px-4 py-3">Qty</th>
+                                    <th class="px-4 py-3">Offer</th>
+                                    <th class="px-4 py-3">Counter</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 bg-white">
+                                ${offer.items
+                                    .map((item) => {
+                                        const counterPrice = offer.counter?.items?.[item.lineId] ?? item.counterPrice ?? "";
+                                        return `
+                                            <tr>
+                                                <td class="px-4 py-3">
+                                                    <p class="font-semibold text-slate-900">${item.brand} ${item.model}</p>
+                                                    <p class="text-xs uppercase tracking-[0.3em] text-slate-400">${item.storageVariant} · Grade ${item.grade}</p>
+                                                </td>
+                                                <td class="px-4 py-3 text-sm text-slate-600">${item.quantity}</td>
+                                                <td class="px-4 py-3 text-sm text-slate-600">${formatCurrency(item.offerPrice)}</td>
+                                                <td class="px-4 py-3 text-sm text-slate-600">
+                                                    <input type="number" min="0" step="0.01" value="${counterPrice || ""}" data-counter-price="${item.lineId}" class="w-24 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                                                </td>
+                                            </tr>
+                                        `;
+                                    })
+                                    .join("")}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="grid gap-3 text-sm text-slate-600">
+                        <label class="font-medium text-slate-700">Status
+                            <select data-offer-status class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none">
+                                ${statusFilters
+                                    .filter((option) => option.id !== "all")
+                                    .map((option) => `<option value="${option.id}" ${offer.status === option.id ? "selected" : ""}>${option.label}</option>`)
+                                    .join("")}
+                            </select>
+                        </label>
+                        <label class="font-medium text-slate-700">Admin note / counter note
+                            <textarea data-offer-note rows="3" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Share counters, decline reasons, or shipping instructions.">${offer.counter?.note || offer.adminNote || ""}</textarea>
+                        </label>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button data-save-offer class="rounded-full bg-emerald-500 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-emerald-400">Save changes</button>
+                        <button data-accept-offer class="rounded-full border border-emerald-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600 transition hover:bg-emerald-50">Mark accepted</button>
+                        <button data-decline-offer class="rounded-full border border-rose-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-rose-500 transition hover:bg-rose-50">Decline</button>
+                    </div>
+                `;
+                offerList.appendChild(card);
+            });
+            emptyOffers.classList.toggle("hidden", filtered.length > 0);
+        }
+
+        function renderInventoryTable() {
+            inventoryTable.innerHTML = "";
+            inventoryState.forEach((device) => {
+                device.storages.forEach((storage) => {
+                    GRADE_ORDER.forEach((grade) => {
+                        const row = document.createElement("tr");
+                        row.dataset.deviceId = device.id;
+                        row.dataset.storageVariant = storage.variant;
+                        row.dataset.grade = grade;
+                        row.innerHTML = `
+                            <td class="px-5 py-4">
+                                <p class="font-semibold text-slate-900">${device.brand} ${device.model}</p>
+                                <p class="text-xs uppercase tracking-[0.3em] text-slate-400">${device.tagline || ""}</p>
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-600">${storage.variant}</td>
+                            <td class="px-5 py-4 text-sm text-slate-600">${GRADE_LABELS[grade]}</td>
+                            <td class="px-5 py-4">
+                                <input type="number" min="0" value="${storage.stock?.[grade] ?? 0}" data-stock-input class="w-24 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                            </td>
+                            <td class="px-5 py-4">
+                                <input type="number" min="0" step="0.01" value="${storage.asking?.[grade] ?? 0}" data-price-input class="w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                            </td>
+                            <td class="px-5 py-4">
+                                <button data-save-inventory class="text-sm font-semibold text-emerald-600 transition hover:text-emerald-700">Update</button>
+                            </td>
+                        `;
+                        inventoryTable.appendChild(row);
+                    });
+                });
+            });
+        }
+
+        function updateOffer(userId, offerId, updater) {
+            const userOffers = offersByUser[userId];
+            if (!Array.isArray(userOffers)) return;
+            const offer = userOffers.find((entry) => entry.id === offerId);
+            if (!offer) return;
+            const previousStatus = offer.status;
+            updater(offer);
+            offer.updatedAt = new Date().toISOString();
+            if (offer.status !== previousStatus) {
+                offer.history = offer.history || [];
+                offer.history.push({ status: offer.status, at: offer.updatedAt });
+                if (offer.status === "accepted") {
+                    offer.acceptedAt = offer.acceptedAt || offer.updatedAt;
+                }
+                if (offer.status === "completed") {
+                    offer.completedAt = offer.completedAt || offer.updatedAt;
+                }
+            }
+            offersByUser[userId] = userOffers;
+            persistOffers();
+            renderMetrics();
+            renderOfferCards();
+        }
+
+        offerFilters.addEventListener("click", (event) => {
+            const button = event.target.closest("button[data-filter]");
+            if (!button) return;
+            activeOfferFilter = button.dataset.filter;
+            renderOfferFilters();
+            renderOfferCards();
+        });
+
+        offerList.addEventListener("click", (event) => {
+            const card = event.target.closest("article[data-offer-id]");
+            if (!card) return;
+            const userId = card.dataset.userId;
+            const offerId = card.dataset.offerId;
+
+            if (event.target.closest("[data-save-offer]")) {
+                const statusSelect = card.querySelector("[data-offer-status]");
+                const noteField = card.querySelector("[data-offer-note]");
+                const counterInputs = card.querySelectorAll("[data-counter-price]");
+                const status = statusSelect.value;
+                const note = noteField.value.trim();
+                const counterValues = {};
+                counterInputs.forEach((input) => {
+                    const value = Number(input.value);
+                    if (!Number.isNaN(value) && value > 0) {
+                        counterValues[input.dataset.counterPrice] = value;
+                    }
+                });
+
+                updateOffer(userId, offerId, (offer) => {
+                    offer.status = status;
+                    if (status === "counter" || (status === "declined" && Object.keys(counterValues).length)) {
+                        offer.counter = {
+                            note,
+                            items: counterValues
+                        };
+                        offer.items = offer.items.map((item) => ({
+                            ...item,
+                            counterPrice: counterValues[item.lineId] ?? item.counterPrice ?? item.offerPrice
+                        }));
+                    } else {
+                        if (note) {
+                            offer.adminNote = note;
+                        }
+                        if (offer.counter && status !== "counter") {
+                            offer.counter = { ...offer.counter, note };
+                        }
+                    }
+                });
+                showToast("Offer updated.");
+            }
+
+            if (event.target.closest("[data-accept-offer]")) {
+                updateOffer(userId, offerId, (offer) => {
+                    offer.status = "accepted";
+                });
+                showToast("Offer marked accepted.");
+            }
+
+            if (event.target.closest("[data-decline-offer]")) {
+                updateOffer(userId, offerId, (offer) => {
+                    offer.status = "declined";
+                });
+                showToast("Offer declined.", "amber");
+            }
+        });
+
+        inventoryTable.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-save-inventory]");
+            if (!button) return;
+            const row = button.closest("tr");
+            if (!row) return;
+            const { deviceId, storageVariant, grade } = row.dataset;
+            const stockInput = row.querySelector("[data-stock-input]");
+            const priceInput = row.querySelector("[data-price-input]");
+            const stock = Number(stockInput.value) || 0;
+            const price = Number(priceInput.value) || 0;
+
+            const device = inventoryState.find((item) => item.id === deviceId);
+            if (!device) return;
+            const storage = device.storages.find((item) => item.variant === storageVariant);
+            if (!storage) return;
+            storage.stock = storage.stock || {};
+            storage.asking = storage.asking || {};
+            storage.stock[grade] = stock;
+            storage.asking[grade] = price;
+
+            saveInventory(inventoryState);
+            showToast("Inventory updated.");
+        });
+
+        resetInventoryButton.addEventListener("click", () => {
+            resetInventory();
+            inventoryState = loadInventory();
+            renderInventoryTable();
+            showToast("Inventory reset to defaults.", "amber");
+        });
+
+        addDeviceForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const formData = new FormData(addDeviceForm);
+            const brand = formData.get("brand").trim();
+            const model = formData.get("model").trim();
+            const tagline = formData.get("tagline").trim();
+            const image = formData.get("image").trim();
+            const highlights = formData.get("highlights").trim();
+            const storageVariant = formData.get("storage").trim();
+            const grade = formData.get("grade");
+            const stock = Number(formData.get("stock")) || 0;
+            const price = Number(formData.get("price")) || 0;
+
+            if (!brand || !model || !storageVariant || !grade) {
+                showToast("Fill out all required fields.", "rose");
+                return;
+            }
+
+            let device = inventoryState.find((item) => item.brand === brand && item.model === model);
+            if (!device) {
+                device = {
+                    id: `${brand.toLowerCase().replace(/\s+/g, "-")}-${model.toLowerCase().replace(/\s+/g, "-")}`,
+                    brand,
+                    model,
+                    tagline,
+                    image,
+                    highlights: highlights ? highlights.split(",").map((item) => item.trim()).filter(Boolean) : [],
+                    storages: []
+                };
+                inventoryState.push(device);
+            } else {
+                if (tagline) device.tagline = tagline;
+                if (image) device.image = image;
+                if (highlights) {
+                    device.highlights = highlights.split(",").map((item) => item.trim()).filter(Boolean);
+                }
+            }
+
+            let storage = device.storages.find((item) => item.variant === storageVariant);
+            if (!storage) {
+                storage = {
+                    variant: storageVariant,
+                    stock: {},
+                    asking: {}
+                };
+                device.storages.push(storage);
+            }
+
+            storage.stock[grade] = stock;
+            storage.asking[grade] = price;
+
+            saveInventory(inventoryState);
+            renderInventoryTable();
+            addDeviceForm.reset();
+            showToast("Device updated.");
+        });
+
+        renderMetrics();
+        renderOfferFilters();
+        renderOfferCards();
+        renderInventoryTable();
+    </script>
+</body>
+</html>

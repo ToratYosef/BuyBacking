@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Buy Devices | SecondHandCell Wholesale Catalog</title>
+    <link rel="icon" href="/favicon/favicon.ico" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+    />
+    <style>
+        body {
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50">
+    <div id="toast" class="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
+        <div id="toastContent" class="hidden w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg"></div>
+    </div>
+
+    <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <nav class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-5">
+            <a href="/buy/" class="flex items-center gap-3 text-slate-900">
+                <img src="/assets/logo.png" alt="SecondHandCell" class="h-12 w-12 rounded-full border border-slate-200 bg-white p-2" />
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-600">SecondHandCell</p>
+                    <h1 class="text-2xl font-semibold tracking-tight">Wholesale catalog</h1>
+                </div>
+            </a>
+            <div class="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
+                <a href="/buy/" class="transition hover:text-emerald-600">Home</a>
+                <a href="/buy/buy-device.html" class="text-slate-900">Devices</a>
+                <a href="/buy/cart.html" class="transition hover:text-emerald-600">Cart</a>
+                <a href="/buy/my-account.html" class="transition hover:text-emerald-600">My account</a>
+            </div>
+            <div class="flex items-center gap-3">
+                <button
+                    id="accountButton"
+                    class="relative flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-emerald-300 hover:text-emerald-600"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                >
+                    <span id="accountInitial" class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-500"></span>
+                </button>
+                <div class="relative">
+                    <button
+                        id="cartButton"
+                        class="relative flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400"
+                        aria-haspopup="true"
+                    >
+                        <i class="fa-solid fa-cart-shopping"></i>
+                        Cart
+                        <span
+                            id="cartBadge"
+                            class="absolute -right-2 -top-2 hidden h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white"
+                        >
+                            0
+                        </span>
+                    </button>
+                    <div id="cartPreview" class="absolute right-0 top-14 hidden w-80 rounded-3xl border border-slate-200 bg-white p-5 shadow-xl">
+                        <div class="flex items-center justify-between">
+                            <p class="text-sm font-semibold text-slate-900">Cart preview</p>
+                            <button class="text-xs font-medium uppercase tracking-[0.3em] text-slate-400 hover:text-emerald-600" data-close-cart-preview>
+                                Close
+                            </button>
+                        </div>
+                        <div id="cartPreviewEmpty" class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
+                            Your cart is empty. Select quantities below to add devices.
+                        </div>
+                        <div id="cartPreviewList" class="mt-4 space-y-3"></div>
+                        <div class="mt-5 flex items-center justify-between">
+                            <a
+                                id="openCartLink"
+                                href="/buy/cart.html"
+                                class="rounded-full bg-emerald-500 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-emerald-400"
+                            >
+                                Open cart
+                            </a>
+                            <button class="text-xs font-medium text-emerald-600 underline" data-close-cart-preview>
+                                Keep browsing
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <div id="accountDropdown" class="absolute right-6 top-20 hidden w-72 rounded-3xl border border-slate-200 bg-white p-5 text-sm shadow-2xl">
+            <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-base font-semibold text-white">
+                    <span id="accountInitialClone">SC</span>
+                </div>
+                <div>
+                    <p data-account-name class="font-semibold text-slate-900">SecondHandCell buyer</p>
+                    <p data-account-email class="text-xs text-slate-500"></p>
+                </div>
+            </div>
+            <div class="mt-5 grid gap-2 text-sm text-slate-600">
+                <a href="/buy/my-account.html#pending" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Pending offers</a>
+                <a href="/buy/my-account.html#history" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Recent orders</a>
+                <a href="/buy/my-account.html#profile" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Account info</a>
+                <a href="/buy/my-account.html#completed" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Completed orders</a>
+                <a href="/buy/my-account.html#imeis" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Order IMEIs</a>
+                <a href="/buy/cart.html" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Open cart</a>
+                <a href="/buy/checkout.html" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Checkout</a>
+                <button
+                    data-sign-out
+                    class="mt-2 flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 transition hover:border-rose-300 hover:text-rose-500"
+                >
+                    Sign out
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="mx-auto flex max-w-7xl flex-col gap-16 px-6 py-16">
+        <section class="space-y-10">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                    <span class="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Live inventory matrix</span>
+                    <h2 class="mt-4 text-4xl font-bold tracking-tight text-slate-900">Select quantities by storage and cosmetic grade.</h2>
+                    <p class="mt-4 max-w-2xl text-lg text-slate-600">Each row represents a storage capacity, and each column shows the available A, B, C, and F stock. Add mixes to your cart and submit pricing once you are ready.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button id="clearAllQuantities" class="rounded-full border border-slate-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-600 transition hover:border-rose-300 hover:text-rose-500">
+                        Clear selections
+                    </button>
+                    <button id="clearCartButton" class="rounded-full border border-slate-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-600 transition hover:border-rose-300 hover:text-rose-500">
+                        Clear cart
+                    </button>
+                    <a href="/buy/cart.html" class="rounded-full bg-emerald-500 px-6 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400">
+                        Review cart
+                    </a>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-3" id="brandFilters"></div>
+        </section>
+
+        <section id="inventorySections" class="space-y-16"></section>
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white/90">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>Offers require authentication. Cart data is stored locally under <code>wholesaleCartV2</code>.</p>
+            <div class="flex items-center gap-3">
+                <a href="mailto:wholesale@secondhandcell.com" class="font-medium text-emerald-600">Contact</a>
+                <span>&bull;</span>
+                <a href="/terms.html" class="hover:text-emerald-600">Terms</a>
+                <span>&bull;</span>
+                <a href="/privacy.html" class="hover:text-emerald-600">Privacy</a>
+            </div>
+        </div>
+    </footer>
+
+    <div id="authBackdrop" class="fixed inset-0 z-50 hidden bg-slate-900/60"></div>
+    <div id="authModal" class="fixed inset-0 z-50 hidden items-center justify-center px-4 py-10">
+        <div class="mx-auto w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-8 shadow-2xl">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Wholesale access</p>
+                    <h2 data-auth-title class="mt-2 text-2xl font-semibold text-slate-900">Sign in</h2>
+                </div>
+                <button class="text-slate-400 transition hover:text-slate-600" data-close-auth-modal>
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="mt-6 flex items-center gap-4 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
+                <button data-auth-mode="signIn" class="rounded-full border border-slate-200 px-4 py-2">Sign in</button>
+                <button data-auth-mode="signUp" class="rounded-full border border-slate-200 px-4 py-2">Sign up</button>
+            </div>
+            <form id="authForm" class="mt-6 space-y-4">
+                <div id="authNameRow" class="hidden">
+                    <label class="text-sm font-medium text-slate-600">Full name
+                        <input name="displayName" type="text" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Wholesale buyer" />
+                    </label>
+                </div>
+                <label class="block text-sm font-medium text-slate-600">Email address
+                    <input name="email" type="email" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="you@company.com" />
+                </label>
+                <label class="block text-sm font-medium text-slate-600">Password
+                    <input name="password" type="password" required minlength="6" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="••••••••" />
+                </label>
+                <p id="authError" class="hidden rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-600"></p>
+                <button type="submit" class="w-full rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400">
+                    Continue
+                </button>
+                <button type="button" data-google-signin class="flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">
+                    <i class="fa-brands fa-google"></i>
+                    Continue with Google
+                </button>
+                <button id="forgotPassword" type="button" class="w-full text-center text-xs font-semibold uppercase tracking-[0.3em] text-slate-400 hover:text-emerald-600">
+                    Forgot password
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeBuyHeader } from "./buy-header.js";
+        import {
+            loadInventory,
+            loadCart,
+            saveCart,
+            clearCart,
+            formatCurrency,
+            GRADE_ORDER,
+            GRADE_LABELS
+        } from "./buy-shared.js";
+
+        initializeBuyHeader();
+
+        const inventory = loadInventory();
+        const brandFilters = document.getElementById("brandFilters");
+        const inventorySections = document.getElementById("inventorySections");
+        const clearAllButton = document.getElementById("clearAllQuantities");
+        const clearCartButton = document.getElementById("clearCartButton");
+        const toastContent = document.getElementById("toastContent");
+        let activeBrand = "all";
+
+        function showToast(message, tone = "emerald") {
+            if (!toastContent) return;
+            toastContent.textContent = message;
+            toastContent.className = `w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg ${
+                tone === "rose"
+                    ? "border-rose-200 bg-rose-50 text-rose-600"
+                    : tone === "amber"
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+            }`;
+            toastContent.classList.remove("hidden");
+            setTimeout(() => {
+                toastContent.classList.add("hidden");
+            }, 2800);
+        }
+
+        function resetInputs() {
+            document.querySelectorAll("input[data-grade-input]").forEach((input) => {
+                input.value = "";
+            });
+        }
+
+        function renderBrandFilters() {
+            const brands = ["all", ...Array.from(new Set(inventory.map((device) => device.brand)))];
+            brandFilters.innerHTML = "";
+            brands.forEach((brand) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.textContent = brand === "all" ? "All brands" : brand;
+                button.className = `rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] transition ${
+                    activeBrand === brand
+                        ? "border-emerald-400 bg-emerald-500 text-white"
+                        : "border-slate-300 text-slate-600 hover:border-emerald-300 hover:text-emerald-600"
+                }`;
+                button.addEventListener("click", () => {
+                    activeBrand = brand;
+                    renderBrandFilters();
+                    renderInventory();
+                });
+                brandFilters.appendChild(button);
+            });
+        }
+
+        function createGradeCell(device, storage, grade) {
+            const available = storage.stock?.[grade] || 0;
+            const asking = storage.asking?.[grade] || 0;
+            const cell = document.createElement("td");
+            cell.className = "border border-slate-200 p-4 align-top";
+            cell.innerHTML = `
+                <div class="space-y-2">
+                    <label class="block text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">${grade}</label>
+                    <input
+                        type="number"
+                        min="0"
+                        max="${available}"
+                        data-grade-input
+                        data-device-id="${device.id}"
+                        data-brand="${device.brand}"
+                        data-model="${device.model}"
+                        data-storage="${storage.variant}"
+                        data-grade="${grade}"
+                        data-asking="${asking}"
+                        data-available="${available}"
+                        class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none"
+                        placeholder="0"
+                    />
+                    <p class="text-[11px] text-slate-400">In stock: ${available}</p>
+                    <p class="text-[11px] text-slate-400">Ask: ${formatCurrency(asking)}</p>
+                </div>
+            `;
+            return cell;
+        }
+
+        function renderInventory() {
+            inventorySections.innerHTML = "";
+            const filtered = activeBrand === "all" ? inventory : inventory.filter((device) => device.brand === activeBrand);
+            const grouped = new Map();
+            filtered.forEach((device) => {
+                if (!grouped.has(device.brand)) {
+                    grouped.set(device.brand, []);
+                }
+                grouped.get(device.brand).push(device);
+            });
+
+            Array.from(grouped.entries()).forEach(([brand, devices]) => {
+                const section = document.createElement("section");
+                section.id = brand.toLowerCase();
+                section.className = "space-y-8";
+                section.innerHTML = `
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">${brand}</p>
+                            <h3 class="mt-2 text-3xl font-semibold text-slate-900">${devices.length} ${(devices.length === 1 ? "model" : "models")}</h3>
+                        </div>
+                        <p class="text-sm text-slate-500">Select quantities below and add them to your cart to set pricing.</p>
+                    </div>
+                `;
+
+                const grid = document.createElement("div");
+                grid.className = "grid gap-6 lg:grid-cols-2";
+
+                devices.forEach((device) => {
+                    const card = document.createElement("article");
+                    card.className = "flex flex-col gap-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm";
+                    card.innerHTML = `
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="space-y-2">
+                                <h4 class="text-xl font-semibold text-slate-900">${device.brand} ${device.model}</h4>
+                                <p class="text-sm text-slate-500">${device.tagline || "Ready to ship"}</p>
+                                <div class="flex flex-wrap gap-2">
+                                    ${GRADE_ORDER.map((grade) => `
+                                        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">
+                                            ${grade}
+                                        </span>
+                                    `).join("")}
+                                </div>
+                                ${device.highlights && device.highlights.length
+                                    ? `<ul class="mt-3 space-y-1 text-xs text-slate-500">${device.highlights
+                                          .map((item) => `<li class="flex items-center gap-2"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>${item}</li>`)
+                                          .join("")}</ul>`
+                                    : ""}
+                            </div>
+                            ${device.image
+                                ? `<img src="${device.image}" alt="${device.model}" class="h-32 w-32 rounded-3xl border border-slate-200 bg-white object-contain p-4" />`
+                                : ""}
+                        </div>
+                        <div class="overflow-hidden rounded-2xl border border-slate-200">
+                            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+                                <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                                    <tr>
+                                        <th class="px-5 py-4">Storage</th>
+                                        ${GRADE_ORDER.map((grade) => `<th class="px-5 py-4">${grade}</th>`).join("")}
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 bg-white">
+                                    ${device.storages
+                                        .map((storage) => {
+                                            const storageCell = `
+                                                <td class="border border-slate-200 p-4 align-top">
+                                                    <div class="space-y-2">
+                                                        <p class="text-sm font-semibold text-slate-900">${storage.variant}</p>
+                                                        <p class="text-[11px] uppercase tracking-[0.3em] text-slate-400">${Object.entries(storage.stock)
+                                                            .map(([grade, value]) => `${grade}: ${value}`)
+                                                            .join(" · ")}</p>
+                                                    </div>
+                                                </td>
+                                            `;
+                                            const gradeCells = GRADE_ORDER.map((grade) => createGradeCell(device, storage, grade).outerHTML).join("");
+                                            return `<tr>${storageCell}${gradeCells}</tr>`;
+                                        })
+                                        .join("")}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                            <p class="text-xs text-slate-500">Set quantities first, then add them to your cart.</p>
+                            <button
+                                type="button"
+                                class="rounded-full bg-emerald-500 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-emerald-400"
+                                data-add-device="${device.id}"
+                            >
+                                Add selections to cart
+                            </button>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+
+                section.appendChild(grid);
+                inventorySections.appendChild(section);
+            });
+        }
+
+        function addSelectionsToCart(button) {
+            const card = button.closest("article");
+            if (!card) return;
+            const inputs = Array.from(card.querySelectorAll("input[data-grade-input]"));
+            const selections = inputs
+                .map((input) => ({
+                    quantity: Number(input.value),
+                    grade: input.dataset.grade,
+                    available: Number(input.dataset.available),
+                    askingPrice: Number(input.dataset.asking),
+                    deviceId: input.dataset.deviceId,
+                    brand: input.dataset.brand,
+                    model: input.dataset.model,
+                    storageVariant: input.dataset.storage
+                }))
+                .filter((line) => line.quantity > 0);
+
+            if (!selections.length) {
+                showToast("Select at least one quantity before adding to cart.", "rose");
+                return;
+            }
+
+            let cart = loadCart();
+            selections.forEach((line) => {
+                const cappedQuantity = Math.min(line.quantity, line.available);
+                const lineId = `${line.deviceId}__${line.storageVariant}__${line.grade}`;
+                const existingIndex = cart.findIndex((item) => item.lineId === lineId);
+                if (existingIndex >= 0) {
+                    cart[existingIndex].quantity = Math.min(
+                        cart[existingIndex].quantity + cappedQuantity,
+                        line.available
+                    );
+                    cart[existingIndex].askingPrice = line.askingPrice;
+                } else {
+                    cart.push({
+                        lineId,
+                        deviceId: line.deviceId,
+                        brand: line.brand,
+                        model: line.model,
+                        storageVariant: line.storageVariant,
+                        grade: line.grade,
+                        quantity: cappedQuantity,
+                        available: line.available,
+                        askingPrice: line.askingPrice
+                    });
+                }
+            });
+
+            saveCart(cart);
+            inputs.forEach((input) => {
+                input.value = "";
+            });
+            showToast("Added selections to your cart.");
+        }
+
+        inventorySections.addEventListener("click", (event) => {
+            const button = event.target.closest("button[data-add-device]");
+            if (button) {
+                addSelectionsToCart(button);
+            }
+        });
+
+        clearAllButton.addEventListener("click", () => {
+            resetInputs();
+            showToast("Cleared quantity selections.", "amber");
+        });
+
+        clearCartButton.addEventListener("click", () => {
+            clearCart();
+            showToast("Cleared all items from your cart.", "amber");
+        });
+
+        renderBrandFilters();
+        renderInventory();
+    </script>
+</body>
+</html>
