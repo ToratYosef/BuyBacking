@@ -3529,4 +3529,472 @@ app.delete("/orders/:id", async (req, res) => {
   }
 });
 
+function getWholesaleNotificationInbox() {
+  if (process.env.WHOLESALE_NOTIFICATIONS_TO) {
+    return process.env.WHOLESALE_NOTIFICATIONS_TO;
+  }
+  if (process.env.INFO_EMAIL) {
+    return process.env.INFO_EMAIL;
+  }
+  try {
+    if (
+      functions.config().notifications &&
+      functions.config().notifications.wholesale_to
+    ) {
+      return functions.config().notifications.wholesale_to;
+    }
+  } catch (error) {
+    console.warn(
+      "Unable to read notifications.wholesale_to config:",
+      error.message
+    );
+  }
+  return "info@secondhandcell.com";
+}
+
+function getWholesaleFromAddress() {
+  if (process.env.EMAIL_USER) {
+    return process.env.EMAIL_USER;
+  }
+  try {
+    if (functions.config().email && functions.config().email.user) {
+      return functions.config().email.user;
+    }
+  } catch (error) {
+    console.warn("Unable to read email.user config:", error.message);
+  }
+  return "info@secondhandcell.com";
+}
+
+function formatUsd(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "$0.00";
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numeric);
+}
+
+function escapeHtml(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildWholesaleItemsTable(items, { priceOverrides } = {}) {
+  const list = Array.isArray(items) ? items : [];
+  const overrides = priceOverrides && typeof priceOverrides === "object" ? priceOverrides : {};
+
+  if (!list.length) {
+    return "<p style=\"margin:16px 0;\">No line items were provided.</p>";
+  }
+
+  let units = 0;
+  let total = 0;
+
+  const rows = list
+    .map((item) => {
+      const quantity = Number(item.quantity) || 0;
+      const overrideKey = item.lineId || item.lineID || item.line_id;
+      const overridePrice =
+        overrideKey !== undefined && overrideKey !== null
+          ? overrides[overrideKey]
+          : undefined;
+      const price = Number(
+        overridePrice ??
+          item.acceptedPrice ??
+          item.counterPrice ??
+          item.offerPrice ??
+          0
+      );
+      const lineTotal = quantity * price;
+      units += quantity;
+      total += lineTotal;
+
+      const deviceParts = [item.brand, item.model, item.storage, item.grade]
+        .filter(Boolean)
+        .map((part) => String(part));
+      const label =
+        item.device ||
+        item.title ||
+        deviceParts.join(" • ") ||
+        "Wholesale device";
+
+      const safeLabel = escapeHtml(label);
+
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${safeLabel}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;">${quantity}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;">${formatUsd(price)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:right;">${formatUsd(lineTotal)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <div style="margin:20px 0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;">
+        <thead style="background:#f8fafc;">
+          <tr>
+            <th style="text-align:left;padding:10px 12px;font-size:13px;color:#475569;text-transform:uppercase;letter-spacing:0.06em;">Item</th>
+            <th style="text-align:center;padding:10px 12px;font-size:13px;color:#475569;text-transform:uppercase;letter-spacing:0.06em;">Qty</th>
+            <th style="text-align:right;padding:10px 12px;font-size:13px;color:#475569;text-transform:uppercase;letter-spacing:0.06em;">Unit Price</th>
+            <th style="text-align:right;padding:10px 12px;font-size:13px;color:#475569;text-transform:uppercase;letter-spacing:0.06em;">Line Total</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr>
+            <td style="padding:12px;font-weight:600;color:#0f172a;">Totals</td>
+            <td style="padding:12px;text-align:center;font-weight:600;color:#0f172a;">${units}</td>
+            <td></td>
+            <td style="padding:12px;text-align:right;font-weight:600;color:#0f172a;">${formatUsd(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+
+function buildWholesaleEmailTemplate({
+  title,
+  intro,
+  items,
+  priceOverrides,
+  note,
+  cta,
+  footer,
+}) {
+  const itemsTable = buildWholesaleItemsTable(items, { priceOverrides });
+  const safeNote = escapeHtml(note).replace(/\n/g, "<br />");
+  const noteBlock = note
+    ? `
+        <div style="margin:16px 0;padding:16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+          <p style="margin:0;font-size:14px;color:#0f172a;font-weight:600;">Notes</p>
+          <p style="margin:8px 0 0;font-size:14px;color:#334155;">${safeNote}</p>
+        </div>
+      `
+    : "";
+  const ctaButton = cta && cta.url && cta.label
+    ? `
+        <div style="margin:24px 0;">
+          <a href="${cta.url}" style="display:inline-block;padding:14px 28px;border-radius:999px;background:#10b981;color:#ffffff;font-weight:600;text-decoration:none;">${cta.label}</a>
+        </div>
+      `
+    : "";
+  const footerBlock = footer
+    ? `<p style=\"margin-top:24px;font-size:12px;color:#94a3b8;\">${escapeHtml(footer)}</p>`
+    : "";
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${title}</title>
+      </head>
+      <body style="margin:0;padding:0;background:#f1f5f9;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;">
+        <div style="max-width:640px;margin:0 auto;padding:32px 20px;">
+          <div style="background:#ffffff;border-radius:24px;box-shadow:0 12px 35px rgba(15,23,42,0.12);overflow:hidden;">
+            <div style="padding:28px 32px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#0ea5e9 0%,#10b981 100%);color:#ffffff;">
+              <h1 style="margin:0;font-size:24px;">${title}</h1>
+            </div>
+            <div style="padding:28px 32px;">
+              <div style="font-size:15px;line-height:1.6;color:#334155;">${intro}</div>
+              ${noteBlock}
+              ${itemsTable}
+              ${ctaButton}
+              ${footerBlock}
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+async function sendWholesaleEmail({ to, subject, html, text }) {
+  if (!to) {
+    console.warn("Wholesale notification skipped due to missing recipient.", {
+      subject,
+    });
+    return;
+  }
+
+  const mailOptions = {
+    from: getWholesaleFromAddress(),
+    to,
+    subject,
+    html,
+  };
+
+  if (text) {
+    mailOptions.text = text;
+  }
+
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error("Failed to send wholesale notification email:", error);
+  }
+}
+
+exports.notifyWholesaleOfferCreated = functions.firestore
+  .document("wholesale/{userId}/offers/{offerDocId}")
+  .onCreate(async (snap, context) => {
+    const offer = snap.data() || {};
+    const offerId = offer.id || context.params.offerDocId;
+    const buyer = offer.buyer || {};
+    const buyerName = buyer.name || buyer.company || buyer.email || "Wholesale buyer";
+    const buyerEmail = buyer.email || "Unknown";
+    const internalRecipient = getWholesaleNotificationInbox();
+    const safeOfferId = escapeHtml(offerId);
+    const safeBuyerName = escapeHtml(buyerName);
+    const safeBuyerEmail = escapeHtml(buyerEmail);
+
+    const intro = `
+      <p style="margin:0 0 12px;">A new wholesale offer has been submitted.</p>
+      <p style="margin:0;">Buyer: <strong>${safeBuyerName}</strong> (${safeBuyerEmail})</p>
+      <p style="margin:12px 0 0;">Offer ID: <strong>${safeOfferId}</strong></p>
+    `;
+
+    const html = buildWholesaleEmailTemplate({
+      title: "New wholesale offer received",
+      intro,
+      items: offer.items,
+      priceOverrides: null,
+      note: offer.note,
+      cta: {
+        label: "Review in admin",
+        url: "https://secondhandcell.com/buy/admin.html#offers",
+      },
+      footer: "This notification was generated automatically when the buyer submitted their cart.",
+    });
+
+    const text = `New wholesale offer ${offerId} from ${buyerName} (${buyerEmail}).`;
+
+    await sendWholesaleEmail({
+      to: internalRecipient,
+      subject: `New wholesale offer ${offerId} submitted`,
+      html,
+      text,
+    });
+
+    return null;
+  });
+
+exports.notifyWholesaleOfferUpdated = functions.firestore
+  .document("wholesale/{userId}/offers/{offerDocId}")
+  .onUpdate(async (change, context) => {
+    const before = change.before.data() || {};
+    const after = change.after.data() || {};
+    const offerId = after.id || before.id || context.params.offerDocId;
+    const buyer = after.buyer || before.buyer || {};
+    const buyerName = buyer.name || buyer.company || buyer.email || "Wholesale buyer";
+    const buyerEmail = buyer.email || null;
+    const statusBefore = before.status || "pending";
+    const statusAfter = after.status || "pending";
+    const notifications = [];
+    const displayBuyerEmail = buyerEmail || "Not provided";
+    const safeOfferId = escapeHtml(offerId);
+    const safeBuyerName = escapeHtml(buyerName);
+
+    const counterBefore = (before.counter && before.counter.items) || {};
+    const counterAfter = (after.counter && after.counter.items) || {};
+    const noteBefore = (before.counter && before.counter.note) || "";
+    const noteAfter = (after.counter && after.counter.note) || "";
+    const counterChanged =
+      statusAfter === "counter" &&
+      (statusBefore !== "counter" ||
+        JSON.stringify(counterBefore) !== JSON.stringify(counterAfter) ||
+        noteBefore !== noteAfter);
+
+    if (counterChanged && buyerEmail) {
+      const intro = `
+        <p style="margin:0 0 12px;">We reviewed your wholesale request and provided updated pricing.</p>
+        <p style="margin:0;">Offer ID: <strong>${safeOfferId}</strong></p>
+      `;
+      const html = buildWholesaleEmailTemplate({
+        title: "We've provided a counter offer",
+        intro,
+        items: after.items,
+        priceOverrides: counterAfter,
+        note: noteAfter,
+        cta: {
+          label: "Review counter in My Account",
+          url: "https://secondhandcell.com/buy/my-account.html#pending",
+        },
+        footer: "Sign in to your wholesale portal to accept or decline this counter.",
+      });
+      const text = `A counter offer is ready for ${offerId}. Review it in your wholesale portal.`;
+      notifications.push(
+        sendWholesaleEmail({
+          to: buyerEmail,
+          subject: `Counter offer ready for ${offerId}`,
+          html,
+          text,
+        })
+      );
+    }
+
+    if (statusBefore !== statusAfter && statusAfter === "accepted" && buyerEmail) {
+      const intro = `
+        <p style="margin:0 0 12px;">Great news! Your wholesale offer is ready to check out.</p>
+        <p style="margin:0;">Offer ID: <strong>${safeOfferId}</strong></p>
+      `;
+      const html = buildWholesaleEmailTemplate({
+        title: "Your offer has been approved",
+        intro,
+        items: after.items,
+        priceOverrides: counterAfter,
+        note: "Checkout is ready whenever you are.",
+        cta: {
+          label: "Proceed to checkout",
+          url: `https://secondhandcell.com/buy/checkout.html?offer=${encodeURIComponent(offerId)}`,
+        },
+        footer: "Payment is due within 24 hours to keep inventory reserved.",
+      });
+      const text = `Offer ${offerId} has been accepted. Complete checkout at https://secondhandcell.com/buy/checkout.html?offer=${offerId}`;
+      notifications.push(
+        sendWholesaleEmail({
+          to: buyerEmail,
+          subject: `Offer ${offerId} approved – complete checkout` ,
+          html,
+          text,
+        })
+      );
+    }
+
+    if (statusBefore !== statusAfter && statusAfter === "declined" && buyerEmail) {
+      const intro = `
+        <p style="margin:0 0 12px;">We wanted to let you know that this wholesale offer has been declined.</p>
+        <p style="margin:0;">Offer ID: <strong>${safeOfferId}</strong></p>
+      `;
+      const html = buildWholesaleEmailTemplate({
+        title: "Update on your wholesale offer",
+        intro,
+        items: after.items,
+        priceOverrides: null,
+        note: noteAfter,
+        cta: {
+          label: "View details in My Account",
+          url: "https://secondhandcell.com/buy/my-account.html#history",
+        },
+        footer: "Reach out to your account manager if you'd like to revisit this submission.",
+      });
+      const text = `Offer ${offerId} was declined. Sign in to review details.`;
+      notifications.push(
+        sendWholesaleEmail({
+          to: buyerEmail,
+          subject: `Offer ${offerId} was declined`,
+          html,
+          text,
+        })
+      );
+    }
+
+    if (statusBefore !== statusAfter && statusAfter === "processing") {
+      const orderId = after.payment && after.payment.orderId;
+      const totalAmount = after.payment && after.payment.totalAmount;
+      const intro = `
+        <p style="margin:0 0 12px;">${safeBuyerName} started checkout for their wholesale offer.</p>
+        <p style="margin:0;">Offer ID: <strong>${safeOfferId}</strong></p>
+        <p style="margin:12px 0 0;">Expected charge: <strong>${formatUsd(totalAmount)}</strong></p>
+        ${
+          orderId
+            ? `<p style="margin:12px 0 0;">Wholesale order ID: <strong>${escapeHtml(orderId)}</strong></p>`
+            : ""
+        }
+      `;
+      const html = buildWholesaleEmailTemplate({
+        title: "Wholesale checkout started",
+        intro,
+        items: after.items,
+        priceOverrides: counterAfter,
+        note: noteAfter,
+        cta: {
+          label: "Open admin dashboard",
+          url: "https://secondhandcell.com/buy/admin.html#offers",
+        },
+        footer: `Buyer: ${buyerName} (${displayBuyerEmail || "No email on file"})`,
+      });
+      const text = `Buyer ${buyerName} started checkout for ${offerId}.`;
+      notifications.push(
+        sendWholesaleEmail({
+          to: getWholesaleNotificationInbox(),
+          subject: `Checkout started for wholesale offer ${offerId}`,
+          html,
+          text,
+        })
+      );
+    }
+
+    if (statusBefore !== statusAfter && statusAfter === "completed") {
+      const orderId = after.payment && after.payment.orderId;
+      const totalAmount = after.payment && after.payment.totalAmount;
+      const paymentIntentId =
+        after.payment && (after.payment.paymentIntentId || after.payment.intentId);
+      const intro = `
+        <p style="margin:0 0 12px;">Payment for this wholesale offer has been confirmed.</p>
+        <p style="margin:0;">Offer ID: <strong>${safeOfferId}</strong></p>
+        ${
+          orderId
+            ? `<p style="margin:12px 0 0;">Wholesale order ID: <strong>${escapeHtml(orderId)}</strong></p>`
+            : ""
+        }
+        ${
+          totalAmount
+            ? `<p style="margin:12px 0 0;">Total collected: <strong>${formatUsd(totalAmount)}</strong></p>`
+            : ""
+        }
+        ${
+          paymentIntentId
+            ? `<p style="margin:12px 0 0;">Stripe PI: <strong>${escapeHtml(paymentIntentId)}</strong></p>`
+            : ""
+        }
+      `;
+      const html = buildWholesaleEmailTemplate({
+        title: "Wholesale payment received",
+        intro,
+        items: after.items,
+        priceOverrides: counterAfter,
+        note: noteAfter,
+        cta: {
+          label: "View order in admin",
+          url: "https://secondhandcell.com/buy/admin.html#offers",
+        },
+        footer: `Buyer: ${buyerName} (${displayBuyerEmail || "No email on file"})`,
+      });
+      const text = `Wholesale offer ${offerId} is paid. Total: ${formatUsd(totalAmount)}.`;
+      notifications.push(
+        sendWholesaleEmail({
+          to: getWholesaleNotificationInbox(),
+          subject: `Wholesale offer ${offerId} payment received`,
+          html,
+          text,
+        })
+      );
+    }
+
+    if (!notifications.length) {
+      return null;
+    }
+
+    await Promise.all(notifications);
+    return null;
+  });
+
 exports.api = functions.https.onRequest(app);

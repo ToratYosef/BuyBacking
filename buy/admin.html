@@ -646,12 +646,11 @@
             const originalOffer = allOffers[offerIndex];
             
             // Function to gather current UI state
-            const getCurrentUiUpdate = (newStatus = originalOffer.status) => {
-                const statusSelect = card.querySelector("[data-offer-status]");
+            const getCurrentUiUpdate = (requestedStatus = originalOffer.status) => {
                 const noteField = card.querySelector("[data-offer-note]");
                 const counterInputs = card.querySelectorAll("[data-counter-price]");
                 const note = noteField.value.trim();
-                
+
                 const counterValues = {};
                 counterInputs.forEach((input) => {
                     const value = Number(input.value);
@@ -662,47 +661,43 @@
 
                 const now = new Date().toISOString();
                 const update = {
-                    status: newStatus,
                     updatedAt: now,
                 };
-                
+
+                let nextStatus = requestedStatus;
+
                 // History Update
                 const newHistory = [...(originalOffer.history || [{ status: originalOffer.status, at: originalOffer.createdAt }])];
 
-                if (newStatus !== originalOffer.status) {
-                    newHistory.push({ status: newStatus, at: now });
-                }
-                update.history = newHistory;
-                
-                if (newStatus === "accepted") {
-                     update.acceptedAt = originalOffer.acceptedAt || now;
-                     update.counter = null; // Clear counter info on acceptance
-                }
-                if (newStatus === "completed") {
-                    update.completedAt = originalOffer.completedAt || now;
-                }
-                
-                // Handle Counter/Note Logic
                 const hasCounterValues = Object.keys(counterValues).length > 0;
-                
-                if (newStatus === "counter" || (newStatus === "declined" && hasCounterValues)) {
+                if (hasCounterValues) {
+                    nextStatus = "counter";
                     update.counter = {
                         note,
-                        items: counterValues
+                        items: counterValues,
                     };
-                    // Ensure the status is set to counter if counter values are present
-                    if(newStatus !== "declined") { update.status = "counter"; }
-
                 } else if (note) {
-                    // Update only the note if status is not counter
                     update.counter = {
                         ...(originalOffer.counter || {}),
-                        note: note // Store admin note here
+                        note,
                     };
                 } else if (originalOffer.counter && !hasCounterValues) {
-                     // If counter was cleared, ensure counter is nulled unless it was just a note update
-                     update.counter = { note: originalOffer.counter.note };
+                    update.counter = null;
                 }
+
+                if (nextStatus === "accepted") {
+                    update.acceptedAt = originalOffer.acceptedAt || now;
+                    update.counter = null; // Clear counter info on acceptance
+                }
+                if (nextStatus === "completed") {
+                    update.completedAt = originalOffer.completedAt || now;
+                }
+
+                if (nextStatus !== originalOffer.status) {
+                    newHistory.push({ status: nextStatus, at: now });
+                }
+                update.history = newHistory;
+                update.status = nextStatus;
 
                 return update;
             };
