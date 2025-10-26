@@ -123,7 +123,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, setLogLevel, query, collection, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, onSnapshot, setLogLevel, query, collection, where, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- Firebase Configuration and Setup ---
         const firebaseConfig = {
@@ -201,22 +201,22 @@
 
                 // Querying by 'id' field requires a separate query or using doc(offersColRef, offerId)
                 // Assuming offerId is the document ID for simplicity and performance.
-                const offerDocRef = doc(offersColRef, offerId);
-                
+                const offerQuery = query(offersColRef, where('id', '==', offerId), limit(1));
+
                 // Listen for real-time status change (webhook will eventually update status to 'completed')
-                const unsubscribe = onSnapshot(offerDocRef, (docSnap) => {
-                    if (!docSnap.exists()) {
-                        displayFailure("Offer not found for this account.");
-                        unsubscribe();
+                const unsubscribe = onSnapshot(offerQuery, (snapshot) => {
+                    if (snapshot.empty) {
+                        console.log(`Waiting for offer ${offerId} to sync…`);
                         return;
                     }
-                    
+
+                    const docSnap = snapshot.docs[0];
                     const offer = docSnap.data();
                     const orderId = offer.payment?.orderId || "N/A";
                     const totalPaid = offer.payment?.totalAmount;
-                    
+
                     orderIdDisplay.textContent = orderId;
-                    
+
                     if (offer.status === "completed") {
                         // SUCCESS STATE
                         totalPaidDisplay.textContent = totalPaid ? formatCurrency(totalPaid) : "N/A";
