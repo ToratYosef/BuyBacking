@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Order Submitted | SecondHandCell</title>
+    <link rel="icon" href="/favicon/favicon.ico" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+    />
+    <style>
+        body {
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+        main {
+            min-height: calc(100vh - 150px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        main.ready {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="toast" class="pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
+        <div id="toastContent" class="hidden w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg"></div>
+    </div>
+
+    <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
+        <nav class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-5">
+            <a href="/buy/" class="flex items-center gap-3 text-slate-900">
+                <img src="https://placehold.co/100x100/10b981/ffffff?text=SC" alt="SecondHandCell" class="h-12 w-12 rounded-full border border-slate-200 bg-white p-2" />
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-600">SecondHandCell</p>
+                    <h1 class="text-2xl font-semibold tracking-tight">Wholesale checkout</h1>
+                </div>
+            </a>
+            <a href="/buy/my-account.html" class="rounded-full bg-emerald-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400">
+                My Account
+            </a>
+        </nav>
+    </header>
+
+    <main id="mainContent">
+        <div class="w-full max-w-xl">
+            <div id="loadingState" class="text-center">
+                <i class="fa-solid fa-spinner fa-spin-pulse text-4xl text-slate-400"></i>
+                <p class="mt-4 text-lg text-slate-600">Verifying payment status...</p>
+                <p class="mt-2 text-sm text-slate-500">(This may take a moment while the server processes the payment via the webhook.)</p>
+            </div>
+
+            <div id="successState" class="hidden rounded-3xl border border-emerald-200 bg-white p-8 text-center shadow-xl">
+                <div class="flex flex-col items-center justify-center">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-3xl text-white shadow-xl shadow-emerald-300/50">
+                        <i class="fa-solid fa-check"></i>
+                    </div>
+                    <h2 class="mt-6 text-3xl font-bold tracking-tight text-slate-900">Order Placed Successfully!</h2>
+                    <p class="mt-3 text-sm text-slate-600">
+                        Your payment was successful and your order is confirmed. Our logistics team will begin processing immediately.
+                    </p>
+                </div>
+                
+                <div class="mt-6 space-y-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                    <p class="font-medium text-slate-900">Order ID: <span id="orderIdDisplay" class="font-bold text-emerald-600"></span></p>
+                    <p>Total Paid: <span id="totalPaidDisplay" class="font-semibold text-slate-900">&mdash;</span></p>
+                    <p>Transaction ID (PI): <span id="paymentIntentDisplay" class="font-semibold text-slate-900">&mdash;</span></p>
+                </div>
+
+                <div class="mt-8 flex flex-col gap-4">
+                    <a href="/buy/my-account.html#history" class="rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400">
+                        View Order in My Account
+                    </a>
+                    <a href="/buy/buy-device.html" class="text-xs font-medium text-slate-500 underline hover:text-emerald-600">
+                        Continue browsing the wholesale catalog
+                    </a>
+                </div>
+            </div>
+
+            <div id="failureState" class="hidden rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-xl">
+                <div class="flex flex-col items-center justify-center">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500 text-3xl text-white shadow-xl shadow-rose-300/50">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <h2 class="mt-6 text-3xl font-bold tracking-tight text-slate-900">Payment Unsuccessful</h2>
+                    <p id="failureMessage" class="mt-3 text-sm text-slate-600">
+                        There was an issue processing your payment. Please return to the checkout page to try again or contact support.
+                    </p>
+                </div>
+                <div class="mt-8">
+                    <a id="retryLink" href="/buy/checkout.html" class="rounded-full bg-rose-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-rose-200/60 transition hover:bg-rose-400">
+                        Return to Checkout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white/90">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p>SecondHandCell is committed to secure wholesale transactions.</p>
+            <div class="flex items-center gap-3">
+                <a href="mailto:wholesale@secondhandcell.com" class="font-medium text-emerald-600">Contact</a>
+                <span>&bull;</span>
+                <a href="/terms.html" class="hover:text-emerald-600">Terms</a>
+                <span>&bull;</span>
+                <a href="/privacy.html" class="hover:text-emerald-600">Privacy</a>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setLogLevel, query, collection, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // --- Firebase Configuration and Setup ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b19600d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        
+        let db, auth;
+        let userId = null;
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug');
+        } catch (e) {
+            console.error("Firebase initialization failed:", e);
+        }
+
+        // --- DOM Elements ---
+        const mainContent = document.getElementById("mainContent");
+        const loadingState = document.getElementById("loadingState");
+        const successState = document.getElementById("successState");
+        const failureState = document.getElementById("failureState");
+        const failureMessage = document.getElementById("failureMessage"); // Added
+        const orderIdDisplay = document.getElementById("orderIdDisplay");
+        const totalPaidDisplay = document.getElementById("totalPaidDisplay");
+        const paymentIntentDisplay = document.getElementById("paymentIntentDisplay");
+        const retryLink = document.getElementById("retryLink");
+
+        // --- Utility Functions ---
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency: "USD",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(amount);
+        };
+
+        function getOffersCollectionRef(uid) {
+             if (!db || !uid) return null;
+             return collection(db, 'wholesale', uid, 'offers'); 
+        }
+
+        // --- Main Logic ---
+
+        function handlePaymentConfirmation(user) {
+            const params = new URLSearchParams(window.location.search);
+            const offerId = params.get("offer");
+            const paymentIntent = params.get("payment_intent");
+            const redirectStatus = params.get("redirect_status");
+            
+            loadingState.classList.remove("hidden");
+            successState.classList.add("hidden");
+            failureState.classList.add("hidden");
+
+            if (redirectStatus === "succeeded" && offerId && paymentIntent) {
+                // Payment succeeded on Stripe side, now wait for Firestore/Webhook confirmation
+                
+                // Set initial URL parameters for display/retry
+                retryLink.href = `/buy/checkout.html?offer=${offerId}`;
+                paymentIntentDisplay.textContent = paymentIntent;
+
+                const offersColRef = getOffersCollectionRef(user.uid);
+                if (!offersColRef) {
+                    displayFailure("Cannot load order data. Authentication failed.");
+                    return;
+                }
+
+                // Querying by 'id' field requires a separate query or using doc(offersColRef, offerId)
+                // Assuming offerId is the document ID for simplicity and performance.
+                const offerDocRef = doc(offersColRef, offerId);
+                
+                // Listen for real-time status change (webhook will eventually update status to 'completed')
+                const unsubscribe = onSnapshot(offerDocRef, (docSnap) => {
+                    if (!docSnap.exists()) {
+                        displayFailure("Offer not found for this account.");
+                        unsubscribe();
+                        return;
+                    }
+                    
+                    const offer = docSnap.data();
+                    const orderId = offer.payment?.orderId || "N/A";
+                    const totalPaid = offer.payment?.totalAmount;
+                    
+                    orderIdDisplay.textContent = orderId;
+                    
+                    if (offer.status === "completed") {
+                        // SUCCESS STATE
+                        totalPaidDisplay.textContent = totalPaid ? formatCurrency(totalPaid) : "N/A";
+                        loadingState.classList.add("hidden");
+                        successState.classList.remove("hidden");
+                        failureState.classList.add("hidden");
+                        unsubscribe(); // Stop listening once completed
+                        console.log("Payment confirmed by Firestore update (webhook success).");
+                    } else if (offer.status === "declined") {
+                        // FAILURE STATE: Explicitly declined
+                        displayFailure("This offer was declined or rejected. Please contact support.");
+                        unsubscribe();
+                    } else if (offer.status === "payment_failed") {
+                        // FAILURE STATE: If a webhook sets this status (not currently implemented, but good for future proofing)
+                        displayFailure("The payment failed. Please return to checkout to try again.");
+                        unsubscribe();
+                    } else {
+                        // KEEP WAITING: Status is still pending, accepted, counter, etc.
+                        console.log(`Waiting for completion. Current status: ${offer.status}`);
+                        return;
+                    }
+                }, (error) => {
+                    console.error("Firestore Listener Error:", error);
+                    displayFailure("Failed to connect to order status updates.");
+                    unsubscribe();
+                });
+
+            } else {
+                // Payment failed or was cancelled (redirect_status is not 'succeeded')
+                displayFailure("Payment failed or was cancelled. Please return to checkout to retry.");
+            }
+        }
+
+        function displayFailure(message) {
+            console.error("Order Submission Failure:", message);
+            loadingState.classList.add("hidden");
+            successState.classList.add("hidden");
+            failureState.classList.remove("hidden");
+            failureMessage.textContent = message; // Display the specific error message
+            
+            // Extract offerId from URL to populate retry link if available
+            const params = new URLSearchParams(window.location.search);
+            const offerId = params.get("offer");
+            if (offerId) {
+                retryLink.href = `/buy/checkout.html?offer=${offerId}`;
+            }
+        }
+
+        // --- Authentication Check ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                if (user.isAnonymous) {
+                    // Anonymous users shouldn't be completing wholesale orders
+                    loadingState.classList.add("hidden");
+                    displayFailure("You must be signed in with a wholesale account to view this page.");
+                } else {
+                    handlePaymentConfirmation(user);
+                }
+            } else {
+                // Attempt anonymous sign-in just to get a UID for Firestore path
+                try {
+                    // Attempt to sign in anonymously to keep the app running, but still fail the process
+                    await signInAnonymously(auth); 
+                    displayFailure("You must sign in with your permanent wholesale account to view this order.");
+                } catch(e) {
+                    displayFailure("Authentication failed. Cannot access order details.");
+                    console.error("Failed to sign in anonymously:", e);
+                }
+            }
+            
+            mainContent.classList.add('ready');
+        });
+    </script>
+</body>
+</html>

@@ -6,7 +6,12 @@ const axios = require('axios');
 const { URLSearchParams } = require('url');
 const { DEFAULT_CARRIER_CODE } = require('../helpers/shipengine');
 
-const db = admin.firestore();
+// RESTORE FIX: Ensure app is initialized before using 'admin.firestore()'
+if (admin.apps.length === 0) {
+    admin.initializeApp();
+}
+
+const db = admin.firestore(); 
 const inventoryCollection = db.collection('wholesaleInventory');
 const ordersCollection = db.collection('wholesaleOrders');
 const offersCollection = db.collection('wholesaleOffers');
@@ -17,6 +22,24 @@ const SHIPENGINE_API_BASE_URL = 'https://api.shipengine.com/v1';
 const DEFAULT_IMAGE_BASE = 'https://raw.githubusercontent.com/toratyosef/BuyBacking/main/';
 const DEFAULT_SUCCESS_URL = 'https://secondhandcell.com/buy/order-submitted.html?order={ORDER_ID}';
 const DEFAULT_CANCEL_URL = 'https://secondhandcell.com/buy/checkout.html?offer={OFFER_ID}';
+
+// Initialize Stripe Library (must be done after key retrieval functions are defined)
+let stripe;
+function initializeStripe() {
+    const secretKey = getStripeSecretKey();
+    if (secretKey && !stripe) {
+        try {
+            // NOTE: In a real project, you would 'npm install stripe' and then require it here.
+            const Stripe = require('stripe');
+            stripe = Stripe(secretKey, {
+                apiVersion: '2020-08-27', // Use a stable API version
+            });
+        } catch (e) {
+            console.error("Stripe library failed to load or initialize:", e);
+        }
+    }
+}
+
 
 function readConfigValue(path, fallback = null) {
     try {
@@ -44,6 +67,15 @@ function getStripePublishableKey() {
         readConfigValue('stripe.publishable') ||
         process.env.STRIPE_PUBLISHABLE_KEY ||
         process.env.STRIPE_PUBLIC_KEY
+    );
+}
+
+function getStripeWebhookSecret() {
+    // Fetches the Stripe Webhook Secret from environment/config
+    // The user MUST set this in their Firebase Environment config or .env file
+    return (
+        readConfigValue('stripe.webhook_secret') ||
+        process.env.STRIPE_WEBHOOK_SECRET
     );
 }
 
@@ -224,63 +256,57 @@ async function estimateShippingRate(shipping, packages) {
     }
 }
 
-async function createStripeCheckoutSession({
+// ----------------------------------------------------
+// NEW FUNCTION: Create a Payment Intent for on-page payment
+// ----------------------------------------------------
+async function createStripePaymentIntent({
     orderId,
     offerId,
     buyer,
-    items,
-    shipping,
-    amount,
+    totalAmount,
     shippingAmount,
+    currency = 'usd',
     metadata = {}
 }) {
     const secretKey = getStripeSecretKey();
     if (!secretKey) {
         throw new Error('Stripe secret key not configured');
     }
+
+    // Stripe uses the smallest currency unit (cents)
+    const totalAmountInCents = Math.max(Math.round((totalAmount + shippingAmount) * 100), 50); 
+    
+    // Set up form data for application/x-www-form-urlencoded
     const params = new URLSearchParams();
-    params.append('mode', 'payment');
-    params.append('success_url', (shipping.successUrl || DEFAULT_SUCCESS_URL).replace('{ORDER_ID}', orderId));
-    params.append('cancel_url', (shipping.cancelUrl || DEFAULT_CANCEL_URL).replace('{OFFER_ID}', offerId));
-    params.append('customer_email', buyer?.email || '');
+    params.append('amount', totalAmountInCents.toString());
+    params.append('currency', currency);
+    params.append('payment_method_types[]', 'card'); // Allow card payments
+    
+    // Optional: Add buyer email as description or setup future customer object
+    if (buyer?.email) {
+        params.append('description', `Wholesale Order ${orderId} from ${buyer.email}`);
+    }
+
+    // Add metadata for tracking
     params.append('metadata[order_id]', orderId);
     params.append('metadata[offer_id]', offerId);
     params.append('metadata[user_id]', buyer?.uid || '');
-
-    items.forEach((item, index) => {
-        const quantity = Math.max(Number(item.quantity) || 0, 1);
-        const unitAmount = Math.max(
-            Math.round(Number(item.acceptedPrice || item.counterPrice || item.offerPrice || 0) * 100),
-            1
-        );
-        params.append(`line_items[${index}][quantity]`, quantity.toString());
-        params.append(`line_items[${index}][price_data][currency]`, 'usd');
-        params.append(`line_items[${index}][price_data][product_data][name]`, `${item.brand} ${item.model} · ${item.storageVariant} · Grade ${item.grade}`);
-        params.append(`line_items[${index}][price_data][unit_amount]`, unitAmount.toString());
-    });
-
-    if (shippingAmount && shippingAmount > 0) {
-        const index = items.length;
-        params.append(`line_items[${index}][quantity]`, '1');
-        params.append(`line_items[${index}][price_data][currency]`, 'usd');
-        params.append(`line_items[${index}][price_data][product_data][name]`, 'Estimated shipping');
-        params.append(`line_items[${index}][price_data][unit_amount]`, Math.round(shippingAmount * 100).toString());
-    }
-
+    
     Object.entries(metadata).forEach(([key, value]) => {
         if (value === undefined || value === null) return;
         params.append(`metadata[${key}]`, value.toString());
     });
-
-    const response = await axios.post(`${STRIPE_API_BASE_URL}/checkout/sessions`, params, {
+    
+    const response = await axios.post(`${STRIPE_API_BASE_URL}/payment_intents`, params, {
         headers: {
             Authorization: `Bearer ${secretKey}`,
             'Content-Type': 'application/x-www-form-urlencoded'
         }
     });
 
-    return response.data;
+    return response.data; // Includes the client_secret
 }
+// ----------------------------------------------------
 
 router.get('/inventory', async (req, res) => {
     try {
@@ -318,6 +344,7 @@ router.post('/inventory/import', async (req, res) => {
     }
 });
 
+// MODIFIED ROUTE: Creates a Payment Intent instead of a Checkout Session
 router.post('/orders/checkout', async (req, res) => {
     const decoded = await authenticate(req);
     if (!decoded?.uid) {
@@ -345,12 +372,14 @@ router.post('/orders/checkout', async (req, res) => {
         const price = Number(line.acceptedPrice || line.counterPrice || line.offerPrice || 0);
         return sum + price * (Number(line.quantity) || 0);
     }, 0);
+    
+    const finalTotal = offerTotal + shippingAmount;
 
     const orderRef = ordersCollection.doc();
     const orderId = orderRef.id;
 
     try {
-        const session = await createStripeCheckoutSession({
+        const paymentIntent = await createStripePaymentIntent({
             orderId,
             offerId,
             buyer: {
@@ -358,10 +387,8 @@ router.post('/orders/checkout', async (req, res) => {
                 email: buyer?.email || decoded.email || '',
                 name: buyer?.name || decoded.name || ''
             },
-            items,
-            shipping,
-            amount: offerTotal,
-            shippingAmount,
+            totalAmount: offerTotal,
+            shippingAmount: shippingAmount,
             metadata: {
                 shipping_preference: shipping.preference || '',
                 box_count: shipping.boxCount || '',
@@ -381,15 +408,15 @@ router.post('/orders/checkout', async (req, res) => {
             totals: {
                 units: totals?.units || items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
                 offerTotal,
-                shippingEstimate: shippingAmount
+                shippingEstimate: shippingAmount,
+                finalTotal: finalTotal // Store the final amount including shipping
             },
             shipping,
             packages,
             shippingEstimate,
             stripe: {
-                sessionId: session.id,
-                url: session.url,
-                paymentIntentId: session.payment_intent || null,
+                paymentIntentId: paymentIntent.id,
+                clientSecret: paymentIntent.client_secret, // CRITICAL: Store and return the client_secret
                 publishableKey: getStripePublishableKey()
             },
             status: 'payment_pending',
@@ -397,24 +424,149 @@ router.post('/orders/checkout', async (req, res) => {
         });
 
         if (payload.saveOfferSnapshot) {
+            // Update the offer document with the Payment Intent info, especially the clientSecret
             await offersCollection.doc(offerId).set({
                 ...payload.saveOfferSnapshot,
                 userId: decoded.uid,
                 orderId,
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                payment: {
+                    orderId: orderId,
+                    clientSecret: paymentIntent.client_secret,
+                    publishableKey: getStripePublishableKey(),
+                    shippingEstimate: shippingEstimate,
+                    boxCount: shipping.boxCount,
+                    totalAmount: finalTotal // Total amount client should see
+                }
             }, { merge: true });
         }
 
+        // Return clientSecret, totalAmount, and publishableKey for the Payment Element to initialize
         res.json({
             orderId,
-            checkoutUrl: session.url,
+            clientSecret: paymentIntent.client_secret,
             shippingEstimate,
+            totalAmount: finalTotal, // ADDED to return the calculated total
             publishableKey: getStripePublishableKey()
         });
     } catch (error) {
-        console.error('Failed to create checkout session:', error.response?.data || error.message);
-        res.status(500).json({ error: 'Unable to create Stripe checkout session' });
+        console.error('Failed to create payment intent:', error.response?.data || error.message);
+        res.status(500).json({ error: 'Unable to create Stripe Payment Intent' });
     }
+});
+
+// NEW ROUTE: Stripe Webhook Handler
+// This must be placed before any body-parsing middleware in the main app file
+// BUT since this is a router, we use express.raw to ensure raw body is accessible.
+router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    // initialize Stripe library for this request
+    initializeStripe(); 
+    
+    const signature = req.headers['stripe-signature'];
+    const webhookSecret = getStripeWebhookSecret();
+    let event;
+
+    if (!stripe || !webhookSecret) {
+        console.error("Stripe library or Webhook Secret is missing.");
+        // We still return 200 to prevent Stripe retries if the key is missing, 
+        // as the problem is internal config, not the event itself.
+        return res.status(200).send('Stripe configuration error.'); 
+    }
+
+    try {
+        event = stripe.webhooks.constructEvent(
+            req.body,
+            signature,
+            webhookSecret
+        );
+    } catch (err) {
+        console.error(`⚠️ Webhook Signature Verification Failed: ${err.message}`);
+        return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    if (event.type === 'payment_intent.succeeded') {
+        const paymentIntent = event.data.object;
+        // metadata fields should be available in Stripe from the Payment Intent creation call
+        const { order_id, offer_id, user_id } = paymentIntent.metadata;
+        
+        console.log(`PaymentIntent ${paymentIntent.id} succeeded for Order ${order_id}.`);
+
+        if (offer_id && user_id) {
+            try {
+                // 1. Update the user's offer document to 'completed'
+                const offerRef = db.collection('wholesale').doc(user_id).collection('offers').doc(offer_id);
+                await offerRef.set({
+                    status: 'completed',
+                    paidAt: admin.firestore.FieldValue.serverTimestamp(),
+                    payment: {
+                        paymentIntentStatus: 'succeeded',
+                        paymentIntentId: paymentIntent.id
+                    }
+                }, { merge: true });
+                console.log(`Offer ${offer_id} marked as completed.`);
+
+                // 2. Update the main wholesaleOrder document
+                if (order_id) {
+                    const orderRef = ordersCollection.doc(order_id);
+                    await orderRef.set({
+                        status: 'paid', // Order status is set to 'paid' after successful webhook confirmation
+                        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+                        stripe: {
+                            paymentIntentStatus: 'succeeded',
+                            paymentIntentId: paymentIntent.id
+                        }
+                    }, { merge: true });
+                    console.log(`Wholesale Order ${order_id} marked as paid.`);
+                }
+
+            } catch (firestoreError) {
+                console.error(`Firestore update error for PI ${paymentIntent.id}:`, firestoreError);
+                return res.status(500).send('Internal Server Error during Firestore update.');
+            }
+        } else {
+             console.warn(`PaymentIntent ${paymentIntent.id} missing required metadata (order_id/offer_id/user_id).`);
+        }
+    } else if (event.type === 'payment_intent.payment_failed') {
+        const paymentIntent = event.data.object;
+        const { order_id, offer_id, user_id } = paymentIntent.metadata;
+        console.log(`PaymentIntent ${paymentIntent.id} failed.`);
+
+        if (offer_id && user_id) {
+            try {
+                 const offerRef = db.collection('wholesale').doc(user_id).collection('offers').doc(offer_id);
+                 await offerRef.set({
+                    status: 'payment_failed', 
+                    failedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    payment: {
+                        paymentIntentStatus: 'failed',
+                        paymentIntentId: paymentIntent.id
+                    }
+                }, { merge: true });
+                 console.log(`Offer ${offer_id} marked as payment_failed.`);
+                 
+                 // Update main order status to reflect payment failure
+                 if (order_id) {
+                    const orderRef = ordersCollection.doc(order_id);
+                    await orderRef.set({
+                        status: 'payment_failed', 
+                        failedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        stripe: {
+                            paymentIntentStatus: 'failed',
+                            paymentIntentId: paymentIntent.id
+                        }
+                    }, { merge: true });
+                    console.log(`Wholesale Order ${order_id} marked as payment_failed.`);
+                }
+                 
+            } catch (e) {
+                 console.error(`Failed to mark offer ${offer_id} as payment_failed:`, e);
+            }
+        }
+    }
+    
+    // Return a 200 response to Stripe to acknowledge receipt of the event
+    res.json({ received: true });
 });
 
 router.get('/orders', async (req, res) => {
@@ -482,12 +634,20 @@ router.post('/orders/:orderId/label', async (req, res) => {
         );
 
         const label = response.data;
+        
+        // --- FIX: Advance status from 'paid' or 'payment_pending' to 'fulfillment_in_progress' ---
+        let fulfillmentStatus = order.status;
+        if (order.status === 'payment_pending' || order.status === 'paid') {
+            fulfillmentStatus = 'fulfillment_in_progress';
+        }
+        // --------------------------------------------------------------------------------------
+        
         await orderRef.update({
             shippingLabel: label,
             trackingNumber: label.tracking_number,
             shipEngineLabelId: label.label_id,
             labelPurchasedAt: admin.firestore.FieldValue.serverTimestamp(),
-            status: order.status === 'payment_pending' ? 'fulfillment_in_progress' : order.status
+            status: fulfillmentStatus
         });
 
         res.json({ label });

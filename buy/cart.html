@@ -28,6 +28,13 @@
         input[type="number"] {
             -moz-appearance: textfield;
         }
+        main {
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        main.ready {
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
@@ -35,10 +42,11 @@
         <div id="toastContent" class="hidden w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg"></div>
     </div>
 
+    <!-- This is a simplified header for the Cart page - Auth/Cart logic handled in script -->
     <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
         <nav class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-5">
             <a href="/buy/" class="flex items-center gap-3 text-slate-900">
-                <img src="/assets/logo.png" alt="SecondHandCell" class="h-12 w-12 rounded-full border border-slate-200 bg-white p-2" />
+                <img src="https://placehold.co/100x100/10b981/ffffff?text=SC" alt="SecondHandCell" class="h-12 w-12 rounded-full border border-slate-200 bg-white p-2" />
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-600">SecondHandCell</p>
                     <h1 class="text-2xl font-semibold tracking-tight">Wholesale cart</h1>
@@ -57,7 +65,7 @@
                     aria-haspopup="true"
                     aria-expanded="false"
                 >
-                    <span id="accountInitial" class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-500"></span>
+                    <span id="accountInitial" class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-500">SC</span>
                 </button>
                 <div class="relative">
                     <button
@@ -74,6 +82,7 @@
                             0
                         </span>
                     </button>
+                    <!-- Cart Preview Dropdown -->
                     <div id="cartPreview" class="absolute right-0 top-14 hidden w-80 rounded-3xl border border-slate-200 bg-white p-5 shadow-xl">
                         <div class="flex items-center justify-between">
                             <p class="text-sm font-semibold text-slate-900">Cart preview</p>
@@ -99,35 +108,30 @@
                 </div>
             </div>
         </nav>
+        <!-- Account Dropdown (Simplified for this page) -->
         <div id="accountDropdown" class="absolute right-6 top-20 hidden w-72 rounded-3xl border border-slate-200 bg-white p-5 text-sm shadow-2xl">
             <div class="flex items-center gap-3">
                 <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-base font-semibold text-white">
                     <span id="accountInitialClone">SC</span>
                 </div>
                 <div>
-                    <p data-account-name class="font-semibold text-slate-900">SecondHandCell buyer</p>
+                    <p data-account-name class="font-semibold text-slate-900">Buyer</p>
                     <p data-account-email class="text-xs text-slate-500"></p>
                 </div>
             </div>
-            <div class="mt-5 grid gap-2 text-sm text-slate-600">
-                <a href="/buy/my-account.html#pending" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Pending offers</a>
-                <a href="/buy/my-account.html#history" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Recent orders</a>
-                <a href="/buy/my-account.html#profile" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Account info</a>
-                <a href="/buy/my-account.html#completed" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Completed orders</a>
-                <a href="/buy/my-account.html#imeis" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Order IMEIs</a>
-                <a href="/buy/buy-device.html" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Browse catalog</a>
-                <a href="/buy/checkout.html" class="rounded-2xl border border-transparent px-4 py-2 transition hover:border-emerald-200 hover:text-emerald-600">Checkout</a>
+            <div class="mt-5 text-sm text-slate-600">
+                    <p class="text-xs text-slate-400">User ID: <span id="currentUserId" class="font-mono text-slate-700"></span></p>
                 <button
                     data-sign-out
-                    class="mt-2 flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 transition hover:border-rose-300 hover:text-rose-500"
+                    class="mt-4 flex items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 transition hover:border-rose-300 hover:text-rose-500"
                 >
-                    Sign out
+                    Sign out (Reload)
                 </button>
             </div>
         </div>
     </header>
 
-    <main class="mx-auto flex max-w-7xl flex-col gap-10 px-6 py-16">
+    <main id="mainContent" class="mx-auto flex max-w-7xl flex-col gap-10 px-6 py-16">
         <section class="space-y-4">
             <h2 class="text-3xl font-semibold text-slate-900">Review your cart</h2>
             <p class="max-w-3xl text-sm text-slate-600">
@@ -142,7 +146,7 @@
             Your cart is empty. Browse the <a href="/buy/buy-device.html" class="font-semibold text-emerald-600 underline">device catalog</a> to start a wholesale quote.
         </section>
 
-        <section id="cartSection" class="space-y-8">
+        <section id="cartSection" class="hidden space-y-8">
             <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
@@ -196,7 +200,7 @@
 
     <footer class="border-t border-slate-200 bg-white/90">
         <div class="mx-auto flex max-w-7xl flex-col gap-4 px-6 py-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-            <p>Offers save under <code>wholesaleOffersV2</code> per authenticated buyer.</p>
+            <p>Offers save under <code>wholesale/{userId}/offers</code> per authenticated buyer.</p>
             <div class="flex items-center gap-3">
                 <a href="mailto:wholesale@secondhandcell.com" class="font-medium text-emerald-600">Contact</a>
                 <span>&bull;</span>
@@ -207,63 +211,45 @@
         </div>
     </footer>
 
+    <!-- Auth Modal is included but hidden, only functional if linked from index.html -->
     <div id="authBackdrop" class="fixed inset-0 z-50 hidden bg-slate-900/60"></div>
     <div id="authModal" class="fixed inset-0 z-50 hidden items-center justify-center px-4 py-10">
         <div class="mx-auto w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-8 shadow-2xl">
-            <div class="flex items-start justify-between">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-600">Wholesale access</p>
-                    <h2 data-auth-title class="mt-2 text-2xl font-semibold text-slate-900">Sign in</h2>
-                </div>
-                <button class="text-slate-400 transition hover:text-slate-600" data-close-auth-modal>
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
-            </div>
-            <div class="mt-6 flex items-center gap-4 text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-                <button data-auth-mode="signIn" class="rounded-full border border-slate-200 px-4 py-2">Sign in</button>
-                <button data-auth-mode="signUp" class="rounded-full border border-slate-200 px-4 py-2">Sign up</button>
-            </div>
-            <form id="authForm" class="mt-6 space-y-4">
-                <div id="authNameRow" class="hidden">
-                    <label class="text-sm font-medium text-slate-600">Full name
-                        <input name="displayName" type="text" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="Wholesale buyer" />
-                    </label>
-                </div>
-                <label class="block text-sm font-medium text-slate-600">Email address
-                    <input name="email" type="email" required class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="you@company.com" />
-                </label>
-                <label class="block text-sm font-medium text-slate-600">Password
-                    <input name="password" type="password" required minlength="6" class="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 focus:border-emerald-400 focus:outline-none" placeholder="••••••••" />
-                </label>
-                <p id="authError" class="hidden rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-600"></p>
-                <button type="submit" class="w-full rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.3em] text-white shadow-lg shadow-emerald-200/60 transition hover:bg-emerald-400">
-                    Continue
-                </button>
-                <button type="button" data-google-signin class="flex w-full items-center justify-center gap-2 rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-emerald-300 hover:text-emerald-600">
-                    <i class="fa-brands fa-google"></i>
-                    Continue with Google
-                </button>
-                <button id="forgotPassword" type="button" class="w-full text-center text-xs font-semibold uppercase tracking-[0.3em] text-slate-400 hover:text-emerald-600">
-                    Forgot password
-                </button>
-            </form>
+             <p class="text-sm text-slate-500">Auth modal functionality is primarily located on the index page.</p>
         </div>
     </div>
 
     <script type="module">
-        import { initializeBuyHeader, requireAuthOrPrompt, auth } from "./buy-header.js";
-        import {
-            loadCart,
-            saveCart,
-            clearCart,
-            formatCurrency,
-            generateOfferId,
-            getUserOffers,
-            saveUserOffers
-        } from "./buy-shared.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, setLogLevel, collection, addDoc, runTransaction, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        initializeBuyHeader();
+        // --- Configuration and Constants ---
+        // NOTE: These are duplicated here for a self-contained page
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "buyback-a0f05.firebaseapp.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.firebasestorage.app",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+        
+        // This is necessary for `doc(db, ...)` construction
+        const currentAppId = firebaseConfig.projectId;	
+        
+        let db, auth;
+        let userId = null;
+        let cart = []; // Global state for cart items
 
+        // --- DOM Elements ---
+        const mainContent = document.getElementById("mainContent");
+        const cartBadge = document.getElementById("cartBadge");
+        const cartPreviewList = document.getElementById("cartPreviewList");
+        const cartPreviewEmpty = document.getElementById("cartPreviewEmpty");
+        const toastContent = document.getElementById("toastContent");
+        
         const cartTableBody = document.getElementById("cartTableBody");
         const emptyState = document.getElementById("emptyState");
         const cartSection = document.getElementById("cartSection");
@@ -273,10 +259,31 @@
         const clearCartButton = document.getElementById("clearCart");
         const notesField = document.getElementById("offerNotes");
         const authRequiredNotice = document.getElementById("authRequiredNotice");
-        const toastContent = document.getElementById("toastContent");
+
+        // --- Firebase Initialization ---
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('Debug');
+        } catch (e) {
+            console.error("Firebase initialization failed:", e);
+        }
+
+        // --- Utility Functions ---
+
+        const formatCurrency = (amount) => {
+            return new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency: "USD",
+                minimumFractionDigits: 2, // Cart page shows cents
+                maximumFractionDigits: 2
+            }).format(amount);
+        };
 
         function showToast(message, tone = "emerald") {
             if (!toastContent) return;
+            clearTimeout(window.toastTimeout);
             toastContent.textContent = message;
             toastContent.className = `w-full max-w-xl rounded-3xl border px-4 py-3 text-sm shadow-lg ${
                 tone === "rose"
@@ -286,13 +293,186 @@
                     : "border-emerald-200 bg-emerald-50 text-emerald-700"
             }`;
             toastContent.classList.remove("hidden");
-            setTimeout(() => {
+            window.toastTimeout = setTimeout(() => {
                 toastContent.classList.add("hidden");
             }, 2800);
         }
+        
+        function getInitial(email) {
+            if (!email || email === 'Anonymous') return 'SC';
+            return email.charAt(0).toUpperCase();
+        }
 
-        function renderCart() {
-            const cart = loadCart();
+        function updateAccountUI(user) {
+            const initial = getInitial(user.email);
+            document.getElementById("accountInitial").textContent = initial;
+            document.getElementById("accountInitialClone").textContent = initial;
+            document.querySelector('[data-account-name]').textContent = user.displayName || 'Wholesale Buyer';
+            document.querySelector('[data-account-email]').textContent = user.email || 'Anonymous Session';
+            document.getElementById("currentUserId").textContent = user.uid.substring(0, 8) + '...';
+            
+            // Set initial color based on auth state
+            const initialEl = document.getElementById("accountInitial");
+            if (user.isAnonymous) {
+                initialEl.classList.add('bg-slate-200', 'text-slate-500');
+                initialEl.classList.remove('bg-emerald-500', 'text-white');
+            } else {
+                initialEl.classList.add('bg-emerald-500', 'text-white');
+                initialEl.classList.remove('bg-slate-200', 'text-slate-500');
+            }
+        }
+        
+        // --- Firestore References ---
+
+        function getCartDocRef() {
+            if (!db || !userId) return null;
+            // The path requested by the user: wholesaleusers/{userId}/cart/current
+            return doc(db, `wholesaleusers/${userId}/cart/current`);
+        }
+        
+        function getOffersCollectionRef() {
+            if (!db || !userId) return null;
+            // The updated path requested by the user: wholesale/{userId}/offers
+            return collection(db, 'wholesale', userId, 'offers');
+        }
+
+        function getInventoryDocRef() {
+            if (!db) return null;
+            return doc(db, `wholesale/inventory`); 
+        }
+
+        // --- Data Management (Firestore) ---
+
+        async function saveCart(currentCart) {
+            const ref = getCartDocRef();
+            if (!ref) {
+                console.error("Firestore not ready for cart save (No userId).");
+                showToast("Database not ready for cart save.", "rose");
+                return;
+            }
+            try {
+                // Save the full array of items
+                await setDoc(ref, { items: currentCart || [] });
+                // Note: The onSnapshot listener handles UI update and local cart state
+            } catch (error) {
+                console.error("Error saving cart:", error);
+                showToast("Failed to save cart to database.", "rose");
+            }
+        }
+
+        function clearCart() {
+            saveCart([]);
+            showToast("Cleared your cart.", "amber");
+        }
+
+        const generateOfferId = () => Math.random().toString(36).substring(2, 9).toUpperCase(); // Still useful for record ID simulation
+
+        async function updateStockInFirestore(updates) {
+            const inventoryRef = getInventoryDocRef();
+            if (!inventoryRef) return console.error("Inventory reference not ready.");
+
+            try {
+                // Use a transaction to safely update the nested stock quantity
+                await runTransaction(db, async (transaction) => {
+                    const inventoryDoc = await transaction.get(inventoryRef);
+                    if (!inventoryDoc.exists()) {
+                        throw new Error("Inventory document does not exist!");
+                    }
+                    
+                    const inventoryData = inventoryDoc.data();
+                    let updated = false;
+
+                    updates.forEach(update => {
+                        const { deviceId, storageVariant, grade, quantity } = update;
+                        const deviceIndex = inventoryData.items.findIndex(d => d.id === deviceId);
+                        
+                        if (deviceIndex !== -1) {
+                            const storageIndex = inventoryData.items[deviceIndex].storages.findIndex(s => s.variant === storageVariant);
+                            if (storageIndex !== -1) {
+                                const currentStock = inventoryData.items[deviceIndex].storages[storageIndex].stock[grade];
+                                if (currentStock >= quantity) {
+                                    inventoryData.items[deviceIndex].storages[storageIndex].stock[grade] = currentStock - quantity;
+                                    updated = true;
+                                } else {
+                                    throw new Error(`Insufficient stock for ${deviceId} ${storageVariant} Grade ${grade}. Transaction aborted.`); 
+                                }
+                            }
+                        }
+                    });
+
+                    if (updated) {
+                        // Write the entire modified inventory array back
+                        transaction.set(inventoryRef, { items: inventoryData.items });
+                    }
+                });
+            } catch (error) {
+                console.error("Stock Update Transaction failed: ", error);
+                throw new Error(`Stock reservation failed: ${error.message}`);
+            }
+        }
+
+
+        // --- UI Rendering ---
+
+        // Variables to restore focus after re-render (Focus Fix)
+        let focusedLineId = null;
+        let focusedField = null;
+        let focusedSelectionStart = 0;
+
+        // ** NEW: Function to update the header cart preview (was missing/incomplete) **
+        function updateCartPreviewUI() {
+            const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+            
+            // 1. Update Badge
+            cartBadge.textContent = totalItems.toString();
+            cartBadge.classList.toggle("hidden", totalItems === 0);
+            cartBadge.classList.toggle("flex", totalItems > 0);
+            
+            // 2. Update Preview List
+            cartPreviewList.innerHTML = '';
+            if (cart.length === 0) {
+                cartPreviewEmpty.classList.remove('hidden');
+            } else {
+                cartPreviewEmpty.classList.add('hidden');
+                cart.slice(0, 3).forEach(item => {
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'flex items-center justify-between border-b border-slate-100 pb-2 last:border-b-0';
+                    itemElement.innerHTML = `
+                        <div>
+                            <p class="text-sm font-medium text-slate-900">${item.brand} ${item.model}</p>
+                            <p class="text-xs text-slate-500">${item.storageVariant} · Grade ${item.grade}</p>
+                        </div>
+                        <p class="text-sm font-semibold text-slate-700">x${item.quantity}</p>
+                    `;
+                    cartPreviewList.appendChild(itemElement);
+                });
+                if (cart.length > 3) {
+                    const moreElement = document.createElement('p');
+                    moreElement.className = 'text-center text-xs font-medium text-slate-400 pt-2';
+                    moreElement.textContent = `...and ${cart.length - 3} more line items`;
+                    cartPreviewList.appendChild(moreElement);
+                }
+            }
+        }
+        // ** END NEW FUNCTION **
+
+        function updateCartUI() {
+            // Call the new preview function to update the header
+            updateCartPreviewUI();
+
+            const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+            
+            // Save focus state before render (Focus Fix)
+            const activeElement = document.activeElement;
+            if (activeElement && (activeElement.dataset.quantityInput || activeElement.dataset.offerInput)) {
+                focusedLineId = activeElement.dataset.quantityInput || activeElement.dataset.offerInput;
+                focusedField = activeElement.dataset.quantityInput ? 'quantity' : 'offer';
+                focusedSelectionStart = activeElement.selectionStart;
+            } else {
+                focusedLineId = null;
+            }
+
+            // This is the cart page logic (full table view)
             const hasItems = cart.length > 0;
             emptyState.classList.toggle("hidden", hasItems);
             cartSection.classList.toggle("hidden", !hasItems);
@@ -301,33 +481,50 @@
                 summaryUnits.textContent = "0";
                 summaryOffer.textContent = "$0.00";
                 submitOfferButton.disabled = true;
+                cartTableBody.innerHTML = "";
                 return;
             }
 
             cartTableBody.innerHTML = "";
 
             cart.forEach((line) => {
+                // Ensure offerPrice is defined, defaulting to askingPrice if missing
                 if (typeof line.offerPrice === "undefined") {
                     line.offerPrice = line.askingPrice;
                 }
                 const row = document.createElement("tr");
                 row.dataset.lineId = line.lineId;
+                
+                // Ensure number inputs reflect the capped values and current state
+                const quantity = Number(line.quantity) || 0;
+                const offerPrice = Number(line.offerPrice) || 0;
+                
                 row.innerHTML = `
                     <td class="px-5 py-4">
                         <p class="font-semibold text-slate-900">${line.brand} ${line.model}</p>
-                        <p class="text-xs uppercase tracking-[0.3em] text-slate-400">${line.deviceId}</p>
+                        <p class="text-xs uppercase tracking-[0.3em] text-slate-400 mt-1">${line.deviceId}</p>
                     </td>
                     <td class="px-5 py-4 text-sm text-slate-600">
-                        <p>${line.storageVariant}</p>
+                        <p class="font-medium text-slate-900">${line.storageVariant}</p>
                         <p class="text-xs uppercase tracking-[0.3em] text-slate-400 mt-1">Grade ${line.grade}</p>
                     </td>
                     <td class="px-5 py-4 text-sm text-slate-600">${line.available}</td>
                     <td class="px-5 py-4">
-                        <input type="number" min="1" max="${line.available}" value="${line.quantity}" data-quantity-input="${line.lineId}" class="w-20 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                        <input type="number" min="1" max="${line.available}" value="${quantity}" data-quantity-input="${line.lineId}" class="w-20 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" />
                     </td>
                     <td class="px-5 py-4 text-sm text-slate-600">${formatCurrency(line.askingPrice)}</td>
                     <td class="px-5 py-4">
-                        <input type="number" min="0" step="0.01" value="${line.offerPrice}" data-offer-input="${line.lineId}" class="w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" />
+                        <!-- FIX: Changed type from "number" to "text" and added pattern for decimal currency input -->
+                        <input 
+                            type="text" 
+                            min="0" 
+                            step="0.01" 
+                            value="${offerPrice}" 
+                            data-offer-input="${line.lineId}" 
+                            class="w-28 rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-400 focus:outline-none" 
+                            pattern="[0-9]*[.]?[0-9]*" 
+                            inputmode="decimal"
+                        />
                     </td>
                     <td class="px-5 py-4">
                         <button data-remove-line="${line.lineId}" class="text-sm font-semibold text-rose-500 transition hover:text-rose-600">Remove</button>
@@ -337,10 +534,24 @@
             });
 
             updateSummary();
+            
+            // Restore focus state after render (Focus Fix)
+            if (focusedLineId) {
+                let selector = focusedField === 'quantity' 
+                    ? `input[data-quantity-input="${focusedLineId}"]` 
+                    : `input[data-offer-input="${focusedLineId}"]`;
+                const inputToFocus = document.querySelector(selector);
+                
+                if (inputToFocus) {
+                    inputToFocus.focus();
+                    inputToFocus.setSelectionRange(focusedSelectionStart, focusedSelectionStart);
+                }
+                // Reset tracker
+                focusedLineId = null;
+            }
         }
 
         function updateSummary() {
-            const cart = loadCart();
             const units = cart.reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
             const totalOffer = cart.reduce((sum, line) => {
                 const price = Number(line.offerPrice || 0);
@@ -351,31 +562,60 @@
             submitOfferButton.disabled = units === 0;
         }
 
+        // --- Event Handlers for Cart Table ---
+
         cartTableBody.addEventListener("input", (event) => {
+            let itemUpdated = false;
+            
+            // Handle Quantity Input (type="number")
             const quantityInput = event.target.closest("input[data-quantity-input]");
             if (quantityInput) {
                 const lineId = quantityInput.dataset.quantityInput;
-                const cart = loadCart();
-                const line = cart.find((item) => item.lineId === lineId);
-                if (!line) return;
+                const lineIndex = cart.findIndex((item) => item.lineId === lineId);
+                if (lineIndex === -1) return;
+                
                 let nextQuantity = Number(quantityInput.value) || 0;
+                
+                // Enforce min and max limits
+                const max = Number(quantityInput.max);
                 if (nextQuantity < 1) nextQuantity = 1;
-                if (nextQuantity > line.available) nextQuantity = line.available;
-                line.quantity = nextQuantity;
+                if (nextQuantity > max) {
+                    nextQuantity = max;
+                    showToast(`Quantity capped at available stock: ${max}`, "amber");
+                }
+                
+                // Update local state and UI
+                cart[lineIndex].quantity = nextQuantity;
                 quantityInput.value = nextQuantity;
-                saveCart(cart);
-                updateSummary();
+                itemUpdated = true;
             }
 
+            // Handle Offer Price Input (type="text" for better cursor behavior)
             const offerInput = event.target.closest("input[data-offer-input]");
             if (offerInput) {
                 const lineId = offerInput.dataset.offerInput;
-                const cart = loadCart();
-                const line = cart.find((item) => item.lineId === lineId);
-                if (!line) return;
-                const value = Number(offerInput.value);
-                line.offerPrice = Number.isNaN(value) ? 0 : value;
-                saveCart(cart);
+                const lineIndex = cart.findIndex((item) => item.lineId === lineId);
+                if (lineIndex === -1) return;
+                
+                // Use regex to sanitize input to ensure only numbers and a decimal point
+                let sanitizedValue = offerInput.value.replace(/[^0-9.]/g, '');
+                
+                // Ensure only one decimal point
+                const parts = sanitizedValue.split('.');
+                if (parts.length > 2) {
+                    sanitizedValue = parts[0] + '.' + parts.slice(1).join('');
+                }
+
+                // Update the input field with the sanitized value
+                offerInput.value = sanitizedValue;
+
+                const value = Number(sanitizedValue);
+                cart[lineIndex].offerPrice = Number.isNaN(value) ? 0 : value;
+                itemUpdated = true;
+            }
+            
+            if(itemUpdated) {
+                saveCart(cart); // Save updated state to Firestore
                 updateSummary();
             }
         });
@@ -385,92 +625,165 @@
             if (removeButton) {
                 event.preventDefault();
                 const lineId = removeButton.dataset.removeLine;
-                let cart = loadCart();
-                cart = cart.filter((line) => line.lineId !== lineId);
-                saveCart(cart);
-                renderCart();
+                // Update local state and save
+                const newCart = cart.filter((line) => line.lineId !== lineId);
+                cart = newCart; // Update global state immediately
+                saveCart(newCart);
                 showToast("Removed line from cart.", "amber");
             }
         });
 
-        clearCartButton.addEventListener("click", () => {
-            clearCart();
-            renderCart();
-            showToast("Cleared your cart.", "amber");
-        });
+        clearCartButton.addEventListener("click", clearCart);
 
         submitOfferButton.addEventListener("click", async () => {
-            if (!auth.currentUser) {
-                requireAuthOrPrompt();
-                showToast("Sign in to submit your offer.", "rose");
+            if (!auth.currentUser || auth.currentUser.isAnonymous) {
+                showToast("Please sign in or register to submit a formal offer.", "rose");
                 return;
             }
 
-            const cart = loadCart();
             if (!cart.length) {
                 showToast("Your cart is empty.", "rose");
                 return;
             }
 
-            const missingPrice = cart.some((line) => typeof line.offerPrice === "undefined" || Number.isNaN(Number(line.offerPrice)));
+            const missingPrice = cart.some((line) => typeof line.offerPrice === "undefined" || Number.isNaN(Number(line.offerPrice)) || Number(line.offerPrice) <= 0);
             if (missingPrice) {
-                showToast("Enter an offer price for each line.", "rose");
+                showToast("Enter a valid offer price for each line.", "rose");
+                return;
+            }
+            
+            const offersRef = getOffersCollectionRef();
+            if (!offersRef) {
+                showToast("Database error: Cannot reference offers collection. User ID is missing.", "rose");
                 return;
             }
 
             const offerId = generateOfferId();
             const now = new Date().toISOString();
-            const offerRecord = {
-                id: offerId,
-                status: "pending",
-                createdAt: now,
-                updatedAt: now,
-                note: notesField.value.trim(),
-                buyer: {
-                    uid: auth.currentUser.uid,
-                    name: auth.currentUser.displayName || "",
-                    email: auth.currentUser.email || ""
-                },
-                items: cart.map((line) => ({
-                    lineId: line.lineId,
-                    brand: line.brand,
-                    model: line.model,
-                    storageVariant: line.storageVariant,
-                    grade: line.grade,
-                    quantity: line.quantity,
-                    askingPrice: line.askingPrice,
-                    offerPrice: Number(line.offerPrice || 0)
-                })),
-                history: [
-                    {
-                        status: "pending",
-                        at: now
+            
+            const offerItems = cart.map((line) => ({
+                lineId: line.lineId,
+                brand: line.brand,
+                model: line.model,
+                storageVariant: line.storageVariant, // Now includes color/GB
+                grade: line.grade,
+                quantity: line.quantity,
+                askingPrice: line.askingPrice,
+                offerPrice: Number(line.offerPrice || 0)
+            }));
+
+            // Prepare stock updates
+            const stockUpdates = offerItems.map(item => ({
+                deviceId: item.deviceId,
+                storageVariant: item.storageVariant,
+                grade: item.grade,
+                quantity: item.quantity
+            }));
+            
+            // --- STOCK DECREMENTATION ON SUBMIT ---
+            try {
+                // 1. Attempt to reduce stock using a Firestore Transaction
+                // This correctly happens HERE, not on add to cart.
+                await updateStockInFirestore(stockUpdates);
+                
+                // 2. If stock reduction is successful, submit the offer record
+                const offerRecord = {
+                    id: offerId,
+                    status: "pending",
+                    createdAt: now,
+                    updatedAt: now,
+                    note: notesField.value.trim(),
+                    buyer: {
+                        uid: auth.currentUser.uid,
+                        name: auth.currentUser.displayName || "Authenticated Buyer",
+                        email: auth.currentUser.email || ""
+                    },
+                    items: offerItems,
+                    history: [
+                        {
+                            status: "pending",
+                            at: now
+                        }
+                    ]
+                };
+
+                await addDoc(offersRef, offerRecord);
+                
+                // 3. Clear cart and confirm success
+                clearCart(); // Clears cart in Firestore
+                notesField.value = "";
+                showToast("Offer submitted successfully and stock reserved. Track progress in My Account.");
+                
+            } catch (error) {
+                console.error("Submission failed:", error);
+                // If the error is a stock reservation error, show the user the specific message
+                const displayMessage = error.message.includes("Stock reservation failed:") 
+                    ? error.message 
+                    : "Failed to submit offer due to a database error. Please refresh and try again.";
+                showToast(displayMessage, "rose");
+            }
+        });
+
+        // Global Event Listeners (Cart & Account Dropdowns)
+        document.getElementById('cartButton').addEventListener('click', () => {
+            document.getElementById('cartPreview').classList.toggle('hidden');
+        });
+        document.querySelectorAll('[data-close-cart-preview]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('cartPreview').classList.add('hidden');
+            });
+        });
+        document.getElementById('accountButton').addEventListener('click', () => {
+            document.getElementById('accountDropdown').classList.toggle('hidden');
+        });
+        document.querySelector('[data-sign-out]').addEventListener('click', () => {
+            // Simple reload to clear session state for demo
+            window.location.reload();	
+        });
+
+        // --- Firebase Auth & Listener Setup ---
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+            } else {
+                // Ensure a user (anonymous or otherwise) always exists for Firestore paths
+                try {
+                    const anonUser = await signInAnonymously(auth);
+                    userId = anonUser.user.uid;
+                } catch (e) {
+                    console.error("Failed to sign in anonymously:", e);
+                    return;
+                }
+            }
+            
+            updateAccountUI(auth.currentUser);
+            
+            // Show content once user ID is ready
+            mainContent.classList.add('ready');
+
+            // Set up Firestore listener
+            const cartRef = getCartDocRef();
+            if (cartRef) {
+                onSnapshot(cartRef, (docSnap) => {
+                    if (docSnap.exists() && docSnap.data().items) {
+                        cart = docSnap.data().items || [];
+                    } else {
+                        cart = [];
                     }
-                ]
-            };
-
-            const userOffers = getUserOffers(auth.currentUser.uid);
-            userOffers.push(offerRecord);
-            saveUserOffers(auth.currentUser.uid, userOffers);
-            clearCart();
-            renderCart();
-            notesField.value = "";
-            showToast("Offer submitted. Track progress in My Account.");
-            setTimeout(() => {
-                window.location.href = "/buy/my-account.html#pending";
-            }, 1200);
+                    updateCartUI(); // Re-render the cart table and summary
+                }, (error) => {
+                    console.error("Cart listener failed:", error);
+                    showToast("Failed to load cart data from database.", "rose");
+                });
+            } else {
+                showToast("User ID not available to load cart.", "rose");
+            }
+            
+            // Update auth notice visibility
+            const isAuth = user && !user.isAnonymous;
+            authRequiredNotice.classList.toggle("hidden", isAuth);
         });
-
-        document.addEventListener("wholesale-auth-changed", (event) => {
-            const user = event.detail?.user;
-            authRequiredNotice.classList.toggle("hidden", !!user);
-        });
-
-        if (!auth.currentUser) {
-            authRequiredNotice.classList.remove("hidden");
-        }
-
-        renderCart();
     </script>
 </body>
 </html>
