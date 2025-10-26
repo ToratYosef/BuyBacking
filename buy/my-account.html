@@ -395,10 +395,13 @@
             try {
                 const querySnapshot = await getDocs(q);
                 const offers = [];
-                querySnapshot.forEach(doc => {
-                    // Store Firestore document ID and all data
-                    // Note: Since we are querying a user-specific subcollection, we trust the offers belong to this user.
-                    offers.push({ id: doc.id, ...doc.data() }); 
+                querySnapshot.forEach((docSnap) => {
+                    const data = docSnap.data();
+                    offers.push({
+                        docId: docSnap.id,
+                        ...data,
+                        id: data.id || docSnap.id,
+                    });
                 });
                 // Sort by createdAt descending
                 offers.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -450,6 +453,7 @@
             
             // Check if there is an active counter that needs acceptance
             const canAcceptCounter = offer.status === "counter" || (offer.status === "declined" && offer.counter?.items);
+            const canDeclineCounter = offer.status === "counter";
 
             card.innerHTML = `
                 <div class="flex flex-col gap-3">
@@ -502,7 +506,12 @@
                 <div class="flex flex-wrap items-center gap-3">
                     ${
                         canAcceptCounter
-                            ? `<button data-accept-counter="${offer.id}" class="rounded-full bg-emerald-500 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-emerald-400">${offer.status === "declined" ? "Accept new price &amp; checkout" : "Accept counter &amp; checkout"}</button>`
+                            ? `<button data-accept-counter="${offer.docId}" class="rounded-full bg-emerald-500 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-sm transition hover:bg-emerald-400">${offer.status === "declined" ? "Accept new price &amp; checkout" : "Accept counter &amp; checkout"}</button>`
+                            : ""
+                    }
+                    ${
+                        canDeclineCounter
+                            ? `<button data-decline-counter="${offer.docId}" class="rounded-full border border-rose-300 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-rose-600 transition hover:border-rose-400 hover:text-rose-700">Decline counter</button>`
                             : ""
                     }
                     ${
@@ -646,38 +655,98 @@
                     return;
                 }
                 const offerDocId = acceptButton.dataset.acceptCounter;
-                
+
                 try {
                     const offersRef = getOffersCollectionRef();
                     if (!offersRef) throw new Error("Offers reference failed. No user ID.");
 
-                    // Note: We use the offerDocId as the ID for the document within the user's offers subcollection
-                    const offerRef = doc(offersRef.firestore, offersRef.path, offerDocId); 
+                    const offerRef = doc(offersRef, offerDocId);
                     const acceptedAt = new Date().toISOString();
-                    
-                    // Find the existing offer in cache to update the history array correctly
-                    const existingOffer = cachedOffers.find(o => o.id === offerDocId);
-                    const newHistory = existingOffer.history || [{ status: 'pending', at: existingOffer.createdAt }];
 
-                    await updateDoc(offerRef, {
+                    const existingOffer = cachedOffers.find((o) => o.docId === offerDocId);
+                    const historyBase = Array.isArray(existingOffer?.history) ? [...existingOffer.history] : [];
+                    if (existingOffer && historyBase.length === 0) {
+                        historyBase.push({ status: existingOffer.status, at: existingOffer.createdAt });
+                    }
+                    historyBase.push({ status: "accepted", at: acceptedAt });
+
+                    const itemsWithCounter = Array.isArray(existingOffer?.items)
+                        ? existingOffer.items.map((item) => {
+                            const counterPrice = existingOffer?.counter?.items?.[item.lineId];
+                            return counterPrice ? { ...item, counterPrice } : item;
+                        })
+                        : [];
+
+                    const updatePayload = {
                         status: "accepted",
                         updatedAt: acceptedAt,
-                        'history': [...newHistory, { status: "accepted", at: acceptedAt }]
-                    });
-                    
+                        acceptedAt: existingOffer?.acceptedAt || acceptedAt,
+                        history: historyBase,
+                        counter: null,
+                        counterAcceptedAt: acceptedAt,
+                    };
+
+                    if (itemsWithCounter.length > 0) {
+                        updatePayload.items = itemsWithCounter;
+                    }
+
+                    await updateDoc(offerRef, updatePayload);
+
                     showToast("Counter accepted. Proceeding to checkout.");
-                    
+
                     // Re-fetch all offers to update UI after update
                     cachedOffers = await fetchOffers(auth.currentUser.uid);
-                    renderAllSections(); 
-                    
+                    renderAllSections();
+
                     setTimeout(() => {
-                        window.location.href = `/buy/checkout.html?offer=${offerDocId}`; 
+                        const redirectId = existingOffer?.id || offerDocId;
+                        window.location.href = `/buy/checkout.html?offer=${redirectId}`;
                     }, 1200);
 
                 } catch (error) {
                     console.error("Error accepting counter:", error);
                     showToast("Failed to accept counter. Please try again.", "rose");
+                }
+                return;
+            }
+
+            const declineButton = event.target.closest("button[data-decline-counter]");
+            if (declineButton) {
+                if (!auth.currentUser || auth.currentUser.isAnonymous) {
+                    showToast("Sign in to respond to the counter.", "rose");
+                    return;
+                }
+
+                const offerDocId = declineButton.dataset.declineCounter;
+
+                try {
+                    const offersRef = getOffersCollectionRef();
+                    if (!offersRef) throw new Error("Offers reference failed. No user ID.");
+
+                    const offerRef = doc(offersRef, offerDocId);
+                    const declinedAt = new Date().toISOString();
+
+                    const existingOffer = cachedOffers.find((o) => o.docId === offerDocId);
+                    const historyBase = Array.isArray(existingOffer?.history) ? [...existingOffer.history] : [];
+                    if (existingOffer && historyBase.length === 0) {
+                        historyBase.push({ status: existingOffer.status, at: existingOffer.createdAt });
+                    }
+                    historyBase.push({ status: "declined", at: declinedAt });
+
+                    await updateDoc(offerRef, {
+                        status: "declined",
+                        updatedAt: declinedAt,
+                        declinedAt,
+                        history: historyBase,
+                    });
+
+                    showToast("Counter declined. We'll let the admin know.", "amber");
+
+                    cachedOffers = await fetchOffers(auth.currentUser.uid);
+                    renderAllSections();
+                } catch (error) {
+                    console.error("Error declining counter:", error);
+                    showToast("Failed to decline counter. Please try again.", "rose");
                 }
             }
         });
