@@ -487,37 +487,49 @@ router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async 
     // Handle the event
     if (event.type === 'payment_intent.succeeded') {
         const paymentIntent = event.data.object;
-        // metadata fields should be available in Stripe from the Payment Intent creation call
-        const { order_id, offer_id, user_id } = paymentIntent.metadata;
-        
+        const { order_id, offer_id, user_id } = paymentIntent.metadata || {};
+
         console.log(`PaymentIntent ${paymentIntent.id} succeeded for Order ${order_id}.`);
 
         if (offer_id && user_id) {
-            try {
-                // 1. Update the user's offer document to 'completed'
-                const offerRef = db.collection('wholesale').doc(user_id).collection('offers').doc(offer_id);
-                await offerRef.set({
-                    status: 'completed',
-                    paidAt: admin.firestore.FieldValue.serverTimestamp(),
-                    payment: {
-                        paymentIntentStatus: 'succeeded',
-                        paymentIntentId: paymentIntent.id
-                    }
-                }, { merge: true });
-                console.log(`Offer ${offer_id} marked as completed.`);
+            const now = admin.firestore.FieldValue.serverTimestamp();
+            const paymentUpdate = {
+                paymentIntentStatus: paymentIntent.status || 'succeeded',
+                paymentIntentId: paymentIntent.id,
+                latestChargeId: paymentIntent.latest_charge || null,
+                amountReceived: paymentIntent.amount_received || null,
+                currency: paymentIntent.currency || 'usd',
+                paymentStatus: 'succeeded'
+            };
 
-                // 2. Update the main wholesaleOrder document
+            try {
+                const userOfferRef = db.collection('wholesale').doc(user_id).collection('offers').doc(offer_id);
+                const globalOfferRef = offersCollection.doc(offer_id);
+
+                const offerStatusUpdate = {
+                    status: 'completed',
+                    statusDisplay: 'Completed',
+                    completedAt: now,
+                    paidAt: now,
+                    payment: paymentUpdate
+                };
+
+                await Promise.all([
+                    userOfferRef.set(offerStatusUpdate, { merge: true }),
+                    globalOfferRef.set(offerStatusUpdate, { merge: true })
+                ]);
+                console.log(`Offer ${offer_id} marked as completed in wholesale collections.`);
+
                 if (order_id) {
                     const orderRef = ordersCollection.doc(order_id);
                     await orderRef.set({
-                        status: 'paid', // Order status is set to 'paid' after successful webhook confirmation
-                        paidAt: admin.firestore.FieldValue.serverTimestamp(),
-                        stripe: {
-                            paymentIntentStatus: 'succeeded',
-                            paymentIntentId: paymentIntent.id
-                        }
+                        status: 'completed',
+                        statusDisplay: 'Completed',
+                        completedAt: now,
+                        paymentStatus: 'succeeded',
+                        stripe: paymentUpdate
                     }, { merge: true });
-                    console.log(`Wholesale Order ${order_id} marked as paid.`);
+                    console.log(`Wholesale Order ${order_id} marked as completed.`);
                 }
 
             } catch (firestoreError) {
@@ -525,42 +537,56 @@ router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async 
                 return res.status(500).send('Internal Server Error during Firestore update.');
             }
         } else {
-             console.warn(`PaymentIntent ${paymentIntent.id} missing required metadata (order_id/offer_id/user_id).`);
+            console.warn(`PaymentIntent ${paymentIntent.id} missing required metadata (order_id/offer_id/user_id).`);
         }
     } else if (event.type === 'payment_intent.payment_failed') {
         const paymentIntent = event.data.object;
-        const { order_id, offer_id, user_id } = paymentIntent.metadata;
+        const { order_id, offer_id, user_id } = paymentIntent.metadata || {};
         console.log(`PaymentIntent ${paymentIntent.id} failed.`);
 
         if (offer_id && user_id) {
+            const now = admin.firestore.FieldValue.serverTimestamp();
+            const paymentUpdate = {
+                paymentIntentStatus: paymentIntent.status || 'failed',
+                paymentIntentId: paymentIntent.id,
+                latestChargeId: paymentIntent.latest_charge || null,
+                amountReceived: paymentIntent.amount_received || null,
+                currency: paymentIntent.currency || 'usd',
+                paymentStatus: 'declined',
+                lastErrorMessage: paymentIntent.last_payment_error?.message || null
+            };
+
             try {
-                 const offerRef = db.collection('wholesale').doc(user_id).collection('offers').doc(offer_id);
-                 await offerRef.set({
-                    status: 'payment_failed', 
-                    failedAt: admin.firestore.FieldValue.serverTimestamp(),
-                    payment: {
-                        paymentIntentStatus: 'failed',
-                        paymentIntentId: paymentIntent.id
-                    }
-                }, { merge: true });
-                 console.log(`Offer ${offer_id} marked as payment_failed.`);
-                 
-                 // Update main order status to reflect payment failure
-                 if (order_id) {
+                const userOfferRef = db.collection('wholesale').doc(user_id).collection('offers').doc(offer_id);
+                const globalOfferRef = offersCollection.doc(offer_id);
+
+                const offerStatusUpdate = {
+                    status: 'payment_failed',
+                    statusDisplay: 'Payment Declined',
+                    failedAt: now,
+                    payment: paymentUpdate
+                };
+
+                await Promise.all([
+                    userOfferRef.set(offerStatusUpdate, { merge: true }),
+                    globalOfferRef.set(offerStatusUpdate, { merge: true })
+                ]);
+                console.log(`Offer ${offer_id} marked as payment_failed in wholesale collections.`);
+
+                if (order_id) {
                     const orderRef = ordersCollection.doc(order_id);
                     await orderRef.set({
-                        status: 'payment_failed', 
-                        failedAt: admin.firestore.FieldValue.serverTimestamp(),
-                        stripe: {
-                            paymentIntentStatus: 'failed',
-                            paymentIntentId: paymentIntent.id
-                        }
+                        status: 'payment_failed',
+                        statusDisplay: 'Payment Declined',
+                        failedAt: now,
+                        paymentStatus: 'declined',
+                        stripe: paymentUpdate
                     }, { merge: true });
                     console.log(`Wholesale Order ${order_id} marked as payment_failed.`);
                 }
-                 
+
             } catch (e) {
-                 console.error(`Failed to mark offer ${offer_id} as payment_failed:`, e);
+                console.error(`Failed to mark offer ${offer_id} as payment_failed:`, e);
             }
         }
     }

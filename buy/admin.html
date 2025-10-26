@@ -729,6 +729,20 @@
                 update.history = newHistory;
                 update.status = nextStatus;
 
+                if (nextStatus === "accepted") {
+                    update.acceptedAt = originalOffer.acceptedAt || now;
+                    update.counter = null; // Clear counter info on acceptance
+                }
+                if (nextStatus === "completed") {
+                    update.completedAt = originalOffer.completedAt || now;
+                }
+
+                if (nextStatus !== originalOffer.status) {
+                    newHistory.push({ status: nextStatus, at: now });
+                }
+                update.history = newHistory;
+                update.status = nextStatus;
+
                 return update;
             };
 
