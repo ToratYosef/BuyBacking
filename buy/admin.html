@@ -659,6 +659,22 @@
                     }
                 });
 
+                const mapItemsWithCounterPricing = (overrides) => {
+                    const lines = Array.isArray(originalOffer.items) ? originalOffer.items : [];
+                    return lines.map((item) => {
+                        const override = overrides[item.lineId];
+                        const updated = { ...item };
+
+                        if (override !== undefined) {
+                            updated.counterPrice = override;
+                        } else if ("counterPrice" in updated) {
+                            delete updated.counterPrice;
+                        }
+
+                        return updated;
+                    });
+                };
+
                 const now = new Date().toISOString();
                 const update = {
                     updatedAt: now,
@@ -676,14 +692,28 @@
                         note,
                         items: counterValues,
                     };
+                    update.items = mapItemsWithCounterPricing(counterValues);
                 } else if (note) {
                     update.counter = {
                         ...(originalOffer.counter || {}),
                         note,
                     };
+                    if (originalOffer.counter?.items) {
+                        update.items = mapItemsWithCounterPricing({});
+                    }
                 } else if (originalOffer.counter && !hasCounterValues) {
                     update.counter = null;
+                    update.items = mapItemsWithCounterPricing({});
                 }
+                if (nextStatus === "completed") {
+                    update.completedAt = originalOffer.completedAt || now;
+                }
+
+                if (nextStatus !== originalOffer.status) {
+                    newHistory.push({ status: nextStatus, at: now });
+                }
+                update.history = newHistory;
+                update.status = nextStatus;
 
                 if (nextStatus === "accepted") {
                     update.acceptedAt = originalOffer.acceptedAt || now;
