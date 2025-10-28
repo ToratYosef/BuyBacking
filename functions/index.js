@@ -830,20 +830,23 @@ const DOWNGRADE_EMAIL_HTML = buildEmailLayout({
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
-const ORDER_COMPLETED_EMAIL_HTML = buildEmailLayout({
-  title: "🥳 Your order is complete!",
-  bodyHtml: `
-      <p>Hi **CUSTOMER_NAME**,</p>
-      <p>Great news! Order <strong>#**ORDER_ID**</strong> is complete and your payout is headed your way.</p>
-      <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:20px 24px; margin:28px 0;">
-        <p style="margin:0 0 12px;"><strong style="color:#0f172a;">Device</strong><br><span style="color:#475569;">**DEVICE_SUMMARY**</span></p>
-        <p style="margin:0 0 12px;"><strong style="color:#0f172a;">Payout</strong><br><span style="color:#059669; font-size:22px; font-weight:700;">$**ORDER_TOTAL**</span></p>
-        <p style="margin:0;"><strong style="color:#0f172a;">Payment method</strong><br><span style="color:#475569;">**PAYMENT_METHOD**</span></p>
-      </div>
-      <p>If anything looks off, just reply—we'll make it right.</p>
-      <p>Thanks for choosing SecondHandCell!</p>
-  `,
-});
+function getOrderCompletedEmailTemplate({ includeTrustpilot = true } = {}) {
+  return buildEmailLayout({
+    title: "🥳 Your order is complete!",
+    includeTrustpilot,
+    bodyHtml: `
+        <p>Hi **CUSTOMER_NAME**,</p>
+        <p>Great news! Order <strong>#**ORDER_ID**</strong> is complete and your payout is headed your way.</p>
+        <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:20px 24px; margin:28px 0;">
+          <p style="margin:0 0 12px;"><strong style="color:#0f172a;">Device</strong><br><span style="color:#475569;">**DEVICE_SUMMARY**</span></p>
+          <p style="margin:0 0 12px;"><strong style="color:#0f172a;">Payout</strong><br><span style="color:#059669; font-size:22px; font-weight:700;">$**ORDER_TOTAL**</span></p>
+          <p style="margin:0;"><strong style="color:#0f172a;">Payment method</strong><br><span style="color:#475569;">**PAYMENT_METHOD**</span></p>
+        </div>
+        <p>If anything looks off, just reply—we'll make it right.</p>
+        <p>Thanks for choosing SecondHandCell!</p>
+    `,
+  });
+}
 
 const REVIEW_REQUEST_EMAIL_HTML = buildEmailLayout({
   title: "We'd love your feedback",
@@ -1462,7 +1465,8 @@ async function sendMultipleTestEmails(email, emailTypes) {
         orderToUse = mockOrderDataWithoutReoffer;
         subject = `[TEST] Your SecondHandCell Order is Complete!`;
         const mockPayout = getOrderPayout(orderToUse);
-        htmlBody = applyTemplate(ORDER_COMPLETED_EMAIL_HTML, {
+        const template = getOrderCompletedEmailTemplate({ includeTrustpilot: !orderToUse.reOffer });
+        htmlBody = applyTemplate(template, {
           "**CUSTOMER_NAME**": orderToUse.shippingInfo.fullName,
           "**ORDER_ID**": orderToUse.id,
           "**DEVICE_SUMMARY**": buildDeviceSummary(orderToUse),
@@ -2124,7 +2128,9 @@ app.put("/orders/:id/status", async (req, res) => {
       }
       case "completed": {
         const payoutAmount = getOrderPayout(order);
-        customerEmailHtml = applyTemplate(ORDER_COMPLETED_EMAIL_HTML, {
+        const wasReoffered = !!(order.reOffer && Object.keys(order.reOffer).length);
+        const completedTemplate = getOrderCompletedEmailTemplate({ includeTrustpilot: !wasReoffered });
+        customerEmailHtml = applyTemplate(completedTemplate, {
           "**CUSTOMER_NAME**": customerName,
           "**ORDER_ID**": order.id,
           "**DEVICE_SUMMARY**": buildDeviceSummary(order),
@@ -2380,6 +2386,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
     const customerEmailHtml = buildEmailLayout({
       title: "Updated offer available",
       accentColor: "#6366f1",
+      includeTrustpilot: false,
       bodyHtml: `
           <p>Hi ${escapeHtml(customerName)},</p>
           <p>Thanks for sending in your device. After inspecting order <strong>#${escapeHtml(order.id)}</strong>, we have a revised offer for you.</p>
