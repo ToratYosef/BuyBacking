@@ -1152,6 +1152,33 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
             };
 
+            const parseCurrencyValue = (value) => {
+                const numeric = Number(value);
+                return Number.isFinite(numeric) ? numeric : null;
+            };
+
+            const getDisplayPrice = (order) => {
+                if (!order || typeof order !== 'object') {
+                    return 0;
+                }
+                const candidates = [
+                    order.reoffer,
+                    order.reOffer?.newPrice,
+                    order.reOffer,
+                    order.price,
+                    order.estimatedQuote,
+                ];
+
+                for (const candidate of candidates) {
+                    const numeric = parseCurrencyValue(candidate);
+                    if (numeric !== null) {
+                        return numeric;
+                    }
+                }
+
+                return 0;
+            };
+
             const renderOrderSelection = (orders) => {
                 orderList.innerHTML = '';
                 if (orders.requiresLogin) {
@@ -1175,12 +1202,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     const orderCard = document.createElement('div');
                     orderCard.className = 'order-card';
                     orderCard.dataset.orderId = order.orderId;
+                    const reofferAmount = parseCurrencyValue(order.reoffer ?? order.reOffer?.newPrice);
+                    const displayPriceValue = getDisplayPrice(order);
+                    const formattedPrice = displayPriceValue.toFixed(2);
                     orderCard.innerHTML = `
                         <img src="${order.imageUrl || 'https://placehold.co/48x48/e0e7ff/4338ca?text=📱'}" alt="${order.deviceName}" onerror="this.onerror=null;this.src='https://placehold.co/48x48/e0e7ff/4338ca?text=📱';">
                         <div class="order-card-details">
                             <strong>ID: ${order.orderId} - ${order.deviceName}</strong>
-                            <span>${order.storage} | $${order.price}</span>
-                            ${order.reoffer ? `<span class="reoffer">Reoffer: $${order.reoffer}</span>` : ''}
+                            <span>${order.storage} | $${formattedPrice}</span>
+                            ${reofferAmount !== null ? `<span class="reoffer">Reoffer: $${reofferAmount.toFixed(2)}</span>` : ''}
                         </div>
                     `;
                     orderCard.addEventListener('click', () => handleOrderSelection(order));
@@ -1197,7 +1227,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             };
 
             const handleOrderSelection = async (order) => {
-                const messageText = `Selected Order: ID: ${order.orderId}, Device: ${order.deviceName}, Storage: ${order.storage}, Price: $${order.price}${order.reoffer ? `, Reoffer: $${order.reoffer}` : ''}`;
+                const reofferAmount = parseCurrencyValue(order.reoffer ?? order.reOffer?.newPrice);
+                const displayPriceValue = getDisplayPrice(order);
+                const formattedPrice = displayPriceValue.toFixed(2);
+                const messageText = `Selected Order: ID: ${order.orderId}, Device: ${order.deviceName}, Storage: ${order.storage}, Price: $${formattedPrice}${reofferAmount !== null ? `, Reoffer: $${reofferAmount.toFixed(2)}` : ''}`;
                 await sendMessage(messageText);
                 orderSelectionContainer.classList.add('hidden');
                 if (currentChatId) {
