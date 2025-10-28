@@ -1271,6 +1271,42 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <span>Send Reminder Email</span>
             </button>
 
+            <div id="phone-check-section" class="mt-6 p-4 border border-slate-200 rounded-xl bg-white/80 shadow-sm">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h4 class="text-lg font-semibold text-slate-800">PhoneCheck ESN Report</h4>
+                        <p class="text-sm text-slate-500 mt-1">Run an ESN/IMEI check to confirm carrier locks, outstanding balances, or blacklist status before continuing.</p>
+                    </div>
+                    <div class="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+                        <input id="phone-check-imei" type="text" placeholder="Enter IMEI" class="w-full sm:w-60 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm" />
+                        <button id="phone-check-run" class="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-md transition-colors duration-200 shadow">
+                            <span>Run Check</span>
+                        </button>
+                    </div>
+                </div>
+                <p class="mt-2 text-xs text-slate-500">Carrier, device type, and other context will auto-fill from the order when available.</p>
+                <div id="phone-check-error" class="hidden mt-3 px-3 py-2 rounded-md bg-red-100 text-red-700 text-sm"></div>
+                <div id="phone-check-results" class="hidden mt-4 p-4 rounded-lg border border-slate-200 bg-slate-50">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <span id="phone-check-status-pill" class="px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wide"></span>
+                        <span id="phone-check-status-text" class="text-sm text-slate-700"></span>
+                        <span id="phone-check-timestamp" class="text-xs text-slate-500 ml-auto"></span>
+                    </div>
+                    <div id="phone-check-reasons" class="hidden mt-3">
+                        <p class="text-sm font-semibold text-red-600">Issues detected:</p>
+                        <ul id="phone-check-reasons-list" class="mt-2 list-disc list-inside text-sm text-red-600 space-y-1"></ul>
+                    </div>
+                    <div id="phone-check-notes" class="hidden mt-3">
+                        <p class="text-xs uppercase tracking-wide text-slate-500 mb-1">Highlights</p>
+                        <ul id="phone-check-notes-list" class="text-sm text-slate-600 space-y-1 list-disc list-inside"></ul>
+                    </div>
+                    <details id="phone-check-raw-wrapper" class="hidden mt-4">
+                        <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">View raw response</summary>
+                        <pre id="phone-check-raw" class="mt-2 bg-slate-900 text-slate-100 text-xs p-3 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap"></pre>
+                    </details>
+                </div>
+            </div>
+
             <div id="modal-action-buttons" class="mt-6 flex flex-col sm:flex-row gap-3">
             </div>
             <div id="modal-message" class="mt-4 p-3 text-sm rounded-md hidden"></div>
@@ -1418,6 +1454,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         
         // Reminder Email Button
         const sendReminderBtn = document.getElementById('send-reminder-btn');
+
+        const phoneCheckSection = document.getElementById('phone-check-section');
+        const phoneCheckInput = document.getElementById('phone-check-imei');
+        const phoneCheckRunButton = document.getElementById('phone-check-run');
+        const phoneCheckError = document.getElementById('phone-check-error');
+        const phoneCheckResults = document.getElementById('phone-check-results');
+        const phoneCheckStatusPill = document.getElementById('phone-check-status-pill');
+        const phoneCheckStatusText = document.getElementById('phone-check-status-text');
+        const phoneCheckTimestamp = document.getElementById('phone-check-timestamp');
+        const phoneCheckReasons = document.getElementById('phone-check-reasons');
+        const phoneCheckReasonsList = document.getElementById('phone-check-reasons-list');
+        const phoneCheckNotes = document.getElementById('phone-check-notes');
+        const phoneCheckNotesList = document.getElementById('phone-check-notes-list');
+        const phoneCheckRawWrapper = document.getElementById('phone-check-raw-wrapper');
+        const phoneCheckRaw = document.getElementById('phone-check-raw');
+        const phoneCheckStatusBaseClass = 'px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wide';
         
         /* REMOVED SUBMENU REFERENCES */
         /* const reofferParentLink = document.querySelector('.reoffer-parent'); */
@@ -1450,6 +1502,21 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 closeOrderDetailsModal();
             }
         });
+
+        if (phoneCheckRunButton) {
+            phoneCheckRunButton.addEventListener('click', () => {
+                handlePhoneCheckRun();
+            });
+        }
+
+        if (phoneCheckInput) {
+            phoneCheckInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handlePhoneCheckRun();
+                }
+            });
+        }
 
         const USPS_TRACKING_URL = 'https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=';
 
@@ -2346,6 +2413,185 @@ if (printWindow) {
             return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
 
+        function resetPhoneCheckResults() {
+            if (phoneCheckError) {
+                phoneCheckError.classList.add('hidden');
+                phoneCheckError.textContent = '';
+            }
+            if (phoneCheckResults) {
+                phoneCheckResults.classList.add('hidden');
+            }
+            if (phoneCheckStatusPill) {
+                phoneCheckStatusPill.textContent = '';
+                phoneCheckStatusPill.className = phoneCheckStatusBaseClass;
+            }
+            if (phoneCheckStatusText) {
+                phoneCheckStatusText.textContent = '';
+            }
+            if (phoneCheckTimestamp) {
+                phoneCheckTimestamp.textContent = '';
+            }
+            if (phoneCheckReasonsList) {
+                phoneCheckReasonsList.innerHTML = '';
+            }
+            if (phoneCheckReasons) {
+                phoneCheckReasons.classList.add('hidden');
+            }
+            if (phoneCheckNotesList) {
+                phoneCheckNotesList.innerHTML = '';
+            }
+            if (phoneCheckNotes) {
+                phoneCheckNotes.classList.add('hidden');
+            }
+            if (phoneCheckRaw) {
+                phoneCheckRaw.textContent = '';
+            }
+            if (phoneCheckRawWrapper) {
+                phoneCheckRawWrapper.classList.add('hidden');
+                phoneCheckRawWrapper.open = false;
+            }
+        }
+
+        function inferDeviceTypeFromOrder(order) {
+            if (!order || !order.device) {
+                return 'auto';
+            }
+            const deviceName = order.device.toLowerCase();
+            if (deviceName.includes('iphone') || deviceName.includes('ipad') || deviceName.includes('apple') || deviceName.includes('watch') || deviceName.includes('mac')) {
+                return 'Apple';
+            }
+            if (deviceName.includes('pixel') || deviceName.includes('samsung') || deviceName.includes('android') || deviceName.includes('google')) {
+                return 'Android';
+            }
+            return 'auto';
+        }
+
+        async function handlePhoneCheckRun() {
+            if (!phoneCheckRunButton) {
+                return;
+            }
+
+            const imeiRaw = phoneCheckInput ? phoneCheckInput.value.trim() : '';
+            const imei = imeiRaw.replace(/\s+/g, '');
+
+            resetPhoneCheckResults();
+
+            if (!imei) {
+                if (phoneCheckError) {
+                    phoneCheckError.textContent = 'Please enter an IMEI before running the check.';
+                    phoneCheckError.classList.remove('hidden');
+                }
+                return;
+            }
+
+            const order = currentOrderDetails || {};
+            const carrier = order.carrier || 'others';
+            const deviceType = inferDeviceTypeFromOrder(order);
+
+            const originalButtonContent = phoneCheckRunButton.innerHTML;
+            phoneCheckRunButton.disabled = true;
+            phoneCheckRunButton.innerHTML = '<span class="flex items-center gap-2"><svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg><span>Checking…</span></span>';
+
+            try {
+                const response = await fetch(`${BACKEND_BASE_URL}/phone-check`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        imei,
+                        deviceType,
+                        carrier,
+                        checkAll: 1,
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => null);
+                    const errorMessage = errorData?.error || `PhoneCheck failed with status ${response.status}.`;
+                    throw new Error(errorMessage);
+                }
+
+                const data = await response.json();
+                if (!data || !data.summary) {
+                    throw new Error('Unexpected response from PhoneCheck service.');
+                }
+
+                const { summary, raw } = data;
+
+                if (phoneCheckResults) {
+                    phoneCheckResults.classList.remove('hidden');
+                }
+
+                if (phoneCheckStatusPill) {
+                    const statusClass = summary.isClean
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-red-100 text-red-700';
+                    phoneCheckStatusPill.className = `${phoneCheckStatusBaseClass} ${statusClass}`;
+                    phoneCheckStatusPill.textContent = summary.isClean ? 'Clean' : 'Attention Needed';
+                }
+
+                if (phoneCheckStatusText) {
+                    phoneCheckStatusText.textContent = summary.statusText || (summary.isClean ? 'No issues detected.' : 'See details below for more information.');
+                }
+
+                if (phoneCheckTimestamp) {
+                    const timestamp = new Date();
+                    phoneCheckTimestamp.textContent = `Checked ${timestamp.toLocaleString()}`;
+                }
+
+                if (phoneCheckReasons && phoneCheckReasonsList) {
+                    phoneCheckReasonsList.innerHTML = '';
+                    if (Array.isArray(summary.reasons) && summary.reasons.length > 0) {
+                        summary.reasons.forEach((reason) => {
+                            const li = document.createElement('li');
+                            li.textContent = reason;
+                            phoneCheckReasonsList.appendChild(li);
+                        });
+                        phoneCheckReasons.classList.remove('hidden');
+                    } else {
+                        phoneCheckReasons.classList.add('hidden');
+                    }
+                }
+
+                if (phoneCheckNotes && phoneCheckNotesList) {
+                    phoneCheckNotesList.innerHTML = '';
+                    const highlights = Array.isArray(summary.notices)
+                        ? summary.notices.filter((notice) => notice && notice !== summary.statusText)
+                        : [];
+                    const uniqueHighlights = Array.from(new Set(highlights)).slice(0, 6);
+
+                    if (uniqueHighlights.length > 0) {
+                        uniqueHighlights.forEach((item) => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            phoneCheckNotesList.appendChild(li);
+                        });
+                        phoneCheckNotes.classList.remove('hidden');
+                    } else {
+                        phoneCheckNotes.classList.add('hidden');
+                    }
+                }
+
+                if (phoneCheckRaw && phoneCheckRawWrapper) {
+                    phoneCheckRaw.textContent = JSON.stringify(raw, null, 2);
+                    phoneCheckRawWrapper.classList.remove('hidden');
+                }
+
+                if (!summary.isClean && phoneCheckError) {
+                    phoneCheckError.textContent = 'Issues were detected. Review the details below before continuing.';
+                    phoneCheckError.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('PhoneCheck error:', error);
+                if (phoneCheckError) {
+                    phoneCheckError.textContent = error.message || 'Failed to complete the PhoneCheck request.';
+                    phoneCheckError.classList.remove('hidden');
+                }
+            } finally {
+                phoneCheckRunButton.disabled = false;
+                phoneCheckRunButton.innerHTML = originalButtonContent;
+            }
+        }
+
         async function handleLabelButtonClick(order) {
             const printUrl = new URL('print-label.html', window.location.href);
             printUrl.searchParams.set('orderId', order.id);
@@ -2502,6 +2748,12 @@ if (printWindow) {
                 modalConditionCracks.textContent = order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A';
                 modalConditionCosmetic.textContent = order.condition_cosmetic ? formatCondition(order.condition_cosmetic) : 'N/A';
 
+                resetPhoneCheckResults();
+                if (phoneCheckInput) {
+                    const potentialImei = order.imei || order.IMEI || order.deviceImei || (order.deviceDetails && order.deviceDetails.imei) || '';
+                    phoneCheckInput.value = potentialImei || '';
+                }
+
                 // Pass the order object to formatStatus here as well
                 modalStatus.textContent = formatStatus(order);
                 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
@@ -2644,6 +2896,16 @@ if (printWindow) {
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;
                 case 'received':
+                    [
+                        { label: 'Email Outstanding Balance Notice', reason: 'outstanding_balance', className: 'bg-amber-600 hover:bg-amber-700' },
+                        { label: 'Email Password Lock Notice', reason: 'password_locked', className: 'bg-slate-700 hover:bg-slate-800' },
+                        { label: 'Email Lost/Stolen Notice', reason: 'stolen', className: 'bg-rose-600 hover:bg-rose-700' },
+                        { label: 'Email FMI / Activation Lock Notice', reason: 'fmi_active', className: 'bg-indigo-600 hover:bg-indigo-700' },
+                    ].forEach(({ label, reason, className }) => {
+                        modalActionButtons.appendChild(
+                            createButton(label, () => sendConditionEmail(order.id, reason, label), className)
+                        );
+                    });
                     modalActionButtons.appendChild(createButton('Mark as Completed', () => handleAction(order.id, 'markCompleted', 'bg-gray-600 hover:bg-gray-700')));
                     modalActionButtons.appendChild(createButton('Propose Re-offer', () => showReofferForm(order.id), 'bg-orange-600 hover:bg-orange-700'));
                     break;
@@ -2861,6 +3123,53 @@ if (printWindow) {
             } catch (error) {
                 console.error("Action error:", error);
                 displayModalMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
+        }
+
+        async function sendConditionEmail(orderId, reasonKey, labelText) {
+            if (!orderId || !reasonKey) {
+                return;
+            }
+
+            const confirmMessage = `Send the "${labelText}" email to the customer?`;
+            const confirmed = window.confirm(confirmMessage);
+            if (!confirmed) {
+                return;
+            }
+
+            let additionalNotes = '';
+            try {
+                additionalNotes = window.prompt('Optional notes to include in the email (leave blank to skip):', '') || '';
+            } catch (promptError) {
+                additionalNotes = '';
+            }
+
+            modalMessage.classList.add('hidden');
+            modalLoadingMessage.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/send-condition-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        reason: reasonKey,
+                        notes: additionalNotes.trim() ? additionalNotes.trim() : undefined,
+                    }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => null);
+                    const errorMessage = errorData?.error || `Failed to send email (${response.status}).`;
+                    throw new Error(errorMessage);
+                }
+
+                const result = await response.json().catch(() => ({}));
+                displayModalMessage(result.message || 'Email sent successfully.', 'success');
+            } catch (error) {
+                console.error('Condition email error:', error);
+                displayModalMessage(error.message || 'Failed to send email.', 'error');
             } finally {
                 modalLoadingMessage.classList.add('hidden');
             }
