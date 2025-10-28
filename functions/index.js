@@ -41,8 +41,55 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const EMAIL_LOGO_URL =
+  "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
+const COUNTDOWN_NOTICE_TEXT =
+  "If we don't hear back within 7 days, we'll automatically requote your device at 75% less to keep your order moving.";
+
+function buildCountdownNoticeHtml() {
+  return `
+    <div style="margin-top: 24px; padding: 18px 20px; background-color: #ecfdf5; border-radius: 12px; border: 1px solid #bbf7d0; color: #065f46; font-size: 17px; line-height: 1.6;">
+      <strong style="display:block; font-size:18px; margin-bottom:8px;">Friendly reminder</strong>
+      If we don't hear back within <strong>7 days</strong>, we'll automatically requote your device at <strong>75% less</strong> to keep your order moving.
+    </div>
+  `;
+}
+
+function appendCountdownNotice(text = "") {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return COUNTDOWN_NOTICE_TEXT;
+  }
+  if (trimmed.includes(COUNTDOWN_NOTICE_TEXT)) {
+    return trimmed;
+  }
+  return `${trimmed}\n\n${COUNTDOWN_NOTICE_TEXT}`;
+}
+
 const PHONECHECK_DEFAULT_API_URL =
   "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+const PHONECHECK_FALLBACK_API_KEY = "9cdbc7a1-1b9c-44ae-a98085104c71ea3e";
+const PHONECHECK_FALLBACK_USERNAME = "Kai2";
+const PHONECHECK_CARRIER_ALIASES = {
+  att: "AT&T",
+  "at&t": "AT&T",
+  tmobile: "T-Mobile",
+  "t-mobile": "T-Mobile",
+  tmob: "T-Mobile",
+  sprint: "Sprint",
+  verizon: "Verizon",
+  unlocked: "Unlocked",
+  blacklist: "Blacklist",
+  "black list": "Blacklist",
+};
+const PHONECHECK_ALLOWED_CARRIERS = new Set([
+  "AT&T",
+  "T-Mobile",
+  "Sprint",
+  "Verizon",
+  "Unlocked",
+  "Blacklist",
+]);
 
 function getPhoneCheckConfig() {
   const config = {
@@ -77,6 +124,16 @@ function getPhoneCheckConfig() {
       "Unable to read functions.config().phonecheck values:",
       error.message
     );
+  }
+
+  if (!config.apiKey) {
+    config.apiKey = PHONECHECK_FALLBACK_API_KEY;
+  }
+  if (!config.username) {
+    config.username = PHONECHECK_FALLBACK_USERNAME;
+  }
+  if (!config.apiUrl) {
+    config.apiUrl = PHONECHECK_DEFAULT_API_URL;
   }
 
   return config;
@@ -172,18 +229,35 @@ function buildConditionEmail(reason, order, notes) {
   const stepsHtml = steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
   const stepsText = steps.map((step) => `• ${step}`).join("\n");
 
-  const html = `
-    <p>Hi ${escapeHtml(greetingName)},</p>
-    <p>During our inspection of the device you sent in for order <strong>#${escapeHtml(orderId)}</strong>, we detected an issue:</p>
-    <p><strong>${escapeHtml(template.headline)}</strong></p>
-    <p>${escapeHtml(template.message)}</p>
-    <ul>${stepsHtml}</ul>
-    ${noteHtml}
-    <p>Please reply to this email if you have any questions or once the issue has been resolved so we can continue processing your payout.</p>
-    <p>Thank you,<br/>SecondHandCell Team</p>
+  const accentColorMap = {
+    outstanding_balance: "#f97316",
+    password_locked: "#6366f1",
+    stolen: "#dc2626",
+    fmi_active: "#f59e0b",
+  };
+
+  const bodyHtml = `
+      <p>Hi ${escapeHtml(greetingName)},</p>
+      <p>During our inspection of the device you sent in for order <strong>#${escapeHtml(orderId)}</strong>, we detected an issue:</p>
+      <div style="background:#fff7ed; border-radius:14px; border:1px solid #fde68a; padding:18px 22px; margin:24px 0; color:#7c2d12;">
+        <strong>${escapeHtml(template.headline)}</strong>
+        <p style="margin:12px 0 0; color:#7c2d12;">${escapeHtml(template.message)}</p>
+      </div>
+      <p style="margin-bottom:16px;">Here's what to do next:</p>
+      <ul style="padding-left:22px; color:#475569; margin:0 0 24px;">
+        ${stepsHtml}
+      </ul>
+      ${noteHtml}
+      <p>Reply to this email once you've taken care of the issue so we can recheck your device and keep your payout moving.</p>
   `;
 
-  const text = `Hi ${greetingName},
+  const html = buildEmailLayout({
+    title: template.headline,
+    accentColor: accentColorMap[reason] || "#0ea5e9",
+    bodyHtml,
+  });
+
+  const text = appendCountdownNotice(`Hi ${greetingName},
 
 During our inspection of the device you sent in for order #${orderId}, we detected an issue:
 
@@ -193,10 +267,10 @@ ${template.message}
 
 ${stepsText}${noteText}
 
-Please reply to this email if you have any questions or once the issue has been resolved so we can continue processing your payout.
+Please reply to this email once the issue has been resolved so we can continue processing your payout.
 
 Thank you,
-SecondHandCell Team`;
+SecondHandCell Team`);
 
   return { subject: template.subject, html, text };
 }
@@ -447,22 +521,29 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     }`;
   });
 
-  const textBody = [
-    `${reason} label void processed for order #${order.id}.`,
-    `Order age: ${ageDescription}.`,
-    "",
-    "Voided label(s):",
-    ...lines,
-  ].join("\n");
+  const textBody = appendCountdownNotice(
+    [
+      `${reason} label void processed for order #${order.id}.`,
+      `Order age: ${ageDescription}.`,
+      "",
+      "Voided label(s):",
+      ...lines,
+    ].join("\n")
+  );
 
-  const htmlBody = `
-    <p>${reason} label void processed for order <strong>#${order.id}</strong>.</p>
-    <p>Order age: <strong>${ageDescription}</strong>.</p>
-    <p>Voided label(s):</p>
-    <ul>
-      ${lines.map((line) => `<li>${line.substring(2)}</li>`).join("\n")}
-    </ul>
-  `;
+  const htmlBody = buildEmailLayout({
+    title: `${reason} label void`,
+    accentColor: "#0ea5e9",
+    includeTrustpilot: true,
+    bodyHtml: `
+      <p>${reason} label void processed for order <strong>#${order.id}</strong>.</p>
+      <p>Order age: <strong>${ageDescription}</strong>.</p>
+      <p style="margin-bottom:12px;">Voided label(s):</p>
+      <ul style="padding-left:22px; color:#475569;">
+        ${lines.map((line) => `<li>${escapeHtml(line.substring(2))}</li>`).join("\n")}
+      </ul>
+    `,
+  });
 
   await transporter.sendMail({
     from: `SecondHandCell <${process.env.EMAIL_USER}>`,
@@ -619,445 +700,167 @@ async function handleLabelVoid(order, selections, options = {}) {
 }
 
 // --- EMAIL HTML Templates (unchanged from your version) ---
-const SHIPPING_LABEL_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Label is Ready!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Label is Ready!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>You've chosen to receive a shipping label for order <strong class="order-id">#**ORDER_ID**</strong>. Here it is!</p><p>Your Tracking Number is: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><div class="button-container"><a href="**LABEL_DOWNLOAD_LINK**" class="button">Download Your Shipping Label</a></div><p style="text-align:center;">We're excited to receive your device!</p></div><div class="footer"><p>Thank you for choosing SecondHandCell.</p></div></div></body></html>`;
-const SHIPPING_KIT_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Shipping Kit is on its Way!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0;display:flex;align-items:center;justify-content:center;gap:10px}.header img{width:32px;height:32px}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.order-id{color:#007bff;font-weight:bold}.tracking-number{color:#007bff;font-weight:bold}.button-container{text-align:center;margin:24px 0}.button{display:inline-block;background-color:#4CAF50;color:#ffffff;padding:12px 24px;text-decoration:none;border-radius:5px;font-weight:bold;font-size:16px;-webkit-transition:background-color .3s ease;transition:background-color .3s ease}.button:hover{background-color:#45a049}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1><img src="https://fonts.gstatic.com/s/e/notoemoji/16.0/1f4e6/72.png" alt="Box Icon">Your Shipping Kit is on its Way!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for your order <strong class="order-id">#**ORDER_ID**</strong>! Your shipping kit is on its way to you.</p><p>You can track its progress with the following tracking number: <strong class="tracking-number">**TRACKING_NUMBER**</strong></p><p>Once your kit arrives, simply place your device inside and use the included return label to send it back to us.</p><p>We're excited to receive your device!</p></div><div class="footer"><p>Thank thank you for choosing SecondHandCell.</p></div></div></body></html>`;
-const ORDER_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your SecondHandCell Order Has Been Received!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content h2{color:#333333;font-size:20px;margin-top:24px;margin-bottom:8px}.order-id{color:#007bff;font-weight:bold}ul{list-style-type:disc;padding-left:20px;margin:0 0 16px}ul li{margin-bottom:8px}.important-note{background-color:#fff3cd;border-left:4px solid #ffc107;padding:16px;margin-top:24px;font-size:14px;color:#856404}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}</style></head><body><div class="email-container"><div class="header"><h1>Your SecondHandCell Order #**ORDER_ID** Has Been Received!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>Thank you for choosing SecondHandCell! We've successfully received your order request for your **DEVICE_NAME**.</p><p>Your Order ID is <strong class="order-id">#**ORDER_ID**</strong>.</p><h2>Next Steps: Preparing Your Device for Shipment</h2><p>Before you send us your device, it's crucial to prepare it correctly. Please follow these steps:</p><ul><li><strong>Backup Your Data:</strong> Ensure all important photos, contacts, and files are backed up to a cloud service or another device.</li><li><strong>Factory Reset:</strong> Perform a full factory reset on your device to erase all personal data. This is vital for your privacy and security.</li><li><strong>Remove Accounts:</strong> Sign out of all accounts (e.g., Apple ID/iCloud, Google Account, Samsung Account).<ul><li>For Apple devices, turn off "Find My iPhone" (FMI).</li><li>For Android devices, ensure Factory Reset Protection (FRP) is disabled.</li></ul></li><li><strong>Remove SIM Card:</strong> Take out any physical SIM cards from the device.</li><li><strong>Remove Accessories:</strong> Do not include cases, screen protectors, or chargers unless specifically instructed.</li></ul><div class="important-note"><p><strong>Important:</strong> We cannot process devices with <strong>Find My iPhone (FMI)</strong>, <strong>Factory Reset Protection (FRP)</strong>, <strong>stolen/lost status</strong>, <strong>outstanding balance due</strong>, or <strong>blacklisted IMEI</strong>. Please ensure your device meets these conditions to avoid delays or rejection.</p></div>**SHIPPING_INSTRUCTION**</div><div class="footer"><p>The SecondHandCell Team</p></div></div></body></html>`;
-const DEVICE_RECEIVED_EMAIL_HTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Your Device Has Arrived!</title><style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;background-color:#f4f4f4;margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}.email-container{max-width:600px;margin:20px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,.1);overflow:hidden;border:1px solid #e0e0e0}.header{background-color:#ffffff;padding:24px;text-align:center;border-bottom:1px solid #e0e0e0}.header h1{font-size:24px;color:#333333;margin:0}.content{padding:24px;color:#555555;font-size:16px;line-height:1.6}.content p{margin:0 0 16px}.content p strong{color:#333333}.footer{padding:24px;text-align:center;color:#999999;font-size:14px;border-top:1px solid #e0e0e0}.order-id{color:#007bff;font-weight:bold}</style></head><body><div class="email-container"><div class="header"><h1>Your Device Has Arrived!</h1></div><div class="content"><p>Hello **CUSTOMER_NAME**,</p><p>We've received your device for order <strong class="order-id">#**ORDER_ID**</strong>!</p><p>It's now in the queue for inspection. We'll be in touch soon with a final offer.</p></div><div class="footer"><p>Thank thank you for choosing SecondHandCell.</p></div></div></body></html>`;
-const ORDER_PLACED_ADMIN_EMAIL_HTML = `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-        background-color: #f4f4f4;
-        margin: 0;
-        padding: 0;
-      }
-      .email-container {
-        max-width: 600px;
-        margin: 20px auto;
-        background-color: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 4px 6px rgba(0,0,0,.1);
-        overflow: hidden;
-      }
-      .header {
-        background-color: #4CAF50;
-        color: #ffffff;
-        padding: 24px;
-        text-align: center;
-      }
-      .header h1 {
-        font-size: 28px;
-        margin: 0;
-      }
-      .content {
-        padding: 24px;
-        color: #555555;
-        font-size: 16px;
-        line-height: 1.6;
-      }
-      .content h2 {
-        color: #333333;
-        font-size: 20px;
-        margin-top: 24px;
-        margin-bottom: 8px;
-      }
-      .order-details p {
-        margin: 8px 0;
-      }
-      .button-container {
-        text-align: center;
-        margin: 24px 0;
-      }
-      .button {
-        display: inline-block;
-        background-color: #007bff;
-        color: #ffffff;
-        padding: 12px 24px;
-        text-decoration: none;
-        border-radius: 5px;
-        font-weight: bold;
-        font-size: 16px;
-      }
-      .footer {
-        padding: 24px;
-        text-align: center;
-        color: #999999;
-        font-size: 14px;
-        border-top: 1px solid #e0e0e0;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="email-container">
-      <div class="header">
-        <h1>New Order Received! 🥳</h1>
+const SHIPPING_LABEL_EMAIL_HTML = buildEmailLayout({
+  title: "Your Shipping Label is Ready!",
+  bodyHtml: `
+      <p>Hi **CUSTOMER_NAME**,</p>
+      <p>Your shipping label for order <strong>#**ORDER_ID**</strong> is ready to go.</p>
+      <p style="margin-bottom:28px;">Use the secure button below to download it instantly and get your device on the way to us.</p>
+      <div style="text-align:center; margin-bottom:32px;">
+        <a href="**LABEL_DOWNLOAD_LINK**" class="button-link">Download Shipping Label</a>
       </div>
-      <div class="content">
-        <h2>Order Details </h2>
-        <div class="order-details">
-          <p><strong>Customer:</strong> **CUSTOMER_NAME**</p>
-          <p><strong>Order ID:</strong> **ORDER_ID**</p>
-          <p><strong>Device:</strong> **DEVICE_NAME**</p>
-          <p><strong>Estimated Quote:</strong> $**ESTIMATED_QUOTE**</p>
-          <p><strong>Shipping Preference:</strong> **SHIPPING_PREFERENCE**</p>
-        </div>
-        <div class="button-container">
-          <a href="https://secondhandcell.com/admin" class="button">Fulfill Order Now</a>
-        </div>
-        <p>This is an automated notification from SecondHandCell.</p>
+      <div style="background:#f8fafc; border:1px solid #dbeafe; border-radius:14px; padding:20px 24px;">
+        <p style="margin:0 0 10px;"><strong style="color:#0f172a;">Tracking Number</strong><br><span style="color:#2563eb; font-weight:600;">**TRACKING_NUMBER**</span></p>
+        <p style="margin:0; color:#475569;">Drop your device off with your preferred carrier as soon as you're ready.</p>
       </div>
-      <div class="footer">
-        <p>The SecondHandCell Team</p>
+      <p style="margin-top:28px;">Need a hand? Reply to this email and our team will guide you.</p>
+  `,
+});
+const SHIPPING_KIT_EMAIL_HTML = buildEmailLayout({
+  title: "Your Shipping Kit is on its Way!",
+  bodyHtml: `
+      <p>Hi **CUSTOMER_NAME**,</p>
+      <p>Your shipping kit for order <strong>#**ORDER_ID**</strong> is en route.</p>
+      <p>Track its journey with the number below and get ready to pop your device inside once it arrives.</p>
+      <div style="background:#f8fafc; border:1px solid #dbeafe; border-radius:14px; padding:20px 24px; margin:0 0 28px;">
+        <p style="margin:0 0 10px;"><strong style="color:#0f172a;">Tracking Number</strong><br><span style="color:#2563eb; font-weight:600;">**TRACKING_NUMBER**</span></p>
+        <p style="margin:0; color:#475569;">Keep an eye out for your kit and pack your device securely when it lands.</p>
       </div>
-    </div>
-  </body>
-  </html>
-`;
-const BLACKLISTED_EMAIL_HTML = `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Important Notice Regarding Your Device - Order #**ORDER_ID**</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
-      .header { background-color: #d9534f; color: #ffffff; padding: 24px; text-align: center; }
-      .header h1 { font-size: 24px; margin: 0; }
-      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
-      .content h2 { color: #d9534f; font-size: 20px; margin-top: 24px; margin-bottom: 8px; }
-      .content p { margin: 0 0 16px; }
-      .order-id { color: #d9534f; font-weight: bold; }
-      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
-    </style>
-  </head>
-  <body>
-    <div class="email-container">
-      <div class="header">
-        <h1>Important Notice Regarding Your Device</h1>
-        <br>
-        
+      <p>Have accessories you don't need? Feel free to include them—we'll recycle responsibly.</p>
+      <p>Need anything else? Just reply to this email.</p>
+  `,
+});
+const ORDER_RECEIVED_EMAIL_HTML = buildEmailLayout({
+  title: "We've received your order!",
+  bodyHtml: `
+      <p>Hi **CUSTOMER_NAME**,</p>
+      <p>Thanks for choosing SecondHandCell! We've logged your order for <strong>**DEVICE_NAME**</strong>.</p>
+      <p>Your order ID is <strong style="color:#2563eb;">#**ORDER_ID**</strong>. Keep it handy for any questions.</p>
+      <h2 style="font-size:20px; color:#0f172a; margin:32px 0 12px;">Before you ship</h2>
+      <ul style="padding-left:22px; margin:0 0 20px; color:#475569;">
+        <li style="margin-bottom:10px;"><strong>Backup your data</strong> so nothing personal is lost.</li>
+        <li style="margin-bottom:10px;"><strong>Factory reset</strong> the device to wipe personal info.</li>
+        <li style="margin-bottom:10px;"><strong>Remove accounts</strong> such as Apple ID/iCloud or Google/Samsung accounts.<br><span style="display:block; margin-top:6px; margin-left:10px;">• Turn off Find My iPhone (FMI).<br>• Disable Factory Reset Protection (FRP) on Android.</span></li>
+        <li style="margin-bottom:10px;"><strong>Remove SIM cards</strong> and eSIM profiles.</li>
+        <li style="margin-bottom:10px;"><strong>Pack accessories separately</strong> unless we specifically request them.</li>
+      </ul>
+      <div style="background:#fef3c7; border-radius:16px; padding:18px 22px; border:1px solid #fde68a; color:#92400e; margin:30px 0;">
+        <strong>Important:</strong> We can't process devices that still have FMI/FRP enabled, an outstanding balance, or a blacklist/lost/stolen status.
       </div>
-      <div class="content">
-        <p>Hello **CUSTOMER_NAME**, </p>
-        <p>This email is in reference to your device for order <strong class="order-id">#**ORDER_ID**</strong>.</p>
-        <p>Upon verification, your device's IMEI has been flagged in the national database as **STATUS_REASON**.</p>
-        <h2>Policy on Lost/Stolen Devices & Legal Compliance</h2>
-        <p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This is a matter of legal and ethical compliance.</p>
-        <p>Because the device is flagged, we cannot proceed with this transaction. Under New York law, we are required to report and hold any device suspected of being lost or stolen. The device cannot be returned to you. We must cooperate with law enforcement to ensure the device is handled in accordance with legal requirements.</p>
-        <p>We advise you to contact your cellular carrier or the original owner of the device to resolve the status issue directly with them.</p>
-        <p>**LEGAL_TEXT**</p>
+      **SHIPPING_INSTRUCTION**
+  `,
+});
+const DEVICE_RECEIVED_EMAIL_HTML = buildEmailLayout({
+  title: "Your device has arrived!",
+  bodyHtml: `
+      <p>Hi **CUSTOMER_NAME**,</p>
+      <p>Your device for order <strong style="color:#2563eb;">#**ORDER_ID**</strong> has landed at our facility.</p>
+      <p>Our technicians are giving it a full inspection now. We'll follow up shortly with an update on your payout.</p>
+      <p>Have questions while you wait? Just reply to this email—real humans are here to help.</p>
+  `,
+});
+const ORDER_PLACED_ADMIN_EMAIL_HTML = buildEmailLayout({
+  title: "New order submitted",
+  accentColor: "#f97316",
+  bodyHtml: `
+      <p>Heads up! A new order just came in.</p>
+      <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:16px; padding:22px 24px; margin-bottom:28px; color:#7c2d12;">
+        <p style="margin:0 0 10px;"><strong>Customer</strong>: **CUSTOMER_NAME**</p>
+        <p style="margin:0 0 10px;"><strong>Order ID</strong>: #**ORDER_ID**</p>
+        <p style="margin:0 0 10px;"><strong>Device</strong>: **DEVICE_NAME**</p>
+        <p style="margin:0;"><strong>Estimated Quote</strong>: $**ESTIMATED_QUOTE** • <strong>Shipping</strong>: **SHIPPING_PREFERENCE**</p>
       </div>
-      <div class="footer">
-        <p>The SecondHandCell Team</p>
-        <p style="font-size: 12px; margin-top: 10px;">New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property. We must comply with all local and federal laws regarding stolen property.</p>
+      <div style="text-align:center; margin-bottom:20px;">
+        <a href="https://secondhandcell.com/admin" class="button-link" style="background-color:#f97316;">Open in Admin</a>
       </div>
-    </div>
-  </body>
-  </html>
-`;
-const FMI_EMAIL_HTML = `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Action Required for Order #**ORDER_ID**</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
-      .header { background-color: #f0ad4e; color: #ffffff; padding: 24px; text-align: center; }
-      .header h1 { font-size: 24px; margin: 0; }
-      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
-      .content h2 { color: #f0ad4e; font-size: 20px; margin-top: 24px; margin-bottom: 8px; }
-      .content p { margin: 0 0 16px; }
-      .order-id { color: #f0ad4e; font-weight: bold; }
-      .button-container { text-align: center; margin: 24px 0; }
-      .button { display: inline-block; background-color: #f0ad4e; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px; }
-      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
-      .countdown-text { text-align: center; margin-top: 20px; font-size: 18px; font-weight: bold; color: #333333; }
-    </style>
-  </head>
-  <body>
-    <div class="email-container">
-      <div class="header">
-        <h1>Action Required for Your Order</h1>
+      <p style="color:#475569;">This alert is automated—feel free to reply if you notice anything unusual.</p>
+  `,
+});
+const BLACKLISTED_EMAIL_HTML = buildEmailLayout({
+  title: "Action required: Carrier blacklist detected",
+  accentColor: "#dc2626",
+  bodyHtml: `
+      <p>Hi **CUSTOMER_NAME**,</p>
+      <p>During our review of order <strong>#**ORDER_ID**</strong>, the carrier database flagged the device as lost, stolen, or blacklisted.</p>
+      <p>We can't release payment while this status is active. Please contact your carrier to remove the flag and reply with confirmation or documentation so we can re-run the check.</p>
+      <p>If you believe this alert is an error, include any proof in your reply and we'll take another look.</p>
+      <p style="color:#dc2626; font-size:15px;">**LEGAL_TEXT**</p>
+  `,
+});
+const FMI_EMAIL_HTML = buildEmailLayout({
+  title: "Turn off Find My to continue",
+  accentColor: "#f59e0b",
+  bodyHtml: `
+      <p>Hi **CUSTOMER_NAME**,</p>
+      <p>Our inspection for order <strong>#**ORDER_ID**</strong> shows Find My iPhone / Activation Lock is still enabled.</p>
+      <p>Please complete the steps below so we can finish processing your payout:</p>
+      <ol style="padding-left:22px; color:#475569; margin-bottom:20px;">
+        <li>Visit <a href="https://icloud.com/find" target="_blank" style="color:#2563eb;">icloud.com/find</a> and sign in.</li>
+        <li>Select the device you're selling.</li>
+        <li>Choose “Remove from Account”.</li>
+        <li>Confirm the device no longer appears in your list.</li>
+      </ol>
+      <div style="text-align:center; margin:32px 0 24px;">
+        <a href="**CONFIRM_URL**" class="button-link" style="background-color:#f59e0b;">I've turned off Find My</a>
       </div>
-      <div class="content">
-        <p>Hello **CUSTOMER_NAME**, </p>
-        <p>This is a notification about your device for order <strong class="order-id">#**ORDER_ID**</strong>. We've detected that "Find My iPhone" (FMI) is still active on the device. **FMI must be turned off for us to complete your buyback transaction.**</p>
-        <p>Please follow these steps to turn off FMI:</p>
-        <ol>
-          <li>Go to <a href="https://icloud.com/find" target="_blank">icloud.com/find</a> and sign in with your Apple ID.</li>
-          <li>Click on "All Devices" at the top of the screen.</li>
-          <li>Select the device you are sending to us.</li>
-          <li>Click "Remove from Account".</li>
-        </ol>
-        <p>Once you have completed this step, please click the button below to let us know. You have **72 hours** to turn off FMI. If we don't receive confirmation within this period, your offer will be automatically reduced to the lowest possible price (as if the device were damaged).</p>
-        <div class="button-container">
-          <a href="**CONFIRM_URL**" class="button">Did it already? Click here.</a>
-        </div>
-        <div class="countdown-text">72-hour countdown has begun.</div>
-        <p>If you have any questions, please reply to this email.</p>
-      </div>
-      <div class="footer">
-        <p>The SecondHandCell Team</p>
-      </div>
-    </div>
-  </body>
-  </html>
-`;
-const BAL_DUE_EMAIL_HTML = `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Action Required for Order #**ORDER_ID**</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8-8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
-      .header { background-color: #f0ad4e; color: #ffffff; padding: 24px; text-align: center; }
-      .header h1 { font-size: 24px; margin: 0; }
-      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
-      .content h2 { color: #f0ad4e; font-size: 20px; margin-top: 24px; margin-bottom: 8px; }
-      .content p { margin: 0 0 16px; }
-      .order-id { color: #f0ad4e; font-weight: bold; }
-      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
-    </style>
-  </head>
-  <body>
-    <div class="email-container">
-      <div class="header">
-        <h1>Action Required for Your Order</h1>
-      </div>
-      <div class="content">
-        <p>Hello **CUSTOMER_NAME**, </p>
-        <p>This is a notification about your device for order <strong class="order-id">#**ORDER_ID**</strong>. We've detected that a **FINANCIAL_STATUS** is on the device with your carrier.</p>
-        <p>To continue with your buyback, you must resolve this with your carrier. Please contact them directly to clear the outstanding balance.</p>
-        <p>You have **72 hours** to clear the balance. If we don't receive an updated status from our system within this period, your offer will be automatically reduced to the lowest possible price (as if the device were damaged).</p>
-        <p>If you have any questions, please reply to this email.</p>
-      </div>
-      <div class="footer">
-        <p>The SecondHandCell Team</p>
-      </div>
-    </div>
-  </body>
-  </html>
-`;
-const DOWNGRADE_EMAIL_HTML = `
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Update on Your Order - Order #**ORDER_ID**</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-      .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e0e0e0; }
-      .header { background-color: #f0ad4e; color: #ffffff; padding: 24px; text-align: center; }
-      .header h1 { font-size: 24px; margin: 0; }
-      .content { padding: 24px; color: #555555; font-size: 16px; line-height: 1.6; }
-      .content p { margin: 0 0 16px; }
-      .order-id { color: #f0ad4e; font-weight: bold; }
-      .footer { padding: 24px; text-align: center; color: #999999; font-size: 14px; border-top: 1px solid #e0e0e0; }
-    </style>
-  </head>
-  <body>
-    <div class="email-container">
-      <div class="header">
-        <h1>Update on Your Order</h1>
-        </div>
-      <div class="content">
-        <p>Hello **CUSTOMER_NAME**, </p>
-        <p>This is an automated notification regarding your order <strong class="order-id">#**ORDER_ID**</strong>. The 72-hour period to resolve the issue with your device has expired. As a result, your offer has been automatically reduced to the lowest possible price (as if the device were damaged).</p>
-        <p>If you have any questions, please reply to this email.</p>
-      </div>
-      <div class="footer">
-        <p>The SecondHandCell Team</p>
-      </div>
-    </div>
-  </body>
-  </html>
-`;
+      <p style="color:#b45309; font-size:15px;">Once it's disabled, click the button above or reply to this email so we can recheck your device.</p>
+  `,
+});
+const BAL_DUE_EMAIL_HTML = buildEmailLayout({
+  title: "Balance due with your carrier",
+  accentColor: "#f97316",
+  bodyHtml: `
+      <p>Hi **CUSTOMER_NAME**,</p>
+      <p>When we ran your device for order <strong>#**ORDER_ID**</strong>, the carrier reported a status of <strong>**FINANCIAL_STATUS**</strong>.</p>
+      <p>Please contact your carrier to clear the balance and then reply to this email so we can rerun the check and keep your payout on track.</p>
+      <p style="color:#c2410c;">Need help figuring out the right department to call? Let us know and we'll point you in the right direction.</p>
+  `,
+});
+const DOWNGRADE_EMAIL_HTML = buildEmailLayout({
+  title: "Order updated after 7 days",
+  accentColor: "#f97316",
+  bodyHtml: `
+      <p>Hi **CUSTOMER_NAME**,</p>
+      <p>We reached out about the issue with your device for order <strong>#**ORDER_ID**</strong> but didn't hear back within seven days.</p>
+      <p>To keep things moving, we've automatically requoted the device at 75% less than the original offer. If you resolve the issue, reply to this email and we'll happily re-evaluate.</p>
+      <p>We're here to help—just let us know how you'd like to proceed.</p>
+  `,
+});
 
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
-const ORDER_COMPLETED_EMAIL_HTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your SecondHandCell Order is Complete!</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
-    .email-container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 10px; box-shadow: 0 4px 6px rgba(15,23,42,0.12); overflow: hidden; border: 1px solid #e2e8f0; }
-    .header { background-color: #22c55e; color: #ffffff; padding: 28px 24px; text-align: center; }
-    .header h1 { font-size: 26px; margin: 0; }
-    .content { padding: 28px 24px; color: #334155; font-size: 16px; line-height: 1.6; }
-    .content p { margin: 0 0 18px; }
-    .order-summary { background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin: 20px 0; }
-    .order-summary p { margin: 8px 0; color: #0f172a; }
-    .order-summary strong { color: #1e293b; }
-    .footer { padding: 24px; text-align: center; color: #94a3b8; font-size: 14px; border-top: 1px solid #e2e8f0; background-color: #f8fafc; }
-  </style>
-</head>
-<body>
-  <div class="email-container">
-    <div class="header">
-      <h1>🥳 Your Order is Complete!</h1>
-    </div>
-    <div class="content">
+function getOrderCompletedEmailTemplate({ includeTrustpilot = true } = {}) {
+  return buildEmailLayout({
+    title: "🥳 Your order is complete!",
+    includeTrustpilot,
+    bodyHtml: `
+        <p>Hi **CUSTOMER_NAME**,</p>
+        <p>Great news! Order <strong>#**ORDER_ID**</strong> is complete and your payout is headed your way.</p>
+        <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:20px 24px; margin:28px 0;">
+          <p style="margin:0 0 12px;"><strong style="color:#0f172a;">Device</strong><br><span style="color:#475569;">**DEVICE_SUMMARY**</span></p>
+          <p style="margin:0 0 12px;"><strong style="color:#0f172a;">Payout</strong><br><span style="color:#059669; font-size:22px; font-weight:700;">$**ORDER_TOTAL**</span></p>
+          <p style="margin:0;"><strong style="color:#0f172a;">Payment method</strong><br><span style="color:#475569;">**PAYMENT_METHOD**</span></p>
+        </div>
+        <p>If anything looks off, just reply—we'll make it right.</p>
+        <p>Thanks for choosing SecondHandCell!</p>
+    `,
+  });
+}
+
+const REVIEW_REQUEST_EMAIL_HTML = buildEmailLayout({
+  title: "We'd love your feedback",
+  accentColor: "#0ea5e9",
+  bodyHtml: `
       <p>Hello **CUSTOMER_NAME**,</p>
-      <p>Great news! Your order <strong>#**ORDER_ID**</strong> is complete and your payout is on the way.</p>
-      <div class="order-summary">
-        <p><strong>Device:</strong> **DEVICE_SUMMARY**</p>
-        <p><strong>Payout:</strong> $**ORDER_TOTAL**</p>
-        <p><strong>Payment Method:</strong> **PAYMENT_METHOD**</p>
+      <p>Thanks again for trusting us with your device. Sharing a quick review helps other sellers feel confident working with SecondHandCell.</p>
+      <p style="margin-bottom:32px;">It only takes a minute and means the world to our team.</p>
+      <div style="text-align:center; margin-bottom:24px;">
+        <a href="${TRUSTPILOT_REVIEW_LINK}" class="button-link" style="background-color:#0ea5e9;">Leave a Trustpilot review</a>
       </div>
-      <p>If you have any questions, simply reply to this email—we're here to help.</p>
-      <p>Thank you again for choosing SecondHandCell!</p>
-      **TRUSTPILOT_SECTION**
-    </div>
-    <div class="footer">
-      <p>The SecondHandCell Team</p>
-    </div>
-  </div>
-</body>
-</html>
-`;
-
-const REVIEW_REQUEST_EMAIL_HTML = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Share Your Experience with SecondHandCell</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
-      background-color: #f3f4f6;
-      margin: 0;
-      padding: 0;
-    }
-    .email-container {
-      max-width: 620px;
-      margin: 40px auto;
-      background-color: #ffffff;
-      border-radius: 12px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.08);
-      overflow: hidden;
-      border: 1px solid #e2e8f0;
-    }
-    .logo {
-      text-align: center;
-      background-color: #ffffff;
-      padding: 24px 0 12px 0;
-    }
-    .logo img {
-      width: 160px;
-      height: auto;
-    }
-    .header {
-      background-color: #0072ce; /* Trustpilot blue */
-      color: #ffffff;
-      padding: 26px 24px;
-      text-align: center;
-    }
-    .header h1 {
-      font-size: 24px;
-      margin: 0;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-    .content {
-      padding: 32px 24px;
-      color: #111827;
-      font-size: 16px;
-      line-height: 1.6;
-    }
-    .content p {
-      margin: 0 0 18px;
-    }
-    .trustpilot-section {
-      text-align: center;
-      margin: 40px auto 0;
-      padding-top: 24px;
-      border-top: 1px solid #e5e7eb;
-    }
-    .trustpilot-section h2 {
-      color: #0072ce;
-      font-weight: 700;
-      margin: 0 0 12px 0;
-      font-size: 20px;
-    }
-    .trustpilot-section a {
-      display: inline-block;
-      text-decoration: none;
-      border: none;
-      outline: none;
-    }
-    .trustpilot-section img {
-      height: 56px;
-      width: auto;
-      display: block;
-      margin: 0 auto 14px auto;
-    }
-    .trustpilot-section p {
-      color: #111827;
-      font-size: 14px;
-      margin: 0;
-    }
-    .footer {
-      padding: 24px;
-      text-align: center;
-      color: #6b7280;
-      font-size: 14px;
-      border-top: 1px solid #e5e7eb;
-      background-color: #f9fafb;
-    }
-  </style>
-</head>
-<body>
-  <div class="email-container">
-    <div class="logo">
-      <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo">
-    </div>
-
-    <div class="header">
-      <h1>We'd Love Your Feedback</h1>
-    </div>
-
-    <div class="content">
-      <p>Hello <strong>**CUSTOMER_NAME**</strong>,</p>
-      <p>Thank you for trusting us with your <strong>**DEVICE_SUMMARY**</strong> (Order #**ORDER_ID**). We just completed your payout of <strong>$**ORDER_TOTAL**</strong>.</p>
-      <p>Could you take a few seconds to share how everything went? Your review helps other sellers feel confident working with us.</p>
-
-      <div class="trustpilot-section">
-        <h2>Review us on Trustpilot</h2>
-        <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank">
-          <img src="https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png" alt="Rate us five stars on Trustpilot">
-        </a>
-        <p>We appreciate you being part of the <strong>SecondHandCell</strong> family!</p>
-      </div>
-    </div>
-
-    <div class="footer">
-      <p>The SecondHandCell Team</p>
-    </div>
-  </div>
-</body>
-</html>
-`;
+      <p style="text-align:center; color:#475569;">Thank you for being part of the SecondHandCell community!</p>
+  `,
+});
 
 
 const stateAbbreviations = {
@@ -1198,24 +1001,80 @@ function buildDeviceSummary(order = {}) {
 
 function buildTrustpilotSection() {
   return `
-    <div style="text-align:center; margin: 40px auto 0; padding: 24px 0; max-width: 500px; border-top: 1px solid #e5e7eb;">
-      <p style="font-weight:600; color:#0f766e; font-size:20px; margin: 0 0 16px 0; line-height: 1.4;">
-        Review us on Trustpilot
-      </p>
-      
-      <a href="${TRUSTPILOT_REVIEW_LINK}" 
-          style="display:inline-block; text-decoration:none; border:none; outline:none;">
-        <img 
-          src="${TRUSTPILOT_STARS_IMAGE_URL}" 
-          alt="Rate us on Trustpilot" 
-          style="height:52px; width:auto; display:block; margin: 0 auto 12px auto; border:0;"
-        >
+    <div style="text-align:center; padding: 28px 24px 32px; background-color:#f8fafc; border-top: 1px solid #e2e8f0;">
+      <p style="font-weight:600; color:#0f172a; font-size:18px; margin:0 0 12px 0;">Loved your experience?</p>
+      <a href="${TRUSTPILOT_REVIEW_LINK}" style="display:inline-block; text-decoration:none; border:none; outline:none;">
+        <img src="${TRUSTPILOT_STARS_IMAGE_URL}" alt="Rate us on Trustpilot" style="height:58px; width:auto; display:block; margin:0 auto 10px auto; border:0;">
       </a>
-
-      <p style="font-size:14px; color:#374151; margin: 0; line-height:1.4;">
-        We appreciate you being part of the <strong>SecondHandCell</strong> family!
-      </p>
+      <p style="font-size:15px; color:#475569; margin:12px 0 0;">Your feedback keeps the <strong>SecondHandCell</strong> community thriving.</p>
     </div>
+  `;
+}
+
+function buildEmailLayout({
+  title = "",
+  bodyHtml = "",
+  accentColor = "#16a34a",
+  includeTrustpilot = true,
+  footerText = "Need help? Reply to this email or call (888) 265-4612.",
+} = {}) {
+  const headingSection = title
+    ? `
+        <tr>
+          <td style="background:${accentColor}; padding: 30px 24px; text-align:center;">
+            <h1 style="margin:0; font-size:28px; line-height:1.3; color:#ffffff; font-weight:700;">${escapeHtml(
+              title
+            )}</h1>
+          </td>
+        </tr>
+      `
+    : "";
+
+  const trustpilotSection = includeTrustpilot ? buildTrustpilotSection() : "";
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${escapeHtml(title || "SecondHandCell Update")}</title>
+      <style>
+        body { background-color:#f1f5f9; margin:0; padding:24px 12px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#0f172a; }
+        .email-shell { width:100%; max-width:640px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 25px 45px rgba(15,23,42,0.08); border:1px solid #e2e8f0; }
+        .logo-cell { padding:28px 0 16px; text-align:center; background-color:#ffffff; }
+        .logo-cell img { height:56px; width:auto; }
+        .content-cell { padding:32px 30px; font-size:17px; line-height:1.75; }
+        .content-cell p { margin:0 0 20px; }
+        .footer-cell { padding:28px 32px; text-align:center; font-size:15px; color:#475569; background-color:#f8fafc; border-top:1px solid #e2e8f0; }
+        .footer-cell p { margin:4px 0; }
+        a.button-link { display:inline-block; padding:14px 26px; border-radius:9999px; background-color:#16a34a; color:#ffffff !important; font-weight:600; text-decoration:none; font-size:17px; }
+      </style>
+    </head>
+    <body>
+      <table role="presentation" cellpadding="0" cellspacing="0" class="email-shell">
+        <tr>
+          <td class="logo-cell">
+            <img src="${EMAIL_LOGO_URL}" alt="SecondHandCell Logo" />
+          </td>
+        </tr>
+        ${headingSection}
+        <tr>
+          <td class="content-cell">
+            ${bodyHtml}
+            ${buildCountdownNoticeHtml()}
+          </td>
+        </tr>
+        ${trustpilotSection ? `<tr><td>${trustpilotSection}</td></tr>` : ""}
+        <tr>
+          <td class="footer-cell">
+            <p>${footerText}</p>
+            <p>© ${new Date().getFullYear()} SecondHandCell. All rights reserved.</p>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
   `;
 }
 
@@ -1532,51 +1391,28 @@ async function sendMultipleTestEmails(email, emailTypes) {
         subject = `[TEST] Re-offer for Order #${orderToUse.id}`;
         let reasonString = orderToUse.reOffer.reasons.join(", ");
         if (orderToUse.reOffer.comments) reasonString += `; ${orderToUse.reOffer.comments}`;
-        htmlBody = `
-          <div style="font-family: 'system-ui','-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Oxygen-Sans','Ubuntu','Cantarell','Helvetica Neue','Arial','sans-serif'; font-size: 14px; line-height: 1.5; color: #444444;">
-            <h2 style="color: #0056b3; font-weight: bold; text-transform: none; font-size: 20px; line-height: 26px; margin: 5px 0 10px;">Hello ${orderToUse.shippingInfo.fullName},</h2>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${orderToUse.id} and after inspection, we have a revised offer for you.</p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${orderToUse.estimatedQuote.toFixed(2)}</p>
-            <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;"><strong>New Offer Price:</strong> $${orderToUse.reOffer.newPrice.toFixed(2)}</p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Reason for New Offer:</strong></p>
-            <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;"><em>"${reasonString}"</em></p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
-            <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
-              <tbody>
-                <tr>
-                  <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
-                    <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
-                      <tbody>
-                        <tr>
-                          <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
-                            <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderToUse.id}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
-                              Accept Offer ($${orderToUse.reOffer.newPrice.toFixed(2)})
-                            </a>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table >
-                  </td>
-                  <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
-                    <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
-                      <tbody>
-                        <tr>
-                          <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
-                            <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderToUse.id}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
-                              Return Phone Now
-                            </a>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
-            <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SecondHandCell Team</p>
-          </div>
-        `;
+        htmlBody = buildEmailLayout({
+          title: "Updated offer available",
+          accentColor: "#6366f1",
+          bodyHtml: `
+              <p>Hi ${escapeHtml(orderToUse.shippingInfo.fullName)},</p>
+              <p>Thanks for sending in your device. After inspection of order <strong>#${escapeHtml(orderToUse.id)}</strong>, we have an updated offer for you.</p>
+              <div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:18px; padding:20px 24px; margin:28px 0;">
+                <p style="margin:0 0 12px; color:#312e81;"><strong>Original Quote:</strong> $${orderToUse.estimatedQuote.toFixed(2)}</p>
+                <p style="margin:0; color:#1e1b4b; font-size:20px; font-weight:700;">New Offer: $${orderToUse.reOffer.newPrice.toFixed(2)}</p>
+              </div>
+              <p style="margin-bottom:12px;">Reason for the change:</p>
+              <p style="background:#fef3c7; border-radius:14px; border:1px solid #fde68a; color:#92400e; padding:14px 18px; margin:0 0 28px;">${escapeHtml(reasonString).replace(/\n/g, "<br>")}</p>
+              <p style="margin-bottom:20px;">Choose how you'd like to proceed:</p>
+              <div style="text-align:center; margin-bottom:20px;">
+                <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderToUse.id}&action=accept" class="button-link" style="background-color:#16a34a;">Accept offer ($${orderToUse.reOffer.newPrice.toFixed(2)})</a>
+              </div>
+              <div style="text-align:center; margin-bottom:24px;">
+                <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderToUse.id}&action=return" class="button-link" style="background-color:#dc2626;">Return device instead</a>
+              </div>
+              <p>Questions or feedback? Reply to this email—we're here to help.</p>
+          `,
+        });
         break;
       case "final-offer-accepted":
         orderToUse = mockOrderData;
@@ -1629,13 +1465,13 @@ async function sendMultipleTestEmails(email, emailTypes) {
         orderToUse = mockOrderDataWithoutReoffer;
         subject = `[TEST] Your SecondHandCell Order is Complete!`;
         const mockPayout = getOrderPayout(orderToUse);
-        htmlBody = applyTemplate(ORDER_COMPLETED_EMAIL_HTML, {
+        const template = getOrderCompletedEmailTemplate({ includeTrustpilot: !orderToUse.reOffer });
+        htmlBody = applyTemplate(template, {
           "**CUSTOMER_NAME**": orderToUse.shippingInfo.fullName,
           "**ORDER_ID**": orderToUse.id,
           "**DEVICE_SUMMARY**": buildDeviceSummary(orderToUse),
           "**ORDER_TOTAL**": formatCurrencyValue(mockPayout),
           "**PAYMENT_METHOD**": formatDisplayText(orderToUse.paymentMethod, "Not specified"),
-          "**TRUSTPILOT_SECTION**": buildTrustpilotSection()
         });
         break;
       default:
@@ -2292,13 +2128,14 @@ app.put("/orders/:id/status", async (req, res) => {
       }
       case "completed": {
         const payoutAmount = getOrderPayout(order);
-        customerEmailHtml = applyTemplate(ORDER_COMPLETED_EMAIL_HTML, {
+        const wasReoffered = !!(order.reOffer && Object.keys(order.reOffer).length);
+        const completedTemplate = getOrderCompletedEmailTemplate({ includeTrustpilot: !wasReoffered });
+        customerEmailHtml = applyTemplate(completedTemplate, {
           "**CUSTOMER_NAME**": customerName,
           "**ORDER_ID**": order.id,
           "**DEVICE_SUMMARY**": buildDeviceSummary(order),
           "**ORDER_TOTAL**": formatCurrencyValue(payoutAmount),
           "**PAYMENT_METHOD**": formatDisplayText(order.paymentMethod, "Not specified"),
-          "**TRUSTPILOT_SECTION**": buildTrustpilotSection()
         });
 
         customerNotificationPromise = transporter.sendMail({
@@ -2348,7 +2185,6 @@ app.post('/orders/:id/send-review-request', async (req, res) => {
       "**ORDER_ID**": order.id,
       "**DEVICE_SUMMARY**": buildDeviceSummary(order),
       "**ORDER_TOTAL**": formatCurrencyValue(payoutAmount),
-      "**TRUSTPILOT_SECTION**": buildTrustpilotSection()
     });
 
     await transporter.sendMail({
@@ -2540,51 +2376,36 @@ app.post("/orders/:id/re-offer", async (req, res) => {
     let reasonString = reasons.join(", ");
     if (comments) reasonString += `; ${comments}`;
 
-    const customerEmailHtml = `
-      <div style="font-family: 'system-ui','-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Oxygen-Sans','Ubuntu','Cantarell','Helvetica Neue','Arial','sans-serif'; font-size: 14px; line-height: 1.5; color: #444444;">
-        <h2 style="color: #0056b3; font-weight: bold; text-transform: none; font-size: 20px; line-height: 26px; margin: 5px 0 10px;">Hello ${order.shippingInfo.fullName},</h2>
-        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${order.id} and after inspection, we have a revised offer for you.</p>
-        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${order.estimatedQuote.toFixed(2)}</p>
-        <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;"><strong>New Offer Price:</strong> $${Number(newPrice).toFixed(2)}</p>
-        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Reason for New Offer:</strong></p>
-        <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;"><em>"${reasonString}"</em></p>
-        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
-        <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
-          <tbody>
-            <tr>
-              <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
-                <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
-                  <tbody>
-                    <tr>
-                      <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
-                        <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
-                          Accept Offer ($${Number(newPrice).toFixed(2)})
-                        </a>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table >
-              </td>
-              <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
-                <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
-                  <tbody>
-                    <tr>
-                      <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
-                        <a href="${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
-                          Return Phone Now
-                        </a>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
-        <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SecondHandCell Team</p>
-      </div>
-    `;
+    const safeReason = escapeHtml(reasonString).replace(/\n/g, "<br>");
+    const originalQuoteValue = Number(order.estimatedQuote || order.originalQuote || 0).toFixed(2);
+    const newOfferValue = Number(newPrice).toFixed(2);
+    const customerName = order.shippingInfo.fullName || "there";
+    const acceptUrl = `${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=accept`;
+    const returnUrl = `${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=return`;
+
+    const customerEmailHtml = buildEmailLayout({
+      title: "Updated offer available",
+      accentColor: "#6366f1",
+      includeTrustpilot: false,
+      bodyHtml: `
+          <p>Hi ${escapeHtml(customerName)},</p>
+          <p>Thanks for sending in your device. After inspecting order <strong>#${escapeHtml(order.id)}</strong>, we have a revised offer for you.</p>
+          <div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:18px; padding:20px 24px; margin:28px 0;">
+            <p style="margin:0 0 12px; color:#312e81;"><strong>Original Quote:</strong> $${originalQuoteValue}</p>
+            <p style="margin:0; color:#1e1b4b; font-size:20px; font-weight:700;">New Offer: $${newOfferValue}</p>
+          </div>
+          <p style="margin-bottom:12px;">Reason for the change:</p>
+          <p style="background:#fef3c7; border-radius:14px; border:1px solid #fde68a; color:#92400e; padding:14px 18px; margin:0 0 28px;">${safeReason}</p>
+          <p style="margin-bottom:20px;">Choose how you'd like to proceed:</p>
+          <div style="text-align:center; margin-bottom:20px;">
+            <a href="${acceptUrl}" class="button-link" style="background-color:#16a34a;">Accept offer ($${newOfferValue})</a>
+          </div>
+          <div style="text-align:center; margin-bottom:24px;">
+            <a href="${returnUrl}" class="button-link" style="background-color:#dc2626;">Return device instead</a>
+          </div>
+          <p>Questions or feedback? Reply to this email—we're here to help.</p>
+      `,
+    });
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
@@ -3622,6 +3443,42 @@ function normalizeCheckAllFlag(value, fallbackEnabled) {
   return fallbackEnabled ? "1" : "0";
 }
 
+function normalizeDeviceTypeForPhoneCheck(value) {
+  if (value === undefined || value === null) {
+    return "Android";
+  }
+  const normalized = value.toString().trim().toLowerCase();
+  if (!normalized) {
+    return "Android";
+  }
+  if (["apple", "ios", "iphone", "ipad", "watch"].includes(normalized)) {
+    return "Apple";
+  }
+  return "Android";
+}
+
+function normalizeCarrierForPhoneCheck(value) {
+  if (value === undefined || value === null) {
+    return "Unlocked";
+  }
+  const trimmed = value.toString().trim();
+  if (!trimmed) {
+    return "Unlocked";
+  }
+  const aliasKey = trimmed.toLowerCase();
+  const mapped = PHONECHECK_CARRIER_ALIASES[aliasKey];
+  if (mapped && PHONECHECK_ALLOWED_CARRIERS.has(mapped)) {
+    return mapped;
+  }
+  const normalized = trimmed.toUpperCase();
+  for (const option of PHONECHECK_ALLOWED_CARRIERS) {
+    if (option.toUpperCase() === normalized) {
+      return option;
+    }
+  }
+  return "Unlocked";
+}
+
 async function handlePhoneCheckRequest(req, res) {
   try {
     const config = getPhoneCheckConfig();
@@ -3648,18 +3505,8 @@ async function handlePhoneCheckRequest(req, res) {
       return res.status(400).json({ error: "IMEI is required." });
     }
 
-    const sanitizedDeviceType =
-      deviceType && typeof deviceType === "string"
-        ? deviceType.trim() || "auto"
-        : deviceType
-        ? String(deviceType).trim() || "auto"
-        : "auto";
-    const sanitizedCarrier =
-      carrier && typeof carrier === "string"
-        ? carrier.trim() || "others"
-        : carrier
-        ? String(carrier).trim() || "others"
-        : "others";
+    const sanitizedDeviceType = normalizeDeviceTypeForPhoneCheck(deviceType);
+    const sanitizedCarrier = normalizeCarrierForPhoneCheck(carrier);
 
     const defaultCheckAll = normalizeCheckAllFlag(
       config.checkAll,
@@ -3672,10 +3519,12 @@ async function handlePhoneCheckRequest(req, res) {
 
     const payload = new URLSearchParams();
     payload.append("Apikey", config.apiKey);
+    payload.append("apiKey", config.apiKey);
     payload.append("Username", config.username);
+    payload.append("username", config.username);
     payload.append("IMEI", sanitizedImei);
-    payload.append("devicetype", sanitizedDeviceType || "auto");
-    payload.append("carrier", sanitizedCarrier || "others");
+    payload.append("devicetype", sanitizedDeviceType);
+    payload.append("carrier", sanitizedCarrier);
     payload.append("checkAll", resolvedCheckAll);
 
     const response = await axios.post(config.apiUrl, payload.toString(), {
@@ -4014,32 +3863,19 @@ function buildWholesaleEmailTemplate({
     ? `<p style=\"margin-top:24px;font-size:12px;color:#94a3b8;\">${escapeHtml(footer)}</p>`
     : "";
 
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>${title}</title>
-      </head>
-      <body style="margin:0;padding:0;background:#f1f5f9;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;">
-        <div style="max-width:640px;margin:0 auto;padding:32px 20px;">
-          <div style="background:#ffffff;border-radius:24px;box-shadow:0 12px 35px rgba(15,23,42,0.12);overflow:hidden;">
-            <div style="padding:28px 32px 16px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#0ea5e9 0%,#10b981 100%);color:#ffffff;">
-              <h1 style="margin:0;font-size:24px;">${title}</h1>
-            </div>
-            <div style="padding:28px 32px;">
-              <div style="font-size:15px;line-height:1.6;color:#334155;">${intro}</div>
-              ${noteBlock}
-              ${itemsTable}
-              ${ctaButton}
-              ${footerBlock}
-            </div>
-          </div>
-        </div>
-      </body>
-    </html>
+  const bodyHtml = `
+      <div style="font-size:16px; line-height:1.7; color:#334155;">${intro}</div>
+      ${noteBlock}
+      ${itemsTable}
+      ${ctaButton}
+      ${footerBlock}
   `;
+
+  return buildEmailLayout({
+    title,
+    accentColor: "#0ea5e9",
+    bodyHtml,
+  });
 }
 
 async function sendWholesaleEmail({ to, subject, html, text }) {

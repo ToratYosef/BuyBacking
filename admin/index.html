@@ -1553,6 +1553,44 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         }
 
+        function coerceCurrencyValue(value) {
+            const numeric = Number(value);
+            return Number.isFinite(numeric) ? numeric : null;
+        }
+
+        function getOrderPayout(order) {
+            if (!order || typeof order !== 'object') {
+                return 0;
+            }
+
+            const candidates = [
+                order.finalPayoutAmount,
+                order.finalPayout,
+                order.finalOfferAmount,
+                order.finalOffer,
+                order.payoutAmount,
+                order.payout,
+                order.reOffer?.newPrice,
+                order.reOffer?.amount,
+                order.reOffer,
+                order.reoffer,
+                order.estimatedQuote,
+                order.price,
+            ];
+
+            for (const candidate of candidates) {
+                if (candidate === undefined || candidate === null) {
+                    continue;
+                }
+                const numeric = coerceCurrencyValue(candidate);
+                if (numeric !== null) {
+                    return numeric;
+                }
+            }
+
+            return 0;
+        }
+
         function normalizeFeedKey(value) {
             if (!value && value !== 0) return '';
             return value.toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -2041,7 +2079,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
                 const c = order.shippingInfo || {};
                 const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
-                const finalPrice = order.reOffer?.newPrice || order.estimatedQuote || 0;
+                const finalPrice = getOrderPayout(order);
 
                 const margin = 18;
                 let y = pageHeight - margin;
@@ -2255,7 +2293,7 @@ if (printWindow) {
 
             orders.forEach(order => {
                 const orderDate = order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : null;
-                const finalPayout = order.reOffer?.newPrice || order.estimatedQuote || 0;
+                const finalPayout = getOrderPayout(order);
                 
                 // Orders Today
                 if (orderDate && orderDate.getTime() >= today.getTime()) {
@@ -2712,7 +2750,8 @@ if (printWindow) {
                 modalItem.textContent = order.device;
                 modalStorage.textContent = order.storage;
                 modalCarrier.textContent = order.carrier;
-                modalPrice.textContent = order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00';
+                const payoutAmount = getOrderPayout(order);
+                modalPrice.textContent = payoutAmount.toFixed(2);
 
                 // START: UPDATED PAYMENT DETAILS LOGIC
                 const paymentMethod = order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A';
@@ -2728,8 +2767,11 @@ if (printWindow) {
                         modalPaypalEmail.textContent = paymentDetails.paypalEmail;
                         modalPaypalEmailRow.classList.remove('hidden');
                     }
-                    if (order.paymentMethod === 'zelle' && (paymentDetails.zelleEmail || paymentDetails.zellePhone)) {
-                        const zelleInfo = paymentDetails.zelleEmail || paymentDetails.zellePhone || 'N/A';
+                    if (order.paymentMethod === 'zelle') {
+                        const zelleInfo = paymentDetails.zelleIdentifier
+                            || paymentDetails.zelleEmail
+                            || paymentDetails.zellePhone
+                            || 'N/A';
                         modalZelleDetails.textContent = zelleInfo;
                         modalZelleDetailsRow.classList.remove('hidden');
                     }
@@ -2918,7 +2960,15 @@ if (printWindow) {
                     }
                     break;
                 case 're-offered-accepted':
-                    modalActionButtons.appendChild(createButton('Pay Now', () => handleAction(order.id, 'payNow', 'bg-teal-600 hover:bg-teal-700')));
+                    if (order.paymentMethod === 'zelle') {
+                        modalActionButtons.appendChild(
+                            createButton('Mark Paid', () => handleAction(order.id, 'markCompleted'), 'bg-emerald-600 hover:bg-emerald-700')
+                        );
+                    } else {
+                        modalActionButtons.appendChild(
+                            createButton('Pay Now', () => handleAction(order.id, 'payNow', 'bg-teal-600 hover:bg-teal-700'))
+                        );
+                    }
                     break;
                 case 're-offered-declined':
                     modalActionButtons.appendChild(createButton('Send Return Label', () => handleAction(order.id, 'sendReturnLabel', 'bg-red-600 hover:bg-red-700')));
@@ -3327,9 +3377,7 @@ if (printWindow) {
         }
 
         function generatePaymentLink(order) {
-            const amount = order.reOffer?.newPrice
-                            ? order.reOffer.newPrice.toFixed(2)
-                            : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
+            const amount = getOrderPayout(order).toFixed(2);
             const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
             
             // Only Venmo has a direct, reliable deep-link structure for payments
