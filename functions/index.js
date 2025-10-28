@@ -41,6 +41,247 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const PHONECHECK_DEFAULT_API_URL =
+  "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+
+function getPhoneCheckConfig() {
+  const config = {
+    apiUrl: process.env.PHONECHECK_API_URL || PHONECHECK_DEFAULT_API_URL,
+    apiKey: process.env.PHONECHECK_API_KEY || null,
+    username: process.env.PHONECHECK_USERNAME || null,
+    checkAll: process.env.PHONECHECK_CHECK_ALL,
+  };
+
+  try {
+    const runtimeConfig = functions.config();
+    if (runtimeConfig && runtimeConfig.phonecheck) {
+      const phonecheck = runtimeConfig.phonecheck;
+      config.apiUrl =
+        phonecheck.api_url ||
+        phonecheck.apiurl ||
+        phonecheck.url ||
+        config.apiUrl;
+      config.apiKey =
+        phonecheck.api_key ||
+        phonecheck.apikey ||
+        phonecheck.key ||
+        config.apiKey;
+      config.username =
+        phonecheck.username || phonecheck.user || config.username;
+      if (phonecheck.check_all !== undefined) {
+        config.checkAll = phonecheck.check_all;
+      }
+    }
+  } catch (error) {
+    console.warn(
+      "Unable to read functions.config().phonecheck values:",
+      error.message
+    );
+  }
+
+  return config;
+}
+
+const CONDITION_EMAIL_FROM_ADDRESS =
+  process.env.CONDITION_EMAIL_FROM ||
+  process.env.EMAIL_FROM ||
+  process.env.EMAIL_USER ||
+  "no-reply@secondhandcell.com";
+
+const CONDITION_EMAIL_BCC_RECIPIENTS = (process.env.CONDITION_EMAIL_BCC ||
+  process.env.SALES_EMAIL ||
+  "sales@secondhandcell.com")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+
+const CONDITION_EMAIL_TEMPLATES = {
+  outstanding_balance: {
+    subject: "Action Required: Outstanding Balance Detected",
+    headline: "Outstanding balance detected",
+    message:
+      "Our ESN verification shows the carrier still reports an outstanding balance tied to this device.",
+    steps: [
+      "Contact your carrier to clear the remaining balance on the device.",
+      "Reply to this email with confirmation so we can re-run the check and release your payout.",
+    ],
+  },
+  password_locked: {
+    subject: "Device Locked: Action Needed",
+    headline: "Device is password or account locked",
+    message:
+      "The device arrived locked with a password, pattern, or linked account which prevents testing and data removal.",
+    steps: [
+      "Remove any screen lock, Apple ID, Google account, or MDM profile from the device.",
+      "Restart the device and confirm it boots to the home screen without requesting credentials.",
+      "Reply to this email once the lock has been cleared so we can finish processing the order.",
+    ],
+  },
+  stolen: {
+    subject: "Important: Device Reported Lost or Stolen",
+    headline: "Device flagged as lost or stolen",
+    message:
+      "The carrier database has flagged this ESN/IMEI as lost or stolen, so we cannot complete the buyback.",
+    steps: [
+      "If you believe this is an error, please contact your carrier to remove the flag.",
+      "Provide any supporting documentation by replying to this email so we can review and re-run the check.",
+    ],
+  },
+  fmi_active: {
+    subject: "Find My / Activation Lock Detected",
+    headline: "Find My or activation lock is still enabled",
+    message:
+      "The device still has Find My iPhone / Activation Lock (or the Android equivalent) enabled, which prevents refurbishment.",
+    steps: [
+      "Disable the lock from the device or from iCloud/Google using your account.",
+      "Remove the device from your trusted devices list.",
+      "Reply to this email once the lock has been removed so we can verify and continue.",
+    ],
+  },
+};
+
+function getGreetingName(fullName) {
+  if (!fullName || typeof fullName !== "string") {
+    return "there";
+  }
+  const [first] = fullName.trim().split(/\s+/);
+  return first || "there";
+}
+
+function buildConditionEmail(reason, order, notes) {
+  const template = CONDITION_EMAIL_TEMPLATES[reason];
+  if (!template) {
+    throw new Error("Unsupported condition email template.");
+  }
+
+  const shippingInfo = order && order.shippingInfo ? order.shippingInfo : {};
+  const customerName = shippingInfo.fullName || shippingInfo.name || null;
+  const greetingName = getGreetingName(customerName);
+  const orderId = (order && order.id) || "your order";
+  const trimmedNotes = typeof notes === "string" ? notes.trim() : "";
+
+  const noteHtml = trimmedNotes
+    ? `<p style="margin-top:16px;"><strong>Additional details from our technician:</strong><br>${escapeHtml(
+        trimmedNotes
+      ).replace(/\n/g, "<br>")}</p>`
+    : "";
+  const noteText = trimmedNotes
+    ? `\n\nAdditional details from our technician:\n${trimmedNotes}`
+    : "";
+
+  const steps = Array.isArray(template.steps) ? template.steps : [];
+  const stepsHtml = steps.map((step) => `<li>${escapeHtml(step)}</li>`).join("");
+  const stepsText = steps.map((step) => `• ${step}`).join("\n");
+
+  const html = `
+    <p>Hi ${escapeHtml(greetingName)},</p>
+    <p>During our inspection of the device you sent in for order <strong>#${escapeHtml(orderId)}</strong>, we detected an issue:</p>
+    <p><strong>${escapeHtml(template.headline)}</strong></p>
+    <p>${escapeHtml(template.message)}</p>
+    <ul>${stepsHtml}</ul>
+    ${noteHtml}
+    <p>Please reply to this email if you have any questions or once the issue has been resolved so we can continue processing your payout.</p>
+    <p>Thank you,<br/>SecondHandCell Team</p>
+  `;
+
+  const text = `Hi ${greetingName},
+
+During our inspection of the device you sent in for order #${orderId}, we detected an issue:
+
+${template.headline}
+
+${template.message}
+
+${stepsText}${noteText}
+
+Please reply to this email if you have any questions or once the issue has been resolved so we can continue processing your payout.
+
+Thank you,
+SecondHandCell Team`;
+
+  return { subject: template.subject, html, text };
+}
+
+function collectStrings(value, bucket) {
+  if (value === null || value === undefined) {
+    return;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) {
+      bucket.push(trimmed);
+    }
+    return;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    bucket.push(String(value));
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectStrings(entry, bucket));
+    return;
+  }
+  if (typeof value === "object") {
+    Object.values(value).forEach((entry) => collectStrings(entry, bucket));
+  }
+}
+
+function analyzePhoneCheckResponse(data) {
+  const strings = [];
+  collectStrings(data, strings);
+
+  const normalized = [];
+  strings.forEach((value) => {
+    const trimmed = value.trim();
+    if (trimmed) {
+      normalized.push(trimmed);
+    }
+  });
+
+  const cleanSignals = normalized.filter((value) => /\b(clean|clear)\b/i.test(value));
+
+  const issuePatterns = [
+    { regex: /balance|due|finance|owed|unpaid/i, label: "Outstanding balance reported" },
+    { regex: /lock|locked|simlock|carrier lock|account lock/i, label: "Carrier or account lock detected" },
+    { regex: /lost|stolen|fraud|blacklist|barred|blocked|hotlist/i, label: "Reported lost or stolen" },
+    { regex: /icloud|find my|fmi|activation lock/i, label: "Find My / activation lock active" },
+    { regex: /password|passcode|pin lock|screen lock/i, label: "Password or passcode lock detected" },
+  ];
+
+  const issues = new Set();
+  normalized.forEach((value) => {
+    issuePatterns.forEach((pattern) => {
+      if (pattern.regex.test(value)) {
+        issues.add(pattern.label);
+      }
+    });
+  });
+
+  let statusText =
+    cleanSignals[0] ||
+    normalized.find((value) => /status|result/i.test(value.toLowerCase())) ||
+    normalized[0] ||
+    "No status returned.";
+
+  const notices = normalized.slice(0, 6);
+  const isClean = cleanSignals.length > 0 && issues.size === 0;
+
+  if (!isClean && issues.size === 0) {
+    const firstNonClean = normalized.find((value) => !/clean|clear/i.test(value));
+    if (firstNonClean) {
+      issues.add(firstNonClean);
+    }
+  }
+
+  return {
+    isClean,
+    statusText,
+    reasons: Array.from(issues),
+    notices,
+    messages: normalized,
+  };
+}
+
 const SHIPENGINE_API_BASE_URL = "https://api.shipengine.com/v1";
 const AUTO_VOID_DELAY_MS =
   27 * 24 * 60 * 60 * 1000 + // 27 days
@@ -3359,118 +3600,194 @@ app.post("/test-emails", async (req, res) => {
   }
 });
 
-app.post("/check-esn", async (req, res) => {
-  try {
-    const { imei, carrier, devicetype, orderId, customerName, customerEmail } = req.body;
-    
-    console.log("Received request to /check-esn with payload:", req.body);
+function normalizeCheckAllFlag(value, fallbackEnabled) {
+  if (value === undefined || value === null || value === "") {
+    return fallbackEnabled ? "1" : "0";
+  }
+  if (typeof value === "boolean") {
+    return value ? "1" : "0";
+  }
+  if (typeof value === "number") {
+    return Number(value) === 0 ? "0" : "1";
+  }
+  const normalized = value.toString().trim().toLowerCase();
+  if (!normalized) {
+    return fallbackEnabled ? "1" : "0";
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return "0";
+  }
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return "1";
+  }
+  return fallbackEnabled ? "1" : "0";
+}
 
-    if (!imei || !carrier || !devicetype || !orderId || !customerName || !customerEmail) {
-      return res.status(400).json({ error: "Missing required fields: imei, carrier, devicetype, orderId, customerName, and customerEmail are all required." });
+async function handlePhoneCheckRequest(req, res) {
+  try {
+    const config = getPhoneCheckConfig();
+    if (!config.apiKey || !config.username) {
+      return res
+        .status(500)
+        .json({ error: "PhoneCheck credentials are not configured." });
     }
 
-    const apiUrl = "https://cloudportal.phonecheck.com/cloud/cloudDB/CheckEsn/";
-    const requestPayload = new URLSearchParams();
-    requestPayload.append("ApiKey", "308b6790-b767-4b43-9065-2c00e13cdbf7");
-    requestPayload.append("Username", "aecells1");
-    requestPayload.append("IMEI", imei);
-    requestPayload.append("carrier", carrier);
-    requestPayload.append("devicetype", devicetype);
+    const {
+      imei,
+      deviceType,
+      carrier,
+      checkAll,
+      orderId,
+    } = req.body || {};
 
-    console.log("Sending payload to PhoneChecks API:", requestPayload.toString());
+    const sanitizedImei =
+      typeof imei === "string"
+        ? imei.trim()
+        : String(imei || "").trim();
 
-    const response = await axios.post(apiUrl, requestPayload.toString(), {
+    if (!sanitizedImei) {
+      return res.status(400).json({ error: "IMEI is required." });
+    }
+
+    const sanitizedDeviceType =
+      deviceType && typeof deviceType === "string"
+        ? deviceType.trim() || "auto"
+        : deviceType
+        ? String(deviceType).trim() || "auto"
+        : "auto";
+    const sanitizedCarrier =
+      carrier && typeof carrier === "string"
+        ? carrier.trim() || "others"
+        : carrier
+        ? String(carrier).trim() || "others"
+        : "others";
+
+    const defaultCheckAll = normalizeCheckAllFlag(
+      config.checkAll,
+      true
+    );
+    const resolvedCheckAll = normalizeCheckAllFlag(
+      checkAll,
+      defaultCheckAll === "1"
+    );
+
+    const payload = new URLSearchParams();
+    payload.append("Apikey", config.apiKey);
+    payload.append("Username", config.username);
+    payload.append("IMEI", sanitizedImei);
+    payload.append("devicetype", sanitizedDeviceType || "auto");
+    payload.append("carrier", sanitizedCarrier || "others");
+    payload.append("checkAll", resolvedCheckAll);
+
+    const response = await axios.post(config.apiUrl, payload.toString(), {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
+      timeout: 20000,
     });
 
-    phoneCheckData = response.data;
+    const data = response.data || {};
+    const summary = analyzePhoneCheckResponse(data);
 
-    let isBlacklisted = phoneCheckData.isBlacklisted || false;
-    let fmiStatus = phoneCheckData.findMyIphoneStatus || "On";
-    let financialStatus = phoneCheckData.financialStatus || "Clear";
-    
-    if (isBlacklisted) {
-      const legalText = `
-        New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property: If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.
-        ... (rest of your legal text)
-      `;
-      
-      const customerEmailHtml = BLACKLISTED_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*STATUS_REASON\*\*/g, "stolen or blacklisted")
-        .replace(/\*\*LEGAL_TEXT\*\*/g, legalText);
-        
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Important Notice Regarding Your Device - Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com"]
-      });
+    const trimmedOrderId =
+      typeof orderId === "string" ? orderId.trim() : String(orderId || "").trim();
 
-      await updateOrderBoth(orderId, {
-        status: "blacklisted",
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (fmiStatus === "On") {
-      const confirmUrl = `${process.env.APP_FRONTEND_URL}/fmi-cleared.html?orderId=${orderId}`;
-      const customerEmailHtml = FMI_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*CONFIRM_URL\*\*/g, confirmUrl);
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "fmi_on_pending",
-        fmiAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-
-    } else if (financialStatus === "BalanceDue" || financialStatus === "PastDue") {
-      const customerEmailHtml = BAL_DUE_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*FINANCIAL_STATUS\*\*/g, financialStatus === "BalanceDue" ? "an outstanding balance" : "a past due balance");
-
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: customerEmail,
-        subject: `Action Required for Order #${orderId}`,
-        html: customerEmailHtml,
-        bcc: ["sales@secondhandcell.com"]
-      });
-
-      const downgradeDate = admin.firestore.Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
-      await updateOrderBoth(orderId, {
-        status: "balance_due_pending",
-        balanceAutoDowngradeDate: downgradeDate,
-        phoneCheckData: phoneCheckData,
-      });
-      
-    } else {
-      await updateOrderBoth(orderId, {
-        status: "imei_checked",
-        phoneCheckData: phoneCheckData,
-      });
+    let orderUpdated = false;
+    if (trimmedOrderId) {
+      try {
+        const orderRef = ordersCollection.doc(trimmedOrderId);
+        const orderSnap = await orderRef.get();
+        if (orderSnap.exists) {
+          await updateOrderBoth(trimmedOrderId, {
+            phoneCheck: {
+              summary,
+              raw: data,
+              lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+          });
+          orderUpdated = true;
+        } else {
+          console.warn(
+            `PhoneCheck update skipped because order ${trimmedOrderId} was not found.`
+          );
+        }
+      } catch (updateError) {
+        console.error("Failed to persist PhoneCheck results:", updateError);
+      }
     }
 
-    res.status(200).json(response.data);
-
+    res.json({ success: true, summary, raw: data, orderUpdated });
   } catch (error) {
-    console.error("Error calling PhoneChecks API or processing data:", error.response?.data || error.message);
-    res.status(500).json({ error: "Failed to check ESN", details: error.response?.data || error.message });
+    console.error(
+      "PhoneCheck API error:",
+      error.response?.data || error.message || error
+    );
+    const status = error.response?.status;
+    const message =
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to complete PhoneCheck request.";
+    const payload = { error: message };
+    if (error.response?.data && typeof error.response.data === "object") {
+      payload.details = error.response.data;
+    }
+    res.status(status && status >= 400 ? status : 500).json(payload);
+  }
+}
+
+app.post("/api/phone-check", handlePhoneCheckRequest);
+app.post("/check-esn", handlePhoneCheckRequest);
+
+app.post("/orders/:id/send-condition-email", async (req, res) => {
+  try {
+    const { reason, notes } = req.body || {};
+    if (!reason || !CONDITION_EMAIL_TEMPLATES[reason]) {
+      return res
+        .status(400)
+        .json({ error: "A valid email reason is required." });
+    }
+
+    const orderRef = ordersCollection.doc(req.params.id);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const order = { id: orderSnap.id, ...orderSnap.data() };
+    const shippingInfo = order.shippingInfo || {};
+    const customerEmail = shippingInfo.email || shippingInfo.emailAddress;
+    if (!customerEmail) {
+      return res
+        .status(400)
+        .json({ error: "The order does not have a customer email address." });
+    }
+
+    if (!transporter) {
+      return res
+        .status(500)
+        .json({ error: "Email service is not configured." });
+    }
+
+    const { subject, html, text } = buildConditionEmail(reason, order, notes);
+    const mailOptions = {
+      from: CONDITION_EMAIL_FROM_ADDRESS,
+      to: customerEmail,
+      subject,
+      html,
+      text,
+    };
+
+    if (CONDITION_EMAIL_BCC_RECIPIENTS.length) {
+      mailOptions.bcc = CONDITION_EMAIL_BCC_RECIPIENTS;
+    }
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({ message: "Email sent successfully." });
+  } catch (error) {
+    console.error("Failed to send condition email:", error);
+    res.status(500).json({ error: "Failed to send condition email." });
   }
 });
 
