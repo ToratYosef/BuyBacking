@@ -112,8 +112,7 @@ const CONDITION_EMAIL_TEMPLATES = {
     message:
       "The device arrived locked with a password, pattern, or linked account which prevents testing and data removal.",
     steps: [
-      "Remove any screen lock, Apple ID, Google account, or MDM profile from the device.",
-      "Restart the device and confirm it boots to the home screen without requesting credentials.",
+      "Send us the any passcode, password, PIN, or pattern required to unlock the device so that we can properly inspect it amd data wipe it.",
       "Reply to this email once the lock has been cleared so we can finish processing the order.",
     ],
   },
