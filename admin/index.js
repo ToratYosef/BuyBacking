@@ -18,6 +18,14 @@ const PORT = process.env.PORT || 3000;
 const AUTO_VOID_DELAY_MS =
   27 * 24 * 60 * 60 * 1000 + // 27 days
   12 * 60 * 60 * 1000; // 12 hours
+const PHONECHECK_API_URL =
+  process.env.PHONECHECK_API_URL ||
+  "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+const PHONECHECK_API_KEY =
+  process.env.PHONECHECK_API_KEY ||
+  "308b6790-b767-4b43-9065-2c00e13cdbf7";
+const PHONECHECK_USERNAME =
+  process.env.PHONECHECK_USERNAME || "aecells1";
 const AUTO_VOID_INTERVAL_MS = (() => {
   if (process.env.AUTO_VOID_INTERVAL_MS === undefined) {
     return 60 * 60 * 1000;
@@ -147,6 +155,210 @@ function timestampToFirestore(value) {
 function timestampToDate(value) {
   const firestoreTimestamp = timestampToFirestore(value);
   return firestoreTimestamp ? firestoreTimestamp.toDate() : null;
+}
+
+function escapeHtml(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return value
+    .toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function getGreetingName(fullName) {
+  if (!fullName) {
+    return "there";
+  }
+  const [first] = fullName.trim().split(/\s+/);
+  return first || "there";
+}
+
+const CONDITION_EMAIL_TEMPLATES = {
+  outstanding_balance: {
+    subject: "Action Required: Outstanding Balance Detected",
+    headline: "Outstanding balance detected",
+    message:
+      "Our ESN verification shows the carrier still reports an outstanding balance tied to this device.",
+    steps: [
+      "Contact your carrier to clear the remaining balance on the device.",
+      "Reply to this email with confirmation so we can re-run the check and release your payout.",
+    ],
+  },
+  password_locked: {
+    subject: "Device Locked: Action Needed",
+    headline: "Device is password or account locked",
+    message:
+      "The device arrived locked with a password, pattern, or linked account which prevents testing and data removal.",
+    steps: [
+      "Remove any screen lock, Apple ID, Google account, or MDM profile from the device.",
+      "Restart the device and confirm it boots to the home screen without requesting credentials.",
+      "Reply to this email once the lock has been cleared so we can finish processing the order.",
+    ],
+  },
+  stolen: {
+    subject: "Important: Device Reported Lost or Stolen",
+    headline: "Device flagged as lost or stolen",
+    message:
+      "The carrier database has flagged this ESN/IMEI as lost or stolen, so we cannot complete the buyback.",
+    steps: [
+      "If you believe this is an error, please contact your carrier to remove the flag.",
+      "Provide any supporting documentation by replying to this email so we can review and re-run the check.",
+    ],
+  },
+  fmi_active: {
+    subject: "Find My / Activation Lock Detected",
+    headline: "Find My or activation lock is still enabled",
+    message:
+      "The device still has Find My iPhone / Activation Lock (or the Android equivalent) enabled, which prevents refurbishment.",
+    steps: [
+      "Disable the lock from the device or from iCloud/Google using your account.",
+      "Remove the device from your trusted devices list.",
+      "Reply to this email once the lock has been removed so we can verify and continue.",
+    ],
+  },
+};
+
+function buildConditionEmail(reason, order, notes) {
+  const template = CONDITION_EMAIL_TEMPLATES[reason];
+  if (!template) {
+    throw new Error("Unsupported condition email template.");
+  }
+
+  const customerName = order?.shippingInfo?.fullName;
+  const greetingName = getGreetingName(customerName);
+  const orderId = order?.id || "your order";
+  const trimmedNotes = typeof notes === "string" ? notes.trim() : "";
+
+  const noteHtml = trimmedNotes
+    ? `<p style="margin-top:16px;"><strong>Additional details from our technician:</strong><br>${escapeHtml(
+        trimmedNotes
+      ).replace(/\n/g, "<br>")}</p>`
+    : "";
+  const noteText = trimmedNotes
+    ? `\n\nAdditional details from our technician:\n${trimmedNotes}`
+    : "";
+
+  const stepsHtml = (template.steps || [])
+    .map((step) => `<li>${escapeHtml(step)}</li>`)
+    .join("");
+  const stepsText = (template.steps || []).map((step) => `• ${step}`).join("\n");
+
+  const html = `
+    <p>Hi ${escapeHtml(greetingName)},</p>
+    <p>During our inspection of the device you sent in for order <strong>#${escapeHtml(orderId)}</strong>, we detected an issue:</p>
+    <p><strong>${escapeHtml(template.headline)}</strong></p>
+    <p>${escapeHtml(template.message)}</p>
+    <ul>${stepsHtml}</ul>
+    ${noteHtml}
+    <p>Please reply to this email if you have any questions or once the issue has been resolved so we can continue processing your payout.</p>
+    <p>Thank you,<br/>SecondHandCell Team</p>
+  `;
+
+  const text = [
+    `Hi ${greetingName},`,
+    "",
+    `During our inspection of the device you sent in for order #${orderId}, we detected an issue:`,
+    "",
+    template.headline,
+    template.message,
+    "",
+    stepsText,
+    noteText,
+    "",
+    "Please reply to this email if you have any questions or once the issue has been resolved so we can continue processing your payout.",
+    "",
+    "Thank you,",
+    "SecondHandCell Team",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return { subject: template.subject, html, text };
+}
+
+function collectStrings(value, bucket) {
+  if (value === null || value === undefined) {
+    return;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) {
+      bucket.push(trimmed);
+    }
+    return;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    bucket.push(String(value));
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectStrings(entry, bucket));
+    return;
+  }
+  if (typeof value === "object") {
+    Object.values(value).forEach((entry) => collectStrings(entry, bucket));
+  }
+}
+
+function analyzePhoneCheckResponse(data) {
+  const strings = [];
+  collectStrings(data, strings);
+
+  const normalized = [];
+  strings.forEach((value) => {
+    const trimmed = value.trim();
+    if (trimmed) {
+      normalized.push(trimmed);
+    }
+  });
+
+  const cleanSignals = normalized.filter((value) => /\b(clean|clear)\b/i.test(value));
+
+  const issuePatterns = [
+    { regex: /balance|due|finance|owed|unpaid/i, label: "Outstanding balance reported" },
+    { regex: /lock|locked|simlock|carrier lock|account lock/i, label: "Carrier or account lock detected" },
+    { regex: /lost|stolen|fraud|blacklist|barred|blocked|hotlist/i, label: "Reported lost or stolen" },
+    { regex: /icloud|find my|fmi|activation lock/i, label: "Find My / activation lock active" },
+    { regex: /password|passcode|pin lock|screen lock/i, label: "Password or passcode lock detected" },
+  ];
+
+  const issues = new Set();
+  normalized.forEach((value) => {
+    issuePatterns.forEach((pattern) => {
+      if (pattern.regex.test(value)) {
+        issues.add(pattern.label);
+      }
+    });
+  });
+
+  let statusText =
+    cleanSignals[0] ||
+    normalized.find((value) => /status|result/i.test(value.toLowerCase())) ||
+    normalized[0] ||
+    "No status returned.";
+
+  const notices = normalized.slice(0, 6);
+  const isClean = cleanSignals.length > 0 && issues.size === 0;
+
+  if (!isClean && issues.size === 0) {
+    const firstNonClean = normalized.find((value) => !/clean|clear/i.test(value));
+    if (firstNonClean) {
+      issues.add(firstNonClean);
+    }
+  }
+
+  return {
+    isClean,
+    statusText,
+    reasons: Array.from(issues),
+    notices,
+    messages: normalized,
+  };
 }
 
 function normalizeLabelData(order) {
@@ -585,6 +797,54 @@ app.get("/api/orders/:id", async (req, res) => {
   }
 });
 
+app.post("/api/phone-check", async (req, res) => {
+  try {
+    if (!PHONECHECK_API_KEY || !PHONECHECK_USERNAME) {
+      return res
+        .status(500)
+        .json({ error: "PhoneCheck credentials are not configured." });
+    }
+
+    const { imei, deviceType, carrier, checkAll } = req.body || {};
+    const sanitizedImei = typeof imei === "string" ? imei.trim() : String(imei || "").trim();
+
+    if (!sanitizedImei) {
+      return res.status(400).json({ error: "IMEI is required." });
+    }
+
+    const payload = {
+      Apikey: PHONECHECK_API_KEY,
+      Username: PHONECHECK_USERNAME,
+      IMEI: sanitizedImei,
+      devicetype: deviceType ? deviceType.toString() : "auto",
+      carrier: carrier || "others",
+      checkAll: typeof checkAll === "number" ? checkAll : 1,
+    };
+
+    const response = await axios.post(PHONECHECK_API_URL, payload, {
+      timeout: 15000,
+    });
+
+    const data = response.data;
+    const summary = analyzePhoneCheckResponse(data);
+
+    res.json({ success: true, summary, raw: data });
+  } catch (error) {
+    console.error("PhoneCheck API error:", error.response?.data || error.message || error);
+    const status = error.response?.status;
+    const message =
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      error.message ||
+      "Failed to complete PhoneCheck request.";
+    const payload = { error: message };
+    if (error.response?.data && typeof error.response.data === "object") {
+      payload.details = error.response.data;
+    }
+    res.status(status && status >= 400 ? status : 500).json(payload);
+  }
+});
+
 // Submit a new order
 // This is the new endpoint to handle the front-end form submission.
 app.post("/api/submit-order", async (req, res) => {
@@ -790,6 +1050,56 @@ app.put("/api/orders/:id/status", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Failed to update order status" });
+  }
+});
+
+app.post("/api/orders/:id/send-condition-email", async (req, res) => {
+  try {
+    const { reason, notes } = req.body || {};
+    if (!reason || !CONDITION_EMAIL_TEMPLATES[reason]) {
+      return res.status(400).json({ error: "A valid email reason is required." });
+    }
+
+    const orderRef = ordersCollection.doc(req.params.id);
+    const doc = await orderRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const customerEmail = order?.shippingInfo?.email;
+    if (!customerEmail) {
+      return res
+        .status(400)
+        .json({ error: "The order does not have a customer email address." });
+    }
+
+    const transporter = getMailTransporter();
+    if (!transporter) {
+      return res
+        .status(500)
+        .json({ error: "Email service is not configured." });
+    }
+
+    const { subject, html, text } = buildConditionEmail(reason, order, notes);
+    const mailOptions = {
+      from: emailFromAddress,
+      to: customerEmail,
+      subject,
+      html,
+      text,
+    };
+
+    if (notificationEmail) {
+      mailOptions.bcc = notificationEmail;
+    }
+
+    await transporter.sendMail(mailOptions);
+
+    res.json({ message: "Email sent successfully." });
+  } catch (error) {
+    console.error("Failed to send condition email:", error);
+    res.status(500).json({ error: "Failed to send condition email." });
   }
 });
 
