@@ -6,7 +6,7 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { URLSearchParams } = require('url');
 const { randomUUID } = require("crypto");
-const { generateCustomLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
+const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
 const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
 const db = admin.firestore();
@@ -2264,26 +2264,20 @@ app.get('/print-bundle/:id', async (req, res) => {
     }
 
     const order = { id: doc.id, ...doc.data() };
-    const pdfParts = [];
-
-    const slipData = await generateCustomLabelPdf(order);
-    pdfParts.push(Buffer.isBuffer(slipData) ? slipData : Buffer.from(slipData));
-
-    const labelUrls = [];
+    const labelUrlCandidates = [];
 
     if (order.shippingPreference === 'Shipping Kit Requested') {
-      if (order.inboundLabelUrl) labelUrls.push(order.inboundLabelUrl);
-      if (order.outboundLabelUrl) labelUrls.push(order.outboundLabelUrl);
+      labelUrlCandidates.push(order.outboundLabelUrl, order.inboundLabelUrl);
     } else if (order.uspsLabelUrl) {
-      labelUrls.push(order.uspsLabelUrl);
+      labelUrlCandidates.push(order.uspsLabelUrl);
+    } else {
+      labelUrlCandidates.push(order.outboundLabelUrl, order.inboundLabelUrl);
     }
 
-    if (order.returnLabelUrl && !labelUrls.includes(order.returnLabelUrl)) {
-      labelUrls.push(order.returnLabelUrl);
-    }
+    const uniqueLabelUrls = Array.from(new Set(labelUrlCandidates.filter(Boolean)));
 
     const downloadedLabels = await Promise.all(
-      labelUrls.map(async (url) => {
+      uniqueLabelUrls.map(async (url) => {
         try {
           const response = await axios.get(url, { responseType: 'arraybuffer' });
           return Buffer.from(response.data);
@@ -2294,7 +2288,14 @@ app.get('/print-bundle/:id', async (req, res) => {
       })
     );
 
-    pdfParts.push(...downloadedLabels.filter(Boolean));
+    const bagLabelData = await generateBagLabelPdf(order);
+    const slipData = await generateCustomLabelPdf(order);
+
+    const pdfParts = [
+      ...downloadedLabels.filter(Boolean),
+      Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData),
+      Buffer.isBuffer(slipData) ? slipData : Buffer.from(slipData),
+    ].filter(Boolean);
 
     const merged = await mergePdfBuffers(pdfParts);
     const mergedBuffer = Buffer.isBuffer(merged) ? merged : Buffer.from(merged);

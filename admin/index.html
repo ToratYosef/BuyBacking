@@ -1986,8 +1986,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                             <label class="block text-sm font-medium text-slate-700">Reasons</label>
                             <div class="mt-1 space-y-2">
                                 <div class="flex items-center gap-2">
-                                    <input id="reason-cracked" name="reoffer-reasons" type="checkbox" value="cracked" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
-                                    <label for="reason-cracked" class="text-sm text-slate-700">Cracked</label>
+                                    <input id="reason-damaged" name="reoffer-reasons" type="checkbox" value="damaged" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-damaged" class="text-sm text-slate-700">Damaged (includes cracked)</label>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <input id="reason-deep-scratches" name="reoffer-reasons" type="checkbox" value="deep-scratches" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
@@ -3046,12 +3046,24 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
          * @param {Object} order - The full order object.
          */
         async function generateAndMergeShippingDocument(order) {
-            // Determine which labels to use based on shipping preference
-            const outboundUrl = order.outboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
-            const inboundUrl = order.inboundLabelUrl || (order.shippingPreference === 'Email Label Requested' ? order.uspsLabelUrl : null);
-            
-            if (!outboundUrl || !inboundUrl) {
-                displayModalMessage("Missing required label URLs to generate merged document.", 'error');
+            const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
+            const rawLabelUrls = [];
+
+            if (isKitOrder) {
+                rawLabelUrls.push(order.outboundLabelUrl, order.inboundLabelUrl);
+            } else {
+                rawLabelUrls.push(order.uspsLabelUrl || order.outboundLabelUrl || order.inboundLabelUrl);
+            }
+
+            const labelUrls = Array.from(new Set(rawLabelUrls.filter(Boolean)));
+
+            if (!labelUrls.length) {
+                displayModalMessage('No shipping labels are available yet. Generate the label before printing.', 'error');
+                return;
+            }
+
+            if (isKitOrder && labelUrls.length < 2) {
+                displayModalMessage('Kit orders require both outbound and inbound labels before printing.', 'error');
                 return;
             }
             
@@ -3087,10 +3099,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 };
 
                 // 1. Fetch ShipEngine labels using the proxy
-                const [outboundBytes, inboundBytes] = await Promise.all([
-                    fetchPdfProxy(outboundUrl),
-                    fetchPdfProxy(inboundUrl),
-                ]);
+                const labelPdfBuffers = await Promise.all(labelUrls.map((url) => fetchPdfProxy(url)));
 
                 // 2. Fetch Logo (optional)
                 let logoImage = null;
@@ -3125,7 +3134,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 const boldFont = await slip.embedFont(StandardFonts.HelveticaBold);
 
                 const c = order.shippingInfo || {};
-                const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
                 const finalPrice = getOrderPayout(order);
 
                 const margin = 18;
@@ -3189,13 +3197,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
                 const instructionLines = isKitOrder
                     ? [
-                        '1. OUTBOUND LABEL: affix to the empty kit (page 1).',
-                        '2. INBOUND LABEL: stays inside the kit for the customer (page 2).',
-                        '3. PACKING SLIP: include this slip with the kit.',
+                        '1. OUTBOUND LABEL: affix to the empty kit mailer (page 1).',
+                        '2. INBOUND LABEL: place inside the kit for the customer (page 2).',
+                        '3. BAG LABEL: attach to the protective bag before shipping (page 3).',
+                        '4. PACKING SLIP: include this slip with the kit (page 4).',
                     ]
                     : [
-                        '1. SHIPPING LABEL: provide to customer (page 1).',
-                        '2. PACKING SLIP: include inside the shipment.',
+                        '1. SHIPPING LABEL: provide to the customer (page 1).',
+                        '2. BAG LABEL: attach to the device bag before mailing (page 2).',
+                        '3. PACKING SLIP: include inside the shipment (page 3).',
                     ];
                 drawSection('Instructions', instructionLines);
 
@@ -3207,29 +3217,77 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     color: rgb(0.4, 0.4, 0.4),
                 });
 
+                const createBagLabelPdf = async () => {
+                    const bagDoc = await PDFLib.PDFDocument.create();
+                    const bagPage = bagDoc.addPage([pageWidth, pageHeight]);
+                    const bagFont = await bagDoc.embedFont(StandardFonts.Helvetica);
+                    const bagBold = await bagDoc.embedFont(StandardFonts.HelveticaBold);
+
+                    let bagY = pageHeight - margin;
+                    bagPage.drawText('SecondHandCell Bag Label', {
+                        x: margin,
+                        y: bagY,
+                        size: 14,
+                        font: bagBold,
+                        color: rgb(0.1, 0.1, 0.1),
+                    });
+                    bagY -= 20;
+
+                    bagPage.drawText(`Order #${order.id}`, {
+                        x: margin,
+                        y: bagY,
+                        size: 18,
+                        font: bagBold,
+                        color: rgb(0.05, 0.05, 0.4),
+                    });
+                    bagY -= 24;
+
+                    const bagLines = [
+                        c.fullName ? `Customer: ${c.fullName}` : 'Customer: N/A',
+                        (order.device || order.storage) ? `Device: ${(order.device || 'N/A')} ${(order.storage || '')}`.trim() : 'Device: N/A',
+                        order.carrier ? `Carrier: ${order.carrier}` : null,
+                        order.paymentMethod ? `Payment: ${formatCondition(order.paymentMethod)}` : null,
+                    ].filter(Boolean);
+
+                    bagLines.forEach((line) => {
+                        bagPage.drawText(line, {
+                            x: margin,
+                            y: bagY,
+                            size: 10,
+                            font: bagFont,
+                            color: rgb(0.1, 0.1, 0.1),
+                        });
+                        bagY -= 14;
+                    });
+
+                    bagY -= 6;
+                    bagPage.drawText('Attach this label to the grey bag before shipping.', {
+                        x: margin,
+                        y: bagY,
+                        size: 9,
+                        font: bagFont,
+                        color: rgb(0.3, 0.3, 0.3),
+                    });
+
+                    return bagDoc.save();
+                };
+
                 const packingBytes = await slip.save();
+                const bagLabelBytes = await createBagLabelPdf();
 
-
-                // 4. Merge all three PDFs
+                // Merge shipping labels, bag label, then packing slip
                 const mergedPdf = await PDFLib.PDFDocument.create();
-                
-                // Add ShipEngine label pages first
-                const labelBytesArray = [];
-                // If it's a kit order, add outbound then inbound
-                if (isKitOrder) {
-                    labelBytesArray.push(outboundBytes, inboundBytes);
-                } else {
-                    // If it's an email label, both URLs point to the same label, so only add once
-                    labelBytesArray.push(outboundBytes); 
-                }
-                
-                for (const bytes of labelBytesArray) {
+
+                for (const bytes of labelPdfBuffers) {
                     const pdf = await PDFLib.PDFDocument.load(bytes);
                     const copied = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
                     copied.forEach(p => mergedPdf.addPage(p));
                 }
-                
-                // Add the custom packing slip last
+
+                const bagLabelPdf = await PDFLib.PDFDocument.load(bagLabelBytes);
+                const copiedBag = await mergedPdf.copyPages(bagLabelPdf, bagLabelPdf.getPageIndices());
+                copiedBag.forEach(p => mergedPdf.addPage(p));
+
                 const packingPdfToMerge = await PDFLib.PDFDocument.load(packingBytes);
                 const copiedPacking = await mergedPdf.copyPages(packingPdfToMerge, packingPdfToMerge.getPageIndices());
                 copiedPacking.forEach(p => mergedPdf.addPage(p));
@@ -3717,15 +3775,7 @@ if (printWindow) {
                 const statusText = formatStatus(order);
                 const labelStatus = formatLabelStatus(order);
 
-                const shouldShowLabelButton = KIT_PRINT_PENDING_STATUSES.includes(order.status);
-
                 const actionButtons = [];
-
-                if (shouldShowLabelButton) {
-                    actionButtons.push(`
-                        <button data-order-id="${order.id}" class="label-btn bg-indigo-600 hover:bg-indigo-700 text-white rounded-md py-1 px-3 transition-colors duration-200">Label</button>
-                    `.trim());
-                }
 
                 actionButtons.push(`
                     <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
@@ -3774,15 +3824,6 @@ if (printWindow) {
                 });
             });
 
-            document.querySelectorAll('.label-btn').forEach(button => {
-                button.addEventListener('click', (event) => {
-                    const orderId = event.currentTarget.dataset.orderId;
-                    const order = allOrders.find(o => o.id === orderId);
-                    if (order) {
-                        handleLabelButtonClick(order);
-                    }
-                });
-            });
         }
 
         function renderPagination() {
@@ -4066,33 +4107,6 @@ if (printWindow) {
             } finally {
                 phoneCheckRunButton.disabled = false;
                 phoneCheckRunButton.innerHTML = originalButtonContent;
-            }
-        }
-
-        async function handleLabelButtonClick(order) {
-            const printUrl = new URL('print-label.html', window.location.href);
-            printUrl.searchParams.set('orderId', order.id);
-
-            const printWindow = window.open(printUrl.toString(), '_blank');
-            if (!printWindow) {
-                alert('Please allow pop-ups to open the shipping documents.');
-            }
-
-            let updateSucceeded = false;
-
-            if (order.shippingPreference === 'Shipping Kit Requested') {
-                updateSucceeded = await markKitAsPrinted(order.id);
-                if (!updateSucceeded) {
-                    updateSucceeded = await updateOrderStatusInline(order.id, 'kit_sent');
-                }
-            } else {
-                updateSucceeded = await updateOrderStatusInline(order.id, 'kit_sent');
-            }
-
-            if (updateSucceeded) {
-                order.status = 'kit_sent';
-                updateDashboardCounts(allOrders);
-                filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
             }
         }
 
@@ -4419,6 +4433,11 @@ if (printWindow) {
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;
                 case 'label_generated':
+                    if (order.shippingPreference === 'Shipping Kit Requested') {
+                        modalActionButtons.appendChild(
+                            createButton('Mark I Sent', () => handleAction(order.id, 'markKitSent'), 'bg-orange-600 hover:bg-orange-700')
+                        );
+                    }
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     break;
                 case 'received':
@@ -4901,6 +4920,10 @@ if (printWindow) {
                         return;
                     case 'sendReturnLabel':
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
+                        method = 'POST';
+                        break;
+                    case 'markKitSent':
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-sent`;
                         method = 'POST';
                         break;
                     case 'sendReviewRequest':
