@@ -1687,7 +1687,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 </div>
             </div>
         </div>
-
         <div class="orders-table-container">
             <div class="orders-table-header">Orders List</div>
             <div class="orders-toolbar">
@@ -1839,6 +1838,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         <button id="cancel-reoffer-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
                         <button id="submit-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Send Re-offer</button>
                     </div>
+                    <span id="orders-trend-delta" class="trend-delta trend-neutral">0%</span>
                 </div>
 
                 <div id="manual-fulfillment-form-container" class="mt-6 p-4 border border-slate-200 rounded-lg hidden">
@@ -2252,6 +2252,139 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             // Format to the desired long date string: "Month Day, Year"
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+
+        function toDateSafe(timestamp) {
+            if (!timestamp) return null;
+            if (timestamp instanceof Date) return timestamp;
+            if (typeof timestamp === 'number') {
+                return new Date(timestamp > 1e12 ? timestamp : timestamp * 1000);
+            }
+            if (typeof timestamp === 'string') {
+                const parsed = new Date(timestamp);
+                return Number.isNaN(parsed.getTime()) ? null : parsed;
+            }
+            if (typeof timestamp === 'object') {
+                if (typeof timestamp.seconds === 'number') {
+                    return new Date(timestamp.seconds * 1000);
+                }
+                if (typeof timestamp._seconds === 'number') {
+                    return new Date(timestamp._seconds * 1000);
+                }
+                if (typeof timestamp.toDate === 'function') {
+                    return timestamp.toDate();
+                }
+            }
+            return null;
+        }
+
+        function formatOrderAge(timestamp) {
+            const date = toDateSafe(timestamp);
+            if (!date) return 'N/A';
+            const diffMs = Date.now() - date.getTime();
+            if (diffMs <= 0) return '0.0 days old';
+            const days = diffMs / (24 * 60 * 60 * 1000);
+            return `${days.toFixed(1)} days old`;
+        }
+
+        function formatLabelAge(timestamp) {
+            const date = toDateSafe(timestamp);
+            if (!date) return 'Unknown age';
+            const diffMs = Date.now() - date.getTime();
+            if (diffMs <= 0) return 'Generated today';
+            const days = diffMs / (24 * 60 * 60 * 1000);
+            return `${days.toFixed(1)} days old`;
+        }
+
+        function formatDateTime(timestamp) {
+            const date = toDateSafe(timestamp);
+            if (!date) return 'Unknown';
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
+        function formatLabelStatus(order) {
+            if (!order) return '';
+            const normalizedStatus = (order.status || '').toLowerCase();
+            if (!['label_generated', 'emailed'].includes(normalizedStatus)) {
+                return '';
+            }
+            let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
+            if (!description) return '';
+            description = description
+                .toString()
+                .replace(/[_-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, c => c.toUpperCase());
+            const parts = [description];
+            if (order.labelTrackingEstimatedDelivery) {
+                parts.push(`ETA ${formatDate(order.labelTrackingEstimatedDelivery)}`);
+            }
+            return parts.join(' • ');
+        }
+
+        function formatLabelDisplayNameKey(key) {
+            if (!key) return 'Shipping Label';
+            const normalizedKey = key.toString().toLowerCase();
+            if (LABEL_NAME_OVERRIDES[normalizedKey]) {
+                return LABEL_NAME_OVERRIDES[normalizedKey];
+            }
+            return key
+                .toString()
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/[_-]+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        function getLabelOptions(order) {
+            const options = [];
+            const labels = order && typeof order.shipEngineLabels === 'object'
+                ? order.shipEngineLabels
+                : {};
+
+            Object.entries(labels).forEach(([key, info]) => {
+                if (!info) return;
+                const labelId = info.id || info.labelId || info.shipEngineLabelId;
+                if (!labelId) return;
+                const status = (info.status || info.voidStatus || 'active').toLowerCase();
+                options.push({
+                    key,
+                    labelId,
+                    displayName: info.displayName || formatLabelDisplayNameKey(key),
+                    status,
+                    trackingNumber: info.trackingNumber || info.tracking_number || null,
+                    generatedAt: info.generatedAt || null,
+                    message: info.message || info.voidMessage || null,
+                    isVoidable: !['voided', 'void_denied'].includes(status),
+                });
+            });
+
+            if (!options.length && order && order.shipEngineLabelId) {
+                const topLevelStatus = (order.labelVoidStatus || 'active').toLowerCase();
+                options.push({
+                    key: 'primary',
+                    labelId: order.shipEngineLabelId,
+                    displayName: 'Primary Shipping Label',
+                    status: topLevelStatus,
+                    trackingNumber: order.trackingNumber || null,
+                    generatedAt: order.labelGeneratedAt || order.createdAt || null,
+                    message: order.labelVoidMessage || null,
+                    isVoidable: !['voided', 'void_denied'].includes(topLevelStatus),
+                });
+            }
+
+            return options;
+        }
+
+        function hasVoidableLabels(order) {
+            return getLabelOptions(order).some(option => option.isVoidable);
         }
 
         function toDateSafe(timestamp) {
