@@ -5,6 +5,7 @@ const admin = require("firebase-admin"); // <-- Required here
 const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { URLSearchParams } = require('url');
+const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
 const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
@@ -90,6 +91,18 @@ const PHONECHECK_ALLOWED_CARRIERS = new Set([
   "Unlocked",
   "Blacklist",
 ]);
+
+const AUTO_REQUOTE_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
+const AUTO_CANCEL_DELAY_MS = 15 * 24 * 60 * 60 * 1000;
+const AUTO_CANCEL_MONITORED_STATUSES = [
+  "order_pending",
+  "shipping_kit_requested",
+  "kit_needs_printing",
+  "kit_sent",
+  "kit_in_transit",
+  "label_generated",
+  "emailed",
+];
 
 function getPhoneCheckConfig() {
   const config = {
@@ -512,8 +525,8 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     ageDescription = `${days.toFixed(1)} days`;
   }
 
-  const reason = options.reason === "automatic" ? "Automatic" : "Manual";
-  const subject = `${reason} label void for order ${order.id}`;
+  const reasonKey = options.reason === "automatic" ? "automatic" : "manual";
+  const subject = `Shipping label voided for order ${order.id}`;
   const lines = approvedResults.map((result) => {
     const labelName = formatLabelDisplayNameFromKey(result.key);
     return `• ${labelName} (ID: ${result.labelId})${
@@ -521,27 +534,42 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     }`;
   });
 
-  const textBody = appendCountdownNotice(
-    [
-      `${reason} label void processed for order #${order.id}.`,
-      `Order age: ${ageDescription}.`,
-      "",
-      "Voided label(s):",
-      ...lines,
-    ].join("\n")
-  );
+  const introText =
+    reasonKey === "automatic"
+      ? "We've automatically voided the prepaid shipping label for your order because it's been a while since we heard from you."
+      : "We've voided the prepaid shipping label for your order as requested.";
+
+  const followUpText =
+    "If you'd still like to send your device in, reply to this email and we'll send a fresh label right away.";
+
+  const textBody = [
+    introText,
+    `Order #: ${order.id}`,
+    `Order age: ${ageDescription}.`,
+    "",
+    "Voided label(s):",
+    ...lines,
+    "",
+    followUpText,
+  ].join("\n");
 
   const htmlBody = buildEmailLayout({
-    title: `${reason} label void`,
+    title: "Shipping label voided",
     accentColor: "#0ea5e9",
-    includeTrustpilot: true,
+    includeTrustpilot: false,
     bodyHtml: `
-      <p>${reason} label void processed for order <strong>#${order.id}</strong>.</p>
+      <p>${
+        reasonKey === "automatic"
+          ? "We've automatically voided the prepaid shipping label for your order because it's been a while since we heard from you."
+          : "We've voided the prepaid shipping label for your order as requested."
+      }</p>
+      <p>Order number: <strong>#${order.id}</strong></p>
       <p>Order age: <strong>${ageDescription}</strong>.</p>
       <p style="margin-bottom:12px;">Voided label(s):</p>
       <ul style="padding-left:22px; color:#475569;">
         ${lines.map((line) => `<li>${escapeHtml(line.substring(2))}</li>`).join("\n")}
       </ul>
+      <p style="margin-top:20px;">If you'd still like to send your device in, reply to this email and we'll send a fresh label right away.</p>
     `,
   });
 
@@ -697,6 +725,97 @@ async function handleLabelVoid(order, selections, options = {}) {
   }
 
   return { results, updates, changed };
+}
+
+async function cancelOrderAndNotify(order, options = {}) {
+  if (!order || !order.id) {
+    throw new Error("Order details are required to cancel an order.");
+  }
+
+  const reason = options.reason || "cancelled";
+  const initiatedBy = options.initiatedBy || null;
+  const auto = options.auto === true;
+  const notifyCustomer = options.notifyCustomer !== false;
+
+  const labels = normalizeShipEngineLabelMap(order);
+  const selections = Object.entries(labels)
+    .filter(([, entry]) => entry && entry.id && isLabelPendingVoid(entry))
+    .map(([key, entry]) => ({ key, id: entry.id }));
+
+  let voidResults = [];
+  if (selections.length) {
+    try {
+      const { results } = await handleLabelVoid(order, selections, {
+        reason: auto ? "automatic" : "manual",
+        shipengineKey: options.shipengineKey,
+      });
+      voidResults = results;
+    } catch (error) {
+      console.error(`Failed to void labels while cancelling order ${order.id}:`, error);
+    }
+  }
+
+  const logEntries = [
+    {
+      type: "cancellation",
+      message: auto
+        ? "Order automatically cancelled after extended inactivity."
+        : `Order cancelled${initiatedBy ? ` by ${initiatedBy}` : ""}.`,
+      metadata: {
+        reason,
+        auto,
+        labelsVoided: voidResults.filter((result) => result.approved).map((result) => result.labelId),
+      },
+    },
+  ];
+
+  const updatePayload = {
+    status: "cancelled",
+    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+    cancelReason: reason,
+    cancelRequestedBy: initiatedBy,
+    autoCancelled: auto,
+  };
+
+  if (voidResults.length) {
+    updatePayload.cancelVoidResults = voidResults;
+  }
+
+  const { order: updatedOrder } = await updateOrderBoth(order.id, updatePayload, {
+    logEntries,
+  });
+
+  if (notifyCustomer && updatedOrder?.shippingInfo?.email) {
+    const customerName = updatedOrder.shippingInfo.fullName || "there";
+    const introMessage = auto
+      ? "has been cancelled because we didn’t receive your device within 15 days."
+      : "has been cancelled as requested.";
+    const followUp = auto
+      ? "If you still plan to send it in, reply to this email and we’ll issue a fresh shipping label right away."
+      : "If you change your mind, reply to this email and we can send a fresh shipping label.";
+
+    const htmlBody = `
+      <p>Hi ${escapeHtml(customerName)},</p>
+      <p>Your order <strong>#${escapeHtml(order.id)}</strong> ${introMessage}</p>
+      <p>${followUp}</p>
+      <p>We’re happy to help with any questions.</p>
+      <p>— The SecondHandCell Team</p>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: updatedOrder.shippingInfo.email,
+        subject: `Order #${updatedOrder.id} has been cancelled`,
+        html: htmlBody,
+        bcc: [process.env.SALES_EMAIL || "sales@secondhandcell.com"],
+      });
+    } catch (emailError) {
+      console.error(`Failed to send cancellation email for order ${order.id}:`, emailError);
+    }
+  }
+
+  return { order: updatedOrder, voidResults };
 }
 
 // --- EMAIL HTML Templates (unchanged from your version) ---
@@ -905,34 +1024,136 @@ async function generateNextOrderNumber() {
   }
 }
 
+function formatStatusLabel(value) {
+  if (!value) return "";
+  return String(value)
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeLogEntries(entries = []) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return [];
+  }
+
+  return entries
+    .filter(Boolean)
+    .map((entry) => {
+      const atValue = entry.at;
+      let timestamp;
+
+      if (atValue instanceof admin.firestore.Timestamp) {
+        timestamp = atValue;
+      } else if (atValue instanceof Date) {
+        timestamp = admin.firestore.Timestamp.fromDate(atValue);
+      } else if (
+        atValue &&
+        typeof atValue === "object" &&
+        typeof atValue.seconds === "number"
+      ) {
+        timestamp = new admin.firestore.Timestamp(
+          atValue.seconds,
+          atValue.nanoseconds || 0
+        );
+      } else {
+        timestamp = admin.firestore.Timestamp.now();
+      }
+
+      return {
+        id: entry.id || randomUUID(),
+        type: entry.type || "update",
+        message: entry.message || "",
+        metadata: entry.metadata ?? null,
+        at: timestamp,
+      };
+    });
+}
+
 async function writeOrderBoth(orderId, data) {
-  await ordersCollection.doc(orderId).set(data);
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const dataToWrite = { ...data, updatedAt: timestamp };
+
+  if (data.status !== undefined && data.lastStatusUpdateAt === undefined) {
+    dataToWrite.lastStatusUpdateAt = timestamp;
+  }
+
+  await ordersCollection.doc(orderId).set(dataToWrite);
+
   if (data.userId) {
     await usersCollection
       .doc(data.userId)
       .collection("orders")
       .doc(orderId)
-      .set(data);
+      .set(dataToWrite);
   }
 }
 
-async function updateOrderBoth(orderId, partialData) {
+async function updateOrderBoth(orderId, partialData = {}, options = {}) {
   const orderRef = ordersCollection.doc(orderId);
-  await orderRef.set(partialData, { merge: true });
+  const existingSnap = await orderRef.get();
+  const existing = existingSnap.data() || {};
+  const userId = existing.userId;
 
-  const snap = await orderRef.get();
-  const base = snap.data() || {};
-  const userId = base.userId;
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const dataToMerge = { ...partialData, updatedAt: timestamp };
+
+  const statusProvided = Object.prototype.hasOwnProperty.call(
+    partialData,
+    "status"
+  );
+
+  if (statusProvided && options.skipStatusTimestamp !== true) {
+    dataToMerge.lastStatusUpdateAt = timestamp;
+  }
+
+  let logEntries = [];
+
+  if (
+    statusProvided &&
+    existing.status !== partialData.status &&
+    options.autoLogStatus !== false
+  ) {
+    logEntries.push({
+      type: "status",
+      message: `Status changed to ${formatStatusLabel(partialData.status)}`,
+      metadata: { status: partialData.status },
+    });
+  }
+
+  if (Array.isArray(options.logEntries)) {
+    logEntries = logEntries.concat(options.logEntries);
+  }
+
+  const normalizedLogs = normalizeLogEntries(logEntries);
+  if (normalizedLogs.length) {
+    dataToMerge.activityLog = admin.firestore.FieldValue.arrayUnion(
+      ...normalizedLogs
+    );
+  }
+
+  await orderRef.set(dataToMerge, { merge: true });
 
   if (userId) {
+    const userUpdate = { ...dataToMerge };
+    if (normalizedLogs.length) {
+      userUpdate.activityLog = admin.firestore.FieldValue.arrayUnion(
+        ...normalizedLogs
+      );
+    }
+
     await usersCollection
       .doc(userId)
       .collection("orders")
       .doc(orderId)
-      .set(partialData, { merge: true });
+      .set(userUpdate, { merge: true });
   }
 
-  return { order: { id: orderId, ...base, ...partialData }, userId };
+  const updatedSnap = await orderRef.get();
+  const updated = updatedSnap.data() || {};
+
+  return { order: { id: orderId, ...updated }, userId };
 }
 
 function applyTemplate(template, replacements = {}) {
@@ -2297,12 +2518,38 @@ app.post('/orders/:id/sync-outbound-tracking', async (req, res) => {
     }
 
     const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
-    const { data: trackingData } = await axios.get(trackingUrl, {
+    const response = await axios.get(trackingUrl, {
       headers: { 'API-Key': shipEngineKey },
     });
 
-    const normalizedStatus = mapShipEngineStatus(trackingData.status_code || trackingData.statusCode);
+    const trackingData = response?.data && typeof response.data === 'object'
+      ? response.data
+      : null;
+
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    if (!trackingData) {
+      await updateOrderBoth(orderId, {
+        outboundTrackingLastSyncedAt: timestamp,
+      }, {
+        autoLogStatus: false,
+        logEntries: [
+          {
+            type: 'tracking',
+            message: 'Outbound tracking sync attempted but ShipEngine returned no data.',
+            metadata: { trackingNumber },
+          },
+        ],
+      });
+
+      return res.json({
+        message: 'ShipEngine returned no outbound tracking data. Order was left unchanged.',
+        order: { id: orderId, status: order.status },
+        tracking: null,
+      });
+    }
+
+    const normalizedStatus = mapShipEngineStatus(trackingData.status_code || trackingData.statusCode);
     const updatePayload = {
       outboundTrackingStatus: trackingData.status_code || trackingData.statusCode || null,
       outboundTrackingStatusDescription: trackingData.status_description || trackingData.statusDescription || null,
@@ -2342,6 +2589,119 @@ app.post('/orders/:id/sync-outbound-tracking', async (req, res) => {
   } catch (error) {
     console.error('Error syncing outbound tracking:', error.response?.data || error);
     res.status(500).json({ error: 'Failed to sync outbound tracking' });
+  }
+});
+
+app.post('/orders/:id/sync-label-tracking', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const doc = await ordersCollection.doc(orderId).get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const trackingNumber =
+      order.trackingNumber || order.inboundTrackingNumber || null;
+
+    if (!trackingNumber) {
+      return res
+        .status(400)
+        .json({ error: 'No inbound tracking number on file for this order.' });
+    }
+
+    const shipEngineKey = process.env.SHIPENGINE_KEY;
+    if (!shipEngineKey) {
+      return res.status(500).json({ error: 'ShipEngine API key not configured.' });
+    }
+
+    const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(
+      trackingNumber
+    )}`;
+    const response = await axios.get(trackingUrl, {
+      headers: { 'API-Key': shipEngineKey },
+    });
+
+    const trackingData = response?.data && typeof response.data === 'object'
+      ? response.data
+      : null;
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    if (!trackingData) {
+      const { order: updatedOrder } = await updateOrderBoth(orderId, {
+        labelTrackingLastSyncedAt: timestamp,
+      }, {
+        autoLogStatus: false,
+        logEntries: [
+          {
+            type: 'tracking',
+            message: 'Inbound label tracking sync attempted but ShipEngine returned no data.',
+            metadata: { trackingNumber },
+          },
+        ],
+      });
+
+      return res.json({
+        message: 'ShipEngine returned no inbound tracking data. Order was left unchanged.',
+        order: { id: updatedOrder.id, status: updatedOrder.status },
+        tracking: null,
+      });
+    }
+
+    const updatePayload = {
+      labelTrackingStatus:
+        trackingData.status_code || trackingData.statusCode || null,
+      labelTrackingStatusDescription:
+        trackingData.status_description || trackingData.statusDescription || null,
+      labelTrackingCarrierStatusCode:
+        trackingData.carrier_status_code || trackingData.carrierStatusCode || null,
+      labelTrackingCarrierStatusDescription:
+        trackingData.carrier_status_description ||
+        trackingData.carrierStatusDescription ||
+        null,
+      labelTrackingEstimatedDelivery:
+        trackingData.estimated_delivery_date ||
+        trackingData.estimatedDeliveryDate ||
+        null,
+      labelTrackingLastSyncedAt: timestamp,
+    };
+
+    if (Array.isArray(trackingData.events)) {
+      updatePayload.labelTrackingEvents = trackingData.events;
+    } else if (Array.isArray(trackingData.activities)) {
+      updatePayload.labelTrackingEvents = trackingData.activities;
+    }
+
+    const normalizedStatus = String(
+      updatePayload.labelTrackingStatus || ''
+    ).toUpperCase();
+    if (normalizedStatus === 'DELIVERED') {
+      updatePayload.labelDeliveredAt = timestamp;
+    }
+
+    const { order: updatedOrder } = await updateOrderBoth(orderId, updatePayload, {
+      autoLogStatus: false,
+      logEntries: [
+        {
+          type: 'tracking',
+          message: `Inbound label tracking synchronized (${updatePayload.labelTrackingStatusDescription || updatePayload.labelTrackingStatus || 'unknown'})`,
+          metadata: { trackingNumber },
+        },
+      ],
+    });
+
+    res.json({
+      message: 'Label tracking synchronized.',
+      order: { id: updatedOrder.id, status: updatedOrder.status },
+      tracking: updatePayload,
+    });
+  } catch (error) {
+    console.error('Error syncing label tracking:', error.response?.data || error);
+    const message =
+      error.response?.data?.error || error.message || 'Failed to sync label tracking';
+    res.status(500).json({ error: message });
   }
 });
 
@@ -2501,6 +2861,37 @@ app.post("/orders/:id/return-label", async (req, res) => {
   } catch (err) {
     console.error("Error generating return label:", err.response?.data || err);
     res.status(500).json({ error: "Failed to generate return label" });
+  }
+});
+
+app.post("/orders/:id/cancel", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const doc = await ordersCollection.doc(orderId).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const reason = req.body?.reason || "cancelled_by_admin";
+    const initiatedBy = req.body?.initiatedBy || req.body?.cancelledBy || null;
+    const notifyCustomer = req.body?.notifyCustomer !== false;
+
+    const { order: updatedOrder, voidResults } = await cancelOrderAndNotify(order, {
+      auto: false,
+      reason,
+      initiatedBy,
+      notifyCustomer,
+    });
+
+    res.json({
+      message: `Order ${orderId} has been cancelled`,
+      order: updatedOrder,
+      voidResults,
+    });
+  } catch (error) {
+    console.error("Error cancelling order:", error);
+    res.status(500).json({ error: "Failed to cancel order" });
   }
 });
 
@@ -2787,6 +3178,136 @@ exports.autoAcceptOffers = functions.pubsub
     return null;
   });
 
+async function runAutoRequoteSweep() {
+  const thresholdTimestamp = admin.firestore.Timestamp.fromMillis(
+    Date.now() - AUTO_REQUOTE_DELAY_MS
+  );
+
+  const seen = new Set();
+  const ordersToProcess = [];
+
+  const emailedQuery = await ordersCollection
+    .where("status", "==", "emailed")
+    .where("emailedAt", "<=", thresholdTimestamp)
+    .get();
+
+  emailedQuery.forEach((doc) => {
+    if (!seen.has(doc.id)) {
+      seen.add(doc.id);
+      ordersToProcess.push({ id: doc.id, ...doc.data() });
+    }
+  });
+
+  const emailedWithoutTimestamp = await ordersCollection
+    .where("status", "==", "emailed")
+    .where("emailedAt", "==", null)
+    .where("lastStatusUpdateAt", "<=", thresholdTimestamp)
+    .get();
+
+  emailedWithoutTimestamp.forEach((doc) => {
+    if (!seen.has(doc.id)) {
+      seen.add(doc.id);
+      ordersToProcess.push({ id: doc.id, ...doc.data() });
+    }
+  });
+
+  for (const order of ordersToProcess) {
+    try {
+      const { order: updatedOrder } = await updateOrderBoth(
+        order.id,
+        {
+          status: "requote_accepted",
+          requoteAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+          requoteAutoAccepted: true,
+        },
+        {
+          logEntries: [
+            {
+              type: "system",
+              message:
+                "Order automatically moved to Requote Accepted after 7 days without a response.",
+              metadata: { previousStatus: order.status },
+            },
+          ],
+        }
+      );
+
+      if (updatedOrder?.shippingInfo?.email) {
+        const customerName = updatedOrder.shippingInfo.fullName || "there";
+        const htmlBody = `
+          <p>Hi ${escapeHtml(customerName)},</p>
+          <p>We followed up about your shipping label for order <strong>#${escapeHtml(
+            updatedOrder.id
+          )}</strong> but didn’t hear back.</p>
+          <p>To keep your account tidy we’ve marked the order as <strong>Requote Accepted</strong>. If you still plan to send your device, reply to this email and we’ll send a fresh label.</p>
+          <p>— The SecondHandCell Team</p>
+        `;
+
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: updatedOrder.shippingInfo.email,
+          subject: `Order #${updatedOrder.id} marked as Requote Accepted`,
+          html: htmlBody,
+          bcc: [process.env.SALES_EMAIL || "sales@secondhandcell.com"],
+        });
+      }
+    } catch (error) {
+      console.error(
+        `Failed to auto-requote emailed order ${order.id}:`,
+        error
+      );
+    }
+  }
+}
+
+exports.autoFinalizeEmailedOrders = functions.pubsub
+  .schedule("every 12 hours")
+  .onRun(async () => {
+    try {
+      await runAutoRequoteSweep();
+    } catch (error) {
+      console.error("Automatic requote sweep failed:", error);
+    }
+    return null;
+  });
+
+async function runAutoCancellationSweep() {
+  const thresholdTimestamp = admin.firestore.Timestamp.fromMillis(
+    Date.now() - AUTO_CANCEL_DELAY_MS
+  );
+
+  const snapshot = await ordersCollection
+    .where("status", "in", AUTO_CANCEL_MONITORED_STATUSES)
+    .where("lastStatusUpdateAt", "<=", thresholdTimestamp)
+    .get();
+
+  for (const doc of snapshot.docs) {
+    const order = { id: doc.id, ...doc.data() };
+    try {
+      await cancelOrderAndNotify(order, {
+        auto: true,
+        reason: "no_activity_15_days",
+      });
+    } catch (error) {
+      console.error(
+        `Failed to auto-cancel dormant order ${order.id}:`,
+        error
+      );
+    }
+  }
+}
+
+exports.autoCancelDormantOrders = functions.pubsub
+  .schedule("every 24 hours")
+  .onRun(async () => {
+    try {
+      await runAutoCancellationSweep();
+    } catch (error) {
+      console.error("Automatic cancellation sweep failed:", error);
+    }
+    return null;
+  });
+
 // This function creates a user document in the 'users' collection, but NOT in the 'admins' collection.
 exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
   try {
@@ -2851,8 +3372,8 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
 
     const order = orderDoc.data();
     
-    // 6. Verify order status is label_generated
-    if (order.status !== 'label_generated') {
+    // 6. Verify order status is label_generated/emailed
+    if (!['label_generated', 'emailed'].includes(order.status)) {
       throw new functions.https.HttpsError('failed-precondition', 'Can only send reminders for orders with generated labels');
     }
 
@@ -3183,6 +3704,20 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       html: emailHtml,
       bcc: ["sales@secondhandcell.com"]
     });
+
+    await updateOrderBoth(
+      sanitizedOrderId,
+      { lastReminderSentAt: admin.firestore.FieldValue.serverTimestamp() },
+      {
+        autoLogStatus: false,
+        logEntries: [
+          {
+            type: 'reminder',
+            message: 'Reminder email sent to customer.',
+          },
+        ],
+      }
+    );
 
     // 8. Log admin action for audit trail
     const auditLog = {
@@ -3546,13 +4081,32 @@ async function handlePhoneCheckRequest(req, res) {
         const orderRef = ordersCollection.doc(trimmedOrderId);
         const orderSnap = await orderRef.get();
         if (orderSnap.exists) {
-          await updateOrderBoth(trimmedOrderId, {
-            phoneCheck: {
-              summary,
-              raw: data,
-              lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+          await updateOrderBoth(
+            trimmedOrderId,
+            {
+              phoneCheck: {
+                summary,
+                raw: data,
+                lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
+                imei: sanitizedImei,
+              },
+              imei: sanitizedImei,
             },
-          });
+            {
+              autoLogStatus: false,
+              logEntries: [
+                {
+                  type: "phonecheck",
+                  message: "PhoneCheck completed",
+                  metadata: {
+                    imei: sanitizedImei,
+                    carrier: sanitizedCarrier,
+                    deviceType: sanitizedDeviceType,
+                  },
+                },
+              ],
+            }
+          );
           orderUpdated = true;
         } else {
           console.warn(
