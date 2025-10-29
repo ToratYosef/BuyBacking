@@ -46,7 +46,8 @@ const EMAIL_LOGO_URL =
   "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
 const COUNTDOWN_NOTICE_TEXT =
   "If we don't hear back within 7 days, we'll automatically requote your device at 75% less to keep your order moving.";
-
+const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
+const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 function buildCountdownNoticeHtml() {
   return `
     <div style="margin-top: 24px; padding: 18px 20px; background-color: #ecfdf5; border-radius: 12px; border: 1px solid #bbf7d0; color: #065f46; font-size: 17px; line-height: 1.6;">
@@ -930,9 +931,6 @@ const DOWNGRADE_EMAIL_HTML = buildEmailLayout({
       <p>We're here to help—just let us know how you'd like to proceed.</p>
   `,
 });
-
-const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
-const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
 function getOrderCompletedEmailTemplate({ includeTrustpilot = true } = {}) {
   return buildEmailLayout({
