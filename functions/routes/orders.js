@@ -278,7 +278,14 @@ router.put("/orders/:id/status", async (req, res) => {
         const orderId = req.params.id;
         if (!status) return res.status(400).json({ error: "Status is required" });
 
-        const { order } = await updateOrderBoth(orderId, { status });
+        const docRef = ordersCollection.doc(orderId);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        const currentOrder = { id: doc.id, ...doc.data() };
+        const logEntries = [];
 
         let customerNotificationPromise = Promise.resolve();
         let internalNotificationPromise = Promise.resolve();
@@ -288,44 +295,53 @@ router.put("/orders/:id/status", async (req, res) => {
         switch (status) {
             case "received": {
                 const deviceReceivedHtml = DEVICE_RECEIVED_EMAIL_HTML
-                    .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-                    .replace(/\*\*ORDER_ID\*\*/g, order.id);
+                    .replace(/\*\*CUSTOMER_NAME\*\*/g, currentOrder.shippingInfo.fullName)
+                    .replace(/\*\*ORDER_ID\*\*/g, currentOrder.id);
 
                 customerNotificationPromise = sendEmail({
                     from: "SecondHandCell <" + functions.config().email.user + ">",
-                    to: order.shippingInfo.email,
+                    to: currentOrder.shippingInfo.email,
                     subject: "Your SecondHandCell Device Has Arrived",
                     html: deviceReceivedHtml,
                 });
 
-                internalSubject = `Device Received for Order #${order.id}`;
-                internalHtmlBody = `<p>The device for Order <strong>#${order.id}</strong> has been received.</p><p>It is now awaiting inspection.</p>`;
-                internalNotificationPromise = sendZendeskComment(order, internalSubject, internalHtmlBody, false);
+                internalSubject = `Device Received for Order #${currentOrder.id}`;
+                internalHtmlBody = `<p>The device for Order <strong>#${currentOrder.id}</strong> has been received.</p><p>It is now awaiting inspection.</p>`;
+                internalNotificationPromise = sendZendeskComment(currentOrder, internalSubject, internalHtmlBody, false);
+                logEntries.push({
+                    type: "email",
+                    message: "Device received confirmation email sent to customer.",
+                });
                 break;
             }
             case "completed": {
-                const customerEmailHtml = `<p>Hello ${order.shippingInfo.fullName},</p><p>Great news! Your order <strong>#${order.id}</strong> has been completed and payment has been processed.</p><p>If you have any questions about your payment, please let us know.</p><p>Thank you for choosing SecondHandCell!</p>`;
+                const customerEmailHtml = `<p>Hello ${currentOrder.shippingInfo.fullName},</p><p>Great news! Your order <strong>#${currentOrder.id}</strong> has been completed and payment has been processed.</p><p>If you have any questions about your payment, please let us know.</p><p>Thank you for choosing SecondHandCell!</p>`;
                 customerNotificationPromise = sendEmail({
                     from: "SecondHandCell <" + functions.config().email.user + ">",
-                    to: order.shippingInfo.email,
+                    to: currentOrder.shippingInfo.email,
                     subject: "Your SecondHandCell Order is Complete",
                     html: customerEmailHtml,
                 });
 
-                internalSubject = `Order Completed: #${order.id}`;
-                internalHtmlBody = `<p>Order <strong>#${order.id}</strong> has been marked as completed.</p><p>Payment has been processed for this order.</p>`;
-                internalNotificationPromise = sendZendeskComment(order, internalSubject, internalHtmlBody, false);
+                internalSubject = `Order Completed: #${currentOrder.id}`;
+                internalHtmlBody = `<p>Order <strong>#${currentOrder.id}</strong> has been marked as completed.</p><p>Payment has been processed for this order.</p>`;
+                internalNotificationPromise = sendZendeskComment(currentOrder, internalSubject, internalHtmlBody, false);
+                logEntries.push({
+                    type: "email",
+                    message: "Order completion email sent to customer.",
+                });
                 break;
             }
             default: {
-                // No specific emails
                 break;
             }
         }
 
+        const { order } = await updateOrderBoth(orderId, { status }, { logEntries });
+
         await Promise.all([customerNotificationPromise, internalNotificationPromise]);
 
-        res.json({ message: `Order marked as ${status}` });
+        res.json({ message: `Order marked as ${status}`, order });
     } catch (err) {
         console.error("Error updating status:", err);
         res.status(500).json({ error: "Failed to update status" });
