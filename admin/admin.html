@@ -345,8 +345,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         <label class="block text-sm font-medium text-gray-700">Reasons</label>
                         <div class="mt-1 space-y-2">
                             <div class="flex items-center">
-                                <input id="reason-cracked" name="reoffer-reasons" type="checkbox" value="cracked" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-cracked" class="ml-2 block text-sm text-gray-900">Cracked</label>
+                                <input id="reason-damaged" name="reoffer-reasons" type="checkbox" value="damaged" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                                <label for="reason-damaged" class="ml-2 block text-sm text-gray-900">Damaged (includes cracked)</label>
                             </div>
                             <div class="flex items-center">
                                 <input id="reason-deep-scratches" name="reoffer-reasons" type="checkbox" value="deep-scratches" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
@@ -1576,12 +1576,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             switch (currentStatus) {
                 case 'order_pending':
                 case 'shipping_kit_requested':
+                case 'kit_needs_printing':
+                case 'needs_printing':
                     modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
                     modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
                     // Reminder button is now handled by sendReminderBtn at the top
                     break;
                 case 'label_generated':
                 case 'emailed':
+                    if (order.shippingPreference === 'Shipping Kit Requested') {
+                        modalActionButtons.appendChild(createButton('Mark I Sent', () => handleAction(order.id, 'markKitSent'), 'bg-orange-600 hover:bg-orange-700'));
+                    }
                     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
                     // Reminder button is now handled by sendReminderBtn at the top
                     break;
@@ -1977,6 +1982,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         return;
                     case 'sendReturnLabel':
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
+                        method = 'POST';
+                        break;
+                    case 'markKitSent':
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-sent`;
                         method = 'POST';
                         break;
                     case 'cancelOrder':

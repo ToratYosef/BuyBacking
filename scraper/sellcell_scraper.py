@@ -131,7 +131,7 @@ def name_key(raw: str) -> str:
             keep.append(t); continue
         if t in QUALIFIERS:
             keep.append(t); continue
-        if t in {"iphone","galaxy","pixel","z","fold","flip","s","note"}:
+        if t in {"iphone","galaxy","pixel","ipad","z","fold","flip","s","note"}:
             keep.append(t); continue
         # short tokens like 's24','s25' etc.
         if re.match(r"^[a-z]\d{2}$", t):

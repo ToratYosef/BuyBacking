@@ -128,6 +128,62 @@ async function generateCustomLabelPdf(order) {
     return pdfDoc.save();
 }
 
+async function generateBagLabelPdf(order) {
+    const pdfDoc = await PDFDocument.create();
+    const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    const { width, height } = page.getSize();
+    let cursorY = height - MARGIN;
+
+    const drawLine = (text, options = {}) => {
+        const { font = regularFont, size = 12, color = rgb(0, 0, 0) } = options;
+        const lines = wrapText(text, width - MARGIN * 2, font, size);
+        lines.forEach((line) => {
+            page.drawText(line, { x: MARGIN, y: cursorY, size, font, color });
+            cursorY -= LINE_HEIGHT;
+        });
+        cursorY -= 2;
+    };
+
+    drawLine('SecondHandCell Bag Label', { font: boldFont, size: 14, color: rgb(0.1, 0.1, 0.1) });
+    cursorY -= 2;
+    drawLine(`Order #${order.id}`, { font: boldFont, size: 20, color: rgb(0.1, 0.1, 0.4) });
+
+    const shippingInfo = order.shippingInfo || {};
+    [
+        shippingInfo.fullName ? `Customer: ${shippingInfo.fullName}` : null,
+        order.device || order.storage ? `Device: ${(order.device || 'Device')} ${(order.storage || '').trim()}`.trim() : null,
+        order.carrier ? `Carrier: ${order.carrier}` : null,
+        order.paymentMethod ? `Payment: ${formatValue(order.paymentMethod)}` : null,
+    ]
+        .filter(Boolean)
+        .forEach((line) => drawLine(line, { size: 11 }));
+
+    drawLine('Attach this label to the shipping bag before mailing the kit.', {
+        size: 10,
+        color: rgb(0.35, 0.35, 0.35),
+    });
+
+    const barcodeSvg = await buildBarcode(order.id);
+    const barcodeImage = await pdfDoc.embedSvg(barcodeSvg);
+    const barcodeScale = Math.min((width - MARGIN * 2) / barcodeImage.width, 1.3);
+    const dims = barcodeImage.scale(barcodeScale);
+
+    page.drawImage(barcodeImage, {
+        x: (width - dims.width) / 2,
+        y: Math.max(MARGIN, cursorY - dims.height - 10),
+        width: dims.width,
+        height: dims.height,
+    });
+
+    cursorY = Math.max(MARGIN, cursorY - dims.height - 16);
+    drawLine('Scan to open this order in the dashboard.', { size: 9, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
+
+    return pdfDoc.save();
+}
+
 function formatValue(value) {
     if (!value) return '—';
     return String(value)
@@ -210,4 +266,4 @@ async function mergePdfBuffers(buffers = []) {
     return mergedPdf.save();
 }
 
-module.exports = { generateCustomLabelPdf, mergePdfBuffers };
+module.exports = { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers };
