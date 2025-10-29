@@ -526,8 +526,8 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     ageDescription = `${days.toFixed(1)} days`;
   }
 
-  const reason = options.reason === "automatic" ? "Automatic" : "Manual";
-  const subject = `${reason} label void for order ${order.id}`;
+  const reasonKey = options.reason === "automatic" ? "automatic" : "manual";
+  const subject = `Shipping label voided for order ${order.id}`;
   const lines = approvedResults.map((result) => {
     const labelName = formatLabelDisplayNameFromKey(result.key);
     return `• ${labelName} (ID: ${result.labelId})${
@@ -535,27 +535,42 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     }`;
   });
 
-  const textBody = appendCountdownNotice(
-    [
-      `${reason} label void processed for order #${order.id}.`,
-      `Order age: ${ageDescription}.`,
-      "",
-      "Voided label(s):",
-      ...lines,
-    ].join("\n")
-  );
+  const introText =
+    reasonKey === "automatic"
+      ? "We've automatically voided the prepaid shipping label for your order because it's been a while since we heard from you."
+      : "We've voided the prepaid shipping label for your order as requested.";
+
+  const followUpText =
+    "If you'd still like to send your device in, reply to this email and we'll send a fresh label right away.";
+
+  const textBody = [
+    introText,
+    `Order #: ${order.id}`,
+    `Order age: ${ageDescription}.`,
+    "",
+    "Voided label(s):",
+    ...lines,
+    "",
+    followUpText,
+  ].join("\n");
 
   const htmlBody = buildEmailLayout({
-    title: `${reason} label void`,
+    title: "Shipping label voided",
     accentColor: "#0ea5e9",
-    includeTrustpilot: true,
+    includeTrustpilot: false,
     bodyHtml: `
-      <p>${reason} label void processed for order <strong>#${order.id}</strong>.</p>
+      <p>${
+        reasonKey === "automatic"
+          ? "We've automatically voided the prepaid shipping label for your order because it's been a while since we heard from you."
+          : "We've voided the prepaid shipping label for your order as requested."
+      }</p>
+      <p>Order number: <strong>#${order.id}</strong></p>
       <p>Order age: <strong>${ageDescription}</strong>.</p>
       <p style="margin-bottom:12px;">Voided label(s):</p>
       <ul style="padding-left:22px; color:#475569;">
         ${lines.map((line) => `<li>${escapeHtml(line.substring(2))}</li>`).join("\n")}
       </ul>
+      <p style="margin-top:20px;">If you'd still like to send your device in, reply to this email and we'll send a fresh label right away.</p>
     `,
   });
 
