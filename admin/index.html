@@ -2467,7 +2467,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         }
 
-        function toDateSafe(timestamp) {
+        function coerceTimestampToDate(timestamp) {
             if (!timestamp) return null;
             if (timestamp instanceof Date) return timestamp;
             if (typeof timestamp === 'number') {
@@ -2492,7 +2492,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         function formatOrderAge(timestamp) {
-            const date = toDateSafe(timestamp);
+            const date = coerceTimestampToDate(timestamp);
             if (!date) return 'N/A';
             const diffMs = Date.now() - date.getTime();
             if (diffMs <= 0) return '0.0 days old';
@@ -2501,7 +2501,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         function formatLabelAge(timestamp) {
-            const date = toDateSafe(timestamp);
+            const date = coerceTimestampToDate(timestamp);
             if (!date) return 'Unknown age';
             const diffMs = Date.now() - date.getTime();
             if (diffMs <= 0) return 'Generated today';
@@ -2510,7 +2510,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         function formatDateTime(timestamp) {
-            const date = toDateSafe(timestamp);
+            const date = coerceTimestampToDate(timestamp);
             if (!date) return 'Unknown';
             return date.toLocaleString('en-US', {
                 month: 'short',
@@ -3826,8 +3826,8 @@ if (printWindow) {
             }
 
             entries.sort((a, b) => {
-                const aDate = toDateSafe(a.at) || new Date(0);
-                const bDate = toDateSafe(b.at) || new Date(0);
+                const aDate = coerceTimestampToDate(a.at) || new Date(0);
+                const bDate = coerceTimestampToDate(b.at) || new Date(0);
                 return bDate.getTime() - aDate.getTime();
             });
 
