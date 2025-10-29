@@ -3,7 +3,6 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const { getStorage } = require('firebase-admin/storage');
 const { getFirestore } = require('firebase-admin/firestore');
-const admin = require('firebase-admin');
 const { createShipStationLabel } = require('../services/shipstation');
 const { sendZendeskComment } = require('../services/zendesk');
 const { sendEmail } = require('../services/notifications');
@@ -47,7 +46,9 @@ router.post("/generate-label/:id", async (req, res) => {
             country: "US",
         };
 
+        const timestamp = admin.firestore.FieldValue.serverTimestamp();
         let updateData = { status: "label_generated" };
+        const logEntries = [];
         let internalHtmlBody = "";
         let customerEmailSubject = "";
         let customerMailOptions;
@@ -96,8 +97,17 @@ router.post("/generate-label/:id", async (req, res) => {
                 trackingNumber: inboundLabelData.trackingNumber, // Set primary tracking for simplicity
                 outboundCarrierCode: 'stamps_com',
                 inboundCarrierCode: 'stamps_com',
-                kitLabelGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+                kitLabelGeneratedAt: timestamp,
             };
+
+            logEntries.push({
+                type: 'label',
+                message: 'Shipping kit labels generated and emailed to customer',
+                metadata: {
+                    outboundTrackingNumber: outboundLabelData.trackingNumber || null,
+                    inboundTrackingNumber: inboundLabelData.trackingNumber || null,
+                },
+            });
 
             customerEmailSubject = `Your SecondHandCell Shipping Kit for Order #${order.id} is on its Way!`;
             const customerEmailHtml = SHIPPING_KIT_EMAIL_HTML
@@ -146,10 +156,26 @@ router.post("/generate-label/:id", async (req, res) => {
 
             updateData = {
                 ...updateData,
+                status: 'emailed',
                 trackingNumber: mainTrackingNumber,
                 uspsLabelUrl: uspsLabelUrl,
+                emailedAt: timestamp,
+                labelTrackingStatus: mainLabelData.status_code || mainLabelData.statusCode || 'LABEL_CREATED',
+                labelTrackingStatusDescription: mainLabelData.status_description || mainLabelData.statusDescription || 'Label created',
+                labelTrackingCarrierStatusCode: mainLabelData.carrier_status_code || mainLabelData.carrierStatusCode || null,
+                labelTrackingCarrierStatusDescription: mainLabelData.carrier_status_description || mainLabelData.carrierStatusDescription || null,
+                labelTrackingLastSyncedAt: timestamp,
             };
-            
+
+            logEntries.push({
+                type: 'label',
+                message: 'Shipping label emailed to customer',
+                metadata: {
+                    trackingNumber: mainTrackingNumber || null,
+                    deliveryMethod: 'email',
+                },
+            });
+
             customerEmailSubject = `Your SecondHandCell Shipping Label for Order #${order.id}`;
             const customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
                 .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
@@ -178,7 +204,7 @@ router.post("/generate-label/:id", async (req, res) => {
             throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
         }
 
-        await updateOrderBoth(req.params.id, updateData);
+        await updateOrderBoth(req.params.id, updateData, { logEntries });
 
         await Promise.all([
             sendEmail(customerMailOptions),

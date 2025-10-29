@@ -26,6 +26,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     <!-- PDF-LIB LIBRARY FOR PDF GENERATION AND MERGING -->
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap');
         
@@ -216,11 +218,65 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             color: #f8fafc;
         }
         
-        .glass-dashboard-grid { /* NEW GRID FOR GLASS CARDS */
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 24px; /* Increased gap for better look */
-            margin-bottom: 40px;
+        .insight-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .insight-pill {
+            flex: 1 1 180px;
+            min-width: 180px;
+            background: linear-gradient(135deg, rgba(148, 163, 184, 0.18), rgba(30, 64, 175, 0.28));
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: #f8fafc;
+            border-radius: 18px;
+            padding: 20px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            box-shadow: 0 25px 60px -30px rgba(15, 23, 42, 0.55);
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .insight-pill:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 35px 80px -35px rgba(15, 23, 42, 0.65);
+        }
+
+        .insight-pill .label {
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(226, 232, 240, 0.78);
+            font-weight: 600;
+        }
+
+        .insight-pill .value {
+            font-size: 32px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .insight-pill .subtext {
+            font-size: 12px;
+            color: rgba(226, 232, 240, 0.7);
+        }
+
+        .insight-pill-link {
+            text-decoration: none;
+            color: inherit;
+            position: relative;
+            display: inline-flex;
+            flex-direction: column;
+        }
+
+        .insight-pill-link i {
+            font-size: 16px;
+            margin-top: auto;
+            opacity: 0.75;
+            align-self: flex-end;
         }
 
         .filter-bar {
@@ -270,108 +326,166 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             border-color: rgba(59, 130, 246, 0.55);
         }
 
-        .dashboard-grid { /* Existing grid moved down */
+        .analytics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
         }
-        
-        /* NEW GLASS CARD STYLE */
-        .glass-card-metrics {
-            background: rgba(255, 255, 255, 0.15); /* Slightly transparent background */
-            border: 1px solid rgba(255, 255, 255, 0.3); /* Lighter border */
-            backdrop-filter: blur(15px); /* The key glass effect */
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-            border-radius: 16px;
-            padding: 24px;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+        .analytics-card {
+            background: rgba(255, 255, 255, 0.82);
+            border-radius: 20px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            box-shadow: 0 30px 70px -40px rgba(15, 23, 42, 0.5);
+            padding: 24px 24px 28px;
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .chart-wrapper {
+            width: 200px;
+            height: 100px;
+            max-width: 200px;
+            max-height: 100px;
+            margin: 0 auto;
             position: relative;
-            color: #f8fafc; /* Light text for dark background */
         }
 
-        .glass-card-metrics:hover {
-            transform: translateY(-5px) scale(1.02);
-            background: rgba(255, 255, 255, 0.25);
-            box-shadow: 0 16px 48px 0 rgba(0, 0, 0, 0.3);
+        .chart-wrapper canvas {
+            width: 100% !important;
+            height: 100% !important;
         }
 
-        .glass-card-metrics h3 {
+        .analytics-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .analytics-card-header h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 2px;
+        }
+
+        .analytics-card-header p {
+            font-size: 13px;
+            color: #475569;
+        }
+
+        .trend-delta {
             font-size: 14px;
             font-weight: 600;
-            color: rgba(255, 255, 255, 0.85);
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            color: #1e293b;
         }
 
-        .glass-card-metrics .count {
-            font-size: 38px;
-            font-weight: 700;
-            line-height: 1;
-            color: #FFFFFF;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        .trend-delta.trend-up {
+            background: rgba(34, 197, 94, 0.12);
+            border-color: rgba(34, 197, 94, 0.35);
+            color: #15803d;
         }
 
-        .glass-card-metrics .icon {
-            position: absolute;
-            right: 24px;
-            top: 24px;
-            font-size: 28px;
-            opacity: 0.35;
-            color: var(--icon-color, #ffffff);
+        .trend-delta.trend-down {
+            background: rgba(248, 113, 113, 0.12);
+            border-color: rgba(248, 113, 113, 0.4);
+            color: #b91c1c;
         }
 
-        
-        .dashboard-card {
-            background: white;
-            border: 1px solid rgba(31, 41, 55, 0.08);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-            border-radius: 12px;
-            padding: 24px;
+        .trend-delta.trend-neutral {
+            background: rgba(148, 163, 184, 0.12);
+            border-color: rgba(148, 163, 184, 0.4);
+            color: #1e293b;
+        }
+
+        .status-breakdown-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 8px 0 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .status-breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            border-radius: 14px;
+            border: 1px solid transparent;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            background: rgba(255, 255, 255, 0.8);
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            box-shadow: 0 30px 60px -35px rgba(15, 23, 42, 0.4);
+            transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
         }
-        
-        .dashboard-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
-            border-color: rgba(99, 102, 241, 0.2);
+
+        .status-breakdown-item:hover {
+            background: rgba(59, 130, 246, 0.08);
+            transform: translateY(-1px);
         }
-        
-        .dashboard-card h3 {
-            font-size: 12px;
+
+        .status-breakdown-item.active {
+            border-color: rgba(59, 130, 246, 0.45);
+            background: rgba(59, 130, 246, 0.12);
+        }
+
+        .status-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-label {
+            font-size: 13px;
             font-weight: 600;
-            color: #374151;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: rgba(71, 85, 105, 0.8);
+            color: #1f2937;
         }
-        
-        .dashboard-card .count {
-            font-size: 36px;
+
+        .status-count {
+            font-size: 14px;
             font-weight: 700;
-            line-height: 1;
-            color: #111827;
             color: #0f172a;
         }
-        
-        .dashboard-card .icon {
-            position: absolute;
-            right: 24px;
-            top: 24px;
-            font-size: 24px;
-            opacity: 0.15;
-            color: var(--icon-color, #6B7280);
-            color: rgba(59, 130, 246, 0.4);
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 999px;
+            box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.18);
         }
-        
+
+        .status-dot-all { background: #38bdf8; }
+        .status-dot-pending { background: #6366f1; }
+        .status-dot-printing { background: #8b5cf6; }
+        .status-dot-kit-sent { background: #f97316; }
+        .status-dot-kit-delivered { background: #10b981; }
+        .status-dot-label { background: #f59e0b; }
+        .status-dot-emailed { background: #38bdf8; }
+        .status-dot-received { background: #0ea5e9; }
+        .status-dot-completed { background: #22c55e; }
+        .status-dot-reoffer-pending { background: #facc15; }
+        .status-dot-reoffer-accepted { background: #14b8a6; }
+        .status-dot-reoffer-declined { background: #ef4444; }
+        .status-dot-return { background: #64748b; }
+
+        @media (max-width: 768px) {
+            .insight-strip {
+                flex-direction: column;
+            }
+            .insight-pill {
+                width: 100%;
+            }
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
         .accent-badge {
             display: inline-block;
             padding: 4px 12px;
@@ -465,6 +579,112 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(14, 165, 233, 0.85));
             color: #f8fafc;
             border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+        }
+
+        .orders-table-wrapper {
+            overflow-x: auto;
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+
+        table.orders-table {
+            width: 100%;
+            min-width: 960px;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .orders-table thead th {
+            text-align: left;
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: #475569;
+            padding: 14px 18px;
+            background: rgba(241, 245, 249, 0.7);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .orders-table tbody td {
+            padding: 16px 18px;
+            font-size: 14px;
+            color: #0f172a;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        }
+
+        .orders-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .orders-table tbody tr:hover {
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .pagination-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            border-top: 1px solid rgba(148, 163, 184, 0.2);
+            background: rgba(248, 250, 252, 0.8);
+        }
+
+        .pagination-controls.hidden {
+            display: none;
+        }
+
+        .pagination-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .pagination-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            background: white;
+            color: #1d4ed8;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .pagination-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination-button:not(:disabled):hover {
+            box-shadow: 0 12px 24px -18px rgba(37, 99, 235, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .pagination-info {
+            font-size: 13px;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        #no-orders-message {
+            padding: 24px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            color: #64748b;
+        }
+
+        #no-orders-message.hidden {
+            display: none;
+        }
+
+        @media (max-width: 1024px) {
+            table.orders-table {
+                min-width: 720px;
+            }
         }
         
         .user-id-badge {
@@ -840,22 +1060,106 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
         
         #order-details-modal > div {
-            border-radius: 16px;
-            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            box-shadow: 0 35px 90px -45px rgba(15, 23, 42, 0.75);
+            background: linear-gradient(135deg, rgba(248, 250, 252, 0.96), rgba(226, 232, 240, 0.9));
+            padding: 32px;
+            width: min(960px, 100%);
+            max-height: 90vh;
+            overflow-y: auto;
+            border: 1px solid rgba(148, 163, 184, 0.25);
         }
-        
+
         #order-details-modal h3 {
             color: #0f172a;
             font-size: 24px;
             font-weight: 700;
         }
-        
+
         #order-details-modal .space-y-3 p {
             color: #1e293b;
         }
-        
+
         #order-details-modal .space-y-3 strong {
             color: #0f172a;
+        }
+
+        #modal-action-buttons {
+            margin-top: 28px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        #modal-action-buttons > * {
+            width: 100%;
+        }
+
+        #modal-action-buttons button {
+            justify-content: center;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-align: center;
+            min-height: 44px;
+            box-shadow: 0 18px 36px -28px rgba(15, 23, 42, 0.45);
+        }
+
+        #modal-loading-message {
+            margin-top: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #2563eb;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        #modal-loading-message.hidden {
+            display: none;
+        }
+
+        #modal-message {
+            border-radius: 12px;
+        }
+
+        #modal-activity-log {
+            margin-top: 32px;
+            border-top: 1px solid rgba(148, 163, 184, 0.3);
+            padding-top: 20px;
+        }
+
+        #modal-activity-log.hidden {
+            display: none;
+        }
+
+        #modal-activity-log h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        #modal-activity-log-list {
+            margin-top: 14px;
+            display: grid;
+            gap: 12px;
+        }
+
+        #modal-activity-log-list li {
+            list-style: none;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(241, 245, 249, 0.85);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 13px;
+            color: #0f172a;
+        }
+
+        #modal-activity-log-list li span {
+            color: #475569;
         }
         
         .loading-screen {
@@ -980,113 +1284,155 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </button>
         </div>
 
-        <!-- NEW GLASS CARD METRICS GRID -->
-        <div class="glass-dashboard-grid">
-            <div class="glass-card-metrics" data-status="order_pending" style="--icon-color: #A7F3D0;">
-                <i class="fas fa-shopping-cart icon"></i>
-                <h3>Orders Today</h3>
-                <div id="orders-today-count" class="count">0</div>
-                <span class="accent-badge" style="background: rgba(255, 255, 255, 0.3); color: #FFF; border: 1px solid rgba(255,255,255,0.4)">New</span>
+        <div class="insight-strip">
+            <div class="insight-pill">
+                <span class="label">Orders Today</span>
+                <span class="value" id="orders-today-count">0</span>
+                <span class="subtext">New submissions</span>
             </div>
-            <div class="glass-card-metrics" data-status="completed" style="--icon-color: #818CF8;">
-                <i class="fas fa-dollar-sign icon"></i>
-                <h3>Total Completed Payout</h3>
-                <div id="total-payout-amount" class="count">$0.00</div>
-                <span class="accent-badge" style="background: rgba(255, 255, 255, 0.3); color: #FFF; border: 1px solid rgba(255,255,255,0.4)">Paid Out</span>
+            <div class="insight-pill">
+                <span class="label">Total Completed Payout</span>
+                <span class="value" id="total-payout-amount">$0.00</span>
+                <span class="subtext">Across closed orders</span>
             </div>
-            <div class="glass-card-metrics" data-status="received" style="--icon-color: #FECACA;">
-                <i class="fas fa-exchange-alt icon"></i>
-                <h3>Completion Rate</h3>
-                <div id="conversion-rate" class="count">0.0%</div>
-                <span class="accent-badge" style="background: rgba(255, 255, 255, 0.3); color: #FFF; border: 1px solid rgba(255,255,255,0.4)">Initial Quotes</span>
+            <div class="insight-pill">
+                <span class="label">Completion Rate</span>
+                <span class="value" id="conversion-rate">0.0%</span>
+                <span class="subtext">Quotes to payouts</span>
             </div>
-            <div class="glass-card-metrics" data-status="received" style="--icon-color: #FBBF24;">
-                <i class="fas fa-warehouse icon"></i>
-                <h3>Devices Received</h3>
-                <div id="received-devices-count" class="count">0</div>
-                <span class="accent-badge" style="background: rgba(255, 255, 255, 0.3); color: #FFF; border: 1px solid rgba(255,255,255,0.4)">Inbound Shipments</span>
+            <div class="insight-pill">
+                <span class="label">Devices Received</span>
+                <span class="value" id="received-devices-count">0</span>
+                <span class="subtext">Awaiting inspection</span>
             </div>
+            <a class="insight-pill insight-pill-link" href="chat/index.html">
+                <span class="label">Active Chats</span>
+                <span class="value" id="active-chats-count">0</span>
+                <span class="subtext">Support queue</span>
+                <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
         </div>
 
-
-        <div class="dashboard-grid">
-            <div class="dashboard-card" onclick="window.location.href='chat/index.html'" style="--icon-color: #3b82f6; cursor: pointer;">
-                <i class="fas fa-comments icon"></i>
-                <h3>Active Chats</h3>
-                <div id="active-chats-count" class="count">0</div>
-                <span class="accent-badge" style="background: #DBEAFE; color: #3b82f6;">Live</span>
+        <div class="analytics-grid">
+            <div class="analytics-card">
+                <div class="analytics-card-header">
+                    <div>
+                        <h3>Order Volume</h3>
+                        <p>Last 14 days of new requests</p>
+                    </div>
+                    <span id="orders-trend-delta" class="trend-delta trend-neutral">0%</span>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="orders-trend-chart" height="100"></canvas>
+                </div>
             </div>
-            <!-- Status cards remain, providing filtering functionality through card click -->
-            <div id="card-order_pending" data-status="order_pending" class="dashboard-card" style="--icon-color: #6366F1;">
-                <i class="fas fa-box-open icon"></i>
-                <h3>Order Pending</h3>
-                <div id="order-pending-count" class="count">0</div>
-                <span class="accent-badge" style="background: #EEF2FF; color: #6366F1;">Active</span>
-            </div>
-            <div id="card-kit_needs_printing" data-status="kit_needs_printing" class="dashboard-card" style="--icon-color: #8B5CF6;">
-                <i class="fas fa-print icon"></i>
-                <h3>Needs Printing</h3>
-                <div id="kit-needs-printing-count" class="count">0</div>
-                <span class="accent-badge" style="background: #F5F3FF; color: #8B5CF6;">Prep</span>
-            </div>
-            <div id="card-kit_sent" data-status="kit_sent" class="dashboard-card" style="--icon-color: #F97316;">
-                <i class="fas fa-truck-loading icon"></i>
-                <h3>Kit Sent</h3>
-                <div id="kit-sent-count" class="count">0</div>
-                <span class="accent-badge" style="background: #FFF7ED; color: #F97316;">On the Way</span>
-            </div>
-            <div id="card-kit_delivered" data-status="kit_delivered" class="dashboard-card" style="--icon-color: #10B981;">
-                <i class="fas fa-home icon"></i>
-                <h3>Kit Delivered</h3>
-                <div id="kit-delivered-count" class="count">0</div>
-                <span class="accent-badge" style="background: #ECFDF5; color: #10B981;">Delivered</span>
-            </div>
-            <div id="card-label_generated" data-status="label_generated" class="dashboard-card" style="--icon-color: #F59E0B;">
-                <i class="fas fa-file-invoice icon"></i>
-                <h3>Label Generated</h3>
-                <div id="label-generated-count" class="count">0</div>
-                <span class="accent-badge" style="background: #FFFBEB; color: #F59E0B;">Ready</span>
-            </div>
-            <div id="card-received" data-status="received" class="dashboard-card" style="--icon-color: #10B981;">
-                <i class="fas fa-truck icon"></i>
-                <h3>Received</h3>
-                <div id="received-count" class="count">0</div>
-                <span class="accent-badge" style="background: #ECFDF5; color: #10B981;">Arrived</span>
-            </div>
-            <div id="card-completed" data-status="completed" class="dashboard-card" style="--icon-color: #A855F7;">
-                <i class="fas fa-check-circle icon"></i>
-                <h3>Completed</h3>
-                <div id="completed-count" class="count">0</div>
-                <span class="accent-badge" style="background: #FAF5FF; color: #A855F7;">Done</span>
-            </div>
-            <div id="card-re-offered-pending" data-status="re-offered-pending" class="dashboard-card" style="--icon-color: #F97316;">
-                <i class="fas fa-hourglass-half icon"></i>
-                <h3>Reoffer Pending</h3>
-                <div id="re-offered-pending-count" class="count">0</div>
-                <span class="accent-badge" style="background: #FFF7ED; color: #F97316;">Pending</span>
-            </div>
-            <div id="card-re-offered-accepted" data-status="re-offered-accepted" class="dashboard-card" style="--icon-color: #14B8A6;">
-                <i class="fas fa-handshake icon"></i>
-                <h3>Reoffer Accepted</h3>
-                <div id="re-offered-accepted-count" class="count">0</div>
-                <span class="accent-badge" style="background: #F0FDFA; color: #14B8A6;">Accepted</span>
-            </div>
-            <div id="card-re-offered-declined" data-status="re-offered-declined" class="dashboard-card" style="--icon-color: #EF4444;">
-                <i class="fas fa-times-circle icon"></i>
-                <h3>Reoffer Declined</h3>
-                <div id="re-offered-declined-count" class="count">0</div>
-                <span class="accent-badge" style="background: #FEF2F2; color: #EF4444;">Declined</span>
-            </div>
-            <div id="card-return-label-generated" data-status="return-label-generated" class="dashboard-card" style="--icon-color: #6B7280;">
-                <i class="fas fa-undo-alt icon"></i>
-                <h3>Return Label</h3>
-                <div id="return-label-generated-count" class="count">0</div>
-                <span class="accent-badge" style="background: #F9FAFB; color: #6B7280;">Return</span>
+            <div class="analytics-card">
+                <div class="analytics-card-header">
+                    <div>
+                        <h3>Status Breakdown</h3>
+                        <p>Tap a status to filter the table</p>
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="orders-status-chart" height="100"></canvas>
+                </div>
+                <ul id="status-breakdown-list" class="status-breakdown-list">
+                    <li class="status-breakdown-item active" data-status="all" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-all"></span>
+                            <span class="status-label">All Orders</span>
+                        </div>
+                        <span class="status-count" id="status-count-all">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="order_pending" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-pending"></span>
+                            <span class="status-label">Order Pending</span>
+                        </div>
+                        <span class="status-count" id="order-pending-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="kit_needs_printing" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-printing"></span>
+                            <span class="status-label">Needs Printing</span>
+                        </div>
+                        <span class="status-count" id="kit-needs-printing-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="kit_sent" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-kit-sent"></span>
+                            <span class="status-label">Kit Sent</span>
+                        </div>
+                        <span class="status-count" id="kit-sent-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="kit_delivered" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-kit-delivered"></span>
+                            <span class="status-label">Kit Delivered</span>
+                        </div>
+                        <span class="status-count" id="kit-delivered-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="label_generated" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-label"></span>
+                            <span class="status-label">Label Generated</span>
+                        </div>
+                        <span class="status-count" id="label-generated-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="emailed" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-emailed"></span>
+                            <span class="status-label">Emailed</span>
+                        </div>
+                        <span class="status-count" id="emailed-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="received" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-received"></span>
+                            <span class="status-label">Received</span>
+                        </div>
+                        <span class="status-count" id="received-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="completed" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-completed"></span>
+                            <span class="status-label">Completed</span>
+                        </div>
+                        <span class="status-count" id="completed-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="re-offered-pending" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-reoffer-pending"></span>
+                            <span class="status-label">Reoffer Pending</span>
+                        </div>
+                        <span class="status-count" id="re-offered-pending-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="re-offered-accepted" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-reoffer-accepted"></span>
+                            <span class="status-label">Reoffer Accepted</span>
+                        </div>
+                        <span class="status-count" id="re-offered-accepted-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="re-offered-declined" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-reoffer-declined"></span>
+                            <span class="status-label">Reoffer Declined</span>
+                        </div>
+                        <span class="status-count" id="re-offered-declined-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="return-label-generated" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-return"></span>
+                            <span class="status-label">Return Label Sent</span>
+                        </div>
+                        <span class="status-count" id="return-label-generated-count">0</span>
+                    </li>
+                </ul>
             </div>
         </div>
-
         <div class="orders-table-container">
-            <h3 class="orders-table-header">Orders List</h3>
+            <div class="orders-table-header">Orders List</div>
             <div class="orders-toolbar">
                 <div class="view-controls">
                     <label class="density-toggle" for="compact-density-toggle">
@@ -1100,216 +1446,235 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     Refresh data
                 </button>
             </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full table-auto divide-y divide-white/10 text-sm text-slate-700">
-                        <thead class="bg-transparent">
-                            <tr>
-                                <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-[0.3em] text-slate-600 w-1/12">Order ID</th>
-                                <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-[0.3em] text-slate-600 w-1/12">Order Date</th>
-                                <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-[0.3em] text-slate-600 w-2/12">Customer Name</th>
-                                <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-[0.3em] text-slate-600 w-1/12">Item</th>
-                                <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-[0.3em] text-slate-600 w-2/12">Status</th>
-                                <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-[0.3em] text-slate-600 w-1/12">Tracking #</th>
-                                <th class="px-3 py-3 text-left text-xs font-medium uppercase tracking-[0.3em] text-slate-600 w-2/12">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="orders-table-body" class="divide-y divide-white/10">
-                            <tr><td colspan="7" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
-                        </tbody>
-                    </table>
+            <div class="orders-table-wrapper">
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Order Date</th>
+                            <th>Last Updated</th>
+                            <th>Customer</th>
+                            <th>Item</th>
+                            <th>Status</th>
+                            <th>Tracking #</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-table-body">
+                        <tr><td colspan="8" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="no-orders-message" class="hidden">No orders found for this status.</div>
+            <div id="pagination-controls" class="pagination-controls hidden">
+                <span class="pagination-info" id="pagination-info">Page 1 of 1</span>
+                <div class="pagination-actions">
+                    <button id="pagination-prev" class="pagination-button" disabled>
+                        <i class="fas fa-arrow-left"></i>
+                        Previous
+                    </button>
+                    <button id="pagination-next" class="pagination-button">
+                        Next
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
                 </div>
-            <div id="no-orders-message" class="text-center text-gray-500 py-8 hidden">No orders found for this status.</div>
+            </div>
         </div>
     </main>
 
-    <div id="order-details-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
-            <button id="close-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl">
+    <div id="order-details-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="relative">
+            <button id="close-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">
                 <i class="fas fa-times"></i>
             </button>
-            <h3 class="text-2xl font-bold text-gray-800 mb-4">Order Details <span id="modal-order-id" class="text-blue-600"></span></h3>
-            <div class="space-y-3 text-gray-700">
-                <p><strong>Customer:</strong> <span id="modal-customer-name"></span></p>
-                <p><strong>Email:</strong> <span id="modal-customer-email"></span></p>
-                <!-- ADDED PHONE FIELD -->
-                <p><strong>Phone:</strong> <span id="modal-customer-phone"></span></p>
-                <p><strong>Item:</strong> <span id="modal-item"></span></p>
-                <p><strong>Storage:</strong> <span id="modal-storage"></span></p>
-                <p><strong>Carrier:</strong> <span id="modal-carrier"></span></p>
-                <p><strong>Estimated Payout:</strong> $<span id="modal-price"></span></p>
-                <p><strong>Payment Method:</strong> <span id="modal-payment-method"></span></p>
-                <!-- UPDATED MODAL PAYMENT DETAIL ROWS -->
-                <p id="modal-venmo-username-row" class="hidden"><strong>Venmo Username:</strong> <span id="modal-venmo-username"></span></p>
-                <p id="modal-paypal-email-row" class="hidden"><strong>PayPal Email:</strong> <span id="modal-paypal-email"></span></p>
-                <p id="modal-zelle-details-row" class="hidden"><strong>Zelle Info:</strong> <span id="modal-zelle-details"></span></p>
-
-                <p><strong>Shipping Address:</strong> <span id="modal-shipping-address"></span></p>
-                <p><strong>Conditions:</strong>
-                    <ul class="list-disc list-inside ml-4 text-sm">
-                        <li>Powers On: <span id="modal-condition-power-on"></span></li>
-                        <li>Fully Functional: <span id="modal-condition-functional"></span></li>
-                        <li>No Cracks: <span id="modal-condition-cracks"></span></li>
-                        <li>Cosmetic: <span id="modal-condition-cosmetic"></span></li>
-                    </ul>
-                </p>
-                <p><strong>Current Status:</strong> <span id="modal-status" class="font-semibold px-2 py-1 rounded-full text-xs"></span></p>
-                
-                <!-- Updated label display for flexibility -->
-                <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
-                <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-blue-500 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
-                <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-red-500 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
-
-                <div id="modal-kit-tracking-row" class="hidden bg-slate-50 border border-slate-200 rounded-md p-3 text-sm">
-                    <p class="font-semibold text-slate-700">Kit Delivery Status</p>
-                    <p id="modal-kit-tracking-status" class="mt-1 text-slate-600"></p>
-                    <p id="modal-kit-tracking-updated" class="mt-1 text-xs text-slate-500"></p>
+            <div class="space-y-4 text-slate-700">
+                <h3 class="text-2xl font-bold text-slate-900">Order Details <span id="modal-order-id" class="text-sky-600"></span></h3>
+                <div class="grid gap-3 text-sm">
+                    <p><strong>Customer:</strong> <span id="modal-customer-name"></span></p>
+                    <p><strong>Email:</strong> <span id="modal-customer-email"></span></p>
+                    <p><strong>Phone:</strong> <span id="modal-customer-phone"></span></p>
+                    <p><strong>Item:</strong> <span id="modal-item"></span></p>
+                    <p><strong>Storage:</strong> <span id="modal-storage"></span></p>
+                    <p><strong>Carrier:</strong> <span id="modal-carrier"></span></p>
+                    <p><strong>Estimated Payout:</strong> $<span id="modal-price"></span></p>
+                    <p><strong>Payment Method:</strong> <span id="modal-payment-method"></span></p>
+                    <p id="modal-venmo-username-row" class="hidden"><strong>Venmo Username:</strong> <span id="modal-venmo-username"></span></p>
+                    <p id="modal-paypal-email-row" class="hidden"><strong>PayPal Email:</strong> <span id="modal-paypal-email"></span></p>
+                    <p id="modal-zelle-details-row" class="hidden"><strong>Zelle Info:</strong> <span id="modal-zelle-details"></span></p>
+                    <p><strong>Shipping Address:</strong> <span id="modal-shipping-address"></span></p>
+                    <div>
+                        <strong>Conditions:</strong>
+                        <ul class="list-disc list-inside ml-4 mt-1 space-y-1">
+                            <li>Powers On: <span id="modal-condition-power-on"></span></li>
+                            <li>Fully Functional: <span id="modal-condition-functional"></span></li>
+                            <li>No Cracks: <span id="modal-condition-cracks"></span></li>
+                            <li>Cosmetic: <span id="modal-condition-cosmetic"></span></li>
+                        </ul>
+                    </div>
+                    <p><strong>Current Status:</strong> <span id="modal-status" class="inline-flex items-center gap-2 font-semibold text-xs px-3 py-1 rounded-full"></span></p>
+                    <p><strong>Order Age:</strong> <span id="modal-order-age">Calculating…</span></p>
+                    <p><strong>Last Reminder:</strong> <span id="modal-last-reminder-date">N/A</span></p>
+                    <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-sky-600 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
+                    <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-sky-600 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
+                    <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-rose-600 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
+                    <div id="modal-label-status-row" class="hidden bg-slate-100 border border-slate-200 rounded-lg p-3">
+                        <p class="text-sm font-semibold text-slate-700">Label Status</p>
+                        <p id="modal-label-status" class="text-sm text-slate-600 mt-1"></p>
+                    </div>
+                    <div id="modal-kit-tracking-row" class="hidden bg-slate-100 border border-slate-200 rounded-lg p-3">
+                        <p class="text-sm font-semibold text-slate-700">Kit Delivery Status</p>
+                        <p id="modal-kit-tracking-status" class="mt-1 text-slate-600"></p>
+                        <p id="modal-kit-tracking-updated" class="mt-1 text-xs text-slate-500"></p>
+                    </div>
+                    <div id="modal-loading-message" class="hidden">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Processing request…
+                    </div>
                 </div>
 
-                <p id="modal-loading-message" class="text-center text-blue-500 hidden"><i class="fas fa-spinner fa-spin mr-2"></i> Processing request...</p>
-            </div>
-
-            <div id="reoffer-form-container" class="mt-6 p-4 border border-gray-200 rounded-lg hidden">
-                <h4 class="text-lg font-semibold text-gray-800 mb-4">Propose New Offer</h4>
-                <div class="space-y-4">
-                    <div>
-                        <label for="reoffer-new-price" class="block text-sm font-medium text-gray-700">New Offer Price ($)</label>
-                        <input type="number" id="reoffer-new-price" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 150.00">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Reasons</label>
-                        <div class="mt-1 space-y-2">
-                            <div class="flex items-center">
-                                <input id="reason-cracked" name="reoffer-reasons" type="checkbox" value="cracked" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-cracked" class="ml-2 block text-sm text-gray-900">Cracked</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input id="reason-deep-scratches" name="reoffer-reasons" type="checkbox" value="deep-scratches" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-deep-scratches" class="ml-2 block text-sm text-gray-900">Deep Scratches</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input id="reason-wrong-device" name="reoffer-reasons" type="checkbox" value="wrong-device" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-wrong-device" class="ml-2 block text-sm text-gray-900">Wrong Device Sent</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input id="reason-non-functional" name="reoffer-reasons" type="checkbox" value="non-functional" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-non-functional" class="ml-2 block text-sm text-gray-900">Non-Functional Component</label>
-                            </div>
-                            <div class="flex items-center">
-                                <input id="reason-other" name="reoffer-reasons" type="checkbox" value="other" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                <label for="reason-other" class="ml-2 block text-sm text-gray-900">Other</label>
+                <div id="reoffer-form-container" class="mt-6 p-4 border border-slate-200 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-slate-900 mb-4">Propose New Offer</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="reoffer-new-price" class="block text-sm font-medium text-slate-700">New Offer Price ($)</label>
+                            <input type="number" id="reoffer-new-price" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="e.g., 150.00">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700">Reasons</label>
+                            <div class="mt-1 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-cracked" name="reoffer-reasons" type="checkbox" value="cracked" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-cracked" class="text-sm text-slate-700">Cracked</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-deep-scratches" name="reoffer-reasons" type="checkbox" value="deep-scratches" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-deep-scratches" class="text-sm text-slate-700">Deep Scratches</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-wrong-device" name="reoffer-reasons" type="checkbox" value="wrong-device" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-wrong-device" class="text-sm text-slate-700">Wrong Device Sent</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-non-functional" name="reoffer-reasons" type="checkbox" value="non-functional" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-non-functional" class="text-sm text-slate-700">Non-Functional Component</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-other" name="reoffer-reasons" type="checkbox" value="other" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-other" class="text-sm text-slate-700">Other</label>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div id="reoffer-pricing-helper" class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg hidden">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-                            <p class="text-sm font-semibold text-slate-700">Feed Pricing Suggestions</p>
-                            <span id="reoffer-pricing-model" class="text-xs uppercase tracking-wide text-slate-500"></span>
+                        <div id="reoffer-pricing-helper" class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg hidden">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                <p class="text-sm font-semibold text-slate-700">Feed Pricing Suggestions</p>
+                                <span id="reoffer-pricing-model" class="text-xs uppercase tracking-wide text-slate-500"></span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Click a value below to populate the new offer amount.</p>
+                            <div id="reoffer-pricing-values" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+                            <p id="reoffer-pricing-message" class="mt-2 text-xs text-rose-500 hidden"></p>
                         </div>
-                        <p class="text-xs text-slate-500 mt-1">Click a value below to populate the new offer amount.</p>
-                        <div id="reoffer-pricing-values" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
-                        <p id="reoffer-pricing-message" class="mt-2 text-xs text-red-500 hidden"></p>
+                        <div>
+                            <label for="reoffer-comments" class="block text-sm font-medium text-slate-700">Additional Comments</label>
+                            <textarea id="reoffer-comments" rows="3" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="Enter additional details here..."></textarea>
+                        </div>
                     </div>
-                    <div>
-                        <label for="reoffer-comments" class="block text-sm font-medium text-gray-700">Additional Comments</label>
-                        <textarea id="reoffer-comments" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="Enter additional details here..."></textarea>
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-reoffer-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="submit-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Send Re-offer</button>
                     </div>
                 </div>
-                <div class="mt-4 flex justify-end gap-3">
-                    <button id="cancel-reoffer-btn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
-                        Cancel
-                    </button>
-                    <button id="submit-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
-                        Send Re-offer
-                    </button>
-                </div>
-            </div>
 
-            <!-- Manual Fulfillment Form -->
-            <div id="manual-fulfillment-form-container" class="mt-6 p-4 border border-gray-200 rounded-lg hidden">
-                <h4 class="text-lg font-semibold text-gray-800 mb-4">Manually Fulfill Order (External Label)</h4>
-                <p id="manual-fulfillment-message" class="text-sm text-gray-600 mb-4">Enter the tracking number(s) generated externally. This will update the order status and notify the customer.</p>
-                
-                <div class="space-y-4">
-                    <div id="manual-outbound-tracking-group">
-                        <label for="manual-outbound-tracking" class="block text-sm font-medium text-gray-700">Outbound Kit Tracking # (Required for Kits)</label>
-                        <input type="text" id="manual-outbound-tracking" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 9400100000000000000000">
+                <div id="manual-fulfillment-form-container" class="mt-6 p-4 border border-slate-200 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-slate-900 mb-4">Manually Fulfill Order (External Label)</h4>
+                    <p id="manual-fulfillment-message" class="text-sm text-slate-600 mb-4">Enter the tracking number(s) generated externally. This will update the order status and notify the customer.</p>
+                    <div class="space-y-4">
+                        <div id="manual-outbound-tracking-group">
+                            <label for="manual-outbound-tracking" class="block text-sm font-medium text-slate-700">Outbound Kit Tracking # (Required for Kits)</label>
+                            <input type="text" id="manual-outbound-tracking" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="e.g., 9400 1000 0000 0000 0000 00">
+                        </div>
+                        <div id="manual-inbound-tracking-group">
+                            <label for="manual-inbound-tracking" class="block text-sm font-medium text-slate-700">Inbound Device Tracking # (Required)</label>
+                            <input type="text" id="manual-inbound-tracking" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="e.g., 9400 1000 0000 0000 0000 01">
+                        </div>
+                        <div>
+                            <label for="manual-label-url" class="block text-sm font-medium text-slate-700">Inbound Label URL (Optional - direct PDF link)</label>
+                            <input type="url" id="manual-label-url" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="https://example.com/label.pdf">
+                        </div>
                     </div>
-                    <div id="manual-inbound-tracking-group">
-                        <label for="manual-inbound-tracking" class="block text-sm font-medium text-gray-700">Inbound Device Tracking # (Required)</label>
-                        <input type="text" id="manual-inbound-tracking" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., 9400100000000000000001">
-                    </div>
-                    <div>
-                        <label for="manual-label-url" class="block text-sm font-medium text-gray-700">Inbound Label URL (Optional - direct PDF link)</label>
-                        <input type="url" id="manual-label-url" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2" placeholder="e.g., https://example.com/label.pdf">
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-manual-fulfillment-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="submit-manual-fulfillment-btn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Confirm Fulfillment</button>
                     </div>
                 </div>
-                <div class="mt-4 flex justify-end gap-3">
-                    <button id="cancel-manual-fulfillment-btn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
-                        Cancel
-                    </button>
-                    <button id="submit-manual-fulfillment-btn" type="button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
-                        Confirm Fulfillment
-                    </button>
-                </div>
-            </div>
 
-            <!-- Delete Confirmation UI (Simple overlay within modal) -->
-            <div id="delete-confirmation-container" class="mt-6 p-4 bg-red-100 border border-red-300 rounded-lg hidden">
-                <p class="text-sm font-semibold text-red-800 mb-3">⚠️ Are you sure you want to permanently delete this order? This action cannot be undone.</p>
-                <div class="flex justify-end gap-3">
-                    <button id="cancel-delete-btn" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
-                        Cancel
-                    </button>
-                    <button id="confirm-delete-btn" type="button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition-colors duration-200">
-                        Yes, Delete Permanently
-                    </button>
-                </div>
-            </div>
-
-            <button id="send-reminder-btn" class="hidden mt-4 w-full px-4 py-3 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
-                <i class="fas fa-envelope"></i>
-                <span>Send Reminder Email</span>
-            </button>
-
-            <div id="phone-check-section" class="mt-6 p-4 border border-slate-200 rounded-xl bg-white/80 shadow-sm">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h4 class="text-lg font-semibold text-slate-800">PhoneCheck ESN Report</h4>
-                        <p class="text-sm text-slate-500 mt-1">Run an ESN/IMEI check to confirm carrier locks, outstanding balances, or blacklist status before continuing.</p>
-                    </div>
-                    <div class="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
-                        <input id="phone-check-imei" type="text" placeholder="Enter IMEI" class="w-full sm:w-60 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm" />
-                        <button id="phone-check-run" class="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-md transition-colors duration-200 shadow">
-                            <span>Run Check</span>
-                        </button>
+                <div id="void-label-form-container" class="mt-6 p-4 border border-rose-200 bg-rose-50 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-rose-600 mb-2">Void Shipping Labels</h4>
+                    <p class="text-sm text-rose-700">Select the labels you would like to cancel. Carrier approval may vary based on label age and usage.</p>
+                    <div id="void-label-options" class="mt-4 space-y-3"></div>
+                    <p id="void-label-message" class="mt-3 text-sm hidden"></p>
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-void-label-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="submit-void-label-btn" type="button" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Void Selected Labels</button>
                     </div>
                 </div>
-                <p class="mt-2 text-xs text-slate-500">Carrier, device type, and other context will auto-fill from the order when available.</p>
-                <div id="phone-check-error" class="hidden mt-3 px-3 py-2 rounded-md bg-red-100 text-red-700 text-sm"></div>
-                <div id="phone-check-results" class="hidden mt-4 p-4 rounded-lg border border-slate-200 bg-slate-50">
-                    <div class="flex flex-wrap items-center gap-3">
-                        <span id="phone-check-status-pill" class="px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wide"></span>
-                        <span id="phone-check-status-text" class="text-sm text-slate-700"></span>
-                        <span id="phone-check-timestamp" class="text-xs text-slate-500 ml-auto"></span>
-                    </div>
-                    <div id="phone-check-reasons" class="hidden mt-3">
-                        <p class="text-sm font-semibold text-red-600">Issues detected:</p>
-                        <ul id="phone-check-reasons-list" class="mt-2 list-disc list-inside text-sm text-red-600 space-y-1"></ul>
-                    </div>
-                    <div id="phone-check-notes" class="hidden mt-3">
-                        <p class="text-xs uppercase tracking-wide text-slate-500 mb-1">Highlights</p>
-                        <ul id="phone-check-notes-list" class="text-sm text-slate-600 space-y-1 list-disc list-inside"></ul>
-                    </div>
-                    <details id="phone-check-raw-wrapper" class="hidden mt-4">
-                        <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">View raw response</summary>
-                        <pre id="phone-check-raw" class="mt-2 bg-slate-900 text-slate-100 text-xs p-3 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap"></pre>
-                    </details>
-                </div>
-            </div>
 
-            <div id="modal-action-buttons" class="mt-6 flex flex-col sm:flex-row gap-3">
+                <div id="delete-confirmation-container" class="mt-6 p-4 bg-rose-100 border border-rose-300 rounded-lg hidden">
+                    <p class="text-sm font-semibold text-rose-700 mb-3">⚠️ Are you sure you want to permanently delete this order? This action cannot be undone.</p>
+                    <div class="flex justify-end gap-3">
+                        <button id="cancel-delete-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="confirm-delete-btn" type="button" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Yes, Delete Permanently</button>
+                    </div>
+                </div>
+
+                <button id="send-reminder-btn" class="hidden mt-6 w-full px-4 py-3 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-envelope"></i>
+                    <span>Send Reminder Email</span>
+                </button>
+
+                <div id="phone-check-section" class="mt-6 p-4 border border-slate-200 rounded-xl bg-white/90 shadow-sm">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h4 class="text-lg font-semibold text-slate-900">PhoneCheck ESN Report</h4>
+                            <p class="text-sm text-slate-500 mt-1">Run an ESN/IMEI check to confirm carrier locks, outstanding balances, or blacklist status before continuing.</p>
+                        </div>
+                        <div class="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+                            <input id="phone-check-imei" type="text" placeholder="Enter IMEI" class="w-full sm:w-60 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm" />
+                            <button id="phone-check-run" class="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-md transition-colors shadow">
+                                <span>Run Check</span>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-xs text-slate-500">Carrier, device type, and other context will auto-fill from the order when available.</p>
+                    <div id="phone-check-error" class="hidden mt-3 px-3 py-2 rounded-md bg-rose-100 text-rose-700 text-sm"></div>
+                    <div id="phone-check-results" class="hidden mt-4 p-4 rounded-lg border border-slate-200 bg-slate-50">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <span id="phone-check-status-pill" class="px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wide"></span>
+                            <span id="phone-check-status-text" class="text-sm text-slate-700"></span>
+                            <span id="phone-check-timestamp" class="text-xs text-slate-500 ml-auto"></span>
+                        </div>
+                        <div id="phone-check-reasons" class="hidden mt-3">
+                            <p class="text-sm font-semibold text-rose-600">Issues detected:</p>
+                            <ul id="phone-check-reasons-list" class="mt-2 list-disc list-inside text-sm text-rose-600 space-y-1"></ul>
+                        </div>
+                        <div id="phone-check-notes" class="hidden mt-3">
+                            <p class="text-xs uppercase tracking-wide text-slate-500 mb-1">Highlights</p>
+                            <ul id="phone-check-notes-list" class="text-sm text-slate-600 space-y-1 list-disc list-inside"></ul>
+                        </div>
+                        <details id="phone-check-raw-wrapper" class="hidden mt-4">
+                            <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">View raw response</summary>
+                            <pre id="phone-check-raw" class="mt-2 bg-slate-900 text-slate-100 text-xs p-3 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap"></pre>
+                        </details>
+                    </div>
+                </div>
+
+                <div id="modal-activity-log" class="hidden">
+                    <h4>Recent Activity</h4>
+                    <ul id="modal-activity-log-list"></ul>
+                </div>
+
+                <div id="modal-action-buttons" class="mt-6"></div>
+                <div id="modal-message" class="mt-4 p-3 text-sm rounded-md hidden"></div>
             </div>
-            <div id="modal-message" class="mt-4 p-3 text-sm rounded-md hidden"></div>
         </div>
     </div>
 
@@ -1328,6 +1693,28 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
         const FEED_PRICING_URL = '/feeds/feed.xml';
         const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+        const LABEL_NAME_OVERRIDES = {
+            primary: 'Primary Shipping Label',
+            inbounddevice: 'Inbound Device Label',
+            outboundkit: 'Outbound Shipping Kit Label',
+            return: 'Return Label',
+        };
+        
+        const TREND_LOOKBACK_DAYS = 14;
+        const STATUS_CHART_CONFIG = [
+            { key: 'order_pending', label: 'Order Pending', color: '#6366f1' },
+            { key: 'kit_needs_printing', label: 'Needs Printing', color: '#8b5cf6' },
+            { key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
+            { key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
+            { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
+            { key: 'emailed', label: 'Emailed', color: '#38bdf8' },
+            { key: 'received', label: 'Received', color: '#0ea5e9' },
+            { key: 'completed', label: 'Completed', color: '#22c55e' },
+            { key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
+            { key: 're-offered-accepted', label: 'Reoffer Accepted', color: '#14b8a6' },
+            { key: 're-offered-declined', label: 'Reoffer Declined', color: '#ef4444' },
+            { key: 'return-label-generated', label: 'Return Label', color: '#64748b' },
+        ];
         
         // Custom logo URL for the packing slip header - UPDATED LOGO URL
         const LOGO_URL = "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
@@ -1345,6 +1732,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         
         const ordersTableBody = document.getElementById('orders-table-body');
         const noOrdersMessage = document.getElementById('no-orders-message');
+        const paginationControls = document.getElementById('pagination-controls');
+        const paginationPrev = document.getElementById('pagination-prev');
+        const paginationNext = document.getElementById('pagination-next');
+        const paginationInfo = document.getElementById('pagination-info');
         const searchInput = document.getElementById('search-orders');
         const statusFilterButtons = document.querySelectorAll('#status-filter-bar .filter-chip');
         const liveOrdersCount = document.getElementById('live-orders-count');
@@ -1357,9 +1748,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
         /* REMOVED STATUS LINKS REFERENCE */
         const displayUserId = document.getElementById('display-user-id');
-        const dashboardCards = document.querySelectorAll('.dashboard-card');
 
-        // New Glass Card Metric elements
+        // Insight metric elements
         const ordersTodayCount = document.getElementById('orders-today-count');
         const totalPayoutAmount = document.getElementById('total-payout-amount');
         const conversionRate = document.getElementById('conversion-rate');
@@ -1371,13 +1761,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const kitSentCount = document.getElementById('kit-sent-count');
         const kitDeliveredCount = document.getElementById('kit-delivered-count');
         const labelGeneratedCount = document.getElementById('label-generated-count');
+        const emailedCount = document.getElementById('emailed-count');
         const receivedCount = document.getElementById('received-count');
         const completedCount = document.getElementById('completed-count');
         const reofferedPendingCount = document.getElementById('re-offered-pending-count');
         const reofferedAcceptedCount = document.getElementById('re-offered-accepted-count');
         const reofferedDeclinedCount = document.getElementById('re-offered-declined-count');
         const returnLabelGeneratedCount = document.getElementById('return-label-generated-count');
-        
+        const statusCountAll = document.getElementById('status-count-all');
+
+        // Analytics elements
+        const ordersTrendCanvas = document.getElementById('orders-trend-chart');
+        const ordersTrendDelta = document.getElementById('orders-trend-delta');
+        const ordersStatusCanvas = document.getElementById('orders-status-chart');
+        const statusBreakdownList = document.getElementById('status-breakdown-list');
+        const statusBreakdownItems = statusBreakdownList ? Array.from(statusBreakdownList.querySelectorAll('.status-breakdown-item')) : [];
+
         const orderDetailsModal = document.getElementById('order-details-modal');
         const closeModalButton = document.getElementById('close-modal');
         const modalOrderId = document.getElementById('modal-order-id');
@@ -1420,6 +1819,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const modalReturnLabelDescription = document.getElementById('modal-return-label-description');
         const modalReturnLabelLink = document.getElementById('modal-return-label-link');
         const modalReturnTrackingNumberDisplay = document.getElementById('modal-return-tracking-number-display');
+        const modalLabelStatusRow = document.getElementById('modal-label-status-row');
+        const modalLabelStatus = document.getElementById('modal-label-status');
+        const modalLastReminderDate = document.getElementById('modal-last-reminder-date');
+        const modalOrderAge = document.getElementById('modal-order-age');
         const modalKitTrackingRow = document.getElementById('modal-kit-tracking-row');
         const modalKitTrackingStatus = document.getElementById('modal-kit-tracking-status');
         const modalKitTrackingUpdated = document.getElementById('modal-kit-tracking-updated');
@@ -1427,6 +1830,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const modalActionButtons = document.getElementById('modal-action-buttons');
         const modalLoadingMessage = document.getElementById('modal-loading-message');
         const modalMessage = document.getElementById('modal-message');
+        const modalActivityLog = document.getElementById('modal-activity-log');
+        const modalActivityLogList = document.getElementById('modal-activity-log-list');
 
         const reofferFormContainer = document.getElementById('reoffer-form-container');
         const reofferNewPrice = document.getElementById('reoffer-new-price');
@@ -1451,9 +1856,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const deleteConfirmationContainer = document.getElementById('delete-confirmation-container');
         const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
         const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
-        
+
         // Reminder Email Button
         const sendReminderBtn = document.getElementById('send-reminder-btn');
+
+        const voidLabelFormContainer = document.getElementById('void-label-form-container');
+        const voidLabelOptionsContainer = document.getElementById('void-label-options');
+        const voidLabelMessage = document.getElementById('void-label-message');
+        const submitVoidLabelBtn = document.getElementById('submit-void-label-btn');
+        const cancelVoidLabelBtn = document.getElementById('cancel-void-label-btn');
 
         const phoneCheckSection = document.getElementById('phone-check-section');
         const phoneCheckInput = document.getElementById('phone-check-imei');
@@ -1476,12 +1887,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         /* const reofferSubmenu = document.querySelector('.submenu-container'); */
 
         let allOrders = [];
+        let currentFilteredOrders = [];
+        let currentPage = 1;
+        const ORDERS_PER_PAGE = 10;
         let currentActiveStatus = 'all';
         let refreshInterval = null;
         let currentOrderDetails = null;
         let feedPricingDataCache = null;
         let feedPricingDataPromise = null;
         const autoRefreshedTracking = new Set();
+
+        let ordersTrendChart = null;
+        let ordersStatusChart = null;
 
         const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printing', 'needs_printing'];
         const REMINDER_ELIGIBLE_STATUSES = ['order_pending', ...KIT_PRINT_PENDING_STATUSES, 'kit_sent', 'label_generated'];
@@ -1551,6 +1968,139 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
             // Format to the desired long date string: "Month Day, Year"
             return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        }
+
+        function toDateSafe(timestamp) {
+            if (!timestamp) return null;
+            if (timestamp instanceof Date) return timestamp;
+            if (typeof timestamp === 'number') {
+                return new Date(timestamp > 1e12 ? timestamp : timestamp * 1000);
+            }
+            if (typeof timestamp === 'string') {
+                const parsed = new Date(timestamp);
+                return Number.isNaN(parsed.getTime()) ? null : parsed;
+            }
+            if (typeof timestamp === 'object') {
+                if (typeof timestamp.seconds === 'number') {
+                    return new Date(timestamp.seconds * 1000);
+                }
+                if (typeof timestamp._seconds === 'number') {
+                    return new Date(timestamp._seconds * 1000);
+                }
+                if (typeof timestamp.toDate === 'function') {
+                    return timestamp.toDate();
+                }
+            }
+            return null;
+        }
+
+        function formatOrderAge(timestamp) {
+            const date = toDateSafe(timestamp);
+            if (!date) return 'N/A';
+            const diffMs = Date.now() - date.getTime();
+            if (diffMs <= 0) return '0.0 days old';
+            const days = diffMs / (24 * 60 * 60 * 1000);
+            return `${days.toFixed(1)} days old`;
+        }
+
+        function formatLabelAge(timestamp) {
+            const date = toDateSafe(timestamp);
+            if (!date) return 'Unknown age';
+            const diffMs = Date.now() - date.getTime();
+            if (diffMs <= 0) return 'Generated today';
+            const days = diffMs / (24 * 60 * 60 * 1000);
+            return `${days.toFixed(1)} days old`;
+        }
+
+        function formatDateTime(timestamp) {
+            const date = toDateSafe(timestamp);
+            if (!date) return 'Unknown';
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
+        function formatLabelStatus(order) {
+            if (!order) return '';
+            const normalizedStatus = (order.status || '').toLowerCase();
+            if (!['label_generated', 'emailed'].includes(normalizedStatus)) {
+                return '';
+            }
+            let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
+            if (!description) return '';
+            description = description
+                .toString()
+                .replace(/[_-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, c => c.toUpperCase());
+            const parts = [description];
+            if (order.labelTrackingEstimatedDelivery) {
+                parts.push(`ETA ${formatDate(order.labelTrackingEstimatedDelivery)}`);
+            }
+            return parts.join(' • ');
+        }
+
+        function formatLabelDisplayNameKey(key) {
+            if (!key) return 'Shipping Label';
+            const normalizedKey = key.toString().toLowerCase();
+            if (LABEL_NAME_OVERRIDES[normalizedKey]) {
+                return LABEL_NAME_OVERRIDES[normalizedKey];
+            }
+            return key
+                .toString()
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/[_-]+/g, ' ')
+                .trim()
+                .replace(/\b\w/g, char => char.toUpperCase());
+        }
+
+        function getLabelOptions(order) {
+            const options = [];
+            const labels = order && typeof order.shipEngineLabels === 'object'
+                ? order.shipEngineLabels
+                : {};
+
+            Object.entries(labels).forEach(([key, info]) => {
+                if (!info) return;
+                const labelId = info.id || info.labelId || info.shipEngineLabelId;
+                if (!labelId) return;
+                const status = (info.status || info.voidStatus || 'active').toLowerCase();
+                options.push({
+                    key,
+                    labelId,
+                    displayName: info.displayName || formatLabelDisplayNameKey(key),
+                    status,
+                    trackingNumber: info.trackingNumber || info.tracking_number || null,
+                    generatedAt: info.generatedAt || null,
+                    message: info.message || info.voidMessage || null,
+                    isVoidable: !['voided', 'void_denied'].includes(status),
+                });
+            });
+
+            if (!options.length && order && order.shipEngineLabelId) {
+                const topLevelStatus = (order.labelVoidStatus || 'active').toLowerCase();
+                options.push({
+                    key: 'primary',
+                    labelId: order.shipEngineLabelId,
+                    displayName: 'Primary Shipping Label',
+                    status: topLevelStatus,
+                    trackingNumber: order.trackingNumber || null,
+                    generatedAt: order.labelGeneratedAt || order.createdAt || null,
+                    message: order.labelVoidMessage || null,
+                    isVoidable: !['voided', 'void_denied'].includes(topLevelStatus),
+                });
+            }
+
+            return options;
+        }
+
+        function hasVoidableLabels(order) {
+            return getLabelOptions(order).some(option => option.isVoidable);
         }
 
         function coerceCurrencyValue(value) {
@@ -2252,20 +2802,39 @@ if (printWindow) {
 
 
         function updateDashboardCounts(ordersData) {
-            // Updated to 'order_pending'
-            orderPendingCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
-            kitNeedsPrintingCount.textContent = ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length;
-            kitSentCount.textContent = ordersData.filter(o => o.status === 'kit_sent').length;
-            kitDeliveredCount.textContent = ordersData.filter(o => o.status === 'kit_delivered').length;
-            labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated').length;
-            receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
-            completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
-            reofferedPendingCount.textContent = ordersData.filter(o => o.status === 're-offered-pending').length;
-            reofferedAcceptedCount.textContent = ordersData.filter(o => o.status === 're-offered-accepted').length;
-            reofferedDeclinedCount.textContent = ordersData.filter(o => o.status === 're-offered-declined').length;
-            returnLabelGeneratedCount.textContent = ordersData.filter(o => o.status === 'return-label-generated').length;
+            const statusCounts = {
+                'order_pending': ordersData.filter(o => o.status === 'order_pending').length,
+                'kit_needs_printing': ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
+                'kit_sent': ordersData.filter(o => o.status === 'kit_sent').length,
+                'kit_delivered': ordersData.filter(o => o.status === 'kit_delivered').length,
+                'label_generated': ordersData.filter(o => o.status === 'label_generated').length,
+                'emailed': ordersData.filter(o => o.status === 'emailed').length,
+                'received': ordersData.filter(o => o.status === 'received').length,
+                'completed': ordersData.filter(o => o.status === 'completed').length,
+                're-offered-pending': ordersData.filter(o => o.status === 're-offered-pending').length,
+                're-offered-accepted': ordersData.filter(o => o.status === 're-offered-accepted').length,
+                're-offered-declined': ordersData.filter(o => o.status === 're-offered-declined').length,
+                'return-label-generated': ordersData.filter(o => o.status === 'return-label-generated').length,
+            };
 
-            // Update the new glass metrics
+            orderPendingCount.textContent = statusCounts['order_pending'];
+            kitNeedsPrintingCount.textContent = statusCounts['kit_needs_printing'];
+            kitSentCount.textContent = statusCounts['kit_sent'];
+            kitDeliveredCount.textContent = statusCounts['kit_delivered'];
+            labelGeneratedCount.textContent = statusCounts['label_generated'];
+            if (emailedCount) {
+                emailedCount.textContent = statusCounts['emailed'];
+            }
+            receivedCount.textContent = statusCounts['received'];
+            completedCount.textContent = statusCounts['completed'];
+            reofferedPendingCount.textContent = statusCounts['re-offered-pending'];
+            reofferedAcceptedCount.textContent = statusCounts['re-offered-accepted'];
+            reofferedDeclinedCount.textContent = statusCounts['re-offered-declined'];
+            returnLabelGeneratedCount.textContent = statusCounts['return-label-generated'];
+            if (statusCountAll) {
+                statusCountAll.textContent = ordersData.length;
+            }
+
             updateGlassMetrics(ordersData);
 
             if (liveOrdersCount) {
@@ -2273,8 +2842,8 @@ if (printWindow) {
                 liveOrdersCount.textContent = liveOrders;
             }
 
-            // Update notification badge
             updateNotificationBadge(ordersData);
+            updateAnalytics(ordersData, statusCounts);
         }
 
         /**
@@ -2333,15 +2902,224 @@ if (printWindow) {
             }
         }
 
-        function renderOrders(ordersToDisplay) {
-            ordersTableBody.innerHTML = '';
-            // Ensure colspan matches the new number of columns (7)
-            if (ordersToDisplay.length === 0) {
-                noOrdersMessage.classList.remove('hidden');
-                ordersTableBody.innerHTML = `<tr><td colspan="7" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
+        function updateAnalytics(orders, statusCounts) {
+            if (typeof Chart === "undefined") {
                 return;
             }
+
+            updateTrendChart(orders);
+            updateStatusChart(statusCounts);
+        }
+
+        function updateTrendChart(orders) {
+            if (!ordersTrendCanvas || typeof Chart === "undefined") {
+                return;
+            }
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const labels = [];
+            const dataPoints = [];
+
+            for (let i = TREND_LOOKBACK_DAYS - 1; i >= 0; i--) {
+                const dayStart = new Date(today);
+                dayStart.setDate(today.getDate() - i);
+                const startTimestamp = dayStart.getTime();
+                const endTimestamp = startTimestamp + 24 * 60 * 60 * 1000;
+                const count = orders.reduce((total, order) => {
+                    const createdAt = extractTimestampMillis(order.createdAt);
+                    return createdAt && createdAt >= startTimestamp && createdAt < endTimestamp
+                        ? total + 1
+                        : total;
+                }, 0);
+
+                labels.push(dayStart.toLocaleDateString('en-US', { month: "short", day: "numeric" }));
+                dataPoints.push(count);
+            }
+
+            const midpoint = Math.floor(TREND_LOOKBACK_DAYS / 2);
+            const previousWindow = dataPoints.slice(0, midpoint).reduce((sum, value) => sum + value, 0);
+            const recentWindow = dataPoints.slice(midpoint).reduce((sum, value) => sum + value, 0);
+            updateTrendDeltaBadge(recentWindow, previousWindow);
+
+            if (!ordersTrendChart) {
+                ordersTrendChart = new Chart(ordersTrendCanvas, {
+                    type: "line",
+                    data: {
+                        labels,
+                        datasets: [{
+                            label: "Orders",
+                            data: dataPoints,
+                            fill: true,
+                            tension: 0.35,
+                            borderColor: "#2563eb",
+                            backgroundColor: "rgba(37, 99, 235, 0.18)",
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: context => `${context.parsed.y} orders`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: "Date",
+                                    color: "#1e293b",
+                                    font: { weight: "600" }
+                                },
+                                ticks: {
+                                    color: "#475569",
+                                    maxTicksLimit: 4,
+                                    maxRotation: 0,
+                                    minRotation: 0
+                                },
+                                grid: {
+                                    color: "rgba(148, 163, 184, 0.25)",
+                                    drawBorder: true
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: "Orders",
+                                    color: "#1e293b",
+                                    font: { weight: "600" }
+                                },
+                                beginAtZero: true,
+                                ticks: {
+                                    color: "#475569",
+                                    precision: 0,
+                                    maxTicksLimit: 4
+                                },
+                                grid: {
+                                    color: "rgba(148, 163, 184, 0.25)",
+                                    drawBorder: true
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                ordersTrendChart.data.labels = labels;
+                ordersTrendChart.data.datasets[0].data = dataPoints;
+                ordersTrendChart.update();
+            }
+        }
+
+        function updateTrendDeltaBadge(recentWindow, previousWindow) {
+            if (!ordersTrendDelta) {
+                return;
+            }
+
+            ordersTrendDelta.classList.remove('trend-up', 'trend-down', 'trend-neutral');
+
+            let deltaPercentage = 0;
+            if (previousWindow === 0) {
+                deltaPercentage = recentWindow === 0 ? 0 : 100;
+            } else {
+                deltaPercentage = ((recentWindow - previousWindow) / previousWindow) * 100;
+            }
+
+            const rounded = Math.round(deltaPercentage);
+            const formatted = `${rounded > 0 ? '+' : ""}${rounded}%`;
+            ordersTrendDelta.textContent = formatted;
+
+            if (rounded > 0) {
+                ordersTrendDelta.classList.add('trend-up');
+            } else if (rounded < 0) {
+                ordersTrendDelta.classList.add('trend-down');
+            } else {
+                ordersTrendDelta.classList.add('trend-neutral');
+            }
+        }
+
+        function updateStatusChart(statusCounts = {}) {
+            if (!ordersStatusCanvas || typeof Chart === "undefined") {
+                return;
+            }
+
+            const labels = [];
+            const values = [];
+            const colors = [];
+
+            STATUS_CHART_CONFIG.forEach(entry => {
+                labels.push(entry.label);
+                values.push(statusCounts[entry.key] || 0);
+                colors.push(entry.color);
+            });
+
+            if (!ordersStatusChart) {
+                ordersStatusChart = new Chart(ordersStatusCanvas, {
+                    type: "doughnut",
+                    data: {
+                        labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: colors,
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: "55%",
+                        plugins: {
+                            legend: {
+                                position: "bottom",
+                                labels: {
+                                    color: "#0f172a",
+                                    boxWidth: 12,
+                                    padding: 16
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                const dataset = ordersStatusChart.data.datasets[0];
+                ordersStatusChart.data.labels = labels;
+                dataset.data = values;
+                dataset.backgroundColor = colors;
+                ordersStatusChart.update();
+            }
+        }
+
+
+        function renderOrders() {
+            const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
+            const total = source.length;
+            ordersTableBody.innerHTML = '';
+
+            if (!total) {
+                noOrdersMessage.classList.remove('hidden');
+                ordersTableBody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
+                if (paginationControls) {
+                    paginationControls.classList.add('hidden');
+                }
+                return;
+            }
+
             noOrdersMessage.classList.add('hidden');
+
+            const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+
+            const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
+            const endIndex = startIndex + ORDERS_PER_PAGE;
+            const ordersToDisplay = source.slice(startIndex, endIndex);
 
             ordersToDisplay.forEach(order => {
                 const row = document.createElement('tr');
@@ -2349,11 +3127,14 @@ if (printWindow) {
                 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
                 const itemDescription = `${order.device} ${order.storage}`;
                 const displayId = order.id;
-                const orderDate = formatDate(order.createdAt); // NEW: Get formatted date
+                const orderDate = formatDate(order.createdAt);
+                const orderAge = formatOrderAge(order.createdAt);
+                const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
+                const lastUpdatedDate = formatDateTime(lastUpdatedRaw);
 
                 const reofferTimer = formatAutoAcceptTimer(order);
-                // Pass the entire order object to formatStatus for conditional logic
-                let statusText = formatStatus(order);
+                const statusText = formatStatus(order);
+                const labelStatus = formatLabelStatus(order);
 
                 const shouldShowLabelButton = KIT_PRINT_PENDING_STATUSES.includes(order.status);
 
@@ -2383,13 +3164,17 @@ if (printWindow) {
 
                 row.innerHTML = `
                     <td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${displayId}</td>
-                    <!-- ADDED ORDER DATE CELL -->
-                    <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${orderDate}</td>
+                    <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
+                        <div>${orderDate}</div>
+                        <div class="text-xs text-slate-400">${orderAge}</div>
+                    </td>
+                    <td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
                     <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
                     <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}</td>
                     <td class="px-3 py-4 whitespace-normal text-sm">
                         <span class="${getStatusClass(order.status)}">
                             <span class="status-bubble-text">${statusText}</span>
+                            ${labelStatus ? `<span class="status-bubble-subtext">${labelStatus}</span>` : ''}
                             ${reofferTimer}
                         </span>
                     </td>
@@ -2419,6 +3204,73 @@ if (printWindow) {
             });
         }
 
+        function renderPagination() {
+            if (!paginationControls) {
+                return;
+            }
+
+            const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
+            const total = source.length;
+            const totalPages = Math.max(1, Math.ceil(Math.max(total, 0) / ORDERS_PER_PAGE));
+
+            if (totalPages <= 1) {
+                paginationControls.classList.add('hidden');
+                return;
+            }
+
+            paginationControls.classList.remove('hidden');
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+
+            if (paginationPrev) {
+                paginationPrev.disabled = currentPage <= 1;
+            }
+            if (paginationNext) {
+                paginationNext.disabled = currentPage >= totalPages;
+            }
+            if (paginationInfo) {
+                paginationInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+            }
+        }
+
+        function renderActivityLog(order) {
+            if (!modalActivityLog || !modalActivityLogList) return;
+            const entries = Array.isArray(order?.activityLog) ? [...order.activityLog] : [];
+
+            if (!entries.length) {
+                modalActivityLog.classList.add('hidden');
+                modalActivityLogList.innerHTML = '';
+                return;
+            }
+
+            entries.sort((a, b) => {
+                const aDate = toDateSafe(a.at) || new Date(0);
+                const bDate = toDateSafe(b.at) || new Date(0);
+                return bDate.getTime() - aDate.getTime();
+            });
+
+            modalActivityLogList.innerHTML = '';
+            entries.forEach(entry => {
+                const li = document.createElement('li');
+                li.className = 'flex items-start justify-between gap-4 border border-gray-100 rounded-md px-3 py-2 bg-gray-50';
+
+                const message = document.createElement('div');
+                message.className = 'text-sm text-gray-700';
+                message.textContent = entry.message || (entry.type ? entry.type.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Update');
+
+                const timestamp = document.createElement('span');
+                timestamp.className = 'text-xs text-gray-400 whitespace-nowrap';
+                timestamp.textContent = formatDateTime(entry.at);
+
+                li.appendChild(message);
+                li.appendChild(timestamp);
+                modalActivityLogList.appendChild(li);
+            });
+
+            modalActivityLog.classList.remove('hidden');
+        }
+
         /**
          * Formats the order status text for display in the dashboard.
          * @param {Object} order - The order object.
@@ -2429,6 +3281,9 @@ if (printWindow) {
 
             if (status === 'order_pending') {
                 return 'Order Pending';
+            }
+            if (status === 'shipping_kit_requested') {
+                return 'Shipping Kit Requested';
             }
             if (KIT_PRINT_PENDING_STATUSES.includes(status)) {
                 return 'Needs Printing';
@@ -2444,8 +3299,11 @@ if (printWindow) {
                 if (preference === 'Email Label Requested') {
                     return 'Label Generated';
                 }
-                // Otherwise (for Shipping Kit Requested), display "Kit Sent"
-                return 'Kit Sent';
+                // Otherwise (for Shipping Kit Requested), display "Shipping Kit on the Way"
+                return 'Shipping Kit on the Way';
+            }
+            if (status === 'emailed') {
+                return 'Emailed';
             }
             // Fallback for other statuses
             return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -2684,7 +3542,7 @@ if (printWindow) {
 
         function getStatusClass(status) {
             switch (status) {
-                case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble'; 
+                case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble';
                 case 'shipping_kit_requested':
                 case 'kit_needs_printing':
                 case 'needs_printing':
@@ -2694,12 +3552,15 @@ if (printWindow) {
                 case 'kit_delivered':
                     return 'bg-emerald-100 text-emerald-800 status-bubble';
                 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
+                case 'emailed': return 'bg-yellow-100 text-yellow-800 status-bubble';
                 case 'received': return 'bg-green-100 text-green-800 status-bubble';
                 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
                 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
                 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
+                case 'requote_accepted': return 'bg-teal-100 text-teal-800 status-bubble';
                 case 're-offered-declined': return 'bg-red-100 text-red-800 status-bubble';
                 case 'return-label-generated': return 'bg-slate-200 text-slate-800 status-bubble';
+                case 'cancelled': return 'bg-gray-200 text-gray-700 status-bubble';
                 default: return 'bg-slate-100 text-slate-700 status-bubble';
             }
         }
@@ -2710,7 +3571,7 @@ if (printWindow) {
             modalLoadingMessage.classList.add('hidden');
             modalMessage.classList.add('hidden');
             modalMessage.textContent = '';
-            
+
             // Hide all payment detail rows initially
             modalVenmoUsernameRow.classList.add('hidden');
             modalPaypalEmailRow.classList.add('hidden');
@@ -2726,6 +3587,28 @@ if (printWindow) {
             modalSecondaryLabelRow.classList.add('hidden');
             modalReturnLabelRow.classList.add('hidden');
             modalKitTrackingRow.classList.add('hidden');
+            if (modalLabelStatusRow) {
+                modalLabelStatusRow.classList.add('hidden');
+            }
+            if (modalActivityLog) {
+                modalActivityLog.classList.add('hidden');
+            }
+            if (modalActivityLogList) {
+                modalActivityLogList.innerHTML = '';
+            }
+            if (voidLabelFormContainer) {
+                voidLabelFormContainer.classList.add('hidden');
+            }
+            if (voidLabelMessage) {
+                voidLabelMessage.classList.add('hidden');
+                voidLabelMessage.textContent = '';
+            }
+            if (modalLastReminderDate) {
+                modalLastReminderDate.textContent = 'N/A';
+            }
+            if (modalOrderAge) {
+                modalOrderAge.textContent = 'Calculating…';
+            }
 
             orderDetailsModal.classList.remove('hidden');
 
@@ -2783,6 +3666,14 @@ if (printWindow) {
                     modalShippingAddress.textContent = `${shippingInfo.streetAddress}, ${shippingInfo.city}, ${shippingInfo.state}, ${shippingInfo.zipCode}`;
                 } else {
                     modalShippingAddress.textContent = 'N/A';
+                }
+
+                if (modalLastReminderDate) {
+                    const lastReminder = order.lastReminderSentAt || order.reminderSentAt || order.reminderEmailSentAt || order.lastReminderAt;
+                    modalLastReminderDate.textContent = lastReminder ? formatDateTime(lastReminder) : 'Never';
+                }
+                if (modalOrderAge) {
+                    modalOrderAge.textContent = formatOrderAge(order.createdAt);
                 }
 
                 modalConditionPowerOn.textContent = order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A';
@@ -2878,6 +3769,17 @@ if (printWindow) {
                 
                 // --- END: UPDATED LABEL LOGIC ---
 
+                const labelStatusText = formatLabelStatus(order);
+                if (modalLabelStatusRow) {
+                    if (labelStatusText) {
+                        modalLabelStatus.textContent = labelStatusText;
+                        modalLabelStatusRow.classList.remove('hidden');
+                    } else {
+                        modalLabelStatusRow.classList.add('hidden');
+                    }
+                }
+
+                renderActivityLog(order);
 
                 renderActionButtons(order);
                 modalActionButtons.classList.remove('hidden');
@@ -2919,6 +3821,7 @@ if (printWindow) {
             };
 
             const currentStatus = order.status;
+            const labelOptions = getLabelOptions(order);
             switch (currentStatus) {
                 case 'order_pending':
                 case 'shipping_kit_requested':
@@ -2975,6 +3878,7 @@ if (printWindow) {
                     break;
                 case 'return-label-generated':
                     break;
+                case 'requote_accepted':
                 case 'completed':
                     modalActionButtons.appendChild(createButton('Send Review Request Email', () => handleAction(order.id, 'sendReviewRequest'), 'bg-amber-600 hover:bg-amber-700'));
                     break;
@@ -3002,10 +3906,145 @@ if (printWindow) {
             }
             // --- END: PDF Merging Button Logic ---
 
+            if (labelOptions.length > 0 && currentStatus !== 'cancelled') {
+                modalActionButtons.appendChild(
+                    createButton('Void Shipping Labels', () => showVoidLabelForm(order), 'bg-red-600 hover:bg-red-700')
+                );
+            }
+
+            if (currentStatus !== 'cancelled') {
+                modalActionButtons.appendChild(
+                    createButton('Cancel Order', () => handleAction(order.id, 'cancelOrder'), 'bg-rose-500 hover:bg-rose-600')
+                );
+            }
+
             // Always add Delete Button, visually separated
             modalActionButtons.appendChild(createButton('Delete Order', () => showDeleteConfirmation(order.id), 'bg-red-500 hover:bg-red-600'));
         }
-        
+
+        function showVoidLabelForm(order) {
+            const options = getLabelOptions(order);
+            if (!options.length) {
+                displayModalMessage('No shipping label information is available for this order.', 'error');
+                return;
+            }
+
+            voidLabelOptionsContainer.innerHTML = '';
+            if (voidLabelMessage) {
+                voidLabelMessage.classList.add('hidden');
+                voidLabelMessage.textContent = '';
+            }
+
+            options.forEach(option => {
+                const optionId = `void-label-${option.key}`;
+                const isDisabled = !option.isVoidable;
+                const labelAge = formatLabelAge(option.generatedAt);
+                const statusText = option.status ? option.status.replace(/_/g, ' ') : 'active';
+                const statusClass = isDisabled ? 'text-red-600' : 'text-green-600';
+                const trackingText = option.trackingNumber ? `Tracking: ${option.trackingNumber}` : 'Tracking: N/A';
+
+                const wrapper = document.createElement('label');
+                wrapper.className = `flex items-start gap-3 p-3 border rounded-md ${isDisabled ? 'bg-gray-100 border-gray-200 opacity-70 cursor-not-allowed' : 'bg-white border-gray-200 hover:border-red-300 transition-colors duration-150'}`;
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'mt-1 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded void-label-checkbox';
+                checkbox.dataset.labelKey = option.key;
+                checkbox.dataset.labelId = option.labelId;
+                checkbox.id = optionId;
+                checkbox.disabled = isDisabled;
+
+                const content = document.createElement('div');
+                content.className = 'flex-1';
+                content.innerHTML = `
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-semibold text-sm text-gray-800">${option.displayName || formatLabelDisplayNameKey(option.key)}</span>
+                        <span class="text-xs font-semibold uppercase tracking-wide ${statusClass}">${statusText}</span>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">${trackingText}</div>
+                    <div class="text-xs text-gray-500">${labelAge}</div>
+                    ${option.message ? `<div class="text-xs text-red-500 mt-1">${option.message}</div>` : ''}
+                `;
+
+                wrapper.appendChild(checkbox);
+                wrapper.appendChild(content);
+                voidLabelOptionsContainer.appendChild(wrapper);
+            });
+
+            modalActionButtons.classList.add('hidden');
+            reofferFormContainer.classList.add('hidden');
+            manualFulfillmentFormContainer.classList.add('hidden');
+            deleteConfirmationContainer.classList.add('hidden');
+            voidLabelFormContainer.classList.remove('hidden');
+
+            submitVoidLabelBtn.onclick = () => handleVoidLabelSubmit(order.id);
+            cancelVoidLabelBtn.onclick = () => {
+                voidLabelFormContainer.classList.add('hidden');
+                modalActionButtons.classList.remove('hidden');
+                if (voidLabelMessage) {
+                    voidLabelMessage.classList.add('hidden');
+                    voidLabelMessage.textContent = '';
+                }
+                openOrderDetailsModal(order.id);
+            };
+        }
+
+        async function handleVoidLabelSubmit(orderId) {
+            const selected = Array.from(document.querySelectorAll('.void-label-checkbox:checked')).map(checkbox => ({
+                key: checkbox.dataset.labelKey,
+                id: checkbox.dataset.labelId,
+            }));
+
+            if (!selected.length) {
+                if (voidLabelMessage) {
+                    voidLabelMessage.textContent = 'Please select at least one label to void.';
+                    voidLabelMessage.className = 'mt-3 text-sm text-red-600';
+                    voidLabelMessage.classList.remove('hidden');
+                }
+                return;
+            }
+
+            modalLoadingMessage.classList.remove('hidden');
+            voidLabelFormContainer.classList.add('hidden');
+
+            try {
+                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/void-label`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ labels: selected }),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || `Failed to void labels: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const approvedCount = (result.results || []).filter(item => item.approved).length;
+                const deniedCount = (result.results || []).filter(item => !item.approved).length;
+
+                let summaryMessage = '';
+                if (approvedCount > 0) {
+                    summaryMessage += `${approvedCount} label${approvedCount > 1 ? 's' : ''} voided successfully.`;
+                }
+                if (deniedCount > 0) {
+                    summaryMessage += ` ${deniedCount} label${deniedCount > 1 ? 's' : ''} could not be voided.`;
+                }
+                if (!summaryMessage.trim()) {
+                    summaryMessage = 'Void request processed.';
+                }
+
+                displayModalMessage(summaryMessage.trim(), approvedCount > 0 ? 'success' : 'error');
+                openOrderDetailsModal(orderId);
+            } catch (error) {
+                console.error('Error voiding labels:', error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
+                modalActionButtons.classList.remove('hidden');
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
+        }
+
         function showReofferForm(orderId) {
             modalActionButtons.classList.add('hidden');
             reofferFormContainer.classList.remove('hidden');
@@ -3232,9 +4271,14 @@ if (printWindow) {
             reofferFormContainer.classList.add('hidden');
             manualFulfillmentFormContainer.classList.add('hidden');
             deleteConfirmationContainer.classList.add('hidden');
+            voidLabelFormContainer.classList.add('hidden');
             sendReminderBtn.classList.add('hidden'); // Also hide the reminder button during action
             modalMessage.classList.add('hidden');
             modalMessage.textContent = '';
+            if (voidLabelMessage) {
+                voidLabelMessage.classList.add('hidden');
+                voidLabelMessage.textContent = '';
+            }
 
             try {
                 let url;
@@ -3284,6 +4328,10 @@ if (printWindow) {
                         break;
                     case 'refreshKitTracking':
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/refresh-kit-tracking`;
+                        method = 'POST';
+                        break;
+                    case 'cancelOrder':
+                        url = `${BACKEND_BASE_URL}/orders/${orderId}/cancel`;
                         method = 'POST';
                         break;
                     case 'deleteOrder': // NEW: Delete Order Logic
@@ -3436,6 +4484,12 @@ if (printWindow) {
             statusFilterButtons.forEach(button => {
                 button.classList.toggle('active', button.dataset.statusFilter === status);
             });
+
+            statusBreakdownItems.forEach(item => {
+                const itemStatus = item.dataset.status;
+                const isActive = status === 'all' ? itemStatus === 'all' : itemStatus === status;
+                item.classList.toggle('active', isActive);
+            });
         }
 
         statusFilterButtons.forEach(button => {
@@ -3447,18 +4501,40 @@ if (printWindow) {
         });
 
         updateStatusFilterHighlight(currentActiveStatus);
-        
-        document.querySelectorAll('.dashboard-card, .glass-card-metrics').forEach(card => {
-            card.addEventListener('click', (event) => {
-                // Prevent click handler on the chat dashboard card which has an onclick attribute
-                if (card.onclick) return;
-                
-                const statusToFilter = card.dataset.status;
 
-                // Clicking a dashboard card should filter the list
+        if (paginationPrev && paginationNext) {
+            paginationPrev.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderOrders();
+                    renderPagination();
+                }
+            });
+
+            paginationNext.addEventListener('click', () => {
+                const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
+                const totalPages = Math.max(1, Math.ceil(source.length / ORDERS_PER_PAGE));
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderOrders();
+                    renderPagination();
+                }
+            });
+        }
+        
+        statusBreakdownItems.forEach(item => {
+            item.addEventListener('click', () => {
+                const statusToFilter = item.dataset.status || 'all';
                 currentActiveStatus = statusToFilter;
                 updateStatusFilterHighlight(currentActiveStatus);
                 filterAndRenderOrders(currentActiveStatus, searchInput.value);
+            });
+
+            item.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    item.click();
+                }
             });
         });
 
@@ -3562,7 +4638,7 @@ if (printWindow) {
                 
             } catch (error) {
                 console.error("Error initializing Firebase:", error);
-                ordersTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+                ordersTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
                 document.getElementById('auth-loading-screen').classList.add('hidden');
             }
         });
@@ -3574,11 +4650,11 @@ if (printWindow) {
                 onSnapshot(ordersCollectionRef, (snapshot) => {
                     allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                     
-                    // Client-side sort: sorting by creation date (if available) ascending (oldest to newest)
+                    // Client-side sort: newest first
                     allOrders.sort((a, b) => {
-                        const dateA = a.createdAt?.seconds || 0;
-                        const dateB = b.createdAt?.seconds || 0;
-                        return dateA - dateB; // Oldest to Newest (Ascending)
+                        const dateA = extractTimestampMillis(a.createdAt) || 0;
+                        const dateB = extractTimestampMillis(b.createdAt) || 0;
+                        return dateB - dateA;
                     });
 
                     updateDashboardCounts(allOrders);
@@ -3587,7 +4663,7 @@ if (printWindow) {
                 });
             } catch (error) {
                 console.error('Error fetching real-time orders:', error);
-                ordersTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+                ordersTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
             }
         }
 
@@ -3597,6 +4673,8 @@ if (printWindow) {
             if (status !== 'all') {
                 if (status === 'kit_needs_printing') {
                     filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
+                } else if (status === 'label_generated') {
+                    filtered = filtered.filter(order => order.status === 'label_generated' || order.status === 'emailed');
                 } else {
                     filtered = filtered.filter(order => order.status === status);
                 }
@@ -3612,7 +4690,17 @@ if (printWindow) {
                     (order.trackingNumber && order.trackingNumber.toLowerCase().includes(lowerCaseSearchTerm))
                 );
             }
-            renderOrders(filtered);
+
+            filtered.sort((a, b) => {
+                const dateA = extractTimestampMillis(a.createdAt) || 0;
+                const dateB = extractTimestampMillis(b.createdAt) || 0;
+                return dateB - dateA;
+            });
+
+            currentFilteredOrders = filtered;
+            currentPage = 1;
+            renderOrders();
+            renderPagination();
         }
 
         // Update current time and date display
