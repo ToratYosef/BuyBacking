@@ -345,6 +345,20 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             gap: 18px;
         }
 
+        .chart-wrapper {
+            width: 200px;
+            height: 100px;
+            max-width: 200px;
+            max-height: 100px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .chart-wrapper canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
         .analytics-card-header {
             display: flex;
             justify-content: space-between;
@@ -390,12 +404,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             background: rgba(148, 163, 184, 0.12);
             border-color: rgba(148, 163, 184, 0.4);
             color: #1e293b;
-        }
-
-        .analytics-card canvas {
-            width: 100% !important;
-            height: auto !important;
-            min-height: 220px;
         }
 
         .status-breakdown-list {
@@ -1314,7 +1322,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </div>
                     <span id="orders-trend-delta" class="trend-delta trend-neutral">0%</span>
                 </div>
-                <canvas id="orders-trend-chart" height="200"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="orders-trend-chart" height="100"></canvas>
+                </div>
             </div>
             <div class="analytics-card">
                 <div class="analytics-card-header">
@@ -1323,7 +1333,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         <p>Tap a status to filter the table</p>
                     </div>
                 </div>
-                <canvas id="orders-status-chart" height="200"></canvas>
+                <div class="chart-wrapper">
+                    <canvas id="orders-status-chart" height="100"></canvas>
+                </div>
                 <ul id="status-breakdown-list" class="status-breakdown-list">
                     <li class="status-breakdown-item active" data-status="all" role="button" tabindex="0">
                         <div class="status-info">
@@ -1518,6 +1530,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         <i class="fas fa-spinner fa-spin"></i>
                         Processing request…
                     </div>
+                    <span id="orders-trend-delta" class="trend-delta trend-neutral">0%</span>
                 </div>
 
                 <div id="reoffer-form-container" class="mt-6 p-4 border border-slate-200 rounded-lg hidden">
@@ -1570,7 +1583,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         <button id="cancel-reoffer-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
                         <button id="submit-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Send Re-offer</button>
                     </div>
-                    <span id="orders-trend-delta" class="trend-delta trend-neutral">0%</span>
                 </div>
 
                 <div id="manual-fulfillment-form-container" class="mt-6 p-4 border border-slate-200 rounded-lg hidden">
@@ -2961,13 +2973,40 @@ if (printWindow) {
                         },
                         scales: {
                             x: {
-                                ticks: { color: "#475569" },
-                                grid: { display: false }
+                                title: {
+                                    display: true,
+                                    text: "Date",
+                                    color: "#1e293b",
+                                    font: { weight: "600" }
+                                },
+                                ticks: {
+                                    color: "#475569",
+                                    maxTicksLimit: 4,
+                                    maxRotation: 0,
+                                    minRotation: 0
+                                },
+                                grid: {
+                                    color: "rgba(148, 163, 184, 0.25)",
+                                    drawBorder: true
+                                }
                             },
                             y: {
+                                title: {
+                                    display: true,
+                                    text: "Orders",
+                                    color: "#1e293b",
+                                    font: { weight: "600" }
+                                },
                                 beginAtZero: true,
-                                ticks: { color: "#475569", precision: 0 },
-                                grid: { color: "rgba(148, 163, 184, 0.2)", drawBorder: false }
+                                ticks: {
+                                    color: "#475569",
+                                    precision: 0,
+                                    maxTicksLimit: 4
+                                },
+                                grid: {
+                                    color: "rgba(148, 163, 184, 0.25)",
+                                    drawBorder: true
+                                }
                             }
                         }
                     }
