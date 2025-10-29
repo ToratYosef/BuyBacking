@@ -959,7 +959,6 @@ function getOrderCompletedEmailTemplate({ includeTrustpilot = true } = {}) {
           <p style="margin:0 0 12px;"><strong style="color:#0f172a;">Payout</strong><br><span style="color:#059669; font-size:22px; font-weight:700;">$**ORDER_TOTAL**</span></p>
           <p style="margin:0;"><strong style="color:#0f172a;">Payment method</strong><br><span style="color:#475569;">**PAYMENT_METHOD**</span></p>
         </div>
-        <p>If anything looks off, just reply—we'll make it right.</p>
         <p>Thanks for choosing SecondHandCell!</p>
     `,
   });
