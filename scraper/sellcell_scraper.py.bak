@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+# sellcell_scraper.py
+# Scrape SellCell device pages starting from sitemaps, find highest offer per device,
+# then update a provided XML by setting each item's <price> (or configured XPath) to (highest + 5).
+#
+# Usage:
+#   python sellcell_scraper.py --config config.yaml --xml-in input.xml --xml-out output.xml
+#
+# Notes:
+# - Respects robots.txt disallows listed in the prompt (you should still keep crawl gentle).
+# - Uses only allowed paths; filters URLs via simple allowlist patterns.
+# - Heuristics used to identify device name and price:
+#     1) JSON-LD Offer/AggregateOffer if present
+#     2) DOM text patterns for prices like "$123.45"
+#     3) Title/H1/OG tags for device names
+#
+# Dependencies: requests, pyyaml, lxml, beautifulsoup4
+#   pip install requests pyyaml lxml beautifulsoup4
+
+import argparse
+import re
+import time
+import math
+import json
+from urllib.parse import urlparse
+import xml.etree.ElementTree as ET
+
+import requests
+import yaml
+from bs4 import BeautifulSoup
+from lxml import etree
+
+DEFAULT_HEADERS = {
+    "User-Agent": "SettonPriceBot/1.0 (+https://example.com/contact)"
+}
+
+PRICE_RE = re.compile(r'(?<!\d)(?:\$|USD\s*)?(\d{1,4}(?:\.\d{2})?)(?!\d)')
+
+def load_yaml(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+def fetch(url, timeout=20):
+    r = requests.get(url, headers=DEFAULT_HEADERS, timeout=timeout)
+    r.raise_for_status()
+    return r
+
+def parse_sitemap_xml(xml_bytes):
+    # Returns a list of <loc> URLs from a sitemap or sitemap index
+    ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    try:
+        root = etree.fromstring(xml_bytes)
+    except Exception:
+        return []
+
+    locs = []
+    # sitemap index
+    for loc in root.xpath("//sm:sitemap/sm:loc/text()", namespaces=ns):
+        locs.append(loc.strip())
+    # url set
+    for loc in root.xpath("//sm:url/sm:loc/text()", namespaces=ns):
+        locs.append(loc.strip())
+    return list(dict.fromkeys(locs))  # dedupe keep order
+
+def filter_urls(urls, allow_patterns, disallow_patterns):
+    def allowed(u):
+        for pat in disallow_patterns:
+            if re.search(pat, u):
+                return False
+        for pat in allow_patterns:
+            if re.search(pat, u):
+                return True
+        return False
+    return [u for u in urls if allowed(u)]
+
+def extract_jsonld_offers(soup):
+    offers = []
+    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            data = json.loads(tag.string or tag.text or "{}")
+        except Exception:
+            continue
+        nodes = data if isinstance(data, list) else [data]
+        for node in nodes:
+            offers.extend(_collect_offers_from_jsonld_node(node))
+    return offers
+
+def _collect_offers_from_jsonld_node(node):
+    out = []
+    if not isinstance(node, dict):
+        return out
+    t = node.get("@type") or node.get("type")
+    if isinstance(t, list):
+        tset = set(t)
+    else:
+        tset = {t} if t else set()
+
+    # AggregateOffer
+    if "AggregateOffer" in tset:
+        low = node.get("lowPrice")
+        high = node.get("highPrice") or node.get("price")
+        for val in (low, high):
+            p = _to_price(val)
+            if p is not None:
+                out.append(p)
+    # Offer
+    if "Offer" in tset:
+        p = _to_price(node.get("price"))
+        if p is not None:
+            out.append(p)
+    # Product with offers
+    if "Product" in tset:
+        offers = node.get("offers")
+        if isinstance(offers, list):
+            for o in offers:
+                out.extend(_collect_offers_from_jsonld_node(o))
+        elif isinstance(offers, dict):
+            out.extend(_collect_offers_from_jsonld_node(offers))
+    # children
+    for k, v in node.items():
+        if isinstance(v, dict):
+            out.extend(_collect_offers_from_jsonld_node(v))
+        elif isinstance(v, list):
+            for x in v:
+                if isinstance(x, dict):
+                    out.extend(_collect_offers_from_jsonld_node(x))
+    return out
+
+def _to_price(val):
+    if val is None:
+        return None
+    try:
+        return float(str(val).strip().replace("$", ""))
+    except Exception:
+        return None
+
+def extract_prices_text(soup):
+    text = soup.get_text(" ", strip=True)
+    prices = []
+    for m in PRICE_RE.finditer(text):
+        try:
+            prices.append(float(m.group(1)))
+        except Exception:
+            pass
+    return prices
+
+def infer_device_name(soup, url):
+    # Try h1, then title, then og:title, then URL tail
+    h1 = soup.find("h1")
+    if h1 and h1.get_text(strip=True):
+        return normalize_name(h1.get_text(" ", strip=True))
+    title = soup.find("title")
+    if title and title.get_text(strip=True):
+        return normalize_name(title.get_text(" ", strip=True))
+    og = soup.find("meta", attrs={"property": "og:title"})
+    if og and og.get("content"):
+        return normalize_name(og["content"])
+    # fallback: last path segment
+    path = urlparse(url).path.rstrip("/").split("/")[-1]
+    return normalize_name(path.replace("-", " "))
+
+def normalize_name(name):
+    return re.sub(r"\s+", " ", name).strip().lower()
+
+def polite_sleep(rate_limit_seconds):
+    if rate_limit_seconds > 0:
+        time.sleep(rate_limit_seconds)
+
+def crawl_and_collect(config, limit=None):
+    # 1) Expand all sitemap URLs
+    queue = list(config["sitemaps"])
+    seen = set()
+    all_urls = []
+
+    for sm_url in queue:
+        try:
+            r = fetch(sm_url)
+            locs = parse_sitemap_xml(r.content)
+            # If it's a sitemap index, fetch nested sitemaps
+            nested_sitemaps = [u for u in locs if u.endswith(".xml")]
+            page_urls = [u for u in locs if not u.endswith(".xml")]
+            # Add nested sitemaps
+            for u in nested_sitemaps:
+                if u not in seen:
+                    queue.append(u)
+                    seen.add(u)
+            all_urls.extend(page_urls)
+        except Exception as e:
+            print(f"[warn] Failed to parse sitemap {sm_url}: {e}")
+
+    # 2) Filter URLs by allow/disallow patterns
+    urls = filter_urls(
+        all_urls,
+        [re.compile(p) for p in config["allow_patterns"]],
+        [re.compile(p) for p in config["disallow_patterns"]],
+    )
+
+    # 3) Crawl pages and extract highest prices per device
+    max_prices = {}
+    crawled = 0
+    for url in urls:
+        if limit and crawled >= limit:
+            break
+        try:
+            r = fetch(url, timeout=config.get("http_timeout", 20))
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            dev_name = infer_device_name(soup, url)
+            # Prices from JSON-LD
+            prices = extract_jsonld_offers(soup)
+            # Fallback text scan
+            if not prices:
+                prices = extract_prices_text(soup)
+
+            if prices:
+                high = max(prices)
+                prev = max_prices.get(dev_name)
+                if prev is None or high > prev:
+                    max_prices[dev_name] = high
+                print(f"[ok] {dev_name} -> highest {high} from {url}")
+            else:
+                print(f"[skip] No price found: {url}")
+
+            crawled += 1
+            polite_sleep(config.get("rate_limit_seconds", 1.0))
+
+        except Exception as e:
+            print(f"[warn] Fetch failed for {url}: {e}")
+            polite_sleep(config.get("rate_limit_seconds", 1.0))
+
+    return max_prices
+
+def update_xml_prices(xml_in, xml_out, max_prices, cfg):
+    """
+    Map items to device names and set price to (highest + 5).
+    Config:
+      xml_item_xpath: XPath selecting each "item" node
+      xml_name_xpath: XPath (relative to item) to read device name (text)
+      xml_price_xpath: XPath (relative to item) selecting node whose text is the price
+      name_normalize: if true, normalize names before matching
+      currency: "$" or "" (ignored for numeric storage)
+      price_increment: float (default 5.0)
+      round_to: optional int; if set, round to nearest (e.g., 1, 5, 10)
+    """
+    parser = etree.XMLParser(remove_blank_text=False)
+    tree = etree.parse(xml_in, parser)
+    root = tree.getroot()
+
+    item_nodes = root.xpath(cfg["xml_item_xpath"])
+    inc = float(cfg.get("price_increment", 5.0))
+    round_to = cfg.get("round_to")
+    updated = 0
+    skipped = 0
+
+    for item in item_nodes:
+        name_nodes = item.xpath(cfg["xml_name_xpath"])
+        price_nodes = item.xpath(cfg["xml_price_xpath"])
+
+        if not name_nodes or not price_nodes:
+            skipped += 1
+            continue
+
+        name_text = " ".join([etree.tostring(n, method="text", encoding="unicode").strip() for n in name_nodes]).strip()
+        key = normalize_name(name_text) if cfg.get("name_normalize", True) else name_text
+
+        if key not in max_prices:
+            skipped += 1
+            continue
+
+        new_price = max_prices[key] + inc
+        if round_to:
+            new_price = round(new_price / round_to) * round_to
+
+        # write numeric text without currency symbol unless requested
+        if cfg.get("currency_prefix"):
+            price_text = f'{cfg["currency_prefix"]}{new_price:.2f}'
+        else:
+            price_text = f"{new_price:.2f}"
+
+        # set text on the first price node
+        pn = price_nodes[0]
+        pn.text = price_text
+        updated += 1
+
+    tree.write(xml_out, encoding="utf-8", xml_declaration=True, pretty_print=True)
+    return updated, skipped
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config", required=True, help="Path to YAML config")
+    ap.add_argument("--xml-in", required=True, help="Input XML file to update")
+    ap.add_argument("--xml-out", required=True, help="Output XML to write")
+    ap.add_argument("--max-pages", type=int, default=None, help="Optional cap on number of pages to crawl")
+    args = ap.parse_args()
+
+    cfg = load_yaml(args.config)
+
+    # Crawl
+    max_prices = crawl_and_collect(cfg, limit=args.max_pages)
+
+    # Save a JSON dump for inspection
+    with open("max_prices.json", "w", encoding="utf-8") as f:
+        json.dump(max_prices, f, indent=2, ensure_ascii=False)
+
+    # Update XML
+    updated, skipped = update_xml_prices(args.xml_in, args.xml_out, max_prices, cfg)
+    print(f"Updated {updated} items, skipped {skipped}. Wrote: {args.xml_out}")
+
+if __name__ == "__main__":
+    main()
