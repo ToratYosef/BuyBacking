@@ -130,6 +130,8 @@
             </select>
             <button id="addDeviceBtn" class="btn-primary"><i class="fas fa-plus"></i> Add Pricing</button>
             <button id="importBtn" class="btn-secondary"><i class="fas fa-file-excel"></i> Import Prices</button>
+            <button id="importXmlBtn" class="btn-secondary"><i class="fas fa-file-code"></i> Import XML</button>
+            <button id="exportXmlBtn" class="btn-secondary"><i class="fas fa-download"></i> Export XML</button>
         </div>
     </header>
 
@@ -230,6 +232,45 @@
         </div>
     </div>
 
+    <!-- XML Import Modal -->
+    <div id="xmlImportModal" class="modal fixed inset-0 bg-gray-900 bg-opacity-70 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-3xl shadow-2xl p-6 relative">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h2 class="text-2xl font-semibold text-slate-900">Import Prices from XML</h2>
+                    <p class="text-sm text-slate-500">Upload an XML feed to sync pricing for existing devices.</p>
+                </div>
+                <button id="closeXmlModalBtn" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-2" for="xmlFile">Choose XML File (.xml)</label>
+                    <input type="file" id="xmlFile" accept=".xml" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+                </div>
+                <div id="xmlImportFeedback" class="hidden p-3 rounded-lg text-sm"></div>
+                <div id="xmlPreview" class="hidden border rounded-xl max-h-64 overflow-y-auto">
+                    <table class="min-w-full bg-white text-left text-sm">
+                        <thead class="sticky-header">
+                            <tr>
+                                <th class="py-2 px-3 text-xs font-semibold text-gray-600 uppercase">Brand</th>
+                                <th class="py-2 px-3 text-xs font-semibold text-gray-600 uppercase">Device</th>
+                                <th class="py-2 px-3 text-xs font-semibold text-gray-600 uppercase">Slug</th>
+                                <th class="py-2 px-3 text-xs font-semibold text-gray-600 uppercase">Storages</th>
+                            </tr>
+                        </thead>
+                        <tbody id="xmlPreviewBody" class="divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-4">
+                <button id="cancelXmlImportBtn" class="btn-secondary">Cancel</button>
+                <button id="processXmlImportBtn" class="btn-primary hidden">Import XML</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -255,9 +296,11 @@
         let filteredDevices = [];
         const supportedBrands = ['iphone', 'samsung', 'google_pixel', 'ipad', 'macbook', 'other'];
         const conditions = ['flawless', 'good', 'fair', 'damaged', 'broken', 'noPower'];
+        const exportConditions = ['flawless', 'good', 'fair', 'broken'];
 
         let brandOptionsInitialized = false;
         let slugManuallyEdited = false;
+        let xmlImportPayload = [];
 
         // DOM elements
         const loadingIndicator = document.getElementById('loadingIndicator');
@@ -268,12 +311,23 @@
         const statusMessage = document.getElementById('statusMessage');
         const importModal = document.getElementById('importModal');
         const importBtn = document.getElementById('importBtn');
+        const importXmlBtn = document.getElementById('importXmlBtn');
+        const exportXmlBtn = document.getElementById('exportXmlBtn');
         const closeModalBtn = document.getElementById('closeModalBtn');
         const excelFile = document.getElementById('excelFile');
         const excelPreview = document.getElementById('excelPreview');
         const processImportBtn = document.getElementById('processImportBtn');
         const cancelImportBtn = document.getElementById('cancelImportBtn');
         const importStatus = document.getElementById('importStatus');
+
+        const xmlImportModal = document.getElementById('xmlImportModal');
+        const closeXmlModalBtn = document.getElementById('closeXmlModalBtn');
+        const cancelXmlImportBtn = document.getElementById('cancelXmlImportBtn');
+        const processXmlImportBtn = document.getElementById('processXmlImportBtn');
+        const xmlFileInput = document.getElementById('xmlFile');
+        const xmlPreview = document.getElementById('xmlPreview');
+        const xmlPreviewBody = document.getElementById('xmlPreviewBody');
+        const xmlImportFeedback = document.getElementById('xmlImportFeedback');
 
         const addDeviceModal = document.getElementById('addDeviceModal');
         const addDeviceBtn = document.getElementById('addDeviceBtn');
@@ -297,6 +351,427 @@
                  statusMessage.classList.add('bg-blue-100', 'text-blue-700');
             }
             statusMessage.classList.remove('hidden');
+        }
+
+        function showXmlImportFeedback(message, type = 'info') {
+            if (!xmlImportFeedback) return;
+            xmlImportFeedback.textContent = message;
+            xmlImportFeedback.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700');
+            if (type === 'error') {
+                xmlImportFeedback.classList.add('bg-red-100', 'text-red-700');
+            } else if (type === 'success') {
+                xmlImportFeedback.classList.add('bg-green-100', 'text-green-700');
+            } else {
+                xmlImportFeedback.classList.add('bg-blue-100', 'text-blue-700');
+            }
+        }
+
+        function resetXmlImportModal() {
+            if (!xmlFileInput) return;
+            xmlFileInput.value = '';
+            xmlPreviewBody.innerHTML = '';
+            xmlPreview.classList.add('hidden');
+            xmlImportFeedback.classList.add('hidden');
+            xmlImportFeedback.textContent = '';
+            processXmlImportBtn.classList.add('hidden');
+            processXmlImportBtn.disabled = false;
+            processXmlImportBtn.textContent = 'Import XML';
+            xmlImportPayload = [];
+        }
+
+        function normalizeSlugSegment(value) {
+            return String(value || '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+
+        function computeDeeplink(device) {
+            const brandSegment = normalizeSlugSegment(device.brand || device.parentDevice);
+            const slugSource = device.slug || device.docId || device.modelID || device.name;
+            const slugSegment = normalizeSlugSegment(slugSource);
+
+            if (!brandSegment && !slugSegment) {
+                return null;
+            }
+
+            let deviceSegment = slugSegment;
+            if (brandSegment && deviceSegment && !deviceSegment.startsWith(`${brandSegment}-`)) {
+                deviceSegment = `${brandSegment}-${deviceSegment}`;
+            } else if (!deviceSegment) {
+                deviceSegment = brandSegment;
+            }
+
+            deviceSegment = deviceSegment.replace(/-+/g, '-');
+            if (!deviceSegment) {
+                return null;
+            }
+
+            return `https://secondhandcell.com/sell/?device=${deviceSegment}&storage={storage}&carrier={carrier}&power={power}&functionality={functionality}&quality={quality}`;
+        }
+
+        function formatXml(xmlString) {
+            const PADDING = '  ';
+            const reg = /(>)(<)(\/*)/g;
+            const xml = xmlString.replace(reg, '$1\n$2$3');
+            const lines = xml.split('\n').map(line => line.trim()).filter(Boolean);
+            let formatted = '';
+            let pad = 0;
+
+            lines.forEach((line) => {
+                if (/^<\//.test(line)) {
+                    pad = Math.max(pad - 1, 0);
+                }
+
+                const indentation = PADDING.repeat(pad);
+                formatted += `${indentation}${line}\n`;
+
+                if (/^<[^!?][^>]*[^/]>$/.test(line)) {
+                    pad += 1;
+                }
+            });
+
+            return formatted.trimEnd();
+        }
+
+        function buildXmlString(devices) {
+            const xmlDocument = document.implementation.createDocument('', 'models');
+            const root = xmlDocument.documentElement;
+
+            const sortedDevices = [...devices].sort((a, b) => {
+                const brandA = String(a.brand || a.parentDevice || '');
+                const brandB = String(b.brand || b.parentDevice || '');
+                const brandCompare = brandA.localeCompare(brandB, undefined, { sensitivity: 'base' });
+                if (brandCompare !== 0) return brandCompare;
+
+                const nameA = String(a.name || a.slug || a.docId || '');
+                const nameB = String(b.name || b.slug || b.docId || '');
+                return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+            });
+
+            sortedDevices.forEach((device) => {
+                const modelNode = xmlDocument.createElement('model');
+                root.appendChild(modelNode);
+
+                const parentDeviceNode = xmlDocument.createElement('parentDevice');
+                parentDeviceNode.textContent = device.brand || device.parentDevice || '';
+                modelNode.appendChild(parentDeviceNode);
+
+                const modelIdNode = xmlDocument.createElement('modelID');
+                modelIdNode.textContent = device.slug || device.docId || device.modelID || '';
+                modelNode.appendChild(modelIdNode);
+
+                const prices = device.prices || {};
+                Object.keys(prices).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })).forEach((storageSize) => {
+                    const connectivityBands = prices[storageSize] || {};
+                    const priceValueNode = xmlDocument.createElement('priceValue');
+                    let hasConnectivity = false;
+
+                    Object.keys(connectivityBands).sort().forEach((connectivity) => {
+                        const conditionMap = connectivityBands[connectivity] || {};
+                        const connectivityNode = xmlDocument.createElement(connectivity);
+                        let hasCondition = false;
+
+                        exportConditions.forEach((condition) => {
+                            const value = conditionMap[condition];
+                            if (value !== undefined && value !== null && value !== '') {
+                                const conditionNode = xmlDocument.createElement(condition);
+                                conditionNode.textContent = String(value);
+                                connectivityNode.appendChild(conditionNode);
+                                hasCondition = true;
+                            }
+                        });
+
+                        if (hasCondition) {
+                            priceValueNode.appendChild(connectivityNode);
+                            hasConnectivity = true;
+                        }
+                    });
+
+                    if (hasConnectivity) {
+                        const pricesNode = xmlDocument.createElement('prices');
+                        const storageNode = xmlDocument.createElement('storageSize');
+                        storageNode.textContent = storageSize;
+                        pricesNode.appendChild(storageNode);
+                        pricesNode.appendChild(priceValueNode);
+                        modelNode.appendChild(pricesNode);
+                    }
+                });
+
+                if (device.slug) {
+                    const slugNode = xmlDocument.createElement('slug');
+                    slugNode.textContent = device.slug;
+                    modelNode.appendChild(slugNode);
+                }
+
+                if (device.imageUrl) {
+                    const imageNode = xmlDocument.createElement('imageUrl');
+                    imageNode.textContent = device.imageUrl;
+                    modelNode.appendChild(imageNode);
+                }
+
+                if (device.name) {
+                    const nameNode = xmlDocument.createElement('name');
+                    nameNode.textContent = device.name;
+                    modelNode.appendChild(nameNode);
+                }
+
+                const brandNode = xmlDocument.createElement('brand');
+                brandNode.textContent = device.brand || device.parentDevice || '';
+                modelNode.appendChild(brandNode);
+
+                const deeplinkValue = device.deeplink || computeDeeplink(device);
+                if (deeplinkValue) {
+                    const deeplinkNode = xmlDocument.createElement('deeplink');
+                    deeplinkNode.textContent = deeplinkValue;
+                    modelNode.appendChild(deeplinkNode);
+                }
+            });
+
+            const serializer = new XMLSerializer();
+            const rawXml = serializer.serializeToString(xmlDocument);
+            return `<?xml version="1.0" encoding="UTF-8"?>\n${formatXml(rawXml)}`;
+        }
+
+        function triggerXmlDownload(xmlString) {
+            const blob = new Blob([xmlString], { type: 'application/xml' });
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+            anchor.href = url;
+            anchor.download = `device-prices-${timestamp}.xml`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            URL.revokeObjectURL(url);
+        }
+
+        function parseXmlFeed(content) {
+            const parser = new DOMParser();
+            const xmlDocument = parser.parseFromString(content, 'application/xml');
+            const parserError = xmlDocument.querySelector('parsererror');
+            if (parserError) {
+                throw new Error('Invalid XML format.');
+            }
+
+            const models = [];
+            const warnings = [];
+
+            const modelNodes = xmlDocument.querySelectorAll('model');
+            modelNodes.forEach((modelNode, index) => {
+                const getText = (selector) => {
+                    const node = modelNode.querySelector(selector);
+                    return node ? node.textContent.trim() : '';
+                };
+
+                const brandRaw = getText('brand') || getText('parentDevice');
+                const slugRaw = getText('slug') || getText('modelID');
+
+                const brand = brandRaw ? brandRaw.trim().toLowerCase() : '';
+                const slug = normalizeSlugSegment(slugRaw);
+
+                if (!brand || !slug) {
+                    warnings.push(`Skipped model at position ${index + 1} due to missing brand or slug.`);
+                    return;
+                }
+
+                const prices = {};
+                let hasPricing = false;
+
+                modelNode.querySelectorAll('prices').forEach((pricesNode) => {
+                    const storageSize = (pricesNode.querySelector('storageSize')?.textContent || '').trim();
+                    if (!storageSize) {
+                        return;
+                    }
+
+                    const priceValueNode = pricesNode.querySelector('priceValue');
+                    if (!priceValueNode) {
+                        return;
+                    }
+
+                    const connectivityMap = {};
+
+                    Array.from(priceValueNode.children).forEach((connectivityNode) => {
+                        const connectivityKey = connectivityNode.tagName.toLowerCase();
+                        const conditionEntries = {};
+
+                        Array.from(connectivityNode.children).forEach((conditionNode) => {
+                            const conditionKey = conditionNode.tagName.toLowerCase();
+                            const numericValue = parseFloat(conditionNode.textContent);
+                            if (!Number.isNaN(numericValue)) {
+                                conditionEntries[conditionKey] = numericValue;
+                            }
+                        });
+
+                        if (Object.keys(conditionEntries).length > 0) {
+                            connectivityMap[connectivityKey] = conditionEntries;
+                        }
+                    });
+
+                    if (Object.keys(connectivityMap).length > 0) {
+                        prices[storageSize] = connectivityMap;
+                        hasPricing = true;
+                    }
+                });
+
+                if (!hasPricing) {
+                    warnings.push(`No pricing data found for ${brand}/${slug}.`);
+                    return;
+                }
+
+                const modelData = {
+                    brand,
+                    slug,
+                    name: getText('name'),
+                    imageUrl: getText('imageUrl'),
+                    deeplink: getText('deeplink'),
+                    prices
+                };
+
+                models.push(modelData);
+            });
+
+            return { models, warnings };
+        }
+
+        function renderXmlPreview(models) {
+            xmlPreviewBody.innerHTML = '';
+            if (!models.length) {
+                xmlPreview.classList.add('hidden');
+                return;
+            }
+
+            models.forEach((model) => {
+                const row = document.createElement('tr');
+                const storages = Object.keys(model.prices)
+                    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+                    .join(', ');
+
+                row.innerHTML = `
+                    <td class="py-2 px-3 text-sm text-gray-900">${formatBrandLabel(model.brand)}</td>
+                    <td class="py-2 px-3 text-sm text-gray-600">${model.name || '—'}</td>
+                    <td class="py-2 px-3 text-sm text-gray-600">${model.slug}</td>
+                    <td class="py-2 px-3 text-sm text-gray-500">${storages || '—'}</td>
+                `;
+
+                xmlPreviewBody.appendChild(row);
+            });
+
+            xmlPreview.classList.remove('hidden');
+        }
+
+        async function handleXmlFileSelect(event) {
+            const file = event.target.files?.[0];
+            if (!file) {
+                return;
+            }
+
+            try {
+                const content = await file.text();
+                const { models, warnings } = parseXmlFeed(content);
+                xmlImportPayload = models;
+
+                if (!models.length) {
+                    renderXmlPreview([]);
+                    showXmlImportFeedback('No valid models were found in the XML file.', 'error');
+                    xmlImportFeedback.classList.remove('hidden');
+                    processXmlImportBtn.classList.add('hidden');
+                    return;
+                }
+
+                renderXmlPreview(models);
+
+                let message = `Ready to import ${models.length} model${models.length === 1 ? '' : 's'}.`;
+                if (warnings.length) {
+                    message += ` ${warnings.length} entr${warnings.length === 1 ? 'y was' : 'ies were'} skipped.`;
+                }
+
+                showXmlImportFeedback(message, warnings.length ? 'info' : 'success');
+                xmlImportFeedback.classList.remove('hidden');
+                processXmlImportBtn.classList.remove('hidden');
+            } catch (error) {
+                console.error('Failed to parse XML file:', error);
+                xmlImportPayload = [];
+                renderXmlPreview([]);
+                showXmlImportFeedback(error.message || 'Failed to read the XML file.', 'error');
+                xmlImportFeedback.classList.remove('hidden');
+                processXmlImportBtn.classList.add('hidden');
+            }
+        }
+
+        async function processXmlImport() {
+            if (!xmlImportPayload.length) {
+                showXmlImportFeedback('Select an XML file with device pricing before importing.', 'error');
+                xmlImportFeedback.classList.remove('hidden');
+                return;
+            }
+
+            const originalText = processXmlImportBtn.textContent;
+            processXmlImportBtn.textContent = 'Importing...';
+            processXmlImportBtn.disabled = true;
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const model of xmlImportPayload) {
+                try {
+                    const collectionPath = `devices/${model.brand}/models`;
+                    const docRef = doc(db, collectionPath, model.slug);
+                    const payload = {
+                        brand: model.brand,
+                        slug: model.slug,
+                        prices: model.prices
+                    };
+
+                    if (model.name) payload.name = model.name;
+                    if (model.imageUrl) payload.imageUrl = model.imageUrl;
+                    if (model.deeplink) payload.deeplink = model.deeplink;
+
+                    await setDoc(docRef, payload, { merge: true });
+                    successCount++;
+                } catch (error) {
+                    console.error(`Failed to import ${model.brand}/${model.slug}:`, error);
+                    errorCount++;
+                }
+            }
+
+            processXmlImportBtn.textContent = originalText;
+            processXmlImportBtn.disabled = false;
+
+            if (errorCount === 0) {
+                showXmlImportFeedback(`Successfully imported ${successCount} model${successCount === 1 ? '' : 's'}.`, 'success');
+                showStatus('XML pricing import completed successfully.', 'success');
+            } else {
+                showXmlImportFeedback(`Imported ${successCount} model${successCount === 1 ? '' : 's'} with ${errorCount} error${errorCount === 1 ? '' : 's'}. Check console for details.`, 'error');
+                showStatus('XML pricing import completed with some errors. Check console for details.', 'error');
+            }
+
+            xmlImportFeedback.classList.remove('hidden');
+
+            if (successCount && errorCount === 0) {
+                setTimeout(() => {
+                    xmlImportModal.classList.remove('is-visible');
+                    resetXmlImportModal();
+                }, 800);
+            }
+
+            await fetchDevices();
+        }
+
+        function handleExportXml() {
+            if (!allDevices.length) {
+                showStatus('Device data is still loading. Please try exporting once the table appears.', 'info');
+                return;
+            }
+
+            try {
+                const xmlString = buildXmlString(allDevices);
+                triggerXmlDownload(xmlString);
+                showStatus('XML export generated successfully.', 'success');
+            } catch (error) {
+                console.error('Failed to generate XML export:', error);
+                showStatus('Failed to create XML export. Check console for details.', 'error');
+            }
         }
 
         // --- AUTHENTICATION ---
@@ -683,6 +1158,33 @@
             slugManuallyEdited = newDeviceSlug.value.trim().length > 0;
         });
         addDeviceForm.addEventListener('submit', handleAddDeviceSubmit);
+
+        // --- XML IMPORT / EXPORT LOGIC ---
+        importXmlBtn.addEventListener('click', () => {
+            resetXmlImportModal();
+            xmlImportModal.classList.add('is-visible');
+        });
+
+        closeXmlModalBtn.addEventListener('click', () => {
+            xmlImportModal.classList.remove('is-visible');
+            resetXmlImportModal();
+        });
+
+        cancelXmlImportBtn.addEventListener('click', () => {
+            xmlImportModal.classList.remove('is-visible');
+            resetXmlImportModal();
+        });
+
+        xmlImportModal.addEventListener('click', (event) => {
+            if (event.target === xmlImportModal) {
+                xmlImportModal.classList.remove('is-visible');
+                resetXmlImportModal();
+            }
+        });
+
+        xmlFileInput.addEventListener('change', handleXmlFileSelect);
+        processXmlImportBtn.addEventListener('click', processXmlImport);
+        exportXmlBtn.addEventListener('click', handleExportXml);
 
         // --- EXCEL IMPORT LOGIC ---
         importBtn.addEventListener('click', () => importModal.classList.add('is-visible'));
