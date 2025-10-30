@@ -410,6 +410,30 @@
             return `https://secondhandcell.com/sell/?device=${deviceSegment}&storage={storage}&carrier={carrier}&power={power}&functionality={functionality}&quality={quality}`;
         }
 
+        function formatXml(xmlString) {
+            const PADDING = '  ';
+            const reg = /(>)(<)(\/*)/g;
+            const xml = xmlString.replace(reg, '$1\n$2$3');
+            const lines = xml.split('\n').map(line => line.trim()).filter(Boolean);
+            let formatted = '';
+            let pad = 0;
+
+            lines.forEach((line) => {
+                if (/^<\//.test(line)) {
+                    pad = Math.max(pad - 1, 0);
+                }
+
+                const indentation = PADDING.repeat(pad);
+                formatted += `${indentation}${line}\n`;
+
+                if (/^<[^!?][^>]*[^/]>$/.test(line)) {
+                    pad += 1;
+                }
+            });
+
+            return formatted.trimEnd();
+        }
+
         function buildXmlString(devices) {
             const xmlDocument = document.implementation.createDocument('', 'models');
             const root = xmlDocument.documentElement;
@@ -505,7 +529,8 @@
             });
 
             const serializer = new XMLSerializer();
-            return `<?xml version="1.0" encoding="UTF-8"?>\n${serializer.serializeToString(xmlDocument)}`;
+            const rawXml = serializer.serializeToString(xmlDocument);
+            return `<?xml version="1.0" encoding="UTF-8"?>\n${formatXml(rawXml)}`;
         }
 
         function triggerXmlDownload(xmlString) {

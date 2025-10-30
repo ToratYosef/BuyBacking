@@ -124,7 +124,11 @@ function buildXml(devices) {
     }
   });
 
-  return root.end({ prettyPrint: true });
+  return root.end({
+    prettyPrint: true,
+    indent: '  ',
+    newline: '\n',
+  });
 }
 
 (async () => {
