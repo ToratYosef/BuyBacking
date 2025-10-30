@@ -2028,6 +2028,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </div>
                 </div>
 
+                <div id="cancel-order-form-container" class="mt-6 p-4 border border-rose-200 bg-rose-50 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-rose-600 mb-2">Cancel Order &amp; Void Labels</h4>
+                    <p id="cancel-order-message" class="text-sm text-rose-700">Select the shipping labels that should be voided before cancelling this order.</p>
+                    <div id="cancel-order-void-options" class="mt-4 space-y-3"></div>
+                    <p id="cancel-order-error" class="mt-3 text-sm text-rose-600 hidden"></p>
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-cancel-order-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Back</button>
+                        <button id="confirm-cancel-order-btn" type="button" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Void Labels &amp; Cancel Order</button>
+                    </div>
+                </div>
+
                 <div id="void-label-form-container" class="mt-6 p-4 border border-rose-200 bg-rose-50 rounded-lg hidden">
                     <h4 class="text-lg font-semibold text-rose-600 mb-2">Void Shipping Labels</h4>
                     <p class="text-sm text-rose-700">Select the labels you would like to cancel. Carrier approval may vary based on label age and usage.</p>
@@ -2325,6 +2336,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const submitVoidLabelBtn = document.getElementById('submit-void-label-btn');
         const cancelVoidLabelBtn = document.getElementById('cancel-void-label-btn');
 
+        const cancelOrderFormContainer = document.getElementById('cancel-order-form-container');
+        const cancelOrderVoidOptionsContainer = document.getElementById('cancel-order-void-options');
+        const cancelOrderMessage = document.getElementById('cancel-order-message');
+        const cancelOrderError = document.getElementById('cancel-order-error');
+        const cancelCancelOrderBtn = document.getElementById('cancel-cancel-order-btn');
+        const confirmCancelOrderBtn = document.getElementById('confirm-cancel-order-btn');
+
         const phoneCheckSection = document.getElementById('phone-check-section');
         const phoneCheckInput = document.getElementById('phone-check-imei');
         const phoneCheckRunButton = document.getElementById('phone-check-run');
@@ -2575,6 +2593,78 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         function hasVoidableLabels(order) {
             return getLabelOptions(order).some(option => option.isVoidable);
+        }
+
+        function createLabelOptionElement(option, { prefix = 'void-label', checked = false, checkboxClass = 'void-label-checkbox' } = {}) {
+            const optionId = `${prefix}-${option.key}`;
+            const isDisabled = !option.isVoidable;
+            const labelAge = formatLabelAge(option.generatedAt);
+            const statusText = option.status ? option.status.replace(/_/g, ' ') : 'active';
+            const statusClass = isDisabled ? 'text-red-600' : 'text-green-600';
+            const trackingText = option.trackingNumber ? `Tracking: ${option.trackingNumber}` : 'Tracking: N/A';
+
+            const wrapper = document.createElement('label');
+            wrapper.className = `flex items-start gap-3 p-3 border rounded-md ${isDisabled ? 'bg-gray-100 border-gray-200 opacity-70 cursor-not-allowed' : 'bg-white border-gray-200 hover:border-red-300 transition-colors duration-150'}`;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = `mt-1 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded ${checkboxClass}`;
+            checkbox.dataset.labelKey = option.key;
+            checkbox.dataset.labelId = option.labelId;
+            checkbox.id = optionId;
+            checkbox.disabled = isDisabled;
+            if (checked && !isDisabled) {
+                checkbox.checked = true;
+            }
+
+            const content = document.createElement('div');
+            content.className = 'flex-1';
+            content.innerHTML = `
+                <div class="flex items-center justify-between gap-2">
+                    <span class="font-semibold text-sm text-gray-800">${option.displayName || formatLabelDisplayNameKey(option.key)}</span>
+                    <span class="text-xs font-semibold uppercase tracking-wide ${statusClass}">${statusText}</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">${trackingText}</div>
+                <div class="text-xs text-gray-500">${labelAge}</div>
+                ${option.message ? `<div class="text-xs text-red-500 mt-1">${option.message}</div>` : ''}
+            `;
+
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(content);
+            return wrapper;
+        }
+
+        async function requestVoidLabels(orderId, selections) {
+            const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/void-label`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ labels: selections }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `Failed to void labels: ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+        function summarizeVoidResults(result) {
+            const approvedCount = (result.results || []).filter(item => item.approved).length;
+            const deniedCount = (result.results || []).filter(item => !item.approved).length;
+
+            let summaryMessage = '';
+            if (approvedCount > 0) {
+                summaryMessage += `${approvedCount} label${approvedCount > 1 ? 's' : ''} voided successfully.`;
+            }
+            if (deniedCount > 0) {
+                summaryMessage += ` ${deniedCount} label${deniedCount > 1 ? 's' : ''} could not be voided.`;
+            }
+            if (!summaryMessage.trim()) {
+                summaryMessage = 'Void request processed.';
+            }
+
+            return { summaryMessage: summaryMessage.trim(), approvedCount, deniedCount };
         }
 
         function coerceCurrencyValue(value) {
@@ -3320,9 +3410,34 @@ if (printWindow) {
 
                 setTimeout(() => URL.revokeObjectURL(url), 60000);
 
-                // Show success message and re-enable buttons
-                displayModalMessage('Merged document (Labels + Slip) generated. Printing window opened.', 'success');
-                renderActionButtons(order);
+                const baseSuccessMessage = 'Merged document (Labels + Slip) generated. Printing window opened.';
+                if (isKitOrder) {
+                    const marked = await markKitAsPrinted(order.id);
+                    if (marked) {
+                        displayModalMessage('Merged document (Labels + Slip) generated and kit status updated to sent.', 'success');
+                    } else {
+                        renderActionButtons(order);
+                        modalActionButtons.classList.remove('hidden');
+                        if (sendReminderBtn) {
+                            if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
+                                sendReminderBtn.classList.remove('hidden');
+                            } else {
+                                sendReminderBtn.classList.add('hidden');
+                            }
+                        }
+                    }
+                } else {
+                    displayModalMessage(baseSuccessMessage, 'success');
+                    renderActionButtons(order);
+                    modalActionButtons.classList.remove('hidden');
+                    if (sendReminderBtn) {
+                        if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
+                            sendReminderBtn.classList.remove('hidden');
+                        } else {
+                            sendReminderBtn.classList.add('hidden');
+                        }
+                    }
+                }
 
             } catch (error) {
                 console.error("Error during PDF generation and merging:", error);
@@ -4256,7 +4371,11 @@ if (printWindow) {
                 resetPhoneCheckResults();
                 if (phoneCheckInput) {
                     const potentialImei = order.imei || order.IMEI || order.deviceImei || (order.deviceDetails && order.deviceDetails.imei) || '';
-                    phoneCheckInput.value = potentialImei || '';
+                    if (order.status === 'received') {
+                        phoneCheckInput.value = potentialImei || '';
+                    } else {
+                        phoneCheckInput.value = '';
+                    }
                 }
 
                 // Pass the order object to formatStatus here as well
@@ -4394,12 +4513,20 @@ if (printWindow) {
 
             const currentStatus = order.status;
             const labelOptions = getLabelOptions(order);
+            const hasGeneratedLabels = labelOptions.length > 0 || Boolean(
+                order.uspsLabelUrl ||
+                order.outboundLabelUrl ||
+                order.inboundLabelUrl ||
+                order.shipEngineLabelId
+            );
             switch (currentStatus) {
                 case 'order_pending':
                 case 'shipping_kit_requested':
                 case 'kit_needs_printing':
                 case 'needs_printing':
-                    modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
+                    if (!hasGeneratedLabels) {
+                        modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
+                    }
                     modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
                     break;
                 case 'kit_sent':
@@ -4490,9 +4617,15 @@ if (printWindow) {
             }
 
             if (currentStatus !== 'cancelled') {
-                modalActionButtons.appendChild(
-                    createButton('Cancel Order', () => handleAction(order.id, 'cancelOrder'), 'bg-rose-500 hover:bg-rose-600')
-                );
+                if (hasVoidableLabels(order)) {
+                    modalActionButtons.appendChild(
+                        createButton('Cancel Order & Void Labels', () => showCancelOrderForm(order), 'bg-rose-500 hover:bg-rose-600')
+                    );
+                } else {
+                    modalActionButtons.appendChild(
+                        createButton('Cancel Order', () => handleAction(order.id, 'cancelOrder'), 'bg-rose-500 hover:bg-rose-600')
+                    );
+                }
             }
 
             // Always add Delete Button, visually separated
@@ -4513,39 +4646,11 @@ if (printWindow) {
             }
 
             options.forEach(option => {
-                const optionId = `void-label-${option.key}`;
-                const isDisabled = !option.isVoidable;
-                const labelAge = formatLabelAge(option.generatedAt);
-                const statusText = option.status ? option.status.replace(/_/g, ' ') : 'active';
-                const statusClass = isDisabled ? 'text-red-600' : 'text-green-600';
-                const trackingText = option.trackingNumber ? `Tracking: ${option.trackingNumber}` : 'Tracking: N/A';
-
-                const wrapper = document.createElement('label');
-                wrapper.className = `flex items-start gap-3 p-3 border rounded-md ${isDisabled ? 'bg-gray-100 border-gray-200 opacity-70 cursor-not-allowed' : 'bg-white border-gray-200 hover:border-red-300 transition-colors duration-150'}`;
-
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.className = 'mt-1 h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded void-label-checkbox';
-                checkbox.dataset.labelKey = option.key;
-                checkbox.dataset.labelId = option.labelId;
-                checkbox.id = optionId;
-                checkbox.disabled = isDisabled;
-
-                const content = document.createElement('div');
-                content.className = 'flex-1';
-                content.innerHTML = `
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="font-semibold text-sm text-gray-800">${option.displayName || formatLabelDisplayNameKey(option.key)}</span>
-                        <span class="text-xs font-semibold uppercase tracking-wide ${statusClass}">${statusText}</span>
-                    </div>
-                    <div class="text-xs text-gray-500 mt-1">${trackingText}</div>
-                    <div class="text-xs text-gray-500">${labelAge}</div>
-                    ${option.message ? `<div class="text-xs text-red-500 mt-1">${option.message}</div>` : ''}
-                `;
-
-                wrapper.appendChild(checkbox);
-                wrapper.appendChild(content);
-                voidLabelOptionsContainer.appendChild(wrapper);
+                const optionElement = createLabelOptionElement(option, {
+                    prefix: 'void-label',
+                    checkboxClass: 'void-label-checkbox'
+                });
+                voidLabelOptionsContainer.appendChild(optionElement);
             });
 
             modalActionButtons.classList.add('hidden');
@@ -4564,6 +4669,115 @@ if (printWindow) {
                 }
                 openOrderDetailsModal(order.id);
             };
+        }
+
+        function showCancelOrderForm(order) {
+            if (!cancelOrderFormContainer || !cancelOrderVoidOptionsContainer) {
+                handleAction(order.id, 'cancelOrder');
+                return;
+            }
+
+            const options = getLabelOptions(order);
+            const voidableOptions = options.filter(option => option.isVoidable);
+
+            if (!voidableOptions.length) {
+                handleAction(order.id, 'cancelOrder');
+                return;
+            }
+
+            cancelOrderVoidOptionsContainer.innerHTML = '';
+            voidableOptions.forEach(option => {
+                const optionElement = createLabelOptionElement(option, {
+                    prefix: 'cancel-label',
+                    checkboxClass: 'cancel-void-checkbox',
+                    checked: true,
+                });
+                cancelOrderVoidOptionsContainer.appendChild(optionElement);
+            });
+
+            if (cancelOrderMessage) {
+                cancelOrderMessage.textContent = 'Select the shipping labels that should be voided before cancelling this order.';
+            }
+            if (cancelOrderError) {
+                cancelOrderError.classList.add('hidden');
+                cancelOrderError.textContent = '';
+            }
+
+            modalActionButtons.classList.add('hidden');
+            reofferFormContainer.classList.add('hidden');
+            manualFulfillmentFormContainer.classList.add('hidden');
+            voidLabelFormContainer.classList.add('hidden');
+            deleteConfirmationContainer.classList.add('hidden');
+            cancelOrderFormContainer.classList.remove('hidden');
+
+            if (cancelCancelOrderBtn) {
+                cancelCancelOrderBtn.onclick = () => {
+                    cancelOrderFormContainer.classList.add('hidden');
+                    modalActionButtons.classList.remove('hidden');
+                    if (cancelOrderError) {
+                        cancelOrderError.classList.add('hidden');
+                        cancelOrderError.textContent = '';
+                    }
+                };
+            }
+
+            if (confirmCancelOrderBtn) {
+                confirmCancelOrderBtn.onclick = () => handleCancelOrder(order);
+            }
+        }
+
+        async function handleCancelOrder(order) {
+            if (!order || !order.id) {
+                return;
+            }
+
+            const selected = cancelOrderVoidOptionsContainer
+                ? Array.from(cancelOrderVoidOptionsContainer.querySelectorAll('.cancel-void-checkbox:checked')).map(checkbox => ({
+                    key: checkbox.dataset.labelKey,
+                    id: checkbox.dataset.labelId,
+                })).filter(item => item.key && item.id)
+                : [];
+
+            if (!selected.length) {
+                if (cancelOrderError) {
+                    cancelOrderError.textContent = 'Please select at least one label to void before cancelling.';
+                    cancelOrderError.classList.remove('hidden');
+                }
+                return;
+            }
+
+            if (cancelOrderError) {
+                cancelOrderError.classList.add('hidden');
+                cancelOrderError.textContent = '';
+            }
+
+            modalLoadingMessage.classList.remove('hidden');
+            if (cancelOrderFormContainer) {
+                cancelOrderFormContainer.classList.add('hidden');
+            }
+
+            try {
+                const voidResult = await requestVoidLabels(order.id, selected);
+                const voidSummary = summarizeVoidResults(voidResult);
+
+                await handleAction(order.id, 'cancelOrder', { body: { voidLabels: false } });
+
+                const summaryParts = [];
+                if (voidSummary.summaryMessage) {
+                    summaryParts.push(voidSummary.summaryMessage);
+                }
+                summaryParts.push(`Order ${order.id} has been cancelled.`);
+                displayModalMessage(summaryParts.join(' ').trim(), 'success');
+            } catch (error) {
+                console.error('Error cancelling order with void:', error);
+                displayModalMessage(`Error: ${error.message}`, 'error');
+                modalActionButtons.classList.remove('hidden');
+                if (cancelOrderFormContainer) {
+                    cancelOrderFormContainer.classList.remove('hidden');
+                }
+            } finally {
+                modalLoadingMessage.classList.add('hidden');
+            }
         }
 
         async function handleVoidLabelSubmit(orderId) {
@@ -4585,33 +4799,10 @@ if (printWindow) {
             voidLabelFormContainer.classList.add('hidden');
 
             try {
-                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/void-label`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ labels: selected }),
-                });
+                const result = await requestVoidLabels(orderId, selected);
+                const { summaryMessage, approvedCount } = summarizeVoidResults(result);
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || `Failed to void labels: ${response.status}`);
-                }
-
-                const result = await response.json();
-                const approvedCount = (result.results || []).filter(item => item.approved).length;
-                const deniedCount = (result.results || []).filter(item => !item.approved).length;
-
-                let summaryMessage = '';
-                if (approvedCount > 0) {
-                    summaryMessage += `${approvedCount} label${approvedCount > 1 ? 's' : ''} voided successfully.`;
-                }
-                if (deniedCount > 0) {
-                    summaryMessage += ` ${deniedCount} label${deniedCount > 1 ? 's' : ''} could not be voided.`;
-                }
-                if (!summaryMessage.trim()) {
-                    summaryMessage = 'Void request processed.';
-                }
-
-                displayModalMessage(summaryMessage.trim(), approvedCount > 0 ? 'success' : 'error');
+                displayModalMessage(summaryMessage, approvedCount > 0 ? 'success' : 'error');
                 openOrderDetailsModal(orderId);
             } catch (error) {
                 console.error('Error voiding labels:', error);
@@ -4841,7 +5032,7 @@ if (printWindow) {
             }
         }
 
-        async function handleAction(orderId, actionType) {
+        async function handleAction(orderId, actionType, options = {}) {
             // Hide all special sections before starting action
             modalLoadingMessage.classList.remove('hidden');
             modalActionButtons.classList.add('hidden');
@@ -4849,6 +5040,7 @@ if (printWindow) {
             manualFulfillmentFormContainer.classList.add('hidden');
             deleteConfirmationContainer.classList.add('hidden');
             voidLabelFormContainer.classList.add('hidden');
+            cancelOrderFormContainer.classList.add('hidden');
             sendReminderBtn.classList.add('hidden'); // Also hide the reminder button during action
             modalMessage.classList.add('hidden');
             modalMessage.textContent = '';
@@ -4860,7 +5052,7 @@ if (printWindow) {
             try {
                 let url;
                 let method = 'PUT';
-                let body = {};
+                let body = options.body && typeof options.body === 'object' ? { ...options.body } : null;
 
                 switch(actionType) {
                     case 'generateLabel':
@@ -4914,6 +5106,9 @@ if (printWindow) {
                     case 'cancelOrder':
                         url = `${BACKEND_BASE_URL}/orders/${orderId}/cancel`;
                         method = 'POST';
+                        if (body === null) {
+                            body = {};
+                        }
                         break;
                     case 'deleteOrder': // NEW: Delete Order Logic
                         url = `${BACKEND_BASE_URL}/orders/${orderId}`;
@@ -4927,7 +5122,7 @@ if (printWindow) {
                 const response = await fetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
-                    body: Object.keys(body).length > 0 ? JSON.stringify(body) : null
+                    body: method === 'GET' || method === 'HEAD' ? null : (body ? JSON.stringify(body) : null)
                 });
 
                 if (!response.ok) {
@@ -5059,6 +5254,18 @@ if (printWindow) {
 
         function closeOrderDetailsModal() {
             orderDetailsModal.classList.add('hidden');
+            if (cancelOrderFormContainer) {
+                cancelOrderFormContainer.classList.add('hidden');
+            }
+            if (voidLabelFormContainer) {
+                voidLabelFormContainer.classList.add('hidden');
+            }
+            if (manualFulfillmentFormContainer) {
+                manualFulfillmentFormContainer.classList.add('hidden');
+            }
+            if (reofferFormContainer) {
+                reofferFormContainer.classList.add('hidden');
+            }
         }
         
         function updateStatusFilterHighlight(status) {

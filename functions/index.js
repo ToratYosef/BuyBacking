@@ -737,6 +737,7 @@ async function cancelOrderAndNotify(order, options = {}) {
   const initiatedBy = options.initiatedBy || null;
   const auto = options.auto === true;
   const notifyCustomer = options.notifyCustomer !== false;
+  const shouldVoidLabels = options.voidLabels !== false;
 
   const labels = normalizeShipEngineLabelMap(order);
   const selections = Object.entries(labels)
@@ -744,7 +745,7 @@ async function cancelOrderAndNotify(order, options = {}) {
     .map(([key, entry]) => ({ key, id: entry.id }));
 
   let voidResults = [];
-  if (selections.length) {
+  if (shouldVoidLabels && selections.length) {
     try {
       const { results } = await handleLabelVoid(order, selections, {
         reason: auto ? "automatic" : "manual",
@@ -778,7 +779,7 @@ async function cancelOrderAndNotify(order, options = {}) {
     autoCancelled: auto,
   };
 
-  if (voidResults.length) {
+  if (shouldVoidLabels && voidResults.length) {
     updatePayload.cancelVoidResults = voidResults;
   }
 
@@ -2874,12 +2875,14 @@ app.post("/orders/:id/cancel", async (req, res) => {
     const reason = req.body?.reason || "cancelled_by_admin";
     const initiatedBy = req.body?.initiatedBy || req.body?.cancelledBy || null;
     const notifyCustomer = req.body?.notifyCustomer !== false;
+    const shouldVoidLabels = req.body?.voidLabels !== false;
 
     const { order: updatedOrder, voidResults } = await cancelOrderAndNotify(order, {
       auto: false,
       reason,
       initiatedBy,
       notifyCustomer,
+      voidLabels: shouldVoidLabels,
     });
 
     res.json({
