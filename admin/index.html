@@ -4460,6 +4460,28 @@ if (printWindow) {
                 
                 // --- END: UPDATED LABEL LOGIC ---
 
+                // Reset label click handlers before reassigning for the current order context
+                if (modalLabelLink) {
+                    modalLabelLink.onclick = null;
+                }
+                if (modalSecondaryLabelLink) {
+                    modalSecondaryLabelLink.onclick = null;
+                }
+
+                if (order.shippingPreference === 'Shipping Kit Requested') {
+                    const labelClickHandler = (event) => {
+                        maybeMarkKitSentOnLabelClick(event, order);
+                    };
+
+                    if (modalLabelRow && !modalLabelRow.classList.contains('hidden') && modalLabelLink) {
+                        modalLabelLink.onclick = labelClickHandler;
+                    }
+
+                    if (modalSecondaryLabelRow && !modalSecondaryLabelRow.classList.contains('hidden') && modalSecondaryLabelLink) {
+                        modalSecondaryLabelLink.onclick = labelClickHandler;
+                    }
+                }
+
                 const labelStatusText = formatLabelStatus(order);
                 if (modalLabelStatusRow) {
                     if (labelStatusText) {
@@ -5160,6 +5182,39 @@ if (printWindow) {
                     }
                 }
             }
+        }
+
+        function maybeMarkKitSentOnLabelClick(event, order) {
+            if (!order || order.shippingPreference !== 'Shipping Kit Requested') {
+                return;
+            }
+
+            const link = event?.currentTarget;
+            if (!link) {
+                return;
+            }
+
+            const href = link.getAttribute('href') || '';
+            if (!href || href === '#') {
+                return;
+            }
+
+            const currentStatus = (order.status || '').toLowerCase();
+            if (currentStatus === 'kit_sent') {
+                return;
+            }
+
+            markKitAsPrinted(order.id).then((marked) => {
+                if (!marked) {
+                    return;
+                }
+
+                order.status = 'kit_sent';
+
+                if (currentOrderDetails && currentOrderDetails.id === order.id) {
+                    currentOrderDetails.status = 'kit_sent';
+                }
+            });
         }
 
         async function markKitAsPrinted(orderId) {
