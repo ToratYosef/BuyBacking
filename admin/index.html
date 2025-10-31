@@ -967,6 +967,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             display: flex;
             gap: 12px;
             align-items: center;
+            flex-wrap: wrap;
         }
 
         .pagination-button {
@@ -992,6 +993,48 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         .pagination-button:not(:disabled):hover {
             box-shadow: 0 12px 24px -18px rgba(37, 99, 235, 0.5);
             transform: translateY(-1px);
+        }
+
+        .pagination-pages {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pagination-page-button {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            background: white;
+            color: #1e293b;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .pagination-page-button:hover:not(:disabled) {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+        }
+
+        .pagination-page-button.active {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+            cursor: default;
+        }
+
+        .pagination-page-button:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        .pagination-ellipsis {
+            font-size: 13px;
+            font-weight: 600;
+            color: #94a3b8;
         }
 
         .pagination-info {
@@ -1803,7 +1846,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <div class="operations-card">
                 <div class="operations-card-header">
                     <h3>Aging Watchlist</h3>
-                    <p>Oldest active orders that may need a personal touch</p>
+                    <p>Orders pending for 15+ days that need a follow-up</p>
                 </div>
                 <ul class="operations-card-list" id="aging-watchlist">
                     <li class="empty">Crunching the latest updates…</li>
@@ -1872,13 +1915,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <div id="pagination-controls" class="pagination-controls hidden">
                 <span class="pagination-info" id="pagination-info">Page 1 of 1</span>
                 <div class="pagination-actions">
+                    <button id="pagination-first" class="pagination-button" disabled>
+                        <i class="fas fa-angles-left"></i>
+                        First
+                    </button>
                     <button id="pagination-prev" class="pagination-button" disabled>
                         <i class="fas fa-arrow-left"></i>
                         Previous
                     </button>
+                    <div id="pagination-pages" class="pagination-pages"></div>
                     <button id="pagination-next" class="pagination-button">
                         Next
                         <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button id="pagination-last" class="pagination-button">
+                        Last
+                        <i class="fas fa-angles-right"></i>
                     </button>
                 </div>
             </div>
@@ -2168,8 +2220,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const ordersTableBody = document.getElementById('orders-table-body');
         const noOrdersMessage = document.getElementById('no-orders-message');
         const paginationControls = document.getElementById('pagination-controls');
+        const paginationFirst = document.getElementById('pagination-first');
         const paginationPrev = document.getElementById('pagination-prev');
         const paginationNext = document.getElementById('pagination-next');
+        const paginationLast = document.getElementById('pagination-last');
+        const paginationPages = document.getElementById('pagination-pages');
         const paginationInfo = document.getElementById('pagination-info');
         const searchInput = document.getElementById('search-orders');
         const mobileSearchInput = document.getElementById('mobile-search-orders');
@@ -2366,6 +2421,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         let allOrders = [];
         let currentFilteredOrders = [];
         let currentPage = 1;
+        let lastKnownTotalPages = 1;
         const ORDERS_PER_PAGE = 10;
         let currentActiveStatus = 'all';
         let refreshInterval = null;
@@ -2595,9 +2651,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             return getLabelOptions(order).some(option => option.isVoidable);
         }
 
-        function createLabelOptionElement(option, { prefix = 'void-label', checked = false, checkboxClass = 'void-label-checkbox' } = {}) {
+        function createLabelOptionElement(option, { prefix = 'void-label', checked = false, checkboxClass = 'void-label-checkbox', disableCheckbox = false } = {}) {
             const optionId = `${prefix}-${option.key}`;
             const isDisabled = !option.isVoidable;
+            const shouldDisable = disableCheckbox || isDisabled;
             const labelAge = formatLabelAge(option.generatedAt);
             const statusText = option.status ? option.status.replace(/_/g, ' ') : 'active';
             const statusClass = isDisabled ? 'text-red-600' : 'text-green-600';
@@ -2612,9 +2669,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             checkbox.dataset.labelKey = option.key;
             checkbox.dataset.labelId = option.labelId;
             checkbox.id = optionId;
-            checkbox.disabled = isDisabled;
-            if (checked && !isDisabled) {
+            checkbox.disabled = shouldDisable;
+            if ((checked && !isDisabled) || shouldDisable) {
                 checkbox.checked = true;
+            }
+
+            if (disableCheckbox && !isDisabled) {
+                checkbox.classList.add('cursor-not-allowed', 'opacity-80');
             }
 
             const content = document.createElement('div');
@@ -3191,158 +3252,123 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     console.warn("Could not load logo image:", e);
                 }
 
-                // 3. Create a compact 4x6 packing slip PDF
                 const { PDFDocument, StandardFonts, rgb } = PDFLib;
-                const slip = await PDFDocument.create();
                 const pageWidth = 288; // 4 in
                 const pageHeight = 432; // 6 in
-                const page = slip.addPage([pageWidth, pageHeight]);
-                const font = await slip.embedFont(StandardFonts.Helvetica);
-                const boldFont = await slip.embedFont(StandardFonts.HelveticaBold);
-
-                const c = order.shippingInfo || {};
-                const finalPrice = getOrderPayout(order);
-
                 const margin = 18;
-                let y = pageHeight - margin;
 
-                if (logoImage) {
-                    const scaledLogo = logoImage.scale(0.18);
-                    page.drawImage(logoImage, {
-                        x: margin,
-                        y: y - scaledLogo.height,
-                        width: scaledLogo.width,
-                        height: scaledLogo.height,
+                const wrapTextLines = (text, font, size, maxWidth) => {
+                    if (!text) {
+                        return [''];
+                    }
+                    const words = String(text).split(/\s+/);
+                    const lines = [];
+                    let currentLine = '';
+
+                    words.forEach((word) => {
+                        const candidate = currentLine ? `${currentLine} ${word}` : word;
+                        if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+                            currentLine = candidate;
+                        } else {
+                            if (currentLine) {
+                                lines.push(currentLine);
+                            }
+                            currentLine = word;
+                        }
                     });
-                    y -= scaledLogo.height + 6;
-                }
 
-                page.drawText('SecondHandCell Packing Slip', {
-                    x: margin,
-                    y,
-                    size: 12,
-                    font: boldFont,
-                    color: rgb(0.1, 0.1, 0.1),
-                });
-                y -= 14;
-                page.drawText(`Order: ${order.id}`, { x: margin, y, size: 9, font: boldFont, color: rgb(0.2, 0.2, 0.2) });
-                page.drawText(`Date: ${formatDate(order.createdAt)}`, { x: margin + 140, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
-                y -= 16;
+                    if (currentLine) {
+                        lines.push(currentLine);
+                    }
 
-                const drawSection = (title, lines) => {
-                    page.drawText(title, { x: margin, y, size: 9, font: boldFont, color: rgb(0.2, 0.2, 0.6) });
-                    y -= 12;
-                    lines.forEach((line) => {
-                        page.drawText(line, { x: margin, y, size: 8, font, color: rgb(0.1, 0.1, 0.1) });
-                        y -= 11;
-                    });
-                    y -= 6;
+                    return lines.length ? lines : [''];
                 };
 
-                const customerLines = [
-                    c.fullName || 'Name: N/A',
-                    c.email ? `Email: ${c.email}` : 'Email: N/A',
-                    c.phone ? `Phone: ${c.phone}` : 'Phone: N/A',
-                    c.streetAddress ? `Addr: ${c.streetAddress}` : 'Addr: N/A',
-                    `${c.city || ''} ${c.state || ''} ${c.zipCode || ''}`.trim(),
-                ].filter(Boolean);
-                drawSection('Customer', customerLines);
-
-                drawSection('Device & Quote', [
-                    `${(order.device || 'Device')} ${(order.storage || '')}`.trim(),
-                    `Carrier: ${order.carrier || 'N/A'}`,
-                    `Quote: $${finalPrice.toFixed(2)}`,
-                    `Payment: ${order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A'}`,
-                ]);
-
-                drawSection('Condition Summary', [
-                    `Power: ${order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A'}`,
-                    `Functional: ${order.condition_functional ? formatCondition(order.condition_functional) : 'N/A'}`,
-                    `Cracks: ${order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A'}`,
-                    `Cosmetic: ${order.condition_cosmetic ? formatCondition(order.condition_cosmetic) : 'N/A'}`,
-                ]);
-
-                const instructionLines = isKitOrder
-                    ? [
-                        '1. OUTBOUND LABEL: affix to the empty kit mailer (page 1).',
-                        '2. INBOUND LABEL: place inside the kit for the customer (page 2).',
-                        '3. BAG LABEL: attach to the protective bag before shipping (page 3).',
-                        '4. PACKING SLIP: include this slip with the kit (page 4).',
-                    ]
-                    : [
-                        '1. SHIPPING LABEL: provide to the customer (page 1).',
-                        '2. BAG LABEL: attach to the device bag before mailing (page 2).',
-                        '3. PACKING SLIP: include inside the shipment (page 3).',
-                    ];
-                drawSection('Instructions', instructionLines);
-
-                page.drawText('Thank you for choosing SecondHandCell!', {
-                    x: margin,
-                    y,
-                    size: 8,
-                    font: boldFont,
-                    color: rgb(0.4, 0.4, 0.4),
-                });
-
                 const createBagLabelPdf = async () => {
-                    const bagDoc = await PDFLib.PDFDocument.create();
+                    const bagDoc = await PDFDocument.create();
                     const bagPage = bagDoc.addPage([pageWidth, pageHeight]);
                     const bagFont = await bagDoc.embedFont(StandardFonts.Helvetica);
                     const bagBold = await bagDoc.embedFont(StandardFonts.HelveticaBold);
-
                     let bagY = pageHeight - margin;
-                    bagPage.drawText('SecondHandCell Bag Label', {
-                        x: margin,
-                        y: bagY,
-                        size: 14,
-                        font: bagBold,
-                        color: rgb(0.1, 0.1, 0.1),
-                    });
-                    bagY -= 20;
+                    const maxWidth = pageWidth - margin * 2;
 
-                    bagPage.drawText(`Order #${order.id}`, {
-                        x: margin,
-                        y: bagY,
-                        size: 18,
-                        font: bagBold,
-                        color: rgb(0.05, 0.05, 0.4),
-                    });
-                    bagY -= 24;
+                    const formatDisplayValue = (value) => {
+                        if (!value) {
+                            return null;
+                        }
+                        return String(value)
+                            .replace(/[_-]+/g, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim()
+                            .replace(/\b\w/g, (char) => char.toUpperCase());
+                    };
 
-                    const bagLines = [
-                        c.fullName ? `Customer: ${c.fullName}` : 'Customer: N/A',
-                        (order.device || order.storage) ? `Device: ${(order.device || 'N/A')} ${(order.storage || '')}`.trim() : 'Device: N/A',
-                        order.carrier ? `Carrier: ${order.carrier}` : null,
-                        order.paymentMethod ? `Payment: ${formatCondition(order.paymentMethod)}` : null,
-                    ].filter(Boolean);
-
-                    bagLines.forEach((line) => {
-                        bagPage.drawText(line, {
-                            x: margin,
-                            y: bagY,
-                            size: 10,
-                            font: bagFont,
-                            color: rgb(0.1, 0.1, 0.1),
+                    const drawBlock = (text, options = {}) => {
+                        const { font = bagFont, size = 11, color = rgb(0, 0, 0), spacing = 12 } = options;
+                        wrapTextLines(text, font, size, maxWidth).forEach((line) => {
+                            bagPage.drawText(line, { x: margin, y: bagY, size, font, color });
+                            bagY -= spacing;
                         });
-                        bagY -= 14;
-                    });
+                    };
 
-                    bagY -= 6;
-                    bagPage.drawText('Attach this label to the grey bag before shipping.', {
-                        x: margin,
-                        y: bagY,
-                        size: 9,
-                        font: bagFont,
-                        color: rgb(0.3, 0.3, 0.3),
-                    });
+                    if (logoImage) {
+                        const scaledLogo = logoImage.scale(0.18);
+                        bagPage.drawImage(logoImage, {
+                            x: margin,
+                            y: bagY - scaledLogo.height,
+                            width: scaledLogo.width,
+                            height: scaledLogo.height,
+                        });
+                        bagY -= scaledLogo.height + 12;
+                    }
+
+                    drawBlock('SecondHandCell Bag Label', { font: bagBold, size: 14, color: rgb(0.1, 0.1, 0.1) });
+                    drawBlock(`Order #${order.id}`, { font: bagBold, size: 22, color: rgb(0.1, 0.1, 0.4), spacing: 18 });
+
+                    const deviceParts = [];
+                    if (order.brand) {
+                        deviceParts.push(order.brand);
+                    }
+                    if (order.device) {
+                        deviceParts.push(order.device);
+                    }
+                    if (deviceParts.length) {
+                        drawBlock(`Device: ${deviceParts.join(' • ')}`);
+                    }
+
+                    if (order.storage) {
+                        drawBlock(`Storage: ${order.storage}`);
+                    }
+
+                    if (order.carrier) {
+                        drawBlock(`Carrier: ${formatDisplayValue(order.carrier)}`);
+                    }
+
+                    const conditionSegments = [];
+                    if (order.condition_power_on) {
+                        conditionSegments.push(`Powers On: ${formatDisplayValue(order.condition_power_on)}`);
+                    }
+                    if (order.condition_functional) {
+                        conditionSegments.push(`Functional: ${formatDisplayValue(order.condition_functional)}`);
+                    }
+                    if (order.condition_cosmetic) {
+                        conditionSegments.push(`Cosmetic: ${formatDisplayValue(order.condition_cosmetic)}`);
+                    }
+                    if (conditionSegments.length) {
+                        drawBlock(`Condition: ${conditionSegments.join(' • ')}`);
+                    }
+
+                    const payoutAmount = getOrderPayout(order).toFixed(2);
+                    drawBlock(`Quoted Price: $${payoutAmount}`, { font: bagBold, size: 13, color: rgb(0.1, 0.45, 0.2), spacing: 16 });
+
+                    drawBlock('Attach this label to the device bag before shipping.', { size: 10, color: rgb(0.35, 0.35, 0.35), spacing: 16 });
 
                     return bagDoc.save();
                 };
 
-                const packingBytes = await slip.save();
                 const bagLabelBytes = await createBagLabelPdf();
 
-                // Merge shipping labels, bag label, then packing slip
+                // Merge shipping labels followed by the bag label
                 const mergedPdf = await PDFLib.PDFDocument.create();
 
                 for (const bytes of labelPdfBuffers) {
@@ -3354,10 +3380,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 const bagLabelPdf = await PDFLib.PDFDocument.load(bagLabelBytes);
                 const copiedBag = await mergedPdf.copyPages(bagLabelPdf, bagLabelPdf.getPageIndices());
                 copiedBag.forEach(p => mergedPdf.addPage(p));
-
-                const packingPdfToMerge = await PDFLib.PDFDocument.load(packingBytes);
-                const copiedPacking = await mergedPdf.copyPages(packingPdfToMerge, packingPdfToMerge.getPageIndices());
-                copiedPacking.forEach(p => mergedPdf.addPage(p));
 
                 // 5. Display merged PDF in a dedicated print window
                 const mergedBytes = await mergedPdf.save();
@@ -3581,7 +3603,7 @@ if (printWindow) {
                 'order_cancelled',
                 're-offered-declined'
             ]);
-            const MIN_WATCHLIST_AGE_DAYS = 2;
+            const MIN_WATCHLIST_AGE_DAYS = 15;
             const MIN_AGE_MS = MIN_WATCHLIST_AGE_DAYS * 24 * 60 * 60 * 1000;
             const now = Date.now();
 
@@ -3605,14 +3627,13 @@ if (printWindow) {
                 .sort((a, b) => b.ageMs - a.ageMs);
 
             const agingCandidates = ranked.filter(entry => entry.ageMs >= MIN_AGE_MS);
-            const highlighted = (agingCandidates.length ? agingCandidates : ranked).slice(0, 3);
 
-            if (!highlighted.length) {
+            if (!agingCandidates.length) {
                 agingWatchlist.innerHTML = '<li class="empty">All caught up — no aging orders.</li>';
                 return;
             }
 
-            const html = highlighted.map(({ order }) => {
+            const html = agingCandidates.map(({ order }) => {
                 const statusText = formatStatus(order);
                 const orderAge = formatOrderAge(order.createdAt);
                 return `
@@ -3918,6 +3939,19 @@ if (printWindow) {
 
         }
 
+        function buildPageSequence(totalPages, currentPage) {
+            const pages = new Set([1, totalPages]);
+            const windowSize = 2;
+
+            for (let index = currentPage - windowSize; index <= currentPage + windowSize; index++) {
+                if (index > 1 && index < totalPages) {
+                    pages.add(index);
+                }
+            }
+
+            return Array.from(pages).sort((a, b) => a - b);
+        }
+
         function renderPagination() {
             if (!paginationControls) {
                 return;
@@ -3926,9 +3960,29 @@ if (printWindow) {
             const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
             const total = source.length;
             const totalPages = Math.max(1, Math.ceil(Math.max(total, 0) / ORDERS_PER_PAGE));
+            lastKnownTotalPages = totalPages;
 
             if (totalPages <= 1) {
                 paginationControls.classList.add('hidden');
+                currentPage = 1;
+                if (paginationPages) {
+                    paginationPages.innerHTML = '';
+                }
+                if (paginationPrev) {
+                    paginationPrev.disabled = true;
+                }
+                if (paginationNext) {
+                    paginationNext.disabled = true;
+                }
+                if (paginationFirst) {
+                    paginationFirst.disabled = true;
+                }
+                if (paginationLast) {
+                    paginationLast.disabled = true;
+                }
+                if (paginationInfo) {
+                    paginationInfo.textContent = 'Page 1 of 1';
+                }
                 return;
             }
 
@@ -3943,8 +3997,45 @@ if (printWindow) {
             if (paginationNext) {
                 paginationNext.disabled = currentPage >= totalPages;
             }
+            if (paginationFirst) {
+                paginationFirst.disabled = currentPage <= 1;
+            }
+            if (paginationLast) {
+                paginationLast.disabled = currentPage >= totalPages;
+            }
             if (paginationInfo) {
                 paginationInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+            }
+
+            if (paginationPages) {
+                paginationPages.innerHTML = '';
+                const sequence = buildPageSequence(totalPages, currentPage);
+                let lastRendered = 0;
+                sequence.forEach((pageNumber) => {
+                    if (lastRendered && pageNumber - lastRendered > 1) {
+                        const ellipsis = document.createElement('span');
+                        ellipsis.className = 'pagination-ellipsis';
+                        ellipsis.textContent = '…';
+                        paginationPages.appendChild(ellipsis);
+                    }
+
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.textContent = pageNumber;
+                    button.className = 'pagination-page-button';
+                    if (pageNumber === currentPage) {
+                        button.classList.add('active');
+                        button.disabled = true;
+                    }
+                    button.addEventListener('click', () => {
+                        currentPage = pageNumber;
+                        renderOrders();
+                        renderPagination();
+                    });
+
+                    paginationPages.appendChild(button);
+                    lastRendered = pageNumber;
+                });
             }
         }
 
@@ -4618,8 +4709,8 @@ if (printWindow) {
             const printEligibleStatuses = ['label_generated', 'shipping_kit_requested', 'kit_needs_printing', 'needs_printing', 'kit_sent'];
             if (printEligibleStatuses.includes(order.status) && outboundLabelUrl && inboundLabelUrl) {
                 const slipButtonText = order.shippingPreference === 'Shipping Kit Requested'
-                    ? 'Print Kit Docs (Outbound + Inbound + Slip)'
-                    : 'Print Document (Label + Slip)';
+                    ? 'Print Kit Docs (Labels + Bag Label)'
+                    : 'Print Document (Label + Bag Label)';
                 
                 // Create the button and insert it at the beginning of the action list
                 const mergeButton = createButton(slipButtonText, () => generateAndMergeShippingDocument(order), 'bg-fuchsia-600 hover:bg-fuchsia-700');
@@ -4713,12 +4804,13 @@ if (printWindow) {
                     prefix: 'cancel-label',
                     checkboxClass: 'cancel-void-checkbox',
                     checked: true,
+                    disableCheckbox: true,
                 });
                 cancelOrderVoidOptionsContainer.appendChild(optionElement);
             });
 
             if (cancelOrderMessage) {
-                cancelOrderMessage.textContent = 'Select the shipping labels that should be voided before cancelling this order.';
+                cancelOrderMessage.textContent = 'These shipping labels will be voided automatically when you cancel this order.';
             }
             if (cancelOrderError) {
                 cancelOrderError.classList.add('hidden');
@@ -4753,53 +4845,16 @@ if (printWindow) {
                 return;
             }
 
-            const selected = cancelOrderVoidOptionsContainer
-                ? Array.from(cancelOrderVoidOptionsContainer.querySelectorAll('.cancel-void-checkbox:checked')).map(checkbox => ({
-                    key: checkbox.dataset.labelKey,
-                    id: checkbox.dataset.labelId,
-                })).filter(item => item.key && item.id)
-                : [];
-
-            if (!selected.length) {
-                if (cancelOrderError) {
-                    cancelOrderError.textContent = 'Please select at least one label to void before cancelling.';
-                    cancelOrderError.classList.remove('hidden');
-                }
-                return;
-            }
-
             if (cancelOrderError) {
                 cancelOrderError.classList.add('hidden');
                 cancelOrderError.textContent = '';
             }
 
-            modalLoadingMessage.classList.remove('hidden');
             if (cancelOrderFormContainer) {
                 cancelOrderFormContainer.classList.add('hidden');
             }
 
-            try {
-                const voidResult = await requestVoidLabels(order.id, selected);
-                const voidSummary = summarizeVoidResults(voidResult);
-
-                await handleAction(order.id, 'cancelOrder', { body: { voidLabels: false } });
-
-                const summaryParts = [];
-                if (voidSummary.summaryMessage) {
-                    summaryParts.push(voidSummary.summaryMessage);
-                }
-                summaryParts.push(`Order ${order.id} has been cancelled.`);
-                displayModalMessage(summaryParts.join(' ').trim(), 'success');
-            } catch (error) {
-                console.error('Error cancelling order with void:', error);
-                displayModalMessage(`Error: ${error.message}`, 'error');
-                modalActionButtons.classList.remove('hidden');
-                if (cancelOrderFormContainer) {
-                    cancelOrderFormContainer.classList.remove('hidden');
-                }
-            } finally {
-                modalLoadingMessage.classList.add('hidden');
-            }
+            await handleAction(order.id, 'cancelOrder');
         }
 
         async function handleVoidLabelSubmit(orderId) {
@@ -5373,7 +5428,17 @@ if (printWindow) {
 
         updateStatusFilterHighlight(currentActiveStatus);
 
-        if (paginationPrev && paginationNext) {
+        if (paginationFirst) {
+            paginationFirst.addEventListener('click', () => {
+                if (currentPage !== 1) {
+                    currentPage = 1;
+                    renderOrders();
+                    renderPagination();
+                }
+            });
+        }
+
+        if (paginationPrev) {
             paginationPrev.addEventListener('click', () => {
                 if (currentPage > 1) {
                     currentPage--;
@@ -5381,12 +5446,26 @@ if (printWindow) {
                     renderPagination();
                 }
             });
+        }
 
+        if (paginationNext) {
             paginationNext.addEventListener('click', () => {
                 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
                 const totalPages = Math.max(1, Math.ceil(source.length / ORDERS_PER_PAGE));
                 if (currentPage < totalPages) {
                     currentPage++;
+                    renderOrders();
+                    renderPagination();
+                }
+            });
+        }
+
+        if (paginationLast) {
+            paginationLast.addEventListener('click', () => {
+                const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
+                const totalPages = Math.max(1, Math.ceil(source.length / ORDERS_PER_PAGE));
+                if (currentPage !== totalPages) {
+                    currentPage = totalPages;
                     renderOrders();
                     renderPagination();
                 }
@@ -5537,7 +5616,7 @@ if (printWindow) {
                     });
 
                     updateDashboardCounts(allOrders);
-                    filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
+                    filterAndRenderOrders(currentActiveStatus, currentSearchTerm, { preservePage: true });
                     updateLastRefreshTimestamp();
                 });
             } catch (error) {
@@ -5546,9 +5625,12 @@ if (printWindow) {
             }
         }
 
-        function filterAndRenderOrders(status, searchTerm = currentSearchTerm) {
+        function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options = {}) {
             currentSearchTerm = typeof searchTerm === 'string' ? searchTerm : '';
             syncSearchInputs(currentSearchTerm);
+
+            const preservePage = options.preservePage === true;
+            const previousPage = currentPage;
 
             let filtered = allOrders;
 
@@ -5580,7 +5662,12 @@ if (printWindow) {
             });
 
             currentFilteredOrders = filtered;
-            currentPage = 1;
+            const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
+            if (preservePage) {
+                currentPage = Math.min(Math.max(previousPage, 1), totalPages);
+            } else {
+                currentPage = 1;
+            }
             renderOrders();
             renderPagination();
         }

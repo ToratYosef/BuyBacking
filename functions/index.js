@@ -370,9 +370,7 @@ function analyzePhoneCheckResponse(data) {
 }
 
 const SHIPENGINE_API_BASE_URL = "https://api.shipengine.com/v1";
-const AUTO_VOID_DELAY_MS =
-  27 * 24 * 60 * 60 * 1000 + // 27 days
-  12 * 60 * 60 * 1000; // 12 hours
+const AUTO_VOID_DELAY_MS = 15 * 24 * 60 * 60 * 1000; // 15 days
 const AUTO_VOID_QUERY_LIMIT = 50;
 const AUTO_VOID_RETRY_DELAY_MS = 12 * 60 * 60 * 1000; // 12 hours between automatic retry attempts
 
@@ -2290,12 +2288,10 @@ app.get('/print-bundle/:id', async (req, res) => {
     );
 
     const bagLabelData = await generateBagLabelPdf(order);
-    const slipData = await generateCustomLabelPdf(order);
 
     const pdfParts = [
       ...downloadedLabels.filter(Boolean),
       Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData),
-      Buffer.isBuffer(slipData) ? slipData : Buffer.from(slipData),
     ].filter(Boolean);
 
     const merged = await mergePdfBuffers(pdfParts);
@@ -2885,8 +2881,26 @@ app.post("/orders/:id/cancel", async (req, res) => {
       voidLabels: shouldVoidLabels,
     });
 
+    const attemptedCount = Array.isArray(voidResults) ? voidResults.length : 0;
+    const approvedCount = Array.isArray(voidResults)
+      ? voidResults.filter((entry) => entry && entry.approved).length
+      : 0;
+    const deniedCount = Math.max(0, attemptedCount - approvedCount);
+
+    let message = `Order ${orderId} has been cancelled.`;
+    if (attemptedCount > 0) {
+      if (approvedCount > 0) {
+        message += ` ${approvedCount} shipping label${approvedCount === 1 ? '' : 's'} voided successfully.`;
+      }
+      if (deniedCount > 0) {
+        message += ` ${deniedCount} label${deniedCount === 1 ? '' : 's'} could not be voided automatically.`;
+      }
+    } else if (shouldVoidLabels) {
+      message += ' No active shipping labels required voiding.';
+    }
+
     res.json({
-      message: `Order ${orderId} has been cancelled`,
+      message,
       order: updatedOrder,
       voidResults,
     });
