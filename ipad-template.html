@@ -540,22 +540,8 @@
                         </div>
                     </div>
                     
-                    <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cracksSection">
-                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">5. Are the front and back free of cracks?</p>
-                        <div class="flex space-x-6 justify-center lg:justify-start" id="q3Options">
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="radio" name="q3_no_cracks" value="yes" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">Yes</span>
-                            </label>
-                            <label class="inline-flex items-center cursor-pointer">
-                                <input type="radio" name="q3_no_cracks" value="no" class="form-radio text-indigo-600 h-5 w-5">
-                                <span class="ml-2 text-slate-700 sm:text-sm">No</span>
-                            </label>
-                        </div>
-                    </div>
-                    
                     <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cosmeticSection">
-                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">6. What’s the overall cosmetic condition?</p>
+                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">5. What’s the overall cosmetic condition?</p>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="q4Options">
                             <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
                                 <input type="radio" name="q4_cosmetic_condition" value="flawless" class="form-radio text-indigo-600 h-5 w-5">
@@ -1392,11 +1378,10 @@
             
             const powerOnSection = document.getElementById('powerOnSection');
             const functionalSection = document.getElementById('functionalSection');
-            const cracksSection = document.getElementById('cracksSection');
             const cosmeticSection = document.getElementById('cosmeticSection');
             
             function hideAllQuestions() {
-                [connectivitySection, powerOnSection, functionalSection, cracksSection, cosmeticSection, getQuoteBtn].forEach(el => {
+                [connectivitySection, powerOnSection, functionalSection, cosmeticSection, getQuoteBtn].forEach(el => {
                     el.classList.add('hidden');
                 });
                 clearQuoteMessage();
@@ -1409,7 +1394,7 @@
             document.getElementById('storage').addEventListener('change', function() {
                 if (this.value) {
                     connectivitySection.classList.remove('hidden');
-                    [powerOnSection, functionalSection, cracksSection, cosmeticSection, getQuoteBtn].forEach(el => el.classList.add('hidden'));
+                    [powerOnSection, functionalSection, cosmeticSection, getQuoteBtn].forEach(el => el.classList.add('hidden'));
                     clearQuoteMessage();
                     this.classList.remove('highlight-missing');
                     saveFormState();
@@ -1421,7 +1406,7 @@
             document.querySelectorAll('input[name="connectivity"]').forEach(radio => {
                 radio.addEventListener('change', () => {
                     powerOnSection.classList.remove('hidden');
-                    [functionalSection, cracksSection, cosmeticSection, getQuoteBtn].forEach(el => el.classList.add('hidden'));
+                    [functionalSection, cosmeticSection, getQuoteBtn].forEach(el => el.classList.add('hidden'));
                     clearQuoteMessage();
                     saveFormState();
                 });
@@ -1431,13 +1416,11 @@
                 radio.addEventListener('change', () => {
                     if (radio.value === 'yes') {
                         functionalSection.classList.remove('hidden');
-                        cracksSection.classList.add('hidden');
                         cosmeticSection.classList.add('hidden');
                         getQuoteBtn.classList.add('hidden');
                         clearQuoteMessage();
                     } else {
                         functionalSection.classList.add('hidden');
-                        cracksSection.classList.add('hidden');
                         cosmeticSection.classList.add('hidden');
                         getQuoteBtn.classList.remove('hidden');
                     }
@@ -1446,22 +1429,6 @@
             });
 
             document.querySelectorAll('input[name="q2_fully_functional"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (radio.value === 'yes') {
-                        cracksSection.classList.remove('hidden');
-                        cosmeticSection.classList.add('hidden');
-                        getQuoteBtn.classList.add('hidden');
-                        clearQuoteMessage();
-                    } else {
-                        cracksSection.classList.add('hidden');
-                        cosmeticSection.classList.add('hidden');
-                        getQuoteBtn.classList.remove('hidden');
-                    }
-                    saveFormState();
-                });
-            });
-            
-            document.querySelectorAll('input[name="q3_no_cracks"]').forEach(radio => {
                 radio.addEventListener('change', () => {
                     if (radio.value === 'yes') {
                         cosmeticSection.classList.remove('hidden');
@@ -1491,7 +1458,6 @@
                 const selectedConnectivity = document.querySelector('input[name="connectivity"]:checked')?.value;
                 const q1PowerOn = document.querySelector('input[name="q1_power_on"]:checked')?.value;
                 const q2Functional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value;
-                const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
                 const q4Cosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
 
                 if (!selectedStorage) {
@@ -1518,13 +1484,7 @@
                     return;
                 }
 
-                if (q1PowerOn === 'yes' && q2Functional === 'yes' && !q3NoCracks) {
-                    document.getElementById('cracksSection').classList.add('highlight-missing');
-                    showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
-                    return;
-                }
-
-                if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes' && !q4Cosmetic) {
+                if (q1PowerOn === 'yes' && q2Functional === 'yes' && !q4Cosmetic) {
                     document.getElementById('cosmeticSection').classList.add('highlight-missing');
                     showQuoteMessage('Please answer all visible questions to get a quote.', 'error');
                     return;
@@ -1540,12 +1500,9 @@
                 
                 let finalPrice = 0;
                 
-                if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes') {
-                    // Fully functional, no cracks
+                if (q1PowerOn === 'yes' && q2Functional === 'yes') {
+                    // Fully functional; cosmetic condition determines price (damaged covers cracks)
                     finalPrice = basePrices[q4Cosmetic];
-                } else if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'no') {
-                    // Fully functional, but has cracks
-                    finalPrice = basePrices.damaged;
                 } else if (q1PowerOn === 'yes' && q2Functional === 'no') {
                     // Powers on, but not functional
                     finalPrice = basePrices.broken;
@@ -1705,7 +1662,7 @@
                     storage: document.getElementById('storage').value,
                     condition_power_on: document.querySelector('input[name="q1_power_on"]:checked').value,
                     condition_functional: document.querySelector('input[name="q2_fully_functional"]:checked')?.value || 'N/A',
-                    condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
+                    condition_cracks: 'Included in cosmetic condition',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
                     estimatedQuote: finalQuote,
                     paymentMethod: selectedPayment.value,
@@ -1769,7 +1726,6 @@
                     connectivity: document.querySelector('input[name="connectivity"]:checked')?.value,
                     q1_power_on: document.querySelector('input[name="q1_power_on"]:checked')?.value,
                     q2_fully_functional: document.querySelector('input[name="q2_fully_functional"]:checked')?.value,
-                    q3_no_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value,
                     q4_cosmetic_condition: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value,
                 };
                 // We're using localStorage for state persistence during page navigation or refresh.
@@ -1812,19 +1768,10 @@
                         if (functionalRadio) {
                             functionalRadio.checked = true;
                             if (formState.q2_fully_functional === 'yes') {
-                                cracksSection.classList.remove('hidden');
-                            } else {
-                                getQuoteBtn.classList.remove('hidden');
-                            }
-                        }
-                    }
-
-                    if (formState.q3_no_cracks) {
-                        const cracksRadio = document.querySelector(`input[name="q3_no_cracks"][value="${formState.q3_no_cracks}"]`);
-                        if (cracksRadio) {
-                            cracksRadio.checked = true;
-                            if (formState.q3_no_cracks === 'yes') {
                                 cosmeticSection.classList.remove('hidden');
+                                if (formState.q4_cosmetic_condition) {
+                                    getQuoteBtn.classList.remove('hidden');
+                                }
                             } else {
                                 getQuoteBtn.classList.remove('hidden');
                             }
