@@ -4460,6 +4460,28 @@ if (printWindow) {
                 
                 // --- END: UPDATED LABEL LOGIC ---
 
+                // Reset label click handlers before reassigning for the current order context
+                if (modalLabelLink) {
+                    modalLabelLink.onclick = null;
+                }
+                if (modalSecondaryLabelLink) {
+                    modalSecondaryLabelLink.onclick = null;
+                }
+
+                if (order.shippingPreference === 'Shipping Kit Requested') {
+                    const labelClickHandler = (event) => {
+                        maybeMarkKitSentOnLabelClick(event, order);
+                    };
+
+                    if (modalLabelRow && !modalLabelRow.classList.contains('hidden') && modalLabelLink) {
+                        modalLabelLink.onclick = labelClickHandler;
+                    }
+
+                    if (modalSecondaryLabelRow && !modalSecondaryLabelRow.classList.contains('hidden') && modalSecondaryLabelLink) {
+                        modalSecondaryLabelLink.onclick = labelClickHandler;
+                    }
+                }
+
                 const labelStatusText = formatLabelStatus(order);
                 if (modalLabelStatusRow) {
                     if (labelStatusText) {
@@ -5162,42 +5184,103 @@ if (printWindow) {
             }
         }
 
-        async function markKitAsPrinted(orderId) {
-            try {
-                const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-printed`, {
-                    method: 'POST'
-                });
-
-                const rawBody = await response.text();
-                let result = {};
-
-                if (rawBody) {
-                    try {
-                        result = JSON.parse(rawBody);
-                    } catch (parseError) {
-                        result = { message: rawBody };
-                    }
-                }
-
-                if (!response.ok) {
-                    throw new Error(result.error || result.message || 'Failed to update kit status');
-                }
-
-                if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
-                    displayModalMessage(result.message || 'Kit marked as sent.', 'success');
-                    openOrderDetailsModal(orderId);
-                }
-
-                return true;
-            } catch (error) {
-                console.error('Failed to mark kit as printed:', error);
-
-                if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
-                    displayModalMessage(`Error: ${error.message}`, 'error');
-                }
-
-                return false;
+        function maybeMarkKitSentOnLabelClick(event, order) {
+            if (!order || order.shippingPreference !== 'Shipping Kit Requested') {
+                return;
             }
+
+            const link = event?.currentTarget;
+            if (!link) {
+                return;
+            }
+
+            const href = link.getAttribute('href') || '';
+            if (!href || href === '#') {
+                return;
+            }
+
+            const currentStatus = (order.status || '').toLowerCase();
+            if (currentStatus === 'kit_sent') {
+                return;
+            }
+
+            markKitAsPrinted(order.id).then((marked) => {
+                if (!marked) {
+                    return;
+                }
+
+                order.status = 'kit_sent';
+
+                if (currentOrderDetails && currentOrderDetails.id === order.id) {
+                    currentOrderDetails.status = 'kit_sent';
+                }
+            });
+        }
+
+        async function markKitAsPrinted(orderId) {
+            const endpoints = [
+                {
+                    url: `${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-printed`,
+                    fallbackMessage: 'Order marked as kit sent after printing.'
+                },
+                {
+                    url: `${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-sent`,
+                    fallbackMessage: 'Order marked as kit sent.'
+                }
+            ];
+
+            let lastError = null;
+
+            for (let index = 0; index < endpoints.length; index++) {
+                const { url, fallbackMessage } = endpoints[index];
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST'
+                    });
+
+                    const rawBody = await response.text();
+                    let result = {};
+
+                    if (rawBody) {
+                        try {
+                            result = JSON.parse(rawBody);
+                        } catch (parseError) {
+                            result = { message: rawBody };
+                        }
+                    }
+
+                    if (!response.ok) {
+                        const errorMessage = result.error || result.message || 'Failed to update kit status';
+
+                        if (response.status === 404 && index < endpoints.length - 1) {
+                            lastError = new Error(errorMessage);
+                            continue;
+                        }
+
+                        throw new Error(errorMessage);
+                    }
+
+                    const successMessage = result.message || fallbackMessage;
+
+                    if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
+                        displayModalMessage(successMessage, 'success');
+                        openOrderDetailsModal(orderId);
+                    }
+
+                    return true;
+                } catch (error) {
+                    lastError = error;
+                    console.error('Failed to mark kit as printed via', url, error);
+                }
+            }
+
+            if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
+                const message = lastError?.message || 'Failed to update kit status';
+                displayModalMessage(`Error: ${message}`, 'error');
+            }
+
+            return false;
         }
 
         function generatePaymentLink(order) {
