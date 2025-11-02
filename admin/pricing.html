@@ -345,6 +345,8 @@
         let slugManuallyEdited = false;
         let xmlImportPayload = [];
         let selectedExistingDeviceKey = '';
+        let selectedExistingDeviceDocPath = '';
+        let selectedExistingDeviceDocId = '';
 
         function normalizeConditionPrices(priceMap = {}) {
             const normalized = { ...priceMap };
@@ -1402,6 +1404,8 @@
             addDeviceForm.reset();
             slugManuallyEdited = false;
             selectedExistingDeviceKey = '';
+            selectedExistingDeviceDocPath = '';
+            selectedExistingDeviceDocId = '';
             if (existingDeviceSelect) {
                 existingDeviceSelect.value = '';
             }
@@ -1463,6 +1467,8 @@
             existingDeviceSelect.value = nextValue;
             if (!hasSelectedOption) {
                 selectedExistingDeviceKey = '';
+                selectedExistingDeviceDocPath = '';
+                selectedExistingDeviceDocId = '';
             }
         }
 
@@ -1473,6 +1479,8 @@
 
             populateBrandOptions();
             selectedExistingDeviceKey = buildDeviceOptionValue(device);
+            selectedExistingDeviceDocPath = device.documentPath || '';
+            selectedExistingDeviceDocId = device.docId || '';
             if (existingDeviceSelect) {
                 existingDeviceSelect.value = selectedExistingDeviceKey;
             }
@@ -1486,7 +1494,7 @@
                 newDeviceName.disabled = false;
             }
             if (newDeviceSlug) {
-                newDeviceSlug.value = device.slug || '';
+                newDeviceSlug.value = device.slug || device.docId || '';
                 newDeviceSlug.disabled = true;
             }
             slugManuallyEdited = true;
@@ -1552,9 +1560,10 @@
             const brand = newDeviceBrand.value;
             const name = newDeviceName.value.trim();
             let slug = newDeviceSlug.value.trim();
+            const isEditingExisting = Boolean(selectedExistingDeviceDocPath && selectedExistingDeviceDocId);
 
             if (!slug) {
-                slug = slugify(name);
+                slug = isEditingExisting ? selectedExistingDeviceDocId : slugify(name);
             }
 
             if (!brand || !name || !slug) {
@@ -1596,8 +1605,9 @@
                 return;
             }
 
-            const docPath = `devices/${brand}/models`;
-            const docRef = doc(db, docPath, slug);
+            const docPath = isEditingExisting ? selectedExistingDeviceDocPath : `devices/${brand}/models`;
+            const docId = isEditingExisting ? selectedExistingDeviceDocId : slug;
+            const docRef = doc(db, docPath, docId);
 
             try {
                 showStatus(`Saving pricing for ${name}…`, 'info');
@@ -1647,6 +1657,21 @@
                 rows[0].querySelectorAll('input').forEach(input => input.value = '');
             } else {
                 removeButton.closest('.storage-row').remove();
+            }
+        });
+        storageRows.addEventListener('focusout', (event) => {
+            const input = event.target;
+            if (!input.classList || !input.classList.contains('storage-input')) {
+                return;
+            }
+            const rawValue = input.value.trim();
+            if (!rawValue) {
+                return;
+            }
+            const compactValue = rawValue.replace(/\s+/g, '');
+            const match = compactValue.match(/^(\d+)(gb)?$/i);
+            if (match) {
+                input.value = `${match[1]}GB`;
             }
         });
         if (existingDeviceSelect) {
