@@ -68,10 +68,16 @@ function appendCountdownNotice(text = "") {
   return `${trimmed}\n\n${COUNTDOWN_NOTICE_TEXT}`;
 }
 
-const PHONECHECK_DEFAULT_API_URL =
-  "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+const PHONECHECK_DEFAULT_BASE_URL =
+  "https://clientapiv2.phonecheck.com/cloud/cloudDB/";
+const PHONECHECK_DEFAULT_API_URL = `${PHONECHECK_DEFAULT_BASE_URL}CheckEsn/`;
 const PHONECHECK_FALLBACK_API_KEY = "9cdbc7a1-1b9c-44ae-a98085104c71ea3e";
 const PHONECHECK_FALLBACK_USERNAME = "Kai2";
+const PHONECHECK_ENDPOINT_PATHS = {
+  deviceInfo: "GetDeviceInfo/",
+  checkEsn: "CheckEsn/",
+  carrierLock: "CheckCarrierLock/",
+};
 const PHONECHECK_CARRIER_ALIASES = {
   att: "AT&T",
   "at&t": "AT&T",
@@ -104,6 +110,30 @@ const AUTO_CANCEL_MONITORED_STATUSES = [
   "label_generated",
   "emailed",
 ];
+
+function ensureTrailingSlash(url = "") {
+  if (!url) {
+    return "/";
+  }
+  return url.endsWith("/") ? url : `${url}/`;
+}
+
+function resolvePhoneCheckBaseUrl(url) {
+  if (!url) {
+    return PHONECHECK_DEFAULT_BASE_URL;
+  }
+  const trimmed = url.toString().trim();
+  if (!trimmed) {
+    return PHONECHECK_DEFAULT_BASE_URL;
+  }
+  const normalized = ensureTrailingSlash(trimmed);
+  const base = normalized.replace(
+    /(CheckEsn|GetDeviceInfo|CheckCarrierLock)\/?$/i,
+    ""
+  );
+  const resolved = base || PHONECHECK_DEFAULT_BASE_URL;
+  return ensureTrailingSlash(resolved);
+}
 
 function getPhoneCheckConfig() {
   const config = {
@@ -149,6 +179,13 @@ function getPhoneCheckConfig() {
   if (!config.apiUrl) {
     config.apiUrl = PHONECHECK_DEFAULT_API_URL;
   }
+
+  config.baseUrl = resolvePhoneCheckBaseUrl(config.apiUrl);
+  config.endpoints = {
+    deviceInfo: `${config.baseUrl}${PHONECHECK_ENDPOINT_PATHS.deviceInfo}`,
+    checkEsn: `${config.baseUrl}${PHONECHECK_ENDPOINT_PATHS.checkEsn}`,
+    carrierLock: `${config.baseUrl}${PHONECHECK_ENDPOINT_PATHS.carrierLock}`,
+  };
 
   return config;
 }
@@ -313,6 +350,111 @@ function collectStrings(value, bucket) {
   }
 }
 
+function normalizeKey(key) {
+  return key.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function extractDisplayValue(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const extracted = extractDisplayValue(entry);
+      if (extracted) {
+        return extracted;
+      }
+    }
+    return null;
+  }
+  if (typeof value === "object") {
+    if (Object.prototype.hasOwnProperty.call(value, "response")) {
+      return extractDisplayValue(value.response);
+    }
+    const bucket = [];
+    collectStrings(value, bucket);
+    return bucket.length ? bucket[0] : null;
+  }
+  return null;
+}
+
+function findFieldValue(data, keys) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const targets = keys.map(normalizeKey);
+  const targetSet = new Set(targets);
+  const stack = [data];
+
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current || typeof current !== "object") {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      for (const entry of current) {
+        if (entry && typeof entry === "object") {
+          stack.push(entry);
+        }
+      }
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      const normalizedKey = normalizeKey(key);
+      if (targetSet.has(normalizedKey)) {
+        const extracted = extractDisplayValue(value);
+        if (extracted) {
+          return extracted;
+        }
+      }
+      if (value && typeof value === "object") {
+        stack.push(value);
+      }
+    }
+  }
+
+  return null;
+}
+
+function interpretBlacklistStatus(value) {
+  const text = value ? String(value).trim() : "";
+  if (!text) {
+    return { status: "", isBlacklisted: null };
+  }
+  const normalized = text.toLowerCase();
+  if (/(yes|blacklisted|barred|blocked|lost|stolen|fraud)/.test(normalized)) {
+    return { status: text, isBlacklisted: true };
+  }
+  if (/(no|clear|clean|good|not blacklisted)/.test(normalized)) {
+    return { status: text, isBlacklisted: false };
+  }
+  return { status: text, isBlacklisted: null };
+}
+
+function interpretLockStatus(value) {
+  const text = value ? String(value).trim() : "";
+  if (!text) {
+    return { status: "", isLocked: null };
+  }
+  const normalized = text.toLowerCase();
+  if (/(locked|yes|active|engaged)/.test(normalized) && !/(unlocked|no lock|not locked)/.test(normalized)) {
+    return { status: text, isLocked: true };
+  }
+  if (/(unlocked|no|not locked|clear|clean)/.test(normalized)) {
+    return { status: text, isLocked: false };
+  }
+  return { status: text, isLocked: null };
+}
+
 function analyzePhoneCheckResponse(data) {
   const strings = [];
   collectStrings(data, strings);
@@ -344,14 +486,65 @@ function analyzePhoneCheckResponse(data) {
     });
   });
 
+  const deviceModel = findFieldValue(data, ["model", "modelname", "devicemodel"]);
+  const deviceMemory = findFieldValue(data, ["memory", "storage", "capacity", "size"]);
+  const deviceColor = findFieldValue(data, ["color", "colour", "devicecolor"]);
+  const carrierName = findFieldValue(data, ["carrier", "network", "carriername"]);
+  const simlockStatus = interpretLockStatus(
+    findFieldValue(data, ["simlock", "sim_lock", "carrierlock", "lockstatus", "simstatus"])
+  );
+  const blacklistStatus = interpretBlacklistStatus(
+    findFieldValue(data, ["blackliststatus", "blacklist", "esnstatus", "blockedstatus"])
+  );
+
+  if (blacklistStatus.isBlacklisted === true) {
+    issues.add("Reported lost or stolen (blacklisted)");
+  }
+  if (simlockStatus.isLocked === true) {
+    issues.add("Carrier or SIM lock detected");
+  }
+
+  const detailsNotices = [];
+  if (deviceModel) {
+    detailsNotices.push(`Model: ${deviceModel}`);
+  }
+  if (deviceMemory) {
+    detailsNotices.push(`Memory: ${deviceMemory}`);
+  }
+  if (deviceColor) {
+    detailsNotices.push(`Color: ${deviceColor}`);
+  }
+  if (blacklistStatus.status) {
+    detailsNotices.push(`Blacklist: ${blacklistStatus.status}`);
+  }
+  if (carrierName) {
+    detailsNotices.push(`Carrier: ${carrierName}`);
+  }
+  if (simlockStatus.status) {
+    detailsNotices.push(`SIM Lock: ${simlockStatus.status}`);
+  }
+
   let statusText =
+    (blacklistStatus.isBlacklisted === true && "Device is blacklisted.") ||
+    (simlockStatus.isLocked === true && "Carrier lock detected.") ||
     cleanSignals[0] ||
     normalized.find((value) => /status|result/i.test(value.toLowerCase())) ||
     normalized[0] ||
     "No status returned.";
 
-  const notices = normalized.slice(0, 6);
-  const isClean = cleanSignals.length > 0 && issues.size === 0;
+  const notices = [...detailsNotices, ...normalized].filter(Boolean).slice(0, 6);
+
+  let isClean = cleanSignals.length > 0 && issues.size === 0;
+  if (blacklistStatus.isBlacklisted === true || simlockStatus.isLocked === true) {
+    isClean = false;
+  } else if (
+    blacklistStatus.isBlacklisted === false &&
+    (simlockStatus.isLocked === false || simlockStatus.isLocked === null) &&
+    issues.size === 0
+  ) {
+    isClean = true;
+    statusText = statusText || "No issues detected.";
+  }
 
   if (!isClean && issues.size === 0) {
     const firstNonClean = normalized.find((value) => !/clean|clear/i.test(value));
@@ -366,6 +559,17 @@ function analyzePhoneCheckResponse(data) {
     reasons: Array.from(issues),
     notices,
     messages: normalized,
+    deviceInfo: {
+      model: deviceModel || "",
+      memory: deviceMemory || "",
+      color: deviceColor || "",
+    },
+    blacklist: blacklistStatus,
+    carrierLock: {
+      carrier: carrierName || "",
+      simlock: simlockStatus.status,
+      isLocked: simlockStatus.isLocked,
+    },
   };
 }
 
@@ -4029,6 +4233,58 @@ function normalizeCarrierForPhoneCheck(value) {
   return "Unlocked";
 }
 
+function buildPhoneCheckPayload(fields) {
+  const params = new URLSearchParams();
+  fields.forEach((field) => {
+    if (!field || field.value === undefined || field.value === null) {
+      return;
+    }
+    const stringValue = String(field.value);
+    const variants = new Set();
+    const primary = field.key || "";
+    if (primary) {
+      variants.add(primary);
+      variants.add(primary.toLowerCase());
+      variants.add(primary.toUpperCase());
+    }
+    (field.aliases || []).forEach((alias) => {
+      if (!alias) {
+        return;
+      }
+      variants.add(alias);
+      variants.add(alias.toLowerCase());
+      variants.add(alias.toUpperCase());
+    });
+    variants.forEach((variant) => {
+      if (variant) {
+        params.append(variant, stringValue);
+      }
+    });
+  });
+  return params;
+}
+
+async function callPhoneCheckEndpoint(url, fields, label) {
+  const payload = buildPhoneCheckPayload(fields);
+  try {
+    const response = await axios.post(url, payload.toString(), {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      timeout: 20000,
+    });
+    return response.data || {};
+  } catch (error) {
+    const baseMessage =
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      error.message ||
+      "Unknown error";
+    error.message = `${label} request failed: ${baseMessage}`;
+    throw error;
+  }
+}
+
 async function handlePhoneCheckRequest(req, res) {
   try {
     const config = getPhoneCheckConfig();
@@ -4067,25 +4323,56 @@ async function handlePhoneCheckRequest(req, res) {
       defaultCheckAll === "1"
     );
 
-    const payload = new URLSearchParams();
-    payload.append("Apikey", config.apiKey);
-    payload.append("apiKey", config.apiKey);
-    payload.append("Username", config.username);
-    payload.append("username", config.username);
-    payload.append("IMEI", sanitizedImei);
-    payload.append("devicetype", sanitizedDeviceType);
-    payload.append("carrier", sanitizedCarrier);
-    payload.append("checkAll", resolvedCheckAll);
+    const endpoints = config.endpoints || {
+      deviceInfo: `${
+        config.baseUrl || resolvePhoneCheckBaseUrl(config.apiUrl)
+      }${PHONECHECK_ENDPOINT_PATHS.deviceInfo}`,
+      checkEsn: config.apiUrl || PHONECHECK_DEFAULT_API_URL,
+      carrierLock: `${
+        config.baseUrl || resolvePhoneCheckBaseUrl(config.apiUrl)
+      }${PHONECHECK_ENDPOINT_PATHS.carrierLock}`,
+    };
 
-    const response = await axios.post(config.apiUrl, payload.toString(), {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      timeout: 20000,
-    });
+    const [deviceInfoData, esnData, carrierLockData] = await Promise.all([
+      callPhoneCheckEndpoint(
+        endpoints.deviceInfo,
+        [
+          { key: "Apikey", value: config.apiKey, aliases: ["apiKey"] },
+          { key: "Username", value: config.username, aliases: ["user", "Userid"] },
+          { key: "IMEI", value: sanitizedImei },
+        ],
+        "Device info"
+      ),
+      callPhoneCheckEndpoint(
+        endpoints.checkEsn,
+        [
+          { key: "Apikey", value: config.apiKey, aliases: ["apiKey"] },
+          { key: "Username", value: config.username, aliases: ["user"] },
+          { key: "IMEI", value: sanitizedImei },
+          { key: "devicetype", value: sanitizedDeviceType },
+          { key: "carrier", value: sanitizedCarrier },
+          { key: "checkAll", value: resolvedCheckAll },
+        ],
+        "ESN"
+      ),
+      callPhoneCheckEndpoint(
+        endpoints.carrierLock,
+        [
+          { key: "Apikey", value: config.apiKey, aliases: ["apiKey"] },
+          { key: "Userid", value: config.username, aliases: ["Username", "user"] },
+          { key: "devicetype", value: sanitizedDeviceType },
+          { key: "Deviceid", value: sanitizedImei, aliases: ["deviceId", "IMEI"] },
+        ],
+        "Carrier lock"
+      ),
+    ]);
 
-    const data = response.data || {};
-    const summary = analyzePhoneCheckResponse(data);
+    const combinedData = {
+      deviceInfo: deviceInfoData,
+      esn: esnData,
+      carrierLock: carrierLockData,
+    };
+    const summary = analyzePhoneCheckResponse(combinedData);
 
     const trimmedOrderId =
       typeof orderId === "string" ? orderId.trim() : String(orderId || "").trim();
@@ -4101,7 +4388,7 @@ async function handlePhoneCheckRequest(req, res) {
             {
               phoneCheck: {
                 summary,
-                raw: data,
+                raw: combinedData,
                 lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
                 imei: sanitizedImei,
               },
@@ -4133,7 +4420,7 @@ async function handlePhoneCheckRequest(req, res) {
       }
     }
 
-    res.json({ success: true, summary, raw: data, orderUpdated });
+    res.json({ success: true, summary, raw: combinedData, orderUpdated });
   } catch (error) {
     console.error(
       "PhoneCheck API error:",
