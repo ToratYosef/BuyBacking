@@ -2865,23 +2865,33 @@ massPrintBtn.innerHTML = label;
 }
 
 function setSelectAllState(displayedIds = lastRenderedOrderIds) {
-if (!ordersSelectAllCheckbox) return;
-const ids = Array.isArray(displayedIds) ? displayedIds : [];
-if (!ids.length) {
-ordersSelectAllCheckbox.checked = false;
-ordersSelectAllCheckbox.indeterminate = false;
-return;
+  if (!ordersSelectAllCheckbox) return;
+  const ids = Array.isArray(displayedIds) ? displayedIds : [];
+  if (!ids.length) {
+    ordersSelectAllCheckbox.checked = false;
+    ordersSelectAllCheckbox.indeterminate = false;
+    return;
+  }
+  const selectedCount = ids.filter((id) => selectedOrderIds.has(id)).length;
+  ordersSelectAllCheckbox.checked = selectedCount === ids.length;
+  ordersSelectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < ids.length;
 }
-const selectedCount = ids.filter((id) => selectedOrderIds.has(id)).length;
-ordersSelectAllCheckbox.checked = selectedCount === ids.length;
-ordersSelectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < ids.length;
+
+function clearSelectedOrderCheckboxes() {
+  if (!ordersTableBody) return;
+  const checkboxes = ordersTableBody.querySelectorAll('.order-select-checkbox');
+  checkboxes.forEach((checkbox) => {
+    if (checkbox && typeof checkbox === 'object' && 'checked' in checkbox) {
+      checkbox.checked = false;
+    }
+  });
 }
 
 function cleanupSelectedOrderIds() {
-if (!selectedOrderIds.size) {
-return;
-}
-const knownIds = new Set(allOrders.map((order) => order.id));
+  if (!selectedOrderIds.size) {
+    return;
+  }
+  const knownIds = new Set(allOrders.map((order) => order.id));
 selectedOrderIds.forEach((id) => {
 if (!knownIds.has(id)) {
 selectedOrderIds.delete(id);
@@ -5000,16 +5010,17 @@ if (nonKitOrders.length) {
 summaryParts.push(`Ignored non-kit orders: ${nonKitOrders.join(', ')}`);
 }
 if (skipped.length) {
-summaryParts.push(`Skipped ${skipped.length} order${skipped.length === 1 ? '' : 's'} without ready labels: ${skipped.join(', ')}`);
-}
+      summaryParts.push(`Skipped ${skipped.length} order${skipped.length === 1 ? '' : 's'} without ready labels: ${skipped.join(', ')}`);
+    }
 
-showOrdersFeedback(summaryParts.join(' '), skipped.length ? 'error' : 'success');
-selectedOrderIds.clear();
-updateMassPrintButtonLabel({ force: true });
-setSelectAllState([]);
-} catch (error) {
-console.error('Mass print failed:', error);
-showOrdersFeedback(error.message || 'Failed to prepare mass print bundle.', 'error');
+    showOrdersFeedback(summaryParts.join(' '), skipped.length ? 'error' : 'success');
+    selectedOrderIds.clear();
+    clearSelectedOrderCheckboxes();
+    updateMassPrintButtonLabel({ force: true });
+    setSelectAllState([]);
+  } catch (error) {
+    console.error('Mass print failed:', error);
+    showOrdersFeedback(error.message || 'Failed to prepare mass print bundle.', 'error');
 } finally {
 massPrintBtn.dataset.loading = 'false';
 updateMassPrintButtonLabel({ force: true });

@@ -7,6 +7,7 @@ import fs from "fs";
 import axios from "axios";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import { FormData } from "undici";
 
 dotenv.config();
 
@@ -18,14 +19,50 @@ const PORT = process.env.PORT || 3000;
 const AUTO_VOID_DELAY_MS =
   27 * 24 * 60 * 60 * 1000 + // 27 days
   12 * 60 * 60 * 1000; // 12 hours
+const PHONECHECK_DEFAULT_BASE_URL =
+  "https://clientapiv2.phonecheck.com/cloud/cloudDB/";
 const PHONECHECK_API_URL =
   process.env.PHONECHECK_API_URL ||
-  "https://clientapiv2.phonecheck.com/cloud/cloudDB/CheckEsn/";
+  `${PHONECHECK_DEFAULT_BASE_URL}CheckEsn/`;
+const PHONECHECK_BASE_URL = resolvePhoneCheckBaseUrl(
+  process.env.PHONECHECK_BASE_URL || PHONECHECK_API_URL
+);
+const PHONECHECK_ENDPOINTS = {
+  deviceInfo: `${PHONECHECK_BASE_URL}GetDeviceInfo/`,
+  checkEsn: `${PHONECHECK_BASE_URL}CheckEsn/`,
+  carrierLock: `${PHONECHECK_BASE_URL}CheckCarrierLock/`,
+};
 const PHONECHECK_API_KEY =
   process.env.PHONECHECK_API_KEY ||
   "308b6790-b767-4b43-9065-2c00e13cdbf7";
 const PHONECHECK_USERNAME =
   process.env.PHONECHECK_USERNAME || "aecells1";
+const PHONECHECK_DEFAULT_TIMEOUT_MS = 20000;
+
+function ensureTrailingSlash(value = "") {
+  if (!value) {
+    return "";
+  }
+  return value.endsWith("/") ? value : `${value}/`;
+}
+
+function resolvePhoneCheckBaseUrl(input) {
+  const fallback = PHONECHECK_DEFAULT_BASE_URL;
+  if (!input || typeof input !== "string") {
+    return fallback;
+  }
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const normalized = ensureTrailingSlash(trimmed);
+  const stripped = normalized.replace(
+    /(CheckEsn|GetDeviceInfo|CheckCarrierLock)\/?$/i,
+    ""
+  );
+  const resolved = stripped || fallback;
+  return ensureTrailingSlash(resolved);
+}
 const AUTO_VOID_INTERVAL_MS = (() => {
   if (process.env.AUTO_VOID_INTERVAL_MS === undefined) {
     return 60 * 60 * 1000;
@@ -408,6 +445,157 @@ function interpretLockStatus(value) {
     return { status: text, isLocked: false };
   }
   return { status: text, isLocked: null };
+}
+
+function normalizePhoneCheckDeviceType(value) {
+  if (value === null || value === undefined) {
+    return "auto";
+  }
+  const text = String(value).trim().toLowerCase();
+  if (!text) {
+    return "auto";
+  }
+  if (text.includes("apple") || text.includes("iphone") || text === "ios") {
+    return "apple";
+  }
+  if (text.includes("android")) {
+    return "android";
+  }
+  return text;
+}
+
+async function postPhoneCheckEndpoint(endpointKey, fields) {
+  const url = PHONECHECK_ENDPOINTS[endpointKey];
+  if (!url) {
+    throw new Error(`Unknown PhoneCheck endpoint: ${endpointKey}`);
+  }
+
+  const formData = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    const normalizedValue =
+      value === null || value === undefined ? "" : value;
+    formData.append(
+      key,
+      typeof normalizedValue === "string"
+        ? normalizedValue
+        : String(normalizedValue)
+    );
+  });
+
+  try {
+    const response = await axios.post(url, formData, {
+      headers: { Accept: "*/*" },
+      timeout: PHONECHECK_DEFAULT_TIMEOUT_MS,
+    });
+    return response.data;
+  } catch (error) {
+    const message =
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      error.message ||
+      "PhoneCheck request failed.";
+    const wrappedError = new Error(message);
+    wrappedError.status = error.response?.status;
+    wrappedError.endpoint = endpointKey;
+    if (error.response?.data && typeof error.response.data === "object") {
+      wrappedError.details = error.response.data;
+    }
+    throw wrappedError;
+  }
+}
+
+function buildPhoneCheckResult(summary, deviceInfoData, checkEsnData, carrierLockData) {
+  const deviceInfoSummary = summary?.deviceInfo || {};
+  const blacklistSummary = summary?.blacklist || {};
+  const carrierSummary = summary?.carrierLock || {};
+
+  const blacklistLabel =
+    blacklistSummary.isBlacklisted === true
+      ? "Blacklisted"
+      : blacklistSummary.isBlacklisted === false
+      ? "Not blacklisted"
+      : "";
+
+  return {
+    success: true,
+    summary,
+    deviceInfo: {
+      summary: {
+        model:
+          deviceInfoSummary.model ||
+          findFieldValue(deviceInfoData, [
+            "model",
+            "modelname",
+            "devicemodel",
+          ]) ||
+          "",
+        memory:
+          deviceInfoSummary.memory ||
+          findFieldValue(deviceInfoData, [
+            "memory",
+            "storage",
+            "capacity",
+            "size",
+          ]) ||
+          "",
+        color:
+          deviceInfoSummary.color ||
+          findFieldValue(deviceInfoData, [
+            "color",
+            "colour",
+            "devicecolor",
+          ]) ||
+          "",
+      },
+      raw: deviceInfoData,
+    },
+    esnCheck: {
+      summary: {
+        blacklistStatus:
+          blacklistSummary.status ||
+          findFieldValue(checkEsnData, [
+            "blackliststatus",
+            "blacklist",
+            "esnstatus",
+            "blockedstatus",
+          ]) ||
+          "",
+        isBlacklisted:
+          typeof blacklistSummary.isBlacklisted === "boolean"
+            ? blacklistSummary.isBlacklisted
+            : null,
+        label: blacklistLabel,
+      },
+      raw: checkEsnData,
+    },
+    carrierLock: {
+      summary: {
+        carrier:
+          carrierSummary.carrier ||
+          findFieldValue(carrierLockData, [
+            "carrier",
+            "network",
+            "carriername",
+          ]) ||
+          "",
+        simlock:
+          carrierSummary.simlock ||
+          findFieldValue(carrierLockData, [
+            "simlock",
+            "sim_lock",
+            "carrierlock",
+            "lockstatus",
+            "simstatus",
+          ]) ||
+          "",
+        isLocked:
+          typeof carrierSummary.isLocked === "boolean"
+            ? carrierSummary.isLocked
+            : null,
+      },
+      raw: carrierLockData,
+    },
+  };
 }
 
 function analyzePhoneCheckResponse(data) {
@@ -973,39 +1161,73 @@ app.post("/api/phone-check", async (req, res) => {
     }
 
     const { imei, deviceType, carrier, checkAll } = req.body || {};
-    const sanitizedImei = typeof imei === "string" ? imei.trim() : String(imei || "").trim();
+    const sanitizedImei =
+      typeof imei === "string" ? imei.trim() : String(imei || "").trim();
 
     if (!sanitizedImei) {
       return res.status(400).json({ error: "IMEI is required." });
     }
 
-    const payload = {
+    const normalizedDeviceType = normalizePhoneCheckDeviceType(deviceType);
+    const sanitizedCarrier =
+      typeof carrier === "string" ? carrier.trim() : "";
+    const checkAllValue =
+      Number.isFinite(Number(checkAll)) && Number(checkAll) >= 0
+        ? String(Number(checkAll))
+        : "1";
+
+    const deviceInfoData = await postPhoneCheckEndpoint("deviceInfo", {
       Apikey: PHONECHECK_API_KEY,
       Username: PHONECHECK_USERNAME,
       IMEI: sanitizedImei,
-      devicetype: deviceType ? deviceType.toString() : "auto",
-      carrier: carrier || "others",
-      checkAll: typeof checkAll === "number" ? checkAll : 1,
-    };
-
-    const response = await axios.post(PHONECHECK_API_URL, payload, {
-      timeout: 15000,
     });
 
-    const data = response.data;
-    const summary = analyzePhoneCheckResponse(data);
+    const checkEsnData = await postPhoneCheckEndpoint("checkEsn", {
+      Apikey: PHONECHECK_API_KEY,
+      Username: PHONECHECK_USERNAME,
+      IMEI: sanitizedImei,
+      devicetype: normalizedDeviceType,
+      checkAll: checkAllValue,
+      carrier: sanitizedCarrier,
+    });
 
-    res.json({ success: true, summary, raw: data });
+    const carrierLockData = await postPhoneCheckEndpoint("carrierLock", {
+      Apikey: PHONECHECK_API_KEY,
+      Userid: PHONECHECK_USERNAME,
+      Deviceid: sanitizedImei,
+      devicetype: normalizedDeviceType,
+    });
+
+    const combinedPayload = {
+      deviceInfo: deviceInfoData,
+      checkEsn: checkEsnData,
+      carrierLock: carrierLockData,
+    };
+
+    const summary = analyzePhoneCheckResponse(combinedPayload);
+    const responsePayload = buildPhoneCheckResult(
+      summary,
+      deviceInfoData,
+      checkEsnData,
+      carrierLockData
+    );
+
+    res.json(responsePayload);
   } catch (error) {
     console.error("PhoneCheck API error:", error.response?.data || error.message || error);
-    const status = error.response?.status;
+    const status = error.status || error.response?.status;
     const message =
+      error.message ||
       error.response?.data?.error ||
       error.response?.data?.message ||
-      error.message ||
       "Failed to complete PhoneCheck request.";
     const payload = { error: message };
-    if (error.response?.data && typeof error.response.data === "object") {
+    if (error.endpoint) {
+      payload.endpoint = error.endpoint;
+    }
+    if (error.details) {
+      payload.details = error.details;
+    } else if (error.response?.data && typeof error.response.data === "object") {
       payload.details = error.response.data;
     }
     res.status(status && status >= 400 ? status : 500).json(payload);
