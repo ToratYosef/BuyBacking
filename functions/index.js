@@ -4440,6 +4440,10 @@ async function handlePhoneCheckRequest(req, res) {
   }
 }
 
+// Legacy admin clients expect the Express app to be mounted at /api, so we
+// register the handler without the /api prefix and keep backwards-compatible
+// aliases for older endpoints.
+app.post("/phone-check", handlePhoneCheckRequest);
 app.post("/api/phone-check", handlePhoneCheckRequest);
 app.post("/check-esn", handlePhoneCheckRequest);
 
