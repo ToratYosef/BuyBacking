@@ -154,7 +154,6 @@
                             <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Good</th>
                             <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Fair</th>
                             <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Damaged</th>
-                            <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Broken</th>
                             <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">No Power</th>
                             <th class="py-3 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Actions</th>
                         </tr>
@@ -199,6 +198,13 @@
                 </button>
             </div>
             <form id="addDeviceForm" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-slate-600 mb-1">Existing Device</label>
+                    <select id="existingDeviceSelect" class="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Create new device</option>
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">Choose an existing device to load its pricing or leave blank to add a new device.</p>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-600 mb-1">Brand</label>
@@ -316,15 +322,17 @@
         let allDevices = [];
         let filteredDevices = [];
         const supportedBrands = ['iphone', 'samsung', 'google_pixel', 'ipad', 'macbook', 'other'];
-        const conditions = ['flawless', 'good', 'fair', 'damaged', 'broken', 'noPower'];
-        const exportConditions = ['flawless', 'good', 'fair', 'broken'];
+        const conditions = ['flawless', 'good', 'fair', 'damaged', 'noPower'];
+        const exportConditions = ['flawless', 'good', 'fair', 'damaged'];
         const conditionLabels = {
             flawless: 'Flawless',
             good: 'Good',
             fair: 'Fair',
             damaged: 'Damaged',
-            broken: 'Broken',
             noPower: 'No Power'
+        };
+        const legacyConditionAliases = {
+            broken: 'damaged'
         };
         const usdFormatter = new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -336,6 +344,45 @@
         let brandOptionsInitialized = false;
         let slugManuallyEdited = false;
         let xmlImportPayload = [];
+        let selectedExistingDeviceKey = '';
+
+        function normalizeConditionPrices(priceMap = {}) {
+            const normalized = { ...priceMap };
+            Object.entries(priceMap || {}).forEach(([key, value]) => {
+                const alias = legacyConditionAliases[key];
+                if (alias) {
+                    if (normalized[alias] === undefined || normalized[alias] === null || normalized[alias] === '') {
+                        normalized[alias] = value;
+                    }
+                    delete normalized[key];
+                }
+            });
+            return normalized;
+        }
+
+        function getConditionPrice(priceMap = {}, condition) {
+            if (!priceMap) {
+                return undefined;
+            }
+            if (priceMap[condition] !== undefined) {
+                return priceMap[condition];
+            }
+            const legacyKey = Object.entries(legacyConditionAliases).find(([, alias]) => alias === condition)?.[0];
+            if (legacyKey && priceMap[legacyKey] !== undefined) {
+                return priceMap[legacyKey];
+            }
+            return undefined;
+        }
+
+        function buildDeviceOptionValue(device = {}) {
+            return `${device.brand || ''}::${device.slug || device.docId || ''}`;
+        }
+
+        function formatDeviceOptionLabel(device = {}) {
+            const brandLabel = device.brand ? formatBrandLabel(device.brand) : 'Unknown Brand';
+            const nameLabel = device.name || device.slug || device.docId || 'Unnamed Device';
+            return `${brandLabel} • ${nameLabel}`;
+        }
 
         // DOM elements
         const loadingIndicator = document.getElementById('loadingIndicator');
@@ -369,6 +416,7 @@
         const closeAddDeviceBtn = document.getElementById('closeAddDeviceBtn');
         const cancelAddDeviceBtn = document.getElementById('cancelAddDeviceBtn');
         const addDeviceForm = document.getElementById('addDeviceForm');
+        const existingDeviceSelect = document.getElementById('existingDeviceSelect');
         const addStorageRowBtn = document.getElementById('addStorageRowBtn');
         const storageRows = document.getElementById('storageRows');
         const newDeviceBrand = document.getElementById('newDeviceBrand');
@@ -535,8 +583,10 @@
                             fieldsGrid.className = 'mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3';
 
                             let hasPricingField = false;
+                            const normalizedSet = normalizeConditionPrices(priceSet);
                             conditions.forEach((condition) => {
-                                if (!priceSet || priceSet[condition] === undefined) {
+                                const priceValue = getConditionPrice(normalizedSet, condition);
+                                if (priceValue === undefined) {
                                     return;
                                 }
                                 hasPricingField = true;
@@ -557,7 +607,8 @@
 
                                 const input = document.createElement('input');
                                 input.type = 'number';
-                                input.value = priceSet[condition] ?? 0;
+                                input.value = priceValue ?? 0;
+                                input.defaultValue = input.value;
                                 input.className = 'w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100';
                                 input.dataset.docId = device.docId;
                                 input.dataset.docPath = device.documentPath;
@@ -804,12 +855,12 @@
                     let hasConnectivity = false;
 
                     Object.keys(connectivityBands).sort().forEach((connectivity) => {
-                        const conditionMap = connectivityBands[connectivity] || {};
+                        const conditionMap = normalizeConditionPrices(connectivityBands[connectivity] || {});
                         const connectivityNode = xmlDocument.createElement(connectivity);
                         let hasCondition = false;
 
                         exportConditions.forEach((condition) => {
-                            const value = conditionMap[condition];
+                            const value = getConditionPrice(conditionMap, condition);
                             if (value !== undefined && value !== null && value !== '') {
                                 const conditionNode = xmlDocument.createElement(condition);
                                 conditionNode.textContent = String(value);
@@ -1152,6 +1203,8 @@
                 console.error("Error fetching devices from Firestore:", error);
                 showStatus("Failed to load device data. Check console for details.", "error");
             }
+            const existingSelection = selectedExistingDeviceKey || (existingDeviceSelect ? existingDeviceSelect.value : '');
+            populateExistingDeviceSelect(existingSelection);
             applyFilters();
         };
 
@@ -1174,21 +1227,15 @@
                     const connectivityTotal = Object.keys(storageData).length;
                     for (const connectivity in storageData) {
                         const prices = storageData[connectivity];
-                        const row = `
-                            <tr class="hover:bg-gray-50">
-                                <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900 flex items-center">
-                                    ${device.brand.includes('ipad') || device.brand.includes('macbook') ? 
-                                      `<i class="fas fa-tablet-alt text-xl mr-2"></i>` : 
-                                      `<i class="fas fa-mobile-alt text-xl mr-2"></i>`}
-                                    ${device.name}
-                                </td>
-                                <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-500">${storage}</td>
-                                <td class="py-3 px-4 whitespace-nowrap text-sm font-semibold ${connectivity === 'unlocked' ? 'text-green-600' : 'text-red-600'}">${connectivity}</td>
-                                ${conditions.map(condition => `
+                        const normalizedPrices = normalizeConditionPrices(prices);
+                        const conditionCells = conditions.map(condition => {
+                            const priceValue = getConditionPrice(normalizedPrices, condition);
+                            const displayValue = priceValue ?? 0;
+                            return `
                                     <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900">
                                         <div class="flex items-center">
                                             <span>$</span>
-                                            <input type="number" value="${prices[condition] || 0}"
+                                            <input type="number" value="${displayValue}"
                                                    class="w-24 border rounded-lg px-2 py-1 text-center"
                                                    data-doc-id="${device.docId}"
                                                    data-doc-path="${device.documentPath}"
@@ -1198,8 +1245,19 @@
                                                    onblur="handlePriceUpdate(this)"
                                                    onkeypress="if(event.key === 'Enter') this.blur();">
                                         </div>
-                                    </td>
-                                `).join('')}
+                                    </td>`;
+                        }).join('');
+                        const row = `
+                            <tr class="hover:bg-gray-50">
+                                <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900 flex items-center">
+                                    ${device.brand.includes('ipad') || device.brand.includes('macbook') ?
+                                      `<i class="fas fa-tablet-alt text-xl mr-2"></i>` :
+                                      `<i class="fas fa-mobile-alt text-xl mr-2"></i>`}
+                                    ${device.name}
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-500">${storage}</td>
+                                <td class="py-3 px-4 whitespace-nowrap text-sm font-semibold ${connectivity === 'unlocked' ? 'text-green-600' : 'text-red-600'}">${connectivity}</td>
+                                ${conditionCells}
                                 <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900">
                                     <button class="delete-row-btn text-red-500 hover:text-red-700"
                                             data-doc-id="${device.docId}"
@@ -1254,16 +1312,13 @@
             const docRef = doc(db, docPath, docId);
 
             try {
-                // Use a batched write to ensure atomicity and avoid race conditions
-                await setDoc(docRef, {
-                    prices: {
-                        [storage]: {
-                            [connectivity]: {
-                                [condition]: newPrice
-                            }
-                        }
-                    }
-                }, { merge: true });
+                const payload = {
+                    [`prices.${storage}.${connectivity}.${condition}`]: newPrice
+                };
+                if (condition === 'damaged') {
+                    payload[`prices.${storage}.${connectivity}.broken`] = deleteField();
+                }
+                await updateDoc(docRef, payload);
 
                 element.defaultValue = newPrice;
                 showStatus(`Price for ${docId} (${storage} - ${connectivity} - ${condition}) updated successfully!`, "success");
@@ -1323,6 +1378,8 @@
 
         function openAddDeviceModal() {
             populateBrandOptions();
+            const currentSelection = selectedExistingDeviceKey || (existingDeviceSelect ? existingDeviceSelect.value : '');
+            populateExistingDeviceSelect(currentSelection);
             resetAddDeviceForm();
             addDeviceModal.classList.add('is-visible');
         }
@@ -1344,6 +1401,19 @@
         function resetAddDeviceForm() {
             addDeviceForm.reset();
             slugManuallyEdited = false;
+            selectedExistingDeviceKey = '';
+            if (existingDeviceSelect) {
+                existingDeviceSelect.value = '';
+            }
+            if (newDeviceBrand) {
+                newDeviceBrand.disabled = false;
+            }
+            if (newDeviceName) {
+                newDeviceName.disabled = false;
+            }
+            if (newDeviceSlug) {
+                newDeviceSlug.disabled = false;
+            }
             storageRows.innerHTML = '';
             storageRows.appendChild(createStorageRow({ connectivity: 'unlocked' }));
         }
@@ -1363,12 +1433,90 @@
                 .replace(/^\w/, char => char.toUpperCase());
         }
 
+        function populateExistingDeviceSelect(selectedValue = '') {
+            if (!existingDeviceSelect) {
+                return;
+            }
+
+            const options = ['<option value="">Create new device</option>'];
+            const sortedDevices = [...allDevices].sort((a, b) => {
+                const brandLabelA = a.brand ? formatBrandLabel(a.brand) : '';
+                const brandLabelB = b.brand ? formatBrandLabel(b.brand) : '';
+                const brandCompare = brandLabelA.localeCompare(brandLabelB, undefined, { sensitivity: 'base' });
+                if (brandCompare !== 0) {
+                    return brandCompare;
+                }
+                const nameA = (a.name || a.slug || a.docId || '').toLowerCase();
+                const nameB = (b.name || b.slug || b.docId || '').toLowerCase();
+                return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+            });
+
+            sortedDevices.forEach(device => {
+                const value = buildDeviceOptionValue(device);
+                const label = formatDeviceOptionLabel(device);
+                options.push(`<option value="${value}">${label}</option>`);
+            });
+
+            existingDeviceSelect.innerHTML = options.join('');
+            const hasSelectedOption = sortedDevices.some(device => buildDeviceOptionValue(device) === selectedValue);
+            const nextValue = selectedValue && hasSelectedOption ? selectedValue : '';
+            existingDeviceSelect.value = nextValue;
+            if (!hasSelectedOption) {
+                selectedExistingDeviceKey = '';
+            }
+        }
+
+        function loadDeviceIntoForm(device) {
+            if (!device) {
+                return;
+            }
+
+            populateBrandOptions();
+            selectedExistingDeviceKey = buildDeviceOptionValue(device);
+            if (existingDeviceSelect) {
+                existingDeviceSelect.value = selectedExistingDeviceKey;
+            }
+
+            if (newDeviceBrand) {
+                newDeviceBrand.value = device.brand || '';
+                newDeviceBrand.disabled = true;
+            }
+            if (newDeviceName) {
+                newDeviceName.value = device.name || '';
+                newDeviceName.disabled = false;
+            }
+            if (newDeviceSlug) {
+                newDeviceSlug.value = device.slug || '';
+                newDeviceSlug.disabled = true;
+            }
+            slugManuallyEdited = true;
+
+            storageRows.innerHTML = '';
+            let rowCount = 0;
+            const prices = device.prices || {};
+            Object.keys(prices).forEach(storageKey => {
+                const connectivityMap = prices[storageKey] || {};
+                Object.keys(connectivityMap).forEach(connectivityKey => {
+                    storageRows.appendChild(createStorageRow({
+                        storage: storageKey,
+                        connectivity: connectivityKey,
+                        prices: connectivityMap[connectivityKey]
+                    }));
+                    rowCount += 1;
+                });
+            });
+
+            if (rowCount === 0) {
+                storageRows.appendChild(createStorageRow({ connectivity: 'unlocked' }));
+            }
+        }
+
         function createStorageRow(initial = {}) {
             const row = document.createElement('div');
             row.className = 'storage-row';
             const storageValue = initial.storage || '';
             const connectivityValue = initial.connectivity || 'unlocked';
-            const priceMap = initial.prices || {};
+            const priceMap = normalizeConditionPrices(initial.prices || {});
             row.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -1381,12 +1529,15 @@
                     </div>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                    ${conditions.map(condition => `
+                    ${conditions.map(condition => {
+                        const priceValue = getConditionPrice(priceMap, condition);
+                        const displayValue = priceValue ?? '';
+                        return `
                         <div>
                             <label class="block text-sm font-medium text-slate-600 mb-1">${formatCondition(condition)}</label>
-                            <input type="number" min="0" step="1" class="price-input w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" data-condition="${condition}" value="${priceMap[condition] ?? ''}" required>
+                            <input type="number" min="0" step="1" class="price-input w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" data-condition="${condition}" value="${displayValue}" required>
                         </div>
-                    `).join('')}
+                    `;}).join('')}
                 </div>
                 <div class="text-right mt-4">
                     <button type="button" class="remove-storage-row text-sm">Remove storage</button>
@@ -1412,6 +1563,7 @@
             }
 
             const pricingPayload = {};
+            const cleanupPayload = {};
             let hasPricing = false;
 
             storageRows.querySelectorAll('.storage-row').forEach(row => {
@@ -1435,6 +1587,7 @@
                     conditionPrices[condition] = Number.isNaN(price) ? 0 : price;
                 });
                 pricingPayload[storageValue][connectivityValue] = conditionPrices;
+                cleanupPayload[`prices.${storageValue}.${connectivityValue}.broken`] = deleteField();
                 hasPricing = true;
             });
 
@@ -1454,6 +1607,10 @@
                     brand,
                     prices: pricingPayload
                 }, { merge: true });
+                const cleanupKeys = Object.keys(cleanupPayload);
+                if (cleanupKeys.length) {
+                    await updateDoc(docRef, cleanupPayload);
+                }
                 showStatus(`Pricing for ${name} saved successfully.`, 'success');
                 closeAddDeviceModal();
                 fetchDevices();
@@ -1492,6 +1649,24 @@
                 removeButton.closest('.storage-row').remove();
             }
         });
+        if (existingDeviceSelect) {
+            existingDeviceSelect.addEventListener('change', () => {
+                const selectedValue = existingDeviceSelect.value;
+                if (!selectedValue) {
+                    resetAddDeviceForm();
+                    populateExistingDeviceSelect('');
+                    return;
+                }
+                const device = allDevices.find(device => buildDeviceOptionValue(device) === selectedValue);
+                if (!device) {
+                    showStatus('The selected device could not be found. Try refreshing the list.', 'error');
+                    resetAddDeviceForm();
+                    populateExistingDeviceSelect('');
+                    return;
+                }
+                loadDeviceIntoForm(device);
+            });
+        }
         newDeviceName.addEventListener('input', () => {
             if (!slugManuallyEdited) {
                 newDeviceSlug.value = slugify(newDeviceName.value);
@@ -1615,7 +1790,6 @@
                      'Good': 'good',
                      'Fair': 'fair',
                      'Damaged': 'damaged',
-                     'Broken': 'broken',
                      'No Power': 'noPower'
                  };
                  const conditionHeaders = Object.keys(conditionMap);
@@ -1644,7 +1818,8 @@
                              name: row['Device'] || slug,
                              slug: slug,
                              brand: brand,
-                             prices: {}
+                             prices: {},
+                             cleanupPaths: new Set()
                          };
                      }
                      if (!deviceUpdates[brand][slug].prices[storage]) {
@@ -1653,7 +1828,10 @@
                      if (!deviceUpdates[brand][slug].prices[storage][connectivity]) {
                          deviceUpdates[brand][slug].prices[storage][connectivity] = {};
                      }
-                     
+                     if (!deviceUpdates[brand][slug].cleanupPaths) {
+                         deviceUpdates[brand][slug].cleanupPaths = new Set();
+                     }
+
                      // Map prices from the row to the update object
                      conditionHeaders.forEach(conditionHeader => {
                          const price = row[conditionHeader];
@@ -1662,25 +1840,44 @@
                              deviceUpdates[brand][slug].prices[storage][connectivity][condition] = parseFloat(price);
                          }
                      });
+
+                     const brokenPrice = row['Broken'];
+                     if (brokenPrice !== undefined && brokenPrice !== null && brokenPrice !== '' && !isNaN(parseFloat(brokenPrice))) {
+                         if (deviceUpdates[brand][slug].prices[storage][connectivity].damaged === undefined) {
+                             deviceUpdates[brand][slug].prices[storage][connectivity].damaged = parseFloat(brokenPrice);
+                         }
+                     }
+                     deviceUpdates[brand][slug].cleanupPaths.add(`prices.${storage}.${connectivity}.broken`);
                  });
-                 
+
                  // Process updates for each device
                  const updatePromises = [];
                  for (const brand in deviceUpdates) {
                      for (const slug in deviceUpdates[brand]) {
                          const updateData = deviceUpdates[brand][slug];
+                         const cleanupSet = updateData.cleanupPaths;
+                         if (cleanupSet) {
+                             delete updateData.cleanupPaths;
+                         }
                          const collectionPath = `devices/${brand}/models`;
                          const docRef = doc(db, collectionPath, slug);
 
-                         updatePromises.push(setDoc(docRef, updateData, { merge: true })
-                            .then(() => {
-                                updatedCount++;
-                            })
-                            .catch(e => {
-                                console.error(`Failed to update document for slug '${slug}':`, e);
-                                errorCount++;
-                            })
-                         );
+                         updatePromises.push((async () => {
+                             try {
+                                 await setDoc(docRef, updateData, { merge: true });
+                                 if (cleanupSet && cleanupSet.size) {
+                                     const cleanupPayload = {};
+                                     cleanupSet.forEach(path => {
+                                         cleanupPayload[path] = deleteField();
+                                     });
+                                     await updateDoc(docRef, cleanupPayload);
+                                 }
+                                 updatedCount++;
+                             } catch (e) {
+                                 console.error(`Failed to update document for slug '${slug}':`, e);
+                                 errorCount++;
+                             }
+                         })());
                      }
                  }
 
