@@ -249,52 +249,5 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         });
     </script>
 
-
-  <script src="/assets/js/page-tracker.js" defer></script>
-  <script>
-    (function () {
-      const CONVERSION_LABEL = 'order-submitted';
-      let recorded = false;
-
-      const attemptRecord = () => {
-        if (recorded || !window.PageTracker || typeof window.PageTracker.recordConversion !== 'function') {
-          return recorded;
-        }
-        const success = window.PageTracker.recordConversion({
-          path: window.location.pathname || '/order-submitted',
-          label: CONVERSION_LABEL,
-          title: document.title || '',
-          metadata: {
-            query: window.location.search || '',
-            type: 'order-confirmation',
-          },
-        });
-        if (success) {
-          recorded = true;
-        }
-        return success;
-      };
-
-      if (!attemptRecord()) {
-        let attempts = 0;
-        const maxAttempts = 40;
-        const retryInterval = setInterval(() => {
-          attempts += 1;
-          if (attemptRecord() || attempts >= maxAttempts) {
-            clearInterval(retryInterval);
-          }
-        }, 250);
-
-        const handler = () => {
-          if (attemptRecord()) {
-            window.removeEventListener('page-tracker:updated', handler);
-          }
-        };
-
-        window.addEventListener('page-tracker:ready', handler, { once: true });
-        window.addEventListener('page-tracker:updated', handler);
-      }
-    })();
-  </script>
 </body>
 </html>

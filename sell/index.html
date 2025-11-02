@@ -26,7 +26,60 @@
         gtag('config', 'AW-17534255111');
     </script>
 
-    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import {
+            getAuth,
+            signInWithPopup,
+            GoogleAuthProvider,
+            signInWithEmailAndPassword,
+            createUserWithEmailAndPassword,
+            signOut,
+            onAuthStateChanged,
+            updateProfile,
+            sendPasswordResetEmail
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+            getFirestore,
+            collection,
+            addDoc,
+            serverTimestamp,
+            doc,
+            getDoc
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "auth.secondhandcell.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.appspot.com",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseAuth = auth;
+        window.GoogleAuthProvider = GoogleAuthProvider;
+        window.signInWithPopup = signInWithPopup;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signOut = signOut;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.updateProfile = updateProfile;
+        window.sendPasswordResetEmail = sendPasswordResetEmail;
+        window.firebaseDb = db;
+        window.firebaseServerTimestamp = serverTimestamp;
+        window.firebase = {
+            firestore: {
+                doc: doc,
+                getDoc: getDoc
+            }
+        };
+    </script>
     <style>
         body {
             font-family: sans-serif;
@@ -563,8 +616,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </div>
                     </div>
                     
+                    <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cracksSection">
+                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">5. Are the front and back free of cracks?</p>
+                        <div class="flex space-x-6 justify-center lg:justify-start" id="q3Options">
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="radio" name="q3_no_cracks" value="yes" class="form-radio text-indigo-600 h-5 w-5">
+                                <span class="ml-2 text-slate-700 sm:text-sm">Yes</span>
+                            </label>
+                            <label class="inline-flex items-center cursor-pointer">
+                                <input type="radio" name="q3_no_cracks" value="no" class="form-radio text-indigo-600 h-5 w-5">
+                                <span class="ml-2 text-slate-700 sm:text-sm">No</span>
+                            </label>
+                        </div>
+                    </div>
+                    
                     <div class="p-6 rounded-lg bg-slate-50 border border-slate-200 shadow-sm question-group hidden sm:p-4" id="cosmeticSection">
-                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">5. What’s the overall cosmetic condition?</p>
+                        <p class="text-lg font-semibold text-slate-700 mb-3 text-center lg:text-left sm:text-base">6. What’s the overall cosmetic condition?</p>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="q4Options">
                             <label class="flex items-center p-3 border border-slate-300 rounded-md hover:bg-indigo-50 transition-colors duration-200 cursor-pointer sm:p-2">
                                 <input type="radio" name="q4_cosmetic_condition" value="flawless" class="form-radio text-indigo-600 h-5 w-5">
@@ -1215,6 +1282,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     const carrierSection = document.getElementById('carrierSection');
                     const powerOnSection = document.getElementById('powerOnSection');
                     const functionalSection = document.getElementById('functionalSection');
+                    const cracksSection = document.getElementById('cracksSection');
                     const cosmeticSection = document.getElementById('cosmeticSection');
                     const getQuoteBtn = document.getElementById('getQuoteBtn');
 
@@ -1295,36 +1363,53 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         }
 
                         if (functionalSelected === 'yes') {
-                            if (cosmeticSection) {
-                                cosmeticSection.classList.remove('hidden');
+                            if (cracksSection) {
+                                cracksSection.classList.remove('hidden');
                             }
 
                             if (qualityValue) {
-                                const cosmeticMapping = {
-                                    flawless: 'flawless',
-                                    mint: 'flawless',
-                                    new: 'flawless',
-                                    pristine: 'flawless',
-                                    good: 'good',
-                                    great: 'good',
-                                    excellent: 'good',
-                                    gentlyused: 'good',
-                                    scratched: 'good',
-                                    fair: 'fair',
-                                    average: 'fair',
-                                    used: 'fair',
-                                    worn: 'fair',
-                                    damaged: 'damaged',
-                                    cracked: 'damaged' // legacy quality option maps to damaged
-                                };
+                                const cracksValue = ['damaged', 'broken', 'cracked'].includes(qualityValue) ? 'no' : 'yes'; // "cracked" kept for legacy URLs
+                                const cracksRadio = document.querySelector(`input[name="q3_no_cracks"][value="${cracksValue}"]`);
+                                if (cracksRadio) {
+                                    cracksRadio.checked = true;
+                                }
 
-                                const cosmeticValue = cosmeticMapping[qualityValue] || 'fair';
-                                const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${cosmeticValue}"]`);
-                                if (cosmeticRadio) {
-                                    cosmeticRadio.checked = true;
+                                if (cracksValue === 'yes') {
+                                    if (cosmeticSection) {
+                                        cosmeticSection.classList.remove('hidden');
+                                    }
+
+                                    const cosmeticMapping = {
+                                        flawless: 'flawless',
+                                        mint: 'flawless',
+                                        new: 'flawless',
+                                        pristine: 'flawless',
+                                        good: 'good',
+                                        great: 'good',
+                                        excellent: 'good',
+                                        gentlyused: 'good',
+                                        scratched: 'good',
+                                        fair: 'fair',
+                                        average: 'fair',
+                                        used: 'fair',
+                                        worn: 'fair',
+                                        damaged: 'damaged',
+                                        cracked: 'damaged' // legacy quality option maps to damaged
+                                    };
+
+                                    const cosmeticValue = cosmeticMapping[qualityValue] || 'fair';
+                                    const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${cosmeticValue}"]`);
+                                    if (cosmeticRadio) {
+                                        cosmeticRadio.checked = true;
+                                    }
+                                } else if (cosmeticSection) {
+                                    cosmeticSection.classList.add('hidden');
                                 }
                             }
                         } else if (functionalSelected === 'no') {
+                            if (cracksSection) {
+                                cracksSection.classList.add('hidden');
+                            }
                             if (cosmeticSection) {
                                 cosmeticSection.classList.add('hidden');
                             }
@@ -1332,6 +1417,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     } else if (powerSelected === 'no') {
                         if (functionalSection) {
                             functionalSection.classList.add('hidden');
+                        }
+                        if (cracksSection) {
+                            cracksSection.classList.add('hidden');
                         }
                         if (cosmeticSection) {
                             cosmeticSection.classList.add('hidden');
@@ -1342,6 +1430,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
                     const selectedPower = document.querySelector('input[name="q1_power_on"]:checked')?.value;
                     const selectedFunctional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value;
+                    const selectedCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
                     const selectedCosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
 
                     let hasAllAnswers = false;
@@ -1351,8 +1440,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         } else if (selectedFunctional) {
                             if (selectedFunctional === 'no') {
                                 hasAllAnswers = true;
-                            } else if (selectedCosmetic) {
-                                hasAllAnswers = true;
+                            } else if (selectedCracks) {
+                                if (selectedCracks === 'no') {
+                                    hasAllAnswers = true;
+                                } else if (selectedCosmetic) {
+                                    hasAllAnswers = true;
+                                }
                             }
                         }
                     }
@@ -1816,6 +1909,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const carrierSection = document.getElementById('carrierSection');
             const powerOnSection = document.getElementById('powerOnSection');
             const functionalSection = document.getElementById('functionalSection');
+            const cracksSection = document.getElementById('cracksSection');
             const cosmeticSection = document.getElementById('cosmeticSection');
             
             // Helper function to uncheck all radios in a container
@@ -1838,12 +1932,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
             
             function hideAllQuestions() {
-                [carrierSection, powerOnSection, functionalSection, cosmeticSection, getQuoteBtn].forEach(el => {
+                [carrierSection, powerOnSection, functionalSection, cracksSection, cosmeticSection, getQuoteBtn].forEach(el => {
                     el.classList.add('hidden');
                 });
                 uncheckRadiosInContainer(carrierSection);
                 uncheckRadiosInContainer(powerOnSection);
                 uncheckRadiosInContainer(functionalSection);
+                uncheckRadiosInContainer(cracksSection);
                 uncheckRadiosInContainer(cosmeticSection);
                 clearQuoteMessage();
                 finalQuoteAmountMainDisplay.classList.add('hidden');
@@ -1854,7 +1949,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 if (this.value) {
                     carrierSection.classList.remove('hidden');
                     // Reset all dependent questions when storage changes
-                    hideAndClearQuestions(powerOnSection, functionalSection, cosmeticSection);
+                    hideAndClearQuestions(powerOnSection, functionalSection, cracksSection, cosmeticSection);
                     getQuoteBtn.classList.add('hidden');
                     
                     clearQuoteMessage();
@@ -1869,7 +1964,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 radio.addEventListener('change', () => {
                     powerOnSection.classList.remove('hidden');
                     // Reset all dependent questions when carrier changes
-                    hideAndClearQuestions(functionalSection, cosmeticSection);
+                    hideAndClearQuestions(functionalSection, cracksSection, cosmeticSection);
                     getQuoteBtn.classList.add('hidden');
 
                     clearQuoteMessage();
@@ -1882,12 +1977,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     if (radio.value === 'yes') {
                         functionalSection.classList.remove('hidden');
                         // Reset all dependent questions when power on changes
-                        hideAndClearQuestions(cosmeticSection);
+                        hideAndClearQuestions(cracksSection, cosmeticSection);
                         getQuoteBtn.classList.add('hidden');
 
                         clearQuoteMessage();
                     } else {
-                        hideAndClearQuestions(functionalSection, cosmeticSection);
+                        hideAndClearQuestions(functionalSection, cracksSection, cosmeticSection);
                         getQuoteBtn.classList.remove('hidden');
                     }
                     saveFormState();
@@ -1897,11 +1992,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             document.querySelectorAll('input[name="q2_fully_functional"]').forEach(radio => {
                 radio.addEventListener('change', () => {
                     if (radio.value === 'yes') {
-                        cosmeticSection.classList.remove('hidden');
-                        // Reset cosmetic question when functionality changes
-                        uncheckRadiosInContainer(cosmeticSection);
+                        cracksSection.classList.remove('hidden');
+                        // Reset all dependent questions when functional changes
+                        hideAndClearQuestions(cosmeticSection);
                         getQuoteBtn.classList.add('hidden');
 
+                        clearQuoteMessage();
+                    } else {
+                        hideAndClearQuestions(cracksSection, cosmeticSection);
+                        getQuoteBtn.classList.remove('hidden');
+                    }
+                    saveFormState();
+                });
+            });
+            
+            document.querySelectorAll('input[name="q3_no_cracks"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (radio.value === 'yes') {
+                        cosmeticSection.classList.remove('hidden');
+                        getQuoteBtn.classList.add('hidden');
                         clearQuoteMessage();
                     } else {
                         hideAndClearQuestions(cosmeticSection);
@@ -1927,6 +2036,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
                 const q1PowerOn = document.querySelector('input[name="q1_power_on"]:checked')?.value;
                 const q2Functional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value;
+                const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
                 const q4Cosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
 
                 let hasError = false;
@@ -1947,7 +2057,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     document.getElementById('functionalSection').classList.add('highlight-missing');
                     hasError = true;
                 }
-                if (q1PowerOn === 'yes' && q2Functional === 'yes' && !q4Cosmetic) {
+                if (q1PowerOn === 'yes' && q2Functional === 'yes' && !q3NoCracks) {
+                    document.getElementById('cracksSection').classList.add('highlight-missing');
+                    hasError = true;
+                }
+                if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes' && !q4Cosmetic) {
                     document.getElementById('cosmeticSection').classList.add('highlight-missing');
                     hasError = true;
                 }
@@ -1973,9 +2087,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 
                 let finalPrice = 0;
                 
-                if (q1PowerOn === 'yes' && q2Functional === 'yes') {
-                    // Fully functional; cosmetic condition determines price (damaged covers cracks)
+                if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes') {
+                    // Fully functional, no cracks
                     finalPrice = basePrices[q4Cosmetic];
+                } else if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'no') {
+                    // Fully functional, but has cracks
+                    finalPrice = basePrices.damaged;
                 } else if (q1PowerOn === 'yes' && q2Functional === 'no') {
                     // Powers on, but not functional
                     finalPrice = basePrices.broken;
@@ -2219,7 +2336,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     storage: document.getElementById('storage').value,
                     condition_power_on: document.querySelector('input[name="q1_power_on"]:checked').value,
                     condition_functional: document.querySelector('input[name="q2_fully_functional"]:checked')?.value || 'N/A',
-                    condition_cracks: 'Included in cosmetic condition',
+                    condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
                     estimatedQuote: finalQuote,
                     shippingPreference: document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
@@ -2316,6 +2433,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     carrier: document.querySelector('input[name="carrier"]:checked')?.value,
                     q1_power_on: document.querySelector('input[name="q1_power_on"]:checked')?.value,
                     q2_fully_functional: document.querySelector('input[name="q2_fully_functional"]:checked')?.value,
+                    q3_no_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value,
                     q4_cosmetic_condition: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value,
                 };
                 // We're using localStorage for state persistence during page navigation or refresh.
@@ -2339,16 +2457,24 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                    if (formState.q1_power_on === 'yes') {
                                        functionalSection.classList.remove('hidden');
                                        if (formState.q2_fully_functional === 'yes') {
-                                           cosmeticSection.classList.remove('hidden');
-                                           if (formState.q4_cosmetic_condition) {
+                                           cracksSection.classList.remove('hidden');
+                                           if (formState.q3_no_cracks === 'yes') {
+                                               cosmeticSection.classList.remove('hidden');
+                                               if (formState.q4_cosmetic_condition) {
+                                                   getQuoteBtn.classList.remove('hidden');
+                                               }
+                                           } else { // cracks present (treated as damaged)
+                                               cosmeticSection.classList.add('hidden');
                                                getQuoteBtn.classList.remove('hidden');
                                            }
                                        } else { // not functional
+                                           cracksSection.classList.add('hidden');
                                            cosmeticSection.classList.add('hidden');
                                            getQuoteBtn.classList.remove('hidden');
                                        }
                                    } else { // no power
                                        functionalSection.classList.add('hidden');
+                                       cracksSection.classList.add('hidden');
                                        cosmeticSection.classList.add('hidden');
                                        getQuoteBtn.classList.remove('hidden');
                                    }
@@ -2368,6 +2494,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     if (formState.q2_fully_functional) {
                         const functionalRadio = document.querySelector(`input[name="q2_fully_functional"][value="${formState.q2_fully_functional}"]`);
                         if (functionalRadio) functionalRadio.checked = true;
+                    }
+                    if (formState.q3_no_cracks) {
+                        const cracksRadio = document.querySelector(`input[name="q3_no_cracks"][value="${formState.q3_no_cracks}"]`);
+                        if (cracksRadio) cracksRadio.checked = true;
                     }
                     if (formState.q4_cosmetic_condition) {
                         const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${formState.q4_cosmetic_condition}"]`);
@@ -2417,8 +2547,5 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
         });
     </script>
-
-  <script src="/assets/js/page-tracker.js" defer></script>
-    <script type="module" src="/assets/js/pages/sell-index.js"></script>
 </body>
 </html>

@@ -1,0 +1,36 @@
+diff --git a/assets/js/pages/admin-index.js b/assets/js/pages/admin-index.js
+index 0000000..0000001 100644
+--- a/assets/js/pages/admin-index.js
++++ b/assets/js/pages/admin-index.js
+@@ -1,3 +1,34 @@
++// --- API BASE URL FIX: Redirect /api/* to Cloud Functions base ---
++(function () {
++  try {
++    const BASE =
++      (typeof window !== "undefined" && window.API_BASE) ||
++      (typeof BACKEND_BASE_URL !== "undefined" && BACKEND_BASE_URL) ||
++      "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
++    const ORIG_FETCH = window.fetch.bind(window);
++    window.fetch = function (input, init) {
++      const url = typeof input === "string" ? input : (input && input.url) || "";
++      if (
++        url &&
++        (url.startsWith("/api") ||
++          /:\/\/buyback-a0f05\.web\.app\/api\b/i.test(url))
++      ) {
++        const rewritten = url
++          .replace(/^https?:\/\/[^/]+\/api/i, BASE)
++          .replace(/^\/api\b/i, BASE);
++        if (typeof input === "string") return ORIG_FETCH(rewritten, init);
++        const req = new Request(rewritten, input);
++        return ORIG_FETCH(req, init);
++      }
++      return ORIG_FETCH(input, init);
++    };
++  } catch (e) {
++    console.warn("API base shim failed", e);
++  }
++})();
++// --- END API BASE URL FIX ---
++
+ // (existing code continues below…)
