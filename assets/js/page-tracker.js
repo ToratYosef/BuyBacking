@@ -8,6 +8,23 @@
   const IP_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
   const SOURCE_FALLBACK = "Direct";
+  const DEFAULT_CONVERSION_LABEL = "default";
+
+  const INITIAL_STORE = {
+    pages: {},
+    visitors: {},
+    conversions: [],
+    conversionIndex: {},
+    lastUpdated: null,
+  };
+
+  let latestContext = {
+    ip: null,
+    path: null,
+    source: null,
+    type: "init",
+    timestamp: null,
+  };
 
   const nowIso = () => new Date().toISOString();
 
@@ -37,10 +54,32 @@
     }
   };
 
+  const ensureStoreShape = (store) => {
+    if (!store || typeof store !== "object") {
+      return { ...INITIAL_STORE };
+    }
+    if (!store.pages || typeof store.pages !== "object") {
+      store.pages = {};
+    }
+    if (!store.visitors || typeof store.visitors !== "object") {
+      store.visitors = {};
+    }
+    if (!Array.isArray(store.conversions)) {
+      store.conversions = [];
+    }
+    if (!store.conversionIndex || typeof store.conversionIndex !== "object") {
+      store.conversionIndex = {};
+    }
+    if (!("lastUpdated" in store)) {
+      store.lastUpdated = null;
+    }
+    return store;
+  };
+
   const readStore = () => {
-    const initial = { pages: {}, lastUpdated: null };
     const raw = safeGet(STORAGE_KEY);
-    return safeParse(raw, initial);
+    const parsed = safeParse(raw, { ...INITIAL_STORE });
+    return ensureStoreShape(parsed);
   };
 
   const writeStore = (data) => {
@@ -48,12 +87,51 @@
     safeSet(STORAGE_KEY, payload);
   };
 
+  const buildConversionKey = (ip, path, label) => {
+    const safeIp = ip && typeof ip === "string" ? ip.trim() : "unknown";
+    const safePath = path && typeof path === "string" ? path : "/";
+    const safeLabel = label && typeof label === "string" ? label : DEFAULT_CONVERSION_LABEL;
+    return `${safeIp}|${safePath}|${safeLabel}`;
+  };
+
+  const normalisePath = (value) => {
+    if (!value || typeof value !== "string") {
+      return "/";
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "/";
+    }
+    return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  };
+
   const dispatchUpdate = (data, context) => {
     try {
-      const detail = { data, context };
+      const detail = {
+        data,
+        context: {
+          type: context && context.type ? context.type : "view",
+          ...context,
+        },
+      };
       window.dispatchEvent(new CustomEvent("page-tracker:updated", { detail }));
     } catch (error) {
       // ignore
+    }
+  };
+
+  const dispatchReady = (data) => {
+    try {
+      window.dispatchEvent(
+        new CustomEvent("page-tracker:ready", {
+          detail: {
+            data,
+            context: { type: "init" },
+          },
+        })
+      );
+    } catch (error) {
+      // ignore readiness errors
     }
   };
 
@@ -213,17 +291,115 @@
     };
   };
 
+  const updateVisitorRecord = (
+    store,
+    ipAddress,
+    path,
+    title,
+    url,
+    referrer,
+    sourceLabel,
+    visitedAt
+  ) => {
+    if (!store.visitors || typeof store.visitors !== "object") {
+      store.visitors = {};
+    }
+    const visitors = store.visitors;
+    const refUrl = (referrer && referrer.url) || "";
+    let visitor = visitors[ipAddress];
+    if (!visitor || typeof visitor !== "object") {
+      visitor = {
+        ip: ipAddress,
+        firstSeen: visitedAt,
+        lastSeen: visitedAt,
+        firstPage: path,
+        lastPage: path,
+        firstTitle: title,
+        lastTitle: title,
+        firstSource: sourceLabel || SOURCE_FALLBACK,
+        lastSource: sourceLabel || SOURCE_FALLBACK,
+        firstReferrer: refUrl,
+        lastReferrer: refUrl,
+        firstUrl: url || "",
+        lastUrl: url || "",
+        visitedPaths: {},
+        visitCount: 0,
+        conversionCount: 0,
+      };
+    } else {
+      if (!visitor.visitedPaths || typeof visitor.visitedPaths !== "object") {
+        visitor.visitedPaths = {};
+      }
+      if (!visitor.firstSeen) {
+        visitor.firstSeen = visitedAt;
+      }
+      if (!visitor.firstPage) {
+        visitor.firstPage = path;
+      }
+      if (!visitor.firstTitle) {
+        visitor.firstTitle = title;
+      }
+      if (!visitor.firstSource) {
+        visitor.firstSource = sourceLabel || SOURCE_FALLBACK;
+      }
+      if (!visitor.firstReferrer && refUrl) {
+        visitor.firstReferrer = refUrl;
+      }
+      if (!visitor.firstUrl && url) {
+        visitor.firstUrl = url;
+      }
+      if (!Number.isFinite(visitor.conversionCount)) {
+        visitor.conversionCount = 0;
+      }
+    }
+
+    if (!visitor.visitedPaths) {
+      visitor.visitedPaths = {};
+    }
+    const existingPath = visitor.visitedPaths[path];
+    if (!existingPath || typeof existingPath !== "object") {
+      visitor.visitedPaths[path] = {
+        firstSeen: visitedAt,
+        lastSeen: visitedAt,
+        views: 1,
+      };
+      visitor.visitCount = (visitor.visitCount || 0) + 1;
+    } else {
+      if (!existingPath.firstSeen) {
+        existingPath.firstSeen = visitedAt;
+      }
+      existingPath.lastSeen = visitedAt;
+      if (!Number.isFinite(existingPath.views)) {
+        existingPath.views = 1;
+      }
+    }
+
+    visitor.lastSeen = visitedAt;
+    visitor.lastPage = path;
+    visitor.lastTitle = title;
+    visitor.lastSource = sourceLabel || visitor.lastSource || visitor.firstSource || SOURCE_FALLBACK;
+    if (refUrl) {
+      visitor.lastReferrer = refUrl;
+    }
+    if (url) {
+      visitor.lastUrl = url;
+    }
+
+    visitors[ipAddress] = visitor;
+    return visitor;
+  };
+
   const recordView = (ipAddress) => {
     if (!ipAddress) {
       ipAddress = "unknown";
     }
 
-    const store = readStore();
+    const store = ensureStoreShape(readStore());
     if (!store.pages || typeof store.pages !== "object") {
       store.pages = {};
     }
 
-    const path = window.location.pathname || "/";
+    const path = normalisePath(window.location.pathname || "/");
     const title = document.title ? String(document.title).slice(0, 256) : "";
     const url = window.location.href || "";
     const visitedAt = nowIso();
@@ -356,10 +532,159 @@
       }
     }
 
+    const visitor = updateVisitorRecord(
+      store,
+      ipAddress,
+      path,
+      title,
+      url,
+      referrer,
+      sourceLabel,
+      visitedAt
+    );
+
     store.lastUpdated = visitedAt;
 
     writeStore(store);
-    dispatchUpdate(store, { path, ip: ipAddress });
+    latestContext = {
+      ip: ipAddress,
+      path,
+      source: sourceLabel || SOURCE_FALLBACK,
+      type: "view",
+      timestamp: visitedAt,
+    };
+
+    dispatchUpdate(store, {
+      type: "view",
+      path,
+      ip: ipAddress,
+      visitedAt,
+      source: sourceLabel || SOURCE_FALLBACK,
+      visitor,
+    });
+  };
+
+  const recordConversion = (input) => {
+    const store = ensureStoreShape(readStore());
+    const occurredAt =
+      input && typeof input.occurredAt === "string" && input.occurredAt.trim()
+        ? input.occurredAt.trim()
+        : nowIso();
+
+    const suppliedIp = input && typeof input.ip === "string" ? input.ip.trim() : "";
+    const ip = suppliedIp || latestContext.ip || "unknown";
+    const path = normalisePath(
+      input && typeof input.path === "string" && input.path ? input.path : window.location.pathname || "/"
+    );
+    const label = input && typeof input.label === "string" && input.label.trim()
+      ? input.label.trim()
+      : DEFAULT_CONVERSION_LABEL;
+
+    const visitor = store.visitors && store.visitors[ip] ? store.visitors[ip] : null;
+    const key = buildConversionKey(ip, path, label);
+    if (store.conversionIndex[key]) {
+      latestContext = {
+        ip,
+        path,
+        source: normaliseSourceLabel(
+          input && input.source ? input.source : (visitor && (visitor.firstSource || visitor.lastSource)) || SOURCE_FALLBACK
+        ),
+        type: "conversion",
+        timestamp: store.conversionIndex[key],
+      };
+      return true;
+    }
+
+    const visitorSource = visitor
+      ? visitor.firstSource || visitor.lastSource || latestContext.source
+      : latestContext.source;
+    const source = normaliseSourceLabel(
+      input && input.source ? input.source : visitorSource || SOURCE_FALLBACK
+    );
+    const referrer =
+      (input && input.referrer) || (visitor && (visitor.firstReferrer || visitor.lastReferrer)) || "";
+
+    const conversion = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      ip,
+      path,
+      label,
+      occurredAt,
+      source,
+      referrer,
+      title:
+        (input && typeof input.title === "string" && input.title.trim()
+          ? input.title.trim()
+          : document.title || "") || "",
+      firstPage: (input && input.firstPage) || (visitor && visitor.firstPage) || "",
+      landingPage:
+        (input && input.landingPage) || (visitor && visitor.firstPage) || window.location.pathname || "",
+      metadata:
+        input && input.metadata && typeof input.metadata === "object"
+          ? input.metadata
+          : undefined,
+    };
+
+    if (conversion.metadata === undefined) {
+      delete conversion.metadata;
+    }
+
+    store.conversionIndex[key] = occurredAt;
+    store.conversions.push(conversion);
+
+    if (visitor) {
+      if (!visitor.conversionCount || !Number.isFinite(visitor.conversionCount)) {
+        visitor.conversionCount = 0;
+      }
+      visitor.conversionCount += 1;
+      visitor.lastConversionAt = occurredAt;
+      if (!visitor.firstConversionAt) {
+        visitor.firstConversionAt = occurredAt;
+      }
+      if (!visitor.conversionPaths || typeof visitor.conversionPaths !== "object") {
+        visitor.conversionPaths = {};
+      }
+      visitor.conversionPaths[path] = occurredAt;
+      store.visitors[ip] = visitor;
+    }
+
+    const MAX_CONVERSIONS = 500;
+    if (store.conversions.length > MAX_CONVERSIONS) {
+      store.conversions = store.conversions.slice(-MAX_CONVERSIONS);
+      const newIndex = {};
+      store.conversions.forEach((entry) => {
+        const entryKey = buildConversionKey(
+          entry && entry.ip ? entry.ip : "unknown",
+          entry && entry.path ? entry.path : "/",
+          entry && entry.label ? entry.label : DEFAULT_CONVERSION_LABEL
+        );
+        newIndex[entryKey] = entry && entry.occurredAt ? entry.occurredAt : occurredAt;
+      });
+      store.conversionIndex = newIndex;
+    }
+
+    store.lastUpdated = occurredAt;
+    writeStore(store);
+
+    latestContext = {
+      ip,
+      path,
+      source: source || SOURCE_FALLBACK,
+      type: "conversion",
+      timestamp: occurredAt,
+    };
+
+    dispatchUpdate(store, {
+      type: "conversion",
+      ip,
+      path,
+      occurredAt,
+      source: source || SOURCE_FALLBACK,
+      label,
+      conversion,
+    });
+
+    return true;
   };
 
   const start = async () => {
@@ -374,6 +699,21 @@
     const ip = await resolveIp();
     recordView(ip);
   };
+
+  const exposeTracker = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const api = window.PageTracker && typeof window.PageTracker === "object" ? window.PageTracker : {};
+    api.getStore = () => ensureStoreShape(readStore());
+    api.recordConversion = recordConversion;
+    api.getLatestContext = () => ({ ...latestContext });
+    api.resolveIp = resolveIp;
+    window.PageTracker = api;
+  };
+
+  exposeTracker();
+  dispatchReady(ensureStoreShape(readStore()));
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {

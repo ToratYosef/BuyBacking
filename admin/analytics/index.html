@@ -53,6 +53,135 @@
       padding: 24px;
       box-shadow: 0 18px 40px rgba(15, 23, 42, 0.35);
     }
+    .conversion-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .conversion-summary h2 {
+      margin: 0 0 6px;
+      font-size: clamp(1.4rem, 3vw, 1.9rem);
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .conversion-summary p {
+      margin: 0;
+      color: rgba(226, 232, 240, 0.8);
+      max-width: 520px;
+    }
+    .conversion-total-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      min-width: 140px;
+      gap: 4px;
+    }
+    .conversion-total {
+      font-size: clamp(2rem, 5vw, 2.6rem);
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    .conversion-total-label {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(148, 163, 184, 0.8);
+    }
+    .conversion-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-top: 24px;
+    }
+    .conversion-card {
+      background: rgba(15, 23, 42, 0.55);
+      border-radius: 16px;
+      border: 1px solid rgba(59, 130, 246, 0.15);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .conversion-card h3 {
+      margin: 0;
+      font-size: 1.1rem;
+      color: #bae6fd;
+      font-weight: 600;
+    }
+    .conversion-card p {
+      margin: 0;
+      color: rgba(148, 163, 184, 0.75);
+      font-size: 0.9rem;
+    }
+    .conversion-table {
+      width: 100%;
+      border-collapse: collapse;
+      border-spacing: 0;
+      font-size: 0.9rem;
+    }
+    .conversion-table th,
+    .conversion-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.18);
+    }
+    .conversion-table th {
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      color: rgba(148, 163, 184, 0.9);
+    }
+    .conversion-table tbody tr:hover {
+      background: rgba(37, 99, 235, 0.12);
+    }
+    .conversion-empty {
+      text-align: center;
+      color: rgba(148, 163, 184, 0.7);
+      padding: 12px 0;
+    }
+    .conversion-recent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .conversion-recent-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid rgba(59, 130, 246, 0.18);
+    }
+    .conversion-recent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .conversion-recent-header strong {
+      font-size: 1rem;
+      color: #f8fafc;
+    }
+    .conversion-recent-header span {
+      font-size: 0.8rem;
+      color: rgba(148, 163, 184, 0.8);
+    }
+    .conversion-recent-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 0.85rem;
+      color: rgba(226, 232, 240, 0.85);
+      word-break: break-word;
+    }
+    .conversion-recent-meta span strong {
+      color: #bae6fd;
+      font-weight: 600;
+    }
     .controls {
       display: flex;
       flex-wrap: wrap;
@@ -216,6 +345,49 @@
         </tbody>
       </table>
     </section>
+    <section class="panel">
+      <div class="conversion-summary">
+        <div>
+          <h2>Conversion insights</h2>
+          <p>Order confirmations tracked on this device with their original traffic sources.</p>
+        </div>
+        <div class="conversion-total-wrapper">
+          <span class="conversion-total" id="conversion-total">0</span>
+          <span class="conversion-total-label">Total conversions</span>
+        </div>
+      </div>
+      <div class="conversion-grid">
+        <div class="conversion-card">
+          <div>
+            <h3>Top sources</h3>
+            <p>Unique visitors credited for conversions</p>
+          </div>
+          <table class="conversion-table">
+            <thead>
+              <tr>
+                <th scope="col">Source</th>
+                <th scope="col">Conversions</th>
+                <th scope="col">Unique IPs</th>
+              </tr>
+            </thead>
+            <tbody id="conversion-source-body">
+              <tr>
+                <td colspan="3" class="conversion-empty">No conversions tracked yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="conversion-card">
+          <div>
+            <h3>Recent conversions</h3>
+            <p>Last 10 submissions captured locally</p>
+          </div>
+          <div id="conversion-recent-list" class="conversion-recent-list">
+            <div class="conversion-empty">Awaiting the first conversion.</div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
   <script>
     const STORAGE_KEY = 'PAGE_TRACKER_LOGS';
@@ -223,6 +395,9 @@
     const statusEl = document.getElementById('status');
     const bodyEl = document.getElementById('pages-body');
     const refreshBtn = document.getElementById('refresh');
+    const conversionTotalEl = document.getElementById('conversion-total');
+    const conversionSourceBody = document.getElementById('conversion-source-body');
+    const conversionRecentList = document.getElementById('conversion-recent-list');
 
     const titleCase = (value) => {
       if (!value) return SOURCE_FALLBACK;
@@ -310,9 +485,15 @@
     const readTrackerData = () => {
       try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
-        return safeParse(raw, { pages: {}, lastUpdated: null });
+        return safeParse(raw, {
+          pages: {},
+          visitors: {},
+          conversions: [],
+          conversionIndex: {},
+          lastUpdated: null,
+        });
       } catch (error) {
-        return { pages: {}, lastUpdated: null, error: true };
+        return { pages: {}, conversions: [], visitors: {}, lastUpdated: null, error: true };
       }
     };
 
@@ -400,6 +581,167 @@
           const bTime = b.lastViewedAt ? new Date(b.lastViewedAt).getTime() : 0;
           return bTime - aTime;
         });
+    }
+
+    function prepareConversionEntries(data) {
+      const conversions = Array.isArray(data?.conversions) ? data.conversions : [];
+      return conversions.map((entry) => {
+        const occurredAtIso = entry && entry.occurredAt ? entry.occurredAt : null;
+        const occurredAtMs = occurredAtIso ? Date.parse(occurredAtIso) : NaN;
+        return {
+          ip: entry && entry.ip ? entry.ip : 'unknown',
+          path: entry && entry.path ? entry.path : '/',
+          source: normaliseSource(entry && entry.source ? entry.source : SOURCE_FALLBACK),
+          referrer: entry && entry.referrer ? entry.referrer : '',
+          occurredAt: occurredAtIso,
+          occurredAtMs: Number.isNaN(occurredAtMs) ? null : occurredAtMs,
+          title: entry && entry.title ? entry.title : '',
+          firstPage: entry && entry.firstPage ? entry.firstPage : '',
+          landingPage: entry && entry.landingPage ? entry.landingPage : '',
+        };
+      });
+    }
+
+    function summariseConversions(entries) {
+      const totalsBySource = new Map();
+      entries.forEach((item) => {
+        const sourceKey = item && item.source ? item.source : SOURCE_FALLBACK;
+        if (!totalsBySource.has(sourceKey)) {
+          totalsBySource.set(sourceKey, {
+            source: sourceKey,
+            conversions: 0,
+            uniqueIps: new Set(),
+            lastConversionMs: null,
+          });
+        }
+        const record = totalsBySource.get(sourceKey);
+        record.conversions += 1;
+        if (item && item.ip) {
+          record.uniqueIps.add(item.ip);
+        }
+        if (item && item.occurredAtMs !== null && item.occurredAtMs !== undefined) {
+          if (record.lastConversionMs === null || item.occurredAtMs > record.lastConversionMs) {
+            record.lastConversionMs = item.occurredAtMs;
+          }
+        }
+      });
+
+      const topSources = Array.from(totalsBySource.values())
+        .map((record) => ({
+          source: record.source,
+          conversions: record.conversions,
+          uniqueIps: record.uniqueIps.size,
+          lastConversionMs: record.lastConversionMs,
+        }))
+        .sort((a, b) => {
+          if (b.conversions !== a.conversions) {
+            return b.conversions - a.conversions;
+          }
+          return a.source.localeCompare(b.source);
+        });
+
+      const recent = entries
+        .slice()
+        .sort((a, b) => {
+          const aTime = a && a.occurredAtMs !== null && a.occurredAtMs !== undefined ? a.occurredAtMs : 0;
+          const bTime = b && b.occurredAtMs !== null && b.occurredAtMs !== undefined ? b.occurredAtMs : 0;
+          return bTime - aTime;
+        })
+        .slice(0, 10);
+
+      return {
+        total: entries.length,
+        topSources,
+        recent,
+      };
+    }
+
+    function renderConversionSources(rows) {
+      if (!conversionSourceBody) {
+        return;
+      }
+      conversionSourceBody.innerHTML = '';
+      if (!Array.isArray(rows) || !rows.length) {
+        const emptyRow = document.createElement('tr');
+        const emptyCell = document.createElement('td');
+        emptyCell.colSpan = 3;
+        emptyCell.className = 'conversion-empty';
+        emptyCell.textContent = 'No conversions tracked yet.';
+        emptyRow.appendChild(emptyCell);
+        conversionSourceBody.appendChild(emptyRow);
+        return;
+      }
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        const sourceCell = document.createElement('td');
+        sourceCell.textContent = row && row.source ? row.source : SOURCE_FALLBACK;
+        const conversionsCell = document.createElement('td');
+        const conversionsValue = row && Number.isFinite(row.conversions) ? row.conversions : 0;
+        conversionsCell.textContent = conversionsValue.toLocaleString();
+        const uniquesCell = document.createElement('td');
+        const uniqueValue = row && Number.isFinite(row.uniqueIps) ? row.uniqueIps : 0;
+        uniquesCell.textContent = uniqueValue.toLocaleString();
+        tr.appendChild(sourceCell);
+        tr.appendChild(conversionsCell);
+        tr.appendChild(uniquesCell);
+        conversionSourceBody.appendChild(tr);
+      });
+    }
+
+    function renderConversionRecent(list) {
+      if (!conversionRecentList) {
+        return;
+      }
+      conversionRecentList.innerHTML = '';
+      if (!Array.isArray(list) || !list.length) {
+        const empty = document.createElement('div');
+        empty.className = 'conversion-empty';
+        empty.textContent = 'No conversions tracked yet.';
+        conversionRecentList.appendChild(empty);
+        return;
+      }
+      list.forEach((item) => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'conversion-recent-item';
+        const header = document.createElement('div');
+        header.className = 'conversion-recent-header';
+        const sourceLabel = document.createElement('strong');
+        sourceLabel.textContent = item && item.source ? item.source : SOURCE_FALLBACK;
+        const timeLabel = document.createElement('span');
+        timeLabel.textContent = formatDate(item && item.occurredAt ? item.occurredAt : null);
+        header.appendChild(sourceLabel);
+        header.appendChild(timeLabel);
+        const meta = document.createElement('div');
+        meta.className = 'conversion-recent-meta';
+        const pathLine = document.createElement('span');
+        pathLine.textContent = `Path: ${item && item.path ? item.path : '/'}`;
+        meta.appendChild(pathLine);
+        const ipLine = document.createElement('span');
+        ipLine.textContent = `IP: ${item && item.ip ? item.ip : 'unknown'}`;
+        meta.appendChild(ipLine);
+        if (item && item.firstPage) {
+          const landingLine = document.createElement('span');
+          landingLine.textContent = `First page: ${item.firstPage}`;
+          meta.appendChild(landingLine);
+        }
+        if (item && item.referrer) {
+          const refLine = document.createElement('span');
+          refLine.textContent = `Referrer: ${item.referrer}`;
+          meta.appendChild(refLine);
+        }
+        wrapper.appendChild(header);
+        wrapper.appendChild(meta);
+        conversionRecentList.appendChild(wrapper);
+      });
+    }
+
+    function renderConversions(summary) {
+      if (conversionTotalEl) {
+        const totalValue = summary && Number.isFinite(summary.total) ? summary.total : 0;
+        conversionTotalEl.textContent = totalValue.toLocaleString();
+      }
+      renderConversionSources(summary ? summary.topSources : []);
+      renderConversionRecent(summary ? summary.recent : []);
     }
 
     function renderRows(pages) {
@@ -526,6 +868,9 @@
         updateStatus(data);
         const rows = prepareRows(data);
         renderRows(rows);
+        const conversions = prepareConversionEntries(data);
+        const summary = summariseConversions(conversions);
+        renderConversions(summary);
       } finally {
         refreshBtn.disabled = false;
       }
@@ -538,6 +883,9 @@
       updateStatus(data);
       const rows = prepareRows(data);
       renderRows(rows);
+      const conversions = prepareConversionEntries(data);
+      const summary = summariseConversions(conversions);
+      renderConversions(summary);
     });
     window.addEventListener('storage', (event) => {
       if (event.key !== STORAGE_KEY) {

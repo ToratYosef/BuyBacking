@@ -631,6 +631,62 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             color: #475569;
         }
 
+        .analytics-card-metric {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            min-width: 120px;
+        }
+
+        .analytics-card-metric .metric-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .analytics-card-metric .metric-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .analytics-conversion-recent {
+            margin-top: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .analytics-conversion-item {
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 12px;
+            padding: 12px 14px;
+            background: rgba(248, 250, 252, 0.7);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .analytics-conversion-item h4 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .analytics-conversion-item time {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .analytics-conversion-item span {
+            font-size: 13px;
+            color: #0f172a;
+            word-break: break-word;
+        }
+
         .operations-highlights {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -2086,6 +2142,37 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <div class="analytics-card">
                     <div class="analytics-card-header">
                         <div>
+                            <h3>Conversions by source</h3>
+                            <p>Order confirmations tracked locally</p>
+                        </div>
+                        <div class="analytics-card-metric">
+                            <span class="metric-value" id="analytics-conversion-total">0</span>
+                            <span class="metric-label">Total conversions</span>
+                        </div>
+                    </div>
+                    <div class="analytics-top-table-wrapper">
+                        <table class="analytics-table">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Conversions</th>
+                                    <th>Unique IPs</th>
+                                </tr>
+                            </thead>
+                            <tbody id="analytics-conversion-table">
+                                <tr class="analytics-empty-row">
+                                    <td colspan="3" class="analytics-empty-state" id="analytics-conversion-empty">Waiting for conversions…</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="analytics-conversion-recent" id="analytics-conversion-recent">
+                        <div class="analytics-empty-state">No conversions recorded yet.</div>
+                    </div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-card-header">
+                        <div>
                             <h3>Live minute buckets</h3>
                             <p>Latest activity grouped by minute</p>
                         </div>
@@ -2822,6 +2909,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const analyticsKpiAvgviews = document.getElementById('analytics-kpi-avgviews');
         const analyticsTopTableBody = document.getElementById('analytics-top-table');
         const analyticsReferrerTableBody = document.getElementById('analytics-referrer-table');
+        const analyticsConversionTotal = document.getElementById('analytics-conversion-total');
+        const analyticsConversionTableBody = document.getElementById('analytics-conversion-table');
+        const analyticsConversionRecent = document.getElementById('analytics-conversion-recent');
         const analyticsLiveList = document.getElementById('analytics-live-list');
 
         const analyticsState = {
@@ -3362,7 +3452,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         function readLocalTrackerStore() {
-            const fallback = { pages: {}, lastUpdated: null };
+            const fallback = { pages: {}, visitors: {}, conversions: [], conversionIndex: {}, lastUpdated: null };
             try {
                 const raw = window.localStorage.getItem(LOCAL_TRACKER_STORAGE_KEY);
                 if (!raw) {
@@ -3374,6 +3464,18 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 }
                 if (!parsed.pages || typeof parsed.pages !== 'object') {
                     parsed.pages = {};
+                }
+                if (!parsed.visitors || typeof parsed.visitors !== 'object') {
+                    parsed.visitors = {};
+                }
+                if (!Array.isArray(parsed.conversions)) {
+                    parsed.conversions = [];
+                }
+                if (!parsed.conversionIndex || typeof parsed.conversionIndex !== 'object') {
+                    parsed.conversionIndex = {};
+                }
+                if (!('lastUpdated' in parsed)) {
+                    parsed.lastUpdated = null;
                 }
                 return parsed;
             } catch (error) {
@@ -3485,6 +3587,63 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     }
                     return a.source.localeCompare(b.source);
                 });
+        }
+
+        function extractConversionEntries(store) {
+            const conversions = Array.isArray(store?.conversions) ? store.conversions : [];
+            return conversions.map((entry) => {
+                const occurredAtIso = entry && entry.occurredAt ? entry.occurredAt : null;
+                const occurredAtMs = occurredAtIso ? Date.parse(occurredAtIso) : NaN;
+                return {
+                    ip: entry && entry.ip ? entry.ip : 'unknown',
+                    path: entry && entry.path ? entry.path : '/',
+                    source: normaliseReferrerSource(entry && entry.source ? entry.source : SOURCE_FALLBACK),
+                    referrer: entry && entry.referrer ? entry.referrer : '',
+                    occurredAt: occurredAtIso,
+                    occurredAtMs: Number.isNaN(occurredAtMs) ? null : occurredAtMs,
+                    title: entry && entry.title ? entry.title : '',
+                    firstPage: entry && entry.firstPage ? entry.firstPage : '',
+                    landingPage: entry && entry.landingPage ? entry.landingPage : '',
+                };
+            });
+        }
+
+        function aggregateConversionSources(entries) {
+            const totals = new Map();
+            entries.forEach((entry) => {
+                const sourceKey = entry && entry.source ? entry.source : SOURCE_FALLBACK;
+                if (!totals.has(sourceKey)) {
+                    totals.set(sourceKey, { source: sourceKey, conversions: 0, uniqueIps: new Set() });
+                }
+                const record = totals.get(sourceKey);
+                record.conversions += 1;
+                if (entry && entry.ip) {
+                    record.uniqueIps.add(entry.ip);
+                }
+            });
+            return Array.from(totals.values())
+                .map((record) => ({
+                    source: record.source,
+                    conversions: record.conversions,
+                    uniques: record.uniqueIps.size,
+                }))
+                .sort((a, b) => {
+                    if (b.conversions !== a.conversions) {
+                        return b.conversions - a.conversions;
+                    }
+                    return a.source.localeCompare(b.source);
+                });
+        }
+
+        function buildRecentConversions(entries, limit = 6) {
+            return entries
+                .slice()
+                .sort((a, b) => {
+                    const aTime = a && a.occurredAtMs !== null && a.occurredAtMs !== undefined ? a.occurredAtMs : 0;
+                    const bTime = b && b.occurredAtMs !== null && b.occurredAtMs !== undefined ? b.occurredAtMs : 0;
+                    return bTime - aTime;
+                })
+                .slice(0, limit);
         }
 
         function determineAutoGranularity(windowMs) {
@@ -3791,6 +3950,92 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             });
         }
 
+        function renderAnalyticsConversions(data) {
+            if (!analyticsConversionTotal || !analyticsConversionTableBody || !analyticsConversionRecent) {
+                return;
+            }
+
+            const totalValue = data && Number.isFinite(data.total) ? data.total : 0;
+            analyticsConversionTotal.textContent = formatAnalyticsNumber(totalValue);
+
+            const sources = Array.isArray(data?.sources) ? data.sources : [];
+            analyticsConversionTableBody.innerHTML = '';
+            if (!sources.length) {
+                const emptyRow = document.createElement('tr');
+                const emptyCell = document.createElement('td');
+                emptyCell.colSpan = 3;
+                emptyCell.className = 'analytics-empty-state';
+                emptyCell.textContent = 'No conversions recorded for this window.';
+                emptyRow.appendChild(emptyCell);
+                analyticsConversionTableBody.appendChild(emptyRow);
+            } else {
+                sources.forEach((row) => {
+                    const tr = document.createElement('tr');
+                    const sourceCell = document.createElement('td');
+                    sourceCell.textContent = row && row.source ? row.source : SOURCE_FALLBACK;
+                    const conversionsCell = document.createElement('td');
+                    conversionsCell.textContent = formatAnalyticsNumber(Number(row?.conversions) || 0);
+                    const uniqueCell = document.createElement('td');
+                    uniqueCell.textContent = formatAnalyticsNumber(Number(row?.uniques) || 0);
+                    tr.appendChild(sourceCell);
+                    tr.appendChild(conversionsCell);
+                    tr.appendChild(uniqueCell);
+                    analyticsConversionTableBody.appendChild(tr);
+                });
+            }
+
+            const recent = Array.isArray(data?.recent) ? data.recent : [];
+            analyticsConversionRecent.innerHTML = '';
+            if (!recent.length) {
+                const empty = document.createElement('div');
+                empty.className = 'analytics-empty-state';
+                empty.textContent = 'No conversions recorded yet.';
+                analyticsConversionRecent.appendChild(empty);
+                return;
+            }
+
+            recent.forEach((entry) => {
+                const card = document.createElement('div');
+                card.className = 'analytics-conversion-item';
+
+                const heading = document.createElement('h4');
+                const sourceLabel = entry && entry.source ? entry.source : SOURCE_FALLBACK;
+                const pathLabel = entry && entry.path ? entry.path : '/';
+                heading.textContent = `${sourceLabel} • ${pathLabel}`;
+                card.appendChild(heading);
+
+                const timestamp = document.createElement('time');
+                if (entry && entry.occurredAt) {
+                    timestamp.dateTime = entry.occurredAt;
+                    const parsed = new Date(entry.occurredAt);
+                    timestamp.textContent = Number.isNaN(parsed.getTime())
+                        ? '—'
+                        : parsed.toLocaleString();
+                } else {
+                    timestamp.textContent = '—';
+                }
+                card.appendChild(timestamp);
+
+                const ipLine = document.createElement('span');
+                ipLine.textContent = `IP: ${entry && entry.ip ? entry.ip : 'unknown'}`;
+                card.appendChild(ipLine);
+
+                if (entry && entry.firstPage) {
+                    const firstPageLine = document.createElement('span');
+                    firstPageLine.textContent = `First page: ${entry.firstPage}`;
+                    card.appendChild(firstPageLine);
+                }
+
+                if (entry && entry.referrer) {
+                    const refLine = document.createElement('span');
+                    refLine.textContent = `Referrer: ${entry.referrer}`;
+                    card.appendChild(refLine);
+                }
+
+                analyticsConversionRecent.appendChild(card);
+            });
+        }
+
         function renderAnalyticsLive(live) {
             if (!analyticsLiveList) {
                 return;
@@ -3935,6 +4180,26 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 } else {
                     renderAnalyticsLive(null);
                 }
+
+                const allConversions = extractConversionEntries(store);
+                const filteredConversions = allConversions.filter((entry) => {
+                    if (entry.occurredAtMs === null || entry.occurredAtMs === undefined) {
+                        return false;
+                    }
+                    if (entry.occurredAtMs < cutoff) {
+                        return false;
+                    }
+                    if (normalizedPath && entry.path !== normalizedPath) {
+                        return false;
+                    }
+                    return true;
+                });
+                const conversionSummary = {
+                    total: filteredConversions.length,
+                    sources: aggregateConversionSources(filteredConversions).slice(0, 10),
+                    recent: buildRecentConversions(filteredConversions, 6),
+                };
+                renderAnalyticsConversions(conversionSummary);
 
                 if (filteredEntries.length) {
                     setAnalyticsStatus(`Updated ${new Date().toLocaleTimeString()}`);
