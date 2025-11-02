@@ -99,6 +99,17 @@ const PHONECHECK_ALLOWED_CARRIERS = new Set([
   "Blacklist",
 ]);
 
+const EXPIRING_REMINDER_ALLOWED_STATUSES = new Set([
+  "order_pending",
+  "shipping_kit_requested",
+  "kit_needs_printing",
+  "needs_printing",
+  "label_generated",
+  "emailed",
+]);
+
+const KIT_REMINDER_ALLOWED_STATUSES = new Set(["kit_sent", "kit_delivered"]);
+
 const AUTO_REQUOTE_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTO_CANCEL_DELAY_MS = 15 * 24 * 60 * 60 * 1000;
 const AUTO_CANCEL_MONITORED_STATUSES = [
@@ -2510,6 +2521,94 @@ app.get('/print-bundle/:id', async (req, res) => {
   }
 });
 
+app.post('/print-bundle/bulk', async (req, res) => {
+  try {
+    const rawIds = Array.isArray(req.body?.orderIds) ? req.body.orderIds : [];
+    const orderIds = rawIds
+      .map((id) => (typeof id === 'string' ? id.trim() : String(id || '').trim()))
+      .filter(Boolean);
+
+    if (!orderIds.length) {
+      return res.status(400).json({ error: 'orderIds array is required.' });
+    }
+
+    const uniqueIds = Array.from(new Set(orderIds));
+    const pdfBuffers = [];
+    const printed = [];
+    const skipped = [];
+
+    for (const orderId of uniqueIds) {
+      try {
+        const doc = await ordersCollection.doc(orderId).get();
+        if (!doc.exists) {
+          skipped.push({ id: orderId, reason: 'not_found' });
+          continue;
+        }
+
+        const order = { id: doc.id, ...doc.data() };
+        const preference = (order.shippingPreference || '').toString().toLowerCase();
+        if (preference !== 'shipping kit requested') {
+          skipped.push({ id: orderId, reason: 'not_kit_order' });
+          continue;
+        }
+
+        const labelUrls = [order.outboundLabelUrl, order.inboundLabelUrl]
+          .filter((url) => typeof url === 'string' && url.trim());
+
+        if (labelUrls.length < 2) {
+          skipped.push({ id: orderId, reason: 'missing_labels' });
+          continue;
+        }
+
+        const downloadedLabels = await Promise.all(
+          labelUrls.map(async (url) => {
+            try {
+              const response = await axios.get(url, { responseType: 'arraybuffer' });
+              return Buffer.from(response.data);
+            } catch (downloadError) {
+              console.error(`Failed to download label for order ${orderId} from ${url}:`, downloadError.message || downloadError);
+              return null;
+            }
+          })
+        );
+
+        const validLabels = downloadedLabels.filter(Boolean);
+        if (!validLabels.length) {
+          skipped.push({ id: orderId, reason: 'label_download_failed' });
+          continue;
+        }
+
+        const bagLabelData = await generateBagLabelPdf(order);
+        const bagBuffer = Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData);
+
+        pdfBuffers.push(...validLabels, bagBuffer);
+        printed.push(orderId);
+      } catch (orderError) {
+        console.error(`Failed to prepare bundle for order ${orderId}:`, orderError.message || orderError);
+        skipped.push({ id: orderId, reason: 'processing_error' });
+      }
+    }
+
+    if (!pdfBuffers.length) {
+      return res.status(422).json({ error: 'No printable kits available for the requested orders.', skipped: skipped.map((item) => item.id) });
+    }
+
+    const mergedBuffer = await mergePdfBuffers(pdfBuffers);
+    const finalBuffer = Buffer.isBuffer(mergedBuffer) ? mergedBuffer : Buffer.from(mergedBuffer);
+    const base64 = finalBuffer.toString('base64');
+
+    res.json({
+      success: true,
+      base64,
+      printed,
+      skipped: skipped.map((entry) => entry.id),
+    });
+  } catch (error) {
+    console.error('Failed to generate bulk print bundle:', error);
+    res.status(500).json({ error: 'Failed to prepare bulk print bundle' });
+  }
+});
+
 app.put("/orders/:id/status", async (req, res) => {
   try {
     const { status } = req.body;
@@ -3984,6 +4083,385 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
     }
     
     throw new functions.https.HttpsError('internal', 'Failed to send reminder email');
+  }
+});
+
+exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context) => {
+  try {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
+    }
+
+    const adminDoc = await adminsCollection.doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+    }
+
+    const { orderId } = data || {};
+    if (!orderId || typeof orderId !== 'string' || !orderId.trim()) {
+      throw new functions.https.HttpsError('invalid-argument', 'Order ID is required');
+    }
+
+    const sanitizedOrderId = orderId.trim();
+    const orderSnap = await ordersCollection.doc(sanitizedOrderId).get();
+    if (!orderSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Order not found');
+    }
+
+    const order = orderSnap.data();
+    if (!EXPIRING_REMINDER_ALLOWED_STATUSES.has(order.status)) {
+      throw new functions.https.HttpsError('failed-precondition', 'Order status is not eligible for an expiration reminder');
+    }
+
+    const customerEmail = order.shippingInfo?.email;
+    if (!customerEmail) {
+      throw new functions.https.HttpsError('failed-precondition', 'Order is missing a customer email address');
+    }
+
+    let createdAtDate = null;
+    const createdAt = order.createdAt;
+    if (createdAt) {
+      if (typeof createdAt.toDate === 'function') {
+        createdAtDate = createdAt.toDate();
+      } else if (typeof createdAt.seconds === 'number') {
+        createdAtDate = new Date(createdAt.seconds * 1000);
+      } else if (typeof createdAt._seconds === 'number') {
+        createdAtDate = new Date(createdAt._seconds * 1000);
+      } else {
+        const fallbackDate = new Date(createdAt);
+        createdAtDate = Number.isNaN(fallbackDate.getTime()) ? null : fallbackDate;
+      }
+    }
+
+    let expiryDateText = null;
+    let daysRemainingText = null;
+    if (createdAtDate instanceof Date && !Number.isNaN(createdAtDate.getTime())) {
+      const expiryDate = new Date(createdAtDate.getTime() + AUTO_CANCEL_DELAY_MS);
+      expiryDateText = expiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      const millisLeft = expiryDate.getTime() - Date.now();
+      const daysLeft = Math.ceil(millisLeft / (24 * 60 * 60 * 1000));
+      if (Number.isFinite(daysLeft)) {
+        if (daysLeft <= 0) {
+          daysRemainingText = 'less than a day';
+        } else if (daysLeft === 1) {
+          daysRemainingText = '1 day';
+        } else {
+          daysRemainingText = `${daysLeft} days`;
+        }
+      }
+    }
+
+    const payoutAmount = getOrderPayout(order);
+    const payoutDisplay = formatCurrencyValue(payoutAmount);
+    const deviceSummary = buildDeviceSummary(order) || [order.device, order.storage, order.carrier]
+      .filter(Boolean)
+      .join(' • ') || 'your device';
+
+    const checklistItems = [
+      'Back up your data to keep your memories safe.',
+      'Sign out of iCloud, Google, and any other accounts.',
+      'Factory reset the device to remove personal information.',
+      'Remove SIM or memory cards and accessories.',
+      'Pack the device securely and place the packing slip inside.',
+    ];
+
+    const emailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Don't Miss Out On Your Trade-In</title>
+  <style>
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 0; }
+    .wrapper { max-width: 620px; margin: 0 auto; padding: 32px 16px; }
+    .card { background: #ffffff; border-radius: 18px; box-shadow: 0 22px 60px rgba(15, 23, 42, 0.12); overflow: hidden; }
+    .card-header { background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; padding: 36px 32px; text-align: center; }
+    .card-header h1 { margin: 0; font-size: 28px; }
+    .card-body { padding: 32px; color: #1f2937; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; background: rgba(37, 99, 235, 0.12); color: #1d4ed8; font-weight: 600; }
+    .details-box { margin: 24px 0; padding: 20px; border-radius: 14px; background: rgba(15, 118, 110, 0.08); border: 1px solid rgba(13, 148, 136, 0.22); }
+    .details-box strong { display: block; margin-bottom: 6px; color: #0f172a; }
+    .checklist { margin: 0; padding-left: 18px; }
+    .checklist li { margin-bottom: 10px; }
+    .cta { margin-top: 28px; text-align: center; }
+    .cta a { display: inline-block; padding: 12px 24px; background: #2563eb; color: #ffffff; border-radius: 999px; text-decoration: none; font-weight: 600; }
+    .footer { padding: 24px; text-align: center; color: #64748b; font-size: 13px; background: #f1f5f9; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="card-header">
+        <div style="font-size:48px; margin-bottom:12px;">⏳</div>
+        <h1>Your quote is almost up</h1>
+        <p>Let's finish your trade-in so you don't lose your offer.</p>
+      </div>
+      <div class="card-body">
+        <p>Hello ${order.shippingInfo?.fullName || 'there'},</p>
+        <p>We noticed you started a trade-in for <strong>${deviceSummary}</strong> but it isn't complete yet. We’re holding your quote of <strong>${payoutDisplay}</strong>${expiryDateText ? ` until <strong>${expiryDateText}</strong>` : ''}.${daysRemainingText ? ` That’s about ${daysRemainingText} left.` : ''}</p>
+
+        <div class="details-box">
+          <strong>Order #${sanitizedOrderId}</strong>
+          <div>Quoted amount: <strong>${payoutDisplay}</strong></div>
+          <div>Shipping preference: ${order.shippingPreference || 'Shipping Kit Requested'}</div>
+          ${expiryDateText ? `<div>Offer expires: ${expiryDateText}</div>` : ''}
+        </div>
+
+        <p class="pill">🚀 Shipping soon keeps your payout locked in</p>
+
+        <p>Here’s a quick checklist to help you get ready:</p>
+        <ol class="checklist">
+          ${checklistItems.map((item) => `<li>${item}</li>`).join('')}
+        </ol>
+
+        <div class="cta">
+          <a href="mailto:support@secondhandcell.com?subject=Question about order ${sanitizedOrderId}">Need help? We’re here.</a>
+        </div>
+
+        <p style="margin-top:28px;">Once your device arrives, we typically inspect and pay out within 48 hours.</p>
+        <p style="margin-top:12px;">Thanks for choosing SecondHandCell!</p>
+      </div>
+      <div class="footer">
+        SecondHandCell • Making device trade-ins simple and rewarding<br>
+        Order #${sanitizedOrderId}
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: customerEmail,
+      subject: '⏳ Your SecondHandCell Quote Is Almost Expired',
+      html: emailHtml,
+      bcc: ["sales@secondhandcell.com"],
+    });
+
+    await updateOrderBoth(
+      sanitizedOrderId,
+      { expiringReminderSentAt: admin.firestore.FieldValue.serverTimestamp() },
+      {
+        autoLogStatus: false,
+        logEntries: [
+          {
+            type: 'expiring_reminder',
+            message: 'Expiration reminder email sent to customer.',
+            metadata: {
+              expiresOn: expiryDateText || null,
+              daysRemaining: daysRemainingText || null,
+            },
+          },
+        ],
+      }
+    );
+
+    await db.collection('adminAuditLogs').add({
+      action: 'send_expiring_reminder_email',
+      adminUid: context.auth.uid,
+      adminEmail: context.auth.token?.email || 'unknown',
+      orderId: sanitizedOrderId,
+      orderStatus: order.status,
+      recipientEmail: customerEmail,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      success: true,
+    });
+
+    return { success: true, message: 'Expiration reminder email sent successfully' };
+  } catch (error) {
+    console.error('Error sending expiring reminder email:', error);
+
+    if (context?.auth) {
+      try {
+        await db.collection('adminAuditLogs').add({
+          action: 'send_expiring_reminder_email',
+          adminUid: context.auth.uid,
+          adminEmail: context.auth.token?.email || 'unknown',
+          orderId: data?.orderId || 'unknown',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          success: false,
+          errorType: error.code || 'unknown',
+          errorMessage: error.message || 'Unknown error',
+        });
+      } catch (logError) {
+        console.error('Failed to log expiring reminder audit entry:', logError);
+      }
+    }
+
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+
+    throw new functions.https.HttpsError('internal', 'Failed to send expiration reminder email');
+  }
+});
+
+exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
+  try {
+    if (!context.auth) {
+      throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
+    }
+
+    const adminDoc = await adminsCollection.doc(context.auth.uid).get();
+    if (!adminDoc.exists) {
+      throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+    }
+
+    const { orderId } = data || {};
+    if (!orderId || typeof orderId !== 'string' || !orderId.trim()) {
+      throw new functions.https.HttpsError('invalid-argument', 'Order ID is required');
+    }
+
+    const sanitizedOrderId = orderId.trim();
+    const orderSnap = await ordersCollection.doc(sanitizedOrderId).get();
+    if (!orderSnap.exists) {
+      throw new functions.https.HttpsError('not-found', 'Order not found');
+    }
+
+    const order = orderSnap.data();
+    if (!KIT_REMINDER_ALLOWED_STATUSES.has(order.status)) {
+      throw new functions.https.HttpsError('failed-precondition', 'Order status is not eligible for a kit reminder');
+    }
+
+    const shippingPreference = (order.shippingPreference || '').toString().toLowerCase();
+    if (shippingPreference !== 'shipping kit requested') {
+      throw new functions.https.HttpsError('failed-precondition', 'Kit reminders are only available for Shipping Kit Requested orders');
+    }
+
+    const customerEmail = order.shippingInfo?.email;
+    if (!customerEmail) {
+      throw new functions.https.HttpsError('failed-precondition', 'Order is missing a customer email address');
+    }
+
+    const outboundTracking = order.outboundTrackingNumber;
+    const inboundTracking = order.inboundTrackingNumber || order.trackingNumber;
+    const deviceSummary = buildDeviceSummary(order) || [order.device, order.storage].filter(Boolean).join(' • ') || 'your device';
+    const payoutAmount = getOrderPayout(order);
+
+    const emailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your SecondHandCell Kit Is Ready</title>
+  <style>
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 0; }
+    .wrapper { max-width: 620px; margin: 0 auto; padding: 32px 16px; }
+    .card { background: #ffffff; border-radius: 18px; box-shadow: 0 20px 55px rgba(15, 23, 42, 0.12); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #10b981, #14b8a6); color: #fff; padding: 34px 30px; text-align: center; }
+    .header h1 { margin: 0; font-size: 26px; }
+    .body { padding: 30px; color: #1f2937; }
+    .highlight { margin: 18px 0; padding: 18px; border-radius: 14px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); }
+    .tracking { margin-top: 18px; padding: 18px; background: rgba(4, 120, 87, 0.08); border-radius: 12px; border: 1px solid rgba(4, 120, 87, 0.25); font-family: 'Fira Code', 'Consolas', monospace; }
+    .tracking a { color: #047857; text-decoration: none; }
+    .steps { margin: 0; padding-left: 20px; }
+    .steps li { margin-bottom: 10px; }
+    .footer { padding: 22px; text-align: center; font-size: 13px; color: #64748b; background: #f1f5f9; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="header">
+        <div style="font-size:46px; margin-bottom:10px;">📦</div>
+        <h1>Your kit is on the way!</h1>
+        <p>Let’s get your ${deviceSummary} shipped so we can finish your payout.</p>
+      </div>
+      <div class="body">
+        <p>Hi ${order.shippingInfo?.fullName || 'there'},</p>
+        <p>Your SecondHandCell shipping kit is ready and waiting for your device. Once it arrives, complete these quick steps so your payout isn’t delayed.</p>
+
+        <div class="highlight">
+          <strong>Order #${sanitizedOrderId}</strong><br />
+          ${payoutAmount ? `Quoted amount: <strong>${formatCurrencyValue(payoutAmount)}</strong><br />` : ''}
+          Shipping preference: <strong>${order.shippingPreference || 'Shipping Kit Requested'}</strong>
+        </div>
+
+        ${outboundTracking ? `<div class="tracking">Outbound kit tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${outboundTracking}" target="_blank" rel="noopener">${outboundTracking}</a></div>` : ''}
+        ${inboundTracking ? `<div class="tracking" style="margin-top:12px;">Return label tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${inboundTracking}" target="_blank" rel="noopener">${inboundTracking}</a></div>` : ''}
+
+        <p style="margin-top:24px;">Before you drop the kit in the mail, make sure to:</p>
+        <ol class="steps">
+          <li>Remove SIM and memory cards.</li>
+          <li>Factory reset the device and log out of all accounts.</li>
+          <li>Place the device in the protective packaging we sent.</li>
+          <li>Attach the return label and drop it with USPS.</li>
+        </ol>
+
+        <p style="margin-top:20px;">Once we receive the device, we’ll inspect it and send payment within 48 hours. Have any questions? Just reply to this email—our team is ready to help.</p>
+      </div>
+      <div class="footer">
+        SecondHandCell • Support: <a href="mailto:support@secondhandcell.com">support@secondhandcell.com</a><br />
+        Order #${sanitizedOrderId}
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: customerEmail,
+      subject: '📦 Friendly reminder: Ship your SecondHandCell kit',
+      html: emailHtml,
+      bcc: ["sales@secondhandcell.com"],
+    });
+
+    await updateOrderBoth(
+      sanitizedOrderId,
+      { kitReminderSentAt: admin.firestore.FieldValue.serverTimestamp() },
+      {
+        autoLogStatus: false,
+        logEntries: [
+          {
+            type: 'kit_reminder',
+            message: 'Kit reminder email sent to customer.',
+            metadata: {
+              outboundTracking: outboundTracking || null,
+              inboundTracking: inboundTracking || null,
+            },
+          },
+        ],
+      }
+    );
+
+    await db.collection('adminAuditLogs').add({
+      action: 'send_kit_reminder_email',
+      adminUid: context.auth.uid,
+      adminEmail: context.auth.token?.email || 'unknown',
+      orderId: sanitizedOrderId,
+      orderStatus: order.status,
+      recipientEmail: customerEmail,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      success: true,
+    });
+
+    return { success: true, message: 'Kit reminder email sent successfully' };
+  } catch (error) {
+    console.error('Error sending kit reminder email:', error);
+
+    if (context?.auth) {
+      try {
+        await db.collection('adminAuditLogs').add({
+          action: 'send_kit_reminder_email',
+          adminUid: context.auth.uid,
+          adminEmail: context.auth.token?.email || 'unknown',
+          orderId: data?.orderId || 'unknown',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          success: false,
+          errorType: error.code || 'unknown',
+          errorMessage: error.message || 'Unknown error',
+        });
+      } catch (logError) {
+        console.error('Failed to log kit reminder audit entry:', logError);
+      }
+    }
+
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+
+    throw new functions.https.HttpsError('internal', 'Failed to send kit reminder email');
   }
 });
 

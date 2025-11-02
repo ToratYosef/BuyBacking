@@ -1144,12 +1144,42 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             gap: 16px;
             padding: 20px 24px 12px;
         }
+        .orders-toolbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
 
         .view-controls {
             display: flex;
             align-items: center;
             gap: 14px;
             flex-wrap: wrap;
+        }
+
+        .mass-print-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(16, 185, 129, 0.45);
+            background: linear-gradient(120deg, rgba(16, 185, 129, 0.12), rgba(45, 212, 191, 0.16));
+            color: #047857;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .mass-print-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .mass-print-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 24px -18px rgba(16, 185, 129, 0.55);
         }
 
         .density-toggle {
@@ -1198,6 +1228,29 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         .refresh-btn:hover:not(:disabled) {
             transform: translateY(-1px);
             box-shadow: 0 12px 26px -18px rgba(37, 99, 235, 0.65);
+        }
+        
+        .orders-toolbar-feedback {
+            margin: 0 24px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #2563eb;
+            background: rgba(224, 231, 255, 0.45);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 10px;
+            padding: 10px 14px;
+        }
+
+        .orders-toolbar-feedback.success {
+            color: #047857;
+            border-color: rgba(16, 185, 129, 0.35);
+            background: rgba(167, 243, 208, 0.45);
+        }
+
+        .orders-toolbar-feedback.error {
+            color: #b91c1c;
+            border-color: rgba(248, 113, 113, 0.45);
+            background: rgba(254, 226, 226, 0.45);
         }
         
         .orders-table-header {
@@ -2348,15 +2401,25 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </label>
                     <span class="orders-toolbar-note" id="last-refresh-at">Updated just now</span>
                 </div>
-                <button class="refresh-btn" id="refresh-orders-btn">
-                    <i class="fas fa-rotate"></i>
-                    Refresh data
-                </button>
+                <div class="orders-toolbar-actions">
+                    <button class="mass-print-btn" id="mass-print-btn" disabled>
+                        <i class="fas fa-print"></i>
+                        Print selected kits
+                    </button>
+                    <button class="refresh-btn" id="refresh-orders-btn">
+                        <i class="fas fa-rotate"></i>
+                        Refresh data
+                    </button>
+                </div>
             </div>
+            <div id="orders-toolbar-feedback" class="orders-toolbar-feedback hidden"></div>
             <div class="orders-table-wrapper">
                 <table class="orders-table">
                     <thead>
                         <tr>
+                            <th class="w-12 text-center">
+                                <input type="checkbox" id="orders-select-all">
+                            </th>
                             <th>Order ID</th>
                             <th>Order Date</th>
                             <th>Last Updated</th>
@@ -2368,7 +2431,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         </tr>
                     </thead>
                     <tbody id="orders-table-body">
-                        <tr><td colspan="8" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
+                        <tr><td colspan="9" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -2575,6 +2638,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     <i class="fas fa-envelope"></i>
                     <span>Send Reminder Email</span>
                 </button>
+                <button id="send-expiring-reminder-btn" class="hidden mt-3 w-full px-4 py-3 bg-rose-500 text-white font-semibold rounded-lg hover:bg-rose-600 transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-hourglass-half"></i>
+                    <span>Send Expiration Reminder</span>
+                </button>
+                <button id="send-kit-reminder-btn" class="hidden mt-3 w-full px-4 py-3 bg-emerald-500 text-white font-semibold rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-truck"></i>
+                    <span>Send Kit Follow-up</span>
+                </button>
 
                 <div id="phone-check-section" class="mt-6 p-4 border border-slate-200 rounded-xl bg-white/90 shadow-sm">
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2582,8 +2653,24 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                             <h4 class="text-lg font-semibold text-slate-900">PhoneCheck ESN Report</h4>
                             <p class="text-sm text-slate-500 mt-1">Run an ESN/IMEI check to confirm carrier locks, outstanding balances, or blacklist status before continuing.</p>
                         </div>
-                        <div class="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
-                            <input id="phone-check-imei" type="text" placeholder="Enter IMEI" class="w-full sm:w-60 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm" />
+                        <div class="w-full sm:w-auto flex flex-col sm:flex-row gap-2 sm:items-center">
+                            <div class="w-full flex flex-col sm:flex-row gap-2">
+                                <select id="phone-check-device-type" class="w-full sm:w-44 px-3 py-2 border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm">
+                                    <option value="" disabled selected>Select device type</option>
+                                    <option value="Apple">Apple</option>
+                                    <option value="Android">Android</option>
+                                </select>
+                                <select id="phone-check-carrier-select" class="w-full sm:w-48 px-3 py-2 border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm">
+                                    <option value="" disabled selected>Select carrier</option>
+                                    <option value="AT&T">AT&amp;T</option>
+                                    <option value="T-Mobile">T-Mobile</option>
+                                    <option value="Sprint">Sprint</option>
+                                    <option value="Verizon">Verizon</option>
+                                    <option value="Unlocked">Unlocked</option>
+                                    <option value="Blacklist">Blacklist</option>
+                                </select>
+                                <input id="phone-check-imei" type="text" placeholder="Enter IMEI" class="w-full sm:w-60 px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 shadow-sm" />
+                            </div>
                             <button id="phone-check-run" class="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-md transition-colors shadow">
                                 <span>Run Check</span>
                             </button>

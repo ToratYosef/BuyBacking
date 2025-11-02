@@ -140,6 +140,13 @@ const mobileAveragePayoutAmount = document.getElementById('mobile-average-payout
 const compactDensityToggle = document.getElementById('compact-density-toggle');
 const refreshOrdersBtn = document.getElementById('refresh-orders-btn');
 const lastRefreshAt = document.getElementById('last-refresh-at');
+const ordersSelectAllCheckbox = document.getElementById('orders-select-all');
+const massPrintBtn = document.getElementById('mass-print-btn');
+const ordersToolbarFeedback = document.getElementById('orders-toolbar-feedback');
+const MASS_PRINT_DEFAULT_LABEL = '<i class="fas fa-print"></i> Print selected kits';
+const selectedOrderIds = new Set();
+let lastRenderedOrderIds = [];
+let ordersFeedbackTimeout = null;
 if (lastRefreshAt) {
 lastRefreshAt.textContent = 'Listening for updates…';
 }
@@ -288,6 +295,8 @@ const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
 
 // Reminder Email Button
 const sendReminderBtn = document.getElementById('send-reminder-btn');
+const sendExpiringReminderBtn = document.getElementById('send-expiring-reminder-btn');
+const sendKitReminderBtn = document.getElementById('send-kit-reminder-btn');
 
 const voidLabelFormContainer = document.getElementById('void-label-form-container');
 const voidLabelOptionsContainer = document.getElementById('void-label-options');
@@ -305,6 +314,8 @@ const confirmCancelOrderBtn = document.getElementById('confirm-cancel-order-btn'
 const phoneCheckSection = document.getElementById('phone-check-section');
 const phoneCheckInput = document.getElementById('phone-check-imei');
 const phoneCheckRunButton = document.getElementById('phone-check-run');
+const phoneCheckDeviceTypeSelect = document.getElementById('phone-check-device-type');
+const phoneCheckCarrierSelect = document.getElementById('phone-check-carrier-select');
 const phoneCheckError = document.getElementById('phone-check-error');
 const phoneCheckResults = document.getElementById('phone-check-results');
 const phoneCheckStatusPill = document.getElementById('phone-check-status-pill');
@@ -315,7 +326,7 @@ const phoneCheckModel = document.getElementById('phone-check-model');
 const phoneCheckMemory = document.getElementById('phone-check-memory');
 const phoneCheckColor = document.getElementById('phone-check-color');
 const phoneCheckBlacklist = document.getElementById('phone-check-blacklist');
-const phoneCheckCarrier = document.getElementById('phone-check-carrier');
+const phoneCheckCarrierDisplay = document.getElementById('phone-check-carrier');
 const phoneCheckSimlock = document.getElementById('phone-check-simlock');
 const phoneCheckReasons = document.getElementById('phone-check-reasons');
 const phoneCheckReasonsList = document.getElementById('phone-check-reasons-list');
@@ -326,6 +337,28 @@ const phoneCheckRaw = document.getElementById('phone-check-raw');
 const phoneCheckBlacklistBaseClass = phoneCheckBlacklist ? phoneCheckBlacklist.className : '';
 const phoneCheckSimlockBaseClass = phoneCheckSimlock ? phoneCheckSimlock.className : '';
 const phoneCheckStatusBaseClass = 'px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wide';
+const PHONECHECK_CARRIER_OPTIONS = ['AT&T', 'T-Mobile', 'Sprint', 'Verizon', 'Unlocked', 'Blacklist'];
+const PHONECHECK_CARRIER_ALIAS_MAP = {
+att: 'AT&T',
+'at&t': 'AT&T',
+'a t t': 'AT&T',
+tmobile: 'T-Mobile',
+'t-mobile': 'T-Mobile',
+'t mobile': 'T-Mobile',
+verizon: 'Verizon',
+'verizon wireless': 'Verizon',
+'verizonwireless': 'Verizon',
+sprint: 'Sprint',
+'sprint pcs': 'Sprint',
+unlocked: 'Unlocked',
+'sim-free': 'Unlocked',
+'sim free': 'Unlocked',
+'simfree': 'Unlocked',
+'factory unlocked': 'Unlocked',
+blacklist: 'Blacklist',
+blacklisted: 'Blacklist',
+'black listed': 'Blacklist',
+};
 
 /* REMOVED SUBMENU REFERENCES */
 /* const reofferParentLink = document.querySelector('.reoffer-parent'); */
@@ -393,7 +426,9 @@ filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
 }
 
 const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printing', 'needs_printing'];
-const REMINDER_ELIGIBLE_STATUSES = ['order_pending', ...KIT_PRINT_PENDING_STATUSES, 'kit_sent', 'label_generated'];
+const REMINDER_ELIGIBLE_STATUSES = ['label_generated', 'emailed'];
+const EXPIRING_REMINDER_STATUSES = ['order_pending', ...KIT_PRINT_PENDING_STATUSES, 'label_generated', 'emailed'];
+const KIT_REMINDER_STATUSES = ['kit_sent', 'kit_delivered'];
 
 window.addEventListener('message', (event) => {
 if (!event.data || event.data.type !== 'kit-print-complete') {
@@ -2387,28 +2422,17 @@ if (isKitOrder) {
 const marked = await markKitAsPrinted(order.id);
 if (marked) {
 displayModalMessage('Merged document (Labels + Slip) generated and kit status updated to sent.', 'success');
+updateReminderButtons(order);
 } else {
 renderActionButtons(order);
 modalActionButtons.classList.remove('hidden');
-if (sendReminderBtn) {
-if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
-sendReminderBtn.classList.remove('hidden');
-} else {
-sendReminderBtn.classList.add('hidden');
-}
-}
+updateReminderButtons(order);
 }
 } else {
 displayModalMessage(baseSuccessMessage, 'success');
 renderActionButtons(order);
 modalActionButtons.classList.remove('hidden');
-if (sendReminderBtn) {
-if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
-sendReminderBtn.classList.remove('hidden');
-} else {
-sendReminderBtn.classList.add('hidden');
-}
-}
+updateReminderButtons(order);
 }
 
 } catch (error) {
@@ -2796,14 +2820,127 @@ ordersStatusChart.update();
 }
 }
 
+function hideOrdersFeedback() {
+if (!ordersToolbarFeedback) return;
+ordersToolbarFeedback.classList.add('hidden');
+ordersToolbarFeedback.classList.remove('success', 'error');
+ordersToolbarFeedback.textContent = '';
+if (ordersFeedbackTimeout) {
+clearTimeout(ordersFeedbackTimeout);
+ordersFeedbackTimeout = null;
+}
+}
+
+function showOrdersFeedback(message, type = 'info', duration = 6000) {
+if (!ordersToolbarFeedback) return;
+if (ordersFeedbackTimeout) {
+clearTimeout(ordersFeedbackTimeout);
+ordersFeedbackTimeout = null;
+}
+ordersToolbarFeedback.textContent = message;
+ordersToolbarFeedback.classList.remove('hidden', 'success', 'error');
+if (type === 'success') {
+ordersToolbarFeedback.classList.add('success');
+} else if (type === 'error') {
+ordersToolbarFeedback.classList.add('error');
+}
+ordersFeedbackTimeout = window.setTimeout(() => {
+hideOrdersFeedback();
+}, duration);
+}
+
+function updateMassPrintButtonLabel({ force } = {}) {
+if (!massPrintBtn) return;
+const isLoading = massPrintBtn.dataset.loading === 'true';
+const count = selectedOrderIds.size;
+massPrintBtn.disabled = isLoading || count === 0;
+if (isLoading && !force) {
+return;
+}
+const label =
+count > 0
+? `<i class="fas fa-print"></i> Print ${count} kit${count === 1 ? '' : 's'}`
+: MASS_PRINT_DEFAULT_LABEL;
+massPrintBtn.innerHTML = label;
+}
+
+function setSelectAllState(displayedIds = lastRenderedOrderIds) {
+if (!ordersSelectAllCheckbox) return;
+const ids = Array.isArray(displayedIds) ? displayedIds : [];
+if (!ids.length) {
+ordersSelectAllCheckbox.checked = false;
+ordersSelectAllCheckbox.indeterminate = false;
+return;
+}
+const selectedCount = ids.filter((id) => selectedOrderIds.has(id)).length;
+ordersSelectAllCheckbox.checked = selectedCount === ids.length;
+ordersSelectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < ids.length;
+}
+
+function cleanupSelectedOrderIds() {
+if (!selectedOrderIds.size) {
+return;
+}
+const knownIds = new Set(allOrders.map((order) => order.id));
+selectedOrderIds.forEach((id) => {
+if (!knownIds.has(id)) {
+selectedOrderIds.delete(id);
+}
+});
+}
+
+function isKitOrder(order = {}) {
+const preference = (order.shippingPreference || '').toString().toLowerCase();
+return preference === 'shipping kit requested';
+}
+
+function updateReminderButtons(order) {
+const orderId = order?.id || null;
+const status = (order?.status || '').toString();
+
+if (sendReminderBtn) {
+if (orderId && REMINDER_ELIGIBLE_STATUSES.includes(status)) {
+sendReminderBtn.classList.remove('hidden');
+sendReminderBtn.onclick = () => handleSendReminder(orderId);
+} else {
+sendReminderBtn.classList.add('hidden');
+sendReminderBtn.onclick = null;
+}
+}
+
+if (sendExpiringReminderBtn) {
+if (orderId && EXPIRING_REMINDER_STATUSES.includes(status)) {
+sendExpiringReminderBtn.classList.remove('hidden');
+sendExpiringReminderBtn.onclick = () => handleSendExpiringReminder(orderId);
+} else {
+sendExpiringReminderBtn.classList.add('hidden');
+sendExpiringReminderBtn.onclick = null;
+}
+}
+
+if (sendKitReminderBtn) {
+if (orderId && KIT_REMINDER_STATUSES.includes(status) && isKitOrder(order)) {
+sendKitReminderBtn.classList.remove('hidden');
+sendKitReminderBtn.onclick = () => handleSendKitReminder(orderId);
+} else {
+sendKitReminderBtn.classList.add('hidden');
+sendKitReminderBtn.onclick = null;
+}
+}
+}
+
 function renderOrders() {
+cleanupSelectedOrderIds();
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
 const total = source.length;
 ordersTableBody.innerHTML = '';
 
 if (!total) {
 noOrdersMessage.classList.remove('hidden');
-ordersTableBody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
+ordersTableBody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
+lastRenderedOrderIds = [];
+setSelectAllState([]);
+updateMassPrintButtonLabel();
 if (paginationControls) {
 paginationControls.classList.add('hidden');
 }
@@ -2820,71 +2957,82 @@ currentPage = totalPages;
 const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
 const endIndex = startIndex + ORDERS_PER_PAGE;
 const ordersToDisplay = source.slice(startIndex, endIndex);
+const displayedIds = [];
 
 ordersToDisplay.forEach(order => {
+displayedIds.push(order.id);
 const row = document.createElement('tr');
 row.className = 'transition-colors duration-200';
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-const itemDescription = `${order.device} ${order.storage}`;
-const displayId = order.id;
+const itemDescription = `${order.device || 'Device'} ${order.storage || ''}`.trim();
 const orderDate = formatDate(order.createdAt);
 const orderAge = formatOrderAge(order.createdAt);
 const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
 const lastUpdatedDate = formatDateTime(lastUpdatedRaw);
-
 const reofferTimer = formatAutoAcceptTimer(order);
 const statusText = formatStatus(order);
 const labelStatus = formatLabelStatus(order);
+const isSelected = selectedOrderIds.has(order.id);
 
-const actionButtons = [];
-
-actionButtons.push(`
-<button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">View Details</button>
-`.trim());
-
-// --- START: MODIFIED TRACKING NUMBER LOGIC FOR MAIN LIST ---
 const trackingNumber = order.trackingNumber;
-let trackingCellContent;
-
-if (trackingNumber) {
-// Make the tracking number a clickable hyperlink
-trackingCellContent = `<a href="${USPS_TRACKING_URL}${trackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${trackingNumber}</a>`;
-} else {
-trackingCellContent = 'N/A';
-}
-// --- END: MODIFIED TRACKING NUMBER LOGIC FOR MAIN LIST ---
+const trackingCellContent = trackingNumber
+? `<a href="${USPS_TRACKING_URL}${trackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${trackingNumber}</a>`
+: 'N/A';
 
 row.innerHTML = `
-<td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${displayId}</td>
+<td class="px-3 py-4 text-center align-top">
+  <input type="checkbox" class="order-select-checkbox" data-order-id="${order.id}" ${isSelected ? 'checked' : ''}>
+</td>
+<td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${order.id}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
-<div>${orderDate}</div>
-<div class="text-xs text-slate-400">${orderAge}</div>
+  <div>${orderDate}</div>
+  <div class="text-xs text-slate-400">${orderAge}</div>
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}</td>
 <td class="px-3 py-4 whitespace-normal text-sm">
-<span class="${getStatusClass(order.status)}">
-<span class="status-bubble-text">${statusText}</span>
-${labelStatus ? `<span class="status-bubble-subtext">${labelStatus}</span>` : ''}
-${reofferTimer}
-</span>
+  <span class="${getStatusClass(order.status)}">
+    <span class="status-bubble-text">${statusText}</span>
+    ${labelStatus ? `<span class="status-bubble-subtext">${labelStatus}</span>` : ''}
+    ${reofferTimer}
+  </span>
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
 <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
-${actionButtons.join(' ')}
+  <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
+    View Details
+  </button>
 </td>
 `;
+
 ordersTableBody.appendChild(row);
+
+const checkbox = row.querySelector('.order-select-checkbox');
+if (checkbox) {
+checkbox.addEventListener('change', (event) => {
+if (event.target.checked) {
+selectedOrderIds.add(order.id);
+} else {
+selectedOrderIds.delete(order.id);
+}
+updateMassPrintButtonLabel();
+setSelectAllState(displayedIds);
+});
+}
+
+const detailsButton = row.querySelector('.view-details-btn');
+if (detailsButton) {
+detailsButton.addEventListener('click', (event) => {
+event.preventDefault();
+openOrderDetailsModal(order.id);
+});
+}
 });
 
-document.querySelectorAll('.view-details-btn').forEach(button => {
-button.addEventListener('click', (event) => {
-const orderId = event.target.dataset.orderId;
-openOrderDetailsModal(orderId);
-});
-});
-
+lastRenderedOrderIds = displayedIds;
+setSelectAllState(displayedIds);
+updateMassPrintButtonLabel();
 }
 
 function buildPageSequence(totalPages, currentPage) {
@@ -3096,8 +3244,8 @@ phoneCheckStatusPill.className = phoneCheckStatusBaseClass;
     phoneCheckBlacklist.textContent = '—';
     phoneCheckBlacklist.className = phoneCheckBlacklistBaseClass;
   }
-  if (phoneCheckCarrier) {
-    phoneCheckCarrier.textContent = '—';
+  if (phoneCheckCarrierDisplay) {
+    phoneCheckCarrierDisplay.textContent = '—';
   }
   if (phoneCheckSimlock) {
     phoneCheckSimlock.textContent = '—';
@@ -3125,17 +3273,103 @@ phoneCheckRawWrapper.open = false;
 }
 
 function inferDeviceTypeFromOrder(order) {
-if (!order || !order.device) {
-return 'auto';
+if (!order) {
+return '';
 }
-const deviceName = order.device.toLowerCase();
-if (deviceName.includes('iphone') || deviceName.includes('ipad') || deviceName.includes('apple') || deviceName.includes('watch') || deviceName.includes('mac')) {
+const candidates = [
+order.device,
+order.deviceName,
+order.deviceModel,
+order.model,
+order.brand,
+order.manufacturer,
+order.deviceCategory,
+order.platform,
+];
+for (const value of candidates) {
+if (!value) continue;
+const normalized = value.toString().trim().toLowerCase();
+if (!normalized) continue;
+if (normalized.includes('iphone') || normalized.includes('ipad') || normalized.includes('apple') || normalized.includes('watch') || normalized.includes('mac')) {
 return 'Apple';
 }
-if (deviceName.includes('pixel') || deviceName.includes('samsung') || deviceName.includes('android') || deviceName.includes('google')) {
+if (normalized.includes('android') || normalized.includes('pixel') || normalized.includes('samsung') || normalized.includes('google') || normalized.includes('galaxy')) {
 return 'Android';
 }
-return 'auto';
+}
+return '';
+}
+
+function resolveCarrierOption(rawCarrier) {
+if (!rawCarrier) {
+return '';
+}
+const normalized = rawCarrier.toString().trim().toLowerCase();
+if (!normalized) {
+return '';
+}
+if (PHONECHECK_CARRIER_ALIAS_MAP[normalized]) {
+return PHONECHECK_CARRIER_ALIAS_MAP[normalized];
+}
+for (const option of PHONECHECK_CARRIER_OPTIONS) {
+if (option.toLowerCase() === normalized) {
+return option;
+}
+}
+if (normalized.includes('att') || normalized.includes('at&t')) {
+return 'AT&T';
+}
+if (normalized.includes('tmobile') || normalized.includes('t-mobile') || normalized.includes('t mobile')) {
+return 'T-Mobile';
+}
+if (normalized.includes('verizon')) {
+return 'Verizon';
+}
+if (normalized.includes('sprint')) {
+return 'Sprint';
+}
+if (normalized.includes('unlock')) {
+return 'Unlocked';
+}
+if (normalized.includes('black')) {
+return 'Blacklist';
+}
+return '';
+}
+
+function inferCarrierFromOrder(order) {
+if (!order) {
+return '';
+}
+const candidates = [
+order.carrier,
+order.deviceCarrier,
+order.carrierStatus,
+order.lockedCarrier,
+order.phoneCheck?.summary?.carrierLock?.carrier,
+order.phoneCheck?.summary?.carrierLock?.originalCarrier,
+];
+for (const candidate of candidates) {
+const resolved = resolveCarrierOption(candidate);
+if (resolved) {
+return resolved;
+}
+}
+return '';
+}
+
+function setSelectValue(selectElement, value) {
+if (!selectElement) {
+return;
+}
+if (value) {
+selectElement.value = value;
+if (selectElement.value !== value) {
+selectElement.selectedIndex = 0;
+}
+return;
+}
+selectElement.selectedIndex = 0;
 }
 
 async function handlePhoneCheckRun() {
@@ -3156,9 +3390,31 @@ phoneCheckError.classList.remove('hidden');
 return;
 }
 
-const order = currentOrderDetails || {};
-const carrier = order.carrier || 'others';
-const deviceType = inferDeviceTypeFromOrder(order);
+if (phoneCheckError) {
+phoneCheckError.textContent = '';
+phoneCheckError.classList.add('hidden');
+}
+
+const selectedDeviceType = phoneCheckDeviceTypeSelect ? phoneCheckDeviceTypeSelect.value : '';
+if (!selectedDeviceType) {
+if (phoneCheckError) {
+phoneCheckError.textContent = 'Please select the device type before running the check.';
+phoneCheckError.classList.remove('hidden');
+}
+return;
+}
+
+const selectedCarrier = phoneCheckCarrierSelect ? phoneCheckCarrierSelect.value : '';
+if (!selectedCarrier) {
+if (phoneCheckError) {
+phoneCheckError.textContent = 'Please select the carrier before running the check.';
+phoneCheckError.classList.remove('hidden');
+}
+return;
+}
+
+const deviceType = selectedDeviceType;
+const carrier = selectedCarrier;
 
 const originalButtonContent = phoneCheckRunButton.innerHTML;
 phoneCheckRunButton.disabled = true;
@@ -3258,8 +3514,8 @@ if (phoneCheckStatusText) {
     phoneCheckBlacklist.textContent = blacklistLabel;
   }
 
-  if (phoneCheckCarrier) {
-    phoneCheckCarrier.textContent = carrierLock.carrier || '—';
+  if (phoneCheckCarrierDisplay) {
+    phoneCheckCarrierDisplay.textContent = carrierLock.carrier || '—';
   }
 
   if (phoneCheckSimlock) {
@@ -3399,7 +3655,7 @@ modalZelleDetailsRow.classList.add('hidden');
 reofferFormContainer.classList.add('hidden');
 manualFulfillmentFormContainer.classList.add('hidden');
 deleteConfirmationContainer.classList.add('hidden');
-sendReminderBtn.classList.add('hidden');
+updateReminderButtons(null);
 
 // Hide all label rows initially
 modalLabelRow.classList.add('hidden');
@@ -3508,6 +3764,14 @@ phoneCheckInput.value = potentialImei || '';
 } else {
 phoneCheckInput.value = '';
 }
+}
+if (phoneCheckDeviceTypeSelect) {
+const inferredDeviceType = inferDeviceTypeFromOrder(order);
+setSelectValue(phoneCheckDeviceTypeSelect, inferredDeviceType);
+}
+if (phoneCheckCarrierSelect) {
+const inferredCarrier = inferCarrierFromOrder(order);
+setSelectValue(phoneCheckCarrierSelect, inferredCarrier);
 }
 
 // Pass the order object to formatStatus here as well
@@ -3640,11 +3904,7 @@ autoRefreshedTracking.add(order.id);
 setTimeout(() => handleAction(order.id, 'refreshKitTracking'), 150);
 }
 
-// Show reminder button for orders awaiting kit actions or label generation
-if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
-sendReminderBtn.classList.remove('hidden');
-sendReminderBtn.onclick = () => handleSendReminder(order.id);
-}
+updateReminderButtons(order);
 
 modalLoadingMessage.classList.add('hidden');
 
@@ -3886,6 +4146,10 @@ if (!order || !order.id) {
 return;
 }
 
+const labelOptions = getLabelOptions(order);
+const voidableOptions = labelOptions.filter(option => option.isVoidable);
+let preCancelVoidSummary = null;
+
 if (cancelOrderError) {
 cancelOrderError.classList.add('hidden');
 cancelOrderError.textContent = '';
@@ -3895,7 +4159,32 @@ if (cancelOrderFormContainer) {
 cancelOrderFormContainer.classList.add('hidden');
 }
 
-await handleAction(order.id, 'cancelOrder');
+if (voidableOptions.length) {
+try {
+modalLoadingMessage.classList.remove('hidden');
+const selections = voidableOptions.map(option => ({
+key: option.key,
+id: option.labelId,
+}));
+const result = await requestVoidLabels(order.id, selections);
+const { summaryMessage } = summarizeVoidResults(result);
+preCancelVoidSummary = summaryMessage;
+} catch (error) {
+console.error('Pre-cancel label void failed:', error);
+preCancelVoidSummary = `Warning: ${error.message}`;
+} finally {
+modalLoadingMessage.classList.add('hidden');
+}
+}
+
+await handleAction(order.id, 'cancelOrder', { body: { voidLabels: true } });
+
+if (preCancelVoidSummary) {
+const normalized = preCancelVoidSummary.toLowerCase();
+if (normalized.includes('warning') || normalized.includes('could not')) {
+displayModalMessage(preCancelVoidSummary, 'error');
+}
+}
 }
 
 async function handleVoidLabelSubmit(orderId) {
@@ -4159,7 +4448,7 @@ manualFulfillmentFormContainer.classList.add('hidden');
 deleteConfirmationContainer.classList.add('hidden');
 voidLabelFormContainer.classList.add('hidden');
 cancelOrderFormContainer.classList.add('hidden');
-sendReminderBtn.classList.add('hidden'); // Also hide the reminder button during action
+updateReminderButtons(null); // Hide reminder buttons during action
 modalMessage.classList.add('hidden');
 modalMessage.textContent = '';
 if (voidLabelMessage) {
@@ -4200,10 +4489,7 @@ throw new Error('Could not generate payment link.');
 }
 modalLoadingMessage.classList.add('hidden');
 modalActionButtons.classList.remove('hidden');
-// Bring back the reminder button if applicable after markCompleted status check
-if (REMINDER_ELIGIBLE_STATUSES.includes(order.status)) {
-sendReminderBtn.classList.remove('hidden');
-}
+updateReminderButtons(order);
 return;
 case 'sendReturnLabel':
 url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
@@ -4272,9 +4558,7 @@ const orderToReRender = allOrders.find(o => o.id === orderId);
 if (orderToReRender) {
 renderActionButtons(orderToReRender);
 modalActionButtons.classList.remove('hidden');
-if (REMINDER_ELIGIBLE_STATUSES.includes(orderToReRender.status)) {
-sendReminderBtn.classList.remove('hidden');
-}
+updateReminderButtons(orderToReRender);
 }
 }
 }
@@ -4310,6 +4594,7 @@ order.status = 'kit_sent';
 if (currentOrderDetails && currentOrderDetails.id === order.id) {
 currentOrderDetails.status = 'kit_sent';
 }
+updateReminderButtons(order);
 });
 }
 
@@ -4395,6 +4680,9 @@ return null;
 }
 
 async function handleSendReminder(orderId) {
+if (!sendReminderBtn) {
+return;
+}
 try {
 sendReminderBtn.disabled = true;
 sendReminderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending...</span>';
@@ -4415,6 +4703,60 @@ console.error('Error sending reminder:', error);
 displayModalMessage(`Failed to send reminder: ${error.message}`, 'error');
 sendReminderBtn.disabled = false;
 sendReminderBtn.innerHTML = '<i class="fas fa-envelope"></i><span>Send Reminder Email</span>';
+}
+}
+
+async function handleSendExpiringReminder(orderId) {
+if (!sendExpiringReminderBtn) {
+return;
+}
+try {
+sendExpiringReminderBtn.disabled = true;
+sendExpiringReminderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending...</span>';
+modalMessage.classList.add('hidden');
+
+const sendExpiringReminderEmail = httpsCallable(functions, 'sendExpiringReminderEmail');
+await sendExpiringReminderEmail({ orderId });
+
+displayModalMessage('Expiration reminder email sent successfully!', 'success');
+sendExpiringReminderBtn.innerHTML = '<i class="fas fa-check"></i><span>Email Sent!</span>';
+
+setTimeout(() => {
+sendExpiringReminderBtn.disabled = false;
+sendExpiringReminderBtn.innerHTML = '<i class="fas fa-hourglass-half"></i><span>Send Expiration Reminder</span>';
+}, 3000);
+} catch (error) {
+console.error('Error sending expiration reminder:', error);
+displayModalMessage(`Failed to send expiration reminder: ${error.message}`, 'error');
+sendExpiringReminderBtn.disabled = false;
+sendExpiringReminderBtn.innerHTML = '<i class="fas fa-hourglass-half"></i><span>Send Expiration Reminder</span>';
+}
+}
+
+async function handleSendKitReminder(orderId) {
+if (!sendKitReminderBtn) {
+return;
+}
+try {
+sendKitReminderBtn.disabled = true;
+sendKitReminderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending...</span>';
+modalMessage.classList.add('hidden');
+
+const sendKitReminderEmail = httpsCallable(functions, 'sendKitReminderEmail');
+await sendKitReminderEmail({ orderId });
+
+displayModalMessage('Kit follow-up email sent successfully!', 'success');
+sendKitReminderBtn.innerHTML = '<i class="fas fa-check"></i><span>Email Sent!</span>';
+
+setTimeout(() => {
+sendKitReminderBtn.disabled = false;
+sendKitReminderBtn.innerHTML = '<i class="fas fa-truck"></i><span>Send Kit Follow-up</span>';
+}, 3000);
+} catch (error) {
+console.error('Error sending kit reminder:', error);
+displayModalMessage(`Failed to send kit reminder: ${error.message}`, 'error');
+sendKitReminderBtn.disabled = false;
+sendKitReminderBtn.innerHTML = '<i class="fas fa-truck"></i><span>Send Kit Follow-up</span>';
 }
 }
 
@@ -4445,6 +4787,7 @@ manualFulfillmentFormContainer.classList.add('hidden');
 if (reofferFormContainer) {
 reofferFormContainer.classList.add('hidden');
 }
+updateReminderButtons(null);
 }
 
 function updateStatusFilterHighlight(status) {
@@ -4568,6 +4911,128 @@ refreshOrdersBtn.innerHTML = originalLabel;
 });
 }
 
+if (massPrintBtn) {
+massPrintBtn.dataset.loading = 'false';
+updateMassPrintButtonLabel({ force: true });
+massPrintBtn.addEventListener('click', async () => {
+if (massPrintBtn.disabled || massPrintBtn.dataset.loading === 'true') {
+return;
+}
+hideOrdersFeedback();
+const selectedIds = Array.from(selectedOrderIds);
+if (!selectedIds.length) {
+return;
+}
+
+const selectedOrders = allOrders.filter((order) => selectedOrderIds.has(order.id));
+const kitOrders = selectedOrders.filter((order) => isKitOrder(order));
+const nonKitOrders = selectedOrders.filter((order) => !isKitOrder(order)).map((order) => order.id);
+
+if (!kitOrders.length) {
+showOrdersFeedback('Select at least one kit order to mass print shipping labels.', 'error');
+return;
+}
+
+massPrintBtn.dataset.loading = 'true';
+massPrintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing…';
+massPrintBtn.disabled = true;
+
+try {
+const response = await fetch(`${BACKEND_BASE_URL}/print-bundle/bulk`, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ orderIds: kitOrders.map((order) => order.id) }),
+});
+
+if (!response.ok) {
+const errorPayload = await response.json().catch(() => ({}));
+const message = errorPayload?.error || `Mass print failed with status ${response.status}`;
+throw new Error(message);
+}
+
+const result = await response.json();
+const base64 = result?.base64;
+const skipped = Array.isArray(result?.skipped) ? result.skipped : [];
+const printedIds = Array.isArray(result?.printed) ? result.printed : kitOrders.map((order) => order.id);
+
+if (!base64) {
+throw new Error('The bulk print response did not include printable data.');
+}
+
+const binaryString = atob(base64);
+const buffer = new Uint8Array(binaryString.length);
+for (let index = 0; index < binaryString.length; index += 1) {
+buffer[index] = binaryString.charCodeAt(index);
+}
+
+const blob = new Blob([buffer], { type: 'application/pdf' });
+const url = URL.createObjectURL(blob);
+
+let printWindow = null;
+try {
+printWindow = window.open(url, '_blank', 'noopener');
+} catch (error) {
+printWindow = null;
+}
+
+if (printWindow && printWindow.focus) {
+try {
+printWindow.focus();
+} catch (focusError) {
+console.warn('Unable to focus mass print window:', focusError);
+}
+} else {
+const downloadLink = document.createElement('a');
+downloadLink.href = url;
+downloadLink.download = 'mass-print-bundle.pdf';
+downloadLink.rel = 'noopener';
+document.body.appendChild(downloadLink);
+downloadLink.click();
+document.body.removeChild(downloadLink);
+showOrdersFeedback('Pop-up blocked. The combined label PDF was downloaded instead.', 'error');
+}
+
+setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+const summaryParts = [];
+summaryParts.push(`Prepared ${printedIds.length} kit${printedIds.length === 1 ? '' : 's'} for printing.`);
+if (nonKitOrders.length) {
+summaryParts.push(`Ignored non-kit orders: ${nonKitOrders.join(', ')}`);
+}
+if (skipped.length) {
+summaryParts.push(`Skipped ${skipped.length} order${skipped.length === 1 ? '' : 's'} without ready labels: ${skipped.join(', ')}`);
+}
+
+showOrdersFeedback(summaryParts.join(' '), skipped.length ? 'error' : 'success');
+selectedOrderIds.clear();
+updateMassPrintButtonLabel({ force: true });
+setSelectAllState([]);
+} catch (error) {
+console.error('Mass print failed:', error);
+showOrdersFeedback(error.message || 'Failed to prepare mass print bundle.', 'error');
+} finally {
+massPrintBtn.dataset.loading = 'false';
+updateMassPrintButtonLabel({ force: true });
+}
+});
+} else {
+updateMassPrintButtonLabel({ force: true });
+}
+
+if (ordersSelectAllCheckbox) {
+ordersSelectAllCheckbox.addEventListener('change', (event) => {
+const displayed = Array.from(lastRenderedOrderIds);
+if (event.target.checked) {
+displayed.forEach((id) => selectedOrderIds.add(id));
+} else {
+displayed.forEach((id) => selectedOrderIds.delete(id));
+}
+ordersSelectAllCheckbox.indeterminate = false;
+updateMassPrintButtonLabel();
+setSelectAllState(displayed);
+});
+}
+
 closeModalButton.addEventListener('click', closeOrderDetailsModal);
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -4635,7 +5100,7 @@ initializeAnalyticsDashboard();
 
 } catch (error) {
 console.error("Error initializing Firebase:", error);
-ordersTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+ordersTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
 document.getElementById('auth-loading-screen').classList.add('hidden');
 }
 });
@@ -4660,7 +5125,7 @@ updateLastRefreshTimestamp();
 });
 } catch (error) {
 console.error('Error fetching real-time orders:', error);
-ordersTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+ordersTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
 }
 }
 
