@@ -137,33 +137,55 @@ async function generateBagLabelPdf(order) {
     const { width, height } = page.getSize();
     let cursorY = height - MARGIN;
 
-    const drawLine = (text, options = {}) => {
-        const { font = regularFont, size = 12, color = rgb(0, 0, 0) } = options;
+    const drawBlock = (text, options = {}) => {
+        const { font = regularFont, size = 12, color = rgb(0, 0, 0), gap = 2 } = options;
         const lines = wrapText(text, width - MARGIN * 2, font, size);
         lines.forEach((line) => {
             page.drawText(line, { x: MARGIN, y: cursorY, size, font, color });
             cursorY -= LINE_HEIGHT;
         });
-        cursorY -= 2;
+        cursorY -= gap;
     };
 
-    drawLine('SecondHandCell Bag Label', { font: boldFont, size: 14, color: rgb(0.1, 0.1, 0.1) });
-    cursorY -= 2;
-    drawLine(`Order #${order.id}`, { font: boldFont, size: 20, color: rgb(0.1, 0.1, 0.4) });
+    drawBlock('SecondHandCell Bag Label', { font: boldFont, size: 14, color: rgb(0.1, 0.1, 0.1) });
+    drawBlock(`Order #${order.id}`, { font: boldFont, size: 22, color: rgb(0.1, 0.1, 0.4), gap: 6 });
 
-    const shippingInfo = order.shippingInfo || {};
-    [
-        shippingInfo.fullName ? `Customer: ${shippingInfo.fullName}` : null,
-        order.device || order.storage ? `Device: ${(order.device || 'Device')} ${(order.storage || '').trim()}`.trim() : null,
-        order.carrier ? `Carrier: ${order.carrier}` : null,
-        order.paymentMethod ? `Payment: ${formatValue(order.paymentMethod)}` : null,
-    ]
-        .filter(Boolean)
-        .forEach((line) => drawLine(line, { size: 11 }));
+    const deviceParts = [];
+    if (order.brand) {
+        deviceParts.push(String(order.brand));
+    }
+    if (order.device) {
+        deviceParts.push(String(order.device));
+    }
+    if (deviceParts.length) {
+        drawBlock(`Device: ${deviceParts.join(' • ')}`, { size: 11 });
+    }
 
-    drawLine('Attach this label to the shipping bag before mailing the kit.', {
+    if (order.storage) {
+        drawBlock(`Storage: ${String(order.storage)}`, { size: 11 });
+    }
+
+    if (order.carrier) {
+        drawBlock(`Carrier: ${formatValue(order.carrier)}`, { size: 11 });
+    }
+
+    const conditionSummary = buildConditionSummary(order);
+    if (conditionSummary) {
+        drawBlock(`Condition: ${conditionSummary}`, { size: 11 });
+    }
+
+    const payoutAmount = resolveOrderPayout(order);
+    drawBlock(`Quoted Price: $${formatCurrency(payoutAmount)}`, {
+        font: boldFont,
+        size: 13,
+        color: rgb(0.1, 0.45, 0.2),
+        gap: 8,
+    });
+
+    drawBlock('Attach this label to the device bag before shipping.', {
         size: 10,
         color: rgb(0.35, 0.35, 0.35),
+        gap: 6,
     });
 
     const barcodeSvg = await buildBarcode(order.id);
@@ -179,9 +201,57 @@ async function generateBagLabelPdf(order) {
     });
 
     cursorY = Math.max(MARGIN, cursorY - dims.height - 16);
-    drawLine('Scan to open this order in the dashboard.', { size: 9, font: boldFont, color: rgb(0.3, 0.3, 0.3) });
+    drawBlock('Scan to open this order in the dashboard.', {
+        size: 9,
+        font: boldFont,
+        color: rgb(0.3, 0.3, 0.3),
+        gap: 0,
+    });
 
     return pdfDoc.save();
+}
+
+function resolveOrderPayout(order = {}) {
+    const candidates = [
+        order.finalPayoutAmount,
+        order.finalPayout,
+        order.finalOfferAmount,
+        order.finalOffer,
+        order.payoutAmount,
+        order.payout,
+        order.reOffer && order.reOffer.newPrice,
+        order.estimatedQuote,
+    ];
+
+    for (const value of candidates) {
+        if (value === undefined || value === null) {
+            continue;
+        }
+        const numeric = Number(value);
+        if (!Number.isNaN(numeric)) {
+            return numeric;
+        }
+    }
+
+    return 0;
+}
+
+function formatCurrency(value) {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+        return '0.00';
+    }
+    return numeric.toFixed(2);
+}
+
+function buildConditionSummary(order = {}) {
+    const segments = [
+        order.condition_power_on ? `Powers On: ${formatValue(order.condition_power_on)}` : null,
+        order.condition_functional ? `Functional: ${formatValue(order.condition_functional)}` : null,
+        order.condition_cosmetic ? `Cosmetic: ${formatValue(order.condition_cosmetic)}` : null,
+    ].filter(Boolean);
+
+    return segments.join(' • ');
 }
 
 function formatValue(value) {
