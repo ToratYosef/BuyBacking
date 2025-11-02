@@ -2798,7 +2798,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const analyticsTopTableBody = document.getElementById('analytics-top-table');
         const analyticsLiveList = document.getElementById('analytics-live-list');
 
-        const ANALYTICS_DEFAULT_SITE_ID = 'default';
         const analyticsState = {
             window: '24h',
             granularity: 'auto',
@@ -2843,6 +2842,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             if (analyticsState.timer) {
                 clearInterval(analyticsState.timer);
             }
+        });
+
+        window.addEventListener('page-tracker:updated', () => {
+            if (!analyticsState.initialized) {
+                return;
+            }
+            refreshAnalyticsData({ silent: true });
         });
 
         orderDetailsModal.addEventListener('click', (event) => {
@@ -3230,6 +3236,176 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
         }
 
+        const LOCAL_TRACKER_STORAGE_KEY = 'PAGE_TRACKER_LOGS';
+
+        function normalizeAnalyticsPath(path) {
+            if (!path) {
+                return '';
+            }
+            const trimmed = path.trim();
+            if (!trimmed) {
+                return '';
+            }
+            return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+        }
+
+        function readLocalTrackerStore() {
+            const fallback = { pages: {}, lastUpdated: null };
+            try {
+                const raw = window.localStorage.getItem(LOCAL_TRACKER_STORAGE_KEY);
+                if (!raw) {
+                    return fallback;
+                }
+                const parsed = JSON.parse(raw);
+                if (!parsed || typeof parsed !== 'object') {
+                    return fallback;
+                }
+                if (!parsed.pages || typeof parsed.pages !== 'object') {
+                    parsed.pages = {};
+                }
+                return parsed;
+            } catch (error) {
+                return { ...fallback, error: true };
+            }
+        }
+
+        function flattenTrackerEntries(store) {
+            const entries = [];
+            if (!store || !store.pages || typeof store.pages !== 'object') {
+                return entries;
+            }
+            Object.entries(store.pages).forEach(([pathKey, info]) => {
+                if (!info || typeof info !== 'object') {
+                    return;
+                }
+                const ipStats = info.ipStats;
+                if (!ipStats || typeof ipStats !== 'object') {
+                    return;
+                }
+                const safePath = typeof pathKey === 'string' && pathKey ? pathKey : '/';
+                Object.entries(ipStats).forEach(([ipKey, details]) => {
+                    const ip = typeof ipKey === 'string' && ipKey.trim() ? ipKey.trim() : 'unknown';
+                    const firstSeen = details && details.firstSeen ? details.firstSeen : (info.lastViewedAt || store.lastUpdated || null);
+                    const lastSeen = details && details.lastSeen ? details.lastSeen : firstSeen;
+                    const firstSeenMs = firstSeen ? Date.parse(firstSeen) : NaN;
+                    const lastSeenMs = lastSeen ? Date.parse(lastSeen) : NaN;
+                    entries.push({
+                        path: safePath,
+                        ip,
+                        firstSeen,
+                        lastSeen,
+                        firstSeenMs: Number.isNaN(firstSeenMs) ? null : firstSeenMs,
+                        lastSeenMs: Number.isNaN(lastSeenMs) ? null : lastSeenMs,
+                    });
+                });
+            });
+            return entries;
+        }
+
+        function aggregateTopPaths(entries) {
+            const totals = new Map();
+            entries.forEach((entry) => {
+                const key = entry.path || '/';
+                if (!totals.has(key)) {
+                    totals.set(key, { path: key, views: 0, uniqueIps: new Set() });
+                }
+                const record = totals.get(key);
+                record.views += 1;
+                if (entry.ip) {
+                    record.uniqueIps.add(entry.ip);
+                }
+            });
+            return Array.from(totals.values())
+                .map((record) => ({
+                    path: record.path,
+                    views: record.views,
+                    uniques: record.uniqueIps.size,
+                }))
+                .sort((a, b) => {
+                    if (b.views !== a.views) {
+                        return b.views - a.views;
+                    }
+                    return a.path.localeCompare(b.path);
+                });
+        }
+
+        function determineAutoGranularity(windowMs) {
+            if (windowMs <= 2 * 60 * 60 * 1000) {
+                return 'minute';
+            }
+            if (windowMs <= 48 * 60 * 60 * 1000) {
+                return 'hour';
+            }
+            return 'day';
+        }
+
+        function buildLocalTimeseries(entries, windowMs, granularity, now) {
+            const bucketSize = granularity === 'day'
+                ? 24 * 60 * 60 * 1000
+                : granularity === 'hour'
+                    ? 60 * 60 * 1000
+                    : 60 * 1000;
+            const end = now;
+            const start = Math.max(0, end - windowMs);
+            const startAligned = Math.floor(start / bucketSize) * bucketSize;
+            const bucketCount = Math.max(1, Math.ceil((end - startAligned) / bucketSize));
+            const buckets = [];
+            const bucketData = [];
+            for (let index = 0; index < bucketCount; index += 1) {
+                const bucketStart = startAligned + index * bucketSize;
+                buckets.push(bucketStart);
+                bucketData.push({ views: 0, uniques: new Set() });
+            }
+            entries.forEach((entry) => {
+                if (!entry || entry.lastSeenMs === null || entry.lastSeenMs === undefined) {
+                    return;
+                }
+                if (entry.lastSeenMs < startAligned) {
+                    return;
+                }
+                let bucketIndex = Math.floor((entry.lastSeenMs - startAligned) / bucketSize);
+                if (bucketIndex < 0) {
+                    return;
+                }
+                if (bucketIndex >= bucketData.length) {
+                    bucketIndex = bucketData.length - 1;
+                }
+                bucketData[bucketIndex].views += 1;
+                if (entry.ip) {
+                    bucketData[bucketIndex].uniques.add(entry.ip);
+                }
+            });
+            return {
+                granularity,
+                buckets: buckets.map((bucketStart, index) => ({
+                    t: new Date(bucketStart).toISOString(),
+                    views: bucketData[index].views,
+                    uniques: bucketData[index].uniques.size,
+                })),
+            };
+        }
+
+        function computeAnalyticsSummary(entries, now) {
+            const pageviews = entries.length;
+            const uniqueIps = new Set();
+            const activeCutoff = now - 5 * 60 * 1000;
+            const activeIps = new Set();
+            entries.forEach((entry) => {
+                const ip = entry.ip || 'unknown';
+                uniqueIps.add(ip);
+                if (entry.lastSeenMs !== null && entry.lastSeenMs !== undefined && entry.lastSeenMs >= activeCutoff) {
+                    activeIps.add(ip);
+                }
+            });
+            const uniqueCount = uniqueIps.size;
+            return {
+                pageviews,
+                unique_users: uniqueCount,
+                active_users_now: activeIps.size,
+                average_views_per_user: uniqueCount > 0 ? pageviews / uniqueCount : 0,
+            };
+        }
+
         function setAnalyticsStatus(message, state = 'idle') {
             if (!analyticsStatus) {
                 return;
@@ -3450,7 +3626,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         function handleAnalyticsError() {
-            setAnalyticsStatus('Failed to load analytics', 'error');
+            setAnalyticsStatus('Analytics unavailable (check local storage access)', 'error');
             analyticsKpiPageviews.textContent = '--';
             analyticsKpiUniques.textContent = '--';
             analyticsKpiActive.textContent = '--';
@@ -3472,36 +3648,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             }
         }
 
-        async function fetchAnalyticsEndpoint(endpoint, params = {}) {
-            const url = new URL(endpoint, window.location.origin);
-            Object.entries(params).forEach(([key, value]) => {
-                if (value === undefined || value === null || value === '') {
-                    return;
-                }
-                url.searchParams.set(key, value);
-            });
-            const headers = { Accept: 'application/json' };
-            if (auth && auth.currentUser) {
-                try {
-                    const token = await auth.currentUser.getIdToken();
-                    headers.Authorization = `Bearer ${token}`;
-                } catch (tokenError) {
-                    console.warn('Unable to fetch analytics token', tokenError);
-                }
-            }
-            const response = await fetch(url.toString(), {
-                method: 'GET',
-                headers,
-                credentials: 'same-origin',
-            });
-            if (!response.ok) {
-                throw new Error(`Analytics request failed: ${response.status}`);
-            }
-            return response.json();
-        }
-
         async function refreshAnalyticsData(options = {}) {
-            if (!analyticsSection || !auth || !auth.currentUser) {
+            if (!analyticsSection) {
                 return;
             }
             if (analyticsState.loading) {
@@ -3520,56 +3668,70 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 analyticsPathInput.value = analyticsState.path;
             }
             try {
-                const siteId = ANALYTICS_DEFAULT_SITE_ID;
                 const windowValue = analyticsState.window;
-                const baseParams = {
-                    siteId,
-                    window: windowValue,
-                };
-                if (analyticsState.path) {
-                    baseParams.path = analyticsState.path;
+                const windowMs = getAnalyticsWindowMs(windowValue);
+                const normalizedPath = normalizeAnalyticsPath(analyticsState.path);
+                const targetGranularity = analyticsState.granularity === 'auto'
+                    ? determineAutoGranularity(windowMs)
+                    : analyticsState.granularity;
+
+                const store = readLocalTrackerStore();
+                if (store.error) {
+                    throw new Error('local-storage-unavailable');
                 }
 
-                const summaryPromise = fetchAnalyticsEndpoint('/api/analytics/summary', baseParams);
-                const timeseriesPromise = fetchAnalyticsEndpoint('/api/analytics/timeseries', {
-                    siteId,
-                    window: windowValue,
-                    path: analyticsState.path || undefined,
-                    granularity: analyticsState.granularity === 'auto' ? undefined : analyticsState.granularity,
+                const entries = flattenTrackerEntries(store);
+                const now = Date.now();
+                const cutoff = now - windowMs;
+                const filteredEntries = entries.filter((entry) => {
+                    if (entry.lastSeenMs === null || entry.lastSeenMs === undefined) {
+                        return false;
+                    }
+                    if (entry.lastSeenMs < cutoff) {
+                        return false;
+                    }
+                    if (normalizedPath && entry.path !== normalizedPath) {
+                        return false;
+                    }
+                    return true;
                 });
-                const topPromise = fetchAnalyticsEndpoint('/api/analytics/top', {
-                    siteId,
-                    window: windowValue,
-                    path: analyticsState.path || undefined,
-                    limit: 20,
-                });
 
-                const windowMs = getAnalyticsWindowMs(windowValue);
-                const livePromise = windowMs <= 30 * 60 * 1000
-                    ? fetchAnalyticsEndpoint('/api/analytics/live', {
-                        siteId,
-                        window: windowValue,
-                        path: analyticsState.path || undefined,
-                    })
-                    : Promise.resolve(null);
-
-                const [summary, timeseries, top, live] = await Promise.all([
-                    summaryPromise,
-                    timeseriesPromise,
-                    topPromise,
-                    livePromise,
-                ]);
-
+                const summary = computeAnalyticsSummary(filteredEntries, now);
                 renderAnalyticsSummary(summary);
+
+                const timeseries = buildLocalTimeseries(filteredEntries, windowMs, targetGranularity, now);
                 renderAnalyticsTimeseries(timeseries);
-                renderAnalyticsTop(top);
-                if (live) {
+
+                const topPaths = aggregateTopPaths(filteredEntries).slice(0, 20);
+                renderAnalyticsTop({ top_paths: topPaths });
+
+                if (windowMs <= 30 * 60 * 1000) {
+                    const liveWindowMs = Math.max(60 * 1000, windowMs);
+                    const liveEntries = entries.filter((entry) => {
+                        if (entry.lastSeenMs === null || entry.lastSeenMs === undefined) {
+                            return false;
+                        }
+                        if (entry.lastSeenMs < now - liveWindowMs) {
+                            return false;
+                        }
+                        if (normalizedPath && entry.path !== normalizedPath) {
+                            return false;
+                        }
+                        return true;
+                    });
+                    const live = buildLocalTimeseries(liveEntries, liveWindowMs, 'minute', now);
                     renderAnalyticsLive(live);
                 } else {
                     renderAnalyticsLive(null);
                 }
 
-                setAnalyticsStatus(`Updated ${new Date().toLocaleTimeString()}`);
+                if (filteredEntries.length) {
+                    setAnalyticsStatus(`Updated ${new Date().toLocaleTimeString()}`);
+                } else if (store.lastUpdated) {
+                    setAnalyticsStatus('No pageviews in this window yet.');
+                } else {
+                    setAnalyticsStatus('Waiting for first page view…');
+                }
             } catch (error) {
                 console.error('Failed to refresh analytics', error);
                 handleAnalyticsError();
