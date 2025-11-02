@@ -2,10 +2,14 @@ const functions = require("firebase-functions/v1");
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin"); // <-- Required here
+const { Timestamp, FieldValue } = require("firebase-admin/firestore");
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { URLSearchParams } = require('url');
-const { randomUUID } = require("crypto");
+const { randomUUID, createHash } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
 const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
@@ -14,6 +18,581 @@ const ordersCollection = db.collection("orders");
 const usersCollection = db.collection("users");
 const adminsCollection = db.collection("admins"); // This collection should only contain manually designated admin UIDs
 const chatsCollection = db.collection("chats");
+
+const analyticsEventsCollection = db.collection("events");
+const rollupsMinuteCollection = db.collection("rollups_minute");
+const rollupsHourCollection = db.collection("rollups_hour");
+const rollupsDayCollection = db.collection("rollups_day");
+
+const ANALYTICS_DEFAULT_SITE_ID = process.env.ANALYTICS_DEFAULT_SITE_ID || "default";
+const ANALYTICS_ALLOWED_EMAILS = (process.env.ADMIN_ALLOWED_EMAILS || "")
+  .split(",")
+  .map((entry) => entry.trim().toLowerCase())
+  .filter(Boolean);
+const ANALYTICS_MAX_BODY_BYTES = 2048;
+const ANALYTICS_UNIQUE_SET_LIMIT = 5000;
+const ANALYTICS_HASH_LIMIT = 20000;
+const ANALYTICS_RATE_LIMIT = {
+  maxTokens: 30,
+  refillIntervalMs: 60 * 1000,
+};
+const ANALYTICS_LIVE_WINDOW_THRESHOLD_MS = 30 * 60 * 1000;
+const BOT_USER_AGENT_REGEX = /bot|spider|crawler|preview|slurp|facebookexternalhit|headless|cfnetwork|wget|curl/i;
+
+const ROLLUP_DEFINITIONS = {
+  minute: {
+    bucketMs: 60 * 1000,
+    collection: rollupsMinuteCollection,
+  },
+  hour: {
+    bucketMs: 60 * 60 * 1000,
+    collection: rollupsHourCollection,
+  },
+  day: {
+    bucketMs: 24 * 60 * 60 * 1000,
+    collection: rollupsDayCollection,
+  },
+};
+
+const analyticsRateBuckets = new Map();
+
+function getClientIp(req) {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.trim()) {
+    return forwarded.split(",")[0].trim();
+  }
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return forwarded[0].trim();
+  }
+  if (req.headers["fastly-client-ip"]) {
+    return String(req.headers["fastly-client-ip"]).trim();
+  }
+  if (req.ip) {
+    return req.ip;
+  }
+  return "unknown";
+}
+
+function consumeIngestToken(ip) {
+  const now = Date.now();
+  const existing = analyticsRateBuckets.get(ip);
+  if (!existing) {
+    analyticsRateBuckets.set(ip, {
+      tokens: ANALYTICS_RATE_LIMIT.maxTokens - 1,
+      lastRefill: now,
+    });
+    return true;
+  }
+
+  const elapsed = now - existing.lastRefill;
+  if (elapsed >= ANALYTICS_RATE_LIMIT.refillIntervalMs) {
+    existing.tokens = ANALYTICS_RATE_LIMIT.maxTokens;
+    existing.lastRefill = now;
+  }
+
+  if (existing.tokens <= 0) {
+    analyticsRateBuckets.set(ip, existing);
+    return false;
+  }
+
+  existing.tokens -= 1;
+  analyticsRateBuckets.set(ip, existing);
+  return true;
+}
+
+function normalizeSiteId(siteId) {
+  if (typeof siteId !== "string") {
+    return ANALYTICS_DEFAULT_SITE_ID;
+  }
+  const trimmed = siteId.trim();
+  if (!trimmed) {
+    return ANALYTICS_DEFAULT_SITE_ID;
+  }
+  return trimmed.slice(0, 128);
+}
+
+function sanitizePath(path) {
+  if (typeof path !== "string") {
+    return "/";
+  }
+  const trimmed = path.trim();
+  if (!trimmed.startsWith("/")) {
+    return "/";
+  }
+  return trimmed.slice(0, 512);
+}
+
+function sanitizeMeta(meta) {
+  if (!meta || typeof meta !== "object") {
+    return {};
+  }
+  const allowedKeys = new Set([
+    "screenW",
+    "screenH",
+    "viewport",
+    "language",
+    "timezone",
+    "referrer",
+  ]);
+  const clean = {};
+  for (const [key, value] of Object.entries(meta)) {
+    if (!allowedKeys.has(key)) {
+      continue;
+    }
+    if (typeof value === "string") {
+      clean[key] = value.slice(0, 256);
+    } else if (typeof value === "number" && Number.isFinite(value)) {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
+function hashAnonId(anonId) {
+  if (!anonId) {
+    return null;
+  }
+  return createHash("sha1").update(String(anonId)).digest("hex").slice(0, 24);
+}
+
+function alignToBucketStart(date, bucketMs) {
+  return new Date(Math.floor(date.getTime() / bucketMs) * bucketMs);
+}
+
+function buildRollupDocId(siteId, path, bucketStartDate) {
+  return `${siteId}|${encodeURIComponent(path)}|${bucketStartDate.toISOString()}`;
+}
+
+function parseWindowParam(value) {
+  const defaultResult = {
+    window: "24h",
+    windowMs: 24 * 60 * 60 * 1000,
+  };
+  if (typeof value !== "string" || !value.trim()) {
+    return defaultResult;
+  }
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d+)([mhd])$/i);
+  if (!match) {
+    return defaultResult;
+  }
+  const amount = parseInt(match[1], 10);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return defaultResult;
+  }
+  const unit = match[2].toLowerCase();
+  let multiplier;
+  if (unit === "m") {
+    multiplier = 60 * 1000;
+  } else if (unit === "h") {
+    multiplier = 60 * 60 * 1000;
+  } else {
+    multiplier = 24 * 60 * 60 * 1000;
+  }
+  return {
+    window: trimmed,
+    windowMs: amount * multiplier,
+  };
+}
+
+function normalizeGranularity(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["minute", "hour", "day"].includes(normalized)) {
+    return normalized;
+  }
+  return null;
+}
+
+function inferGranularity(windowMs) {
+  if (windowMs <= 2 * 60 * 60 * 1000) {
+    return "minute";
+  }
+  if (windowMs <= 48 * 60 * 60 * 1000) {
+    return "hour";
+  }
+  return "day";
+}
+
+function getSummaryGranularity(windowMs) {
+  if (windowMs <= 48 * 60 * 60 * 1000) {
+    return "minute";
+  }
+  if (windowMs <= 30 * 24 * 60 * 60 * 1000) {
+    return "hour";
+  }
+  return "day";
+}
+
+function extractUniqueTokensFromDoc(doc) {
+  if (!doc || typeof doc !== "object") {
+    return [];
+  }
+  if (Array.isArray(doc.uniqueHashes)) {
+    return doc.uniqueHashes.filter((entry) => typeof entry === "string" && entry);
+  }
+  if (Array.isArray(doc.uniqueIds)) {
+    return doc.uniqueIds
+      .map((entry) => hashAnonId(entry))
+      .filter((entry) => typeof entry === "string" && entry);
+  }
+  return [];
+}
+
+function mergeUniqueTokens(targetSet, tokens) {
+  for (const token of tokens) {
+    if (typeof token === "string" && token) {
+      targetSet.add(token);
+    }
+  }
+}
+
+async function requireAnalyticsAdmin(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    const token = authHeader.slice("Bearer ".length).trim();
+    if (!token) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    const decoded = await admin.auth().verifyIdToken(token, true);
+    const email = (decoded.email || "").toLowerCase();
+    let allowed = false;
+    if (ANALYTICS_ALLOWED_EMAILS.length === 0 || ANALYTICS_ALLOWED_EMAILS.includes(email)) {
+      allowed = true;
+    } else if (decoded.uid) {
+      const adminDoc = await adminsCollection.doc(decoded.uid).get();
+      allowed = adminDoc.exists;
+    }
+    if (!allowed) {
+      return res.status(403).json({ error: "forbidden" });
+    }
+    req.analyticsUser = { uid: decoded.uid, email };
+    return next();
+  } catch (error) {
+    console.error("Failed analytics admin auth", error);
+    return res.status(401).json({ error: "unauthorized" });
+  }
+}
+
+async function updateMinuteRollup(siteId, path, bucketStartDate, anonId) {
+  const docId = buildRollupDocId(siteId, path, bucketStartDate);
+  const docRef = rollupsMinuteCollection.doc(docId);
+  const hashed = hashAnonId(anonId);
+  await db.runTransaction(async (tx) => {
+    const snapshot = await tx.get(docRef);
+    if (!snapshot.exists) {
+      const uniqueIds = anonId ? [anonId] : [];
+      const uniqueHashes = hashed ? [hashed] : [];
+      tx.set(docRef, {
+        siteId,
+        path,
+        bucketStart: Timestamp.fromDate(bucketStartDate),
+        views: 1,
+        uniques: uniqueIds.length,
+        uniqueIds,
+        uniqueHashes,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        compactedToHour: false,
+        compactedToDay: false,
+      });
+      return;
+    }
+    const data = snapshot.data() || {};
+    const updatePayload = {
+      views: FieldValue.increment(1),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    const uniqueIds = Array.isArray(data.uniqueIds) ? data.uniqueIds.slice(0, ANALYTICS_UNIQUE_SET_LIMIT) : [];
+    const uniqueHashes = Array.isArray(data.uniqueHashes)
+      ? data.uniqueHashes.slice(0, ANALYTICS_HASH_LIMIT)
+      : uniqueIds.map((value) => hashAnonId(value)).filter(Boolean);
+
+    let uniqueChanged = false;
+    if (anonId && !uniqueIds.includes(anonId) && uniqueIds.length < ANALYTICS_UNIQUE_SET_LIMIT) {
+      uniqueIds.push(anonId);
+      uniqueChanged = true;
+    }
+    if (hashed && !uniqueHashes.includes(hashed) && uniqueHashes.length < ANALYTICS_HASH_LIMIT) {
+      uniqueHashes.push(hashed);
+      uniqueChanged = true;
+    }
+
+    if (uniqueChanged) {
+      updatePayload.uniqueIds = uniqueIds;
+      updatePayload.uniqueHashes = uniqueHashes;
+      updatePayload.uniques = uniqueIds.length || uniqueHashes.length;
+    } else if (typeof data.uniques === "number") {
+      updatePayload.uniques = data.uniques;
+    }
+
+    tx.update(docRef, updatePayload);
+  });
+}
+
+async function fetchRollupDocuments(granularity, siteId, path, startDate, endDate) {
+  const definition = ROLLUP_DEFINITIONS[granularity];
+  if (!definition) {
+    return [];
+  }
+  const alignedStart = alignToBucketStart(startDate, definition.bucketMs);
+  const alignedEnd = alignToBucketStart(endDate, definition.bucketMs);
+  let query = definition.collection
+    .where("siteId", "==", siteId)
+    .where("bucketStart", ">=", Timestamp.fromDate(alignedStart))
+    .where("bucketStart", "<=", Timestamp.fromDate(alignedEnd))
+    .orderBy("bucketStart");
+  if (path) {
+    query = query.where("path", "==", path);
+  }
+  const snapshot = await query.get();
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+function buildBucketSkeleton(startDate, endDate, bucketMs) {
+  const buckets = [];
+  let pointer = alignToBucketStart(startDate, bucketMs).getTime();
+  const end = alignToBucketStart(endDate, bucketMs).getTime();
+  while (pointer <= end) {
+    buckets.push({
+      t: new Date(pointer).toISOString(),
+      views: 0,
+      uniques: 0,
+    });
+    pointer += bucketMs;
+  }
+  return buckets;
+}
+
+async function computeActiveUsersNow(siteId, path) {
+  const windowStart = Timestamp.fromDate(new Date(Date.now() - 5 * 60 * 1000));
+  let query = analyticsEventsCollection
+    .where("siteId", "==", siteId)
+    .where("ts", ">=", windowStart)
+    .orderBy("ts", "desc");
+  if (path) {
+    query = query.where("path", "==", path);
+  }
+  const snapshot = await query.get();
+  const sessionIds = new Set();
+  snapshot.forEach((doc) => {
+    const data = doc.data() || {};
+    if (path && data.path !== path) {
+      return;
+    }
+    if (data.sessionId) {
+      sessionIds.add(String(data.sessionId));
+    }
+  });
+  return sessionIds.size;
+}
+
+async function buildAnalyticsSummary({ siteId, windowMs, now, path }) {
+  const startDate = new Date(now.getTime() - windowMs);
+  const granularity = getSummaryGranularity(windowMs);
+  const pathKey = path ? sanitizePath(path) : "__all__";
+  const docs = await fetchRollupDocuments(granularity, siteId, pathKey, startDate, now);
+  let pageviews = 0;
+  const uniqueTokens = new Set();
+  docs.forEach((doc) => {
+    pageviews += doc.views || 0;
+    mergeUniqueTokens(uniqueTokens, extractUniqueTokensFromDoc(doc));
+  });
+  const uniqueUsers = uniqueTokens.size;
+  const activeUsersNow = await computeActiveUsersNow(siteId, path ? sanitizePath(path) : null);
+  let topPaths = [];
+  if (!path) {
+    const top = await buildAnalyticsTopPages({ siteId, windowMs, now, limit: 5, path: null });
+    topPaths = top.top_paths;
+  }
+  const averageViewsPerUser = uniqueUsers > 0 ? Number((pageviews / uniqueUsers).toFixed(2)) : 0;
+  return {
+    siteId,
+    windowMs,
+    pageviews,
+    unique_users: uniqueUsers,
+    active_users_now: activeUsersNow,
+    average_views_per_user: averageViewsPerUser,
+    top_paths: topPaths,
+  };
+}
+
+async function buildAnalyticsTimeseries({
+  siteId,
+  windowMs,
+  now,
+  path,
+  granularity: requestedGranularity,
+}) {
+  const startDate = new Date(now.getTime() - windowMs);
+  const granularity = normalizeGranularity(requestedGranularity) || inferGranularity(windowMs);
+  const definition = ROLLUP_DEFINITIONS[granularity];
+  if (!definition) {
+    return { siteId, windowMs, granularity, buckets: [] };
+  }
+  const pathKey = path ? sanitizePath(path) : "__all__";
+  const docs = await fetchRollupDocuments(granularity, siteId, pathKey, startDate, now);
+  const buckets = buildBucketSkeleton(startDate, now, definition.bucketMs);
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.t, bucket]));
+  docs.forEach((doc) => {
+    if (!doc.bucketStart || typeof doc.bucketStart.toDate !== "function") {
+      return;
+    }
+    const bucketDate = alignToBucketStart(doc.bucketStart.toDate(), definition.bucketMs);
+    const key = bucketDate.toISOString();
+    const bucket = bucketMap.get(key);
+    if (!bucket) {
+      return;
+    }
+    bucket.views += doc.views || 0;
+    bucket.uniques = doc.uniques || bucket.uniques;
+  });
+  return {
+    siteId,
+    windowMs,
+    granularity,
+    buckets,
+  };
+}
+
+async function buildAnalyticsTopPages({ siteId, windowMs, now, limit = 20, path }) {
+  const startDate = new Date(now.getTime() - windowMs);
+  const granularity = getSummaryGranularity(windowMs);
+  const docs = await fetchRollupDocuments(granularity, siteId, null, startDate, now);
+  const aggregates = new Map();
+  docs.forEach((doc) => {
+    const docPath = doc.path;
+    if (!docPath || docPath === "__all__") {
+      return;
+    }
+    if (path && docPath !== path) {
+      return;
+    }
+    let entry = aggregates.get(docPath);
+    if (!entry) {
+      entry = {
+        path: docPath,
+        views: 0,
+        uniqueTokens: new Set(),
+      };
+      aggregates.set(docPath, entry);
+    }
+    entry.views += doc.views || 0;
+    mergeUniqueTokens(entry.uniqueTokens, extractUniqueTokensFromDoc(doc));
+  });
+  const sorted = Array.from(aggregates.values())
+    .map((entry) => ({
+      path: entry.path,
+      views: entry.views,
+      uniques: entry.uniqueTokens.size,
+    }))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, limit);
+  return {
+    siteId,
+    windowMs,
+    top_paths: sorted,
+  };
+}
+
+async function buildAnalyticsLive({ siteId, windowMs, now, path }) {
+  const effectiveWindowMs = Math.min(windowMs, ANALYTICS_LIVE_WINDOW_THRESHOLD_MS);
+  const startDate = new Date(now.getTime() - effectiveWindowMs);
+  const definition = ROLLUP_DEFINITIONS.minute;
+  const pathKey = path ? sanitizePath(path) : "__all__";
+  const docs = await fetchRollupDocuments("minute", siteId, pathKey, startDate, now);
+  const buckets = buildBucketSkeleton(startDate, now, definition.bucketMs);
+  const bucketMap = new Map(buckets.map((bucket) => [bucket.t, bucket]));
+  docs.forEach((doc) => {
+    if (!doc.bucketStart || typeof doc.bucketStart.toDate !== "function") {
+      return;
+    }
+    const bucketDate = alignToBucketStart(doc.bucketStart.toDate(), definition.bucketMs);
+    const key = bucketDate.toISOString();
+    const bucket = bucketMap.get(key);
+    if (!bucket) {
+      return;
+    }
+    bucket.views += doc.views || 0;
+    bucket.uniques = doc.uniques || bucket.uniques;
+  });
+  const activeUsersNow = await computeActiveUsersNow(siteId, path ? sanitizePath(path) : null);
+  return {
+    siteId,
+    windowMs: effectiveWindowMs,
+    buckets,
+    active_users_now: activeUsersNow,
+  };
+}
+
+async function compactRollupDocument(docSnap, targetDefinition, sourceFlagField) {
+  await db.runTransaction(async (tx) => {
+    const freshSnap = await tx.get(docSnap.ref);
+    if (!freshSnap.exists) {
+      return;
+    }
+    const data = freshSnap.data();
+    if (!data || data[sourceFlagField]) {
+      return;
+    }
+    const bucketStartTimestamp = data.bucketStart;
+    if (!bucketStartTimestamp || typeof bucketStartTimestamp.toDate !== "function") {
+      tx.update(docSnap.ref, { [sourceFlagField]: true });
+      return;
+    }
+    const sourceDate = bucketStartTimestamp.toDate();
+    const targetBucketDate = alignToBucketStart(
+      sourceDate,
+      targetDefinition.bucketMs
+    );
+    const targetDocRef = targetDefinition.collection.doc(
+      buildRollupDocId(data.siteId, data.path, targetBucketDate)
+    );
+    const targetSnap = await tx.get(targetDocRef);
+    const existingData = targetSnap.exists ? targetSnap.data() || {} : {};
+    const uniqueTokens = new Set();
+    mergeUniqueTokens(uniqueTokens, extractUniqueTokensFromDoc(existingData));
+    mergeUniqueTokens(uniqueTokens, extractUniqueTokensFromDoc(data));
+    const uniqueArray = Array.from(uniqueTokens);
+    const payload = {
+      siteId: data.siteId,
+      path: data.path,
+      bucketStart: Timestamp.fromDate(targetBucketDate),
+      views: (existingData.views || 0) + (data.views || 0),
+      uniques: uniqueArray.length,
+      uniqueHashes: uniqueArray.slice(0, ANALYTICS_HASH_LIMIT),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (!targetSnap.exists) {
+      payload.createdAt = FieldValue.serverTimestamp();
+      payload.compactedToDay = false;
+    }
+    tx.set(targetDocRef, payload, { merge: true });
+    tx.update(docSnap.ref, {
+      [sourceFlagField]: true,
+      compactedAt: FieldValue.serverTimestamp(),
+    });
+  });
+}
+
+async function compactRollupsBatch(sourceDefinition, targetDefinition, flagField, cutoffDate) {
+  const snapshot = await sourceDefinition.collection
+    .where(flagField, "==", false)
+    .where("bucketStart", "<=", Timestamp.fromDate(cutoffDate))
+    .orderBy("bucketStart")
+    .limit(100)
+    .get();
+  if (snapshot.empty) {
+    return 0;
+  }
+  await Promise.all(snapshot.docs.map((doc) => compactRollupDocument(doc, targetDefinition, flagField)));
+  return snapshot.size;
+}
 
 const app = express();
 
@@ -33,6 +612,203 @@ app.use(
 );
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
+
+app.get("/api/healthz", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ ok: true, uptime: process.uptime() });
+});
+
+app.post("/api/ingest/pageview", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const ip = getClientIp(req);
+  if (!consumeIngestToken(ip)) {
+    return res.status(429).json({ ok: false, error: "rate_limited" });
+  }
+  try {
+    if (!req.body || typeof req.body !== "object") {
+      return res.status(400).json({ ok: false, error: "invalid_body" });
+    }
+    let rawBody = "";
+    try {
+      rawBody = JSON.stringify(req.body);
+    } catch (stringifyError) {
+      return res.status(400).json({ ok: false, error: "invalid_body" });
+    }
+    if (Buffer.byteLength(rawBody) > ANALYTICS_MAX_BODY_BYTES) {
+      return res.status(413).json({ ok: false, error: "payload_too_large" });
+    }
+
+    const payload = req.body;
+    const siteId = normalizeSiteId(payload.siteId || ANALYTICS_DEFAULT_SITE_ID);
+    const userAgent = typeof payload.ua === "string" ? payload.ua : "";
+    if (BOT_USER_AGENT_REGEX.test(userAgent.toLowerCase())) {
+      functions.logger.info("analytics.ingest.bot_drop", { ua: userAgent });
+      return res.json({ ok: true, skipped: true });
+    }
+    if (!payload.path) {
+      return res.status(400).json({ ok: false, error: "missing_path" });
+    }
+    const pathValue = sanitizePath(payload.path);
+    if (!pathValue.startsWith("/")) {
+      return res.status(400).json({ ok: false, error: "invalid_path" });
+    }
+    const timestamp = payload.ts ? new Date(payload.ts) : new Date();
+    if (!Number.isFinite(timestamp.getTime())) {
+      return res.status(400).json({ ok: false, error: "invalid_ts" });
+    }
+
+    const urlValue = typeof payload.url === "string" ? payload.url.slice(0, 2048) : null;
+    const referrerValue = typeof payload.referrer === "string" && payload.referrer
+      ? payload.referrer.slice(0, 2048)
+      : null;
+    const anonId = payload.anonId ? String(payload.anonId).slice(0, 128) : null;
+    const sessionId = payload.sessionId ? String(payload.sessionId).slice(0, 128) : null;
+    const country = payload.country ? String(payload.country).slice(0, 64) : null;
+
+    const eventDoc = {
+      siteId,
+      ts: Timestamp.fromDate(timestamp),
+      url: urlValue,
+      path: pathValue,
+      referrer: referrerValue,
+      anonId,
+      sessionId,
+      ua: userAgent.slice(0, 512),
+      meta: sanitizeMeta(payload.meta),
+      country,
+      bot: false,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+
+    await analyticsEventsCollection.add(eventDoc);
+
+    const bucketStartDate = alignToBucketStart(
+      timestamp,
+      ROLLUP_DEFINITIONS.minute.bucketMs
+    );
+    await Promise.all([
+      updateMinuteRollup(siteId, pathValue, bucketStartDate, anonId),
+      updateMinuteRollup(siteId, "__all__", bucketStartDate, anonId),
+    ]);
+
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error("analytics.ingest.error", error);
+    return res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
+app.get("/api/analytics/summary", requireAnalyticsAdmin, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const { window, windowMs } = parseWindowParam(req.query.window);
+    const siteId = normalizeSiteId(req.query.siteId || ANALYTICS_DEFAULT_SITE_ID);
+    const path = typeof req.query.path === "string" && req.query.path.trim()
+      ? req.query.path.trim()
+      : null;
+    const summary = await buildAnalyticsSummary({
+      siteId,
+      windowMs,
+      now: new Date(),
+      path,
+    });
+    return res.json({
+      window,
+      siteId,
+      pageviews: summary.pageviews,
+      unique_users: summary.unique_users,
+      active_users_now: summary.active_users_now,
+      average_views_per_user: summary.average_views_per_user,
+      top_paths: summary.top_paths,
+    });
+  } catch (error) {
+    console.error("analytics.summary.error", error);
+    return res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
+app.get("/api/analytics/timeseries", requireAnalyticsAdmin, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const { window, windowMs } = parseWindowParam(req.query.window);
+    const siteId = normalizeSiteId(req.query.siteId || ANALYTICS_DEFAULT_SITE_ID);
+    const path = typeof req.query.path === "string" && req.query.path.trim()
+      ? req.query.path.trim()
+      : null;
+    const timeseries = await buildAnalyticsTimeseries({
+      siteId,
+      windowMs,
+      now: new Date(),
+      path,
+      granularity: req.query.granularity,
+    });
+    return res.json({
+      window,
+      siteId,
+      granularity: timeseries.granularity,
+      buckets: timeseries.buckets,
+    });
+  } catch (error) {
+    console.error("analytics.timeseries.error", error);
+    return res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
+app.get("/api/analytics/live", requireAnalyticsAdmin, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const { window, windowMs } = parseWindowParam(req.query.window);
+    const siteId = normalizeSiteId(req.query.siteId || ANALYTICS_DEFAULT_SITE_ID);
+    const path = typeof req.query.path === "string" && req.query.path.trim()
+      ? req.query.path.trim()
+      : null;
+    const live = await buildAnalyticsLive({
+      siteId,
+      windowMs,
+      now: new Date(),
+      path,
+    });
+    return res.json({
+      window,
+      siteId,
+      active_users_now: live.active_users_now,
+      buckets: live.buckets,
+    });
+  } catch (error) {
+    console.error("analytics.live.error", error);
+    return res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
+app.get("/api/analytics/top", requireAnalyticsAdmin, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const { window, windowMs } = parseWindowParam(req.query.window);
+    const siteId = normalizeSiteId(req.query.siteId || ANALYTICS_DEFAULT_SITE_ID);
+    const limitParam = parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(limitParam)
+      ? Math.min(Math.max(limitParam, 1), 100)
+      : 20;
+    const path = typeof req.query.path === "string" && req.query.path.trim()
+      ? req.query.path.trim()
+      : null;
+    const top = await buildAnalyticsTopPages({
+      siteId,
+      windowMs,
+      now: new Date(),
+      limit,
+      path,
+    });
+    return res.json({
+      window,
+      siteId,
+      top_paths: top.top_paths,
+    });
+  } catch (error) {
+    console.error("analytics.top.error", error);
+    return res.status(500).json({ ok: false, error: "internal" });
+  }
+});
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -3140,6 +3916,34 @@ async function runAutomaticLabelVoidSweep() {
     }
   }
 }
+
+exports.compactMinuteRollups = functions.pubsub
+  .schedule('every 5 minutes')
+  .onRun(async () => {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - 5 * 60 * 1000);
+    await compactRollupsBatch(
+      ROLLUP_DEFINITIONS.minute,
+      ROLLUP_DEFINITIONS.hour,
+      'compactedToHour',
+      cutoff
+    );
+    return null;
+  });
+
+exports.compactHourRollups = functions.pubsub
+  .schedule('every 60 minutes')
+  .onRun(async () => {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    await compactRollupsBatch(
+      ROLLUP_DEFINITIONS.hour,
+      ROLLUP_DEFINITIONS.day,
+      'compactedToDay',
+      cutoff
+    );
+    return null;
+  });
 
 exports.autoVoidExpiredLabels = functions.pubsub
   .schedule("every 60 minutes")
