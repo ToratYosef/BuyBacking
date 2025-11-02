@@ -305,6 +305,111 @@ function collectStrings(value, bucket) {
   }
 }
 
+function normalizeKey(key) {
+  return key.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function extractDisplayValue(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const extracted = extractDisplayValue(entry);
+      if (extracted) {
+        return extracted;
+      }
+    }
+    return null;
+  }
+  if (typeof value === "object") {
+    if (Object.prototype.hasOwnProperty.call(value, "response")) {
+      return extractDisplayValue(value.response);
+    }
+    const bucket = [];
+    collectStrings(value, bucket);
+    return bucket.length ? bucket[0] : null;
+  }
+  return null;
+}
+
+function findFieldValue(data, keys) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const targets = keys.map(normalizeKey);
+  const targetSet = new Set(targets);
+  const stack = [data];
+
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current || typeof current !== "object") {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      for (const entry of current) {
+        if (entry && typeof entry === "object") {
+          stack.push(entry);
+        }
+      }
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(current)) {
+      const normalizedKey = normalizeKey(key);
+      if (targetSet.has(normalizedKey)) {
+        const extracted = extractDisplayValue(value);
+        if (extracted) {
+          return extracted;
+        }
+      }
+      if (value && typeof value === "object") {
+        stack.push(value);
+      }
+    }
+  }
+
+  return null;
+}
+
+function interpretBlacklistStatus(value) {
+  const text = value ? String(value).trim() : "";
+  if (!text) {
+    return { status: "", isBlacklisted: null };
+  }
+  const normalized = text.toLowerCase();
+  if (/(yes|blacklisted|barred|blocked|lost|stolen|fraud)/.test(normalized)) {
+    return { status: text, isBlacklisted: true };
+  }
+  if (/(no|clear|clean|good|not blacklisted)/.test(normalized)) {
+    return { status: text, isBlacklisted: false };
+  }
+  return { status: text, isBlacklisted: null };
+}
+
+function interpretLockStatus(value) {
+  const text = value ? String(value).trim() : "";
+  if (!text) {
+    return { status: "", isLocked: null };
+  }
+  const normalized = text.toLowerCase();
+  if (/(locked|yes|active|engaged)/.test(normalized) && !/(unlocked|no lock|not locked)/.test(normalized)) {
+    return { status: text, isLocked: true };
+  }
+  if (/(unlocked|no|not locked|clear|clean)/.test(normalized)) {
+    return { status: text, isLocked: false };
+  }
+  return { status: text, isLocked: null };
+}
+
 function analyzePhoneCheckResponse(data) {
   const strings = [];
   collectStrings(data, strings);
@@ -336,14 +441,65 @@ function analyzePhoneCheckResponse(data) {
     });
   });
 
+  const deviceModel = findFieldValue(data, ["model", "modelname", "devicemodel"]);
+  const deviceMemory = findFieldValue(data, ["memory", "storage", "capacity", "size"]);
+  const deviceColor = findFieldValue(data, ["color", "colour", "devicecolor"]);
+  const carrierName = findFieldValue(data, ["carrier", "network", "carriername"]);
+  const simlockStatus = interpretLockStatus(
+    findFieldValue(data, ["simlock", "sim_lock", "carrierlock", "lockstatus", "simstatus"])
+  );
+  const blacklistStatus = interpretBlacklistStatus(
+    findFieldValue(data, ["blackliststatus", "blacklist", "esnstatus", "blockedstatus"])
+  );
+
+  if (blacklistStatus.isBlacklisted === true) {
+    issues.add("Reported lost or stolen (blacklisted)");
+  }
+  if (simlockStatus.isLocked === true) {
+    issues.add("Carrier or SIM lock detected");
+  }
+
+  const detailsNotices = [];
+  if (deviceModel) {
+    detailsNotices.push(`Model: ${deviceModel}`);
+  }
+  if (deviceMemory) {
+    detailsNotices.push(`Memory: ${deviceMemory}`);
+  }
+  if (deviceColor) {
+    detailsNotices.push(`Color: ${deviceColor}`);
+  }
+  if (blacklistStatus.status) {
+    detailsNotices.push(`Blacklist: ${blacklistStatus.status}`);
+  }
+  if (carrierName) {
+    detailsNotices.push(`Carrier: ${carrierName}`);
+  }
+  if (simlockStatus.status) {
+    detailsNotices.push(`SIM Lock: ${simlockStatus.status}`);
+  }
+
   let statusText =
+    (blacklistStatus.isBlacklisted === true && "Device is blacklisted.") ||
+    (simlockStatus.isLocked === true && "Carrier lock detected.") ||
     cleanSignals[0] ||
     normalized.find((value) => /status|result/i.test(value.toLowerCase())) ||
     normalized[0] ||
     "No status returned.";
 
-  const notices = normalized.slice(0, 6);
-  const isClean = cleanSignals.length > 0 && issues.size === 0;
+  const notices = [...detailsNotices, ...normalized].filter(Boolean).slice(0, 6);
+
+  let isClean = cleanSignals.length > 0 && issues.size === 0;
+  if (blacklistStatus.isBlacklisted === true || simlockStatus.isLocked === true) {
+    isClean = false;
+  } else if (
+    blacklistStatus.isBlacklisted === false &&
+    (simlockStatus.isLocked === false || simlockStatus.isLocked === null) &&
+    issues.size === 0
+  ) {
+    isClean = true;
+    statusText = statusText || "No issues detected.";
+  }
 
   if (!isClean && issues.size === 0) {
     const firstNonClean = normalized.find((value) => !/clean|clear/i.test(value));
@@ -358,6 +514,17 @@ function analyzePhoneCheckResponse(data) {
     reasons: Array.from(issues),
     notices,
     messages: normalized,
+    deviceInfo: {
+      model: deviceModel || "",
+      memory: deviceMemory || "",
+      color: deviceColor || "",
+    },
+    blacklist: blacklistStatus,
+    carrierLock: {
+      carrier: carrierName || "",
+      simlock: simlockStatus.status,
+      isLocked: simlockStatus.isLocked,
+    },
   };
 }
 

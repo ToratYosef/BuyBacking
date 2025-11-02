@@ -310,12 +310,21 @@ const phoneCheckResults = document.getElementById('phone-check-results');
 const phoneCheckStatusPill = document.getElementById('phone-check-status-pill');
 const phoneCheckStatusText = document.getElementById('phone-check-status-text');
 const phoneCheckTimestamp = document.getElementById('phone-check-timestamp');
+const phoneCheckDetails = document.getElementById('phone-check-details');
+const phoneCheckModel = document.getElementById('phone-check-model');
+const phoneCheckMemory = document.getElementById('phone-check-memory');
+const phoneCheckColor = document.getElementById('phone-check-color');
+const phoneCheckBlacklist = document.getElementById('phone-check-blacklist');
+const phoneCheckCarrier = document.getElementById('phone-check-carrier');
+const phoneCheckSimlock = document.getElementById('phone-check-simlock');
 const phoneCheckReasons = document.getElementById('phone-check-reasons');
 const phoneCheckReasonsList = document.getElementById('phone-check-reasons-list');
 const phoneCheckNotes = document.getElementById('phone-check-notes');
 const phoneCheckNotesList = document.getElementById('phone-check-notes-list');
 const phoneCheckRawWrapper = document.getElementById('phone-check-raw-wrapper');
 const phoneCheckRaw = document.getElementById('phone-check-raw');
+const phoneCheckBlacklistBaseClass = phoneCheckBlacklist ? phoneCheckBlacklist.className : '';
+const phoneCheckSimlockBaseClass = phoneCheckSimlock ? phoneCheckSimlock.className : '';
 const phoneCheckStatusBaseClass = 'px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wide';
 
 /* REMOVED SUBMENU REFERENCES */
@@ -3065,17 +3074,40 @@ if (phoneCheckStatusPill) {
 phoneCheckStatusPill.textContent = '';
 phoneCheckStatusPill.className = phoneCheckStatusBaseClass;
 }
-if (phoneCheckStatusText) {
-phoneCheckStatusText.textContent = '';
-}
-if (phoneCheckTimestamp) {
-phoneCheckTimestamp.textContent = '';
-}
-if (phoneCheckReasonsList) {
-phoneCheckReasonsList.innerHTML = '';
-}
-if (phoneCheckReasons) {
-phoneCheckReasons.classList.add('hidden');
+  if (phoneCheckStatusText) {
+    phoneCheckStatusText.textContent = '';
+  }
+  if (phoneCheckTimestamp) {
+    phoneCheckTimestamp.textContent = '';
+  }
+  if (phoneCheckDetails) {
+    phoneCheckDetails.classList.add('hidden');
+  }
+  if (phoneCheckModel) {
+    phoneCheckModel.textContent = '—';
+  }
+  if (phoneCheckMemory) {
+    phoneCheckMemory.textContent = '—';
+  }
+  if (phoneCheckColor) {
+    phoneCheckColor.textContent = '—';
+  }
+  if (phoneCheckBlacklist) {
+    phoneCheckBlacklist.textContent = '—';
+    phoneCheckBlacklist.className = phoneCheckBlacklistBaseClass;
+  }
+  if (phoneCheckCarrier) {
+    phoneCheckCarrier.textContent = '—';
+  }
+  if (phoneCheckSimlock) {
+    phoneCheckSimlock.textContent = '—';
+    phoneCheckSimlock.className = phoneCheckSimlockBaseClass;
+  }
+  if (phoneCheckReasonsList) {
+    phoneCheckReasonsList.innerHTML = '';
+  }
+  if (phoneCheckReasons) {
+    phoneCheckReasons.classList.add('hidden');
 }
 if (phoneCheckNotesList) {
 phoneCheckNotesList.innerHTML = '';
@@ -3170,18 +3202,88 @@ phoneCheckStatusPill.textContent = summary.isClean ? 'Clean' : 'Attention Needed
 }
 
 if (phoneCheckStatusText) {
-phoneCheckStatusText.textContent = summary.statusText || (summary.isClean ? 'No issues detected.' : 'See details below for more information.');
-}
+    phoneCheckStatusText.textContent = summary.statusText || (summary.isClean ? 'No issues detected.' : 'See details below for more information.');
+  }
 
-if (phoneCheckTimestamp) {
-const timestamp = new Date();
-phoneCheckTimestamp.textContent = `Checked ${timestamp.toLocaleString()}`;
-}
+  if (phoneCheckTimestamp) {
+    const timestamp = new Date();
+    phoneCheckTimestamp.textContent = `Checked ${timestamp.toLocaleString()}`;
+  }
 
-if (phoneCheckReasons && phoneCheckReasonsList) {
-phoneCheckReasonsList.innerHTML = '';
-if (Array.isArray(summary.reasons) && summary.reasons.length > 0) {
-summary.reasons.forEach((reason) => {
+  const deviceInfo = summary.deviceInfo || {};
+  const blacklist = summary.blacklist || {};
+  const carrierLock = summary.carrierLock || {};
+  const hasDetails = [
+    deviceInfo.model,
+    deviceInfo.memory,
+    deviceInfo.color,
+    blacklist.status,
+    typeof blacklist.isBlacklisted === 'boolean',
+    carrierLock.carrier,
+    carrierLock.simlock,
+    typeof carrierLock.isLocked === 'boolean',
+  ].some(Boolean);
+
+  if (phoneCheckDetails) {
+    phoneCheckDetails.classList.toggle('hidden', !hasDetails);
+  }
+
+  if (phoneCheckModel) {
+    phoneCheckModel.textContent = deviceInfo.model || '—';
+  }
+
+  if (phoneCheckMemory) {
+    phoneCheckMemory.textContent = deviceInfo.memory || '—';
+  }
+
+  if (phoneCheckColor) {
+    phoneCheckColor.textContent = deviceInfo.color || '—';
+  }
+
+  if (phoneCheckBlacklist) {
+    const blacklistLabel =
+      blacklist.status ||
+      (blacklist.isBlacklisted === true
+        ? 'Blacklisted'
+        : blacklist.isBlacklisted === false
+        ? 'Not Blacklisted'
+        : '—');
+    let blacklistClass = phoneCheckBlacklistBaseClass;
+    if (blacklist.isBlacklisted === true) {
+      blacklistClass += ' text-rose-600';
+    } else if (blacklist.isBlacklisted === false) {
+      blacklistClass += ' text-emerald-600';
+    }
+    phoneCheckBlacklist.className = blacklistClass;
+    phoneCheckBlacklist.textContent = blacklistLabel;
+  }
+
+  if (phoneCheckCarrier) {
+    phoneCheckCarrier.textContent = carrierLock.carrier || '—';
+  }
+
+  if (phoneCheckSimlock) {
+    const simlockLabel =
+      carrierLock.simlock ||
+      (carrierLock.isLocked === true
+        ? 'Locked'
+        : carrierLock.isLocked === false
+        ? 'Unlocked'
+        : '—');
+    let simlockClass = phoneCheckSimlockBaseClass;
+    if (carrierLock.isLocked === true) {
+      simlockClass += ' text-rose-600';
+    } else if (carrierLock.isLocked === false) {
+      simlockClass += ' text-emerald-600';
+    }
+    phoneCheckSimlock.className = simlockClass;
+    phoneCheckSimlock.textContent = simlockLabel;
+  }
+
+  if (phoneCheckReasons && phoneCheckReasonsList) {
+    phoneCheckReasonsList.innerHTML = '';
+    if (Array.isArray(summary.reasons) && summary.reasons.length > 0) {
+      summary.reasons.forEach((reason) => {
 const li = document.createElement('li');
 li.textContent = reason;
 phoneCheckReasonsList.appendChild(li);
