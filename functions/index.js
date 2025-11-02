@@ -23,6 +23,7 @@ const analyticsEventsCollection = db.collection("events");
 const rollupsMinuteCollection = db.collection("rollups_minute");
 const rollupsHourCollection = db.collection("rollups_hour");
 const rollupsDayCollection = db.collection("rollups_day");
+const pageViewStatsCollection = db.collection("page_view_stats");
 
 const ANALYTICS_DEFAULT_SITE_ID = process.env.ANALYTICS_DEFAULT_SITE_ID || "default";
 const ANALYTICS_ALLOWED_EMAILS = (process.env.ADMIN_ALLOWED_EMAILS || "")
@@ -155,8 +156,41 @@ function hashAnonId(anonId) {
   return createHash("sha1").update(String(anonId)).digest("hex").slice(0, 24);
 }
 
+function toBase64Url(value) {
+  return Buffer.from(String(value))
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function buildPageViewDocId(path) {
+  return toBase64Url(path || "/");
+}
+
+function buildIpKey(ip) {
+  return toBase64Url(ip || "unknown");
+}
+
 function alignToBucketStart(date, bucketMs) {
   return new Date(Math.floor(date.getTime() / bucketMs) * bucketMs);
+}
+
+function timestampToIso(value) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Timestamp) {
+    return value.toDate().toISOString();
+  }
+  if (typeof value.toDate === "function") {
+    try {
+      return value.toDate().toISOString();
+    } catch (error) {
+      return null;
+    }
+  }
+  return null;
 }
 
 function buildRollupDocId(siteId, path, bucketStartDate) {
@@ -611,6 +645,113 @@ app.use(
   })
 );
 app.use(express.json());
+
+app.post("/api/simple-analytics/collect", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const ip = getClientIp(req);
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    let pathValue = typeof payload.path === "string" ? payload.path.trim() : "";
+    if (!pathValue) {
+      pathValue = "/";
+    }
+    if (!pathValue.startsWith("/")) {
+      pathValue = `/${pathValue}`;
+    }
+    const titleValue = typeof payload.title === "string" ? payload.title.slice(0, 256) : "";
+    const urlValue = typeof payload.url === "string" ? payload.url.slice(0, 2048) : "";
+
+    const docRef = pageViewStatsCollection.doc(buildPageViewDocId(pathValue));
+    const ipKey = buildIpKey(ip);
+    let counted = false;
+
+    await db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(docRef);
+      const data = snapshot.exists ? snapshot.data() || {} : {};
+      const existingStats = data.ipStats || {};
+      const alreadyCounted = Boolean(existingStats[ipKey]);
+      const updatePayload = {
+        path: pathValue,
+        updatedAt: FieldValue.serverTimestamp(),
+        lastTitle: titleValue,
+        lastUrl: urlValue,
+        lastIp: ip,
+        lastViewedAt: FieldValue.serverTimestamp(),
+      };
+      if (!snapshot.exists) {
+        updatePayload.createdAt = FieldValue.serverTimestamp();
+      }
+      if (!alreadyCounted) {
+        counted = true;
+        updatePayload.totalViews = FieldValue.increment(1);
+        updatePayload.uniqueIpCount = FieldValue.increment(1);
+        updatePayload[`ipStats.${ipKey}`] = {
+          ip,
+          firstSeen: FieldValue.serverTimestamp(),
+          lastSeen: FieldValue.serverTimestamp(),
+          lastUrl: urlValue,
+          lastTitle: titleValue,
+        };
+      } else {
+        updatePayload[`ipStats.${ipKey}.lastSeen`] = FieldValue.serverTimestamp();
+        if (urlValue) {
+          updatePayload[`ipStats.${ipKey}.lastUrl`] = urlValue;
+        }
+        if (titleValue) {
+          updatePayload[`ipStats.${ipKey}.lastTitle`] = titleValue;
+        }
+      }
+      tx.set(docRef, updatePayload, { merge: true });
+    });
+
+    return res.json({ ok: true, counted, path: pathValue });
+  } catch (error) {
+    console.error("pageview.collect.error", error);
+    return res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
+app.get("/api/simple-analytics/pages", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    const snapshot = await pageViewStatsCollection.orderBy("totalViews", "desc").limit(200).get();
+    const pages = snapshot.docs.map((doc) => {
+      const data = doc.data() || {};
+      const ipStats = [];
+      if (data.ipStats && typeof data.ipStats === "object") {
+        for (const entry of Object.values(data.ipStats)) {
+          if (!entry || typeof entry !== "object") {
+            continue;
+          }
+          ipStats.push({
+            ip: entry.ip || null,
+            firstSeen: timestampToIso(entry.firstSeen),
+            lastSeen: timestampToIso(entry.lastSeen),
+            lastUrl: entry.lastUrl || null,
+            lastTitle: entry.lastTitle || null,
+          });
+        }
+      }
+      ipStats.sort((a, b) => {
+        const aTime = a.lastSeen ? Date.parse(a.lastSeen) : 0;
+        const bTime = b.lastSeen ? Date.parse(b.lastSeen) : 0;
+        return bTime - aTime;
+      });
+      return {
+        path: data.path || "/",
+        totalViews: data.totalViews || 0,
+        uniqueIpCount: data.uniqueIpCount || ipStats.length,
+        lastViewedAt: timestampToIso(data.lastViewedAt || data.updatedAt),
+        ipStats,
+      };
+    });
+    return res.json({ ok: true, pages });
+  } catch (error) {
+    console.error("pageview.pages.error", error);
+    return res.status(500).json({ ok: false, error: "internal" });
+  }
+});
+
 app.use('/wholesale', wholesaleRouter);
 
 app.get("/api/healthz", (req, res) => {
