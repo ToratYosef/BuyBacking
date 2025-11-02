@@ -119,6 +119,26 @@
       padding: 6px 12px;
       font-size: 0.85rem;
     }
+    .referrer-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .referrer-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-left: 2px solid rgba(148, 163, 184, 0.25);
+      padding-left: 10px;
+    }
+    .referrer-item strong {
+      font-size: 0.85rem;
+      color: #f8fafc;
+    }
+    .referrer-item span {
+      font-size: 0.8rem;
+      color: rgba(148, 163, 184, 0.8);
+    }
     .ip-list {
       display: flex;
       flex-direction: column;
@@ -185,12 +205,13 @@
             <th scope="col">Views</th>
             <th scope="col">Unique IPs</th>
             <th scope="col">Last Viewed</th>
+            <th scope="col">Top Referrers</th>
             <th scope="col">IP Details</th>
           </tr>
         </thead>
         <tbody id="pages-body">
           <tr>
-            <td colspan="5" style="text-align:center; padding: 28px; color: rgba(148, 163, 184, 0.75);">Gathering analytics…</td>
+            <td colspan="6" style="text-align:center; padding: 28px; color: rgba(148, 163, 184, 0.75);">Gathering analytics…</td>
           </tr>
         </tbody>
       </table>
@@ -198,9 +219,83 @@
   </main>
   <script>
     const STORAGE_KEY = 'PAGE_TRACKER_LOGS';
+    const SOURCE_FALLBACK = 'Direct';
     const statusEl = document.getElementById('status');
     const bodyEl = document.getElementById('pages-body');
     const refreshBtn = document.getElementById('refresh');
+
+    const titleCase = (value) => {
+      if (!value) return SOURCE_FALLBACK;
+      return value
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+    };
+
+    const normaliseSource = (value) => {
+      if (!value || typeof value !== 'string') {
+        return SOURCE_FALLBACK;
+      }
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return SOURCE_FALLBACK;
+      }
+      const lower = trimmed.toLowerCase();
+      const preset = {
+        direct: SOURCE_FALLBACK,
+        internal: 'Internal',
+        google: 'Google',
+        sellcell: 'SellCell',
+        'sellcell.com': 'SellCell',
+        facebook: 'Facebook',
+        instagram: 'Instagram',
+        twitter: 'Twitter',
+        linkedin: 'LinkedIn',
+        bing: 'Bing',
+        yahoo: 'Yahoo',
+        duckduckgo: 'DuckDuckGo',
+        x: 'X',
+      };
+      if (preset[lower]) {
+        return preset[lower];
+      }
+      const cleaned = trimmed.replace(/^www\./i, '').replace(/[-_]/g, ' ');
+      return titleCase(cleaned);
+    };
+
+    const inferSourceFromReferrer = (refUrl) => {
+      if (!refUrl || typeof refUrl !== 'string') {
+        return SOURCE_FALLBACK;
+      }
+      try {
+        const parsed = new URL(refUrl);
+        if (parsed.hostname && parsed.hostname === window.location.hostname) {
+          return 'Internal';
+        }
+        const params = parsed.searchParams;
+        const utm = params.get('utm_source') || params.get('source') || params.get('ref');
+        if (utm && utm.trim()) {
+          return normaliseSource(utm);
+        }
+        if (parsed.hostname) {
+          const host = parsed.hostname.toLowerCase();
+          if (host.includes('google')) return 'Google';
+          if (host.includes('sellcell')) return 'SellCell';
+          if (host.includes('facebook')) return 'Facebook';
+          if (host.includes('instagram')) return 'Instagram';
+          if (host.includes('twitter') || host === 'x.com') return 'Twitter';
+          if (host.includes('linkedin')) return 'LinkedIn';
+          if (host.includes('bing')) return 'Bing';
+          if (host.includes('yahoo')) return 'Yahoo';
+          if (host.includes('duckduckgo')) return 'DuckDuckGo';
+          return normaliseSource(host);
+        }
+      } catch (error) {
+        // ignore
+      }
+      return SOURCE_FALLBACK;
+    };
 
     const safeParse = (raw, fallback) => {
       if (!raw) return fallback;
@@ -240,13 +335,25 @@
       return entries
         .map(([path, info]) => {
           const ipStats = info && typeof info === 'object' && info.ipStats ? info.ipStats : {};
-          const ipArray = Object.values(ipStats).map((entry) => ({
-            ip: entry.ip || 'Unknown',
-            firstSeen: entry.firstSeen || null,
-            lastSeen: entry.lastSeen || null,
-            lastUrl: entry.lastUrl || '',
-            lastTitle: entry.lastTitle || '',
-          }));
+          const ipArray = Object.values(ipStats).map((entry) => {
+            const firstReferrer = typeof entry.firstReferrer === 'string' ? entry.firstReferrer : '';
+            const lastReferrer = typeof entry.lastReferrer === 'string'
+              ? entry.lastReferrer
+              : (firstReferrer || '');
+            const firstSource = normaliseSource(entry.firstSource || inferSourceFromReferrer(firstReferrer));
+            const lastSource = normaliseSource(entry.lastSource || inferSourceFromReferrer(lastReferrer) || firstSource);
+            return {
+              ip: entry.ip || 'Unknown',
+              firstSeen: entry.firstSeen || null,
+              lastSeen: entry.lastSeen || null,
+              lastUrl: entry.lastUrl || '',
+              lastTitle: entry.lastTitle || '',
+              firstReferrer,
+              lastReferrer,
+              firstSource,
+              lastSource,
+            };
+          });
           ipArray.sort((a, b) => {
             const aTime = a.lastSeen ? new Date(a.lastSeen).getTime() : 0;
             const bTime = b.lastSeen ? new Date(b.lastSeen).getTime() : 0;
@@ -255,12 +362,34 @@
           const uniqueCount = info && typeof info.uniqueIpCount === 'number'
             ? info.uniqueIpCount
             : ipArray.length;
+          const referrerStats = info && typeof info.referrerStats === 'object' ? info.referrerStats : {};
+          const referrers = Object.entries(referrerStats)
+            .map(([key, details]) => {
+              const count = Number(details && details.count ? details.count : 0);
+              const lastSeen = details && details.lastSeen ? details.lastSeen : null;
+              const refUrl = details && details.lastReferrer ? details.lastReferrer : (details && details.sampleUrl ? details.sampleUrl : '');
+              const source = normaliseSource((details && details.source) || key);
+              return {
+                source,
+                count,
+                lastSeen,
+                lastReferrer: refUrl,
+              };
+            })
+            .filter((ref) => ref.count > 0)
+            .sort((a, b) => {
+              if (b.count !== a.count) {
+                return b.count - a.count;
+              }
+              return a.source.localeCompare(b.source);
+            });
           return {
             path,
             totalViews: typeof info.totalViews === 'number' ? info.totalViews : ipArray.length,
             uniqueIpCount: uniqueCount,
             lastViewedAt: info.lastViewedAt || null,
             ipStats: ipArray,
+            referrers,
           };
         })
         .sort((a, b) => {
@@ -275,7 +404,7 @@
 
     function renderRows(pages) {
       if (!Array.isArray(pages) || !pages.length) {
-        bodyEl.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 28px; color: rgba(148, 163, 184, 0.75);">No page views recorded yet.</td></tr>';
+        bodyEl.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 28px; color: rgba(148, 163, 184, 0.75);">No page views recorded yet.</td></tr>';
         return;
       }
       bodyEl.innerHTML = '';
@@ -287,7 +416,42 @@
           <td><span class="tag">${page.uniqueIpCount ?? 0}</span></td>
           <td>${formatDate(page.lastViewedAt)}</td>
           <td></td>
+          <td></td>
         `;
+        const refCell = row.children[4];
+        if (Array.isArray(page.referrers) && page.referrers.length) {
+          const refList = document.createElement('div');
+          refList.className = 'referrer-list';
+          page.referrers.slice(0, 3).forEach((referrer) => {
+            const item = document.createElement('div');
+            item.className = 'referrer-item';
+            const label = document.createElement('strong');
+            label.textContent = `${referrer.source || SOURCE_FALLBACK} · ${referrer.count ?? 0}`;
+            item.appendChild(label);
+            if (referrer.lastReferrer) {
+              const urlLine = document.createElement('span');
+              urlLine.textContent = referrer.lastReferrer;
+              item.appendChild(urlLine);
+            }
+            if (referrer.lastSeen) {
+              const lastSeen = document.createElement('span');
+              lastSeen.textContent = `Last seen: ${formatDate(referrer.lastSeen)}`;
+              item.appendChild(lastSeen);
+            }
+            refList.appendChild(item);
+          });
+          if (page.referrers.length > 3) {
+            const more = document.createElement('span');
+            more.style.fontSize = '0.8rem';
+            more.style.color = 'rgba(148, 163, 184, 0.75)';
+            more.textContent = `+${page.referrers.length - 3} more source${page.referrers.length - 3 === 1 ? '' : 's'}`;
+            refList.appendChild(more);
+          }
+          refCell.appendChild(refList);
+        } else {
+          refCell.innerHTML = '<span style="color: rgba(148, 163, 184, 0.75);">—</span>';
+        }
+
         const detailsCell = row.lastElementChild;
         if (Array.isArray(page.ipStats) && page.ipStats.length) {
           const details = document.createElement('details');
@@ -305,15 +469,29 @@
             first.textContent = `First seen: ${formatDate(entry.firstSeen)}`;
             const last = document.createElement('span');
             last.textContent = `Last seen: ${formatDate(entry.lastSeen)}`;
-            const lastUrl = document.createElement('span');
-            lastUrl.textContent = entry.lastUrl ? `Last URL: ${entry.lastUrl}` : 'Last URL: —';
+            const sourceFirst = document.createElement('span');
+            sourceFirst.textContent = `First source: ${entry.firstSource || SOURCE_FALLBACK}`;
+            const sourceLast = document.createElement('span');
+            sourceLast.textContent = `Last source: ${entry.lastSource || entry.firstSource || SOURCE_FALLBACK}`;
+            const nodes = [ip, first, last, sourceFirst, sourceLast];
+            if (entry.firstReferrer) {
+              const refFirst = document.createElement('span');
+              refFirst.textContent = `First referrer: ${entry.firstReferrer}`;
+              nodes.push(refFirst);
+            } else if (entry.lastReferrer) {
+              const refLast = document.createElement('span');
+              refLast.textContent = `Last referrer: ${entry.lastReferrer}`;
+              nodes.push(refLast);
+            }
             if (entry.lastTitle) {
               const lastTitle = document.createElement('span');
               lastTitle.textContent = `Last title: ${entry.lastTitle}`;
-              item.append(ip, first, last, lastTitle, lastUrl);
-            } else {
-              item.append(ip, first, last, lastUrl);
+              nodes.push(lastTitle);
             }
+            const lastUrl = document.createElement('span');
+            lastUrl.textContent = entry.lastUrl ? `Last URL: ${entry.lastUrl}` : 'Last URL: —';
+            nodes.push(lastUrl);
+            item.append(...nodes);
             list.appendChild(item);
           }
           details.appendChild(list);

@@ -2061,6 +2061,31 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <div class="analytics-card">
                     <div class="analytics-card-header">
                         <div>
+                            <h3>Top referrers</h3>
+                            <p>Sources sending visitors during the selected window</p>
+                        </div>
+                    </div>
+                    <div class="analytics-top-table-wrapper">
+                        <table class="analytics-table">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Views</th>
+                                    <th>Uniques</th>
+                                    <th>Sample referrer</th>
+                                </tr>
+                            </thead>
+                            <tbody id="analytics-referrer-table">
+                                <tr class="analytics-empty-row">
+                                    <td colspan="4" class="analytics-empty-state" id="analytics-referrer-empty">Waiting for data…</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="analytics-card">
+                    <div class="analytics-card-header">
+                        <div>
                             <h3>Live minute buckets</h3>
                             <p>Latest activity grouped by minute</p>
                         </div>
@@ -2796,6 +2821,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         const analyticsKpiActive = document.getElementById('analytics-kpi-active');
         const analyticsKpiAvgviews = document.getElementById('analytics-kpi-avgviews');
         const analyticsTopTableBody = document.getElementById('analytics-top-table');
+        const analyticsReferrerTableBody = document.getElementById('analytics-referrer-table');
         const analyticsLiveList = document.getElementById('analytics-live-list');
 
         const analyticsState = {
@@ -3247,6 +3273,82 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
 
         const LOCAL_TRACKER_STORAGE_KEY = 'PAGE_TRACKER_LOGS';
+        const SOURCE_FALLBACK = 'Direct';
+
+        function titleCase(value) {
+            if (!value) {
+                return SOURCE_FALLBACK;
+            }
+            return value
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+                .join(' ');
+        }
+
+        function normaliseReferrerSource(value) {
+            if (!value || typeof value !== 'string') {
+                return SOURCE_FALLBACK;
+            }
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return SOURCE_FALLBACK;
+            }
+            const lower = trimmed.toLowerCase();
+            const preset = {
+                direct: SOURCE_FALLBACK,
+                internal: 'Internal',
+                google: 'Google',
+                sellcell: 'SellCell',
+                'sellcell.com': 'SellCell',
+                facebook: 'Facebook',
+                instagram: 'Instagram',
+                twitter: 'Twitter',
+                linkedin: 'LinkedIn',
+                bing: 'Bing',
+                yahoo: 'Yahoo',
+                duckduckgo: 'DuckDuckGo',
+                x: 'X',
+            };
+            if (preset[lower]) {
+                return preset[lower];
+            }
+            const cleaned = trimmed.replace(/^www\./i, '').replace(/[-_]/g, ' ');
+            return titleCase(cleaned);
+        }
+
+        function inferSourceFromReferrerUrl(refUrl) {
+            if (!refUrl || typeof refUrl !== 'string') {
+                return SOURCE_FALLBACK;
+            }
+            try {
+                const parsed = new URL(refUrl);
+                if (parsed.hostname && parsed.hostname === window.location.hostname) {
+                    return 'Internal';
+                }
+                const params = parsed.searchParams;
+                const utm = params.get('utm_source') || params.get('source') || params.get('ref');
+                if (utm && utm.trim()) {
+                    return normaliseReferrerSource(utm);
+                }
+                if (parsed.hostname) {
+                    const host = parsed.hostname.toLowerCase();
+                    if (host.includes('google')) return 'Google';
+                    if (host.includes('sellcell')) return 'SellCell';
+                    if (host.includes('facebook')) return 'Facebook';
+                    if (host.includes('instagram')) return 'Instagram';
+                    if (host.includes('twitter') || host === 'x.com') return 'Twitter';
+                    if (host.includes('linkedin')) return 'LinkedIn';
+                    if (host.includes('bing')) return 'Bing';
+                    if (host.includes('yahoo')) return 'Yahoo';
+                    if (host.includes('duckduckgo')) return 'DuckDuckGo';
+                    return normaliseReferrerSource(host);
+                }
+            } catch (error) {
+                // ignore
+            }
+            return SOURCE_FALLBACK;
+        }
 
         function normalizeAnalyticsPath(path) {
             if (!path) {
@@ -3299,6 +3401,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     const lastSeen = details && details.lastSeen ? details.lastSeen : firstSeen;
                     const firstSeenMs = firstSeen ? Date.parse(firstSeen) : NaN;
                     const lastSeenMs = lastSeen ? Date.parse(lastSeen) : NaN;
+                    const firstReferrer = details && typeof details.firstReferrer === 'string' ? details.firstReferrer : '';
+                    const lastReferrer = details && typeof details.lastReferrer === 'string' ? details.lastReferrer : (firstReferrer || '');
+                    const firstSource = normaliseReferrerSource((details && details.firstSource) || inferSourceFromReferrerUrl(firstReferrer));
+                    const lastSource = normaliseReferrerSource((details && details.lastSource) || inferSourceFromReferrerUrl(lastReferrer) || firstSource);
                     entries.push({
                         path: safePath,
                         ip,
@@ -3306,6 +3412,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         lastSeen,
                         firstSeenMs: Number.isNaN(firstSeenMs) ? null : firstSeenMs,
                         lastSeenMs: Number.isNaN(lastSeenMs) ? null : lastSeenMs,
+                        firstReferrer,
+                        lastReferrer,
+                        firstSource,
+                        lastSource,
                     });
                 });
             });
@@ -3336,6 +3446,44 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         return b.views - a.views;
                     }
                     return a.path.localeCompare(b.path);
+                });
+        }
+
+        function aggregateTopReferrers(entries) {
+            const totals = new Map();
+            entries.forEach((entry) => {
+                const sourceLabel = normaliseReferrerSource(entry.lastSource || entry.firstSource || SOURCE_FALLBACK);
+                const key = sourceLabel.toLowerCase();
+                if (!totals.has(key)) {
+                    totals.set(key, {
+                        source: sourceLabel,
+                        views: 0,
+                        uniqueIps: new Set(),
+                        sampleReferrer: entry.lastReferrer || entry.firstReferrer || '',
+                    });
+                }
+                const record = totals.get(key);
+                record.source = sourceLabel || record.source;
+                record.views += 1;
+                if (entry.ip) {
+                    record.uniqueIps.add(entry.ip);
+                }
+                if (!record.sampleReferrer && (entry.lastReferrer || entry.firstReferrer)) {
+                    record.sampleReferrer = entry.lastReferrer || entry.firstReferrer || '';
+                }
+            });
+            return Array.from(totals.values())
+                .map((record) => ({
+                    source: record.source,
+                    views: record.views,
+                    uniques: record.uniqueIps.size,
+                    sampleReferrer: record.sampleReferrer,
+                }))
+                .sort((a, b) => {
+                    if (b.views !== a.views) {
+                        return b.views - a.views;
+                    }
+                    return a.source.localeCompare(b.source);
                 });
         }
 
@@ -3602,6 +3750,47 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             });
         }
 
+        function renderAnalyticsReferrers(data) {
+            if (!analyticsReferrerTableBody) {
+                return;
+            }
+            const rows = Array.isArray(data?.top_referrers) ? data.top_referrers : [];
+            analyticsReferrerTableBody.innerHTML = '';
+            if (!rows.length) {
+                const emptyRow = document.createElement('tr');
+                const emptyCell = document.createElement('td');
+                emptyCell.colSpan = 4;
+                emptyCell.className = 'analytics-empty-state';
+                emptyCell.textContent = 'No referral sources recorded for this window.';
+                emptyRow.appendChild(emptyCell);
+                analyticsReferrerTableBody.appendChild(emptyRow);
+                return;
+            }
+
+            rows.forEach((row) => {
+                const tr = document.createElement('tr');
+
+                const sourceCell = document.createElement('td');
+                sourceCell.textContent = row.source || SOURCE_FALLBACK;
+
+                const viewsCell = document.createElement('td');
+                viewsCell.textContent = formatAnalyticsNumber(Number(row.views) || 0);
+
+                const uniquesCell = document.createElement('td');
+                uniquesCell.textContent = formatAnalyticsNumber(Number(row.uniques) || 0);
+
+                const sampleCell = document.createElement('td');
+                sampleCell.textContent = row.sampleReferrer || '—';
+
+                tr.appendChild(sourceCell);
+                tr.appendChild(viewsCell);
+                tr.appendChild(uniquesCell);
+                tr.appendChild(sampleCell);
+
+                analyticsReferrerTableBody.appendChild(tr);
+            });
+        }
+
         function renderAnalyticsLive(live) {
             if (!analyticsLiveList) {
                 return;
@@ -3649,6 +3838,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 cell.textContent = 'Analytics temporarily unavailable.';
                 row.appendChild(cell);
                 analyticsTopTableBody.appendChild(row);
+            }
+            if (analyticsReferrerTableBody && !analyticsReferrerTableBody.children.length) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 4;
+                cell.className = 'analytics-empty-state';
+                cell.textContent = 'Analytics temporarily unavailable.';
+                row.appendChild(cell);
+                analyticsReferrerTableBody.appendChild(row);
             }
             if (analyticsLiveList && !analyticsLiveList.children.length) {
                 const empty = document.createElement('div');
@@ -3714,6 +3912,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
                 const topPaths = aggregateTopPaths(filteredEntries).slice(0, 20);
                 renderAnalyticsTop({ top_paths: topPaths });
+
+                const topReferrers = aggregateTopReferrers(filteredEntries).slice(0, 20);
+                renderAnalyticsReferrers({ top_referrers: topReferrers });
 
                 if (windowMs <= 30 * 60 * 1000) {
                     const liveWindowMs = Math.max(60 * 1000, windowMs);
