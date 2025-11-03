@@ -121,6 +121,12 @@ let auth;
 let functions;
 let currentUserId = 'anonymous_user';
 
+const ADMIN_PAGE = document.body?.dataset?.adminPage || 'orders';
+const IS_ORDERS_PAGE = ADMIN_PAGE === 'orders';
+const IS_ANALYTICS_PAGE = ADMIN_PAGE === 'analytics';
+const IS_AGING_PAGE = ADMIN_PAGE === 'aging';
+const IS_BULK_PRINT_PAGE = ADMIN_PAGE === 'bulk-print';
+
 const ordersTableBody = document.getElementById('orders-table-body');
 const noOrdersMessage = document.getElementById('no-orders-message');
 const paginationControls = document.getElementById('pagination-controls');
@@ -311,55 +317,6 @@ const cancelOrderError = document.getElementById('cancel-order-error');
 const cancelCancelOrderBtn = document.getElementById('cancel-cancel-order-btn');
 const confirmCancelOrderBtn = document.getElementById('confirm-cancel-order-btn');
 
-const phoneCheckSection = document.getElementById('phone-check-section');
-const phoneCheckInput = document.getElementById('phone-check-imei');
-const phoneCheckRunButton = document.getElementById('phone-check-run');
-const phoneCheckDeviceTypeSelect = document.getElementById('phone-check-device-type');
-const phoneCheckCarrierSelect = document.getElementById('phone-check-carrier-select');
-const phoneCheckError = document.getElementById('phone-check-error');
-const phoneCheckResults = document.getElementById('phone-check-results');
-const phoneCheckStatusPill = document.getElementById('phone-check-status-pill');
-const phoneCheckStatusText = document.getElementById('phone-check-status-text');
-const phoneCheckTimestamp = document.getElementById('phone-check-timestamp');
-const phoneCheckDetails = document.getElementById('phone-check-details');
-const phoneCheckModel = document.getElementById('phone-check-model');
-const phoneCheckMemory = document.getElementById('phone-check-memory');
-const phoneCheckColor = document.getElementById('phone-check-color');
-const phoneCheckBlacklist = document.getElementById('phone-check-blacklist');
-const phoneCheckCarrierDisplay = document.getElementById('phone-check-carrier');
-const phoneCheckSimlock = document.getElementById('phone-check-simlock');
-const phoneCheckReasons = document.getElementById('phone-check-reasons');
-const phoneCheckReasonsList = document.getElementById('phone-check-reasons-list');
-const phoneCheckNotes = document.getElementById('phone-check-notes');
-const phoneCheckNotesList = document.getElementById('phone-check-notes-list');
-const phoneCheckRawWrapper = document.getElementById('phone-check-raw-wrapper');
-const phoneCheckRaw = document.getElementById('phone-check-raw');
-const phoneCheckBlacklistBaseClass = phoneCheckBlacklist ? phoneCheckBlacklist.className : '';
-const phoneCheckSimlockBaseClass = phoneCheckSimlock ? phoneCheckSimlock.className : '';
-const phoneCheckStatusBaseClass = 'px-3 py-1 text-xs font-semibold rounded-full uppercase tracking-wide';
-const PHONECHECK_CARRIER_OPTIONS = ['AT&T', 'T-Mobile', 'Sprint', 'Verizon', 'Unlocked', 'Blacklist'];
-const PHONECHECK_CARRIER_ALIAS_MAP = {
-att: 'AT&T',
-'at&t': 'AT&T',
-'a t t': 'AT&T',
-tmobile: 'T-Mobile',
-'t-mobile': 'T-Mobile',
-'t mobile': 'T-Mobile',
-verizon: 'Verizon',
-'verizon wireless': 'Verizon',
-'verizonwireless': 'Verizon',
-sprint: 'Sprint',
-'sprint pcs': 'Sprint',
-unlocked: 'Unlocked',
-'sim-free': 'Unlocked',
-'sim free': 'Unlocked',
-'simfree': 'Unlocked',
-'factory unlocked': 'Unlocked',
-blacklist: 'Blacklist',
-blacklisted: 'Blacklist',
-'black listed': 'Blacklist',
-};
-
 /* REMOVED SUBMENU REFERENCES */
 /* const reofferParentLink = document.querySelector('.reoffer-parent'); */
 /* const reofferSubmenu = document.querySelector('.submenu-container'); */
@@ -369,7 +326,7 @@ let currentFilteredOrders = [];
 let currentPage = 1;
 let lastKnownTotalPages = 1;
 const ORDERS_PER_PAGE = 10;
-let currentActiveStatus = 'all';
+let currentActiveStatus = IS_BULK_PRINT_PAGE ? 'kit_needs_printing' : 'all';
 let refreshInterval = null;
 let currentOrderDetails = null;
 let feedPricingDataCache = null;
@@ -429,6 +386,16 @@ const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printin
 const REMINDER_ELIGIBLE_STATUSES = ['label_generated', 'emailed'];
 const EXPIRING_REMINDER_STATUSES = ['order_pending', ...KIT_PRINT_PENDING_STATUSES, 'label_generated', 'emailed'];
 const KIT_REMINDER_STATUSES = ['kit_sent', 'kit_delivered'];
+const AGING_EXCLUDED_STATUSES = new Set([
+  'completed',
+  'return-label-generated',
+  'return_label_generated',
+  'cancelled',
+  'canceled',
+  'order_cancelled',
+  're-offered-declined',
+]);
+const MIN_AGING_MS = 15 * 24 * 60 * 60 * 1000;
 
 window.addEventListener('message', (event) => {
 if (!event.data || event.data.type !== 'kit-print-complete') {
@@ -470,20 +437,9 @@ closeOrderDetailsModal();
 }
 });
 
-if (phoneCheckRunButton) {
-phoneCheckRunButton.addEventListener('click', () => {
-handlePhoneCheckRun();
-});
-}
 
-if (phoneCheckInput) {
-phoneCheckInput.addEventListener('keydown', (event) => {
-if (event.key === 'Enter') {
-event.preventDefault();
-handlePhoneCheckRun();
-}
-});
-}
+
+
 
 const USPS_TRACKING_URL = 'https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=';
 
@@ -2459,20 +2415,42 @@ const statusCounts = {
 'return-label-generated': ordersData.filter(o => o.status === 'return-label-generated').length,
 };
 
+if (orderPendingCount) {
 orderPendingCount.textContent = statusCounts['order_pending'];
+}
+if (kitNeedsPrintingCount) {
 kitNeedsPrintingCount.textContent = statusCounts['kit_needs_printing'];
+}
+if (kitSentCount) {
 kitSentCount.textContent = statusCounts['kit_sent'];
+}
+if (kitDeliveredCount) {
 kitDeliveredCount.textContent = statusCounts['kit_delivered'];
+}
+if (labelGeneratedCount) {
 labelGeneratedCount.textContent = statusCounts['label_generated'];
+}
 if (emailedCount) {
 emailedCount.textContent = statusCounts['emailed'];
 }
+if (receivedCount) {
 receivedCount.textContent = statusCounts['received'];
+}
+if (completedCount) {
 completedCount.textContent = statusCounts['completed'];
+}
+if (reofferedPendingCount) {
 reofferedPendingCount.textContent = statusCounts['re-offered-pending'];
+}
+if (reofferedAcceptedCount) {
 reofferedAcceptedCount.textContent = statusCounts['re-offered-accepted'];
+}
+if (reofferedDeclinedCount) {
 reofferedDeclinedCount.textContent = statusCounts['re-offered-declined'];
+}
+if (returnLabelGeneratedCount) {
 returnLabelGeneratedCount.textContent = statusCounts['return-label-generated'];
+}
 if (statusCountAll) {
 statusCountAll.textContent = ordersData.length;
 }
@@ -2537,10 +2515,18 @@ const conversionRateVal = initialOrderCount > 0
 ? ((completedOrdersCount / initialOrderCount) * 100).toFixed(1)
 : '0.0';
 
+if (ordersTodayCount) {
 ordersTodayCount.textContent = ordersToday;
+}
+if (totalPayoutAmount) {
 totalPayoutAmount.textContent = `$${totalPayout.toFixed(2)}`;
+}
+if (conversionRate) {
 conversionRate.textContent = `${conversionRateVal}%`;
+}
+if (receivedDevicesCount) {
 receivedDevicesCount.textContent = receivedDevicesCountVal;
+}
 if (averagePayoutAmount) {
 averagePayoutAmount.textContent = completedOrdersCount > 0
 ? `$${(totalPayout / completedOrdersCount).toFixed(2)}`
@@ -2563,50 +2549,38 @@ updateStatusChart(statusCounts);
 }
 
 function updateOperationsHighlights(orders = []) {
-if (!agingWatchlist) {
+if (!IS_AGING_PAGE || !agingWatchlist) {
 return;
 }
 
-const EXCLUDED_STATUSES = new Set([
-'completed',
-'return-label-generated',
-'return_label_generated',
-'cancelled',
-'canceled',
-'order_cancelled',
-'re-offered-declined'
-]);
-const MIN_WATCHLIST_AGE_DAYS = 15;
-const MIN_AGE_MS = MIN_WATCHLIST_AGE_DAYS * 24 * 60 * 60 * 1000;
 const now = Date.now();
 
 const ranked = orders
-.filter(order => {
-const status = (order.status || '').toLowerCase();
-return !EXCLUDED_STATUSES.has(status);
-})
 .map(order => {
 const createdAtMs = extractTimestampMillis(order.createdAt);
 if (!createdAtMs) {
 return null;
 }
+const status = (order.status || '').toString().toLowerCase();
+if (AGING_EXCLUDED_STATUSES.has(status)) {
+return null;
+}
+const ageMs = now - createdAtMs;
 return {
 order,
-ageMs: now - createdAtMs,
+ageMs,
 createdAtMs
 };
 })
-.filter(Boolean)
+.filter(entry => entry && entry.ageMs >= MIN_AGING_MS)
 .sort((a, b) => b.ageMs - a.ageMs);
 
-const agingCandidates = ranked.filter(entry => entry.ageMs >= MIN_AGE_MS);
-
-if (!agingCandidates.length) {
+if (!ranked.length) {
 agingWatchlist.innerHTML = '<li class="empty">All caught up — no aging orders.</li>';
 return;
 }
 
-const html = agingCandidates.map(({ order }) => {
+const html = ranked.map(({ order }) => {
 const statusText = formatStatus(order);
 const orderAge = formatOrderAge(order.createdAt);
 return `
@@ -2864,6 +2838,44 @@ count > 0
 massPrintBtn.innerHTML = label;
 }
 
+const SKIP_REASON_LABELS = {
+  not_found: 'order not found',
+  not_kit_order: 'not a kit order',
+  missing_labels: 'missing shipping labels',
+  label_download_failed: 'label download failed',
+  processing_error: 'processing error',
+};
+
+function normalizeSkippedEntries(raw = []) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((entry) => {
+      if (!entry) return null;
+      if (typeof entry === 'string') {
+        return { id: entry, reason: null };
+      }
+
+      const idValue = typeof entry.id === 'string' ? entry.id : String(entry.id || '').trim();
+      if (!idValue) {
+        return null;
+      }
+
+      return {
+        id: idValue,
+        reason: entry.reason || null,
+      };
+    })
+    .filter(Boolean);
+}
+
+function formatSkippedReason(reason) {
+  if (!reason) return '';
+  return SKIP_REASON_LABELS[reason] || reason;
+}
+
 function setSelectAllState(displayedIds = lastRenderedOrderIds) {
   if (!ordersSelectAllCheckbox) return;
   const ids = Array.isArray(displayedIds) ? displayedIds : [];
@@ -2900,8 +2912,31 @@ selectedOrderIds.delete(id);
 }
 
 function isKitOrder(order = {}) {
-const preference = (order.shippingPreference || '').toString().toLowerCase();
-return preference === 'shipping kit requested';
+  const preference = (order.shippingPreference || order.shipping_preference || '')
+    .toString()
+    .toLowerCase();
+  if (!preference) {
+    return false;
+  }
+  if (preference === 'shipping kit requested' || preference === 'ship_kit') {
+    return true;
+  }
+  return preference.includes('kit');
+}
+
+function isAgingCandidate(order = {}) {
+  if (!order) {
+    return false;
+  }
+  const status = (order.status || '').toString().toLowerCase();
+  if (AGING_EXCLUDED_STATUSES.has(status)) {
+    return false;
+  }
+  const createdAtMs = extractTimestampMillis(order.createdAt);
+  if (!createdAtMs) {
+    return false;
+  }
+  return Date.now() - createdAtMs >= MIN_AGING_MS;
 }
 
 function updateReminderButtons(order) {
@@ -2941,12 +2976,17 @@ sendKitReminderBtn.onclick = null;
 
 function renderOrders() {
 cleanupSelectedOrderIds();
+if (!ordersTableBody) {
+return;
+}
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
 const total = source.length;
 ordersTableBody.innerHTML = '';
 
 if (!total) {
+if (noOrdersMessage) {
 noOrdersMessage.classList.remove('hidden');
+}
 ordersTableBody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
 lastRenderedOrderIds = [];
 setSelectAllState([]);
@@ -2957,7 +2997,9 @@ paginationControls.classList.add('hidden');
 return;
 }
 
+if (noOrdersMessage) {
 noOrdersMessage.classList.add('hidden');
+}
 
 const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
 if (currentPage > totalPages) {
@@ -3219,155 +3261,6 @@ return 'Emailed';
 // Fallback for other statuses
 return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
-
-function resetPhoneCheckResults() {
-if (phoneCheckError) {
-phoneCheckError.classList.add('hidden');
-phoneCheckError.textContent = '';
-}
-if (phoneCheckResults) {
-phoneCheckResults.classList.add('hidden');
-}
-if (phoneCheckStatusPill) {
-phoneCheckStatusPill.textContent = '';
-phoneCheckStatusPill.className = phoneCheckStatusBaseClass;
-}
-  if (phoneCheckStatusText) {
-    phoneCheckStatusText.textContent = '';
-  }
-  if (phoneCheckTimestamp) {
-    phoneCheckTimestamp.textContent = '';
-  }
-  if (phoneCheckDetails) {
-    phoneCheckDetails.classList.add('hidden');
-  }
-  if (phoneCheckModel) {
-    phoneCheckModel.textContent = '—';
-  }
-  if (phoneCheckMemory) {
-    phoneCheckMemory.textContent = '—';
-  }
-  if (phoneCheckColor) {
-    phoneCheckColor.textContent = '—';
-  }
-  if (phoneCheckBlacklist) {
-    phoneCheckBlacklist.textContent = '—';
-    phoneCheckBlacklist.className = phoneCheckBlacklistBaseClass;
-  }
-  if (phoneCheckCarrierDisplay) {
-    phoneCheckCarrierDisplay.textContent = '—';
-  }
-  if (phoneCheckSimlock) {
-    phoneCheckSimlock.textContent = '—';
-    phoneCheckSimlock.className = phoneCheckSimlockBaseClass;
-  }
-  if (phoneCheckReasonsList) {
-    phoneCheckReasonsList.innerHTML = '';
-  }
-  if (phoneCheckReasons) {
-    phoneCheckReasons.classList.add('hidden');
-}
-if (phoneCheckNotesList) {
-phoneCheckNotesList.innerHTML = '';
-}
-if (phoneCheckNotes) {
-phoneCheckNotes.classList.add('hidden');
-}
-if (phoneCheckRaw) {
-phoneCheckRaw.textContent = '';
-}
-if (phoneCheckRawWrapper) {
-phoneCheckRawWrapper.classList.add('hidden');
-phoneCheckRawWrapper.open = false;
-}
-}
-
-function inferDeviceTypeFromOrder(order) {
-if (!order) {
-return '';
-}
-const candidates = [
-order.device,
-order.deviceName,
-order.deviceModel,
-order.model,
-order.brand,
-order.manufacturer,
-order.deviceCategory,
-order.platform,
-];
-for (const value of candidates) {
-if (!value) continue;
-const normalized = value.toString().trim().toLowerCase();
-if (!normalized) continue;
-if (normalized.includes('iphone') || normalized.includes('ipad') || normalized.includes('apple') || normalized.includes('watch') || normalized.includes('mac')) {
-return 'Apple';
-}
-if (normalized.includes('android') || normalized.includes('pixel') || normalized.includes('samsung') || normalized.includes('google') || normalized.includes('galaxy')) {
-return 'Android';
-}
-}
-return '';
-}
-
-function resolveCarrierOption(rawCarrier) {
-if (!rawCarrier) {
-return '';
-}
-const normalized = rawCarrier.toString().trim().toLowerCase();
-if (!normalized) {
-return '';
-}
-if (PHONECHECK_CARRIER_ALIAS_MAP[normalized]) {
-return PHONECHECK_CARRIER_ALIAS_MAP[normalized];
-}
-for (const option of PHONECHECK_CARRIER_OPTIONS) {
-if (option.toLowerCase() === normalized) {
-return option;
-}
-}
-if (normalized.includes('att') || normalized.includes('at&t')) {
-return 'AT&T';
-}
-if (normalized.includes('tmobile') || normalized.includes('t-mobile') || normalized.includes('t mobile')) {
-return 'T-Mobile';
-}
-if (normalized.includes('verizon')) {
-return 'Verizon';
-}
-if (normalized.includes('sprint')) {
-return 'Sprint';
-}
-if (normalized.includes('unlock')) {
-return 'Unlocked';
-}
-if (normalized.includes('black')) {
-return 'Blacklist';
-}
-return '';
-}
-
-function inferCarrierFromOrder(order) {
-if (!order) {
-return '';
-}
-const candidates = [
-order.carrier,
-order.deviceCarrier,
-order.carrierStatus,
-order.lockedCarrier,
-order.phoneCheck?.summary?.carrierLock?.carrier,
-order.phoneCheck?.summary?.carrierLock?.originalCarrier,
-];
-for (const candidate of candidates) {
-const resolved = resolveCarrierOption(candidate);
-if (resolved) {
-return resolved;
-}
-}
-return '';
-}
-
 function setSelectValue(selectElement, value) {
 if (!selectElement) {
 return;
@@ -3382,223 +3275,7 @@ return;
 selectElement.selectedIndex = 0;
 }
 
-async function handlePhoneCheckRun() {
-if (!phoneCheckRunButton) {
-return;
-}
 
-const imeiRaw = phoneCheckInput ? phoneCheckInput.value.trim() : '';
-const imei = imeiRaw.replace(/\s+/g, '');
-
-resetPhoneCheckResults();
-
-if (!imei) {
-if (phoneCheckError) {
-phoneCheckError.textContent = 'Please enter an IMEI before running the check.';
-phoneCheckError.classList.remove('hidden');
-}
-return;
-}
-
-if (phoneCheckError) {
-phoneCheckError.textContent = '';
-phoneCheckError.classList.add('hidden');
-}
-
-const selectedDeviceType = phoneCheckDeviceTypeSelect ? phoneCheckDeviceTypeSelect.value : '';
-if (!selectedDeviceType) {
-if (phoneCheckError) {
-phoneCheckError.textContent = 'Please select the device type before running the check.';
-phoneCheckError.classList.remove('hidden');
-}
-return;
-}
-
-const selectedCarrier = phoneCheckCarrierSelect ? phoneCheckCarrierSelect.value : '';
-if (!selectedCarrier) {
-if (phoneCheckError) {
-phoneCheckError.textContent = 'Please select the carrier before running the check.';
-phoneCheckError.classList.remove('hidden');
-}
-return;
-}
-
-const deviceType = selectedDeviceType;
-const carrier = selectedCarrier;
-
-const originalButtonContent = phoneCheckRunButton.innerHTML;
-phoneCheckRunButton.disabled = true;
-phoneCheckRunButton.innerHTML = '<span class="flex items-center gap-2"><svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path></svg><span>Checking…</span></span>';
-
-try {
-const response = await fetch(`${BACKEND_BASE_URL}/phone-check`, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
-imei,
-deviceType,
-carrier,
-checkAll: 1,
-}),
-});
-
-if (!response.ok) {
-const errorData = await response.json().catch(() => null);
-const errorMessage = errorData?.error || `PhoneCheck failed with status ${response.status}.`;
-throw new Error(errorMessage);
-}
-
-const data = await response.json();
-if (!data || !data.summary) {
-throw new Error('Unexpected response from PhoneCheck service.');
-}
-
-const { summary, raw } = data;
-
-if (phoneCheckResults) {
-phoneCheckResults.classList.remove('hidden');
-}
-
-if (phoneCheckStatusPill) {
-const statusClass = summary.isClean
-? 'bg-emerald-100 text-emerald-700'
-: 'bg-red-100 text-red-700';
-phoneCheckStatusPill.className = `${phoneCheckStatusBaseClass} ${statusClass}`;
-phoneCheckStatusPill.textContent = summary.isClean ? 'Clean' : 'Attention Needed';
-}
-
-if (phoneCheckStatusText) {
-    phoneCheckStatusText.textContent = summary.statusText || (summary.isClean ? 'No issues detected.' : 'See details below for more information.');
-  }
-
-  if (phoneCheckTimestamp) {
-    const timestamp = new Date();
-    phoneCheckTimestamp.textContent = `Checked ${timestamp.toLocaleString()}`;
-  }
-
-  const deviceInfo = summary.deviceInfo || {};
-  const blacklist = summary.blacklist || {};
-  const carrierLock = summary.carrierLock || {};
-  const hasDetails = [
-    deviceInfo.model,
-    deviceInfo.memory,
-    deviceInfo.color,
-    blacklist.status,
-    typeof blacklist.isBlacklisted === 'boolean',
-    carrierLock.carrier,
-    carrierLock.simlock,
-    typeof carrierLock.isLocked === 'boolean',
-  ].some(Boolean);
-
-  if (phoneCheckDetails) {
-    phoneCheckDetails.classList.toggle('hidden', !hasDetails);
-  }
-
-  if (phoneCheckModel) {
-    phoneCheckModel.textContent = deviceInfo.model || '—';
-  }
-
-  if (phoneCheckMemory) {
-    phoneCheckMemory.textContent = deviceInfo.memory || '—';
-  }
-
-  if (phoneCheckColor) {
-    phoneCheckColor.textContent = deviceInfo.color || '—';
-  }
-
-  if (phoneCheckBlacklist) {
-    const blacklistLabel =
-      blacklist.status ||
-      (blacklist.isBlacklisted === true
-        ? 'Blacklisted'
-        : blacklist.isBlacklisted === false
-        ? 'Not Blacklisted'
-        : '—');
-    let blacklistClass = phoneCheckBlacklistBaseClass;
-    if (blacklist.isBlacklisted === true) {
-      blacklistClass += ' text-rose-600';
-    } else if (blacklist.isBlacklisted === false) {
-      blacklistClass += ' text-emerald-600';
-    }
-    phoneCheckBlacklist.className = blacklistClass;
-    phoneCheckBlacklist.textContent = blacklistLabel;
-  }
-
-  if (phoneCheckCarrierDisplay) {
-    phoneCheckCarrierDisplay.textContent = carrierLock.carrier || '—';
-  }
-
-  if (phoneCheckSimlock) {
-    const simlockLabel =
-      carrierLock.simlock ||
-      (carrierLock.isLocked === true
-        ? 'Locked'
-        : carrierLock.isLocked === false
-        ? 'Unlocked'
-        : '—');
-    let simlockClass = phoneCheckSimlockBaseClass;
-    if (carrierLock.isLocked === true) {
-      simlockClass += ' text-rose-600';
-    } else if (carrierLock.isLocked === false) {
-      simlockClass += ' text-emerald-600';
-    }
-    phoneCheckSimlock.className = simlockClass;
-    phoneCheckSimlock.textContent = simlockLabel;
-  }
-
-  if (phoneCheckReasons && phoneCheckReasonsList) {
-    phoneCheckReasonsList.innerHTML = '';
-    if (Array.isArray(summary.reasons) && summary.reasons.length > 0) {
-      summary.reasons.forEach((reason) => {
-const li = document.createElement('li');
-li.textContent = reason;
-phoneCheckReasonsList.appendChild(li);
-});
-phoneCheckReasons.classList.remove('hidden');
-} else {
-phoneCheckReasons.classList.add('hidden');
-}
-}
-
-if (phoneCheckNotes && phoneCheckNotesList) {
-phoneCheckNotesList.innerHTML = '';
-const highlights = Array.isArray(summary.notices)
-? summary.notices.filter((notice) => notice && notice !== summary.statusText)
-: [];
-const uniqueHighlights = Array.from(new Set(highlights)).slice(0, 6);
-
-if (uniqueHighlights.length > 0) {
-uniqueHighlights.forEach((item) => {
-const li = document.createElement('li');
-li.textContent = item;
-phoneCheckNotesList.appendChild(li);
-});
-phoneCheckNotes.classList.remove('hidden');
-} else {
-phoneCheckNotes.classList.add('hidden');
-}
-}
-
-if (phoneCheckRaw && phoneCheckRawWrapper) {
-phoneCheckRaw.textContent = JSON.stringify(raw, null, 2);
-phoneCheckRawWrapper.classList.remove('hidden');
-}
-
-if (!summary.isClean && phoneCheckError) {
-phoneCheckError.textContent = 'Issues were detected. Review the details below before continuing.';
-phoneCheckError.classList.remove('hidden');
-}
-} catch (error) {
-console.error('PhoneCheck error:', error);
-if (phoneCheckError) {
-phoneCheckError.textContent = error.message || 'Failed to complete the PhoneCheck request.';
-phoneCheckError.classList.remove('hidden');
-}
-} finally {
-phoneCheckRunButton.disabled = false;
-phoneCheckRunButton.innerHTML = originalButtonContent;
-}
-}
 
 async function updateOrderStatusInline(orderId, status) {
 try {
@@ -3651,6 +3328,9 @@ default: return 'bg-slate-100 text-slate-700 status-bubble';
 }
 
 async function openOrderDetailsModal(orderId) {
+if (!orderDetailsModal) {
+return;
+}
 // Hide all action/form containers
 modalActionButtons.innerHTML = '';
 modalLoadingMessage.classList.add('hidden');
@@ -3764,26 +3444,6 @@ modalOrderAge.textContent = formatOrderAge(order.createdAt);
 modalConditionPowerOn.textContent = order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A';
 modalConditionFunctional.textContent = order.condition_functional ? formatCondition(order.condition_functional) : 'N/A';
 modalConditionCracks.textContent = order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A';
-modalConditionCosmetic.textContent = order.condition_cosmetic ? formatCondition(order.condition_cosmetic) : 'N/A';
-
-resetPhoneCheckResults();
-if (phoneCheckInput) {
-const potentialImei = order.imei || order.IMEI || order.deviceImei || (order.deviceDetails && order.deviceDetails.imei) || '';
-if (order.status === 'received') {
-phoneCheckInput.value = potentialImei || '';
-} else {
-phoneCheckInput.value = '';
-}
-}
-if (phoneCheckDeviceTypeSelect) {
-const inferredDeviceType = inferDeviceTypeFromOrder(order);
-setSelectValue(phoneCheckDeviceTypeSelect, inferredDeviceType);
-}
-if (phoneCheckCarrierSelect) {
-const inferredCarrier = inferCarrierFromOrder(order);
-setSelectValue(phoneCheckCarrierSelect, inferredCarrier);
-}
-
 // Pass the order object to formatStatus here as well
 modalStatus.textContent = formatStatus(order);
 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
@@ -4784,6 +4444,9 @@ modalMessage.classList.remove('hidden');
 }
 
 function closeOrderDetailsModal() {
+if (!orderDetailsModal) {
+return;
+}
 orderDetailsModal.classList.add('hidden');
 if (cancelOrderFormContainer) {
 cancelOrderFormContainer.classList.add('hidden');
@@ -4896,6 +4559,9 @@ applySearchTerm(mobileSearchInput.value);
 
 if (compactDensityToggle) {
 compactDensityToggle.addEventListener('change', () => {
+if (!ordersTableBody) {
+return;
+}
 ordersTableBody.classList.toggle('density-compact', compactDensityToggle.checked);
 });
 }
@@ -4921,115 +4587,142 @@ refreshOrdersBtn.innerHTML = originalLabel;
 });
 }
 
+
 if (massPrintBtn) {
-massPrintBtn.dataset.loading = 'false';
-updateMassPrintButtonLabel({ force: true });
-massPrintBtn.addEventListener('click', async () => {
-if (massPrintBtn.disabled || massPrintBtn.dataset.loading === 'true') {
-return;
-}
-hideOrdersFeedback();
-const selectedIds = Array.from(selectedOrderIds);
-if (!selectedIds.length) {
-return;
-}
-
-const selectedOrders = allOrders.filter((order) => selectedOrderIds.has(order.id));
-const kitOrders = selectedOrders.filter((order) => isKitOrder(order));
-const nonKitOrders = selectedOrders.filter((order) => !isKitOrder(order)).map((order) => order.id);
-
-if (!kitOrders.length) {
-showOrdersFeedback('Select at least one kit order to mass print shipping labels.', 'error');
-return;
-}
-
-massPrintBtn.dataset.loading = 'true';
-massPrintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing…';
-massPrintBtn.disabled = true;
-
-try {
-const response = await fetch(`${BACKEND_BASE_URL}/print-bundle/bulk`, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ orderIds: kitOrders.map((order) => order.id) }),
-});
-
-if (!response.ok) {
-const errorPayload = await response.json().catch(() => ({}));
-const message = errorPayload?.error || `Mass print failed with status ${response.status}`;
-throw new Error(message);
-}
-
-const result = await response.json();
-const base64 = result?.base64;
-const skipped = Array.isArray(result?.skipped) ? result.skipped : [];
-const printedIds = Array.isArray(result?.printed) ? result.printed : kitOrders.map((order) => order.id);
-
-if (!base64) {
-throw new Error('The bulk print response did not include printable data.');
-}
-
-const binaryString = atob(base64);
-const buffer = new Uint8Array(binaryString.length);
-for (let index = 0; index < binaryString.length; index += 1) {
-buffer[index] = binaryString.charCodeAt(index);
-}
-
-const blob = new Blob([buffer], { type: 'application/pdf' });
-const url = URL.createObjectURL(blob);
-
-let printWindow = null;
-try {
-printWindow = window.open(url, '_blank', 'noopener');
-} catch (error) {
-printWindow = null;
-}
-
-if (printWindow && printWindow.focus) {
-try {
-printWindow.focus();
-} catch (focusError) {
-console.warn('Unable to focus mass print window:', focusError);
-}
-} else {
-const downloadLink = document.createElement('a');
-downloadLink.href = url;
-downloadLink.download = 'mass-print-bundle.pdf';
-downloadLink.rel = 'noopener';
-document.body.appendChild(downloadLink);
-downloadLink.click();
-document.body.removeChild(downloadLink);
-showOrdersFeedback('Pop-up blocked. The combined label PDF was downloaded instead.', 'error');
-}
-
-setTimeout(() => URL.revokeObjectURL(url), 60000);
-
-const summaryParts = [];
-summaryParts.push(`Prepared ${printedIds.length} kit${printedIds.length === 1 ? '' : 's'} for printing.`);
-if (nonKitOrders.length) {
-summaryParts.push(`Ignored non-kit orders: ${nonKitOrders.join(', ')}`);
-}
-if (skipped.length) {
-      summaryParts.push(`Skipped ${skipped.length} order${skipped.length === 1 ? '' : 's'} without ready labels: ${skipped.join(', ')}`);
+  massPrintBtn.dataset.loading = 'false';
+  updateMassPrintButtonLabel({ force: true });
+  massPrintBtn.addEventListener('click', async () => {
+    if (massPrintBtn.disabled || massPrintBtn.dataset.loading === 'true') {
+      return;
     }
 
-    showOrdersFeedback(summaryParts.join(' '), skipped.length ? 'error' : 'success');
-    selectedOrderIds.clear();
-    clearSelectedOrderCheckboxes();
-    updateMassPrintButtonLabel({ force: true });
-    setSelectAllState([]);
-  } catch (error) {
-    console.error('Mass print failed:', error);
-    showOrdersFeedback(error.message || 'Failed to prepare mass print bundle.', 'error');
-} finally {
-massPrintBtn.dataset.loading = 'false';
-updateMassPrintButtonLabel({ force: true });
-}
-});
-} else {
-updateMassPrintButtonLabel({ force: true });
-}
+    hideOrdersFeedback();
+    const selectedIds = Array.from(selectedOrderIds);
+    if (!selectedIds.length) {
+      return;
+    }
 
+    const selectedOrders = allOrders.filter((order) => selectedOrderIds.has(order.id));
+    const kitOrders = selectedOrders.filter((order) => isKitOrder(order));
+    const nonKitOrders = selectedOrders
+      .filter((order) => !isKitOrder(order))
+      .map((order) => order.id);
+
+    if (!kitOrders.length) {
+      showOrdersFeedback('Select at least one kit order to mass print shipping labels.', 'error');
+      return;
+    }
+
+    massPrintBtn.dataset.loading = 'true';
+    massPrintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing…';
+    massPrintBtn.disabled = true;
+
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/print-bundle/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: kitOrders.map((order) => order.id) }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        const message = errorPayload?.error || `Mass print failed with status ${response.status}`;
+        const errorDetails = new Error(message);
+        if (errorPayload && errorPayload.skipped) {
+          errorDetails.skipped = errorPayload.skipped;
+        }
+        throw errorDetails;
+      }
+
+      const result = await response.json();
+      const base64 = result?.base64;
+      const skippedEntries = normalizeSkippedEntries(result?.skipped);
+      const printedIds = Array.isArray(result?.printed)
+        ? result.printed
+        : kitOrders.map((order) => order.id);
+
+      if (!base64) {
+        throw new Error('The bulk print response did not include printable data.');
+      }
+
+      const binaryString = atob(base64);
+      const buffer = new Uint8Array(binaryString.length);
+      for (let index = 0; index < binaryString.length; index += 1) {
+        buffer[index] = binaryString.charCodeAt(index);
+      }
+
+      const blob = new Blob([buffer], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+
+      let printWindow = null;
+      try {
+        printWindow = window.open(url, '_blank', 'noopener');
+      } catch (error) {
+        printWindow = null;
+      }
+
+      if (printWindow && printWindow.focus) {
+        try {
+          printWindow.focus();
+        } catch (focusError) {
+          console.warn('Unable to focus mass print window:', focusError);
+        }
+      } else {
+        const downloadLink = document.createElement('a');
+        downloadLink.href = url;
+        downloadLink.download = 'mass-print-bundle.pdf';
+        downloadLink.rel = 'noopener';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        showOrdersFeedback('Pop-up blocked. The combined label PDF was downloaded instead.', 'error');
+      }
+
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+      const summaryParts = [];
+      summaryParts.push(`Prepared ${printedIds.length} kit${printedIds.length === 1 ? '' : 's'} for printing.`);
+      if (nonKitOrders.length) {
+        summaryParts.push(`Ignored non-kit orders: ${nonKitOrders.join(', ')}`);
+      }
+      if (skippedEntries.length) {
+        const skippedSummary = skippedEntries
+          .map((entry) => {
+            const reasonText = formatSkippedReason(entry.reason);
+            return reasonText ? `${entry.id} (${reasonText})` : entry.id;
+          })
+          .join(', ');
+        summaryParts.push(`Skipped ${skippedEntries.length} order${skippedEntries.length === 1 ? '' : 's'}: ${skippedSummary}`);
+      }
+
+      const feedbackType = skippedEntries.length ? 'error' : 'success';
+      showOrdersFeedback(summaryParts.join(' '), feedbackType);
+      selectedOrderIds.clear();
+      clearSelectedOrderCheckboxes();
+      updateMassPrintButtonLabel({ force: true });
+      setSelectAllState([]);
+    } catch (error) {
+      console.error('Mass print failed:', error);
+      const skippedEntries = normalizeSkippedEntries(error.skipped);
+      let message = error.message || 'Failed to prepare mass print bundle.';
+      if (skippedEntries.length) {
+        const skippedSummary = skippedEntries
+          .map((entry) => {
+            const reasonText = formatSkippedReason(entry.reason);
+            return reasonText ? `${entry.id} (${reasonText})` : entry.id;
+          })
+          .join(', ');
+        message = `${message} Skipped: ${skippedSummary}.`;
+      }
+      showOrdersFeedback(message, 'error');
+    } finally {
+      massPrintBtn.dataset.loading = 'false';
+      updateMassPrintButtonLabel({ force: true });
+    }
+  });
+} else {
+  updateMassPrintButtonLabel({ force: true });
+}
 if (ordersSelectAllCheckbox) {
 ordersSelectAllCheckbox.addEventListener('change', (event) => {
 const displayed = Array.from(lastRenderedOrderIds);
@@ -5044,7 +4737,9 @@ setSelectAllState(displayed);
 });
 }
 
+if (closeModalButton) {
 closeModalButton.addEventListener('click', closeOrderDetailsModal);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
 try {
@@ -5058,6 +4753,7 @@ const authLoadingScreen = document.getElementById('auth-loading-screen');
 
 // Logout functionality - added AFTER auth is initialized
 const logoutBtn = document.getElementById('logout-btn');
+if (logoutBtn) {
 logoutBtn.addEventListener('click', async () => {
 try {
 await signOut(auth);
@@ -5070,11 +4766,13 @@ console.error('Error signing out:', error);
 console.error('Failed to logout. Please try again.');
 }
 });
+}
 
 // Notification bell dropdown functionality - added AFTER auth is initialized
 const notificationBellContainer = document.getElementById('notification-bell-container');
 const notificationDropdown = document.getElementById('notification-dropdown');
 
+if (notificationBellContainer && notificationDropdown) {
 notificationBellContainer.addEventListener('click', (e) => {
 e.stopPropagation();
 notificationDropdown.classList.toggle('show');
@@ -5086,6 +4784,7 @@ if (!notificationBellContainer.contains(e.target)) {
 notificationDropdown.classList.remove('show');
 }
 });
+}
 
 onAuthStateChanged(auth, (user) => {
 if (!user || user.isAnonymous) {
@@ -5096,7 +4795,7 @@ return;
 }
 
 console.log('Auth state changed: User logged in, UID:', user.uid);
-authLoadingScreen.classList.add('hidden');
+authLoadingScreen?.classList.add('hidden');
 
 currentUserId = user.uid;
 /* REMOVED SIDEBAR USER ID DISPLAY, NOW JUST LOGGED IN */
@@ -5106,13 +4805,17 @@ fetchAndRenderOrders();
 /* REMOVED NOTIFICATION LIST UPDATES - ONLY BADGE REMAINS FOR PERFORMANCE */
 /* updateNotifications(); */
 updateActiveChatsCount(); // <-- Moved here for safety
+if (IS_ANALYTICS_PAGE) {
 initializeAnalyticsDashboard();
+}
 });
 
 } catch (error) {
 console.error("Error initializing Firebase:", error);
+if (ordersTableBody) {
 ordersTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
-document.getElementById('auth-loading-screen').classList.add('hidden');
+}
+document.getElementById('auth-loading-screen')?.classList.add('hidden');
 }
 });
 
@@ -5136,7 +4839,9 @@ updateLastRefreshTimestamp();
 });
 } catch (error) {
 console.error('Error fetching real-time orders:', error);
+if (ordersTableBody) {
 ordersTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+}
 }
 }
 
@@ -5170,6 +4875,14 @@ order.id.toLowerCase().includes(lowerCaseSearchTerm) ||
 );
 }
 
+if (IS_AGING_PAGE) {
+filtered = filtered.filter(isAgingCandidate);
+}
+
+if (IS_BULK_PRINT_PAGE) {
+filtered = filtered.filter(isKitOrder);
+}
+
 filtered.sort((a, b) => {
 const dateA = extractTimestampMillis(a.createdAt) || 0;
 const dateB = extractTimestampMillis(b.createdAt) || 0;
@@ -5199,7 +4912,10 @@ hour: '2-digit',
 minute: '2-digit'
 };
 const timeDate = now.toLocaleDateString('en-US', options);
-document.getElementById('current-time-date').textContent = timeDate;
+const timeDisplay = document.getElementById('current-time-date');
+if (timeDisplay) {
+timeDisplay.textContent = timeDate;
+}
 }
 
 // Update time every minute
@@ -5219,20 +4935,30 @@ const chatsCollectionRef = collection(db, "chats");
 const q = query(chatsCollectionRef, where("status", "==", "active"));
 onSnapshot(q, (snapshot) => {
 const count = snapshot.size;
-document.getElementById('active-chats-count').textContent = count;
+const activeChatsEl = document.getElementById('active-chats-count');
+if (activeChatsEl) {
+activeChatsEl.textContent = count;
+}
 
 // Update floating button badge
 const floatingBadge = document.getElementById('floating-chat-badge');
 if (count > 0) {
+if (floatingBadge) {
 floatingBadge.textContent = count;
 floatingBadge.style.display = 'block';
+}
 } else {
+if (floatingBadge) {
 floatingBadge.style.display = 'none';
+}
 }
 });
 } catch (error) {
 console.log('Chats collection not available or error fetching:', error);
-document.getElementById('active-chats-count').textContent = '0';
+const activeChatsEl = document.getElementById('active-chats-count');
+if (activeChatsEl) {
+activeChatsEl.textContent = '0';
+}
 }
 }
 
@@ -5243,6 +4969,9 @@ order.status === 'order_pending' || KIT_PRINT_PENDING_STATUSES.includes(order.st
 ).length;
 
 const notificationBadge = document.getElementById('notification-badge');
+if (!notificationBadge) {
+return;
+}
 if (newOrders > 0) {
 notificationBadge.textContent = newOrders;
 notificationBadge.style.display = 'block';
@@ -5278,7 +5007,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 alert(`✅ Refreshed ${kitOrders.length} kit tracking updates.`);
                 // Optionally reload order list
-                refreshOrdersBtn.click();
+                if (refreshOrdersBtn) {
+                    refreshOrdersBtn.click();
+                }
             } catch (err) {
                 alert('⚠️ Failed to refresh kit tracking data. Check console for details.');
                 console.error(err);
