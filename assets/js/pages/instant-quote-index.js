@@ -27,6 +27,7 @@ let conditions = { power: '', screen: '', cracks: '' };
 let isAuthReady = false;
 let finalQuote = 0.00; // Final calculated price
 let currentUserId = null; // New: to store user ID
+let pendingShippingUnlock = false;
 
 const US_STATES = [
 { name: "Alabama", code: "AL" }, { name: "Alaska", code: "AK" }, { name: "Arizona", code: "AZ" }, { name: "Arkansas", code: "AR" },
@@ -52,6 +53,77 @@ const loginForm = document.getElementById('loginForm');
 const signupForm = document.getElementById('signupForm');
 const authMessage = document.getElementById('authMessage');
 const googleProvider = new GoogleAuthProvider();
+
+const SHIPPING_INFO_STORAGE_KEY = 'instantQuoteShippingInfo';
+let cachedShippingInfo = null;
+
+function loadStoredShippingInfo() {
+    if (cachedShippingInfo) {
+        return cachedShippingInfo;
+    }
+    try {
+        const raw = localStorage.getItem(SHIPPING_INFO_STORAGE_KEY);
+        if (!raw) {
+            return null;
+        }
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+            cachedShippingInfo = parsed;
+            return parsed;
+        }
+    } catch (error) {
+        console.warn('Unable to read stored shipping information', error);
+    }
+    return null;
+}
+
+function persistShippingInfo(update = {}) {
+    const existing = loadStoredShippingInfo() || {};
+    const merged = { ...existing, ...update };
+    cachedShippingInfo = merged;
+    try {
+        localStorage.setItem(SHIPPING_INFO_STORAGE_KEY, JSON.stringify(merged));
+    } catch (error) {
+        console.warn('Unable to store shipping information', error);
+    }
+    return merged;
+}
+
+function applyShippingInfo(info, { overwriteExisting = false } = {}) {
+    const data = info || loadStoredShippingInfo();
+    if (!data) return;
+
+    const mappings = [
+        ['fullName', 'fullName'],
+        ['email', 'email'],
+        ['phone', 'phone'],
+        ['street-address', 'streetAddress'],
+        ['city', 'city'],
+        ['state', 'state'],
+        ['zip-code', 'zipCode']
+    ];
+
+    mappings.forEach(([elementId, key]) => {
+        const field = document.getElementById(elementId);
+        if (!field) return;
+        const value = data[key];
+        if (typeof value === 'undefined' || value === null) return;
+        if (overwriteExisting || !field.value) {
+            field.value = value;
+        }
+    });
+
+    if (data.shippingPreference) {
+        const radio = document.querySelector(`input[name="shipping_preference"][value="${data.shippingPreference}"]`);
+        if (radio) {
+            radio.checked = true;
+        }
+    }
+
+    if (typeof window.updateOverview === 'function') {
+        window.updateOverview();
+    }
+}
 
 const devicePreviewImg = document.getElementById('device-preview-img');
 const deviceImagePreviewDiv = document.getElementById('device-image-preview');
@@ -149,71 +221,146 @@ document.getElementById('payment-message-box').classList.add('hidden');
 
 // --- AUTHENTICATION LOGIC ---
 
-function showAuthMessage(msg, type) {
-authMessage.textContent = msg;
-authMessage.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700');
-if (type === 'error') {
-authMessage.classList.add('bg-red-100', 'text-red-700');
-} else if (type === 'success') {
-authMessage.classList.add('bg-green-100', 'text-green-700');
-} else if (type === 'info') {
-authMessage.classList.add('bg-blue-100', 'text-blue-700');
+const AUTH_ERROR_MESSAGES = {
+    'invalid-credential': 'The email or password you entered is incorrect.',
+    'wrong-password': 'The email or password you entered is incorrect.',
+    'user-not-found': 'We couldn\'t find an account with that email address.',
+    'invalid-email': 'Please enter a valid email address.',
+    'missing-email': 'Please enter your email address.',
+    'email-already-in-use': 'An account with this email already exists. Try logging in instead.',
+    'weak-password': 'Your password must be at least 6 characters.',
+    'popup-closed-by-user': 'The sign-in popup was closed before you finished. Please try again.',
+    'popup-blocked': 'Your browser blocked the sign-in popup. Please allow popups and try again.',
+    'network-request-failed': 'We couldn\'t reach the server. Check your internet connection and try again.',
+    'too-many-requests': 'Too many attempts have been made. Please wait a moment and try again.',
+    'user-disabled': 'This account has been disabled. Contact our support team for assistance.'
+};
+
+function extractAuthCode(error) {
+    if (!error) return null;
+    if (typeof error.code === 'string') {
+        return error.code.startsWith('auth/') ? error.code.slice(5) : error.code;
+    }
+    if (typeof error.message === 'string') {
+        const match = error.message.match(/auth\/([^)]+)/);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+    return null;
 }
+
+function formatAuthCodeToSentence(code) {
+    if (!code) return '';
+    const cleaned = code.replace(/-/g, ' ');
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1) + '.';
+}
+
+function getAuthErrorMessage(actionDescription, error) {
+    const fallback = `We couldn't ${actionDescription}. Please try again.`;
+    const code = extractAuthCode(error);
+    if (!code) {
+        return fallback;
+    }
+    const normalizedCode = code.toLowerCase();
+    const friendly = AUTH_ERROR_MESSAGES[normalizedCode];
+    if (friendly) {
+        return `We couldn't ${actionDescription}. ${friendly}`;
+    }
+    return `We couldn't ${actionDescription}. ${formatAuthCodeToSentence(normalizedCode)}`;
+}
+
+function showAuthMessage(msg, type) {
+    authMessage.textContent = msg;
+    authMessage.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700');
+    if (type === 'error') {
+        authMessage.classList.add('bg-red-100', 'text-red-700');
+    } else if (type === 'success') {
+        authMessage.classList.add('bg-green-100', 'text-green-700');
+    } else if (type === 'info') {
+        authMessage.classList.add('bg-blue-100', 'text-blue-700');
+    }
 }
 
 function clearAuthMessage() {
-authMessage.classList.add('hidden');
-authMessage.textContent = '';
+    authMessage.classList.add('hidden');
+    authMessage.textContent = '';
 }
 
-window.showLoginModal = function(initialTab = 'login') {
-openModal('loginModal');
-clearAuthMessage();
-showTab(initialTab);
-}
+window.showLoginModal = function(initialTab = 'signup') {
+    openModal('loginModal');
+    clearAuthMessage();
+    showTab(initialTab);
+};
 
 window.hideLoginModal = function() {
-closeModal('loginModal');
-document.getElementById('loginEmail').value = '';
-document.getElementById('loginPassword').value = '';
-clearAuthMessage();
-}
+    closeModal('loginModal');
+    document.getElementById('loginEmail').value = '';
+    document.getElementById('loginPassword').value = '';
+    clearAuthMessage();
+    pendingShippingUnlock = false;
+};
 
 function showTab(tabName) {
-clearAuthMessage();
+    clearAuthMessage();
 
-loginTabBtn.classList.remove('border-indigo-600', 'text-indigo-600');
-signupTabBtn.classList.remove('border-indigo-600', 'text-indigo-600');
-loginTabBtn.classList.add('border-transparent', 'text-gray-500');
-signupTabBtn.classList.add('border-transparent', 'text-gray-500');
+    loginTabBtn.classList.remove('border-indigo-600', 'text-indigo-600', 'border-transparent', 'text-gray-500');
+    signupTabBtn.classList.remove('border-indigo-600', 'text-indigo-600', 'border-transparent', 'text-gray-500');
 
-if (tabName === 'login') {
-loginForm.classList.remove('hidden');
-signupForm.classList.add('hidden');
-loginTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
-} else if (tabName === 'signup') {
-signupForm.classList.remove('hidden');
-loginForm.classList.add('hidden');
-signupTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
-}
+    if (tabName === 'login') {
+        loginForm.classList.remove('hidden');
+        signupForm.classList.add('hidden');
+        loginTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
+        signupTabBtn.classList.add('border-transparent', 'text-gray-500');
+    } else {
+        signupForm.classList.remove('hidden');
+        loginForm.classList.add('hidden');
+        signupTabBtn.classList.add('border-indigo-600', 'text-indigo-600');
+        loginTabBtn.classList.add('border-transparent', 'text-gray-500');
+    }
 }
 
 function handleAuthSuccess(user) {
-currentUserId = user.uid;
+    currentUserId = user.uid;
 
-// Auto-fill email in the shipping form
-if (user.email) {
-document.getElementById('email').value = user.email;
-}
+    const existingInfo = loadStoredShippingInfo() || {};
+    const updates = {};
+    if (user.email) {
+        const emailField = document.getElementById('email');
+        if (emailField && !emailField.value) {
+            emailField.value = user.email;
+        }
+        if (!existingInfo.email) {
+            updates.email = user.email;
+        }
+    }
 
-// Proceed to shipping details if the quote has already been calculated
-if (finalQuote > 0 && document.getElementById('pricing-input-section').classList.contains('hidden')) {
-// If the user signed in on the payment gate, immediately proceed.
-window.updateOverview();
-window.closeModal('loginModal');
-} else {
-window.closeModal('loginModal');
-}
+    if (user.displayName) {
+        const nameField = document.getElementById('fullName');
+        if (nameField && !nameField.value) {
+            nameField.value = user.displayName;
+        }
+        if (!existingInfo.fullName) {
+            updates.fullName = user.displayName;
+        }
+    }
+
+    if (Object.keys(updates).length) {
+        const mergedInfo = persistShippingInfo(updates);
+        applyShippingInfo(mergedInfo, { overwriteExisting: false });
+    } else {
+        applyShippingInfo();
+    }
+
+    window.closeModal('loginModal');
+
+    if (finalQuote > 0 && document.getElementById('pricing-input-section').classList.contains('hidden')) {
+        window.updateOverview();
+    }
+
+    if (pendingShippingUnlock) {
+        window.lockPriceAndProceed({ bypassAuthCheck: true });
+    }
 }
 
 // Event Listeners for Login/Sign Up buttons (added in DOMContentLoaded listener below)
@@ -506,42 +653,56 @@ document.getElementById('price-summary').classList.remove('hidden');
 document.getElementById('price-summary').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-window.lockPriceAndProceed = function() {
-// ** NEW: AUTHENTICATION CHECK **
-if (!auth.currentUser || auth.currentUser.isAnonymous) {
-window.showLoginModal('login');
-return;
+function proceedToShippingSection() {
+    document.getElementById('pricing-input-section').classList.add('hidden');
+    document.getElementById('calculatePriceBtn').classList.add('hidden');
+    document.getElementById('quote-message-box').classList.add('hidden');
+
+    const shippingSection = document.getElementById('shipping-details-section');
+    shippingSection.classList.remove('hidden');
+
+    const displayedBrand = selectedBrand.charAt(0).toUpperCase() + selectedBrand.slice(1);
+    const displayedModel = selectedDevice.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const carrier = document.getElementById('carrier-select').value.toUpperCase();
+
+    document.getElementById('overviewDevice').textContent = `${displayedBrand} ${displayedModel} - ${document.getElementById('storage-select').value}`;
+    document.getElementById('overviewCarrier').textContent = carrier;
+    document.getElementById('overviewQuote').textContent = `$${finalQuote.toFixed(2)}`;
+
+    const storedInfo = loadStoredShippingInfo();
+    if (storedInfo) {
+        applyShippingInfo(storedInfo, { overwriteExisting: false });
+    }
+
+    if (auth.currentUser && auth.currentUser.email) {
+        const emailField = document.getElementById('email');
+        if (emailField && !emailField.value) {
+            emailField.value = auth.currentUser.email;
+        }
+    }
+
+    window.updateOverview();
+
+    shippingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// Hide the pricing questions and calculate button
-document.getElementById('pricing-input-section').classList.add('hidden');
-document.getElementById('calculatePriceBtn').classList.add('hidden');
-document.getElementById('quote-message-box').classList.add('hidden');
+window.lockPriceAndProceed = function(options = {}) {
+    const { bypassAuthCheck = false } = options;
+    if (!bypassAuthCheck && (!auth.currentUser || auth.currentUser.isAnonymous)) {
+        pendingShippingUnlock = true;
+        window.showLoginModal();
+        return;
+    }
 
-// Show the shipping details section
-const shippingSection = document.getElementById('shipping-details-section');
-shippingSection.classList.remove('hidden');
+    pendingShippingUnlock = false;
+    proceedToShippingSection();
+};
 
-// Populate overview fields with quote data (Device, Carrier, Quote)
-const displayedBrand = selectedBrand.charAt(0).toUpperCase() + selectedBrand.slice(1);
-const displayedModel = selectedDevice.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-const carrier = document.getElementById('carrier-select').value.toUpperCase();
-
-document.getElementById('overviewDevice').textContent = `${displayedBrand} ${displayedModel} - ${document.getElementById('storage-select').value}`;
-document.getElementById('overviewCarrier').textContent = carrier;
-document.getElementById('overviewQuote').textContent = `$${finalQuote.toFixed(2)}`;
-
-// Initial email population from auth (if available)
-if (auth.currentUser && auth.currentUser.email) {
-document.getElementById('email').value = auth.currentUser.email;
-}
-
-// Initial call to update overview (for default shipping preference)
-window.updateOverview();
-
-// Scroll to the new section
-shippingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
+window.continueAsGuest = function() {
+    pendingShippingUnlock = false;
+    window.hideLoginModal();
+    window.lockPriceAndProceed({ bypassAuthCheck: true });
+};
 
 window.updateOverview = function() {
 const shippingPreference = document.querySelector('input[name="shipping_preference"]:checked')?.value;
@@ -614,6 +775,18 @@ messageBox.classList.add('bg-red-100', 'text-red-700');
 if (firstMissing) firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
 return;
 }
+
+const shippingInfo = {
+fullName: document.getElementById('fullName').value,
+email: document.getElementById('email').value,
+phone: document.getElementById('phone').value,
+streetAddress: document.getElementById('street-address').value,
+city: document.getElementById('city').value,
+state: document.getElementById('state').value,
+zipCode: document.getElementById('zip-code').value,
+shippingPreference: shippingPref.value
+};
+persistShippingInfo(shippingInfo);
 
 // If validation passes, open payment modal
 openModal('paymentModal');
@@ -809,10 +982,18 @@ const signupEmailInput = document.getElementById('signupEmail');
 const signupPasswordInput = document.getElementById('signupPassword');
 const loginForm = document.getElementById('loginForm');
 const signupForm = document.getElementById('signupForm');
+const guestCheckoutBtn = document.getElementById('guestCheckoutBtn');
 
 // Tab switching
 loginTabBtn.addEventListener('click', () => showTab('login'));
 signupTabBtn.addEventListener('click', () => showTab('signup'));
+
+if (guestCheckoutBtn) {
+guestCheckoutBtn.addEventListener('click', () => {
+clearAuthMessage();
+window.continueAsGuest();
+});
+}
 
 // Google Sign-In
 googleLoginBtn.addEventListener('click', async () => {
@@ -823,7 +1004,7 @@ const result = await signInWithPopup(auth, googleProvider);
 handleAuthSuccess(result.user);
 } catch (error) {
 console.error("Google login error:", error);
-showAuthMessage(`Google login failed: ${error.message}`, 'error');
+showAuthMessage(getAuthErrorMessage('complete Google sign-in', error), 'error');
 }
 });
 
@@ -836,7 +1017,7 @@ const result = await signInWithPopup(auth, googleProvider);
 handleAuthSuccess(result.user);
 } catch (error) {
 console.error("Google signup error:", error);
-showAuthMessage(`Google signup failed: ${error.message}`, 'error');
+showAuthMessage(getAuthErrorMessage('complete Google sign-up', error), 'error');
 }
 });
 
@@ -852,7 +1033,7 @@ const userCredential = await signInWithEmailAndPassword(auth, email, password);
 handleAuthSuccess(userCredential.user);
 } catch (error) {
 console.error("Email login error:", error);
-showAuthMessage(`Login failed: ${error.message}`, 'error');
+showAuthMessage(getAuthErrorMessage('log you in', error), 'error');
 }
 });
 
@@ -878,7 +1059,7 @@ displayName: name
 handleAuthSuccess(userCredential.user);
 } catch (error) {
 console.error("Email signup error:", error);
-showAuthMessage(`Sign up failed: ${error.message}`, 'error');
+showAuthMessage(getAuthErrorMessage('create your account', error), 'error');
 }
 });
 });

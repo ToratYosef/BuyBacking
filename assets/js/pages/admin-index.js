@@ -2864,6 +2864,44 @@ count > 0
 massPrintBtn.innerHTML = label;
 }
 
+const SKIP_REASON_LABELS = {
+  not_found: 'order not found',
+  not_kit_order: 'not a kit order',
+  missing_labels: 'missing shipping labels',
+  label_download_failed: 'label download failed',
+  processing_error: 'processing error',
+};
+
+function normalizeSkippedEntries(raw = []) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .map((entry) => {
+      if (!entry) return null;
+      if (typeof entry === 'string') {
+        return { id: entry, reason: null };
+      }
+
+      const idValue = typeof entry.id === 'string' ? entry.id : String(entry.id || '').trim();
+      if (!idValue) {
+        return null;
+      }
+
+      return {
+        id: idValue,
+        reason: entry.reason || null,
+      };
+    })
+    .filter(Boolean);
+}
+
+function formatSkippedReason(reason) {
+  if (!reason) return '';
+  return SKIP_REASON_LABELS[reason] || reason;
+}
+
 function setSelectAllState(displayedIds = lastRenderedOrderIds) {
   if (!ordersSelectAllCheckbox) return;
   const ids = Array.isArray(displayedIds) ? displayedIds : [];
@@ -4921,115 +4959,142 @@ refreshOrdersBtn.innerHTML = originalLabel;
 });
 }
 
+
 if (massPrintBtn) {
-massPrintBtn.dataset.loading = 'false';
-updateMassPrintButtonLabel({ force: true });
-massPrintBtn.addEventListener('click', async () => {
-if (massPrintBtn.disabled || massPrintBtn.dataset.loading === 'true') {
-return;
-}
-hideOrdersFeedback();
-const selectedIds = Array.from(selectedOrderIds);
-if (!selectedIds.length) {
-return;
-}
-
-const selectedOrders = allOrders.filter((order) => selectedOrderIds.has(order.id));
-const kitOrders = selectedOrders.filter((order) => isKitOrder(order));
-const nonKitOrders = selectedOrders.filter((order) => !isKitOrder(order)).map((order) => order.id);
-
-if (!kitOrders.length) {
-showOrdersFeedback('Select at least one kit order to mass print shipping labels.', 'error');
-return;
-}
-
-massPrintBtn.dataset.loading = 'true';
-massPrintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing…';
-massPrintBtn.disabled = true;
-
-try {
-const response = await fetch(`${BACKEND_BASE_URL}/print-bundle/bulk`, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ orderIds: kitOrders.map((order) => order.id) }),
-});
-
-if (!response.ok) {
-const errorPayload = await response.json().catch(() => ({}));
-const message = errorPayload?.error || `Mass print failed with status ${response.status}`;
-throw new Error(message);
-}
-
-const result = await response.json();
-const base64 = result?.base64;
-const skipped = Array.isArray(result?.skipped) ? result.skipped : [];
-const printedIds = Array.isArray(result?.printed) ? result.printed : kitOrders.map((order) => order.id);
-
-if (!base64) {
-throw new Error('The bulk print response did not include printable data.');
-}
-
-const binaryString = atob(base64);
-const buffer = new Uint8Array(binaryString.length);
-for (let index = 0; index < binaryString.length; index += 1) {
-buffer[index] = binaryString.charCodeAt(index);
-}
-
-const blob = new Blob([buffer], { type: 'application/pdf' });
-const url = URL.createObjectURL(blob);
-
-let printWindow = null;
-try {
-printWindow = window.open(url, '_blank', 'noopener');
-} catch (error) {
-printWindow = null;
-}
-
-if (printWindow && printWindow.focus) {
-try {
-printWindow.focus();
-} catch (focusError) {
-console.warn('Unable to focus mass print window:', focusError);
-}
-} else {
-const downloadLink = document.createElement('a');
-downloadLink.href = url;
-downloadLink.download = 'mass-print-bundle.pdf';
-downloadLink.rel = 'noopener';
-document.body.appendChild(downloadLink);
-downloadLink.click();
-document.body.removeChild(downloadLink);
-showOrdersFeedback('Pop-up blocked. The combined label PDF was downloaded instead.', 'error');
-}
-
-setTimeout(() => URL.revokeObjectURL(url), 60000);
-
-const summaryParts = [];
-summaryParts.push(`Prepared ${printedIds.length} kit${printedIds.length === 1 ? '' : 's'} for printing.`);
-if (nonKitOrders.length) {
-summaryParts.push(`Ignored non-kit orders: ${nonKitOrders.join(', ')}`);
-}
-if (skipped.length) {
-      summaryParts.push(`Skipped ${skipped.length} order${skipped.length === 1 ? '' : 's'} without ready labels: ${skipped.join(', ')}`);
+  massPrintBtn.dataset.loading = 'false';
+  updateMassPrintButtonLabel({ force: true });
+  massPrintBtn.addEventListener('click', async () => {
+    if (massPrintBtn.disabled || massPrintBtn.dataset.loading === 'true') {
+      return;
     }
 
-    showOrdersFeedback(summaryParts.join(' '), skipped.length ? 'error' : 'success');
-    selectedOrderIds.clear();
-    clearSelectedOrderCheckboxes();
-    updateMassPrintButtonLabel({ force: true });
-    setSelectAllState([]);
-  } catch (error) {
-    console.error('Mass print failed:', error);
-    showOrdersFeedback(error.message || 'Failed to prepare mass print bundle.', 'error');
-} finally {
-massPrintBtn.dataset.loading = 'false';
-updateMassPrintButtonLabel({ force: true });
-}
-});
-} else {
-updateMassPrintButtonLabel({ force: true });
-}
+    hideOrdersFeedback();
+    const selectedIds = Array.from(selectedOrderIds);
+    if (!selectedIds.length) {
+      return;
+    }
 
+    const selectedOrders = allOrders.filter((order) => selectedOrderIds.has(order.id));
+    const kitOrders = selectedOrders.filter((order) => isKitOrder(order));
+    const nonKitOrders = selectedOrders
+      .filter((order) => !isKitOrder(order))
+      .map((order) => order.id);
+
+    if (!kitOrders.length) {
+      showOrdersFeedback('Select at least one kit order to mass print shipping labels.', 'error');
+      return;
+    }
+
+    massPrintBtn.dataset.loading = 'true';
+    massPrintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing…';
+    massPrintBtn.disabled = true;
+
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/print-bundle/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: kitOrders.map((order) => order.id) }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        const message = errorPayload?.error || `Mass print failed with status ${response.status}`;
+        const errorDetails = new Error(message);
+        if (errorPayload && errorPayload.skipped) {
+          errorDetails.skipped = errorPayload.skipped;
+        }
+        throw errorDetails;
+      }
+
+      const result = await response.json();
+      const base64 = result?.base64;
+      const skippedEntries = normalizeSkippedEntries(result?.skipped);
+      const printedIds = Array.isArray(result?.printed)
+        ? result.printed
+        : kitOrders.map((order) => order.id);
+
+      if (!base64) {
+        throw new Error('The bulk print response did not include printable data.');
+      }
+
+      const binaryString = atob(base64);
+      const buffer = new Uint8Array(binaryString.length);
+      for (let index = 0; index < binaryString.length; index += 1) {
+        buffer[index] = binaryString.charCodeAt(index);
+      }
+
+      const blob = new Blob([buffer], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+
+      let printWindow = null;
+      try {
+        printWindow = window.open(url, '_blank', 'noopener');
+      } catch (error) {
+        printWindow = null;
+      }
+
+      if (printWindow && printWindow.focus) {
+        try {
+          printWindow.focus();
+        } catch (focusError) {
+          console.warn('Unable to focus mass print window:', focusError);
+        }
+      } else {
+        const downloadLink = document.createElement('a');
+        downloadLink.href = url;
+        downloadLink.download = 'mass-print-bundle.pdf';
+        downloadLink.rel = 'noopener';
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        showOrdersFeedback('Pop-up blocked. The combined label PDF was downloaded instead.', 'error');
+      }
+
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+      const summaryParts = [];
+      summaryParts.push(`Prepared ${printedIds.length} kit${printedIds.length === 1 ? '' : 's'} for printing.`);
+      if (nonKitOrders.length) {
+        summaryParts.push(`Ignored non-kit orders: ${nonKitOrders.join(', ')}`);
+      }
+      if (skippedEntries.length) {
+        const skippedSummary = skippedEntries
+          .map((entry) => {
+            const reasonText = formatSkippedReason(entry.reason);
+            return reasonText ? `${entry.id} (${reasonText})` : entry.id;
+          })
+          .join(', ');
+        summaryParts.push(`Skipped ${skippedEntries.length} order${skippedEntries.length === 1 ? '' : 's'}: ${skippedSummary}`);
+      }
+
+      const feedbackType = skippedEntries.length ? 'error' : 'success';
+      showOrdersFeedback(summaryParts.join(' '), feedbackType);
+      selectedOrderIds.clear();
+      clearSelectedOrderCheckboxes();
+      updateMassPrintButtonLabel({ force: true });
+      setSelectAllState([]);
+    } catch (error) {
+      console.error('Mass print failed:', error);
+      const skippedEntries = normalizeSkippedEntries(error.skipped);
+      let message = error.message || 'Failed to prepare mass print bundle.';
+      if (skippedEntries.length) {
+        const skippedSummary = skippedEntries
+          .map((entry) => {
+            const reasonText = formatSkippedReason(entry.reason);
+            return reasonText ? `${entry.id} (${reasonText})` : entry.id;
+          })
+          .join(', ');
+        message = `${message} Skipped: ${skippedSummary}.`;
+      }
+      showOrdersFeedback(message, 'error');
+    } finally {
+      massPrintBtn.dataset.loading = 'false';
+      updateMassPrintButtonLabel({ force: true });
+    }
+  });
+} else {
+  updateMassPrintButtonLabel({ force: true });
+}
 if (ordersSelectAllCheckbox) {
 ordersSelectAllCheckbox.addEventListener('change', (event) => {
 const displayed = Array.from(lastRenderedOrderIds);
