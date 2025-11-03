@@ -707,7 +707,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                             </div>
                             <p id="savedAddressPreview" class="mt-2 text-sm text-slate-600 hidden"></p>
                         </div>
-                        <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div id="shippingFormFields" class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <!-- MODIFIED: Full Name now spans 2 columns for better focus on desktop -->
                             <div class="md:col-span-2">
                                 <label for="fullName" class="block text-sm font-medium text-slate-700">Full Name</label>
@@ -1783,11 +1783,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const stateInput = document.getElementById('state');
             const zipCodeInput = document.getElementById('zip-code');
             const SHIPPING_INFO_STORAGE_KEY = 'shc-shipping-info';
+            const shippingFormFields = document.getElementById('shippingFormFields');
             const savedAddressesWrapper = document.getElementById('savedAddressesWrapper');
             const savedAddressSelect = document.getElementById('savedAddressSelect');
             const savedAddressPreview = document.getElementById('savedAddressPreview');
             const useDifferentAddressBtn = document.getElementById('useDifferentAddressBtn');
             let savedAddresses = [];
+            let manualAddressMode = true;
+            let manualModeExplicit = false;
 
             // New modal links
             const aboutUsLink = document.getElementById('aboutUsLink');
@@ -2708,6 +2711,33 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 savedAddressPreview.classList.remove('hidden');
             }
 
+            function setManualAddressMode(enabled, options = {}) {
+                manualAddressMode = !!enabled;
+                if (options.userInitiated === true) {
+                    manualModeExplicit = manualAddressMode;
+                } else if (!savedAddresses.length) {
+                    manualModeExplicit = false;
+                }
+
+                if (shippingFormFields) {
+                    shippingFormFields.classList.toggle('hidden', !manualAddressMode);
+                }
+
+                if (useDifferentAddressBtn) {
+                    if (savedAddresses.length) {
+                        useDifferentAddressBtn.classList.remove('hidden');
+                        useDifferentAddressBtn.textContent = manualAddressMode ? 'Use saved address' : 'Use a different address';
+                        useDifferentAddressBtn.setAttribute('aria-pressed', manualAddressMode ? 'true' : 'false');
+                    } else {
+                        useDifferentAddressBtn.classList.add('hidden');
+                    }
+                }
+
+                if (manualAddressMode && options.prefill) {
+                    applyShippingInfoToForm(options.prefill, { force: true });
+                }
+            }
+
             function clearSavedAddressesUI() {
                 savedAddresses = [];
                 if (savedAddressSelect) {
@@ -2721,6 +2751,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     useDifferentAddressBtn.classList.add('hidden');
                 }
                 updateSavedAddressPreview(null);
+                manualModeExplicit = false;
+                setManualAddressMode(true);
             }
 
             function buildAddressOptionLabel(address) {
@@ -2771,6 +2803,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     if (useDifferentAddressBtn) {
                         useDifferentAddressBtn.classList.remove('hidden');
                     }
+                    setManualAddressMode(manualModeExplicit);
                     if (selectedId) {
                         const selected = savedAddresses.find(address => address.id === selectedId);
                         if (selected) {
@@ -2786,6 +2819,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         useDifferentAddressBtn.classList.add('hidden');
                     }
                     updateSavedAddressPreview(null);
+                    setManualAddressMode(true);
                 }
             }
 
@@ -2949,17 +2983,43 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     const selectedId = savedAddressSelect.value;
                     if (!selectedId) {
                         updateSavedAddressPreview(null);
+                        manualModeExplicit = true;
+                        setManualAddressMode(true, { userInitiated: true });
                         return;
                     }
                     selectSavedAddress(selectedId, { force: true });
+                    if (!manualModeExplicit) {
+                        setManualAddressMode(false);
+                    }
                 });
             }
 
             if (useDifferentAddressBtn) {
                 useDifferentAddressBtn.addEventListener('click', () => {
-                    selectSavedAddress('', { force: false });
-                    if (fullNameInput) {
-                        fullNameInput.focus();
+                    if (!savedAddresses.length) {
+                        setManualAddressMode(true, { userInitiated: true });
+                        return;
+                    }
+
+                    if (manualAddressMode) {
+                        const fallback = savedAddressSelect?.value || (savedAddresses[0] && savedAddresses[0].id);
+                        if (fallback) {
+                            if (savedAddressSelect) {
+                                savedAddressSelect.value = fallback;
+                            }
+                            selectSavedAddress(fallback, { force: true });
+                        }
+                        setManualAddressMode(false, { userInitiated: true });
+                    } else {
+                        const selected = savedAddresses.find(address => address.id === savedAddressSelect?.value) || savedAddresses[0] || null;
+                        if (savedAddressSelect) {
+                            savedAddressSelect.value = '';
+                        }
+                        updateSavedAddressPreview(null);
+                        setManualAddressMode(true, { userInitiated: true, prefill: selected });
+                        if (fullNameInput) {
+                            fullNameInput.focus();
+                        }
                     }
                 });
             }

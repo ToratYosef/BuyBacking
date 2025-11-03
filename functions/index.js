@@ -4,11 +4,14 @@ const cors = require("cors");
 const admin = require("firebase-admin"); // <-- Required here
 const axios = require("axios");
 const nodemailer = require("nodemailer");
-const { URLSearchParams } = require('url');
 const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
 const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 const db = admin.firestore();
 const ordersCollection = db.collection("orders");
 const usersCollection = db.collection("users");
@@ -24,13 +27,37 @@ const allowedOrigins = [
   "https://www.secondhandcell.com",
 ];
 
-app.use(
-  cors({
-    origin: allowedOrigins,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Not allowed by CORS"));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+};
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Vary", "Origin");
+  res.header("Access-Control-Allow-Methods", corsOptions.methods.join(","));
+  res.header(
+    "Access-Control-Allow-Headers",
+    corsOptions.allowedHeaders.join(",")
+  );
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).send("");
+  }
+
+  return cors(corsOptions)(req, res, next);
+});
+
+app.options("*", cors(corsOptions));
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
 
@@ -68,37 +95,6 @@ function appendCountdownNotice(text = "") {
   return `${trimmed}\n\n${COUNTDOWN_NOTICE_TEXT}`;
 }
 
-const PHONECHECK_DEFAULT_BASE_URL =
-  "https://clientapiv2.phonecheck.com/cloud/cloudDB/";
-const PHONECHECK_DEFAULT_API_URL = `${PHONECHECK_DEFAULT_BASE_URL}CheckEsn/`;
-const PHONECHECK_FALLBACK_API_KEY = "9cdbc7a1-1b9c-44ae-a98085104c71ea3e";
-const PHONECHECK_FALLBACK_USERNAME = "Kai2";
-const PHONECHECK_ENDPOINT_PATHS = {
-  deviceInfo: "GetDeviceInfo/",
-  checkEsn: "CheckEsn/",
-  carrierLock: "CheckCarrierLock/",
-};
-const PHONECHECK_CARRIER_ALIASES = {
-  att: "AT&T",
-  "at&t": "AT&T",
-  tmobile: "T-Mobile",
-  "t-mobile": "T-Mobile",
-  tmob: "T-Mobile",
-  sprint: "Sprint",
-  verizon: "Verizon",
-  unlocked: "Unlocked",
-  blacklist: "Blacklist",
-  "black list": "Blacklist",
-};
-const PHONECHECK_ALLOWED_CARRIERS = new Set([
-  "AT&T",
-  "T-Mobile",
-  "Sprint",
-  "Verizon",
-  "Unlocked",
-  "Blacklist",
-]);
-
 const EXPIRING_REMINDER_ALLOWED_STATUSES = new Set([
   "order_pending",
   "shipping_kit_requested",
@@ -121,85 +117,6 @@ const AUTO_CANCEL_MONITORED_STATUSES = [
   "label_generated",
   "emailed",
 ];
-
-function ensureTrailingSlash(url = "") {
-  if (!url) {
-    return "/";
-  }
-  return url.endsWith("/") ? url : `${url}/`;
-}
-
-function resolvePhoneCheckBaseUrl(url) {
-  if (!url) {
-    return PHONECHECK_DEFAULT_BASE_URL;
-  }
-  const trimmed = url.toString().trim();
-  if (!trimmed) {
-    return PHONECHECK_DEFAULT_BASE_URL;
-  }
-  const normalized = ensureTrailingSlash(trimmed);
-  const base = normalized.replace(
-    /(CheckEsn|GetDeviceInfo|CheckCarrierLock)\/?$/i,
-    ""
-  );
-  const resolved = base || PHONECHECK_DEFAULT_BASE_URL;
-  return ensureTrailingSlash(resolved);
-}
-
-function getPhoneCheckConfig() {
-  const config = {
-    apiUrl: process.env.PHONECHECK_API_URL || PHONECHECK_DEFAULT_API_URL,
-    apiKey: process.env.PHONECHECK_API_KEY || null,
-    username: process.env.PHONECHECK_USERNAME || null,
-    checkAll: process.env.PHONECHECK_CHECK_ALL,
-  };
-
-  try {
-    const runtimeConfig = functions.config();
-    if (runtimeConfig && runtimeConfig.phonecheck) {
-      const phonecheck = runtimeConfig.phonecheck;
-      config.apiUrl =
-        phonecheck.api_url ||
-        phonecheck.apiurl ||
-        phonecheck.url ||
-        config.apiUrl;
-      config.apiKey =
-        phonecheck.api_key ||
-        phonecheck.apikey ||
-        phonecheck.key ||
-        config.apiKey;
-      config.username =
-        phonecheck.username || phonecheck.user || config.username;
-      if (phonecheck.check_all !== undefined) {
-        config.checkAll = phonecheck.check_all;
-      }
-    }
-  } catch (error) {
-    console.warn(
-      "Unable to read functions.config().phonecheck values:",
-      error.message
-    );
-  }
-
-  if (!config.apiKey) {
-    config.apiKey = PHONECHECK_FALLBACK_API_KEY;
-  }
-  if (!config.username) {
-    config.username = PHONECHECK_FALLBACK_USERNAME;
-  }
-  if (!config.apiUrl) {
-    config.apiUrl = PHONECHECK_DEFAULT_API_URL;
-  }
-
-  config.baseUrl = resolvePhoneCheckBaseUrl(config.apiUrl);
-  config.endpoints = {
-    deviceInfo: `${config.baseUrl}${PHONECHECK_ENDPOINT_PATHS.deviceInfo}`,
-    checkEsn: `${config.baseUrl}${PHONECHECK_ENDPOINT_PATHS.checkEsn}`,
-    carrierLock: `${config.baseUrl}${PHONECHECK_ENDPOINT_PATHS.carrierLock}`,
-  };
-
-  return config;
-}
 
 const CONDITION_EMAIL_FROM_ADDRESS =
   process.env.CONDITION_EMAIL_FROM ||
@@ -335,253 +252,6 @@ Thank you,
 SecondHandCell Team`);
 
   return { subject: template.subject, html, text };
-}
-
-function collectStrings(value, bucket) {
-  if (value === null || value === undefined) {
-    return;
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (trimmed) {
-      bucket.push(trimmed);
-    }
-    return;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    bucket.push(String(value));
-    return;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((entry) => collectStrings(entry, bucket));
-    return;
-  }
-  if (typeof value === "object") {
-    Object.values(value).forEach((entry) => collectStrings(entry, bucket));
-  }
-}
-
-function normalizeKey(key) {
-  return key.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function extractDisplayValue(value) {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    return trimmed || null;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) {
-      const extracted = extractDisplayValue(entry);
-      if (extracted) {
-        return extracted;
-      }
-    }
-    return null;
-  }
-  if (typeof value === "object") {
-    if (Object.prototype.hasOwnProperty.call(value, "response")) {
-      return extractDisplayValue(value.response);
-    }
-    const bucket = [];
-    collectStrings(value, bucket);
-    return bucket.length ? bucket[0] : null;
-  }
-  return null;
-}
-
-function findFieldValue(data, keys) {
-  if (!data || typeof data !== "object") {
-    return null;
-  }
-
-  const targets = keys.map(normalizeKey);
-  const targetSet = new Set(targets);
-  const stack = [data];
-
-  while (stack.length) {
-    const current = stack.pop();
-    if (!current || typeof current !== "object") {
-      continue;
-    }
-    if (Array.isArray(current)) {
-      for (const entry of current) {
-        if (entry && typeof entry === "object") {
-          stack.push(entry);
-        }
-      }
-      continue;
-    }
-
-    for (const [key, value] of Object.entries(current)) {
-      const normalizedKey = normalizeKey(key);
-      if (targetSet.has(normalizedKey)) {
-        const extracted = extractDisplayValue(value);
-        if (extracted) {
-          return extracted;
-        }
-      }
-      if (value && typeof value === "object") {
-        stack.push(value);
-      }
-    }
-  }
-
-  return null;
-}
-
-function interpretBlacklistStatus(value) {
-  const text = value ? String(value).trim() : "";
-  if (!text) {
-    return { status: "", isBlacklisted: null };
-  }
-  const normalized = text.toLowerCase();
-  if (/(yes|blacklisted|barred|blocked|lost|stolen|fraud)/.test(normalized)) {
-    return { status: text, isBlacklisted: true };
-  }
-  if (/(no|clear|clean|good|not blacklisted)/.test(normalized)) {
-    return { status: text, isBlacklisted: false };
-  }
-  return { status: text, isBlacklisted: null };
-}
-
-function interpretLockStatus(value) {
-  const text = value ? String(value).trim() : "";
-  if (!text) {
-    return { status: "", isLocked: null };
-  }
-  const normalized = text.toLowerCase();
-  if (/(locked|yes|active|engaged)/.test(normalized) && !/(unlocked|no lock|not locked)/.test(normalized)) {
-    return { status: text, isLocked: true };
-  }
-  if (/(unlocked|no|not locked|clear|clean)/.test(normalized)) {
-    return { status: text, isLocked: false };
-  }
-  return { status: text, isLocked: null };
-}
-
-function analyzePhoneCheckResponse(data) {
-  const strings = [];
-  collectStrings(data, strings);
-
-  const normalized = [];
-  strings.forEach((value) => {
-    const trimmed = value.trim();
-    if (trimmed) {
-      normalized.push(trimmed);
-    }
-  });
-
-  const cleanSignals = normalized.filter((value) => /\b(clean|clear)\b/i.test(value));
-
-  const issuePatterns = [
-    { regex: /balance|due|finance|owed|unpaid/i, label: "Outstanding balance reported" },
-    { regex: /lock|locked|simlock|carrier lock|account lock/i, label: "Carrier or account lock detected" },
-    { regex: /lost|stolen|fraud|blacklist|barred|blocked|hotlist/i, label: "Reported lost or stolen" },
-    { regex: /icloud|find my|fmi|activation lock/i, label: "Find My / activation lock active" },
-    { regex: /password|passcode|pin lock|screen lock/i, label: "Password or passcode lock detected" },
-  ];
-
-  const issues = new Set();
-  normalized.forEach((value) => {
-    issuePatterns.forEach((pattern) => {
-      if (pattern.regex.test(value)) {
-        issues.add(pattern.label);
-      }
-    });
-  });
-
-  const deviceModel = findFieldValue(data, ["model", "modelname", "devicemodel"]);
-  const deviceMemory = findFieldValue(data, ["memory", "storage", "capacity", "size"]);
-  const deviceColor = findFieldValue(data, ["color", "colour", "devicecolor"]);
-  const carrierName = findFieldValue(data, ["carrier", "network", "carriername"]);
-  const simlockStatus = interpretLockStatus(
-    findFieldValue(data, ["simlock", "sim_lock", "carrierlock", "lockstatus", "simstatus"])
-  );
-  const blacklistStatus = interpretBlacklistStatus(
-    findFieldValue(data, ["blackliststatus", "blacklist", "esnstatus", "blockedstatus"])
-  );
-
-  if (blacklistStatus.isBlacklisted === true) {
-    issues.add("Reported lost or stolen (blacklisted)");
-  }
-  if (simlockStatus.isLocked === true) {
-    issues.add("Carrier or SIM lock detected");
-  }
-
-  const detailsNotices = [];
-  if (deviceModel) {
-    detailsNotices.push(`Model: ${deviceModel}`);
-  }
-  if (deviceMemory) {
-    detailsNotices.push(`Memory: ${deviceMemory}`);
-  }
-  if (deviceColor) {
-    detailsNotices.push(`Color: ${deviceColor}`);
-  }
-  if (blacklistStatus.status) {
-    detailsNotices.push(`Blacklist: ${blacklistStatus.status}`);
-  }
-  if (carrierName) {
-    detailsNotices.push(`Carrier: ${carrierName}`);
-  }
-  if (simlockStatus.status) {
-    detailsNotices.push(`SIM Lock: ${simlockStatus.status}`);
-  }
-
-  let statusText =
-    (blacklistStatus.isBlacklisted === true && "Device is blacklisted.") ||
-    (simlockStatus.isLocked === true && "Carrier lock detected.") ||
-    cleanSignals[0] ||
-    normalized.find((value) => /status|result/i.test(value.toLowerCase())) ||
-    normalized[0] ||
-    "No status returned.";
-
-  const notices = [...detailsNotices, ...normalized].filter(Boolean).slice(0, 6);
-
-  let isClean = cleanSignals.length > 0 && issues.size === 0;
-  if (blacklistStatus.isBlacklisted === true || simlockStatus.isLocked === true) {
-    isClean = false;
-  } else if (
-    blacklistStatus.isBlacklisted === false &&
-    (simlockStatus.isLocked === false || simlockStatus.isLocked === null) &&
-    issues.size === 0
-  ) {
-    isClean = true;
-    statusText = statusText || "No issues detected.";
-  }
-
-  if (!isClean && issues.size === 0) {
-    const firstNonClean = normalized.find((value) => !/clean|clear/i.test(value));
-    if (firstNonClean) {
-      issues.add(firstNonClean);
-    }
-  }
-
-  return {
-    isClean,
-    statusText,
-    reasons: Array.from(issues),
-    notices,
-    messages: normalized,
-    deviceInfo: {
-      model: deviceModel || "",
-      memory: deviceMemory || "",
-      color: deviceColor || "",
-    },
-    blacklist: blacklistStatus,
-    carrierLock: {
-      carrier: carrierName || "",
-      simlock: simlockStatus.status,
-      isLocked: simlockStatus.isLocked,
-    },
-  };
 }
 
 const SHIPENGINE_API_BASE_URL = "https://api.shipengine.com/v1";
@@ -4673,279 +4343,6 @@ app.post("/test-emails", async (req, res) => {
     res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
   }
 });
-
-function normalizeCheckAllFlag(value, fallbackEnabled) {
-  if (value === undefined || value === null || value === "") {
-    return fallbackEnabled ? "1" : "0";
-  }
-  if (typeof value === "boolean") {
-    return value ? "1" : "0";
-  }
-  if (typeof value === "number") {
-    return Number(value) === 0 ? "0" : "1";
-  }
-  const normalized = value.toString().trim().toLowerCase();
-  if (!normalized) {
-    return fallbackEnabled ? "1" : "0";
-  }
-  if (["0", "false", "no", "off"].includes(normalized)) {
-    return "0";
-  }
-  if (["1", "true", "yes", "on"].includes(normalized)) {
-    return "1";
-  }
-  return fallbackEnabled ? "1" : "0";
-}
-
-function normalizeDeviceTypeForPhoneCheck(value) {
-  if (value === undefined || value === null) {
-    return "Android";
-  }
-  const normalized = value.toString().trim().toLowerCase();
-  if (!normalized) {
-    return "Android";
-  }
-  if (["apple", "ios", "iphone", "ipad", "watch"].includes(normalized)) {
-    return "Apple";
-  }
-  return "Android";
-}
-
-function normalizeCarrierForPhoneCheck(value) {
-  if (value === undefined || value === null) {
-    return "Unlocked";
-  }
-  const trimmed = value.toString().trim();
-  if (!trimmed) {
-    return "Unlocked";
-  }
-  const aliasKey = trimmed.toLowerCase();
-  const mapped = PHONECHECK_CARRIER_ALIASES[aliasKey];
-  if (mapped && PHONECHECK_ALLOWED_CARRIERS.has(mapped)) {
-    return mapped;
-  }
-  const normalized = trimmed.toUpperCase();
-  for (const option of PHONECHECK_ALLOWED_CARRIERS) {
-    if (option.toUpperCase() === normalized) {
-      return option;
-    }
-  }
-  return "Unlocked";
-}
-
-function buildPhoneCheckPayload(fields) {
-  const params = new URLSearchParams();
-  fields.forEach((field) => {
-    if (!field || field.value === undefined || field.value === null) {
-      return;
-    }
-    const stringValue = String(field.value);
-    const variants = new Set();
-    const primary = field.key || "";
-    if (primary) {
-      variants.add(primary);
-      variants.add(primary.toLowerCase());
-      variants.add(primary.toUpperCase());
-    }
-    (field.aliases || []).forEach((alias) => {
-      if (!alias) {
-        return;
-      }
-      variants.add(alias);
-      variants.add(alias.toLowerCase());
-      variants.add(alias.toUpperCase());
-    });
-    variants.forEach((variant) => {
-      if (variant) {
-        params.append(variant, stringValue);
-      }
-    });
-  });
-  return params;
-}
-
-async function callPhoneCheckEndpoint(url, fields, label) {
-  const payload = buildPhoneCheckPayload(fields);
-  try {
-    const response = await axios.post(url, payload.toString(), {
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      timeout: 20000,
-    });
-    return response.data || {};
-  } catch (error) {
-    const baseMessage =
-      error.response?.data?.error ||
-      error.response?.data?.message ||
-      error.message ||
-      "Unknown error";
-    error.message = `${label} request failed: ${baseMessage}`;
-    throw error;
-  }
-}
-
-async function handlePhoneCheckRequest(req, res) {
-  try {
-    const config = getPhoneCheckConfig();
-    if (!config.apiKey || !config.username) {
-      return res
-        .status(500)
-        .json({ error: "PhoneCheck credentials are not configured." });
-    }
-
-    const {
-      imei,
-      deviceType,
-      carrier,
-      checkAll,
-      orderId,
-    } = req.body || {};
-
-    const sanitizedImei =
-      typeof imei === "string"
-        ? imei.trim()
-        : String(imei || "").trim();
-
-    if (!sanitizedImei) {
-      return res.status(400).json({ error: "IMEI is required." });
-    }
-
-    const sanitizedDeviceType = normalizeDeviceTypeForPhoneCheck(deviceType);
-    const sanitizedCarrier = normalizeCarrierForPhoneCheck(carrier);
-
-    const defaultCheckAll = normalizeCheckAllFlag(
-      config.checkAll,
-      true
-    );
-    const resolvedCheckAll = normalizeCheckAllFlag(
-      checkAll,
-      defaultCheckAll === "1"
-    );
-
-    const endpoints = config.endpoints || {
-      deviceInfo: `${
-        config.baseUrl || resolvePhoneCheckBaseUrl(config.apiUrl)
-      }${PHONECHECK_ENDPOINT_PATHS.deviceInfo}`,
-      checkEsn: config.apiUrl || PHONECHECK_DEFAULT_API_URL,
-      carrierLock: `${
-        config.baseUrl || resolvePhoneCheckBaseUrl(config.apiUrl)
-      }${PHONECHECK_ENDPOINT_PATHS.carrierLock}`,
-    };
-
-    const [deviceInfoData, esnData, carrierLockData] = await Promise.all([
-      callPhoneCheckEndpoint(
-        endpoints.deviceInfo,
-        [
-          { key: "Apikey", value: config.apiKey, aliases: ["apiKey"] },
-          { key: "Username", value: config.username, aliases: ["user", "Userid"] },
-          { key: "IMEI", value: sanitizedImei },
-        ],
-        "Device info"
-      ),
-      callPhoneCheckEndpoint(
-        endpoints.checkEsn,
-        [
-          { key: "Apikey", value: config.apiKey, aliases: ["apiKey"] },
-          { key: "Username", value: config.username, aliases: ["user"] },
-          { key: "IMEI", value: sanitizedImei },
-          { key: "devicetype", value: sanitizedDeviceType },
-          { key: "carrier", value: sanitizedCarrier },
-          { key: "checkAll", value: resolvedCheckAll },
-        ],
-        "ESN"
-      ),
-      callPhoneCheckEndpoint(
-        endpoints.carrierLock,
-        [
-          { key: "Apikey", value: config.apiKey, aliases: ["apiKey"] },
-          { key: "Userid", value: config.username, aliases: ["Username", "user"] },
-          { key: "devicetype", value: sanitizedDeviceType },
-          { key: "Deviceid", value: sanitizedImei, aliases: ["deviceId", "IMEI"] },
-        ],
-        "Carrier lock"
-      ),
-    ]);
-
-    const combinedData = {
-      deviceInfo: deviceInfoData,
-      esn: esnData,
-      carrierLock: carrierLockData,
-    };
-    const summary = analyzePhoneCheckResponse(combinedData);
-
-    const trimmedOrderId =
-      typeof orderId === "string" ? orderId.trim() : String(orderId || "").trim();
-
-    let orderUpdated = false;
-    if (trimmedOrderId) {
-      try {
-        const orderRef = ordersCollection.doc(trimmedOrderId);
-        const orderSnap = await orderRef.get();
-        if (orderSnap.exists) {
-          await updateOrderBoth(
-            trimmedOrderId,
-            {
-              phoneCheck: {
-                summary,
-                raw: combinedData,
-                lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
-                imei: sanitizedImei,
-              },
-              imei: sanitizedImei,
-            },
-            {
-              autoLogStatus: false,
-              logEntries: [
-                {
-                  type: "phonecheck",
-                  message: "PhoneCheck completed",
-                  metadata: {
-                    imei: sanitizedImei,
-                    carrier: sanitizedCarrier,
-                    deviceType: sanitizedDeviceType,
-                  },
-                },
-              ],
-            }
-          );
-          orderUpdated = true;
-        } else {
-          console.warn(
-            `PhoneCheck update skipped because order ${trimmedOrderId} was not found.`
-          );
-        }
-      } catch (updateError) {
-        console.error("Failed to persist PhoneCheck results:", updateError);
-      }
-    }
-
-    res.json({ success: true, summary, raw: combinedData, orderUpdated });
-  } catch (error) {
-    console.error(
-      "PhoneCheck API error:",
-      error.response?.data || error.message || error
-    );
-    const status = error.response?.status;
-    const message =
-      error.response?.data?.error ||
-      error.response?.data?.message ||
-      error.message ||
-      "Failed to complete PhoneCheck request.";
-    const payload = { error: message };
-    if (error.response?.data && typeof error.response.data === "object") {
-      payload.details = error.response.data;
-    }
-    res.status(status && status >= 400 ? status : 500).json(payload);
-  }
-}
-
-// Legacy admin clients expect the Express app to be mounted at /api, so we
-// register the handler without the /api prefix and keep backwards-compatible
-// aliases for older endpoints.
-app.post("/phone-check", handlePhoneCheckRequest);
-app.post("/api/phone-check", handlePhoneCheckRequest);
-app.post("/check-esn", handlePhoneCheckRequest);
 
 app.post("/orders/:id/send-condition-email", async (req, res) => {
   try {
