@@ -45,7 +45,12 @@
             addDoc,
             serverTimestamp,
             doc,
-            getDoc
+            getDoc,
+            setDoc,
+            getDocs,
+            query,
+            orderBy,
+            limit
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -75,8 +80,14 @@
         window.firebaseServerTimestamp = serverTimestamp;
         window.firebase = {
             firestore: {
-                doc: doc,
-                getDoc: getDoc
+                doc,
+                getDoc,
+                collection,
+                getDocs,
+                setDoc,
+                query,
+                orderBy,
+                limit
             }
         };
     </script>
@@ -686,6 +697,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </div>
 
                         <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">8. Shipping Information</h2>
+                        <div id="savedAddressesWrapper" class="mb-6 hidden">
+                            <label for="savedAddressSelect" class="block text-sm font-medium text-slate-700 mb-2">Use a saved address</label>
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                                <select id="savedAddressSelect" class="flex-1 border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="" selected>Choose a saved address</option>
+                                </select>
+                                <button type="button" id="useDifferentAddressBtn" class="btn-secondary-green px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap hidden w-full sm:w-auto">Use a different address</button>
+                            </div>
+                            <p id="savedAddressPreview" class="mt-2 text-sm text-slate-600 hidden"></p>
+                        </div>
                         <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <!-- MODIFIED: Full Name now spans 2 columns for better focus on desktop -->
                             <div class="md:col-span-2">
@@ -876,13 +897,203 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
 
 
-    <div id="loginModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2><div class="flex border-b border-slate-200 mb-6"><button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Login</button><button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Sign Up</button></div><form id="loginForm" class="space-y-4"><p class="text-slate-600 text-center">Log in to continue with your order.</p><button type="button" id="googleLoginBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Login with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="loginEmail" class="sr-only">Email Address</label><input type="email" id="loginEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email"></div><div><label for="loginPassword" class="sr-only">Password</label><input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="current-password"></div><button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button><p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-blue-600 font-semibold hover:underline">Reset it here</a></p></form><form id="signupForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Create an account to complete your order.</p><button type="button" id="googleSignupBtn" class="btn-google-style"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">Sign Up with Google</button><div class="text-center text-slate-500 relative my-4"><span class="bg-white px-2 z-10 relative">or</span><hr class="absolute inset-0 top-1/2 border-t border-slate-200"></div><div><label for="signupName" class="sr-only">Full Name</label><input type="text" id="signupName" placeholder="Full Name" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="name"></div><div><label for="signupEmail" class="sr-only">Email Address</label><input type="email" id="signupEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email"></div><div><label for="signupPassword" class="sr-only">Password</label><input type="password" id="signupPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="new-password"></div><button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button><p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-blue-600 font-semibold hover:underline">Log in here</a></p></form><form id="forgotPasswordForm" class="space-y-4 hidden"><p class="text-slate-600 text-center">Enter your email to receive a password reset link.</p><div><label for="forgotEmail" class="sr-only">Email Address</label><input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email"></div><button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button><p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-blue-600 font-semibold hover:underline">Return to Login</a></p></form><div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div><button type="button" id="guestCheckoutBtn" class="btn-secondary-green w-full mt-4">Continue as Guest</button></div></div>
+    <div id="loginModal" class="modal fixed inset-0 z-50 flex justify-center items-start sm:items-center p-4 sm:p-6 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content my-8 sm:my-0 max-h-[calc(100vh-4rem)] overflow-y-auto">
+            <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2>
+            <div class="flex border-b border-slate-200 mb-6">
+                <button id="loginTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Login</button>
+                <button id="signupTabBtn" class="flex-1 py-3 text-center text-lg font-medium border-b-2 border-transparent text-slate-500 hover:text-blue-600 hover:border-blue-600 transition-colors duration-200">Sign Up</button>
+            </div>
+            <form id="loginForm" class="space-y-4">
+                <p class="text-slate-600 text-center">Log in to continue with your order.</p>
+                <button type="button" id="googleLoginBtn" class="btn-google-style">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">
+                    Login with Google
+                </button>
+                <div class="text-center text-slate-500 relative my-4">
+                    <span class="bg-white px-2 z-10 relative">or</span>
+                    <hr class="absolute inset-0 top-1/2 border-t border-slate-200">
+                </div>
+                <div>
+                    <label for="loginEmail" class="sr-only">Email Address</label>
+                    <input type="email" id="loginEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email">
+                </div>
+                <div>
+                    <label for="loginPassword" class="sr-only">Password</label>
+                    <input type="password" id="loginPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="current-password">
+                </div>
+                <button type="submit" id="emailLoginBtn" class="btn-dark-slate">Login</button>
+                <p class="text-center text-sm text-slate-600">Forgot your password? <a href="#" id="forgotPasswordLink" class="text-blue-600 font-semibold hover:underline">Reset it here</a></p>
+            </form>
+            <form id="signupForm" class="space-y-4 hidden">
+                <p class="text-slate-600 text-center">Create an account to complete your order.</p>
+                <button type="button" id="googleSignupBtn" class="btn-google-style">
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" class="w-5 h-5 mr-3">
+                    Sign Up with Google
+                </button>
+                <div class="text-center text-slate-500 relative my-4">
+                    <span class="bg-white px-2 z-10 relative">or</span>
+                    <hr class="absolute inset-0 top-1/2 border-t border-slate-200">
+                </div>
+                <div>
+                    <label for="signupName" class="sr-only">Full Name</label>
+                    <input type="text" id="signupName" placeholder="Full Name" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="name">
+                </div>
+                <div>
+                    <label for="signupEmail" class="sr-only">Email Address</label>
+                    <input type="email" id="signupEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email">
+                </div>
+                <div>
+                    <label for="signupPassword" class="sr-only">Password</label>
+                    <input type="password" id="signupPassword" placeholder="Password" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="new-password">
+                </div>
+                <button type="submit" id="emailSignupBtn" class="btn-dark-slate">Sign Up</button>
+                <p class="text-center text-sm text-slate-600">Already have an account? <a href="#" id="switchToLogin" class="text-blue-600 font-semibold hover:underline">Log in here</a></p>
+            </form>
+            <form id="forgotPasswordForm" class="space-y-4 hidden">
+                <p class="text-slate-600 text-center">Enter your email to receive a password reset link.</p>
+                <div>
+                    <label for="forgotEmail" class="sr-only">Email Address</label>
+                    <input type="email" id="forgotEmail" placeholder="Email Address" class="w-full border border-slate-300 p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="email">
+                </div>
+                <button type="submit" id="sendResetEmailBtn" class="btn-dark-slate">Send Reset Email</button>
+                <p class="text-center text-sm text-slate-600">Remember your password? <a href="#" id="returnToLogin" class="text-blue-600 font-semibold hover:underline">Return to Login</a></p>
+            </form>
+            <div id="authMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div>
+            <button type="button" id="guestCheckoutBtn" class="btn-secondary-green w-full mt-4">Continue as Guest</button>
+        </div>
+    </div>
 
-    <div id="aboutUsModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative modal-content"><button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2><p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p></div></div>
+    <div id="aboutUsModal" class="modal fixed inset-0 z-50 flex justify-center items-start sm:items-center p-4 sm:p-6 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl p-6 relative modal-content my-8 sm:my-0 max-h-[calc(100vh-4rem)] overflow-y-auto">
+            <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="text-2xl font-bold text-slate-800 mb-4">About Us</h2>
+            <p class="text-slate-600">Welcome to SecondHandCell, where we believe in giving old tech a new life. Our mission is to make selling your used devices as simple, safe, and rewarding as possible. We offer competitive prices, a hassle-free process, and a commitment to sustainability.</p>
+        </div>
+    </div>
 
-    <div id="privacyPolicyModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content modal-content-scroll"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4 flex-shrink-0">Privacy Policy</h2><div class="modal-content-body"><div class="prose max-w-none text-left"><p><strong>Last Updated: August 27, 2025</strong></p><p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p><h3>Information We Collect</h3><p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition.</p><h3>How We Use Your Information</h3><p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p><h3>Data Security and Wiping</h3><p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased.</p><h3>Disclosure of Your Information</h3><p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p><h3>Your Consent </h3><p>By using our site, you consent to our website's privacy policy.</p></div></div></div></div>
 
-    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);"><div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content modal-content-scroll"><button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button><h2 class="text-2xl font-bold text-slate-800 mb-4 flex-shrink-0">Terms & Conditions</h2><div class="modal-content-body"><div class="prose max-w-none text-left"><p><strong>Last Updated: August 27, 2025</strong></p><p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p><h3>1. User Obligations</h3><p>By using the Service, you represent and warrant that:</p><ul><li>You are the legal owner of the device you are selling.</li><li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li><li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li><li>All information you provide about the device is accurate and truthful.</li></ul><h3>2. The Offer Process</h3><ul><li>The initial quote provided on our website is an estimate based on the information you provide.</li><li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li><li>**The device must contain all original manufacturer parts to qualify for "Fully Functional." If non-original parts are detected during inspection, the device will be automatically reclassified as "Not Functional" or "Damaged," and a revised offer will be issued.**</li><li>**You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.**</li><li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li></ul><h3>3. Shipping and Risk of Loss</h3><p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p><h3>4. Limitation of Liability</h3><p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p><hr class="my-6 border-t border-slate-300"><h3>5. Policy on Lost/Stolen Devices & Legal Compliance (New York State & NYC)</h3><p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This section outlines our strict policy and the legal framework governing such transactions in New York State and New York City.</p><h4>Laws That May Apply (NY State + NYC)</h4><ul><li>**New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property:** If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.</li><li>**New York Penal Law § 165.40 – Criminal possession of stolen property in the 5th degree:** Knowingly possessing stolen property (or should reasonably know it’s stolen) is a misdemeanor.</li><li>**New York City Administrative Code § 20-272 et seq. (Secondhand Dealer Law):** Dealers in secondhand goods must:<ul><li>Keep records of all items received (including seller ID).</li><li>Provide daily reports to the NYPD of transactions (often through electronic reporting).</li><li>If police suspect an item is lost/stolen, you must hold and exhibit it to them.</li></ul></li><li>**New York City Administrative Code § 20-273:** It is unlawful to conceal, withhold, or refuse inspection of such goods.</li><li>**General Business Law (NY) GBL § 89-g and following – Regulation of pawnbrokers and secondhand dealers:** Requires keeping detailed records and prohibits resale of items flagged as stolen/lost until cleared.</li><li>**Federal Considerations (18 U.S.C. § 2315 – Possession or sale of stolen property):** If stolen goods (like phones) cross state lines or involve interstate commerce, federal law applies.</li></ul><h4>Process to Handle Lost/Stolen Phones in Your Buyback</h4><p>Here’s our step-by-step written policy to handle devices suspected of being lost or stolen:</p><h5>Intake & Verification</h5><ul><li>Every device received must be checked against:<ul><li>IMEI/serial number databases (e.g., GSMA, carrier blacklists).</li><li>Customer’s government-issued ID at time of transaction.</li></ul></li><li>Record the transaction in compliance with NYC Secondhand Dealer laws.</li></ul><h5>If a Device is Flagged as Lost or Stolen</h5><ul><li>Immediately set the device aside and do not refurbish, resell, or dispose of it.</li><li>Clearly label it as “On Hold – Suspected Lost/Stolen.”</li></ul><h5>Customer Communication</h5><ul><li>If the customer requests the item back:<ul><li>Explain: “Under New York law, we cannot return or release devices suspected to be lost or stolen. These items must be reported and may only be released by law enforcement.”</li></ul></li></ul><h5>Law Enforcement Notification</h5><ul><li>Report the device to the NYPD Property Clerk’s Office (or local precinct if outside NYC).</li><li>Provide transaction records, customer ID, and the device itself if requested.</li></ul><h5>Outcome</h5><ul><li>If police confirm the device is stolen:<ul><li>It will be seized and returned to the rightful owner or carrier.</li></ul></li><li>If cleared:<ul><li>You may proceed with processing the device as normal.</li></ul></li></ul><h5>Recordkeeping</h5><ul><li>Keep all paperwork of the transaction, report, and police correspondence for at least 5 years (per NYC dealer rules).</li></ul></div></div></div></div>
+    <div id="privacyPolicyModal" class="modal fixed inset-0 z-50 flex justify-center items-start sm:items-center p-4 sm:p-6 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content modal-content-scroll my-8 sm:my-0 max-h-[calc(100vh-4rem)] overflow-y-auto">
+            <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="text-2xl font-bold text-slate-800 mb-4 flex-shrink-0">Privacy Policy</h2>
+            <div class="modal-content-body">
+                <div class="prose max-w-none text-left">
+                    <p><strong>Last Updated: August 27, 2025</strong></p>
+                    <p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p>
+                    <h3>Information We Collect</h3>
+                    <p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Venmo, Zelle, or PayPal details). We also collect information about the device you are selling, including its model, serial number, and condition.</p>
+                    <h3>How We Use Your Information</h3>
+                    <p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p>
+                    <h3>Data Security and Wiping</h3>
+                    <p>We implement a variety of security measures to maintain the safety of your personal information. All devices sold to us undergo a certified, multi-pass data-wiping process to ensure your personal information is professionally and permanently erased.</p>
+                    <h3>Disclosure of Your Information</h3>
+                    <p>We do not sell, trade, or otherwise transfer to outside parties your Personally Identifiable Information except to trusted third parties who assist us in operating our website, conducting our business, or servicing you (such as shipping carriers), so long as those parties agree to keep this information confidential.</p>
+                    <h3>Your Consent </h3>
+                    <p>By using our site, you consent to our website's privacy policy.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="termsAndConditionsModal" class="modal fixed inset-0 z-50 flex justify-center items-start sm:items-center p-4 sm:p-6 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-3xl p-8 relative modal-content modal-content-scroll my-8 sm:my-0 max-h-[calc(100vh-4rem)] overflow-y-auto">
+            <button class="close-modal-btn absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
+            <h2 class="text-2xl font-bold text-slate-800 mb-4 flex-shrink-0">Terms &amp; Conditions</h2>
+            <div class="modal-content-body">
+                <div class="prose max-w-none text-left">
+                    <p><strong>Last Updated: August 27, 2025</strong></p>
+                    <p>Please read these Terms and Conditions ("Terms") carefully before using the SecondHandCell website ("Service") operated by us.</p>
+                    <h3>1. User Obligations</h3>
+                    <ul>
+                        <li>You are the legal owner of the device you are selling.</li>
+                        <li>The device is not reported as lost or stolen, and its IMEI is not blacklisted.</li>
+                        <li>The device has no outstanding balance and is not subject to any financing or lease agreement.</li>
+                        <li>All information you provide about the device is accurate and truthful.</li>
+                    </ul>
+                    <h3>2. The Offer Process</h3>
+                    <ul>
+                        <li>The initial quote provided on our website is an estimate based on the information you provide.</li>
+                        <li>Upon receiving your device, we will conduct a thorough inspection. If the device's condition differs from what was described, we will issue a revised offer via email.</li>
+                        <li><strong>The device must contain all original manufacturer parts to qualify for "Fully Functional." If non-original parts are detected during inspection, the device will be automatically reclassified as "Not Functional" or "Damaged," and a revised offer will be issued.</strong></li>
+                        <li><strong>You have seven (7) days to accept or decline the revised offer. If you do not respond within this 7-day period, the revised offer will be automatically accepted on your behalf, and we will proceed with payment.</strong></li>
+                        <li>Once an offer (initial or revised) is accepted, it is locked in and final. There is no option for a re-offer or to have the device returned.</li>
+                    </ul>
+                    <h3>3. Shipping and Risk of Loss</h3>
+                    <p>We provide a prepaid shipping label and materials. SecondHandCell is not responsible for any damage or loss that occurs before the device is received and scanned by our designated shipping carrier.</p>
+                    <h3>4. Limitation of Liability</h3>
+                    <p>In no event shall SecondHandCell, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your access to or use of or inability to access or use the Service.</p>
+                    <hr class="my-6 border-t border-slate-300">
+                    <h3>5. Policy on Lost/Stolen Devices &amp; Legal Compliance (New York State &amp; NYC)</h3>
+                    <p>SecondHandCell is committed to operating in full compliance with all applicable laws and regulations regarding the purchase and sale of secondhand goods, particularly those concerning lost or stolen property. This section outlines our strict policy and the legal framework governing such transactions in New York State and New York City.</p>
+                    <h4>Laws That May Apply (NY State + NYC)</h4>
+                    <ul>
+                        <li><strong>New York Penal Law § 155.05(2)(b) – Larceny by acquiring lost property:</strong> If someone acquires lost property and does not take reasonable measures to return it, it counts as larceny.</li>
+                        <li><strong>New York Penal Law § 165.40 – Criminal possession of stolen property in the 5th degree:</strong> Knowingly possessing stolen property (or should reasonably know it’s stolen) is a misdemeanor.</li>
+                        <li><strong>New York City Administrative Code § 20-272 et seq. (Secondhand Dealer Law):</strong> Dealers in secondhand goods must:
+                            <ul>
+                                <li>Keep records of all items received (including seller ID).</li>
+                                <li>Provide daily reports to the NYPD of transactions (often through electronic reporting).</li>
+                                <li>If police suspect an item is lost/stolen, you must hold and exhibit it to them.</li>
+                            </ul>
+                        </li>
+                        <li><strong>New York City Administrative Code § 20-273:</strong> It is unlawful to conceal, withhold, or refuse inspection of such goods.</li>
+                        <li><strong>General Business Law (NY) GBL § 89-g and following – Regulation of pawnbrokers and secondhand dealers:</strong> Requires keeping detailed records and prohibits resale of items flagged as stolen/lost until cleared.</li>
+                        <li><strong>Federal Considerations (18 U.S.C. § 2315 – Possession or sale of stolen property):</strong> If stolen goods (like phones) cross state lines or involve interstate commerce, federal law applies.</li>
+                    </ul>
+                    <h4>Process to Handle Lost/Stolen Phones in Your Buyback</h4>
+                    <p>Here’s our step-by-step written policy to handle devices suspected of being lost or stolen:</p>
+                    <h5>Intake &amp; Verification</h5>
+                    <ul>
+                        <li>Every device received must be checked against:
+                            <ul>
+                                <li>IMEI/serial number databases (e.g., GSMA, carrier blacklists).</li>
+                                <li>Customer’s government-issued ID at time of transaction.</li>
+                            </ul>
+                        </li>
+                        <li>Record the transaction in compliance with NYC Secondhand Dealer laws.</li>
+                    </ul>
+                    <h5>If a Device is Flagged as Lost or Stolen</h5>
+                    <ul>
+                        <li>Immediately set the device aside and do not refurbish, resell, or dispose of it.</li>
+                        <li>Clearly label it as “On Hold – Suspected Lost/Stolen.”</li>
+                    </ul>
+                    <h5>Customer Communication</h5>
+                    <ul>
+                        <li>If the customer requests the item back:
+                            <ul>
+                                <li>Explain: “Under New York law, we cannot return or release devices suspected to be lost or stolen. These items must be reported and may only be released by law enforcement.”</li>
+                            </ul>
+                        </li>
+                    </ul>
+                    <h5>Law Enforcement Notification</h5>
+                    <ul>
+                        <li>Report the device to the NYPD Property Clerk’s Office (or local precinct if outside NYC).</li>
+                        <li>Provide transaction records, customer ID, and the device itself if requested.</li>
+                    </ul>
+                    <h5>Outcome</h5>
+                    <ul>
+                        <li>If police confirm the device is stolen:
+                            <ul>
+                                <li>It will be seized and returned to the rightful owner or carrier.</li>
+                            </ul>
+                        </li>
+                        <li>If cleared:
+                            <ul>
+                                <li>You may proceed with processing the device as normal.</li>
+                            </ul>
+                        </li>
+                    </ul>
+                    <h5>Recordkeeping</h5>
+                    <ul>
+                        <li>Keep all paperwork of the transaction, report, and police correspondence for at least 5 years (per NYC dealer rules).</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <footer class="bg-slate-800 text-white">
         <div class="container mx-auto px-4 py-12">
@@ -954,14 +1165,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         const AUTH_ERROR_MESSAGES = {
             'invalid-credential': 'The email or password you entered is incorrect.',
             'wrong-password': 'The email or password you entered is incorrect.',
-            'user-not-found': 'We couldn't find an account with that email address.',
+            'user-not-found': "We couldn't find an account with that email address.",
             'invalid-email': 'Please enter a valid email address.',
             'missing-email': 'Please enter your email address.',
             'email-already-in-use': 'An account with this email already exists. Try logging in instead.',
             'weak-password': 'Your password must be at least 6 characters.',
             'popup-closed-by-user': 'The sign-in popup was closed before you finished. Please try again.',
             'popup-blocked': 'Your browser blocked the sign-in popup. Please allow popups and try again.',
-            'network-request-failed': 'We couldn't reach the server. Check your internet connection and try again.',
+            'network-request-failed': "We couldn't reach the server. Check your internet connection and try again.",
             'too-many-requests': 'Too many attempts have been made. Please wait a moment and try again.',
             'user-disabled': 'This account has been disabled. Contact our support team for assistance.'
         };
@@ -1181,7 +1392,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const updateProfile = window.updateProfile;
             const sendPasswordResetEmail = window.sendPasswordResetEmail;
             const db = window.firebaseDb;
-            const { doc, getDoc } = window.firebase.firestore;
+            const { doc, getDoc, collection, getDocs, setDoc, query, orderBy, limit } = window.firebase.firestore;
             const serverTimestamp = window.firebaseServerTimestamp;
 
             // --- DYNAMIC CONTENT SETUP ---
@@ -1572,6 +1783,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const stateInput = document.getElementById('state');
             const zipCodeInput = document.getElementById('zip-code');
             const SHIPPING_INFO_STORAGE_KEY = 'shc-shipping-info';
+            const savedAddressesWrapper = document.getElementById('savedAddressesWrapper');
+            const savedAddressSelect = document.getElementById('savedAddressSelect');
+            const savedAddressPreview = document.getElementById('savedAddressPreview');
+            const useDifferentAddressBtn = document.getElementById('useDifferentAddressBtn');
+            let savedAddresses = [];
 
             // New modal links
             const aboutUsLink = document.getElementById('aboutUsLink');
@@ -1661,6 +1877,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     saveShippingInfo();
                     updateOverview();
 
+                    loadUserShippingDetails(user);
+
                     if (finalQuote > 0 && nextSteps.classList.contains('hidden')) {
                         nextSteps.classList.remove('hidden');
                         updateOverview();
@@ -1680,6 +1898,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         shippingInfoEmailInput.value = '';
                     }
                     loadSavedShippingInfo();
+                    clearSavedAddressesUI();
                 }
             });
             userMonogram.addEventListener('click', (e) => {
@@ -2382,6 +2601,369 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
             }
 
+            function normalizeShippingInfoForStorage(info = {}) {
+                const base = {
+                    fullName: '',
+                    email: '',
+                    phone: '',
+                    streetAddress: '',
+                    city: '',
+                    state: '',
+                    zipCode: '',
+                    shippingPreference: ''
+                };
+
+                if (!info || typeof info !== 'object') {
+                    return { ...base };
+                }
+
+                const rawPreference = (info.shippingPreference || info.shipping_preference || info.preferredShipping || '')
+                    .toString()
+                    .trim()
+                    .toLowerCase();
+
+                let normalizedPreference = '';
+                if (rawPreference === 'ship_kit' || rawPreference === 'shipping kit requested') {
+                    normalizedPreference = 'ship_kit';
+                } else if (rawPreference === 'email_label' || rawPreference === 'email label requested') {
+                    normalizedPreference = 'email_label';
+                }
+
+                return {
+                    ...base,
+                    fullName: (info.fullName || '').toString().trim(),
+                    email: (info.email || '').toString().trim(),
+                    phone: (info.phone || '').toString().replace(/\D/g, ''),
+                    streetAddress: (info.streetAddress || '').toString().trim(),
+                    city: (info.city || '').toString().trim(),
+                    state: (info.state || '').toString().trim().toUpperCase(),
+                    zipCode: (info.zipCode || '').toString().trim(),
+                    shippingPreference: normalizedPreference
+                };
+            }
+
+            function formatPhoneFromDigits(phone) {
+                const digits = (phone || '').toString().replace(/\D/g, '');
+                if (digits.length !== 10) {
+                    return digits;
+                }
+                return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+            }
+
+            function buildAddressDocIdFromInfo(info = {}) {
+                const normalized = normalizeShippingInfoForStorage(info);
+                const sanitize = (value) => (value || '')
+                    .toString()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+
+                const parts = [
+                    normalized.streetAddress,
+                    normalized.city,
+                    normalized.state,
+                    normalized.zipCode,
+                    normalized.phone
+                ].map(sanitize).filter(Boolean);
+
+                let key = parts.join('-');
+                if (!key) {
+                    const fallback = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36);
+                    key = `addr-${fallback}`;
+                }
+                if (key.length > 120) {
+                    key = key.slice(0, 120).replace(/-+$/g, '');
+                }
+                return key || `addr-${Date.now().toString(36)}`;
+            }
+
+            function updateSavedAddressPreview(address) {
+                if (!savedAddressPreview) return;
+                if (!address) {
+                    savedAddressPreview.classList.add('hidden');
+                    savedAddressPreview.textContent = '';
+                    return;
+                }
+
+                const normalized = normalizeShippingInfoForStorage(address);
+                const segments = [];
+
+                if (normalized.fullName) segments.push(normalized.fullName);
+                if (normalized.streetAddress) segments.push(normalized.streetAddress);
+
+                const cityState = [normalized.city, normalized.state].filter(Boolean).join(', ');
+                const locationLine = [cityState, normalized.zipCode].filter(Boolean).join(' ');
+                if (locationLine.trim()) segments.push(locationLine.trim());
+
+                if (normalized.phone) segments.push(formatPhoneFromDigits(normalized.phone));
+                if (normalized.email) segments.push(normalized.email);
+
+                if (!segments.length) {
+                    savedAddressPreview.classList.add('hidden');
+                    savedAddressPreview.textContent = '';
+                    return;
+                }
+
+                savedAddressPreview.textContent = segments.join(' • ');
+                savedAddressPreview.classList.remove('hidden');
+            }
+
+            function clearSavedAddressesUI() {
+                savedAddresses = [];
+                if (savedAddressSelect) {
+                    savedAddressSelect.innerHTML = '<option value="" selected>Choose a saved address</option>';
+                    savedAddressSelect.disabled = true;
+                }
+                if (savedAddressesWrapper) {
+                    savedAddressesWrapper.classList.add('hidden');
+                }
+                if (useDifferentAddressBtn) {
+                    useDifferentAddressBtn.classList.add('hidden');
+                }
+                updateSavedAddressPreview(null);
+            }
+
+            function buildAddressOptionLabel(address) {
+                const normalized = normalizeShippingInfoForStorage(address);
+                const parts = [];
+                if (normalized.fullName) parts.push(normalized.fullName);
+                if (normalized.streetAddress) parts.push(normalized.streetAddress);
+                const cityState = [normalized.city, normalized.state].filter(Boolean).join(', ');
+                const cityLine = [cityState, normalized.zipCode].filter(Boolean).join(' ');
+                if (cityLine.trim()) parts.push(cityLine.trim());
+                let label = parts.join(' • ') || 'Saved address';
+                if (label.length > 80) {
+                    label = `${label.slice(0, 77)}…`;
+                }
+                return label;
+            }
+
+            function populateSavedAddresses(addresses = [], options = {}) {
+                if (!savedAddressSelect || !savedAddressesWrapper) return;
+                const { selectedId = '' } = options;
+                savedAddresses = Array.isArray(addresses) ? addresses.map(address => ({ ...address })) : [];
+
+                savedAddressSelect.innerHTML = '';
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = savedAddresses.length ? 'Choose a saved address' : 'No saved addresses yet';
+                placeholder.selected = !selectedId;
+                placeholder.disabled = !!savedAddresses.length;
+                savedAddressSelect.appendChild(placeholder);
+
+                savedAddresses.forEach(address => {
+                    const option = document.createElement('option');
+                    const addressId = address.id || buildAddressDocIdFromInfo(address);
+                    if (!address.id) {
+                        address.id = addressId;
+                    }
+                    option.value = addressId;
+                    option.textContent = buildAddressOptionLabel(address);
+                    if (addressId === selectedId) {
+                        option.selected = true;
+                    }
+                    savedAddressSelect.appendChild(option);
+                });
+
+                if (savedAddresses.length) {
+                    savedAddressesWrapper.classList.remove('hidden');
+                    savedAddressSelect.disabled = false;
+                    if (useDifferentAddressBtn) {
+                        useDifferentAddressBtn.classList.remove('hidden');
+                    }
+                    if (selectedId) {
+                        const selected = savedAddresses.find(address => address.id === selectedId);
+                        if (selected) {
+                            updateSavedAddressPreview(selected);
+                        }
+                    } else {
+                        updateSavedAddressPreview(null);
+                    }
+                } else {
+                    savedAddressesWrapper.classList.add('hidden');
+                    savedAddressSelect.disabled = true;
+                    if (useDifferentAddressBtn) {
+                        useDifferentAddressBtn.classList.add('hidden');
+                    }
+                    updateSavedAddressPreview(null);
+                }
+            }
+
+            function applyShippingInfoToForm(info, options = {}) {
+                const { force = false } = options || {};
+                const normalized = normalizeShippingInfoForStorage(info);
+
+                const setFieldValue = (input, value) => {
+                    if (!input) return;
+                    if (!force && input.value) return;
+                    if (typeof value === 'undefined' || value === null) return;
+                    input.value = value;
+                };
+
+                setFieldValue(fullNameInput, normalized.fullName);
+                setFieldValue(shippingInfoEmailInput, normalized.email);
+
+                if (phoneInput) {
+                    if (normalized.phone) {
+                        phoneInput.value = normalized.phone;
+                        formatPhoneNumber(phoneInput);
+                    } else if (force) {
+                        phoneInput.value = '';
+                    }
+                }
+
+                setFieldValue(streetAddressInput, normalized.streetAddress);
+                setFieldValue(cityInput, normalized.city);
+
+                if (stateInput) {
+                    if ((force || !stateInput.value) && normalized.state) {
+                        stateInput.value = normalized.state;
+                    } else if (force && !normalized.state) {
+                        stateInput.value = '';
+                    }
+                }
+
+                setFieldValue(zipCodeInput, normalized.zipCode);
+
+                const preferenceSelected = document.querySelector('input[name="shipping_preference"]:checked');
+                if (normalized.shippingPreference && (force || !preferenceSelected)) {
+                    const preferenceRadio = document.querySelector(`input[name="shipping_preference"][value="${normalized.shippingPreference}"]`);
+                    if (preferenceRadio) {
+                        preferenceRadio.checked = true;
+                        preferenceRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+
+                updateOverview();
+                saveShippingInfo();
+            }
+
+            function selectSavedAddress(addressId, options = {}) {
+                const { force = true } = options || {};
+                if (!savedAddressSelect) return;
+                savedAddressSelect.value = addressId || '';
+                if (!addressId) {
+                    updateSavedAddressPreview(null);
+                    return;
+                }
+                const selected = savedAddresses.find(address => String(address.id) === String(addressId));
+                if (selected) {
+                    applyShippingInfoToForm(selected, { force });
+                    updateSavedAddressPreview(selected);
+                }
+            }
+
+            async function fetchSavedAddressesForUser(userId) {
+                if (!userId) return [];
+                try {
+                    const addressesRef = collection(db, `users/${userId}/savedAddresses`);
+                    const addressQuery = query(addressesRef, orderBy('updatedAt', 'desc'), limit(5));
+                    const snapshot = await getDocs(addressQuery);
+                    const results = [];
+                    snapshot.forEach(docSnap => {
+                        const data = docSnap.data() || {};
+                        results.push({ id: docSnap.id, ...normalizeShippingInfoForStorage(data) });
+                    });
+                    return results;
+                } catch (error) {
+                    console.warn('Unable to load saved addresses', error);
+                    return [];
+                }
+            }
+
+            async function persistShippingInfoForUser(userId, shippingInfo) {
+                if (!userId) return null;
+                const normalized = normalizeShippingInfoForStorage(shippingInfo);
+                if (!normalized.fullName || !normalized.streetAddress || !normalized.city || !normalized.state || !normalized.zipCode) {
+                    return null;
+                }
+
+                try {
+                    const userDocRef = doc(db, `users/${userId}`);
+                    await setDoc(userDocRef, {
+                        lastShippingInfo: normalized,
+                        updatedAt: serverTimestamp()
+                    }, { merge: true });
+
+                    const addressDocId = buildAddressDocIdFromInfo(normalized);
+                    const addressDocRef = doc(db, `users/${userId}/savedAddresses/${addressDocId}`);
+                    const existingSnapshot = await getDoc(addressDocRef);
+                    const timestampPayload = existingSnapshot.exists()
+                        ? { updatedAt: serverTimestamp() }
+                        : { createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+
+                    await setDoc(addressDocRef, { ...normalized, ...timestampPayload }, { merge: true });
+
+                    return { id: addressDocId, ...normalized };
+                } catch (error) {
+                    console.warn('Unable to persist shipping info', error);
+                    return null;
+                }
+            }
+
+            async function loadUserShippingDetails(user) {
+                if (!user || !user.uid) return;
+                clearSavedAddressesUI();
+
+                try {
+                    const userId = user.uid;
+                    const shippingFieldsEmpty = !fullNameInput?.value && !streetAddressInput?.value && !cityInput?.value && !stateInput?.value && !zipCodeInput?.value && !phoneInput?.value;
+
+                    const [addresses, userDocSnapshot] = await Promise.all([
+                        fetchSavedAddressesForUser(userId),
+                        (async () => {
+                            try {
+                                const userDocRef = doc(db, `users/${userId}`);
+                                const snapshot = await getDoc(userDocRef);
+                                return snapshot.exists() ? snapshot.data() : null;
+                            } catch (error) {
+                                console.warn('Unable to fetch user profile details', error);
+                                return null;
+                            }
+                        })()
+                    ]);
+
+                    populateSavedAddresses(addresses);
+
+                    let lastShippingInfo = null;
+                    if (userDocSnapshot && userDocSnapshot.lastShippingInfo) {
+                        lastShippingInfo = normalizeShippingInfoForStorage(userDocSnapshot.lastShippingInfo);
+                    }
+
+                    if (shippingFieldsEmpty && addresses.length) {
+                        selectSavedAddress(addresses[0].id, { force: true });
+                    } else if (shippingFieldsEmpty && lastShippingInfo) {
+                        applyShippingInfoToForm(lastShippingInfo, { force: true });
+                        updateSavedAddressPreview(lastShippingInfo);
+                    } else if (lastShippingInfo) {
+                        updateSavedAddressPreview(lastShippingInfo);
+                    }
+                } catch (error) {
+                    console.warn('Unable to load saved shipping details', error);
+                    clearSavedAddressesUI();
+                }
+            }
+
+            if (savedAddressSelect) {
+                savedAddressSelect.addEventListener('change', () => {
+                    const selectedId = savedAddressSelect.value;
+                    if (!selectedId) {
+                        updateSavedAddressPreview(null);
+                        return;
+                    }
+                    selectSavedAddress(selectedId, { force: true });
+                });
+            }
+
+            if (useDifferentAddressBtn) {
+                useDifferentAddressBtn.addEventListener('click', () => {
+                    selectSavedAddress('', { force: false });
+                    if (fullNameInput) {
+                        fullNameInput.focus();
+                    }
+                });
+            }
+
             const handleShippingInput = () => {
                 updateOverview();
                 saveShippingInfo();
@@ -2476,6 +3058,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 submitOrderBtn.classList.remove('btn-primary-indigo');
                 submitOrderBtn.classList.add('btn-disabled');
                 
+                const rawShippingPreference = document.querySelector('input[name="shipping_preference"]:checked').value;
+
                 const orderData = {
                     device: device.name,
                     brand: deviceInfo.brand, // FIXED: Use parsed brand from deviceInfo
@@ -2487,7 +3071,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
                     estimatedQuote: finalQuote,
-                    shippingPreference: document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+                    shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
                     paymentMethod: selectedPayment.value,
                     paymentDetails: {},
                     shippingInfo: {
@@ -2498,7 +3082,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         streetAddress: streetAddressInput.value,
                         city: cityInput.value,
                         state: stateInput.value, // Now guaranteed to be a 2-letter code
-                        zipCode: zipCodeInput.value
+                        zipCode: zipCodeInput.value,
+                        shippingPreference: rawShippingPreference
                     },
                     termsAccepted: document.getElementById('termsAccepted').checked,
                     userId: currentUserId,
@@ -2529,7 +3114,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     if (!response.ok) {
                         throw new Error(result.error || 'Failed to submit order.');
                     }
-                    
+
+                    if (isUserLoggedIn && currentUserId) {
+                        try {
+                            const persistedAddress = await persistShippingInfoForUser(currentUserId, orderData.shippingInfo);
+                            if (persistedAddress) {
+                                savedAddresses = savedAddresses.filter(address => address.id !== persistedAddress.id);
+                                savedAddresses.unshift(persistedAddress);
+                                populateSavedAddresses(savedAddresses, { selectedId: persistedAddress.id });
+                            }
+                        } catch (persistError) {
+                            console.warn('Unable to cache shipping details for reuse', persistError);
+                        }
+                    }
+
                     // Get order ID from response and estimated price from deviceInfo or orderData
                     const orderId = result.orderId || result.id || Date.now().toString();
                     const totalPrice = deviceInfo.estimatedPrice || orderData.estimatedQuote || finalQuote || '0';
