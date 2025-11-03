@@ -2541,7 +2541,22 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 });
             });
 
-            const shippingInputs = document.querySelectorAll('#shippingSection input, #shippingSection select');
+            const shippingInputs = Array.from(document.querySelectorAll('#shippingSection input, #shippingSection select'));
+            const requiredShippingInputs = shippingInputs.filter(input => input.hasAttribute('required'));
+            requiredShippingInputs.forEach(input => {
+                input.dataset.wasRequired = 'true';
+            });
+
+            function updateShippingFieldRequirements(enabled) {
+                requiredShippingInputs.forEach(input => {
+                    if (!input.dataset.wasRequired) return;
+                    if (enabled) {
+                        input.setAttribute('required', '');
+                    } else {
+                        input.removeAttribute('required');
+                    }
+                });
+            }
 
             function saveShippingInfo() {
                 if (!fullNameInput || !streetAddressInput) return;
@@ -2730,6 +2745,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         useDifferentAddressBtn.setAttribute('aria-pressed', manualAddressMode ? 'true' : 'false');
                     } else {
                         useDifferentAddressBtn.classList.add('hidden');
+                    }
+                }
+
+                updateShippingFieldRequirements(manualAddressMode);
+
+                if (!manualAddressMode) {
+                    const activeId = savedAddressSelect?.value;
+                    const activeAddress = savedAddresses.find(address => address.id === activeId) || savedAddresses[0] || null;
+                    if (activeAddress) {
+                        applyShippingInfoToForm(activeAddress, { force: true });
+                        updateSavedAddressPreview(activeAddress);
                     }
                 }
 
