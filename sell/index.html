@@ -45,7 +45,12 @@
             addDoc,
             serverTimestamp,
             doc,
-            getDoc
+            getDoc,
+            setDoc,
+            getDocs,
+            query,
+            orderBy,
+            limit
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -75,8 +80,14 @@
         window.firebaseServerTimestamp = serverTimestamp;
         window.firebase = {
             firestore: {
-                doc: doc,
-                getDoc: getDoc
+                doc,
+                getDoc,
+                collection,
+                getDocs,
+                setDoc,
+                query,
+                orderBy,
+                limit
             }
         };
     </script>
@@ -686,6 +697,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </div>
 
                         <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">8. Shipping Information</h2>
+                        <div id="savedAddressesWrapper" class="mb-6 hidden">
+                            <label for="savedAddressSelect" class="block text-sm font-medium text-slate-700 mb-2">Use a saved address</label>
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                                <select id="savedAddressSelect" class="flex-1 border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="" selected>Choose a saved address</option>
+                                </select>
+                                <button type="button" id="useDifferentAddressBtn" class="btn-secondary-green px-4 py-2 rounded-md text-sm font-semibold whitespace-nowrap hidden w-full sm:w-auto">Use a different address</button>
+                            </div>
+                            <p id="savedAddressPreview" class="mt-2 text-sm text-slate-600 hidden"></p>
+                        </div>
                         <div class="mb-8 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <!-- MODIFIED: Full Name now spans 2 columns for better focus on desktop -->
                             <div class="md:col-span-2">
@@ -1371,7 +1392,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const updateProfile = window.updateProfile;
             const sendPasswordResetEmail = window.sendPasswordResetEmail;
             const db = window.firebaseDb;
-            const { doc, getDoc } = window.firebase.firestore;
+            const { doc, getDoc, collection, getDocs, setDoc, query, orderBy, limit } = window.firebase.firestore;
             const serverTimestamp = window.firebaseServerTimestamp;
 
             // --- DYNAMIC CONTENT SETUP ---
@@ -1762,6 +1783,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const stateInput = document.getElementById('state');
             const zipCodeInput = document.getElementById('zip-code');
             const SHIPPING_INFO_STORAGE_KEY = 'shc-shipping-info';
+            const savedAddressesWrapper = document.getElementById('savedAddressesWrapper');
+            const savedAddressSelect = document.getElementById('savedAddressSelect');
+            const savedAddressPreview = document.getElementById('savedAddressPreview');
+            const useDifferentAddressBtn = document.getElementById('useDifferentAddressBtn');
+            let savedAddresses = [];
 
             // New modal links
             const aboutUsLink = document.getElementById('aboutUsLink');
@@ -1851,6 +1877,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     saveShippingInfo();
                     updateOverview();
 
+                    loadUserShippingDetails(user);
+
                     if (finalQuote > 0 && nextSteps.classList.contains('hidden')) {
                         nextSteps.classList.remove('hidden');
                         updateOverview();
@@ -1870,6 +1898,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         shippingInfoEmailInput.value = '';
                     }
                     loadSavedShippingInfo();
+                    clearSavedAddressesUI();
                 }
             });
             userMonogram.addEventListener('click', (e) => {
@@ -2572,6 +2601,369 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
             }
 
+            function normalizeShippingInfoForStorage(info = {}) {
+                const base = {
+                    fullName: '',
+                    email: '',
+                    phone: '',
+                    streetAddress: '',
+                    city: '',
+                    state: '',
+                    zipCode: '',
+                    shippingPreference: ''
+                };
+
+                if (!info || typeof info !== 'object') {
+                    return { ...base };
+                }
+
+                const rawPreference = (info.shippingPreference || info.shipping_preference || info.preferredShipping || '')
+                    .toString()
+                    .trim()
+                    .toLowerCase();
+
+                let normalizedPreference = '';
+                if (rawPreference === 'ship_kit' || rawPreference === 'shipping kit requested') {
+                    normalizedPreference = 'ship_kit';
+                } else if (rawPreference === 'email_label' || rawPreference === 'email label requested') {
+                    normalizedPreference = 'email_label';
+                }
+
+                return {
+                    ...base,
+                    fullName: (info.fullName || '').toString().trim(),
+                    email: (info.email || '').toString().trim(),
+                    phone: (info.phone || '').toString().replace(/\D/g, ''),
+                    streetAddress: (info.streetAddress || '').toString().trim(),
+                    city: (info.city || '').toString().trim(),
+                    state: (info.state || '').toString().trim().toUpperCase(),
+                    zipCode: (info.zipCode || '').toString().trim(),
+                    shippingPreference: normalizedPreference
+                };
+            }
+
+            function formatPhoneFromDigits(phone) {
+                const digits = (phone || '').toString().replace(/\D/g, '');
+                if (digits.length !== 10) {
+                    return digits;
+                }
+                return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+            }
+
+            function buildAddressDocIdFromInfo(info = {}) {
+                const normalized = normalizeShippingInfoForStorage(info);
+                const sanitize = (value) => (value || '')
+                    .toString()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+
+                const parts = [
+                    normalized.streetAddress,
+                    normalized.city,
+                    normalized.state,
+                    normalized.zipCode,
+                    normalized.phone
+                ].map(sanitize).filter(Boolean);
+
+                let key = parts.join('-');
+                if (!key) {
+                    const fallback = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36);
+                    key = `addr-${fallback}`;
+                }
+                if (key.length > 120) {
+                    key = key.slice(0, 120).replace(/-+$/g, '');
+                }
+                return key || `addr-${Date.now().toString(36)}`;
+            }
+
+            function updateSavedAddressPreview(address) {
+                if (!savedAddressPreview) return;
+                if (!address) {
+                    savedAddressPreview.classList.add('hidden');
+                    savedAddressPreview.textContent = '';
+                    return;
+                }
+
+                const normalized = normalizeShippingInfoForStorage(address);
+                const segments = [];
+
+                if (normalized.fullName) segments.push(normalized.fullName);
+                if (normalized.streetAddress) segments.push(normalized.streetAddress);
+
+                const cityState = [normalized.city, normalized.state].filter(Boolean).join(', ');
+                const locationLine = [cityState, normalized.zipCode].filter(Boolean).join(' ');
+                if (locationLine.trim()) segments.push(locationLine.trim());
+
+                if (normalized.phone) segments.push(formatPhoneFromDigits(normalized.phone));
+                if (normalized.email) segments.push(normalized.email);
+
+                if (!segments.length) {
+                    savedAddressPreview.classList.add('hidden');
+                    savedAddressPreview.textContent = '';
+                    return;
+                }
+
+                savedAddressPreview.textContent = segments.join(' • ');
+                savedAddressPreview.classList.remove('hidden');
+            }
+
+            function clearSavedAddressesUI() {
+                savedAddresses = [];
+                if (savedAddressSelect) {
+                    savedAddressSelect.innerHTML = '<option value="" selected>Choose a saved address</option>';
+                    savedAddressSelect.disabled = true;
+                }
+                if (savedAddressesWrapper) {
+                    savedAddressesWrapper.classList.add('hidden');
+                }
+                if (useDifferentAddressBtn) {
+                    useDifferentAddressBtn.classList.add('hidden');
+                }
+                updateSavedAddressPreview(null);
+            }
+
+            function buildAddressOptionLabel(address) {
+                const normalized = normalizeShippingInfoForStorage(address);
+                const parts = [];
+                if (normalized.fullName) parts.push(normalized.fullName);
+                if (normalized.streetAddress) parts.push(normalized.streetAddress);
+                const cityState = [normalized.city, normalized.state].filter(Boolean).join(', ');
+                const cityLine = [cityState, normalized.zipCode].filter(Boolean).join(' ');
+                if (cityLine.trim()) parts.push(cityLine.trim());
+                let label = parts.join(' • ') || 'Saved address';
+                if (label.length > 80) {
+                    label = `${label.slice(0, 77)}…`;
+                }
+                return label;
+            }
+
+            function populateSavedAddresses(addresses = [], options = {}) {
+                if (!savedAddressSelect || !savedAddressesWrapper) return;
+                const { selectedId = '' } = options;
+                savedAddresses = Array.isArray(addresses) ? addresses.map(address => ({ ...address })) : [];
+
+                savedAddressSelect.innerHTML = '';
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = savedAddresses.length ? 'Choose a saved address' : 'No saved addresses yet';
+                placeholder.selected = !selectedId;
+                placeholder.disabled = !!savedAddresses.length;
+                savedAddressSelect.appendChild(placeholder);
+
+                savedAddresses.forEach(address => {
+                    const option = document.createElement('option');
+                    const addressId = address.id || buildAddressDocIdFromInfo(address);
+                    if (!address.id) {
+                        address.id = addressId;
+                    }
+                    option.value = addressId;
+                    option.textContent = buildAddressOptionLabel(address);
+                    if (addressId === selectedId) {
+                        option.selected = true;
+                    }
+                    savedAddressSelect.appendChild(option);
+                });
+
+                if (savedAddresses.length) {
+                    savedAddressesWrapper.classList.remove('hidden');
+                    savedAddressSelect.disabled = false;
+                    if (useDifferentAddressBtn) {
+                        useDifferentAddressBtn.classList.remove('hidden');
+                    }
+                    if (selectedId) {
+                        const selected = savedAddresses.find(address => address.id === selectedId);
+                        if (selected) {
+                            updateSavedAddressPreview(selected);
+                        }
+                    } else {
+                        updateSavedAddressPreview(null);
+                    }
+                } else {
+                    savedAddressesWrapper.classList.add('hidden');
+                    savedAddressSelect.disabled = true;
+                    if (useDifferentAddressBtn) {
+                        useDifferentAddressBtn.classList.add('hidden');
+                    }
+                    updateSavedAddressPreview(null);
+                }
+            }
+
+            function applyShippingInfoToForm(info, options = {}) {
+                const { force = false } = options || {};
+                const normalized = normalizeShippingInfoForStorage(info);
+
+                const setFieldValue = (input, value) => {
+                    if (!input) return;
+                    if (!force && input.value) return;
+                    if (typeof value === 'undefined' || value === null) return;
+                    input.value = value;
+                };
+
+                setFieldValue(fullNameInput, normalized.fullName);
+                setFieldValue(shippingInfoEmailInput, normalized.email);
+
+                if (phoneInput) {
+                    if (normalized.phone) {
+                        phoneInput.value = normalized.phone;
+                        formatPhoneNumber(phoneInput);
+                    } else if (force) {
+                        phoneInput.value = '';
+                    }
+                }
+
+                setFieldValue(streetAddressInput, normalized.streetAddress);
+                setFieldValue(cityInput, normalized.city);
+
+                if (stateInput) {
+                    if ((force || !stateInput.value) && normalized.state) {
+                        stateInput.value = normalized.state;
+                    } else if (force && !normalized.state) {
+                        stateInput.value = '';
+                    }
+                }
+
+                setFieldValue(zipCodeInput, normalized.zipCode);
+
+                const preferenceSelected = document.querySelector('input[name="shipping_preference"]:checked');
+                if (normalized.shippingPreference && (force || !preferenceSelected)) {
+                    const preferenceRadio = document.querySelector(`input[name="shipping_preference"][value="${normalized.shippingPreference}"]`);
+                    if (preferenceRadio) {
+                        preferenceRadio.checked = true;
+                        preferenceRadio.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+
+                updateOverview();
+                saveShippingInfo();
+            }
+
+            function selectSavedAddress(addressId, options = {}) {
+                const { force = true } = options || {};
+                if (!savedAddressSelect) return;
+                savedAddressSelect.value = addressId || '';
+                if (!addressId) {
+                    updateSavedAddressPreview(null);
+                    return;
+                }
+                const selected = savedAddresses.find(address => String(address.id) === String(addressId));
+                if (selected) {
+                    applyShippingInfoToForm(selected, { force });
+                    updateSavedAddressPreview(selected);
+                }
+            }
+
+            async function fetchSavedAddressesForUser(userId) {
+                if (!userId) return [];
+                try {
+                    const addressesRef = collection(db, `users/${userId}/savedAddresses`);
+                    const addressQuery = query(addressesRef, orderBy('updatedAt', 'desc'), limit(5));
+                    const snapshot = await getDocs(addressQuery);
+                    const results = [];
+                    snapshot.forEach(docSnap => {
+                        const data = docSnap.data() || {};
+                        results.push({ id: docSnap.id, ...normalizeShippingInfoForStorage(data) });
+                    });
+                    return results;
+                } catch (error) {
+                    console.warn('Unable to load saved addresses', error);
+                    return [];
+                }
+            }
+
+            async function persistShippingInfoForUser(userId, shippingInfo) {
+                if (!userId) return null;
+                const normalized = normalizeShippingInfoForStorage(shippingInfo);
+                if (!normalized.fullName || !normalized.streetAddress || !normalized.city || !normalized.state || !normalized.zipCode) {
+                    return null;
+                }
+
+                try {
+                    const userDocRef = doc(db, `users/${userId}`);
+                    await setDoc(userDocRef, {
+                        lastShippingInfo: normalized,
+                        updatedAt: serverTimestamp()
+                    }, { merge: true });
+
+                    const addressDocId = buildAddressDocIdFromInfo(normalized);
+                    const addressDocRef = doc(db, `users/${userId}/savedAddresses/${addressDocId}`);
+                    const existingSnapshot = await getDoc(addressDocRef);
+                    const timestampPayload = existingSnapshot.exists()
+                        ? { updatedAt: serverTimestamp() }
+                        : { createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+
+                    await setDoc(addressDocRef, { ...normalized, ...timestampPayload }, { merge: true });
+
+                    return { id: addressDocId, ...normalized };
+                } catch (error) {
+                    console.warn('Unable to persist shipping info', error);
+                    return null;
+                }
+            }
+
+            async function loadUserShippingDetails(user) {
+                if (!user || !user.uid) return;
+                clearSavedAddressesUI();
+
+                try {
+                    const userId = user.uid;
+                    const shippingFieldsEmpty = !fullNameInput?.value && !streetAddressInput?.value && !cityInput?.value && !stateInput?.value && !zipCodeInput?.value && !phoneInput?.value;
+
+                    const [addresses, userDocSnapshot] = await Promise.all([
+                        fetchSavedAddressesForUser(userId),
+                        (async () => {
+                            try {
+                                const userDocRef = doc(db, `users/${userId}`);
+                                const snapshot = await getDoc(userDocRef);
+                                return snapshot.exists() ? snapshot.data() : null;
+                            } catch (error) {
+                                console.warn('Unable to fetch user profile details', error);
+                                return null;
+                            }
+                        })()
+                    ]);
+
+                    populateSavedAddresses(addresses);
+
+                    let lastShippingInfo = null;
+                    if (userDocSnapshot && userDocSnapshot.lastShippingInfo) {
+                        lastShippingInfo = normalizeShippingInfoForStorage(userDocSnapshot.lastShippingInfo);
+                    }
+
+                    if (shippingFieldsEmpty && addresses.length) {
+                        selectSavedAddress(addresses[0].id, { force: true });
+                    } else if (shippingFieldsEmpty && lastShippingInfo) {
+                        applyShippingInfoToForm(lastShippingInfo, { force: true });
+                        updateSavedAddressPreview(lastShippingInfo);
+                    } else if (lastShippingInfo) {
+                        updateSavedAddressPreview(lastShippingInfo);
+                    }
+                } catch (error) {
+                    console.warn('Unable to load saved shipping details', error);
+                    clearSavedAddressesUI();
+                }
+            }
+
+            if (savedAddressSelect) {
+                savedAddressSelect.addEventListener('change', () => {
+                    const selectedId = savedAddressSelect.value;
+                    if (!selectedId) {
+                        updateSavedAddressPreview(null);
+                        return;
+                    }
+                    selectSavedAddress(selectedId, { force: true });
+                });
+            }
+
+            if (useDifferentAddressBtn) {
+                useDifferentAddressBtn.addEventListener('click', () => {
+                    selectSavedAddress('', { force: false });
+                    if (fullNameInput) {
+                        fullNameInput.focus();
+                    }
+                });
+            }
+
             const handleShippingInput = () => {
                 updateOverview();
                 saveShippingInfo();
@@ -2666,6 +3058,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 submitOrderBtn.classList.remove('btn-primary-indigo');
                 submitOrderBtn.classList.add('btn-disabled');
                 
+                const rawShippingPreference = document.querySelector('input[name="shipping_preference"]:checked').value;
+
                 const orderData = {
                     device: device.name,
                     brand: deviceInfo.brand, // FIXED: Use parsed brand from deviceInfo
@@ -2677,7 +3071,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
                     estimatedQuote: finalQuote,
-                    shippingPreference: document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+                    shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
                     paymentMethod: selectedPayment.value,
                     paymentDetails: {},
                     shippingInfo: {
@@ -2688,7 +3082,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         streetAddress: streetAddressInput.value,
                         city: cityInput.value,
                         state: stateInput.value, // Now guaranteed to be a 2-letter code
-                        zipCode: zipCodeInput.value
+                        zipCode: zipCodeInput.value,
+                        shippingPreference: rawShippingPreference
                     },
                     termsAccepted: document.getElementById('termsAccepted').checked,
                     userId: currentUserId,
@@ -2719,7 +3114,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     if (!response.ok) {
                         throw new Error(result.error || 'Failed to submit order.');
                     }
-                    
+
+                    if (isUserLoggedIn && currentUserId) {
+                        try {
+                            const persistedAddress = await persistShippingInfoForUser(currentUserId, orderData.shippingInfo);
+                            if (persistedAddress) {
+                                savedAddresses = savedAddresses.filter(address => address.id !== persistedAddress.id);
+                                savedAddresses.unshift(persistedAddress);
+                                populateSavedAddresses(savedAddresses, { selectedId: persistedAddress.id });
+                            }
+                        } catch (persistError) {
+                            console.warn('Unable to cache shipping details for reuse', persistError);
+                        }
+                    }
+
                     // Get order ID from response and estimated price from deviceInfo or orderData
                     const orderId = result.orderId || result.id || Date.now().toString();
                     const totalPrice = deviceInfo.estimatedPrice || orderData.estimatedQuote || finalQuote || '0';
