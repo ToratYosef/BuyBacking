@@ -431,13 +431,11 @@ return;
 refreshAnalyticsData({ silent: true });
 });
 
-if (orderDetailsModal) {
-  orderDetailsModal.addEventListener('click', (event) => {
-    if (event.target === orderDetailsModal) {
-      closeOrderDetailsModal();
-    }
-  });
+orderDetailsModal.addEventListener('click', (event) => {
+if (event.target === orderDetailsModal) {
+closeOrderDetailsModal();
 }
+});
 
 
 
