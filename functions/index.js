@@ -2589,8 +2589,30 @@ app.post('/print-bundle/bulk', async (req, res) => {
       }
     }
 
+    const buildSkipSummary = () => {
+      if (!skipped.length) return '';
+      const reasonLabels = {
+        not_found: 'not found in Firestore',
+        not_kit_order: 'not a shipping kit order',
+        missing_labels: 'missing shipping labels',
+        label_download_failed: 'label download failed',
+        processing_error: 'unexpected processing error',
+      };
+
+      return skipped
+        .map((entry) => {
+          const reasonText = reasonLabels[entry.reason] || entry.reason || 'unspecified issue';
+          return `${entry.id} (${reasonText})`;
+        })
+        .join(', ');
+    };
+
     if (!pdfBuffers.length) {
-      return res.status(422).json({ error: 'No printable kits available for the requested orders.', skipped: skipped.map((item) => item.id) });
+      const summary = buildSkipSummary();
+      const errorMessage = summary
+        ? `No printable kits available for the requested orders. Skipped: ${summary}`
+        : 'No printable kits available for the requested orders.';
+      return res.status(422).json({ error: errorMessage, skipped });
     }
 
     const mergedBuffer = await mergePdfBuffers(pdfBuffers);
@@ -2601,7 +2623,7 @@ app.post('/print-bundle/bulk', async (req, res) => {
       success: true,
       base64,
       printed,
-      skipped: skipped.map((entry) => entry.id),
+      skipped,
     });
   } catch (error) {
     console.error('Failed to generate bulk print bundle:', error);
