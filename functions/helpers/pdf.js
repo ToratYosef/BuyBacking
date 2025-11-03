@@ -1,9 +1,13 @@
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const bwipjs = require('bwip-js');
 
-const PAGE_WIDTH = 288; // 4 inches (72 pts per inch)
-const PAGE_HEIGHT = 432; // 6 inches
-const MARGIN = 20;
+const PACKING_SLIP_WIDTH = 288; // 4 inches (72 pts per inch)
+const PACKING_SLIP_HEIGHT = 432; // 6 inches
+const PACKING_SLIP_MARGIN = 20;
+const BAG_LABEL_WIDTH = 288; // 4 inches wide
+const BAG_LABEL_HEIGHT = 144; // 2 inches tall
+const BAG_LABEL_MARGIN_X = 16;
+const BAG_LABEL_MARGIN_Y = 12;
 const LINE_HEIGHT = 14;
 
 /**
@@ -16,15 +20,15 @@ async function generateCustomLabelPdf(order) {
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    let page = pdfDoc.addPage([PACKING_SLIP_WIDTH, PACKING_SLIP_HEIGHT]);
     let { width, height } = page.getSize();
-    let cursorY = height - MARGIN;
+    let cursorY = height - PACKING_SLIP_MARGIN;
 
     const ensureSpace = (requiredLines = 1) => {
-        if (cursorY - requiredLines * LINE_HEIGHT < MARGIN + 60) {
-            page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+        if (cursorY - requiredLines * LINE_HEIGHT < PACKING_SLIP_MARGIN + 60) {
+            page = pdfDoc.addPage([PACKING_SLIP_WIDTH, PACKING_SLIP_HEIGHT]);
             ({ width, height } = page.getSize());
-            cursorY = height - MARGIN;
+            cursorY = height - PACKING_SLIP_MARGIN;
         }
     };
 
@@ -34,7 +38,7 @@ async function generateCustomLabelPdf(order) {
         lines.forEach((line) => {
             ensureSpace();
             page.drawText(line, {
-                x: MARGIN,
+                x: PACKING_SLIP_MARGIN,
                 y: cursorY,
                 size,
                 font,
@@ -48,7 +52,7 @@ async function generateCustomLabelPdf(order) {
     const drawSectionTitle = (title) => {
         ensureSpace();
         page.drawText(title, {
-            x: MARGIN,
+            x: PACKING_SLIP_MARGIN,
             y: cursorY,
             size: 14,
             font: boldFont,
@@ -117,12 +121,12 @@ async function generateCustomLabelPdf(order) {
 
     page.drawImage(barcodeImage, {
         x: (width - dims.width) / 2,
-        y: Math.max(MARGIN, cursorY - dims.height - 10),
+        y: Math.max(PACKING_SLIP_MARGIN, cursorY - dims.height - 10),
         width: dims.width,
         height: dims.height,
     });
 
-    cursorY = Math.max(MARGIN, cursorY - dims.height - 18);
+    cursorY = Math.max(PACKING_SLIP_MARGIN, cursorY - dims.height - 18);
     drawText('Scan to view order in dashboard', { size: 8, font: boldFont });
 
     return pdfDoc.save();
@@ -133,79 +137,137 @@ async function generateBagLabelPdf(order) {
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    const page = pdfDoc.addPage([BAG_LABEL_WIDTH, BAG_LABEL_HEIGHT]);
     const { width, height } = page.getSize();
-    let cursorY = height - MARGIN;
+    const barcodeReserve = BAG_LABEL_MARGIN_Y + 48;
+    let cursorY = height - BAG_LABEL_MARGIN_Y;
 
-    const drawBlock = (text, options = {}) => {
-        const { font = regularFont, size = 12, color = rgb(0, 0, 0), gap = 2 } = options;
-        const lines = wrapText(text, width - MARGIN * 2, font, size);
+    const drawLine = (text, options = {}) => {
+        const { font = regularFont, size = 10, color = rgb(0, 0, 0), gap = 4 } = options;
+        if (!text) {
+            cursorY = Math.max(cursorY - gap, barcodeReserve);
+            return;
+        }
+        const lines = wrapText(text, width - BAG_LABEL_MARGIN_X * 2, font, size);
         lines.forEach((line) => {
-            page.drawText(line, { x: MARGIN, y: cursorY, size, font, color });
             cursorY -= LINE_HEIGHT;
+            cursorY = Math.max(cursorY, barcodeReserve);
+            page.drawText(line, {
+                x: BAG_LABEL_MARGIN_X,
+                y: cursorY,
+                size,
+                font,
+                color,
+            });
         });
-        cursorY -= gap;
+        cursorY = Math.max(cursorY - gap, barcodeReserve);
     };
 
-    drawBlock('SecondHandCell Bag Label', { font: boldFont, size: 14, color: rgb(0.1, 0.1, 0.1) });
-    drawBlock(`Order #${order.id}`, { font: boldFont, size: 22, color: rgb(0.1, 0.1, 0.4), gap: 6 });
+    const shippingInfo = order.shippingInfo || {};
+    const contactName = shippingInfo.fullName || shippingInfo.name || 'Customer';
+    const contactPhone =
+        shippingInfo.phone ||
+        shippingInfo.phoneNumber ||
+        shippingInfo.phone_number ||
+        '';
 
     const deviceParts = [];
-    if (order.brand) {
-        deviceParts.push(String(order.brand));
-    }
-    if (order.device) {
-        deviceParts.push(String(order.device));
-    }
-    if (deviceParts.length) {
-        drawBlock(`Device: ${deviceParts.join(' • ')}`, { size: 11 });
-    }
-
-    if (order.storage) {
-        drawBlock(`Storage: ${String(order.storage)}`, { size: 11 });
-    }
-
-    if (order.carrier) {
-        drawBlock(`Carrier: ${formatValue(order.carrier)}`, { size: 11 });
-    }
-
-    const conditionSummary = buildConditionSummary(order);
-    if (conditionSummary) {
-        drawBlock(`Condition: ${conditionSummary}`, { size: 11 });
-    }
-
+    if (order.brand) deviceParts.push(String(order.brand));
+    if (order.device) deviceParts.push(String(order.device));
+    const deviceLabel = deviceParts.join(' ');
+    const storageLabel = order.storage || order.memory || '';
+    const lockLabel = formatValue(order.carrier);
+    const conditionSummary = order.condition || order.deviceCondition || buildConditionSummary(order);
+    const qualityLabel = conditionSummary && conditionSummary !== '—'
+        ? conditionSummary
+        : formatValue(order.condition_grade || order.quality);
     const payoutAmount = resolveOrderPayout(order);
-    drawBlock(`Quoted Price: $${formatCurrency(payoutAmount)}`, {
+
+    drawLine('SecondHandCell', {
         font: boldFont,
-        size: 13,
-        color: rgb(0.1, 0.45, 0.2),
+        size: 9,
+        color: rgb(0.32, 0.32, 0.36),
+        gap: 2,
+    });
+    drawLine(`Order #${order.id}`, {
+        font: boldFont,
+        size: 18,
+        color: rgb(0.12, 0.16, 0.48),
+        gap: 6,
+    });
+
+    const deviceLineParts = [];
+    if (deviceLabel) deviceLineParts.push(deviceLabel);
+    if (storageLabel) deviceLineParts.push(storageLabel);
+    drawLine(deviceLineParts.join(' • '), {
+        font: boldFont,
+        size: 11,
+        color: rgb(0.08, 0.08, 0.1),
+        gap: 2,
+    });
+
+    const specParts = [];
+    if (lockLabel && lockLabel !== '—') specParts.push(`Lock: ${lockLabel}`);
+    if (qualityLabel && qualityLabel !== '—') specParts.push(`Quality: ${qualityLabel}`);
+    drawLine(specParts.join('    '), {
+        size: 9,
+        color: rgb(0.28, 0.28, 0.32),
+        gap: 3,
+    });
+
+    const contactParts = [contactName];
+    if (contactPhone) contactParts.push(contactPhone);
+    const cityLine = [shippingInfo.city, shippingInfo.state]
+        .filter(Boolean)
+        .join(', ');
+    if (cityLine) contactParts.push(cityLine);
+    drawLine(contactParts.join(' • '), {
+        size: 9,
+        color: rgb(0.24, 0.24, 0.28),
+        gap: 3,
+    });
+
+    drawLine(`Quote: $${formatCurrency(payoutAmount)}`, {
+        font: boldFont,
+        size: 14,
+        color: rgb(0.1, 0.5, 0.26),
         gap: 8,
     });
 
-    drawBlock('Attach this label to the device bag before shipping.', {
-        size: 10,
-        color: rgb(0.35, 0.35, 0.35),
+    drawLine('Attach this label to the device bag.', {
+        size: 8,
+        color: rgb(0.45, 0.45, 0.45),
         gap: 6,
     });
 
     const barcodeSvg = await buildBarcode(order.id);
     const barcodeImage = await pdfDoc.embedSvg(barcodeSvg);
-    const barcodeScale = Math.min((width - MARGIN * 2) / barcodeImage.width, 1.3);
+    const maxBarcodeWidth = width - BAG_LABEL_MARGIN_X * 2;
+    const maxBarcodeHeight = 36;
+    const barcodeScale = Math.min(
+        maxBarcodeWidth / barcodeImage.width,
+        maxBarcodeHeight / barcodeImage.height,
+        1.2
+    );
     const dims = barcodeImage.scale(barcodeScale);
+    const barcodeY = BAG_LABEL_MARGIN_Y + 14;
 
     page.drawImage(barcodeImage, {
         x: (width - dims.width) / 2,
-        y: Math.max(MARGIN, cursorY - dims.height - 10),
+        y: barcodeY,
         width: dims.width,
         height: dims.height,
     });
 
-    cursorY = Math.max(MARGIN, cursorY - dims.height - 16);
-    drawBlock('Scan to open this order in the dashboard.', {
-        size: 9,
+    const caption = 'Scan to open this order';
+    const captionSize = 8;
+    const captionWidth = boldFont.widthOfTextAtSize(caption, captionSize);
+    page.drawText(caption, {
+        x: (width - captionWidth) / 2,
+        y: barcodeY - 10,
+        size: captionSize,
         font: boldFont,
-        color: rgb(0.3, 0.3, 0.3),
-        gap: 0,
+        color: rgb(0.35, 0.35, 0.35),
     });
 
     return pdfDoc.save();
