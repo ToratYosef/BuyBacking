@@ -2236,14 +2236,39 @@ let bagY = pageHeight - margin;
 const maxWidth = pageWidth - margin * 2;
 
 const formatDisplayValue = (value) => {
-if (!value) {
+const normalized = normalizeConditionInput(value);
+
+if (normalized === null || normalized === undefined) {
 return null;
 }
-return String(value)
+
+if (typeof normalized === 'boolean') {
+return normalized ? 'Yes' : 'No';
+}
+
+if (typeof normalized === 'number') {
+return String(normalized);
+}
+
+const cleaned = String(normalized)
 .replace(/[_-]+/g, ' ')
 .replace(/\s+/g, ' ')
-.trim()
-.replace(/\b\w/g, (char) => char.toUpperCase());
+.trim();
+
+if (!cleaned) {
+return null;
+}
+
+const lower = cleaned.toLowerCase();
+if (lower === 'na' || lower === 'n/a') {
+return 'N/A';
+}
+
+return cleaned
+.split(' ')
+.filter(Boolean)
+.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+.join(' ');
 };
 
 const drawBlock = (text, options = {}) => {
@@ -3300,29 +3325,191 @@ return false;
 }
 }
 
-function formatCondition(condition) {
+const COSMETIC_CONDITION_KEYS = [
+'cosmetic',
+'cosmeticCondition',
+'cosmetic_condition',
+'cosmeticGrade',
+'cosmetic_grade',
+'condition_cosmetic',
+'conditionCosmetic',
+'grade',
+'quality',
+'overall',
+'overallCondition',
+'summary',
+'condition',
+'label',
+'value',
+'name',
+'display',
+'displayName',
+'text',
+'title',
+'status',
+'description'
+];
+
+function normalizeConditionInput(condition, preferredKeys, visited) {
 if (condition === null || condition === undefined) {
+return null;
+}
+
+if (typeof condition === 'string') {
+const trimmed = condition.trim();
+return trimmed ? trimmed : null;
+}
+
+if (typeof condition === 'number' || typeof condition === 'boolean') {
+return condition;
+}
+
+if (Array.isArray(condition)) {
+for (const entry of condition) {
+const normalizedEntry = normalizeConditionInput(entry, preferredKeys, visited);
+if (normalizedEntry !== null && normalizedEntry !== undefined) {
+return normalizedEntry;
+}
+}
+return null;
+}
+
+if (typeof condition === 'object') {
+const seen = visited || new Set();
+if (seen.has(condition)) {
+return null;
+}
+seen.add(condition);
+
+const prioritizedKeys = Array.isArray(preferredKeys) && preferredKeys.length ? preferredKeys : [];
+for (const key of prioritizedKeys) {
+if (Object.prototype.hasOwnProperty.call(condition, key)) {
+const normalizedValue = normalizeConditionInput(condition[key], preferredKeys, seen);
+if (normalizedValue !== null && normalizedValue !== undefined) {
+return normalizedValue;
+}
+}
+}
+
+const fallbackKeys = ['label', 'name', 'display', 'displayName', 'text', 'title', 'value', 'grade', 'quality', 'condition', 'status', 'description'];
+for (const key of fallbackKeys) {
+if (Object.prototype.hasOwnProperty.call(condition, key)) {
+const normalizedValue = normalizeConditionInput(condition[key], preferredKeys, seen);
+if (normalizedValue !== null && normalizedValue !== undefined) {
+return normalizedValue;
+}
+}
+}
+
+for (const key of Object.keys(condition)) {
+if (prioritizedKeys.includes(key)) {
+continue;
+}
+const normalizedValue = normalizeConditionInput(condition[key], preferredKeys, seen);
+if (normalizedValue !== null && normalizedValue !== undefined) {
+return normalizedValue;
+}
+}
+
+return null;
+}
+
+return null;
+}
+
+function formatCondition(condition) {
+const normalizedValue = normalizeConditionInput(condition);
+
+if (normalizedValue === null || normalizedValue === undefined) {
 return '';
 }
 
-if (typeof condition === 'boolean') {
-return condition ? 'Yes' : 'No';
+if (typeof normalizedValue === 'boolean') {
+return normalizedValue ? 'Yes' : 'No';
 }
 
-if (typeof condition === 'number') {
-return String(condition);
+if (typeof normalizedValue === 'number') {
+return String(normalizedValue);
 }
 
-const normalized = String(condition)
+const cleaned = String(normalizedValue)
 .replace(/[_-]+/g, ' ')
 .replace(/\s+/g, ' ')
 .trim();
 
-return normalized
+if (!cleaned) {
+return '';
+}
+
+const lower = cleaned.toLowerCase();
+if (lower === 'na' || lower === 'n/a') {
+return 'N/A';
+}
+
+return cleaned
 .split(' ')
 .filter(Boolean)
-.map(word => word.charAt(0).toUpperCase() + word.slice(1))
+.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
 .join(' ');
+}
+
+function resolveCosmeticCondition(order) {
+if (!order || typeof order !== 'object') {
+return normalizeConditionInput(order, COSMETIC_CONDITION_KEYS);
+}
+
+const directFields = [
+'condition_cosmetic',
+'conditionCosmetic',
+'condition_grade',
+'conditionGrade',
+'cosmetic_condition',
+'cosmeticCondition',
+'cosmetic_grade',
+'cosmeticGrade',
+'receivedCondition',
+'receivedDeviceCondition',
+'quality',
+'grade',
+'deviceCondition',
+'condition'
+];
+
+for (const field of directFields) {
+if (Object.prototype.hasOwnProperty.call(order, field)) {
+const resolved = normalizeConditionInput(order[field], COSMETIC_CONDITION_KEYS);
+if (resolved !== null && resolved !== undefined) {
+return resolved;
+}
+}
+}
+
+const nestedFields = [
+'conditions',
+'conditionDetails',
+'conditionSummary',
+'orderConditions',
+'conditionAssessment',
+'assessment',
+'deviceAssessment',
+'deviceDetails',
+'receivedInspection',
+'receivedAssessment',
+'attributes'
+];
+
+for (const field of nestedFields) {
+if (!Object.prototype.hasOwnProperty.call(order, field)) {
+continue;
+}
+
+const resolved = normalizeConditionInput(order[field], COSMETIC_CONDITION_KEYS);
+if (resolved !== null && resolved !== undefined) {
+return resolved;
+}
+}
+
+return null;
 }
 
 function getStatusClass(status) {
@@ -3467,13 +3654,11 @@ modalOrderAge.textContent = formatOrderAge(order.createdAt);
 modalConditionPowerOn.textContent = order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A';
 modalConditionFunctional.textContent = order.condition_functional ? formatCondition(order.condition_functional) : 'N/A';
 modalConditionCracks.textContent = order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A';
-const cosmeticCondition =
-order.condition_cosmetic ||
-order.condition_grade ||
-order.quality ||
-(order.conditions && (order.conditions.cosmetic || order.conditions.quality)) ||
-order.deviceCondition;
-modalConditionCosmetic.textContent = cosmeticCondition ? formatCondition(cosmeticCondition) : 'N/A';
+const cosmeticCondition = resolveCosmeticCondition(order);
+const cosmeticDisplay = cosmeticCondition !== null && cosmeticCondition !== undefined
+? formatCondition(cosmeticCondition)
+: '';
+modalConditionCosmetic.textContent = cosmeticDisplay || 'N/A';
 // Pass the order object to formatStatus here as well
 modalStatus.textContent = formatStatus(order);
 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
