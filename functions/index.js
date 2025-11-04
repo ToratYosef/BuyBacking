@@ -8,6 +8,7 @@ const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
 const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
+const createEmailsRouter = require('./routes/emails');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -234,6 +235,7 @@ function buildConditionEmail(reason, order, notes) {
     title: template.headline,
     accentColor: accentColorMap[reason] || "#0ea5e9",
     bodyHtml,
+    includeCountdownNotice: true,
   });
 
   const text = appendCountdownNotice(`Hi ${greetingName},
@@ -783,6 +785,7 @@ const ORDER_PLACED_ADMIN_EMAIL_HTML = buildEmailLayout({
 const BLACKLISTED_EMAIL_HTML = buildEmailLayout({
   title: "Action required: Carrier blacklist detected",
   accentColor: "#dc2626",
+  includeCountdownNotice: true,
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
       <p>During our review of order <strong>#**ORDER_ID**</strong>, the carrier database flagged the device as lost, stolen, or blacklisted.</p>
@@ -794,6 +797,7 @@ const BLACKLISTED_EMAIL_HTML = buildEmailLayout({
 const FMI_EMAIL_HTML = buildEmailLayout({
   title: "Turn off Find My to continue",
   accentColor: "#f59e0b",
+  includeCountdownNotice: true,
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
       <p>Our inspection for order <strong>#**ORDER_ID**</strong> shows Find My iPhone / Activation Lock is still enabled.</p>
@@ -813,6 +817,7 @@ const FMI_EMAIL_HTML = buildEmailLayout({
 const BAL_DUE_EMAIL_HTML = buildEmailLayout({
   title: "Balance due with your carrier",
   accentColor: "#f97316",
+  includeCountdownNotice: true,
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
       <p>When we ran your device for order <strong>#**ORDER_ID**</strong>, the carrier reported a status of <strong>**FINANCIAL_STATUS**</strong>.</p>
@@ -1119,6 +1124,7 @@ function buildEmailLayout({
   accentColor = "#16a34a",
   includeTrustpilot = true,
   footerText = "Need help? Reply to this email or call (888) 265-4612.",
+  includeCountdownNotice = false,
 } = {}) {
   const headingSection = title
     ? `
@@ -1133,6 +1139,9 @@ function buildEmailLayout({
     : "";
 
   const trustpilotSection = includeTrustpilot ? buildTrustpilotSection() : "";
+  const countdownSection = includeCountdownNotice
+    ? buildCountdownNoticeHtml()
+    : "";
 
   return `
     <!DOCTYPE html>
@@ -1164,7 +1173,7 @@ function buildEmailLayout({
         <tr>
           <td class="content-cell">
             ${bodyHtml}
-            ${buildCountdownNoticeHtml()}
+            ${countdownSection}
           </td>
         </tr>
         ${trustpilotSection ? `<tr><td>${trustpilotSection}</td></tr>` : ""}
@@ -1593,6 +1602,19 @@ async function sendMultipleTestEmails(email, emailTypes) {
   await Promise.all(mailPromises);
   return { message: "Test emails sent successfully." };
 }
+
+const emailsRouter = createEmailsRouter({
+  transporter,
+  sendMultipleTestEmails,
+  CONDITION_EMAIL_TEMPLATES,
+  CONDITION_EMAIL_FROM_ADDRESS,
+  CONDITION_EMAIL_BCC_RECIPIENTS,
+  buildConditionEmail,
+  ordersCollection,
+  updateOrderBoth,
+});
+
+app.use('/', emailsRouter);
 
 // ------------------------------
 // ROUTES
@@ -3021,29 +3043,6 @@ app.delete("/orders/:id", async (req, res) => {
   }
 });
 
-// A new route to handle sending a general email
-app.post("/send-email", async (req, res) => {
-    try {
-        const { to, bcc, subject, html } = req.body;
-        if (!to || !subject || !html) {
-            return res.status(400).json({ error: "Missing required fields: to, subject, and html are required." });
-        }
-
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: to,
-            subject: subject,
-            html: html,
-            bcc: bcc || [], // Use the bcc from the request body, or an empty array if not provided
-        };
-
-        await transporter.sendMail(mailOptions);
-        res.status(200).json({ message: "Email sent successfully." });
-    } catch (error) {
-        console.error("Error sending email:", error);
-        res.status(500).json({ error: "Failed to send email." });
-    }
-});
 
 async function runAutomaticLabelVoidSweep() {
   const shipengineKey = getShipEngineApiKey();
@@ -4326,101 +4325,6 @@ exports.onNewChatCreated = functions.firestore
     
     return null;
   });
-
-app.post("/test-emails", async (req, res) => {
-  const { email, emailTypes } = req.body;
-
-  if (!email || !emailTypes || !Array.isArray(emailTypes)) {
-    return res.status(400).json({ error: "Email and emailTypes array are required." });
-  }
-
-  try {
-    const testResult = await sendMultipleTestEmails(email, emailTypes);
-    console.log("Test emails sent. Types:", emailTypes);
-    res.status(200).json(testResult);
-  } catch (error) {
-    console.error("Failed to send test emails:", error);
-    res.status(500).json({ error: `Failed to send test emails: ${error.message}` });
-  }
-});
-
-app.post("/orders/:id/send-condition-email", async (req, res) => {
-  try {
-    const { reason, notes } = req.body || {};
-    if (!reason || !CONDITION_EMAIL_TEMPLATES[reason]) {
-      return res
-        .status(400)
-        .json({ error: "A valid email reason is required." });
-    }
-
-    const orderRef = ordersCollection.doc(req.params.id);
-    const orderSnap = await orderRef.get();
-    if (!orderSnap.exists) {
-      return res.status(404).json({ error: "Order not found." });
-    }
-
-    const order = { id: orderSnap.id, ...orderSnap.data() };
-    const shippingInfo = order.shippingInfo || {};
-    const customerEmail = shippingInfo.email || shippingInfo.emailAddress;
-    if (!customerEmail) {
-      return res
-        .status(400)
-        .json({ error: "The order does not have a customer email address." });
-    }
-
-    if (!transporter) {
-      return res
-        .status(500)
-        .json({ error: "Email service is not configured." });
-    }
-
-    const { subject, html, text } = buildConditionEmail(reason, order, notes);
-    const mailOptions = {
-      from: CONDITION_EMAIL_FROM_ADDRESS,
-      to: customerEmail,
-      subject,
-      html,
-      text,
-    };
-
-    if (CONDITION_EMAIL_BCC_RECIPIENTS.length) {
-      mailOptions.bcc = CONDITION_EMAIL_BCC_RECIPIENTS;
-    }
-
-    await transporter.sendMail(mailOptions);
-
-    res.json({ message: "Email sent successfully." });
-  } catch (error) {
-    console.error("Failed to send condition email:", error);
-    res.status(500).json({ error: "Failed to send condition email." });
-  }
-});
-
-app.post("/orders/:id/fmi-cleared", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const docRef = ordersCollection.doc(id);
-      const doc = await docRef.get();
-      if (!doc.exists) return res.status(404).json({ error: "Order not found" });
-
-      const order = { id: doc.id, ...doc.data() };
-      
-      if (order.status !== "fmi_on_pending") {
-          return res.status(409).json({ error: "Order is not in the correct state to be marked FMI cleared." });
-      }
-      
-      await updateOrderBoth(id, {
-          status: "fmi_cleared",
-          fmiAutoDowngradeDate: null,
-      });
-
-      res.json({ message: "FMI status updated successfully." });
-
-    } catch (err) {
-        console.error("Error clearing FMI status:", err);
-        res.status(500).json({ error: "Failed to clear FMI status" });
-    }
-});
 
 app.delete("/orders/:id", async (req, res) => {
   try {
