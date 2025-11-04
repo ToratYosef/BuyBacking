@@ -3301,7 +3301,28 @@ return false;
 }
 
 function formatCondition(condition) {
-return condition.charAt(0).toUpperCase() + condition.slice(1);
+if (condition === null || condition === undefined) {
+return '';
+}
+
+if (typeof condition === 'boolean') {
+return condition ? 'Yes' : 'No';
+}
+
+if (typeof condition === 'number') {
+return String(condition);
+}
+
+const normalized = String(condition)
+.replace(/[_-]+/g, ' ')
+.replace(/\s+/g, ' ')
+.trim();
+
+return normalized
+.split(' ')
+.filter(Boolean)
+.map(word => word.charAt(0).toUpperCase() + word.slice(1))
+.join(' ');
 }
 
 function getStatusClass(status) {
@@ -3446,6 +3467,13 @@ modalOrderAge.textContent = formatOrderAge(order.createdAt);
 modalConditionPowerOn.textContent = order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A';
 modalConditionFunctional.textContent = order.condition_functional ? formatCondition(order.condition_functional) : 'N/A';
 modalConditionCracks.textContent = order.condition_cracks ? formatCondition(order.condition_cracks) : 'N/A';
+const cosmeticCondition =
+order.condition_cosmetic ||
+order.condition_grade ||
+order.quality ||
+(order.conditions && (order.conditions.cosmetic || order.conditions.quality)) ||
+order.deviceCondition;
+modalConditionCosmetic.textContent = cosmeticCondition ? formatCondition(cosmeticCondition) : 'N/A';
 // Pass the order object to formatStatus here as well
 modalStatus.textContent = formatStatus(order);
 modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
