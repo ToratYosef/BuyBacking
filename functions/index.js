@@ -74,14 +74,14 @@ const transporter = nodemailer.createTransport({
 const EMAIL_LOGO_URL =
   "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
 const COUNTDOWN_NOTICE_TEXT =
-  "If we don't hear back within 7 days, we'll automatically requote your device at 75% less to keep your order moving.";
+  "If we don't hear back, we may finalize your order at 75% less to keep your order moving.";
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 function buildCountdownNoticeHtml() {
   return `
     <div style="margin-top: 24px; padding: 18px 20px; background-color: #ecfdf5; border-radius: 12px; border: 1px solid #bbf7d0; color: #065f46; font-size: 17px; line-height: 1.6;">
       <strong style="display:block; font-size:18px; margin-bottom:8px;">Friendly reminder</strong>
-      If we don't hear back within <strong>7 days</strong>, we'll automatically requote your device at <strong>75% less</strong> to keep your order moving.
+      If we don't hear back, we may finalize your device at <strong>75% less</strong> to keep your order moving.
     </div>
   `;
 }
@@ -108,7 +108,15 @@ const EXPIRING_REMINDER_ALLOWED_STATUSES = new Set([
 
 const KIT_REMINDER_ALLOWED_STATUSES = new Set(["kit_sent", "kit_delivered"]);
 
-const AUTO_REQUOTE_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
+const MANUAL_AUTO_REQUOTE_INELIGIBLE_STATUSES = new Set([
+  'completed',
+  'cancelled',
+  'return-label-generated',
+  're-offered-accepted',
+  're-offered-declined',
+  're-offered-auto-accepted',
+  'requote_accepted',
+]);
 const AUTO_CANCEL_DELAY_MS = 15 * 24 * 60 * 60 * 1000;
 const AUTO_CANCEL_MONITORED_STATUSES = [
   "order_pending",
@@ -698,6 +706,17 @@ async function cancelOrderAndNotify(order, options = {}) {
         html: htmlBody,
         bcc: [process.env.SALES_EMAIL || "sales@secondhandcell.com"],
       });
+
+      await recordCustomerEmail(
+        updatedOrder.id,
+        'Cancellation notice email sent to customer.',
+        { reason, autoCancelled: auto },
+        {
+          additionalUpdates: {
+            cancellationNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        }
+      );
     } catch (emailError) {
       console.error(`Failed to send cancellation email for order ${order.id}:`, emailError);
     }
@@ -827,12 +846,12 @@ const BAL_DUE_EMAIL_HTML = buildEmailLayout({
   `,
 });
 const DOWNGRADE_EMAIL_HTML = buildEmailLayout({
-  title: "Order updated after 7 days",
+  title: "Order finalized at adjusted payout",
   accentColor: "#f97316",
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
-      <p>We reached out about the issue with your device for order <strong>#**ORDER_ID**</strong> but didn't hear back within seven days.</p>
-      <p>To keep things moving, we've automatically requoted the device at 75% less than the original offer. If you resolve the issue, reply to this email and we'll happily re-evaluate.</p>
+      <p>We reached out about the issue with your device for order <strong>#**ORDER_ID**</strong> but haven't received an update.</p>
+      <p>To keep things moving, we've finalized the device at 75% less than the original offer. If you resolve the issue, reply to this email and we'll happily re-evaluate.</p>
       <p>We're here to help—just let us know how you'd like to proceed.</p>
   `,
 });
@@ -1041,6 +1060,77 @@ async function updateOrderBoth(orderId, partialData = {}, options = {}) {
   const updated = updatedSnap.data() || {};
 
   return { order: { id: orderId, ...updated }, userId };
+}
+
+async function recordCustomerEmail(orderId, message, metadata = {}, options = {}) {
+  if (!orderId || !message) {
+    return null;
+  }
+
+  const cleanedMetadata = {};
+  if (metadata && typeof metadata === "object") {
+    for (const [key, value] of Object.entries(metadata)) {
+      if (value !== undefined && value !== null && value !== "") {
+        cleanedMetadata[key] = value;
+      }
+    }
+  }
+
+  const logEntry = {
+    type: options?.logType || "email",
+    message,
+  };
+
+  if (Object.keys(cleanedMetadata).length > 0) {
+    logEntry.metadata = cleanedMetadata;
+  }
+
+  const additionalUpdates = {};
+  if (options && typeof options.additionalUpdates === "object") {
+    for (const [key, value] of Object.entries(options.additionalUpdates)) {
+      if (value !== undefined) {
+        additionalUpdates[key] = value;
+      }
+    }
+  }
+
+  const payload = {
+    lastCustomerEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+    ...additionalUpdates,
+  };
+
+  return updateOrderBoth(orderId, payload, {
+    autoLogStatus: false,
+    logEntries: [logEntry],
+  });
+}
+
+function getLastCustomerEmailMillis(order = {}) {
+  const candidates = [
+    order.lastCustomerEmailSentAt,
+    order.lastReminderSentAt,
+    order.expiringReminderSentAt,
+    order.kitReminderSentAt,
+    order.reminderSentAt,
+    order.reminderEmailSentAt,
+    order.lastReminderAt,
+    order.reviewRequestSentAt,
+    order.returnLabelEmailSentAt,
+    order.cancellationNotifiedAt,
+  ];
+
+  let latest = 0;
+  for (const value of candidates) {
+    const date = toDate(value);
+    if (date) {
+      const time = date.getTime();
+      if (time > latest) {
+        latest = time;
+      }
+    }
+  }
+
+  return latest > 0 ? latest : null;
 }
 
 function applyTemplate(template, replacements = {}) {
@@ -1679,6 +1769,8 @@ app.put("/orders/:id/status", async (req, res) => {
     let customerNotificationPromise = Promise.resolve();
     let customerEmailHtml = "";
     const customerName = order.shippingInfo.fullName;
+    let emailLogMessage = null;
+    let emailMetadata = { status };
 
     switch (status) {
       case "received": {
@@ -1693,6 +1785,8 @@ app.put("/orders/:id/status", async (req, res) => {
           html: customerEmailHtml,
           bcc: ["sales@secondhandcell.com"]
         });
+        emailLogMessage = "Received confirmation email sent to customer.";
+        emailMetadata.trackingNumber = order.trackingNumber || order.inboundTrackingNumber || null;
         break;
       }
       case "completed": {
@@ -1714,6 +1808,9 @@ app.put("/orders/:id/status", async (req, res) => {
           html: customerEmailHtml,
           bcc: ["sales@secondhandcell.com"]
         });
+        emailLogMessage = "Order completion email sent to customer.";
+        emailMetadata.payoutAmount = formatCurrencyValue(payoutAmount);
+        emailMetadata.wasReoffered = wasReoffered;
         break;
       }
       default: {
@@ -1722,6 +1819,10 @@ app.put("/orders/:id/status", async (req, res) => {
     }
 
     await customerNotificationPromise;
+
+    if (emailLogMessage) {
+      await recordCustomerEmail(orderId, emailLogMessage, emailMetadata);
+    }
 
     res.json({ message: `Order marked as ${status}` });
   } catch (err) {
@@ -1764,9 +1865,16 @@ app.post('/orders/:id/send-review-request', async (req, res) => {
       bcc: ['sales@secondhandcell.com']
     });
 
-    await updateOrderBoth(orderId, {
-      reviewRequestSentAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    await recordCustomerEmail(
+      orderId,
+      'Review request email sent to customer.',
+      { status: order.status },
+      {
+        additionalUpdates: {
+          reviewRequestSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      }
+    );
 
     res.json({ message: 'Review request email sent successfully.' });
   } catch (error) {
@@ -2123,6 +2231,15 @@ app.post("/orders/:id/re-offer", async (req, res) => {
       bcc: ["sales@secondhandcell.com"]
     });
 
+    await recordCustomerEmail(
+      orderId,
+      'Re-offer email sent to customer.',
+      {
+        newPrice: Number(newPrice).toFixed(2),
+        originalQuote: Number(order.estimatedQuote || order.originalQuote || 0).toFixed(2),
+      }
+    );
+
     res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
   } catch (err) {
     console.error("Error submitting re-offer:", err);
@@ -2208,6 +2325,17 @@ app.post("/orders/:id/return-label", async (req, res) => {
 
     await transporter.sendMail(customerMailOptions);
 
+    await recordCustomerEmail(
+      order.id,
+      'Return label email sent to customer.',
+      { trackingNumber: returnTrackingNumber },
+      {
+        additionalUpdates: {
+          returnLabelEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      }
+    );
+
     res.json({
       message: "Return label generated successfully.",
       returnLabelUrl: returnLabelData.label_download?.pdf,
@@ -2217,6 +2345,131 @@ app.post("/orders/:id/return-label", async (req, res) => {
   } catch (err) {
     console.error("Error generating return label:", err.response?.data || err);
     res.status(500).json({ error: "Failed to generate return label" });
+  }
+});
+
+app.post("/orders/:id/auto-requote", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    if (!orderId) {
+      return res.status(400).json({ error: "Order ID is required." });
+    }
+
+    const docRef = ordersCollection.doc(orderId);
+    const doc = await docRef.get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const status = (order.status || '').toString().toLowerCase();
+
+    if (MANUAL_AUTO_REQUOTE_INELIGIBLE_STATUSES.has(status)) {
+      return res
+        .status(409)
+        .json({ error: "Order status is not eligible for manual auto-requote." });
+    }
+
+    if (order.autoRequote?.manual === true) {
+      return res.status(409).json({ error: "This order has already been manually auto-requoted." });
+    }
+
+    const customerEmail = order.shippingInfo?.email;
+    if (!customerEmail) {
+      return res.status(409).json({ error: "Order is missing a customer email address." });
+    }
+
+    const lastEmailMs = getLastCustomerEmailMillis(order);
+    const lastEmailTimestamp = lastEmailMs
+      ? admin.firestore.Timestamp.fromMillis(lastEmailMs)
+      : null;
+
+    const baseAmount = Number(order.reOffer?.newPrice ?? getOrderPayout(order));
+    if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
+      return res.status(409).json({ error: "No valid quoted amount available for auto-requote." });
+    }
+
+    const reducedAmount = Number((baseAmount * 0.25).toFixed(2));
+    if (!Number.isFinite(reducedAmount) || reducedAmount <= 0) {
+      return res.status(409).json({ error: "Unable to calculate the adjusted payout amount." });
+    }
+
+    const customerName = order.shippingInfo?.fullName || 'there';
+    const baseDisplay = baseAmount.toFixed(2);
+    const reducedDisplay = reducedAmount.toFixed(2);
+    const timestampField = admin.firestore.FieldValue.serverTimestamp();
+
+    const autoRequotePayload = {
+      reducedFrom: Number(baseDisplay),
+      reducedTo: reducedAmount,
+      manual: true,
+      initiatedBy: req.body?.initiatedBy || 'admin_manual_auto_requote',
+      completedAt: timestampField,
+    };
+
+    if (lastEmailTimestamp) {
+      autoRequotePayload.lastCustomerEmailAt = lastEmailTimestamp;
+    }
+
+    const { order: updatedOrder } = await updateOrderBoth(orderId, {
+      status: 'completed',
+      finalPayoutAmount: reducedAmount,
+      finalOfferAmount: reducedAmount,
+      finalPayout: reducedAmount,
+      requoteAcceptedAt: timestampField,
+      autoRequote: autoRequotePayload,
+    }, {
+      logEntries: [
+        {
+          type: 'auto_requote',
+          message: `Order manually finalized at $${reducedDisplay} after unresolved customer communication.`,
+          metadata: {
+            previousStatus: order.status || null,
+            reducedFrom: Number(baseDisplay),
+            reducedTo: reducedAmount,
+            reductionPercent: 75,
+          },
+        },
+      ],
+    });
+
+    const emailHtml = buildEmailLayout({
+      title: 'Order finalized at adjusted payout',
+      accentColor: '#dc2626',
+      bodyHtml: `
+        <p>Hi ${escapeHtml(customerName)},</p>
+        <p>Since we have not received a response after multiple emails, we’ve finalized order <strong>#${escapeHtml(order.id)}</strong> at a payout that is 75% less than the previous quote of $${baseDisplay}.</p>
+        <p>Your new payout amount is <strong>$${reducedDisplay}</strong>. You will receive your payment shortly.</p>
+        <p>If you have any questions, just reply to this email and our team will be happy to help.</p>
+      `,
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: customerEmail,
+      subject: `Order #${order.id} finalized at adjusted payout`,
+      html: emailHtml,
+      bcc: [process.env.SALES_EMAIL || 'sales@secondhandcell.com'],
+    });
+
+    await recordCustomerEmail(
+      orderId,
+      'Manual auto-requote email sent to customer.',
+      {
+        status: 'completed',
+        reducedFrom: baseDisplay,
+        reducedTo: reducedDisplay,
+      },
+      { logType: 'auto_requote_email' }
+    );
+
+    res.json({
+      message: `Order finalized at $${reducedDisplay} after admin confirmation.`,
+      order: { id: updatedOrder.id, status: updatedOrder.status, finalPayoutAmount: reducedAmount },
+    });
+  } catch (error) {
+    console.error('Error performing manual auto-requote:', error);
+    res.status(500).json({ error: 'Failed to finalize the order with the adjusted payout.' });
   }
 });
 
@@ -2308,6 +2561,12 @@ app.post("/accept-offer-action", async (req, res) => {
       bcc: ["sales@secondhandcell.com"]
     });
 
+    await recordCustomerEmail(
+      orderId,
+      'Re-offer acceptance confirmation email sent to customer.',
+      { status: 're-offered-accepted' }
+    );
+
     res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
   } catch (err) {
     console.error("Error accepting offer:", err);
@@ -2350,6 +2609,12 @@ app.post("/return-phone-action", async (req, res) => {
       html: customerHtmlBody,
       bcc: ["sales@secondhandcell.com"]
     });
+
+    await recordCustomerEmail(
+      orderId,
+      'Return request confirmation email sent to customer.',
+      { status: 're-offered-declined' }
+    );
 
     res.json({ message: "Return requested successfully.", orderId: orderData.id });
   } catch (err) {
@@ -2524,103 +2789,16 @@ exports.autoAcceptOffers = functions.pubsub
         status: "re-offered-auto-accepted",
         acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      await recordCustomerEmail(
+        doc.id,
+        'Re-offer auto-accept email sent to customer.',
+        { status: 're-offered-auto-accepted', auto: true }
+      );
     });
 
     await Promise.all(updates);
     console.log(`Auto-accepted ${updates.length} expired offers.`);
-    return null;
-  });
-
-async function runAutoRequoteSweep() {
-  const thresholdTimestamp = admin.firestore.Timestamp.fromMillis(
-    Date.now() - AUTO_REQUOTE_DELAY_MS
-  );
-
-  const seen = new Set();
-  const ordersToProcess = [];
-
-  const emailedQuery = await ordersCollection
-    .where("status", "==", "emailed")
-    .where("emailedAt", "<=", thresholdTimestamp)
-    .get();
-
-  emailedQuery.forEach((doc) => {
-    if (!seen.has(doc.id)) {
-      seen.add(doc.id);
-      ordersToProcess.push({ id: doc.id, ...doc.data() });
-    }
-  });
-
-  const emailedWithoutTimestamp = await ordersCollection
-    .where("status", "==", "emailed")
-    .where("emailedAt", "==", null)
-    .where("lastStatusUpdateAt", "<=", thresholdTimestamp)
-    .get();
-
-  emailedWithoutTimestamp.forEach((doc) => {
-    if (!seen.has(doc.id)) {
-      seen.add(doc.id);
-      ordersToProcess.push({ id: doc.id, ...doc.data() });
-    }
-  });
-
-  for (const order of ordersToProcess) {
-    try {
-      const { order: updatedOrder } = await updateOrderBoth(
-        order.id,
-        {
-          status: "requote_accepted",
-          requoteAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-          requoteAutoAccepted: true,
-        },
-        {
-          logEntries: [
-            {
-              type: "system",
-              message:
-                "Order automatically moved to Requote Accepted after 7 days without a response.",
-              metadata: { previousStatus: order.status },
-            },
-          ],
-        }
-      );
-
-      if (updatedOrder?.shippingInfo?.email) {
-        const customerName = updatedOrder.shippingInfo.fullName || "there";
-        const htmlBody = `
-          <p>Hi ${escapeHtml(customerName)},</p>
-          <p>We followed up about your shipping label for order <strong>#${escapeHtml(
-            updatedOrder.id
-          )}</strong> but didn’t hear back.</p>
-          <p>To keep your account tidy we’ve marked the order as <strong>Requote Accepted</strong>. If you still plan to send your device, reply to this email and we’ll send a fresh label.</p>
-          <p>— The SecondHandCell Team</p>
-        `;
-
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: updatedOrder.shippingInfo.email,
-          subject: `Order #${updatedOrder.id} marked as Requote Accepted`,
-          html: htmlBody,
-          bcc: [process.env.SALES_EMAIL || "sales@secondhandcell.com"],
-        });
-      }
-    } catch (error) {
-      console.error(
-        `Failed to auto-requote emailed order ${order.id}:`,
-        error
-      );
-    }
-  }
-}
-
-exports.autoFinalizeEmailedOrders = functions.pubsub
-  .schedule("every 12 hours")
-  .onRun(async () => {
-    try {
-      await runAutoRequoteSweep();
-    } catch (error) {
-      console.error("Automatic requote sweep failed:", error);
-    }
     return null;
   });
 
@@ -3058,17 +3236,15 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       bcc: ["sales@secondhandcell.com"]
     });
 
-    await updateOrderBoth(
+    await recordCustomerEmail(
       sanitizedOrderId,
-      { lastReminderSentAt: admin.firestore.FieldValue.serverTimestamp() },
+      'Reminder email sent to customer.',
+      { status: order.status },
       {
-        autoLogStatus: false,
-        logEntries: [
-          {
-            type: 'reminder',
-            message: 'Reminder email sent to customer.',
-          },
-        ],
+        logType: 'reminder',
+        additionalUpdates: {
+          lastReminderSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
       }
     );
 
@@ -3273,21 +3449,19 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
       bcc: ["sales@secondhandcell.com"],
     });
 
-    await updateOrderBoth(
+    await recordCustomerEmail(
       sanitizedOrderId,
-      { expiringReminderSentAt: admin.firestore.FieldValue.serverTimestamp() },
+      'Expiration reminder email sent to customer.',
       {
-        autoLogStatus: false,
-        logEntries: [
-          {
-            type: 'expiring_reminder',
-            message: 'Expiration reminder email sent to customer.',
-            metadata: {
-              expiresOn: expiryDateText || null,
-              daysRemaining: daysRemainingText || null,
-            },
-          },
-        ],
+        status: order.status,
+        expiresOn: expiryDateText || null,
+        daysRemaining: daysRemainingText || null,
+      },
+      {
+        logType: 'expiring_reminder',
+        additionalUpdates: {
+          expiringReminderSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
       }
     );
 
@@ -3442,21 +3616,19 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
       bcc: ["sales@secondhandcell.com"],
     });
 
-    await updateOrderBoth(
+    await recordCustomerEmail(
       sanitizedOrderId,
-      { kitReminderSentAt: admin.firestore.FieldValue.serverTimestamp() },
+      'Kit reminder email sent to customer.',
       {
-        autoLogStatus: false,
-        logEntries: [
-          {
-            type: 'kit_reminder',
-            message: 'Kit reminder email sent to customer.',
-            metadata: {
-              outboundTracking: outboundTracking || null,
-              inboundTracking: inboundTracking || null,
-            },
-          },
-        ],
+        status: order.status,
+        outboundTracking: outboundTracking || null,
+        inboundTracking: inboundTracking || null,
+      },
+      {
+        logType: 'kit_reminder',
+        additionalUpdates: {
+          kitReminderSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
       }
     );
 

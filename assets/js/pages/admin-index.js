@@ -1785,6 +1785,69 @@ return timestamp.toDate().getTime();
 return null;
 }
 
+const AUTO_REQUOTE_INELIGIBLE_STATUSES = new Set([
+'completed',
+'cancelled',
+'return-label-generated',
+'re-offered-accepted',
+'re-offered-declined',
+'re-offered-auto-accepted',
+]);
+
+function getLastCustomerEmailTimestamp(order = {}) {
+if (!order || typeof order !== 'object') {
+return null;
+}
+
+const timestampCandidates = [
+order.lastCustomerEmailSentAt,
+order.lastReminderSentAt,
+order.expiringReminderSentAt,
+order.kitReminderSentAt,
+order.reminderSentAt,
+order.reminderEmailSentAt,
+order.lastReminderAt,
+order.reviewRequestSentAt,
+];
+
+let latest = 0;
+timestampCandidates.forEach((value) => {
+const ms = extractTimestampMillis(value);
+if (ms && ms > latest) {
+latest = ms;
+}
+});
+
+return latest > 0 ? latest : null;
+}
+
+function hasAutoRequoteCompleted(order = {}) {
+const completedAt = order?.autoRequote?.completedAt;
+return Boolean(extractTimestampMillis(completedAt));
+}
+
+function isEligibleForAutoRequote(order = {}) {
+  if (!order || !order.id) {
+    return false;
+  }
+
+  const status = (order.status || '').toString().toLowerCase();
+  if (!status || AUTO_REQUOTE_INELIGIBLE_STATUSES.has(status)) {
+    return false;
+  }
+
+  if (hasAutoRequoteCompleted(order)) {
+    return false;
+  }
+
+  const payoutAmount = Number(getOrderPayout(order));
+  if (!Number.isFinite(payoutAmount) || payoutAmount <= 0) {
+    return false;
+  }
+
+  return true;
+}
+
 function getAutoAcceptDeadline(order) {
 if (!order || order.status !== 're-offered-pending' || !order.reOffer) return null;
 const explicit = extractTimestampMillis(order.reOffer.autoAcceptDate);
@@ -3644,8 +3707,8 @@ modalShippingAddress.textContent = 'N/A';
 }
 
 if (modalLastReminderDate) {
-const lastReminder = order.lastReminderSentAt || order.reminderSentAt || order.reminderEmailSentAt || order.lastReminderAt;
-modalLastReminderDate.textContent = lastReminder ? formatDateTime(lastReminder) : 'Never';
+const lastEmailTimestamp = getLastCustomerEmailTimestamp(order);
+modalLastReminderDate.textContent = lastEmailTimestamp ? formatDateTime(lastEmailTimestamp) : 'Never';
 }
 if (modalOrderAge) {
 modalOrderAge.textContent = formatOrderAge(order.createdAt);
@@ -3885,6 +3948,12 @@ case 'requote_accepted':
 case 'completed':
 modalActionButtons.appendChild(createButton('Send Review Request Email', () => handleAction(order.id, 'sendReviewRequest'), 'bg-amber-600 hover:bg-amber-700'));
 break;
+}
+
+if (isEligibleForAutoRequote(order)) {
+modalActionButtons.appendChild(
+createButton('Finalize 75% Reduced Payout', () => handleAction(order.id, 'autoRequote'), 'bg-rose-700 hover:bg-rose-800')
+);
 }
 
 // --- NEW: PDF Merging Button Logic ---
@@ -4305,6 +4374,7 @@ headers: { 'Content-Type': 'application/json' },
 body: JSON.stringify({
 reason: reasonKey,
 notes: additionalNotes.trim() ? additionalNotes.trim() : undefined,
+label: labelText,
 }),
 });
 
@@ -4316,6 +4386,7 @@ throw new Error(errorMessage);
 
 const result = await response.json().catch(() => ({}));
 displayModalMessage(result.message || 'Email sent successfully.', 'success');
+openOrderDetailsModal(orderId);
 } catch (error) {
 console.error('Condition email error:', error);
 displayModalMessage(error.message || 'Failed to send email.', 'error');
@@ -4387,6 +4458,13 @@ break;
 case 'sendReviewRequest':
 url = `${BACKEND_BASE_URL}/orders/${orderId}/send-review-request`;
 method = 'POST';
+break;
+case 'autoRequote':
+url = `${BACKEND_BASE_URL}/orders/${orderId}/auto-requote`;
+method = 'POST';
+if (body === null) {
+body = {};
+}
 break;
 case 'refreshKitTracking':
 url = `${BACKEND_BASE_URL}/orders/${orderId}/refresh-kit-tracking`;
