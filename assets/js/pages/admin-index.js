@@ -1828,30 +1828,25 @@ return Boolean(extractTimestampMillis(completedAt));
 }
 
 function isEligibleForAutoRequote(order = {}) {
-if (!order || !order.id) {
-return false;
-}
+  if (!order || !order.id) {
+    return false;
+  }
 
-const status = (order.status || '').toString().toLowerCase();
-if (!status || AUTO_REQUOTE_INELIGIBLE_STATUSES.has(status)) {
-return false;
-}
+  const status = (order.status || '').toString().toLowerCase();
+  if (!status || AUTO_REQUOTE_INELIGIBLE_STATUSES.has(status)) {
+    return false;
+  }
 
-if (hasAutoRequoteCompleted(order)) {
-return false;
-}
+  if (hasAutoRequoteCompleted(order)) {
+    return false;
+  }
 
-const payoutAmount = Number(getOrderPayout(order));
-if (!Number.isFinite(payoutAmount) || payoutAmount <= 0) {
-return false;
-}
+  const payoutAmount = Number(getOrderPayout(order));
+  if (!Number.isFinite(payoutAmount) || payoutAmount <= 0) {
+    return false;
+  }
 
-const lastEmailMs = getLastCustomerEmailTimestamp(order);
-if (!lastEmailMs) {
-return false;
-}
-
-return Date.now() - lastEmailMs >= AUTO_REQUOTE_WAIT_MS;
+  return true;
 }
 
 function getAutoAcceptDeadline(order) {

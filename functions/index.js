@@ -74,14 +74,14 @@ const transporter = nodemailer.createTransport({
 const EMAIL_LOGO_URL =
   "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
 const COUNTDOWN_NOTICE_TEXT =
-  "If we don't hear back within 7 days, we'll automatically requote your device at 75% less to keep your order moving.";
+  "If we don't hear back, we may finalize your order at 75% less to keep your order moving.";
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 function buildCountdownNoticeHtml() {
   return `
     <div style="margin-top: 24px; padding: 18px 20px; background-color: #ecfdf5; border-radius: 12px; border: 1px solid #bbf7d0; color: #065f46; font-size: 17px; line-height: 1.6;">
       <strong style="display:block; font-size:18px; margin-bottom:8px;">Friendly reminder</strong>
-      If we don't hear back within <strong>7 days</strong>, we'll automatically requote your device at <strong>75% less</strong> to keep your order moving.
+      If we don't hear back, we may finalize your device at <strong>75% less</strong> to keep your order moving.
     </div>
   `;
 }
@@ -108,8 +108,6 @@ const EXPIRING_REMINDER_ALLOWED_STATUSES = new Set([
 
 const KIT_REMINDER_ALLOWED_STATUSES = new Set(["kit_sent", "kit_delivered"]);
 
-const AUTO_REQUOTE_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
-const AUTO_REQUOTE_NO_RESPONSE_WINDOW_MS = AUTO_REQUOTE_DELAY_MS;
 const MANUAL_AUTO_REQUOTE_INELIGIBLE_STATUSES = new Set([
   'completed',
   'cancelled',
@@ -848,12 +846,12 @@ const BAL_DUE_EMAIL_HTML = buildEmailLayout({
   `,
 });
 const DOWNGRADE_EMAIL_HTML = buildEmailLayout({
-  title: "Order updated after 7 days",
+  title: "Order finalized at adjusted payout",
   accentColor: "#f97316",
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
-      <p>We reached out about the issue with your device for order <strong>#**ORDER_ID**</strong> but didn't hear back within seven days.</p>
-      <p>To keep things moving, we've automatically requoted the device at 75% less than the original offer. If you resolve the issue, reply to this email and we'll happily re-evaluate.</p>
+      <p>We reached out about the issue with your device for order <strong>#**ORDER_ID**</strong> but haven't received an update.</p>
+      <p>To keep things moving, we've finalized the device at 75% less than the original offer. If you resolve the issue, reply to this email and we'll happily re-evaluate.</p>
       <p>We're here to help—just let us know how you'd like to proceed.</p>
   `,
 });
@@ -2382,18 +2380,9 @@ app.post("/orders/:id/auto-requote", async (req, res) => {
     }
 
     const lastEmailMs = getLastCustomerEmailMillis(order);
-    if (!lastEmailMs) {
-      return res.status(409).json({ error: "No prior customer email found for this order." });
-    }
-
-    const elapsedSinceLastEmail = Date.now() - lastEmailMs;
-    if (elapsedSinceLastEmail < AUTO_REQUOTE_NO_RESPONSE_WINDOW_MS) {
-      const remainingMs = AUTO_REQUOTE_NO_RESPONSE_WINDOW_MS - elapsedSinceLastEmail;
-      const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
-      return res.status(409).json({
-        error: `Please wait ${remainingDays} more day(s) before finalizing the auto-requote.`,
-      });
-    }
+    const lastEmailTimestamp = lastEmailMs
+      ? admin.firestore.Timestamp.fromMillis(lastEmailMs)
+      : null;
 
     const baseAmount = Number(order.reOffer?.newPrice ?? getOrderPayout(order));
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
@@ -2410,25 +2399,30 @@ app.post("/orders/:id/auto-requote", async (req, res) => {
     const reducedDisplay = reducedAmount.toFixed(2);
     const timestampField = admin.firestore.FieldValue.serverTimestamp();
 
+    const autoRequotePayload = {
+      reducedFrom: Number(baseDisplay),
+      reducedTo: reducedAmount,
+      manual: true,
+      initiatedBy: req.body?.initiatedBy || 'admin_manual_auto_requote',
+      completedAt: timestampField,
+    };
+
+    if (lastEmailTimestamp) {
+      autoRequotePayload.lastCustomerEmailAt = lastEmailTimestamp;
+    }
+
     const { order: updatedOrder } = await updateOrderBoth(orderId, {
       status: 'completed',
       finalPayoutAmount: reducedAmount,
       finalOfferAmount: reducedAmount,
       finalPayout: reducedAmount,
       requoteAcceptedAt: timestampField,
-      autoRequote: {
-        reducedFrom: Number(baseDisplay),
-        reducedTo: reducedAmount,
-        manual: true,
-        initiatedBy: req.body?.initiatedBy || 'admin_manual_auto_requote',
-        completedAt: timestampField,
-        lastCustomerEmailAt: admin.firestore.Timestamp.fromMillis(lastEmailMs),
-      },
+      autoRequote: autoRequotePayload,
     }, {
       logEntries: [
         {
           type: 'auto_requote',
-          message: `Order manually finalized at $${reducedDisplay} after no customer response.`,
+          message: `Order manually finalized at $${reducedDisplay} after unresolved customer communication.`,
           metadata: {
             previousStatus: order.status || null,
             reducedFrom: Number(baseDisplay),
@@ -2470,7 +2464,7 @@ app.post("/orders/:id/auto-requote", async (req, res) => {
     );
 
     res.json({
-      message: `Order finalized at $${reducedDisplay} after 7 days without a response.`,
+      message: `Order finalized at $${reducedDisplay} after admin confirmation.`,
       order: { id: updatedOrder.id, status: updatedOrder.status, finalPayoutAmount: reducedAmount },
     });
   } catch (error) {
@@ -2805,105 +2799,6 @@ exports.autoAcceptOffers = functions.pubsub
 
     await Promise.all(updates);
     console.log(`Auto-accepted ${updates.length} expired offers.`);
-    return null;
-  });
-
-async function runAutoRequoteSweep() {
-  const thresholdTimestamp = admin.firestore.Timestamp.fromMillis(
-    Date.now() - AUTO_REQUOTE_DELAY_MS
-  );
-
-  const seen = new Set();
-  const ordersToProcess = [];
-
-  const emailedQuery = await ordersCollection
-    .where("status", "==", "emailed")
-    .where("emailedAt", "<=", thresholdTimestamp)
-    .get();
-
-  emailedQuery.forEach((doc) => {
-    if (!seen.has(doc.id)) {
-      seen.add(doc.id);
-      ordersToProcess.push({ id: doc.id, ...doc.data() });
-    }
-  });
-
-  const emailedWithoutTimestamp = await ordersCollection
-    .where("status", "==", "emailed")
-    .where("emailedAt", "==", null)
-    .where("lastStatusUpdateAt", "<=", thresholdTimestamp)
-    .get();
-
-  emailedWithoutTimestamp.forEach((doc) => {
-    if (!seen.has(doc.id)) {
-      seen.add(doc.id);
-      ordersToProcess.push({ id: doc.id, ...doc.data() });
-    }
-  });
-
-  for (const order of ordersToProcess) {
-    try {
-      const { order: updatedOrder } = await updateOrderBoth(
-        order.id,
-        {
-          status: "requote_accepted",
-          requoteAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-          requoteAutoAccepted: true,
-        },
-        {
-          logEntries: [
-            {
-              type: "system",
-              message:
-                "Order automatically moved to Requote Accepted after 7 days without a response.",
-              metadata: { previousStatus: order.status },
-            },
-          ],
-        }
-      );
-
-      if (updatedOrder?.shippingInfo?.email) {
-        const customerName = updatedOrder.shippingInfo.fullName || "there";
-        const htmlBody = `
-          <p>Hi ${escapeHtml(customerName)},</p>
-          <p>We followed up about your shipping label for order <strong>#${escapeHtml(
-            updatedOrder.id
-          )}</strong> but didn’t hear back.</p>
-          <p>To keep your account tidy we’ve marked the order as <strong>Requote Accepted</strong>. If you still plan to send your device, reply to this email and we’ll send a fresh label.</p>
-          <p>— The SecondHandCell Team</p>
-        `;
-
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: updatedOrder.shippingInfo.email,
-          subject: `Order #${updatedOrder.id} marked as Requote Accepted`,
-          html: htmlBody,
-          bcc: [process.env.SALES_EMAIL || "sales@secondhandcell.com"],
-        });
-
-        await recordCustomerEmail(
-          updatedOrder.id,
-          'Automatic requote email sent to customer.',
-          { status: 'requote_accepted', auto: true }
-        );
-      }
-    } catch (error) {
-      console.error(
-        `Failed to auto-requote emailed order ${order.id}:`,
-        error
-      );
-    }
-  }
-}
-
-exports.autoFinalizeEmailedOrders = functions.pubsub
-  .schedule("every 12 hours")
-  .onRun(async () => {
-    try {
-      await runAutoRequoteSweep();
-    } catch (error) {
-      console.error("Automatic requote sweep failed:", error);
-    }
     return null;
   });
 
