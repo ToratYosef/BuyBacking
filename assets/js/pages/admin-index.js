@@ -77,6 +77,28 @@ const STATUS_CHART_CONFIG = [
 { key: 'return-label-generated', label: 'Return Label', color: '#64748b' },
 ];
 
+const STATUS_DROPDOWN_OPTIONS = [
+  'order_pending',
+  'shipping_kit_requested',
+  'kit_needs_printing',
+  'needs_printing',
+  'kit_sent',
+  'kit_in_transit',
+  'kit_delivered',
+  'label_generated',
+  'emailed',
+  'received',
+  'completed',
+  're-offered-pending',
+  're-offered-accepted',
+  're-offered-declined',
+  're-offered-auto-accepted',
+  'return-label-generated',
+  'cancelled',
+];
+
+const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold text-xs px-3 py-1 rounded-full border border-transparent shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-400';
+
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
@@ -246,6 +268,10 @@ const modalConditionFunctional = document.getElementById('modal-condition-functi
 const modalConditionCracks = document.getElementById('modal-condition-cracks');
 const modalConditionCosmetic = document.getElementById('modal-condition-cosmetic');
 const modalStatus = document.getElementById('modal-status');
+const modalStatusText = document.getElementById('modal-status-text');
+const modalStatusWrapper = document.getElementById('modal-status-wrapper');
+const modalStatusDropdown = document.getElementById('modal-status-dropdown');
+const modalStatusCaret = document.getElementById('modal-status-caret');
 
 // New/Updated label elements in modal
 const modalLabelRow = document.getElementById('modal-label-row');
@@ -3368,25 +3394,42 @@ selectElement.selectedIndex = 0;
 
 
 
-async function updateOrderStatusInline(orderId, status) {
-try {
-const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/status`, {
-method: 'PUT',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ status })
-});
+async function updateOrderStatusInline(orderId, status, options = {}) {
+  try {
+    const payload = { status };
+    if (options.notifyCustomer === false) {
+      payload.notifyCustomer = false;
+    }
+    if (options.body && typeof options.body === 'object') {
+      Object.assign(payload, options.body);
+    }
 
-if (!response.ok) {
-const errorText = await response.text();
-throw new Error(errorText || `Failed to update order status to ${status}.`);
-}
+    const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
-return true;
-} catch (error) {
-console.error(`Failed to update status for order ${orderId}:`, error);
-alert('Unable to update the order status. Please open the order and try again.');
-return false;
-}
+    const rawBody = await response.text();
+    let data = {};
+    if (rawBody) {
+      try {
+        data = JSON.parse(rawBody);
+      } catch {
+        data = { message: rawBody };
+      }
+    }
+
+    if (!response.ok) {
+      const errorMessage = data.error || data.message || `Failed to update order status to ${status}.`;
+      throw new Error(errorMessage);
+    }
+
+    return data;
+  } catch (error) {
+    console.error(`Failed to update status for order ${orderId}:`, error);
+    throw error;
+  }
 }
 
 const COSMETIC_CONDITION_KEYS = [
@@ -3584,6 +3627,7 @@ case 'kit_needs_printing':
 case 'needs_printing':
 return 'bg-indigo-100 text-indigo-800 status-bubble';
 case 'kit_sent':
+case 'kit_in_transit':
 return 'bg-orange-100 text-orange-800 status-bubble';
 case 'kit_delivered':
 return 'bg-emerald-100 text-emerald-800 status-bubble';
@@ -3593,12 +3637,150 @@ case 'received': return 'bg-green-100 text-green-800 status-bubble';
 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
+case 're-offered-auto-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
 case 'requote_accepted': return 'bg-teal-100 text-teal-800 status-bubble';
 case 're-offered-declined': return 'bg-red-100 text-red-800 status-bubble';
 case 'return-label-generated': return 'bg-slate-200 text-slate-800 status-bubble';
 case 'cancelled': return 'bg-gray-200 text-gray-700 status-bubble';
 default: return 'bg-slate-100 text-slate-700 status-bubble';
 }
+}
+
+function getStatusToneClasses(status) {
+  const toneClass = getStatusClass(status);
+  if (!toneClass) {
+    return 'bg-slate-100 text-slate-700';
+  }
+
+  return toneClass
+    .split(' ')
+    .filter((cls) => cls && cls !== 'status-bubble')
+    .join(' ');
+}
+
+function getStatusDisplayLabel(status, order) {
+  const display = formatStatus({ status, shippingPreference: order?.shippingPreference });
+  if (display && typeof display === 'string') {
+    return display;
+  }
+  return status
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+let isStatusDropdownOpen = false;
+
+function closeStatusDropdown() {
+  if (!modalStatusDropdown) {
+    return;
+  }
+  modalStatusDropdown.classList.add('hidden');
+  if (modalStatusCaret) {
+    modalStatusCaret.classList.remove('rotate-180');
+  }
+  isStatusDropdownOpen = false;
+}
+
+function openStatusDropdown() {
+  if (!modalStatusDropdown) {
+    return;
+  }
+  modalStatusDropdown.classList.remove('hidden');
+  if (modalStatusCaret) {
+    modalStatusCaret.classList.add('rotate-180');
+  }
+  isStatusDropdownOpen = true;
+}
+
+function toggleStatusDropdown(forceState) {
+  if (!modalStatusDropdown) {
+    return;
+  }
+  const shouldOpen =
+    typeof forceState === 'boolean' ? forceState : modalStatusDropdown.classList.contains('hidden');
+  if (shouldOpen) {
+    openStatusDropdown();
+  } else {
+    closeStatusDropdown();
+  }
+}
+
+function renderStatusDropdown(order) {
+  if (!modalStatusDropdown) {
+    return;
+  }
+
+  modalStatusDropdown.innerHTML = '';
+
+  STATUS_DROPDOWN_OPTIONS.forEach((statusKey) => {
+    const optionLabel = getStatusDisplayLabel(statusKey, order);
+    const optionButton = document.createElement('button');
+    optionButton.type = 'button';
+    optionButton.className = 'flex w-full items-center justify-between gap-3 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition-colors';
+
+    const badge = document.createElement('span');
+    badge.className = `inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${getStatusToneClasses(statusKey)}`;
+    badge.textContent = optionLabel;
+
+    optionButton.appendChild(badge);
+
+    if (statusKey === order.status) {
+      optionButton.classList.add('bg-slate-100', 'cursor-default');
+      const currentLabel = document.createElement('span');
+      currentLabel.className = 'text-xs text-slate-400';
+      currentLabel.textContent = 'Current';
+      optionButton.appendChild(currentLabel);
+      optionButton.disabled = true;
+    } else {
+      optionButton.addEventListener('click', () => handleStatusDropdownSelection(statusKey));
+    }
+
+    modalStatusDropdown.appendChild(optionButton);
+  });
+}
+
+async function handleStatusDropdownSelection(newStatus) {
+  if (!currentOrderDetails) {
+    closeStatusDropdown();
+    return;
+  }
+
+  if (newStatus === currentOrderDetails.status) {
+    closeStatusDropdown();
+    return;
+  }
+
+  try {
+    if (modalLoadingMessage) {
+      modalLoadingMessage.classList.remove('hidden');
+    }
+    if (modalActionButtons) {
+      modalActionButtons.classList.add('hidden');
+    }
+
+    await updateOrderStatusInline(currentOrderDetails.id, newStatus, { notifyCustomer: false });
+
+    await openOrderDetailsModal(currentOrderDetails.id);
+
+    const statusLabel = currentOrderDetails
+      ? getStatusDisplayLabel(newStatus, currentOrderDetails)
+      : getStatusDisplayLabel(newStatus);
+
+    displayModalMessage(`Status updated to ${statusLabel} without emailing the customer.`, 'success');
+  } catch (error) {
+    console.error('Silent status update failed:', error);
+    displayModalMessage(error.message || 'Failed to update the order status.', 'error');
+  } finally {
+    closeStatusDropdown();
+    if (modalLoadingMessage) {
+      modalLoadingMessage.classList.add('hidden');
+    }
+    if (modalActionButtons) {
+      modalActionButtons.classList.remove('hidden');
+    }
+  }
 }
 
 async function openOrderDetailsModal(orderId) {
@@ -3724,8 +3906,15 @@ const cosmeticDisplay = cosmeticCondition !== null && cosmeticCondition !== unde
 : '';
 modalConditionCosmetic.textContent = cosmeticDisplay || 'N/A';
 // Pass the order object to formatStatus here as well
-modalStatus.textContent = formatStatus(order);
-modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatusClass(order.status)}`;
+const statusLabel = formatStatus(order);
+if (modalStatusText) {
+  modalStatusText.textContent = statusLabel;
+}
+if (modalStatus) {
+  modalStatus.className = `${STATUS_BUTTON_BASE_CLASSES} ${getStatusToneClasses(order.status)}`.trim();
+}
+renderStatusDropdown(order);
+closeStatusDropdown();
 
 // --- START: UPDATED LABEL LOGIC FOR USPS HYPERLINKING IN MODAL ---
 
@@ -4741,6 +4930,7 @@ function closeOrderDetailsModal() {
 if (!orderDetailsModal) {
 return;
 }
+closeStatusDropdown();
 orderDetailsModal.classList.add('hidden');
 if (cancelOrderFormContainer) {
 cancelOrderFormContainer.classList.add('hidden');
@@ -4778,6 +4968,26 @@ filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
 });
 
 updateStatusFilterHighlight(currentActiveStatus);
+
+if (modalStatus) {
+  modalStatus.addEventListener('click', (event) => {
+    event.stopPropagation();
+    if (!currentOrderDetails) {
+      return;
+    }
+    renderStatusDropdown(currentOrderDetails);
+    toggleStatusDropdown();
+  });
+}
+
+document.addEventListener('click', (event) => {
+  if (!isStatusDropdownOpen) {
+    return;
+  }
+  if (modalStatusWrapper && !modalStatusWrapper.contains(event.target)) {
+    closeStatusDropdown();
+  }
+});
 
 if (paginationFirst) {
 paginationFirst.addEventListener('click', () => {
