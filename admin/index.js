@@ -52,6 +52,7 @@ admin.initializeApp({
 
 const db = admin.firestore();
 const ordersCollection = db.collection("orders");
+const usersCollection = db.collection("users");
 
 let mailTransporter;
 const notificationEmail = process.env.NOTIFICATION_EMAIL_TO || "";
@@ -1048,7 +1049,7 @@ app.put("/api/orders/:id/status", async (req, res) => {
 
 app.post("/api/orders/:id/send-condition-email", async (req, res) => {
   try {
-    const { reason, notes } = req.body || {};
+    const { reason, notes, label: labelText } = req.body || {};
     if (!reason || !CONDITION_EMAIL_TEMPLATES[reason]) {
       return res.status(400).json({ error: "A valid email reason is required." });
     }
@@ -1088,6 +1089,38 @@ app.post("/api/orders/:id/send-condition-email", async (req, res) => {
     }
 
     await transporter.sendMail(mailOptions);
+
+    const timestampField = admin.firestore.FieldValue.serverTimestamp();
+    const activityEntry = {
+      type: "email",
+      message: `Sent ${labelText || CONDITION_EMAIL_TEMPLATES[reason]?.subject || "condition"} email to customer.`,
+      metadata: {
+        reason,
+        label: labelText || null,
+        notes: notes?.trim() || null,
+      },
+      at: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const updatePayload = {
+      lastCustomerEmailSentAt: timestampField,
+      lastConditionEmailReason: reason,
+      activityLog: admin.firestore.FieldValue.arrayUnion(activityEntry),
+    };
+
+    if (notes && notes.trim()) {
+      updatePayload.lastConditionEmailNotes = notes.trim();
+    }
+
+    await orderRef.set(updatePayload, { merge: true });
+
+    if (order.userId) {
+      await usersCollection
+        .doc(order.userId)
+        .collection("orders")
+        .doc(order.id)
+        .set(updatePayload, { merge: true });
+    }
 
     res.json({ message: "Email sent successfully." });
   } catch (error) {
