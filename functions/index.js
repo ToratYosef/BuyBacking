@@ -2139,9 +2139,9 @@ app.post("/orders/:id/return-label", async (req, res) => {
     const buyerShippingInfo = order.shippingInfo;
     const orderIdForLabel = order.id || "N/A";
 
-    const swiftBuyBackAddress = {
-      name: "SHC Returns",
-      company_name: "SecondHandCell",
+    const secondHandCellAddress = {
+      name: "Second Hand Cell",
+      company_name: "Second Hand Cell",
       phone: "3475591707",
       address_line1: "1602 MCDONALD AVE STE REAR ENTRANCE",
       city_locality: "Brooklyn",
@@ -2159,7 +2159,15 @@ app.post("/orders/:id/return-label", async (req, res) => {
       postal_code: buyerShippingInfo.zipCode,
       country_code: "US",
     };
-    
+
+    const isReturnToCustomer = order.status === "re-offered-declined";
+    const shipFromAddress = isReturnToCustomer
+      ? secondHandCellAddress
+      : buyerAddress;
+    const shipToAddress = isReturnToCustomer
+      ? buyerAddress
+      : secondHandCellAddress;
+
     // Package data for the return label (phone inside kit)
     const returnPackageData = {
       service_code: "usps_first_class_mail",
@@ -2169,8 +2177,8 @@ app.post("/orders/:id/return-label", async (req, res) => {
 
 
     const returnLabelData = await createShipEngineLabel(
-      buyerAddress,
-      swiftBuyBackAddress,
+      shipFromAddress,
+      shipToAddress,
       `${orderIdForLabel}-RETURN`,
       returnPackageData
     );
