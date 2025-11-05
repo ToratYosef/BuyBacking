@@ -67,8 +67,10 @@ const STATUS_CHART_CONFIG = [
 { key: 'kit_needs_printing', label: 'Needs Printing', color: '#8b5cf6' },
 { key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
 { key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
+{ key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
 { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
 { key: 'emailed', label: 'Emailed', color: '#38bdf8' },
+{ key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0284c7' },
 { key: 'received', label: 'Received', color: '#0ea5e9' },
 { key: 'completed', label: 'Completed', color: '#22c55e' },
 { key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
@@ -85,8 +87,10 @@ const STATUS_DROPDOWN_OPTIONS = [
   'kit_sent',
   'kit_in_transit',
   'kit_delivered',
+  'kit_on_the_way_to_us',
   'label_generated',
   'emailed',
+  'phone_on_the_way',
   'received',
   'completed',
   're-offered-pending',
@@ -337,6 +341,12 @@ const voidLabelMessage = document.getElementById('void-label-message');
 const submitVoidLabelBtn = document.getElementById('submit-void-label-btn');
 const cancelVoidLabelBtn = document.getElementById('cancel-void-label-btn');
 
+const clearDataFormContainer = document.getElementById('clear-data-form-container');
+const clearDataOptionsContainer = document.getElementById('clear-data-options');
+const clearDataMessage = document.getElementById('clear-data-message');
+const submitClearDataBtn = document.getElementById('submit-clear-data-btn');
+const cancelClearDataBtn = document.getElementById('cancel-clear-data-btn');
+
 const cancelOrderFormContainer = document.getElementById('cancel-order-form-container');
 const cancelOrderVoidOptionsContainer = document.getElementById('cancel-order-void-options');
 const cancelOrderMessage = document.getElementById('cancel-order-message');
@@ -410,9 +420,16 @@ filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
 }
 
 const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printing', 'needs_printing'];
-const REMINDER_ELIGIBLE_STATUSES = ['label_generated', 'emailed'];
-const EXPIRING_REMINDER_STATUSES = ['order_pending', ...KIT_PRINT_PENDING_STATUSES, 'label_generated', 'emailed'];
-const KIT_REMINDER_STATUSES = ['kit_sent', 'kit_delivered'];
+const REMINDER_ELIGIBLE_STATUSES = ['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way'];
+const EXPIRING_REMINDER_STATUSES = [
+  'order_pending',
+  ...KIT_PRINT_PENDING_STATUSES,
+  'label_generated',
+  'emailed',
+  'kit_on_the_way_to_us',
+  'phone_on_the_way',
+];
+const KIT_REMINDER_STATUSES = ['kit_sent', 'kit_delivered', 'kit_on_the_way_to_us'];
 const AGING_EXCLUDED_STATUSES = new Set([
   'completed',
   'return-label-generated',
@@ -562,7 +579,7 @@ minute: '2-digit'
 function formatLabelStatus(order) {
 if (!order) return '';
 const normalizedStatus = (order.status || '').toLowerCase();
-if (!['label_generated', 'emailed'].includes(normalizedStatus)) {
+if (!['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way'].includes(normalizedStatus)) {
 return '';
 }
 let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
@@ -634,6 +651,99 @@ isVoidable: !['voided', 'void_denied'].includes(topLevelStatus),
 return options;
 }
 
+function getClearDataOptions(order) {
+const options = [];
+if (!order || typeof order !== 'object') {
+return options;
+}
+
+const labels = order.shipEngineLabels && typeof order.shipEngineLabels === 'object'
+? order.shipEngineLabels
+: {};
+const seenLabelKeys = new Set();
+
+Object.entries(labels).forEach(([key, info]) => {
+if (!key) return;
+const normalizedKey = key.toString().toLowerCase();
+seenLabelKeys.add(normalizedKey);
+const displayName = (info && (info.displayName || formatLabelDisplayNameKey(key))) || formatLabelDisplayNameKey(key);
+const trackingValue = info?.trackingNumber || info?.tracking_number || null;
+options.push({
+id: `shipLabel:${normalizedKey}`,
+label: `Remove ${displayName}`,
+description: 'Deletes the saved ShipEngine label metadata and download link so a new label can be generated.',
+detail: trackingValue ? `Tracking: ${trackingValue}` : null,
+});
+});
+
+if (!seenLabelKeys.has('primary') && (order.shipEngineLabelId || order.uspsLabelUrl)) {
+options.push({
+id: 'shipLabel:primary',
+label: 'Remove primary shipping label',
+description: 'Clears the stored USPS label link and ShipEngine metadata for the primary label.',
+detail: order.trackingNumber ? `Tracking: ${order.trackingNumber}` : null,
+});
+}
+
+if (!seenLabelKeys.has('outboundkit') && order.outboundLabelUrl) {
+const outboundLabelName = formatLabelDisplayNameKey('outboundkit');
+options.push({
+id: 'shipLabel:outboundkit',
+label: outboundLabelName ? `Remove ${outboundLabelName}` : 'Remove outbound kit label',
+description: 'Deletes the saved outbound kit label metadata and download link.',
+detail: null,
+});
+}
+
+if (!seenLabelKeys.has('inbounddevice') && order.inboundLabelUrl) {
+const inboundLabelName = formatLabelDisplayNameKey('inbounddevice');
+options.push({
+id: 'shipLabel:inbounddevice',
+label: inboundLabelName ? `Remove ${inboundLabelName}` : 'Remove inbound device label',
+description: 'Deletes the saved inbound device label metadata and download link.',
+detail: null,
+});
+}
+
+if (order.trackingNumber) {
+options.push({
+id: 'tracking:primary',
+label: 'Clear primary tracking number',
+description: 'Removes the main tracking number stored on the order record.',
+detail: `Tracking: ${order.trackingNumber}`,
+});
+}
+
+if (order.outboundTrackingNumber) {
+options.push({
+id: 'tracking:outbound',
+label: 'Clear outbound kit tracking number',
+description: 'Removes the outbound shipping kit tracking number saved on this order.',
+detail: `Tracking: ${order.outboundTrackingNumber}`,
+});
+}
+
+if (order.inboundTrackingNumber) {
+options.push({
+id: 'tracking:inbound',
+label: 'Clear inbound device tracking number',
+description: 'Removes the inbound device tracking number saved on this order.',
+detail: `Tracking: ${order.inboundTrackingNumber}`,
+});
+}
+
+if (order.returnLabelUrl || order.returnTrackingNumber) {
+options.push({
+id: 'returnLabel',
+label: 'Remove return label',
+description: 'Deletes the return label download link and tracking number that were sent to the customer.',
+detail: order.returnTrackingNumber ? `Tracking: ${order.returnTrackingNumber}` : null,
+});
+}
+
+return options;
+}
+
 function hasVoidableLabels(order) {
 return getLabelOptions(order).some(option => option.isVoidable);
 }
@@ -682,6 +792,43 @@ wrapper.appendChild(content);
 return wrapper;
 }
 
+function createClearDataOptionElement(option) {
+const wrapper = document.createElement('label');
+wrapper.className = 'flex items-start gap-3 p-3 border rounded-md bg-white border-amber-200 hover:border-amber-300 transition-colors duration-150';
+
+const checkbox = document.createElement('input');
+checkbox.type = 'checkbox';
+checkbox.className = 'mt-1 h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded clear-data-checkbox';
+checkbox.dataset.target = option.id;
+checkbox.value = option.id;
+
+const content = document.createElement('div');
+content.className = 'flex-1';
+
+const title = document.createElement('div');
+title.className = 'font-semibold text-sm text-slate-800';
+title.textContent = option.label;
+content.appendChild(title);
+
+if (option.detail) {
+const detail = document.createElement('div');
+detail.className = 'text-xs text-slate-500 mt-1';
+detail.textContent = option.detail;
+content.appendChild(detail);
+}
+
+if (option.description) {
+const description = document.createElement('div');
+description.className = option.detail ? 'text-xs text-slate-500 mt-1' : 'text-xs text-slate-500';
+description.textContent = option.description;
+content.appendChild(description);
+}
+
+wrapper.appendChild(checkbox);
+wrapper.appendChild(content);
+return wrapper;
+}
+
 async function requestVoidLabels(orderId, selections) {
 const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/void-label`, {
 method: 'POST',
@@ -692,6 +839,21 @@ body: JSON.stringify({ labels: selections }),
 if (!response.ok) {
 const errorText = await response.text();
 throw new Error(errorText || `Failed to void labels: ${response.status}`);
+}
+
+return response.json();
+}
+
+async function requestClearOrderData(orderId, selections) {
+const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/clear-data`, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ selections }),
+});
+
+if (!response.ok) {
+const errorText = await response.text();
+throw new Error(errorText || `Failed to clear data: ${response.status}`);
 }
 
 return response.json();
@@ -713,6 +875,107 @@ summaryMessage = 'Void request processed.';
 }
 
 return { summaryMessage: summaryMessage.trim(), approvedCount, deniedCount };
+}
+
+function resetClearDataMessage() {
+if (!clearDataMessage) return;
+clearDataMessage.textContent = '';
+clearDataMessage.className = 'mt-3 text-sm hidden';
+}
+
+function hideClearDataForm() {
+if (clearDataFormContainer) {
+clearDataFormContainer.classList.add('hidden');
+}
+if (clearDataOptionsContainer) {
+clearDataOptionsContainer.innerHTML = '';
+}
+resetClearDataMessage();
+}
+
+function showClearDataForm(order) {
+if (!clearDataFormContainer || !clearDataOptionsContainer) {
+displayModalMessage('Clear data controls are not available on this page.', 'error');
+return;
+}
+
+resetClearDataMessage();
+clearDataOptionsContainer.innerHTML = '';
+
+const options = getClearDataOptions(order);
+if (!options.length) {
+displayModalMessage('No saved shipping or tracking data is available to clear for this order.', 'info');
+return;
+}
+
+if (cancelOrderFormContainer) {
+cancelOrderFormContainer.classList.add('hidden');
+}
+if (voidLabelFormContainer) {
+voidLabelFormContainer.classList.add('hidden');
+}
+if (manualFulfillmentFormContainer) {
+manualFulfillmentFormContainer.classList.add('hidden');
+}
+if (deleteConfirmationContainer) {
+deleteConfirmationContainer.classList.add('hidden');
+}
+if (reofferFormContainer) {
+reofferFormContainer.classList.add('hidden');
+}
+
+options.forEach(option => {
+clearDataOptionsContainer.appendChild(createClearDataOptionElement(option));
+});
+
+modalActionButtons.classList.add('hidden');
+clearDataFormContainer.classList.remove('hidden');
+
+if (submitClearDataBtn) {
+submitClearDataBtn.onclick = () => handleClearDataSubmit(order.id);
+}
+if (cancelClearDataBtn) {
+cancelClearDataBtn.onclick = () => {
+hideClearDataForm();
+modalActionButtons.classList.remove('hidden');
+if (order && order.id) {
+openOrderDetailsModal(order.id);
+}
+};
+}
+}
+
+async function handleClearDataSubmit(orderId) {
+const selectedTargets = Array.from(document.querySelectorAll('.clear-data-checkbox:checked'))
+.map(checkbox => checkbox.dataset.target)
+.filter(Boolean);
+
+if (!selectedTargets.length) {
+if (clearDataMessage) {
+clearDataMessage.textContent = 'Please select at least one item to clear.';
+clearDataMessage.className = 'mt-3 text-sm text-red-600';
+}
+return;
+}
+
+modalLoadingMessage.classList.remove('hidden');
+if (clearDataFormContainer) {
+clearDataFormContainer.classList.add('hidden');
+}
+resetClearDataMessage();
+
+try {
+const result = await requestClearOrderData(orderId, selectedTargets);
+const summary = result?.message || 'Selected data cleared successfully.';
+displayModalMessage(summary, 'success');
+openOrderDetailsModal(orderId);
+} catch (error) {
+console.error('Error clearing stored data:', error);
+displayModalMessage(`Error: ${error.message}`, 'error');
+modalActionButtons.classList.remove('hidden');
+} finally {
+modalLoadingMessage.classList.add('hidden');
+}
 }
 
 function coerceCurrencyValue(value) {
@@ -3364,6 +3627,9 @@ return 'Kit Sent';
 if (status === 'kit_delivered') {
 return 'Kit Delivered';
 }
+if (status === 'kit_on_the_way_to_us') {
+return 'Kit On The Way To Us';
+}
 if (status === 'label_generated') {
 // If the user requested an emailed label, display "Label Generated"
 if (preference === 'Email Label Requested') {
@@ -3374,6 +3640,9 @@ return 'Shipping Kit on the Way';
 }
 if (status === 'emailed') {
 return 'Emailed';
+}
+if (status === 'phone_on_the_way') {
+return 'Phone On The Way';
 }
 // Fallback for other statuses
 return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -3631,8 +3900,11 @@ case 'kit_in_transit':
 return 'bg-orange-100 text-orange-800 status-bubble';
 case 'kit_delivered':
 return 'bg-emerald-100 text-emerald-800 status-bubble';
+case 'kit_on_the_way_to_us':
+return 'bg-teal-100 text-teal-800 status-bubble';
 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'emailed': return 'bg-yellow-100 text-yellow-800 status-bubble';
+case 'phone_on_the_way': return 'bg-sky-100 text-sky-800 status-bubble';
 case 'received': return 'bg-green-100 text-green-800 status-bubble';
 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
@@ -3801,6 +4073,7 @@ modalZelleDetailsRow.classList.add('hidden');
 reofferFormContainer.classList.add('hidden');
 manualFulfillmentFormContainer.classList.add('hidden');
 deleteConfirmationContainer.classList.add('hidden');
+hideClearDataForm();
 updateReminderButtons(null);
 
 // Hide all label rows initially
@@ -4065,6 +4338,7 @@ return button;
 
 const currentStatus = order.status;
 const labelOptions = getLabelOptions(order);
+const clearDataOptions = getClearDataOptions(order);
 const hasGeneratedLabels = labelOptions.length > 0 || Boolean(
 order.uspsLabelUrl ||
 order.outboundLabelUrl ||
@@ -4174,6 +4448,12 @@ createButton('Void Shipping Labels', () => showVoidLabelForm(order), 'bg-red-600
 );
 }
 
+if (clearDataOptions.length > 0) {
+modalActionButtons.appendChild(
+createButton('Clear Saved Shipping Data', () => showClearDataForm(order), 'bg-amber-600 hover:bg-amber-700')
+);
+}
+
 if (currentStatus !== 'cancelled') {
 if (hasVoidableLabels(order)) {
 modalActionButtons.appendChild(
@@ -4196,6 +4476,8 @@ if (!options.length) {
 displayModalMessage('No shipping label information is available for this order.', 'error');
 return;
 }
+
+hideClearDataForm();
 
 voidLabelOptionsContainer.innerHTML = '';
 if (voidLabelMessage) {
@@ -4234,6 +4516,8 @@ if (!cancelOrderFormContainer || !cancelOrderVoidOptionsContainer) {
 handleAction(order.id, 'cancelOrder');
 return;
 }
+
+hideClearDataForm();
 
 const options = getLabelOptions(order);
 const voidableOptions = options.filter(option => option.isVoidable);
@@ -4365,6 +4649,7 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function showReofferForm(orderId) {
+hideClearDataForm();
 modalActionButtons.classList.add('hidden');
 reofferFormContainer.classList.remove('hidden');
 reofferNewPrice.value = '';
@@ -4408,6 +4693,7 @@ reofferPricingMessage.classList.remove('hidden');
 * @param {Object} order The current order object.
 */
 function showManualFulfillmentForm(order) {
+hideClearDataForm();
 modalActionButtons.classList.add('hidden');
 manualFulfillmentFormContainer.classList.remove('hidden');
 manualOutboundTracking.value = '';
@@ -4485,6 +4771,7 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function showDeleteConfirmation(orderId) {
+hideClearDataForm();
 modalActionButtons.classList.add('hidden');
 deleteConfirmationContainer.classList.remove('hidden');
 
@@ -4594,6 +4881,7 @@ manualFulfillmentFormContainer.classList.add('hidden');
 deleteConfirmationContainer.classList.add('hidden');
 voidLabelFormContainer.classList.add('hidden');
 cancelOrderFormContainer.classList.add('hidden');
+hideClearDataForm();
 updateReminderButtons(null); // Hide reminder buttons during action
 modalMessage.classList.add('hidden');
 modalMessage.textContent = '';
@@ -4944,6 +5232,7 @@ manualFulfillmentFormContainer.classList.add('hidden');
 if (reofferFormContainer) {
 reofferFormContainer.classList.add('hidden');
 }
+hideClearDataForm();
 updateReminderButtons(null);
 }
 
@@ -5579,16 +5868,18 @@ document.addEventListener('DOMContentLoaded', () => {
       try { return await res.json(); } catch { return {}; }
     }
 
-    async function runBatchRefresh({ concurrency = 4 } = {}) {
+    async function runBatchRefresh({ concurrency = 4, manageRefreshButton = true } = {}) {
       const ids = collectOrderIdsFromTable();
       if (!ids.length) {
         console.log("No order rows found to refresh.");
         return { ok: 0, fail: 0, total: 0 };
       }
 
-      const allBtn = document.getElementById("refresh-all-kits-btn");
-      toggleBtnState(refreshBtn, true);
-      toggleBtnState(allBtn, true);
+      const kitBtn = document.getElementById("refresh-all-kits-btn");
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, true);
+        if (kitBtn) toggleBtnState(kitBtn, true);
+      }
       setStatus(`Refreshing ${ids.length} kits…`);
 
       let i = 0;
@@ -5614,10 +5905,91 @@ document.addEventListener('DOMContentLoaded', () => {
       const N = Math.min(concurrency, ids.length);
       await Promise.all(Array.from({ length: N }, worker));
 
-      toggleBtnState(refreshBtn, false);
-      toggleBtnState(allBtn, false);
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
       setStatus(`Batch refresh complete: ${results.ok} ok, ${results.fail} failed`);
       return results;
+    }
+
+    async function refreshInboundTrackingForOrder(orderId) {
+      const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/sync-label-tracking`;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        return { skipped: true };
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      try {
+        return await res.json();
+      } catch {
+        return {};
+      }
+    }
+
+    async function runLabelRefresh({ concurrency = 4 } = {}) {
+      const ids = collectOrderIdsFromTable();
+      if (!ids.length) {
+        console.log("No order rows found to refresh inbound labels for.");
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
+      }
+
+      setStatus(`Refreshing inbound labels… 0/${ids.length}`);
+
+      let i = 0;
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
+      const queue = ids.slice();
+
+      async function worker() {
+        while (queue.length) {
+          const id = queue.shift();
+          try {
+            const response = await refreshInboundTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
+          } catch (error) {
+            results.fail++;
+            console.warn("Inbound refresh failed", id, error);
+          } finally {
+            i++;
+            setStatus(`Refreshing inbound labels… ${i}/${ids.length}`);
+          }
+        }
+      }
+
+      const N = Math.min(concurrency, ids.length);
+      await Promise.all(Array.from({ length: N }, worker));
+
+      setStatus(
+        `Inbound refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
+      );
+      return results;
+    }
+
+    async function runCombinedRefresh({ concurrency = 4 } = {}) {
+      const kitBtn = document.getElementById("refresh-all-kits-btn");
+      toggleBtnState(refreshBtn, true);
+      if (kitBtn) toggleBtnState(kitBtn, true);
+      setStatus("Refreshing kits and labels…");
+
+      try {
+        const kitResult = await runBatchRefresh({ concurrency, manageRefreshButton: false });
+        const labelResult = await runLabelRefresh({ concurrency });
+        setStatus(
+          `Kits refreshed (${kitResult.ok}/${kitResult.total}); labels refreshed (${labelResult.ok}/${labelResult.total}, ${labelResult.skipped} skipped, ${labelResult.fail} failed)`
+        );
+        return { kitResult, labelResult };
+      } catch (error) {
+        console.warn("Combined refresh error", error);
+        setStatus("Combined refresh failed. Check console for details.");
+        throw error;
+      } finally {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
     }
 
     // Create and insert the "Refresh all kit tracking" button if not present
@@ -5629,8 +6001,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const btn = document.createElement("button");
       btn.id = "refresh-all-kits-btn";
       btn.className = "refresh-btn";
-      btn.innerHTML = '<i class="fas fa-truck-fast"></i><span>Refresh all kit tracking</span>';
-      btn.addEventListener("click", () => runBatchRefresh({ concurrency: 4 }));
+      btn.innerHTML = '<i class="fas fa-sync-alt"></i><span>Refresh kits + labels</span>';
+      btn.addEventListener("click", () => runCombinedRefresh({ concurrency: 4 }));
       // Place it next to the existing Refresh data button
       const actions = toolbar.querySelector(".refresh-btn")?.parentElement || toolbar;
       actions.appendChild(btn);
@@ -5646,7 +6018,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!DO_BATCH_BEFORE_REFRESH) return; // fall through to the original handler
         ev.preventDefault();
         try {
-          await runBatchRefresh({ concurrency: 4 });
+          await runCombinedRefresh({ concurrency: 4 });
         } catch (e) {
           console.warn("Batch refresh error", e);
         }
@@ -5654,6 +6026,19 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => clone.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: false })), 0);
       }, { capture: true });
     }
+
+    const AUTO_LABEL_REFRESH_INTERVAL = 30 * 60 * 1000;
+    let labelRefreshInFlight = false;
+    setInterval(() => {
+      if (labelRefreshInFlight) return;
+      if (!ordersTbody || !ordersTbody.children || !ordersTbody.children.length) return;
+      labelRefreshInFlight = true;
+      runLabelRefresh({ concurrency: 2 })
+        .catch((error) => console.warn("Auto inbound refresh failed", error))
+        .finally(() => {
+          labelRefreshInFlight = false;
+        });
+    }, AUTO_LABEL_REFRESH_INTERVAL);
   } catch (e) {
     console.warn("Batch kit refresh bootstrap failed", e);
   }
