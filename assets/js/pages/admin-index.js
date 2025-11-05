@@ -337,6 +337,12 @@ const voidLabelMessage = document.getElementById('void-label-message');
 const submitVoidLabelBtn = document.getElementById('submit-void-label-btn');
 const cancelVoidLabelBtn = document.getElementById('cancel-void-label-btn');
 
+const clearDataFormContainer = document.getElementById('clear-data-form-container');
+const clearDataOptionsContainer = document.getElementById('clear-data-options');
+const clearDataMessage = document.getElementById('clear-data-message');
+const submitClearDataBtn = document.getElementById('submit-clear-data-btn');
+const cancelClearDataBtn = document.getElementById('cancel-clear-data-btn');
+
 const cancelOrderFormContainer = document.getElementById('cancel-order-form-container');
 const cancelOrderVoidOptionsContainer = document.getElementById('cancel-order-void-options');
 const cancelOrderMessage = document.getElementById('cancel-order-message');
@@ -634,6 +640,99 @@ isVoidable: !['voided', 'void_denied'].includes(topLevelStatus),
 return options;
 }
 
+function getClearDataOptions(order) {
+const options = [];
+if (!order || typeof order !== 'object') {
+return options;
+}
+
+const labels = order.shipEngineLabels && typeof order.shipEngineLabels === 'object'
+? order.shipEngineLabels
+: {};
+const seenLabelKeys = new Set();
+
+Object.entries(labels).forEach(([key, info]) => {
+if (!key) return;
+const normalizedKey = key.toString().toLowerCase();
+seenLabelKeys.add(normalizedKey);
+const displayName = (info && (info.displayName || formatLabelDisplayNameKey(key))) || formatLabelDisplayNameKey(key);
+const trackingValue = info?.trackingNumber || info?.tracking_number || null;
+options.push({
+id: `shipLabel:${normalizedKey}`,
+label: `Remove ${displayName}`,
+description: 'Deletes the saved ShipEngine label metadata and download link so a new label can be generated.',
+detail: trackingValue ? `Tracking: ${trackingValue}` : null,
+});
+});
+
+if (!seenLabelKeys.has('primary') && (order.shipEngineLabelId || order.uspsLabelUrl)) {
+options.push({
+id: 'shipLabel:primary',
+label: 'Remove primary shipping label',
+description: 'Clears the stored USPS label link and ShipEngine metadata for the primary label.',
+detail: order.trackingNumber ? `Tracking: ${order.trackingNumber}` : null,
+});
+}
+
+if (!seenLabelKeys.has('outboundkit') && order.outboundLabelUrl) {
+const outboundLabelName = formatLabelDisplayNameKey('outboundkit');
+options.push({
+id: 'shipLabel:outboundkit',
+label: outboundLabelName ? `Remove ${outboundLabelName}` : 'Remove outbound kit label',
+description: 'Deletes the saved outbound kit label metadata and download link.',
+detail: null,
+});
+}
+
+if (!seenLabelKeys.has('inbounddevice') && order.inboundLabelUrl) {
+const inboundLabelName = formatLabelDisplayNameKey('inbounddevice');
+options.push({
+id: 'shipLabel:inbounddevice',
+label: inboundLabelName ? `Remove ${inboundLabelName}` : 'Remove inbound device label',
+description: 'Deletes the saved inbound device label metadata and download link.',
+detail: null,
+});
+}
+
+if (order.trackingNumber) {
+options.push({
+id: 'tracking:primary',
+label: 'Clear primary tracking number',
+description: 'Removes the main tracking number stored on the order record.',
+detail: `Tracking: ${order.trackingNumber}`,
+});
+}
+
+if (order.outboundTrackingNumber) {
+options.push({
+id: 'tracking:outbound',
+label: 'Clear outbound kit tracking number',
+description: 'Removes the outbound shipping kit tracking number saved on this order.',
+detail: `Tracking: ${order.outboundTrackingNumber}`,
+});
+}
+
+if (order.inboundTrackingNumber) {
+options.push({
+id: 'tracking:inbound',
+label: 'Clear inbound device tracking number',
+description: 'Removes the inbound device tracking number saved on this order.',
+detail: `Tracking: ${order.inboundTrackingNumber}`,
+});
+}
+
+if (order.returnLabelUrl || order.returnTrackingNumber) {
+options.push({
+id: 'returnLabel',
+label: 'Remove return label',
+description: 'Deletes the return label download link and tracking number that were sent to the customer.',
+detail: order.returnTrackingNumber ? `Tracking: ${order.returnTrackingNumber}` : null,
+});
+}
+
+return options;
+}
+
 function hasVoidableLabels(order) {
 return getLabelOptions(order).some(option => option.isVoidable);
 }
@@ -682,6 +781,43 @@ wrapper.appendChild(content);
 return wrapper;
 }
 
+function createClearDataOptionElement(option) {
+const wrapper = document.createElement('label');
+wrapper.className = 'flex items-start gap-3 p-3 border rounded-md bg-white border-amber-200 hover:border-amber-300 transition-colors duration-150';
+
+const checkbox = document.createElement('input');
+checkbox.type = 'checkbox';
+checkbox.className = 'mt-1 h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded clear-data-checkbox';
+checkbox.dataset.target = option.id;
+checkbox.value = option.id;
+
+const content = document.createElement('div');
+content.className = 'flex-1';
+
+const title = document.createElement('div');
+title.className = 'font-semibold text-sm text-slate-800';
+title.textContent = option.label;
+content.appendChild(title);
+
+if (option.detail) {
+const detail = document.createElement('div');
+detail.className = 'text-xs text-slate-500 mt-1';
+detail.textContent = option.detail;
+content.appendChild(detail);
+}
+
+if (option.description) {
+const description = document.createElement('div');
+description.className = option.detail ? 'text-xs text-slate-500 mt-1' : 'text-xs text-slate-500';
+description.textContent = option.description;
+content.appendChild(description);
+}
+
+wrapper.appendChild(checkbox);
+wrapper.appendChild(content);
+return wrapper;
+}
+
 async function requestVoidLabels(orderId, selections) {
 const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/void-label`, {
 method: 'POST',
@@ -692,6 +828,21 @@ body: JSON.stringify({ labels: selections }),
 if (!response.ok) {
 const errorText = await response.text();
 throw new Error(errorText || `Failed to void labels: ${response.status}`);
+}
+
+return response.json();
+}
+
+async function requestClearOrderData(orderId, selections) {
+const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/clear-data`, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ selections }),
+});
+
+if (!response.ok) {
+const errorText = await response.text();
+throw new Error(errorText || `Failed to clear data: ${response.status}`);
 }
 
 return response.json();
@@ -713,6 +864,107 @@ summaryMessage = 'Void request processed.';
 }
 
 return { summaryMessage: summaryMessage.trim(), approvedCount, deniedCount };
+}
+
+function resetClearDataMessage() {
+if (!clearDataMessage) return;
+clearDataMessage.textContent = '';
+clearDataMessage.className = 'mt-3 text-sm hidden';
+}
+
+function hideClearDataForm() {
+if (clearDataFormContainer) {
+clearDataFormContainer.classList.add('hidden');
+}
+if (clearDataOptionsContainer) {
+clearDataOptionsContainer.innerHTML = '';
+}
+resetClearDataMessage();
+}
+
+function showClearDataForm(order) {
+if (!clearDataFormContainer || !clearDataOptionsContainer) {
+displayModalMessage('Clear data controls are not available on this page.', 'error');
+return;
+}
+
+resetClearDataMessage();
+clearDataOptionsContainer.innerHTML = '';
+
+const options = getClearDataOptions(order);
+if (!options.length) {
+displayModalMessage('No saved shipping or tracking data is available to clear for this order.', 'info');
+return;
+}
+
+if (cancelOrderFormContainer) {
+cancelOrderFormContainer.classList.add('hidden');
+}
+if (voidLabelFormContainer) {
+voidLabelFormContainer.classList.add('hidden');
+}
+if (manualFulfillmentFormContainer) {
+manualFulfillmentFormContainer.classList.add('hidden');
+}
+if (deleteConfirmationContainer) {
+deleteConfirmationContainer.classList.add('hidden');
+}
+if (reofferFormContainer) {
+reofferFormContainer.classList.add('hidden');
+}
+
+options.forEach(option => {
+clearDataOptionsContainer.appendChild(createClearDataOptionElement(option));
+});
+
+modalActionButtons.classList.add('hidden');
+clearDataFormContainer.classList.remove('hidden');
+
+if (submitClearDataBtn) {
+submitClearDataBtn.onclick = () => handleClearDataSubmit(order.id);
+}
+if (cancelClearDataBtn) {
+cancelClearDataBtn.onclick = () => {
+hideClearDataForm();
+modalActionButtons.classList.remove('hidden');
+if (order && order.id) {
+openOrderDetailsModal(order.id);
+}
+};
+}
+}
+
+async function handleClearDataSubmit(orderId) {
+const selectedTargets = Array.from(document.querySelectorAll('.clear-data-checkbox:checked'))
+.map(checkbox => checkbox.dataset.target)
+.filter(Boolean);
+
+if (!selectedTargets.length) {
+if (clearDataMessage) {
+clearDataMessage.textContent = 'Please select at least one item to clear.';
+clearDataMessage.className = 'mt-3 text-sm text-red-600';
+}
+return;
+}
+
+modalLoadingMessage.classList.remove('hidden');
+if (clearDataFormContainer) {
+clearDataFormContainer.classList.add('hidden');
+}
+resetClearDataMessage();
+
+try {
+const result = await requestClearOrderData(orderId, selectedTargets);
+const summary = result?.message || 'Selected data cleared successfully.';
+displayModalMessage(summary, 'success');
+openOrderDetailsModal(orderId);
+} catch (error) {
+console.error('Error clearing stored data:', error);
+displayModalMessage(`Error: ${error.message}`, 'error');
+modalActionButtons.classList.remove('hidden');
+} finally {
+modalLoadingMessage.classList.add('hidden');
+}
 }
 
 function coerceCurrencyValue(value) {
@@ -3801,6 +4053,7 @@ modalZelleDetailsRow.classList.add('hidden');
 reofferFormContainer.classList.add('hidden');
 manualFulfillmentFormContainer.classList.add('hidden');
 deleteConfirmationContainer.classList.add('hidden');
+hideClearDataForm();
 updateReminderButtons(null);
 
 // Hide all label rows initially
@@ -4065,6 +4318,7 @@ return button;
 
 const currentStatus = order.status;
 const labelOptions = getLabelOptions(order);
+const clearDataOptions = getClearDataOptions(order);
 const hasGeneratedLabels = labelOptions.length > 0 || Boolean(
 order.uspsLabelUrl ||
 order.outboundLabelUrl ||
@@ -4174,6 +4428,12 @@ createButton('Void Shipping Labels', () => showVoidLabelForm(order), 'bg-red-600
 );
 }
 
+if (clearDataOptions.length > 0) {
+modalActionButtons.appendChild(
+createButton('Clear Saved Shipping Data', () => showClearDataForm(order), 'bg-amber-600 hover:bg-amber-700')
+);
+}
+
 if (currentStatus !== 'cancelled') {
 if (hasVoidableLabels(order)) {
 modalActionButtons.appendChild(
@@ -4196,6 +4456,8 @@ if (!options.length) {
 displayModalMessage('No shipping label information is available for this order.', 'error');
 return;
 }
+
+hideClearDataForm();
 
 voidLabelOptionsContainer.innerHTML = '';
 if (voidLabelMessage) {
@@ -4234,6 +4496,8 @@ if (!cancelOrderFormContainer || !cancelOrderVoidOptionsContainer) {
 handleAction(order.id, 'cancelOrder');
 return;
 }
+
+hideClearDataForm();
 
 const options = getLabelOptions(order);
 const voidableOptions = options.filter(option => option.isVoidable);
@@ -4365,6 +4629,7 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function showReofferForm(orderId) {
+hideClearDataForm();
 modalActionButtons.classList.add('hidden');
 reofferFormContainer.classList.remove('hidden');
 reofferNewPrice.value = '';
@@ -4408,6 +4673,7 @@ reofferPricingMessage.classList.remove('hidden');
 * @param {Object} order The current order object.
 */
 function showManualFulfillmentForm(order) {
+hideClearDataForm();
 modalActionButtons.classList.add('hidden');
 manualFulfillmentFormContainer.classList.remove('hidden');
 manualOutboundTracking.value = '';
@@ -4485,6 +4751,7 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function showDeleteConfirmation(orderId) {
+hideClearDataForm();
 modalActionButtons.classList.add('hidden');
 deleteConfirmationContainer.classList.remove('hidden');
 
@@ -4594,6 +4861,7 @@ manualFulfillmentFormContainer.classList.add('hidden');
 deleteConfirmationContainer.classList.add('hidden');
 voidLabelFormContainer.classList.add('hidden');
 cancelOrderFormContainer.classList.add('hidden');
+hideClearDataForm();
 updateReminderButtons(null); // Hide reminder buttons during action
 modalMessage.classList.add('hidden');
 modalMessage.textContent = '';
@@ -4944,6 +5212,7 @@ manualFulfillmentFormContainer.classList.add('hidden');
 if (reofferFormContainer) {
 reofferFormContainer.classList.add('hidden');
 }
+hideClearDataForm();
 updateReminderButtons(null);
 }
 
