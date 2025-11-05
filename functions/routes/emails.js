@@ -1,4 +1,5 @@
 const express = require('express');
+const admin = require('firebase-admin');
 
 module.exports = function createEmailsRouter({
   transporter,
@@ -61,7 +62,7 @@ module.exports = function createEmailsRouter({
 
   router.post('/orders/:id/send-condition-email', async (req, res) => {
     try {
-      const { reason, notes } = req.body || {};
+      const { reason, notes, label: labelText } = req.body || {};
       if (!reason || !CONDITION_EMAIL_TEMPLATES[reason]) {
         return res.status(400).json({ error: 'A valid email reason is required.' });
       }
@@ -95,6 +96,29 @@ module.exports = function createEmailsRouter({
       }
 
       await transporter.sendMail(mailOptions);
+
+      await updateOrderBoth(
+        req.params.id,
+        {
+          lastCustomerEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastConditionEmailReason: reason,
+          ...(notes && notes.trim() ? { lastConditionEmailNotes: notes.trim() } : {}),
+        },
+        {
+          autoLogStatus: false,
+          logEntries: [
+            {
+              type: 'email',
+              message: `Sent ${labelText || subject} email to customer.`,
+              metadata: {
+                reason,
+                label: labelText || null,
+                notes: notes && notes.trim() ? notes.trim() : null,
+              },
+            },
+          ],
+        }
+      );
 
       res.json({ message: 'Email sent successfully.' });
     } catch (error) {
