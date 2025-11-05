@@ -67,8 +67,10 @@ const STATUS_CHART_CONFIG = [
 { key: 'kit_needs_printing', label: 'Needs Printing', color: '#8b5cf6' },
 { key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
 { key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
+{ key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
 { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
 { key: 'emailed', label: 'Emailed', color: '#38bdf8' },
+{ key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0284c7' },
 { key: 'received', label: 'Received', color: '#0ea5e9' },
 { key: 'completed', label: 'Completed', color: '#22c55e' },
 { key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
@@ -85,8 +87,10 @@ const STATUS_DROPDOWN_OPTIONS = [
   'kit_sent',
   'kit_in_transit',
   'kit_delivered',
+  'kit_on_the_way_to_us',
   'label_generated',
   'emailed',
+  'phone_on_the_way',
   'received',
   'completed',
   're-offered-pending',
@@ -416,9 +420,16 @@ filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
 }
 
 const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printing', 'needs_printing'];
-const REMINDER_ELIGIBLE_STATUSES = ['label_generated', 'emailed'];
-const EXPIRING_REMINDER_STATUSES = ['order_pending', ...KIT_PRINT_PENDING_STATUSES, 'label_generated', 'emailed'];
-const KIT_REMINDER_STATUSES = ['kit_sent', 'kit_delivered'];
+const REMINDER_ELIGIBLE_STATUSES = ['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way'];
+const EXPIRING_REMINDER_STATUSES = [
+  'order_pending',
+  ...KIT_PRINT_PENDING_STATUSES,
+  'label_generated',
+  'emailed',
+  'kit_on_the_way_to_us',
+  'phone_on_the_way',
+];
+const KIT_REMINDER_STATUSES = ['kit_sent', 'kit_delivered', 'kit_on_the_way_to_us'];
 const AGING_EXCLUDED_STATUSES = new Set([
   'completed',
   'return-label-generated',
@@ -568,7 +579,7 @@ minute: '2-digit'
 function formatLabelStatus(order) {
 if (!order) return '';
 const normalizedStatus = (order.status || '').toLowerCase();
-if (!['label_generated', 'emailed'].includes(normalizedStatus)) {
+if (!['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way'].includes(normalizedStatus)) {
 return '';
 }
 let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
@@ -3616,6 +3627,9 @@ return 'Kit Sent';
 if (status === 'kit_delivered') {
 return 'Kit Delivered';
 }
+if (status === 'kit_on_the_way_to_us') {
+return 'Kit On The Way To Us';
+}
 if (status === 'label_generated') {
 // If the user requested an emailed label, display "Label Generated"
 if (preference === 'Email Label Requested') {
@@ -3626,6 +3640,9 @@ return 'Shipping Kit on the Way';
 }
 if (status === 'emailed') {
 return 'Emailed';
+}
+if (status === 'phone_on_the_way') {
+return 'Phone On The Way';
 }
 // Fallback for other statuses
 return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -3883,8 +3900,11 @@ case 'kit_in_transit':
 return 'bg-orange-100 text-orange-800 status-bubble';
 case 'kit_delivered':
 return 'bg-emerald-100 text-emerald-800 status-bubble';
+case 'kit_on_the_way_to_us':
+return 'bg-teal-100 text-teal-800 status-bubble';
 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'emailed': return 'bg-yellow-100 text-yellow-800 status-bubble';
+case 'phone_on_the_way': return 'bg-sky-100 text-sky-800 status-bubble';
 case 'received': return 'bg-green-100 text-green-800 status-bubble';
 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
@@ -5848,16 +5868,18 @@ document.addEventListener('DOMContentLoaded', () => {
       try { return await res.json(); } catch { return {}; }
     }
 
-    async function runBatchRefresh({ concurrency = 4 } = {}) {
+    async function runBatchRefresh({ concurrency = 4, manageRefreshButton = true } = {}) {
       const ids = collectOrderIdsFromTable();
       if (!ids.length) {
         console.log("No order rows found to refresh.");
         return { ok: 0, fail: 0, total: 0 };
       }
 
-      const allBtn = document.getElementById("refresh-all-kits-btn");
-      toggleBtnState(refreshBtn, true);
-      toggleBtnState(allBtn, true);
+      const kitBtn = document.getElementById("refresh-all-kits-btn");
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, true);
+        if (kitBtn) toggleBtnState(kitBtn, true);
+      }
       setStatus(`Refreshing ${ids.length} kits…`);
 
       let i = 0;
@@ -5883,10 +5905,91 @@ document.addEventListener('DOMContentLoaded', () => {
       const N = Math.min(concurrency, ids.length);
       await Promise.all(Array.from({ length: N }, worker));
 
-      toggleBtnState(refreshBtn, false);
-      toggleBtnState(allBtn, false);
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
       setStatus(`Batch refresh complete: ${results.ok} ok, ${results.fail} failed`);
       return results;
+    }
+
+    async function refreshInboundTrackingForOrder(orderId) {
+      const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/sync-label-tracking`;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        return { skipped: true };
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      try {
+        return await res.json();
+      } catch {
+        return {};
+      }
+    }
+
+    async function runLabelRefresh({ concurrency = 4 } = {}) {
+      const ids = collectOrderIdsFromTable();
+      if (!ids.length) {
+        console.log("No order rows found to refresh inbound labels for.");
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
+      }
+
+      setStatus(`Refreshing inbound labels… 0/${ids.length}`);
+
+      let i = 0;
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
+      const queue = ids.slice();
+
+      async function worker() {
+        while (queue.length) {
+          const id = queue.shift();
+          try {
+            const response = await refreshInboundTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
+          } catch (error) {
+            results.fail++;
+            console.warn("Inbound refresh failed", id, error);
+          } finally {
+            i++;
+            setStatus(`Refreshing inbound labels… ${i}/${ids.length}`);
+          }
+        }
+      }
+
+      const N = Math.min(concurrency, ids.length);
+      await Promise.all(Array.from({ length: N }, worker));
+
+      setStatus(
+        `Inbound refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
+      );
+      return results;
+    }
+
+    async function runCombinedRefresh({ concurrency = 4 } = {}) {
+      const kitBtn = document.getElementById("refresh-all-kits-btn");
+      toggleBtnState(refreshBtn, true);
+      if (kitBtn) toggleBtnState(kitBtn, true);
+      setStatus("Refreshing kits and labels…");
+
+      try {
+        const kitResult = await runBatchRefresh({ concurrency, manageRefreshButton: false });
+        const labelResult = await runLabelRefresh({ concurrency });
+        setStatus(
+          `Kits refreshed (${kitResult.ok}/${kitResult.total}); labels refreshed (${labelResult.ok}/${labelResult.total}, ${labelResult.skipped} skipped, ${labelResult.fail} failed)`
+        );
+        return { kitResult, labelResult };
+      } catch (error) {
+        console.warn("Combined refresh error", error);
+        setStatus("Combined refresh failed. Check console for details.");
+        throw error;
+      } finally {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
     }
 
     // Create and insert the "Refresh all kit tracking" button if not present
@@ -5898,8 +6001,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const btn = document.createElement("button");
       btn.id = "refresh-all-kits-btn";
       btn.className = "refresh-btn";
-      btn.innerHTML = '<i class="fas fa-truck-fast"></i><span>Refresh all kit tracking</span>';
-      btn.addEventListener("click", () => runBatchRefresh({ concurrency: 4 }));
+      btn.innerHTML = '<i class="fas fa-sync-alt"></i><span>Refresh kits + labels</span>';
+      btn.addEventListener("click", () => runCombinedRefresh({ concurrency: 4 }));
       // Place it next to the existing Refresh data button
       const actions = toolbar.querySelector(".refresh-btn")?.parentElement || toolbar;
       actions.appendChild(btn);
@@ -5915,7 +6018,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!DO_BATCH_BEFORE_REFRESH) return; // fall through to the original handler
         ev.preventDefault();
         try {
-          await runBatchRefresh({ concurrency: 4 });
+          await runCombinedRefresh({ concurrency: 4 });
         } catch (e) {
           console.warn("Batch refresh error", e);
         }
@@ -5923,6 +6026,19 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => clone.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: false })), 0);
       }, { capture: true });
     }
+
+    const AUTO_LABEL_REFRESH_INTERVAL = 30 * 60 * 1000;
+    let labelRefreshInFlight = false;
+    setInterval(() => {
+      if (labelRefreshInFlight) return;
+      if (!ordersTbody || !ordersTbody.children || !ordersTbody.children.length) return;
+      labelRefreshInFlight = true;
+      runLabelRefresh({ concurrency: 2 })
+        .catch((error) => console.warn("Auto inbound refresh failed", error))
+        .finally(() => {
+          labelRefreshInFlight = false;
+        });
+    }, AUTO_LABEL_REFRESH_INTERVAL);
   } catch (e) {
     console.warn("Batch kit refresh bootstrap failed", e);
   }
