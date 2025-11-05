@@ -53,6 +53,7 @@
 const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 const FEED_PRICING_URL = '/feeds/feed.xml';
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const AUTO_REQUOTE_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
 const LABEL_NAME_OVERRIDES = {
 primary: 'Primary Shipping Label',
 inbounddevice: 'Inbound Device Label',
