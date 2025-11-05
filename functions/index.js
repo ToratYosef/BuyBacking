@@ -243,6 +243,7 @@ function buildConditionEmail(reason, order, notes) {
   const html = buildEmailLayout({
     title: template.headline,
     accentColor: accentColorMap[reason] || "#0ea5e9",
+    includeTrustpilot: false,
     bodyHtml,
     includeCountdownNotice: true,
   });
@@ -806,6 +807,7 @@ const BLACKLISTED_EMAIL_HTML = buildEmailLayout({
   title: "Action required: Carrier blacklist detected",
   accentColor: "#dc2626",
   includeCountdownNotice: true,
+  includeTrustpilot: false,
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
       <p>During our review of order <strong>#**ORDER_ID**</strong>, the carrier database flagged the device as lost, stolen, or blacklisted.</p>
@@ -818,6 +820,7 @@ const FMI_EMAIL_HTML = buildEmailLayout({
   title: "Turn off Find My to continue",
   accentColor: "#f59e0b",
   includeCountdownNotice: true,
+  includeTrustpilot: false,
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
       <p>Our inspection for order <strong>#**ORDER_ID**</strong> shows Find My iPhone / Activation Lock is still enabled.</p>
@@ -838,6 +841,7 @@ const BAL_DUE_EMAIL_HTML = buildEmailLayout({
   title: "Balance due with your carrier",
   accentColor: "#f97316",
   includeCountdownNotice: true,
+  includeTrustpilot: false,
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
       <p>When we ran your device for order <strong>#**ORDER_ID**</strong>, the carrier reported a status of <strong>**FINANCIAL_STATUS**</strong>.</p>
@@ -848,6 +852,7 @@ const BAL_DUE_EMAIL_HTML = buildEmailLayout({
 const DOWNGRADE_EMAIL_HTML = buildEmailLayout({
   title: "Order finalized at adjusted payout",
   accentColor: "#f97316",
+  includeTrustpilot: false,
   bodyHtml: `
       <p>Hi **CUSTOMER_NAME**,</p>
       <p>We reached out about the issue with your device for order <strong>#**ORDER_ID**</strong> but haven't received an update.</p>
@@ -1755,6 +1760,7 @@ app.put("/orders/:id/status", async (req, res) => {
     const orderId = req.params.id;
     if (!status) return res.status(400).json({ error: "Status is required" });
 
+    const notifyCustomer = req.body?.notifyCustomer !== false;
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
     const statusUpdate = { status, lastStatusUpdateAt: timestamp };
     if (status === 'kit_sent') {
@@ -1766,65 +1772,72 @@ app.put("/orders/:id/status", async (req, res) => {
 
     const { order } = await updateOrderBoth(orderId, statusUpdate);
 
-    let customerNotificationPromise = Promise.resolve();
-    let customerEmailHtml = "";
-    const customerName = order.shippingInfo.fullName;
     let emailLogMessage = null;
     let emailMetadata = { status };
 
-    switch (status) {
-      case "received": {
-        customerEmailHtml = DEVICE_RECEIVED_EMAIL_HTML
-          .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
-          .replace(/\*\*ORDER_ID\*\*/g, order.id);
+    if (notifyCustomer) {
+      let customerNotificationPromise = Promise.resolve();
+      let customerEmailHtml = "";
+      const customerName = order.shippingInfo?.fullName || 'there';
 
-        customerNotificationPromise = transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: order.shippingInfo.email,
-          subject: "Your SecondHandCell Device Has Arrived",
-          html: customerEmailHtml,
-          bcc: ["sales@secondhandcell.com"]
-        });
-        emailLogMessage = "Received confirmation email sent to customer.";
-        emailMetadata.trackingNumber = order.trackingNumber || order.inboundTrackingNumber || null;
-        break;
-      }
-      case "completed": {
-        const payoutAmount = getOrderPayout(order);
-        const wasReoffered = !!(order.reOffer && Object.keys(order.reOffer).length);
-        const completedTemplate = getOrderCompletedEmailTemplate({ includeTrustpilot: !wasReoffered });
-        customerEmailHtml = applyTemplate(completedTemplate, {
-          "**CUSTOMER_NAME**": customerName,
-          "**ORDER_ID**": order.id,
-          "**DEVICE_SUMMARY**": buildDeviceSummary(order),
-          "**ORDER_TOTAL**": formatCurrencyValue(payoutAmount),
-          "**PAYMENT_METHOD**": formatDisplayText(order.paymentMethod, "Not specified"),
-        });
+      switch (status) {
+        case "received": {
+          customerEmailHtml = DEVICE_RECEIVED_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName)
+            .replace(/\*\*ORDER_ID\*\*/g, order.id);
 
-        customerNotificationPromise = transporter.sendMail({
-          from: process.env.EMAIL_USER,
-          to: order.shippingInfo.email,
-          subject: "Your SecondHandCell Order is Complete",
-          html: customerEmailHtml,
-          bcc: ["sales@secondhandcell.com"]
-        });
-        emailLogMessage = "Order completion email sent to customer.";
-        emailMetadata.payoutAmount = formatCurrencyValue(payoutAmount);
-        emailMetadata.wasReoffered = wasReoffered;
-        break;
+          customerNotificationPromise = transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: order.shippingInfo.email,
+            subject: "Your SecondHandCell Device Has Arrived",
+            html: customerEmailHtml,
+            bcc: ["sales@secondhandcell.com"]
+          });
+          emailLogMessage = "Received confirmation email sent to customer.";
+          emailMetadata.trackingNumber = order.trackingNumber || order.inboundTrackingNumber || null;
+          break;
+        }
+        case "completed": {
+          const payoutAmount = getOrderPayout(order);
+          const wasReoffered = !!(order.reOffer && Object.keys(order.reOffer).length);
+          const completedTemplate = getOrderCompletedEmailTemplate({ includeTrustpilot: !wasReoffered });
+          customerEmailHtml = applyTemplate(completedTemplate, {
+            "**CUSTOMER_NAME**": customerName,
+            "**ORDER_ID**": order.id,
+            "**DEVICE_SUMMARY**": buildDeviceSummary(order),
+            "**ORDER_TOTAL**": formatCurrencyValue(payoutAmount),
+            "**PAYMENT_METHOD**": formatDisplayText(order.paymentMethod, "Not specified"),
+          });
+
+          customerNotificationPromise = transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: order.shippingInfo.email,
+            subject: "Your SecondHandCell Order is Complete",
+            html: customerEmailHtml,
+            bcc: ["sales@secondhandcell.com"]
+          });
+          emailLogMessage = "Order completion email sent to customer.";
+          emailMetadata.payoutAmount = formatCurrencyValue(payoutAmount);
+          emailMetadata.wasReoffered = wasReoffered;
+          break;
+        }
+        default: {
+          break;
+        }
       }
-      default: {
-        break;
+
+      await customerNotificationPromise;
+
+      if (emailLogMessage) {
+        await recordCustomerEmail(orderId, emailLogMessage, emailMetadata);
       }
     }
 
-    await customerNotificationPromise;
+    const responseMessage = notifyCustomer
+      ? `Order marked as ${status}`
+      : `Order marked as ${status} without emailing the customer.`;
 
-    if (emailLogMessage) {
-      await recordCustomerEmail(orderId, emailLogMessage, emailMetadata);
-    }
-
-    res.json({ message: `Order marked as ${status}` });
+    res.json({ message: responseMessage, notifyCustomer });
   } catch (err) {
     console.error("Error updating status:", err);
     res.status(500).json({ error: "Failed to update status" });
@@ -2436,6 +2449,7 @@ app.post("/orders/:id/auto-requote", async (req, res) => {
     const emailHtml = buildEmailLayout({
       title: 'Order finalized at adjusted payout',
       accentColor: '#dc2626',
+      includeTrustpilot: false,
       bodyHtml: `
         <p>Hi ${escapeHtml(customerName)},</p>
         <p>Since we have not received a response after multiple emails, we’ve finalized order <strong>#${escapeHtml(order.id)}</strong> at a payout that is 75% less than the previous quote of $${baseDisplay}.</p>
