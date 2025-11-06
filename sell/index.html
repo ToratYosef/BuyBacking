@@ -1305,12 +1305,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             zipCodeInput.value = '';
 
             let streetNumber = '';
-            let route = '';
+            let routeShort = '';
+            let routeLong = '';
             let city = '';
             let state = '';
             let postalCode = '';
             let postalCodeSuffix = '';
             let countryName = '';
+            let countryShort = '';
             let subpremise = '';
 
             for (const component of place.address_components) {
@@ -1321,7 +1323,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         streetNumber = component.long_name;
                         break;
                     case 'route':
-                        route = component.short_name;
+                        routeShort = component.short_name;
+                        routeLong = component.long_name;
                         break;
                     case 'locality':
                         city = component.long_name;
@@ -1338,6 +1341,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         break;
                     case 'country':
                         countryName = component.long_name;
+                        countryShort = component.short_name;
                         break;
                     case 'subpremise':
                         subpremise = component.long_name;
@@ -1345,7 +1349,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
             }
 
-            const streetLine = `${streetNumber} ${route}`.trim();
+            const streetLine = `${streetNumber} ${routeShort}`.trim();
+            const streetLineLong = `${streetNumber} ${routeLong || routeShort}`.trim();
             const zipValue = [postalCode, postalCodeSuffix].filter(Boolean).join('-');
 
             if (city) {
@@ -1361,15 +1366,48 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 streetAddressLine2Input.value = subpremise;
             }
 
-            const combinedDisplay = place.formatted_address || [
-                streetLine,
-                city || cityInput.value,
-                state || stateInput.value,
-                zipValue,
-                countryName
-            ].filter(Boolean).join(', ');
+            let locationSegment = '';
+            if (place.structured_formatting?.secondary_text) {
+                locationSegment = place.structured_formatting.secondary_text.trim();
+                if (zipValue && !locationSegment.includes(zipValue)) {
+                    const segmentParts = locationSegment.split(',').map(part => part.trim());
+                    if (segmentParts.length >= 2) {
+                        const [firstPart, ...restParts] = segmentParts;
+                        const stateIndex = 0;
+                        if (restParts.length > stateIndex) {
+                            const statePart = restParts[stateIndex];
+                            if (!statePart.includes(zipValue)) {
+                                restParts[stateIndex] = `${statePart} ${zipValue}`.replace(/\s+/g, ' ').trim();
+                            }
+                        }
+                        locationSegment = [firstPart, ...restParts].join(', ');
+                    } else {
+                        locationSegment = `${locationSegment}, ${zipValue}`;
+                    }
+                }
+            }
 
-            streetAddressInput.value = combinedDisplay || streetLine;
+            if (!locationSegment) {
+                const cityStateZip = [state || stateInput.value, zipValue].filter(Boolean).join(' ').trim();
+                const fallbackParts = [];
+                if (city || cityInput.value) {
+                    fallbackParts.push(city || cityInput.value);
+                }
+                if (cityStateZip) {
+                    fallbackParts.push(cityStateZip);
+                }
+                const countryDisplay = countryName || (countryShort === 'US' ? 'USA' : countryShort);
+                if (countryDisplay) {
+                    fallbackParts.push(countryDisplay);
+                }
+                if (fallbackParts.length) {
+                    locationSegment = `${fallbackParts[0]}, ${fallbackParts.slice(1).join(', ')}`;
+                }
+            }
+
+            const combinedDisplay = `${streetLineLong}${locationSegment ? locationSegment : ''}`.trim();
+
+            streetAddressInput.value = combinedDisplay || place.formatted_address || streetLineLong || streetLine;
 
             // Keep the autocomplete suggestions from lingering by briefly removing focus.
             setTimeout(() => streetAddressInput.blur(), 0);
