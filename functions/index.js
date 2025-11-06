@@ -2044,8 +2044,8 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const order = { id: doc.id, ...doc.data() };
 
-    if (!order.outboundTrackingNumber) {
-      return res.status(400).json({ error: 'Outbound tracking number not available for this order' });
+    if (!order.outboundTrackingNumber && !order.inboundTrackingNumber) {
+      return res.status(400).json({ error: 'No tracking numbers available for this order' });
     }
 
     const shipengineKey = process.env.SHIPENGINE_KEY;
@@ -2053,7 +2053,7 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
       return res.status(500).json({ error: 'ShipEngine API key not configured.' });
     }
 
-    const { updatePayload, delivered } = await buildKitTrackingUpdate(order, {
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
       axiosClient: axios,
       shipengineKey,
       defaultCarrierCode: DEFAULT_CARRIER_CODE,
@@ -2061,10 +2061,25 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
     });
 
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
-    const { order: updatedOrder } = await updateOrderBoth(orderId, {
+    const updateData = {
       ...updatePayload,
       kitTrackingLastRefreshedAt: timestamp,
-    });
+    };
+
+    if (direction === 'inbound') {
+      updateData.inboundTrackingLastRefreshedAt = timestamp;
+    }
+
+    const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
+
+    const message =
+      direction === 'inbound'
+        ? delivered
+          ? 'Inbound device marked as delivered.'
+          : 'Inbound tracking status refreshed.'
+        : delivered
+          ? 'Kit marked as delivered.'
+          : 'Kit tracking status refreshed.';
 
     if (delivered && shipengineKey) {
       try {
@@ -2080,8 +2095,9 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
     }
 
     res.json({
-      message: delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.',
+      message,
       delivered,
+      direction,
       tracking: updatePayload.kitTrackingStatus,
       order: {
         id: updatedOrder.id,
@@ -2747,153 +2763,6 @@ app.post("/orders/:id/return-label", async (req, res) => {
   } catch (err) {
     console.error("Error generating return label:", err.response?.data || err);
     res.status(500).json({ error: "Failed to generate return label" });
-  }
-});
-
-app.post("/orders/:id/clear-data", async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    const rawSelections = Array.isArray(req.body?.selections)
-      ? req.body.selections
-      : [];
-
-    const selections = rawSelections
-      .map((value) => (value === undefined || value === null ? "" : String(value).trim()))
-      .filter((value) => value.length > 0);
-
-    if (!selections.length) {
-      return res.status(400).json({ error: "Please choose at least one data selection to clear." });
-    }
-
-    const orderRef = ordersCollection.doc(orderId);
-    const snapshot = await orderRef.get();
-    if (!snapshot.exists) {
-      return res.status(404).json({ error: "Order not found." });
-    }
-
-    const order = { id: snapshot.id, ...snapshot.data() };
-    const updates = {};
-    const clearedLabelNames = [];
-    const clearedTrackingDescriptions = [];
-    let clearedReturnLabel = false;
-    const uniqueSelections = Array.from(new Set(selections));
-    const fieldValue = admin.firestore.FieldValue;
-
-    const markDeletion = (fieldPath) => {
-      if (!fieldPath) return;
-      updates[fieldPath] = fieldValue.delete();
-    };
-
-    uniqueSelections.forEach((selection) => {
-      if (selection.startsWith("shipLabel:")) {
-        const [, rawKey = "primary"] = selection.split(":");
-        const normalizedKey = rawKey.toString().toLowerCase();
-        markDeletion(`shipEngineLabels.${normalizedKey}`);
-
-        const labelDisplayName = formatLabelDisplayNameFromKey(normalizedKey);
-        if (!clearedLabelNames.includes(labelDisplayName)) {
-          clearedLabelNames.push(labelDisplayName);
-        }
-
-        if (normalizedKey === "primary") {
-          [
-            "shipEngineLabelId",
-            "uspsLabelUrl",
-            "labelGeneratedAt",
-            "latestLabelGeneratedAt",
-            "labelVoidStatus",
-            "labelVoidMessage",
-          ].forEach(markDeletion);
-        }
-
-        if (normalizedKey === "outboundkit") {
-          markDeletion("outboundLabelUrl");
-        }
-
-        if (normalizedKey === "inbounddevice") {
-          markDeletion("inboundLabelUrl");
-        }
-      } else if (selection.startsWith("tracking:")) {
-        const [, rawKey = ""] = selection.split(":");
-        const normalizedKey = rawKey.toString().toLowerCase();
-
-        if (normalizedKey === "primary" || normalizedKey === "label") {
-          markDeletion("trackingNumber");
-          if (!clearedTrackingDescriptions.includes("primary tracking number")) {
-            clearedTrackingDescriptions.push("primary tracking number");
-          }
-        } else if (normalizedKey === "inbound") {
-          markDeletion("inboundTrackingNumber");
-          if (!clearedTrackingDescriptions.includes("inbound tracking number")) {
-            clearedTrackingDescriptions.push("inbound tracking number");
-          }
-        } else if (normalizedKey === "outbound") {
-          markDeletion("outboundTrackingNumber");
-          if (!clearedTrackingDescriptions.includes("outbound kit tracking number")) {
-            clearedTrackingDescriptions.push("outbound kit tracking number");
-          }
-        }
-      } else if (selection === "returnLabel") {
-        clearedReturnLabel = true;
-        ["returnLabelUrl", "returnTrackingNumber", "returnLabelEmailSentAt"].forEach(markDeletion);
-      }
-    });
-
-    if (!Object.keys(updates).length) {
-      return res.status(400).json({ error: "No matching data was found to clear for the selected options." });
-    }
-
-    const summaryParts = [];
-    if (clearedLabelNames.length) {
-      const labelSummary = clearedLabelNames
-        .map((name) => `${name} label record`)
-        .join(", ");
-      summaryParts.push(labelSummary);
-    }
-    if (clearedTrackingDescriptions.length) {
-      summaryParts.push(clearedTrackingDescriptions.join(", "));
-    }
-    if (clearedReturnLabel) {
-      summaryParts.push("return label data");
-    }
-
-    const summaryText = summaryParts.length ? summaryParts.join("; ") : "selected data";
-
-    const logMetadata = { selections: uniqueSelections };
-    if (clearedLabelNames.length) {
-      logMetadata.labels = clearedLabelNames;
-    }
-    if (clearedTrackingDescriptions.length) {
-      logMetadata.tracking = clearedTrackingDescriptions;
-    }
-    if (clearedReturnLabel) {
-      logMetadata.returnLabel = true;
-    }
-
-    const { order: updatedOrder } = await updateOrderBoth(orderId, updates, {
-      autoLogStatus: false,
-      logEntries: [
-        {
-          type: "admin_action",
-          message: `Cleared ${summaryText}.`,
-          metadata: logMetadata,
-        },
-      ],
-    });
-
-    res.json({
-      message: `Cleared ${summaryText}.`,
-      cleared: {
-        selections: uniqueSelections,
-        labels: clearedLabelNames,
-        tracking: clearedTrackingDescriptions,
-        returnLabel: clearedReturnLabel,
-      },
-      order: updatedOrder,
-    });
-  } catch (error) {
-    console.error("Failed to clear order data:", error);
-    res.status(500).json({ error: "Failed to clear order data." });
   }
 });
 
