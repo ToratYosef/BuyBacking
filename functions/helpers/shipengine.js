@@ -1,6 +1,19 @@
 const axios = require('axios');
 
 const DEFAULT_CARRIER_CODE = 'stamps_com';
+const INBOUND_TRACKING_STATUSES = new Set([
+    'kit_delivered',
+    'label_generated',
+    'emailed',
+    'received',
+    'completed',
+    're-offered-pending',
+    're-offered-accepted',
+    're-offered-declined',
+    're-offered-auto-accepted',
+    'return-label-generated',
+    'requote_accepted',
+]);
 
 function extractTrackingFields(trackingData = {}) {
     const statusCode = trackingData.status_code || trackingData.statusCode || null;
@@ -31,18 +44,38 @@ async function buildKitTrackingUpdate(
         serverTimestamp,
     } = {}
 ) {
-    if (!order?.outboundTrackingNumber) {
-        throw new Error('Outbound tracking number not available for this order');
+    const hasOutbound = Boolean(order?.outboundTrackingNumber);
+    const hasInbound = Boolean(order?.inboundTrackingNumber);
+
+    if (!hasOutbound && !hasInbound) {
+        throw new Error('Tracking number not available for this order');
     }
 
     if (!shipengineKey) {
         throw new Error('ShipEngine API key not configured');
     }
 
-    const carrierCode = order.outboundCarrierCode || defaultCarrierCode;
+    const normalizedStatus = String(order?.status || '').toLowerCase();
+    const prefersInbound =
+        hasInbound &&
+        (String(order?.kitTrackingStatus?.direction || '').toLowerCase() === 'inbound' ||
+            INBOUND_TRACKING_STATUSES.has(normalizedStatus));
+
+    const useInbound = (!hasOutbound && hasInbound) || prefersInbound;
+    const trackingNumber = useInbound
+        ? order.inboundTrackingNumber
+        : order.outboundTrackingNumber;
+
+    if (!trackingNumber) {
+        throw new Error('Tracking number not available for this order');
+    }
+
+    const carrierCode = useInbound
+        ? order.inboundCarrierCode || defaultCarrierCode
+        : order.outboundCarrierCode || defaultCarrierCode;
     const trackingUrl = `https://api.shipengine.com/v1/tracking?carrier_code=${encodeURIComponent(
         carrierCode
-    )}&tracking_number=${encodeURIComponent(order.outboundTrackingNumber)}`;
+    )}&tracking_number=${encodeURIComponent(trackingNumber)}`;
 
     const response = await axiosClient.get(trackingUrl, {
         headers: {
@@ -60,28 +93,34 @@ async function buildKitTrackingUpdate(
         estimatedDelivery,
     } = extractTrackingFields(trackingData);
 
-    const updatePayload = {
-        kitTrackingStatus: {
-            statusCode,
-            statusDescription,
-            carrierCode,
-            lastUpdated,
-            estimatedDelivery,
-        },
+    const direction = useInbound ? 'inbound' : 'outbound';
+    const statusPayload = {
+        statusCode,
+        statusDescription,
+        carrierCode,
+        lastUpdated,
+        estimatedDelivery,
+        trackingNumber,
+        direction,
     };
 
-    if (delivered) {
+    const updatePayload = {
+        kitTrackingStatus: statusPayload,
+    };
+
+    if (!useInbound && delivered) {
         updatePayload.status = 'kit_delivered';
         if (typeof serverTimestamp === 'function') {
             updatePayload.kitDeliveredAt = serverTimestamp();
         }
     }
 
-    return { updatePayload, delivered };
+    return { updatePayload, delivered, direction };
 }
 
 module.exports = {
     DEFAULT_CARRIER_CODE,
     extractTrackingFields,
     buildKitTrackingUpdate,
+    INBOUND_TRACKING_STATUSES,
 };
