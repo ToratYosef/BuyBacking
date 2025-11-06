@@ -728,6 +728,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 <label for="street-address" class="block text-sm font-medium text-slate-700">Street Address</label>
                                 <input type="text" id="street-address" required class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="Start typing your address..." autocomplete="street-address">
                             </div>
+                            <div class="md:col-span-2">
+                                <label for="address-unit" class="block text-sm font-medium text-slate-700">Apartment / Suite / Unit</label>
+                                <input type="text" id="address-unit" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="e.g., Apt 5B or Suite 210" autocomplete="address-line2" inputmode="text">
+                            </div>
+                            <div>
+                                <label for="building-name" class="block text-sm font-medium text-slate-700">Building Name</label>
+                                <input type="text" id="building-name" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="Building or complex name">
+                            </div>
+                            <div>
+                                <label for="floor-number" class="block text-sm font-medium text-slate-700">Floor</label>
+                                <input type="text" id="floor-number" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="e.g., Floor 4">
+                            </div>
                             <div>
                                 <label for="city" class="block text-sm font-medium text-slate-700">City</label>
                                 <input type="text" id="city" required class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" autocomplete="address-level2">
@@ -742,6 +754,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                             <div>
                                 <label for="zip-code" class="block text-sm font-medium text-slate-700">ZIP Code</label>
                                 <input type="text" id="zip-code" required class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" autocomplete="postal-code">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label for="delivery-notes" class="block text-sm font-medium text-slate-700">Delivery Instructions</label>
+                                <textarea id="delivery-notes" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" rows="3" placeholder="Gate codes, lobby details, or other helpful notes"></textarea>
                             </div>
                         </div>
 
@@ -1278,12 +1294,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // Get each component of the address from the place details,
             // and then fill-in the corresponding field on the form.
             const streetAddressInput = document.getElementById('street-address');
+            const addressUnitInput = document.getElementById('address-unit');
+            const buildingNameInput = document.getElementById('building-name');
+            const floorNumberInput = document.getElementById('floor-number');
             const cityInput = document.getElementById('city');
             const stateInput = document.getElementById('state');
             const zipCodeInput = document.getElementById('zip-code');
 
             // Clear out the fields first
             streetAddressInput.value = '';
+            if (addressUnitInput) addressUnitInput.value = '';
+            if (buildingNameInput) buildingNameInput.value = '';
+            if (floorNumberInput) floorNumberInput.value = '';
             cityInput.value = '';
             stateInput.value = '';
             zipCodeInput.value = '';
@@ -1780,6 +1802,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // const phoneInput = document.getElementById('phone'); // Already defined above
 
             const streetAddressInput = document.getElementById('street-address');
+            const addressUnitInput = document.getElementById('address-unit');
+            const buildingNameInput = document.getElementById('building-name');
+            const floorNumberInput = document.getElementById('floor-number');
+            const deliveryNotesInput = document.getElementById('delivery-notes');
             const cityInput = document.getElementById('city');
             const stateInput = document.getElementById('state');
             const zipCodeInput = document.getElementById('zip-code');
@@ -2542,7 +2568,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 });
             });
 
-            const shippingInputs = Array.from(document.querySelectorAll('#shippingSection input, #shippingSection select'));
+            const shippingInputs = Array.from(document.querySelectorAll('#shippingSection input, #shippingSection select, #shippingSection textarea'));
             const requiredShippingInputs = shippingInputs.filter(input => input.hasAttribute('required'));
             requiredShippingInputs.forEach(input => {
                 input.dataset.wasRequired = 'true';
@@ -2568,6 +2594,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         phone: phoneInput?.value || '',
                         email: shippingInfoEmailInput?.value || '',
                         streetAddress: streetAddressInput.value || '',
+                        addressUnit: addressUnitInput?.value || '',
+                        buildingName: buildingNameInput?.value || '',
+                        floorNumber: floorNumberInput?.value || '',
+                        deliveryNotes: deliveryNotesInput?.value || '',
                         city: cityInput.value || '',
                         state: stateInput.value || '',
                         zipCode: zipCodeInput.value || '',
@@ -2598,6 +2628,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     if (streetAddressInput && data.streetAddress && (force || !streetAddressInput.value)) {
                         streetAddressInput.value = data.streetAddress;
                     }
+                    if (addressUnitInput && data.addressUnit && (force || !addressUnitInput.value)) {
+                        addressUnitInput.value = data.addressUnit;
+                    }
+                    if (buildingNameInput && data.buildingName && (force || !buildingNameInput.value)) {
+                        buildingNameInput.value = data.buildingName;
+                    }
+                    if (floorNumberInput && data.floorNumber && (force || !floorNumberInput.value)) {
+                        floorNumberInput.value = data.floorNumber;
+                    }
+                    if (deliveryNotesInput && data.deliveryNotes && (force || !deliveryNotesInput.value)) {
+                        deliveryNotesInput.value = data.deliveryNotes;
+                    }
                     if (cityInput && data.city && (force || !cityInput.value)) {
                         cityInput.value = data.city;
                     }
@@ -2626,6 +2668,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     email: '',
                     phone: '',
                     streetAddress: '',
+                    addressUnit: '',
+                    buildingName: '',
+                    floorNumber: '',
+                    deliveryNotes: '',
                     city: '',
                     state: '',
                     zipCode: '',
@@ -2648,15 +2694,34 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     normalizedPreference = 'email_label';
                 }
 
+                const extractString = (...values) => {
+                    for (const value of values) {
+                        if (typeof value === 'number') {
+                            return value.toString();
+                        }
+                        if (value && typeof value === 'string') {
+                            const trimmed = value.trim();
+                            if (trimmed) {
+                                return trimmed;
+                            }
+                        }
+                    }
+                    return '';
+                };
+
                 return {
                     ...base,
-                    fullName: (info.fullName || '').toString().trim(),
-                    email: (info.email || '').toString().trim(),
-                    phone: (info.phone || '').toString().replace(/\D/g, ''),
-                    streetAddress: (info.streetAddress || '').toString().trim(),
-                    city: (info.city || '').toString().trim(),
-                    state: (info.state || '').toString().trim().toUpperCase(),
-                    zipCode: (info.zipCode || '').toString().trim(),
+                    fullName: extractString(info.fullName),
+                    email: extractString(info.email),
+                    phone: extractString(info.phone).replace(/\D/g, ''),
+                    streetAddress: extractString(info.streetAddress, info.addressLine1, info.address1),
+                    addressUnit: extractString(info.addressUnit, info.unit, info.apartment, info.suite, info.addressLine2, info.address2),
+                    buildingName: extractString(info.buildingName, info.building, info.complex, info.residenceName),
+                    floorNumber: extractString(info.floorNumber, info.floor, info.level),
+                    deliveryNotes: extractString(info.deliveryNotes, info.deliveryInstructions, info.instructions, info.notes),
+                    city: extractString(info.city, info.locality),
+                    state: extractString(info.state, info.region).toUpperCase(),
+                    zipCode: extractString(info.zipCode, info.postalCode, info.zip),
                     shippingPreference: normalizedPreference
                 };
             }
@@ -2679,6 +2744,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                 const parts = [
                     normalized.streetAddress,
+                    normalized.addressUnit,
+                    normalized.buildingName,
+                    normalized.floorNumber,
                     normalized.city,
                     normalized.state,
                     normalized.zipCode,
@@ -2708,11 +2776,34 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const segments = [];
 
                 if (normalized.fullName) segments.push(normalized.fullName);
-                if (normalized.streetAddress) segments.push(normalized.streetAddress);
+
+                const streetLine = [normalized.streetAddress, normalized.addressUnit]
+                    .filter(Boolean)
+                    .join(' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                if (streetLine) segments.push(streetLine);
+
+                const buildingParts = [];
+                if (normalized.buildingName) buildingParts.push(normalized.buildingName);
+                if (normalized.floorNumber) {
+                    const trimmedFloor = normalized.floorNumber.trim();
+                    if (trimmedFloor) {
+                        const floorDisplay = /floor|level|fl/i.test(trimmedFloor) ? trimmedFloor : `Floor ${trimmedFloor}`;
+                        buildingParts.push(floorDisplay);
+                    }
+                }
+                const buildingLine = buildingParts.join(' • ');
+                if (buildingLine) segments.push(buildingLine);
 
                 const cityState = [normalized.city, normalized.state].filter(Boolean).join(', ');
                 const locationLine = [cityState, normalized.zipCode].filter(Boolean).join(' ');
                 if (locationLine.trim()) segments.push(locationLine.trim());
+
+                if (normalized.deliveryNotes) {
+                    const cleanedNotes = normalized.deliveryNotes.replace(/\s+/g, ' ').trim();
+                    if (cleanedNotes) segments.push(`Notes: ${cleanedNotes}`);
+                }
 
                 if (normalized.phone) segments.push(formatPhoneFromDigits(normalized.phone));
                 if (normalized.email) segments.push(normalized.email);
@@ -2786,7 +2877,23 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const normalized = normalizeShippingInfoForStorage(address);
                 const parts = [];
                 if (normalized.fullName) parts.push(normalized.fullName);
-                if (normalized.streetAddress) parts.push(normalized.streetAddress);
+                const streetLine = [normalized.streetAddress, normalized.addressUnit]
+                    .filter(Boolean)
+                    .join(' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                if (streetLine) parts.push(streetLine);
+                const buildingParts = [];
+                if (normalized.buildingName) buildingParts.push(normalized.buildingName);
+                if (normalized.floorNumber) {
+                    const trimmedFloor = normalized.floorNumber.trim();
+                    if (trimmedFloor) {
+                        const floorDisplay = /floor|level|fl/i.test(trimmedFloor) ? trimmedFloor : `Floor ${trimmedFloor}`;
+                        buildingParts.push(floorDisplay);
+                    }
+                }
+                const buildingLine = buildingParts.join(' • ');
+                if (buildingLine) parts.push(buildingLine);
                 const cityState = [normalized.city, normalized.state].filter(Boolean).join(', ');
                 const cityLine = [cityState, normalized.zipCode].filter(Boolean).join(' ');
                 if (cityLine.trim()) parts.push(cityLine.trim());
@@ -2874,6 +2981,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
 
                 setFieldValue(streetAddressInput, normalized.streetAddress);
+                setFieldValue(addressUnitInput, normalized.addressUnit);
+                setFieldValue(buildingNameInput, normalized.buildingName);
+                setFieldValue(floorNumberInput, normalized.floorNumber);
+                if (deliveryNotesInput && (force || !deliveryNotesInput.value) && normalized.deliveryNotes) {
+                    deliveryNotesInput.value = normalized.deliveryNotes;
+                } else if (deliveryNotesInput && force && !normalized.deliveryNotes) {
+                    deliveryNotesInput.value = '';
+                }
                 setFieldValue(cityInput, normalized.city);
 
                 if (stateInput) {
@@ -3092,6 +3207,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const fullName = fullNameInput?.value || '';
                 const phone = phoneInput?.value || '';
                 const streetAddress = streetAddressInput?.value || '';
+                const addressUnit = addressUnitInput?.value || '';
+                const buildingName = buildingNameInput?.value || '';
+                const floorNumber = floorNumberInput?.value || '';
+                const deliveryNotes = deliveryNotesInput?.value || '';
                 const city = cityInput?.value || '';
                 const state = stateInput?.value || '';
                 const zipCode = zipCodeInput?.value || '';
@@ -3103,7 +3222,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 // NEW: Update phone overview display
                 overviewPhone.textContent = phone || 'Not Entered';
 
-                const fullAddress = [fullName, streetAddress, city, state, zipCode].filter(Boolean).join(', ');
+                const streetLine = [streetAddress, addressUnit].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+                const buildingParts = [];
+                if (buildingName) buildingParts.push(buildingName);
+                if (floorNumber) {
+                    const trimmedFloor = floorNumber.trim();
+                    if (trimmedFloor) {
+                        const floorDisplay = /floor|level|fl/i.test(trimmedFloor) ? trimmedFloor : `Floor ${trimmedFloor}`;
+                        buildingParts.push(floorDisplay);
+                    }
+                }
+                const cityState = [city, state].filter(Boolean).join(', ');
+                const locationLine = [cityState, zipCode].filter(Boolean).join(' ').trim();
+                const notesLine = deliveryNotes
+                    ? `Notes: ${deliveryNotes.replace(/\s+/g, ' ').trim()}`
+                    : '';
+                const fullAddress = [fullName, streetLine, buildingParts.join(' • '), locationLine, notesLine]
+                    .map(part => part && part.trim())
+                    .filter(Boolean)
+                    .join(', ');
                 overviewAddress.textContent = fullAddress || 'Not Entered';
             }
 
@@ -3170,6 +3307,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         // MODIFIED: Store the cleaned, unformatted 10-digit number in Firebase
                         phone: phoneInput.value.replace(/\D/g, ''),
                         streetAddress: streetAddressInput.value,
+                        addressUnit: addressUnitInput?.value || '',
+                        buildingName: buildingNameInput?.value || '',
+                        floorNumber: floorNumberInput?.value || '',
+                        deliveryNotes: deliveryNotesInput?.value || '',
                         city: cityInput.value,
                         state: stateInput.value, // Now guaranteed to be a 2-letter code
                         zipCode: zipCodeInput.value,
