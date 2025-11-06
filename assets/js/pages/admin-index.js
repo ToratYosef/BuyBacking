@@ -6131,6 +6131,64 @@ notificationBadge.style.display = 'none';
       const N = Math.min(concurrency, ids.length);
       await Promise.all(Array.from({ length: N }, worker));
 
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
+      setStatus(`Batch refresh complete: ${results.ok} ok, ${results.fail} failed`);
+      return results;
+    }
+
+    async function refreshInboundTrackingForOrder(orderId) {
+      const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/sync-label-tracking`;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        return { skipped: true };
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      try {
+        return await res.json();
+      } catch {
+        return {};
+      }
+    }
+
+    async function runLabelRefresh({ concurrency = 4 } = {}) {
+      const ids = collectOrderIdsFromTable();
+      if (!ids.length) {
+        console.log("No order rows found to refresh inbound labels for.");
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
+      }
+
+      setStatus(`Refreshing inbound labels… 0/${ids.length}`);
+
+      let i = 0;
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
+      const queue = ids.slice();
+
+      async function worker() {
+        while (queue.length) {
+          const id = queue.shift();
+          try {
+            const response = await refreshInboundTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
+          } catch (error) {
+            results.fail++;
+            console.warn("Inbound refresh failed", id, error);
+          } finally {
+            i++;
+            setStatus(`Refreshing inbound labels… ${i}/${ids.length}`);
+          }
+        }
+      }
+
+      const N = Math.min(concurrency, ids.length);
+      await Promise.all(Array.from({ length: N }, worker));
+
       setStatus(
         `Inbound refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
       );
