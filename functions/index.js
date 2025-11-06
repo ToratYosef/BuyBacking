@@ -2044,8 +2044,8 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const order = { id: doc.id, ...doc.data() };
 
-    if (!order.outboundTrackingNumber) {
-      return res.status(400).json({ error: 'Outbound tracking number not available for this order' });
+    if (!order.outboundTrackingNumber && !order.inboundTrackingNumber) {
+      return res.status(400).json({ error: 'No tracking numbers available for this order' });
     }
 
     const shipengineKey = process.env.SHIPENGINE_KEY;
@@ -2053,7 +2053,7 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
       return res.status(500).json({ error: 'ShipEngine API key not configured.' });
     }
 
-    const { updatePayload, delivered } = await buildKitTrackingUpdate(order, {
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
       axiosClient: axios,
       shipengineKey,
       defaultCarrierCode: DEFAULT_CARRIER_CODE,
@@ -2061,10 +2061,38 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
     });
 
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
-    const { order: updatedOrder } = await updateOrderBoth(orderId, {
+    const updateData = {
       ...updatePayload,
       kitTrackingLastRefreshedAt: timestamp,
-    });
+    };
+
+    if (direction === 'inbound') {
+      updateData.inboundTrackingLastRefreshedAt = timestamp;
+    }
+
+    const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
+
+    const message =
+      direction === 'inbound'
+        ? delivered
+          ? 'Inbound device marked as delivered.'
+          : 'Inbound tracking status refreshed.'
+        : delivered
+          ? 'Kit marked as delivered.'
+          : 'Kit tracking status refreshed.';
+
+    if (delivered && shipengineKey) {
+      try {
+        if (shouldTrackInbound(updatedOrder)) {
+          await syncInboundTrackingForOrder(updatedOrder, { shipengineKey });
+        }
+      } catch (inboundError) {
+        console.error(
+          `Error syncing inbound tracking after kit delivery for order ${orderId}:`,
+          inboundError
+        );
+      }
+    }
 
     if (delivered && shipengineKey) {
       try {
@@ -2080,8 +2108,9 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
     }
 
     res.json({
-      message: delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.',
+      message,
       delivered,
+      direction,
       tracking: updatePayload.kitTrackingStatus,
       order: {
         id: updatedOrder.id,
@@ -2260,6 +2289,24 @@ async function syncInboundTrackingForOrder(order, options = {}) {
         message: shipEngineMessage || null,
       };
     }
+    logEntries.push({
+      type: 'status',
+      message: `Status changed to ${formatStatusLabel(statusUpdate.nextStatus)} via inbound tracking.`,
+      metadata: { trackingNumber, source: 'inbound_tracking' },
+    });
+  }
+
+  const { order: updatedOrder } = await updateOrderBoth(order.id, updatePayload, {
+    autoLogStatus: false,
+    logEntries,
+  });
+
+  let emailSent = false;
+  if (statusUpdate && statusUpdate.nextStatus === 'received') {
+    emailSent = await sendDeviceReceivedNotification(updatedOrder, {
+      trackingNumber,
+    });
+  }
 
     console.error(
       `ShipEngine inbound tracking error for ${order.id} (${trackingNumber}):`,
@@ -2281,6 +2328,67 @@ async function syncInboundTrackingForOrder(order, options = {}) {
         },
       ],
     });
+  } catch (error) {
+    console.error(`Failed to tag auto-cancellation timestamps for order ${order.id}:`, error);
+  }
+
+  const email = cancelledOrder.shippingInfo?.email;
+  if (!email) {
+    return cancelledOrder;
+  }
+
+  const customerName = cancelledOrder.shippingInfo?.fullName || 'there';
+  const continuation = isKitOrder(cancelledOrder)
+    ? 'Reply to this email and we will send a fresh prepaid label—just stick it on top of the replacement shipping kit when it arrives.'
+    : 'Reply to this email and we will send a fresh prepaid label you can use right away.';
+
+  const htmlBody = `
+    <p>Hi ${escapeHtml(customerName)},</p>
+    <p>We voided the shipping label for order <strong>#${escapeHtml(cancelledOrder.id)}</strong> because we haven\'t received your device in 15 days. We do this to keep orders moving for everyone.</p>
+    <p>${escapeHtml(continuation)}</p>
+    <p>If you decided not to send your device, just reply and let us know so we can close things out. If you change your mind later, respond and we\'ll send another prepaid label.</p>
+    <p>— The SecondHandCell Team</p>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: `Order #${cancelledOrder.id} was voided after 15 days`,
+      html: htmlBody,
+      bcc: ['sales@secondhandcell.com'],
+    });
+
+    await recordCustomerEmail(cancelledOrder.id, 'Order auto-voided after 15 days without inbound shipment.', {
+      auto: true,
+      reason: 'return_window_expired',
+    }, {
+      additionalUpdates: {
+        returnAutoVoidNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+  } catch (error) {
+    console.error(`Failed to send auto-cancellation email for order ${order.id}:`, error);
+  }
+
+  return cancelledOrder;
+}
+
+app.post('/orders/:id/sync-label-tracking', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const doc = await ordersCollection.doc(orderId).get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const result = await syncInboundTrackingForOrder(order);
+
+    if (result.skipped === 'no_tracking') {
+      return res.status(400).json({ error: 'No inbound tracking number on file for this order.' });
+    }
 
     return {
       order: updatedOrder,
