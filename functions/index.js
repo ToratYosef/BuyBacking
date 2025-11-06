@@ -2093,8 +2093,8 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const order = { id: doc.id, ...doc.data() };
 
-    if (!order.outboundTrackingNumber) {
-      return res.status(400).json({ error: 'Outbound tracking number not available for this order' });
+    if (!order.outboundTrackingNumber && !order.inboundTrackingNumber) {
+      return res.status(400).json({ error: 'No tracking numbers available for this order' });
     }
 
     const shipengineKey = process.env.SHIPENGINE_KEY;
@@ -2102,7 +2102,7 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
       return res.status(500).json({ error: 'ShipEngine API key not configured.' });
     }
 
-    const { updatePayload, delivered } = await buildKitTrackingUpdate(order, {
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
       axiosClient: axios,
       shipengineKey,
       defaultCarrierCode: DEFAULT_CARRIER_CODE,
@@ -2110,10 +2110,38 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
     });
 
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
-    const { order: updatedOrder } = await updateOrderBoth(orderId, {
+    const updateData = {
       ...updatePayload,
       kitTrackingLastRefreshedAt: timestamp,
-    });
+    };
+
+    if (direction === 'inbound') {
+      updateData.inboundTrackingLastRefreshedAt = timestamp;
+    }
+
+    const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
+
+    const message =
+      direction === 'inbound'
+        ? delivered
+          ? 'Inbound device marked as delivered.'
+          : 'Inbound tracking status refreshed.'
+        : delivered
+          ? 'Kit marked as delivered.'
+          : 'Kit tracking status refreshed.';
+
+    if (delivered && shipengineKey) {
+      try {
+        if (shouldTrackInbound(updatedOrder)) {
+          await syncInboundTrackingForOrder(updatedOrder, { shipengineKey });
+        }
+      } catch (inboundError) {
+        console.error(
+          `Error syncing inbound tracking after kit delivery for order ${orderId}:`,
+          inboundError
+        );
+      }
+    }
 
     if (delivered && shipengineKey) {
       try {
@@ -2129,8 +2157,9 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
     }
 
     res.json({
-      message: delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.',
+      message,
       delivered,
+      direction,
       tracking: updatePayload.kitTrackingStatus,
       order: {
         id: updatedOrder.id,
