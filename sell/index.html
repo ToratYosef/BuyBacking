@@ -1322,7 +1322,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
             }
             
-            streetAddressInput.value = `${streetNumber} ${route}`.trim();
+            const streetLine = `${streetNumber} ${route}`.trim();
+            const combinedDisplay = [
+                streetLine,
+                cityInput.value,
+                stateInput.value,
+                zipCodeInput.value
+            ].filter(Boolean).join(', ');
+
+            streetAddressInput.value = combinedDisplay || streetLine;
+
+            // Keep the autocomplete suggestions from lingering by briefly removing focus.
+            streetAddressInput.blur();
 
             // Manually trigger an input event on each field to let other scripts know they've changed
             const event = new Event('input', { bubbles: true });
