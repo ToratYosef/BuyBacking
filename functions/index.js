@@ -2094,6 +2094,19 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
       }
     }
 
+    if (delivered && shipengineKey) {
+      try {
+        if (shouldTrackInbound(updatedOrder)) {
+          await syncInboundTrackingForOrder(updatedOrder, { shipengineKey });
+        }
+      } catch (inboundError) {
+        console.error(
+          `Error syncing inbound tracking after kit delivery for order ${orderId}:`,
+          inboundError
+        );
+      }
+    }
+
     res.json({
       message,
       delivered,
@@ -2227,15 +2240,80 @@ async function syncInboundTrackingForOrder(order, options = {}) {
   const axiosClient = options.axiosClient || axios;
   const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
 
-  const response = await axiosClient.get(trackingUrl, {
-    headers: { 'API-Key': shipEngineKey },
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+  let trackingData = null;
+  try {
+    const response = await axiosClient.get(trackingUrl, {
+      headers: { 'API-Key': shipEngineKey },
+      timeout: options.timeoutMs || 20000,
+    });
+
+    trackingData = response?.data && typeof response.data === 'object'
+      ? response.data
+      : null;
+  } catch (error) {
+    const status = error?.response?.status;
+    const payload = error?.response?.data;
+    const shipEngineMessage = payload?.errors?.[0]?.message || payload?.message || error.message || null;
+    const shipEngineErrorCode = payload?.errors?.[0]?.error_code || payload?.error_code || payload?.errorCode || null;
+
+    const isClientSideIssue = status && status >= 400 && status < 500 && status !== 401 && status !== 403;
+
+    if (isClientSideIssue) {
+      const logEntries = [
+        {
+          type: 'tracking',
+          message: `Inbound label tracking skipped: ${shipEngineMessage || `ShipEngine responded with status ${status}`}`,
+          metadata: {
+            trackingNumber,
+            shipEngineStatus: status,
+            shipEngineErrorCode: shipEngineErrorCode || null,
+          },
+        },
+      ];
+
+      const { order: updatedOrder } = await updateOrderBoth(order.id, {
+        labelTrackingLastSyncedAt: timestamp,
+      }, {
+        autoLogStatus: false,
+        logEntries,
+      });
+
+      return {
+        order: updatedOrder,
+        tracking: null,
+        skipped: 'shipengine_error',
+        shipEngineStatus: status,
+        shipEngineErrorCode: shipEngineErrorCode || null,
+        message: shipEngineMessage || null,
+      };
+    }
+    logEntries.push({
+      type: 'status',
+      message: `Status changed to ${formatStatusLabel(statusUpdate.nextStatus)} via inbound tracking.`,
+      metadata: { trackingNumber, source: 'inbound_tracking' },
+    });
+  }
+
+  const { order: updatedOrder } = await updateOrderBoth(order.id, updatePayload, {
+    autoLogStatus: false,
+    logEntries,
   });
 
-  const trackingData = response?.data && typeof response.data === 'object'
-    ? response.data
-    : null;
+  let emailSent = false;
+  if (statusUpdate && statusUpdate.nextStatus === 'received') {
+    emailSent = await sendDeviceReceivedNotification(updatedOrder, {
+      trackingNumber,
+    });
+  }
 
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    console.error(
+      `ShipEngine inbound tracking error for ${order.id} (${trackingNumber}):`,
+      payload || error
+    );
+    throw error;
+  }
 
   if (!trackingData) {
     const { order: updatedOrder } = await updateOrderBoth(order.id, {
@@ -2250,6 +2328,67 @@ async function syncInboundTrackingForOrder(order, options = {}) {
         },
       ],
     });
+  } catch (error) {
+    console.error(`Failed to tag auto-cancellation timestamps for order ${order.id}:`, error);
+  }
+
+  const email = cancelledOrder.shippingInfo?.email;
+  if (!email) {
+    return cancelledOrder;
+  }
+
+  const customerName = cancelledOrder.shippingInfo?.fullName || 'there';
+  const continuation = isKitOrder(cancelledOrder)
+    ? 'Reply to this email and we will send a fresh prepaid label—just stick it on top of the replacement shipping kit when it arrives.'
+    : 'Reply to this email and we will send a fresh prepaid label you can use right away.';
+
+  const htmlBody = `
+    <p>Hi ${escapeHtml(customerName)},</p>
+    <p>We voided the shipping label for order <strong>#${escapeHtml(cancelledOrder.id)}</strong> because we haven\'t received your device in 15 days. We do this to keep orders moving for everyone.</p>
+    <p>${escapeHtml(continuation)}</p>
+    <p>If you decided not to send your device, just reply and let us know so we can close things out. If you change your mind later, respond and we\'ll send another prepaid label.</p>
+    <p>— The SecondHandCell Team</p>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: `Order #${cancelledOrder.id} was voided after 15 days`,
+      html: htmlBody,
+      bcc: ['sales@secondhandcell.com'],
+    });
+
+    await recordCustomerEmail(cancelledOrder.id, 'Order auto-voided after 15 days without inbound shipment.', {
+      auto: true,
+      reason: 'return_window_expired',
+    }, {
+      additionalUpdates: {
+        returnAutoVoidNotifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+  } catch (error) {
+    console.error(`Failed to send auto-cancellation email for order ${order.id}:`, error);
+  }
+
+  return cancelledOrder;
+}
+
+app.post('/orders/:id/sync-label-tracking', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const doc = await ordersCollection.doc(orderId).get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = { id: doc.id, ...doc.data() };
+    const result = await syncInboundTrackingForOrder(order);
+
+    if (result.skipped === 'no_tracking') {
+      return res.status(400).json({ error: 'No inbound tracking number on file for this order.' });
+    }
 
     return {
       order: updatedOrder,
@@ -2565,6 +2704,16 @@ app.post('/orders/:id/sync-label-tracking', async (req, res) => {
       return res.status(400).json({ error: 'No inbound tracking number on file for this order.' });
     }
 
+    if (result.skipped) {
+      return res.json({
+        message: result.message || 'Label tracking sync skipped.',
+        skipped: result.skipped,
+        shipEngineStatus: result.shipEngineStatus || null,
+        shipEngineErrorCode: result.shipEngineErrorCode || null,
+        order: { id: result.order.id, status: result.order.status },
+      });
+    }
+
     res.json({
       message: 'Label tracking synchronized.',
       order: { id: result.order.id, status: result.order.status },
@@ -2763,6 +2912,153 @@ app.post("/orders/:id/return-label", async (req, res) => {
   } catch (err) {
     console.error("Error generating return label:", err.response?.data || err);
     res.status(500).json({ error: "Failed to generate return label" });
+  }
+});
+
+app.post("/orders/:id/clear-data", async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const rawSelections = Array.isArray(req.body?.selections)
+      ? req.body.selections
+      : [];
+
+    const selections = rawSelections
+      .map((value) => (value === undefined || value === null ? "" : String(value).trim()))
+      .filter((value) => value.length > 0);
+
+    if (!selections.length) {
+      return res.status(400).json({ error: "Please choose at least one data selection to clear." });
+    }
+
+    const orderRef = ordersCollection.doc(orderId);
+    const snapshot = await orderRef.get();
+    if (!snapshot.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const order = { id: snapshot.id, ...snapshot.data() };
+    const updates = {};
+    const clearedLabelNames = [];
+    const clearedTrackingDescriptions = [];
+    let clearedReturnLabel = false;
+    const uniqueSelections = Array.from(new Set(selections));
+    const fieldValue = admin.firestore.FieldValue;
+
+    const markDeletion = (fieldPath) => {
+      if (!fieldPath) return;
+      updates[fieldPath] = fieldValue.delete();
+    };
+
+    uniqueSelections.forEach((selection) => {
+      if (selection.startsWith("shipLabel:")) {
+        const [, rawKey = "primary"] = selection.split(":");
+        const normalizedKey = rawKey.toString().toLowerCase();
+        markDeletion(`shipEngineLabels.${normalizedKey}`);
+
+        const labelDisplayName = formatLabelDisplayNameFromKey(normalizedKey);
+        if (!clearedLabelNames.includes(labelDisplayName)) {
+          clearedLabelNames.push(labelDisplayName);
+        }
+
+        if (normalizedKey === "primary") {
+          [
+            "shipEngineLabelId",
+            "uspsLabelUrl",
+            "labelGeneratedAt",
+            "latestLabelGeneratedAt",
+            "labelVoidStatus",
+            "labelVoidMessage",
+          ].forEach(markDeletion);
+        }
+
+        if (normalizedKey === "outboundkit") {
+          markDeletion("outboundLabelUrl");
+        }
+
+        if (normalizedKey === "inbounddevice") {
+          markDeletion("inboundLabelUrl");
+        }
+      } else if (selection.startsWith("tracking:")) {
+        const [, rawKey = ""] = selection.split(":");
+        const normalizedKey = rawKey.toString().toLowerCase();
+
+        if (normalizedKey === "primary" || normalizedKey === "label") {
+          markDeletion("trackingNumber");
+          if (!clearedTrackingDescriptions.includes("primary tracking number")) {
+            clearedTrackingDescriptions.push("primary tracking number");
+          }
+        } else if (normalizedKey === "inbound") {
+          markDeletion("inboundTrackingNumber");
+          if (!clearedTrackingDescriptions.includes("inbound tracking number")) {
+            clearedTrackingDescriptions.push("inbound tracking number");
+          }
+        } else if (normalizedKey === "outbound") {
+          markDeletion("outboundTrackingNumber");
+          if (!clearedTrackingDescriptions.includes("outbound kit tracking number")) {
+            clearedTrackingDescriptions.push("outbound kit tracking number");
+          }
+        }
+      } else if (selection === "returnLabel") {
+        clearedReturnLabel = true;
+        ["returnLabelUrl", "returnTrackingNumber", "returnLabelEmailSentAt"].forEach(markDeletion);
+      }
+    });
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ error: "No matching data was found to clear for the selected options." });
+    }
+
+    const summaryParts = [];
+    if (clearedLabelNames.length) {
+      const labelSummary = clearedLabelNames
+        .map((name) => `${name} label record`)
+        .join(", ");
+      summaryParts.push(labelSummary);
+    }
+    if (clearedTrackingDescriptions.length) {
+      summaryParts.push(clearedTrackingDescriptions.join(", "));
+    }
+    if (clearedReturnLabel) {
+      summaryParts.push("return label data");
+    }
+
+    const summaryText = summaryParts.length ? summaryParts.join("; ") : "selected data";
+
+    const logMetadata = { selections: uniqueSelections };
+    if (clearedLabelNames.length) {
+      logMetadata.labels = clearedLabelNames;
+    }
+    if (clearedTrackingDescriptions.length) {
+      logMetadata.tracking = clearedTrackingDescriptions;
+    }
+    if (clearedReturnLabel) {
+      logMetadata.returnLabel = true;
+    }
+
+    const { order: updatedOrder } = await updateOrderBoth(orderId, updates, {
+      autoLogStatus: false,
+      logEntries: [
+        {
+          type: "admin_action",
+          message: `Cleared ${summaryText}.`,
+          metadata: logMetadata,
+        },
+      ],
+    });
+
+    res.json({
+      message: `Cleared ${summaryText}.`,
+      cleared: {
+        selections: uniqueSelections,
+        labels: clearedLabelNames,
+        tracking: clearedTrackingDescriptions,
+        returnLabel: clearedReturnLabel,
+      },
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.error("Failed to clear order data:", error);
+    res.status(500).json({ error: "Failed to clear order data." });
   }
 });
 

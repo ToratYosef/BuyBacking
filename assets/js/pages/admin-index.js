@@ -87,8 +87,10 @@ const STATUS_DROPDOWN_OPTIONS = [
   'kit_sent',
   'kit_in_transit',
   'kit_delivered',
+  'kit_on_the_way_to_us',
   'label_generated',
   'emailed',
+  'phone_on_the_way',
   'received',
   'completed',
   're-offered-pending',
@@ -6011,13 +6013,7 @@ notificationBadge.style.display = 'none';
       }
     }
 
-    async function runBatchRefresh({ mode = "kit", concurrency = 4 } = {}) {
-      const config = MODE_CONFIG[mode];
-      if (!config) {
-        console.warn("Unknown batch refresh mode", mode);
-        return { ok: 0, fail: 0, total: 0 };
-      }
-
+    async function runBatchRefresh({ concurrency = 4, manageRefreshButton = true } = {}) {
       const ids = collectOrderIdsFromTable();
       if (!ids.length) {
         setStatus("No orders available to refresh.");
@@ -6025,10 +6021,12 @@ notificationBadge.style.display = 'none';
         return { ok: 0, fail: 0, total: 0 };
       }
 
-      const targetBtn = document.getElementById(config.buttonId);
-      toggleBtnState(refreshBtn, true);
-      toggleBtnState(targetBtn, true);
-      setStatus(config.startStatus(ids.length));
+      const kitBtn = document.getElementById("refresh-all-kits-btn");
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, true);
+        if (kitBtn) toggleBtnState(kitBtn, true);
+      }
+      setStatus(`Refreshing ${ids.length} kits…`);
 
       const results = { ok: 0, fail: 0, total: ids.length };
       const queue = ids.slice();
@@ -6075,24 +6073,106 @@ notificationBadge.style.display = 'none';
         setTimeout(() => refreshBtn.click(), 150);
       }
 
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
+      setStatus(`Batch refresh complete: ${results.ok} ok, ${results.fail} failed`);
       return results;
     }
 
-    function ensureButton(mode) {
-      const config = MODE_CONFIG[mode];
-      if (!config) return;
-      if (document.getElementById(config.buttonId)) return;
+    async function refreshInboundTrackingForOrder(orderId) {
+      const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/sync-label-tracking`;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        return { skipped: true };
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      try {
+        return await res.json();
+      } catch {
+        return {};
+      }
+    }
 
+    async function runLabelRefresh({ concurrency = 4 } = {}) {
+      const ids = collectOrderIdsFromTable();
+      if (!ids.length) {
+        console.log("No order rows found to refresh inbound labels for.");
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
+      }
+
+      setStatus(`Refreshing inbound labels… 0/${ids.length}`);
+
+      let i = 0;
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
+      const queue = ids.slice();
+
+      async function worker() {
+        while (queue.length) {
+          const id = queue.shift();
+          try {
+            const response = await refreshInboundTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
+          } catch (error) {
+            results.fail++;
+            console.warn("Inbound refresh failed", id, error);
+          } finally {
+            i++;
+            setStatus(`Refreshing inbound labels… ${i}/${ids.length}`);
+          }
+        }
+      }
+
+      const N = Math.min(concurrency, ids.length);
+      await Promise.all(Array.from({ length: N }, worker));
+
+      setStatus(
+        `Inbound refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
+      );
+      return results;
+    }
+
+    async function runCombinedRefresh({ concurrency = 4 } = {}) {
+      const kitBtn = document.getElementById("refresh-all-kits-btn");
+      toggleBtnState(refreshBtn, true);
+      if (kitBtn) toggleBtnState(kitBtn, true);
+      setStatus("Refreshing kits and labels…");
+
+      try {
+        const kitResult = await runBatchRefresh({ concurrency, manageRefreshButton: false });
+        const labelResult = await runLabelRefresh({ concurrency });
+        setStatus(
+          `Kits refreshed (${kitResult.ok}/${kitResult.total}); labels refreshed (${labelResult.ok}/${labelResult.total}, ${labelResult.skipped} skipped, ${labelResult.fail} failed)`
+        );
+        return { kitResult, labelResult };
+      } catch (error) {
+        console.warn("Combined refresh error", error);
+        setStatus("Combined refresh failed. Check console for details.");
+        throw error;
+      } finally {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
+    }
+
+    // Create and insert the "Refresh all kit tracking" button if not present
+    (function insertButton() {
+      if (document.getElementById("refresh-all-kits-btn")) return;
       const toolbar = document.querySelector(".orders-toolbar");
       if (!toolbar) return;
 
       const btn = document.createElement("button");
       btn.id = config.buttonId;
       btn.className = "refresh-btn";
-      btn.innerHTML = `<i class="${config.icon}"></i><span>${config.label}</span>`;
-      btn.addEventListener("click", () => runBatchRefresh({ mode, concurrency: 4 }));
-
-      const actions = toolbar.querySelector(".orders-toolbar-actions") || toolbar;
+      btn.innerHTML = '<i class="fas fa-sync-alt"></i><span>Refresh kits + labels</span>';
+      btn.addEventListener("click", () => runCombinedRefresh({ concurrency: 4 }));
+      // Place it next to the existing Refresh data button
+      const actions = toolbar.querySelector(".refresh-btn")?.parentElement || toolbar;
       actions.appendChild(btn);
     }
 
@@ -6104,25 +6184,31 @@ notificationBadge.style.display = 'none';
       refreshBtn.__batchPatched = true;
       const clone = refreshBtn.cloneNode(true);
       refreshBtn.parentNode.replaceChild(clone, refreshBtn);
-      clone.addEventListener(
-        "click",
-        async (ev) => {
-          if (!DO_BATCH_BEFORE_REFRESH) return;
-          ev.preventDefault();
-          try {
-            await runBatchRefresh({ mode: "kit", concurrency: 4 });
-          } catch (e) {
-            console.warn("Batch refresh error", e);
-          }
-          setTimeout(() =>
-            clone.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: false }))
-          , 0);
-        },
-        { capture: true }
-      );
+      clone.addEventListener("click", async (ev) => {
+        if (!DO_BATCH_BEFORE_REFRESH) return; // fall through to the original handler
+        ev.preventDefault();
+        try {
+          await runCombinedRefresh({ concurrency: 4 });
+        } catch (e) {
+          console.warn("Batch refresh error", e);
+        }
+        // Trigger a real data refresh by dispatching a click again (bubbles to other listeners)
+        setTimeout(() => clone.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: false })), 0);
+      }, { capture: true });
     }
 
-    window.runTrackingBatchRefresh = runBatchRefresh;
+    const AUTO_LABEL_REFRESH_INTERVAL = 30 * 60 * 1000;
+    let labelRefreshInFlight = false;
+    setInterval(() => {
+      if (labelRefreshInFlight) return;
+      if (!ordersTbody || !ordersTbody.children || !ordersTbody.children.length) return;
+      labelRefreshInFlight = true;
+      runLabelRefresh({ concurrency: 2 })
+        .catch((error) => console.warn("Auto inbound refresh failed", error))
+        .finally(() => {
+          labelRefreshInFlight = false;
+        });
+    }, AUTO_LABEL_REFRESH_INTERVAL);
   } catch (e) {
     console.warn("Batch tracking refresh bootstrap failed", e);
   }
