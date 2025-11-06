@@ -728,10 +728,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 <label for="street-address" class="block text-sm font-medium text-slate-700">Street Address</label>
                                 <input type="text" id="street-address" required class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="Start typing your address..." autocomplete="street-address">
                             </div>
-                            <div class="md:col-span-2">
-                                <label for="street-address2" class="block text-sm font-medium text-slate-700">Apartment, suite, etc. (optional)</label>
-                                <input type="text" id="street-address2" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" placeholder="Apartment, suite, unit, building" autocomplete="address-line2">
-                            </div>
                             <div>
                                 <label for="city" class="block text-sm font-medium text-slate-700">City</label>
                                 <input type="text" id="city" required class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 sm:text-sm" autocomplete="address-level2">
@@ -1257,16 +1253,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
         // This function is called by the Google Maps script when it has loaded.
         function initAutocomplete() {
+            // Get the input element
             const streetAddressInput = document.getElementById('street-address');
-            if (!streetAddressInput || !window.google || !google.maps?.places) {
-                console.warn('Google Places Autocomplete could not initialize — missing dependencies or input field.');
-                return;
-            }
-
+            
             // Create the autocomplete object, restricting the search to geographical location types.
             autocomplete = new google.maps.places.Autocomplete(streetAddressInput, {
                 types: ['address'],
-                componentRestrictions: { country: ['us', 'ca'] }
+                componentRestrictions: { country: 'us' } // Restrict to US addresses
             });
 
             // When the user selects an address from the dropdown, populate the address fields in the form.
@@ -1285,38 +1278,18 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // Get each component of the address from the place details,
             // and then fill-in the corresponding field on the form.
             const streetAddressInput = document.getElementById('street-address');
-            const streetAddressLine2Input = document.getElementById('street-address2');
             const cityInput = document.getElementById('city');
             const stateInput = document.getElementById('state');
             const zipCodeInput = document.getElementById('zip-code');
 
-            if (!streetAddressInput || !cityInput || !stateInput || !zipCodeInput) {
-                console.warn('Unable to populate address fields from Google Places (missing inputs).');
-                return;
-            }
-
-            if (!streetAddressInput || !cityInput || !stateInput || !zipCodeInput) {
-                console.warn('Unable to populate address fields from Google Places (missing inputs).');
-                return;
-            }
-
             // Clear out the fields first
             streetAddressInput.value = '';
-            if (streetAddressLine2Input) {
-                streetAddressLine2Input.value = '';
-            }
             cityInput.value = '';
             stateInput.value = '';
             zipCodeInput.value = '';
 
             let streetNumber = '';
             let route = '';
-            let city = '';
-            let state = '';
-            let postalCode = '';
-            let postalCodeSuffix = '';
-            let countryName = '';
-            let subpremise = '';
 
             for (const component of place.address_components) {
                 const componentType = component.types[0];
@@ -1329,55 +1302,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         route = component.short_name;
                         break;
                     case 'locality':
-                        city = component.long_name;
+                        cityInput.value = component.long_name;
                         break;
                     case 'administrative_area_level_1':
                         // Use the short name (two-letter code) for the state input
-                        state = component.short_name;
+                        stateInput.value = component.short_name;
                         break;
                     case 'postal_code':
-                        postalCode = component.long_name;
-                        break;
-                    case 'postal_code_suffix':
-                        postalCodeSuffix = component.long_name;
-                        break;
-                    case 'country':
-                        countryName = component.long_name;
-                        break;
-                    case 'subpremise':
-                        subpremise = component.long_name;
+                        zipCodeInput.value = component.long_name;
                         break;
                 }
             }
             
-            const streetLine = `${streetNumber} ${route}`.trim();
-            const combinedDisplay = [
-                streetLine,
-                cityInput.value,
-                stateInput.value,
-                zipCodeInput.value
-            ].filter(Boolean).join(', ');
-
-            streetAddressInput.value = combinedDisplay || streetLine;
-
-            // Keep the autocomplete suggestions from lingering by briefly removing focus.
-            streetAddressInput.blur();
+            streetAddressInput.value = `${streetNumber} ${route}`.trim();
 
             // Manually trigger an input event on each field to let other scripts know they've changed
-            const fireInputEvent = (input) => {
-                if (input) {
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            };
-
-            fireInputEvent(streetAddressInput);
-            fireInputEvent(streetAddressLine2Input);
-            fireInputEvent(cityInput);
-            fireInputEvent(stateInput);
-            fireInputEvent(zipCodeInput);
+            const event = new Event('input', { bubbles: true });
+            streetAddressInput.dispatchEvent(event);
+            cityInput.dispatchEvent(event);
+            stateInput.dispatchEvent(event);
+            zipCodeInput.dispatchEvent(event);
         }
-
-        window.initAutocomplete = initAutocomplete;
         
         let device = null;
         let deviceInfo = null; // Declare globally to hold parsed info
@@ -3438,10 +3383,5 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
         });
     </script>
-    <script
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBO9G7N5DIqiZc69MR5JIkXCvC-fHIO-oI&libraries=places&callback=initAutocomplete"
-        async
-        defer
-    ></script>
 </body>
 </html>
