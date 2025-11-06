@@ -21,7 +21,7 @@ test('marks kit as delivered when ShipEngine reports delivery', async () => {
         estimated_delivery_date: '2024-10-01'
     });
 
-    const { updatePayload, delivered } = await buildKitTrackingUpdate(
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(
         {
             outboundTrackingNumber: '9400TEST123',
             outboundCarrierCode: 'usps'
@@ -41,6 +41,7 @@ test('marks kit as delivered when ShipEngine reports delivery', async () => {
     assert.equal(axiosStub.calls[0].options.headers['API-Key'], 'demo-key');
 
     assert.equal(delivered, true);
+    assert.equal(direction, 'outbound');
     assert.equal(updatePayload.status, 'kit_delivered');
     assert.equal(updatePayload.kitDeliveredAt, 'server-ts');
     assert.deepEqual(updatePayload.kitTrackingStatus, {
@@ -48,7 +49,9 @@ test('marks kit as delivered when ShipEngine reports delivery', async () => {
         statusDescription: 'Package delivered',
         carrierCode: 'usps',
         lastUpdated: '2024-10-01T18:22:00Z',
-        estimatedDelivery: '2024-10-01'
+        estimatedDelivery: '2024-10-01',
+        trackingNumber: '9400TEST123',
+        direction: 'outbound'
     });
 });
 
@@ -57,7 +60,7 @@ test('returns in-transit tracking data without forcing delivery status', async (
         status_description: 'In transit to destination facility'
     });
 
-    const { updatePayload, delivered } = await buildKitTrackingUpdate(
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(
         {
             outboundTrackingNumber: '9400TEST999'
         },
@@ -68,6 +71,7 @@ test('returns in-transit tracking data without forcing delivery status', async (
     );
 
     assert.equal(delivered, false);
+    assert.equal(direction, 'outbound');
     assert.ok(!('status' in updatePayload), 'Order status should remain unchanged when not delivered');
     assert.ok(!('kitDeliveredAt' in updatePayload));
     assert.deepEqual(updatePayload.kitTrackingStatus, {
@@ -75,7 +79,41 @@ test('returns in-transit tracking data without forcing delivery status', async (
         statusDescription: 'In transit to destination facility',
         carrierCode: 'stamps_com',
         lastUpdated: null,
-        estimatedDelivery: null
+        estimatedDelivery: null,
+        trackingNumber: '9400TEST999',
+        direction: 'outbound'
+    });
+});
+
+test('prefers inbound tracking once the kit is delivered', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'IT',
+        status_description: 'Inbound in transit'
+    });
+
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(
+        {
+            status: 'kit_delivered',
+            outboundTrackingNumber: '9400OUTBOUND1',
+            inboundTrackingNumber: '9400INBOUND1'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key'
+        }
+    );
+
+    assert.equal(delivered, false);
+    assert.equal(direction, 'inbound');
+    assert.ok(!('status' in updatePayload));
+    assert.deepEqual(updatePayload.kitTrackingStatus, {
+        statusCode: 'IT',
+        statusDescription: 'Inbound in transit',
+        carrierCode: 'stamps_com',
+        lastUpdated: null,
+        estimatedDelivery: null,
+        trackingNumber: '9400INBOUND1',
+        direction: 'inbound'
     });
 });
 

@@ -106,6 +106,20 @@ const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
+const INBOUND_TRACKING_STATUSES = new Set([
+  'kit_delivered',
+  'label_generated',
+  'emailed',
+  'received',
+  'completed',
+  're-offered-pending',
+  're-offered-accepted',
+  're-offered-declined',
+  're-offered-auto-accepted',
+  'return-label-generated',
+  'requote_accepted',
+]);
+
 // Custom logo URL for the packing slip header - UPDATED LOGO URL
 const LOGO_URL = "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
 
@@ -293,13 +307,16 @@ const modalReturnLabelDescription = document.getElementById('modal-return-label-
 const modalReturnLabelLink = document.getElementById('modal-return-label-link');
 const modalReturnTrackingNumberDisplay = document.getElementById('modal-return-tracking-number-display');
 const modalLabelStatusRow = document.getElementById('modal-label-status-row');
+const modalLabelStatusTitle = document.getElementById('modal-label-status-title');
 const modalLabelStatus = document.getElementById('modal-label-status');
+const modalLabelRefreshButton = document.getElementById('modal-refresh-label-tracking');
 const modalLastReminderDate = document.getElementById('modal-last-reminder-date');
 const modalOrderAge = document.getElementById('modal-order-age');
 const modalKitTrackingRow = document.getElementById('modal-kit-tracking-row');
 const modalKitTrackingTitle = document.getElementById('modal-kit-tracking-title');
 const modalKitTrackingStatus = document.getElementById('modal-kit-tracking-status');
 const modalKitTrackingUpdated = document.getElementById('modal-kit-tracking-updated');
+const modalKitRefreshButton = document.getElementById('modal-refresh-kit-tracking');
 
 const modalActionButtons = document.getElementById('modal-action-buttons');
 const modalLoadingMessage = document.getElementById('modal-loading-message');
@@ -3396,6 +3413,7 @@ ordersToDisplay.forEach(order => {
 displayedIds.push(order.id);
 const row = document.createElement('tr');
 row.className = 'transition-colors duration-200';
+row.dataset.orderId = order.id;
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
 const itemDescription = `${order.device || 'Device'} ${order.storage || ''}`.trim();
 const orderDate = formatDate(order.createdAt);
@@ -4236,15 +4254,67 @@ modalSecondaryLabelDescription.textContent = 'Inbound Device Label (PDF)';
 modalSecondaryLabelRow.classList.remove('hidden');
 }
 
-const kitTrackingStatus = order.kitTrackingStatus;
-if (kitTrackingStatus && (kitTrackingStatus.statusDescription || kitTrackingStatus.statusCode)) {
-modalKitTrackingStatus.textContent = kitTrackingStatus.statusDescription || kitTrackingStatus.statusCode;
-modalKitTrackingUpdated.textContent = kitTrackingStatus.lastUpdated ? `Last update: ${formatDate(kitTrackingStatus.lastUpdated)}` : '';
-modalKitTrackingRow.classList.remove('hidden');
-} else if (order.outboundTrackingNumber) {
-modalKitTrackingStatus.textContent = 'Kit tracking available. Refresh to see the latest scans.';
-modalKitTrackingUpdated.textContent = '';
-modalKitTrackingRow.classList.remove('hidden');
+const hasOutboundTracking = Boolean(order.outboundTrackingNumber);
+const hasInboundTracking = Boolean(order.inboundTrackingNumber);
+const existingDirection = String(order?.kitTrackingStatus?.direction || '').toLowerCase();
+const prefersInbound =
+  hasInboundTracking &&
+  (INBOUND_TRACKING_STATUSES.has(String(order.status || '').toLowerCase()) ||
+    existingDirection === 'inbound');
+const kitTrackingDirection = prefersInbound ? 'inbound' : existingDirection || 'outbound';
+
+if (modalKitTrackingTitle) {
+  modalKitTrackingTitle.textContent =
+    kitTrackingDirection === 'inbound' ? 'Inbound Device Status' : 'Kit Delivery Status';
+}
+
+const shouldShowKitTracking =
+  order.shippingPreference === 'Shipping Kit Requested' && (hasOutboundTracking || hasInboundTracking);
+
+if (shouldShowKitTracking) {
+  const kitTrackingStatus = order.kitTrackingStatus;
+  const hasStatusText = Boolean(
+    kitTrackingStatus &&
+      (kitTrackingStatus.statusDescription || kitTrackingStatus.statusCode)
+  );
+
+  if (hasStatusText) {
+    modalKitTrackingStatus.textContent =
+      kitTrackingStatus.statusDescription || kitTrackingStatus.statusCode;
+    modalKitTrackingUpdated.textContent = kitTrackingStatus.lastUpdated
+      ? `Last update: ${formatDate(kitTrackingStatus.lastUpdated)}`
+      : '';
+  } else {
+    modalKitTrackingStatus.textContent =
+      kitTrackingDirection === 'inbound'
+        ? 'Inbound tracking available. Refresh to see the latest scans.'
+        : 'Kit tracking available. Refresh to see the latest scans.';
+    modalKitTrackingUpdated.textContent = '';
+  }
+
+  modalKitTrackingRow.classList.remove('hidden');
+
+  if (modalKitRefreshButton) {
+    modalKitRefreshButton.classList.remove('hidden');
+    modalKitRefreshButton.disabled = false;
+    modalKitRefreshButton.onclick = async () => {
+      if (modalKitRefreshButton.disabled) return;
+      modalKitRefreshButton.disabled = true;
+      try {
+        await handleAction(order.id, 'refreshKitTracking');
+      } finally {
+        modalKitRefreshButton.disabled = false;
+      }
+    };
+  }
+} else {
+  modalKitTrackingRow.classList.add('hidden');
+  modalKitTrackingStatus.textContent = '';
+  modalKitTrackingUpdated.textContent = '';
+  if (modalKitRefreshButton) {
+    modalKitRefreshButton.classList.add('hidden');
+    modalKitRefreshButton.onclick = null;
+  }
 }
 
 }
@@ -4330,13 +4400,42 @@ modalSecondaryLabelLink.onclick = labelClickHandler;
 }
 
 const labelStatusText = formatLabelStatus(order);
-if (modalLabelStatusRow) {
-if (labelStatusText) {
-modalLabelStatus.textContent = labelStatusText;
-modalLabelStatusRow.classList.remove('hidden');
-} else {
-modalLabelStatusRow.classList.add('hidden');
+const hasLabelTrackingNumber = Boolean(order.trackingNumber || order.inboundTrackingNumber);
+
+if (modalLabelStatusTitle) {
+  modalLabelStatusTitle.textContent = 'Label Delivery Status';
 }
+
+if (modalLabelStatusRow) {
+  if (labelStatusText) {
+    modalLabelStatus.textContent = labelStatusText;
+    modalLabelStatusRow.classList.remove('hidden');
+  } else if (hasLabelTrackingNumber) {
+    modalLabelStatus.textContent = 'Label tracking available. Refresh to see the latest scans.';
+    modalLabelStatusRow.classList.remove('hidden');
+  } else {
+    modalLabelStatus.textContent = '';
+    modalLabelStatusRow.classList.add('hidden');
+  }
+}
+
+if (modalLabelRefreshButton) {
+  if (hasLabelTrackingNumber) {
+    modalLabelRefreshButton.classList.remove('hidden');
+    modalLabelRefreshButton.disabled = false;
+    modalLabelRefreshButton.onclick = async () => {
+      if (modalLabelRefreshButton.disabled) return;
+      modalLabelRefreshButton.disabled = true;
+      try {
+        await handleAction(order.id, 'refreshLabelTracking');
+      } finally {
+        modalLabelRefreshButton.disabled = false;
+      }
+    };
+  } else {
+    modalLabelRefreshButton.classList.add('hidden');
+    modalLabelRefreshButton.onclick = null;
+  }
 }
 
 renderActivityLog(order);
@@ -4984,10 +5083,14 @@ if (body === null) {
 body = {};
 }
 break;
-case 'refreshKitTracking':
-url = `${BACKEND_BASE_URL}/orders/${orderId}/refresh-kit-tracking`;
-method = 'POST';
-break;
+  case 'refreshKitTracking':
+    url = `${BACKEND_BASE_URL}/orders/${orderId}/refresh-kit-tracking`;
+    method = 'POST';
+    break;
+  case 'refreshLabelTracking':
+    url = `${BACKEND_BASE_URL}/orders/${orderId}/sync-label-tracking`;
+    method = 'POST';
+    break;
 case 'cancelOrder':
 url = `${BACKEND_BASE_URL}/orders/${orderId}/cancel`;
 method = 'POST';
@@ -5812,53 +5915,11 @@ notificationBadge.style.display = 'block';
 notificationBadge.style.display = 'none';
 }
 }
-document.addEventListener('DOMContentLoaded', () => {
-    const refreshAllTrackingBtn = document.getElementById('refresh-all-tracking-btn');
-    const refreshOrdersBtn = document.getElementById('refresh-orders-btn');
-
-    if (refreshAllTrackingBtn) {
-        refreshAllTrackingBtn.addEventListener('click', async () => {
-            refreshAllTrackingBtn.disabled = true;
-            refreshAllTrackingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
-            try {
-                // Fetch all orders (replace with your Firestore or API call)
-                const orders = await fetch('/api/orders').then(r => r.json());
-
-                // Filter only ones with kits sent or delivered
-                const kitOrders = orders.filter(o =>
-                    ['kit_sent', 'kit_delivered'].includes(o.status)
-                );
-
-                for (const order of kitOrders) {
-                    try {
-                        await fetch(`/api/track-kit/${order.id}`, { method: 'POST' });
-                        console.log(`Refreshed tracking for ${order.id}`);
-                    } catch (err) {
-                        console.warn(`Failed to refresh ${order.id}`, err);
-                    }
-                }
-
-                alert(`✅ Refreshed ${kitOrders.length} kit tracking updates.`);
-                // Optionally reload order list
-                if (refreshOrdersBtn) {
-                    refreshOrdersBtn.click();
-                }
-            } catch (err) {
-                alert('⚠️ Failed to refresh kit tracking data. Check console for details.');
-                console.error(err);
-            } finally {
-                refreshAllTrackingBtn.disabled = false;
-                refreshAllTrackingBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh All Kit Tracking';
-            }
-        });
-    }
-});
-
-/* --- BATCH KIT REFRESH (auto UI + logic) --- */
+/* --- BATCH TRACKING REFRESH (auto UI + logic) --- */
 (function () {
   try {
-    if (window.__BATCH_KIT_REFRESH_INSTALLED__) return;
-    window.__BATCH_KIT_REFRESH_INSTALLED__ = true;
+    if (window.__BATCH_TRACKING_REFRESH_INSTALLED__) return;
+    window.__BATCH_TRACKING_REFRESH_INSTALLED__ = true;
 
     const API_BASE =
       (typeof window !== "undefined" && (window.API_BASE || window.BACKEND_BASE_URL)) ||
@@ -5869,18 +5930,47 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshBtn = document.getElementById("refresh-orders-btn");
     const lastRefreshAt = document.getElementById("last-refresh-at");
 
+    const MODE_CONFIG = {
+      kit: {
+        buttonId: "refresh-all-kits-btn",
+        icon: "fas fa-truck-fast",
+        label: "Refresh all kit tracking",
+        startStatus: (total) => `Refreshing ${total} kits…`,
+        progressStatus: (current, total) => `Refreshing kit tracking… ${current}/${total}`,
+        completeStatus: (results) =>
+          `Kit tracking refresh: ${results.ok} ok, ${results.fail} failed`,
+        endpoint: (orderId) =>
+          `${API_BASE}/orders/${encodeURIComponent(orderId)}/refresh-kit-tracking`,
+        feedback: (results) => {
+          const base = `Kit tracking refreshed for ${results.ok}/${results.total} orders.`;
+          return results.fail ? `${base} ${results.fail} failed.` : base;
+        },
+      },
+      label: {
+        buttonId: "refresh-all-labels-btn",
+        icon: "fas fa-tag",
+        label: "Refresh all label tracking",
+        startStatus: (total) => `Refreshing ${total} labels…`,
+        progressStatus: (current, total) => `Refreshing label tracking… ${current}/${total}`,
+        completeStatus: (results) =>
+          `Label tracking refresh: ${results.ok} ok, ${results.fail} failed`,
+        endpoint: (orderId) =>
+          `${API_BASE}/orders/${encodeURIComponent(orderId)}/sync-label-tracking`,
+        feedback: (results) => {
+          const base = `Label tracking refreshed for ${results.ok}/${results.total} orders.`;
+          return results.fail ? `${base} ${results.fail} failed.` : base;
+        },
+      },
+    };
+
     function setStatus(text) {
       if (lastRefreshAt) lastRefreshAt.textContent = text;
     }
 
-    function toggleBtnState(btn, on, label) {
+    function toggleBtnState(btn, on) {
       if (!btn) return;
       btn.disabled = on;
       btn.classList.toggle("is-loading", on);
-      if (label) {
-        const span = btn.querySelector("span.status");
-        if (span) span.textContent = label;
-      }
     }
 
     function collectOrderIdsFromTable() {
@@ -5898,20 +5988,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const m = text.match(/SHC-\d+|[A-Z]{2,}-\d+/);
         if (m) ids.add(m[0]);
       }
-      return Array.from(ids);
+      const collected = Array.from(ids);
+      if (!collected.length && Array.isArray(lastRenderedOrderIds) && lastRenderedOrderIds.length) {
+        return lastRenderedOrderIds.slice();
+      }
+      return collected;
     }
 
-    async function refreshKitTrackingForOrder(orderId) {
-      const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/refresh-kit-tracking`;
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+    async function refreshTrackingForOrder(orderId, mode) {
+      const config = MODE_CONFIG[mode];
+      if (!config) {
+        throw new Error(`Unsupported tracking refresh mode: ${mode}`);
+      }
+      const url = config.endpoint(orderId);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      try { return await res.json(); } catch { return {}; }
+      try {
+        return await res.json();
+      } catch {
+        return {};
+      }
     }
 
     async function runBatchRefresh({ concurrency = 4, manageRefreshButton = true } = {}) {
       const ids = collectOrderIdsFromTable();
       if (!ids.length) {
-        console.log("No order rows found to refresh.");
+        setStatus("No orders available to refresh.");
+        showOrdersFeedback("No orders are currently loaded to refresh tracking.", "error");
         return { ok: 0, fail: 0, total: 0 };
       }
 
@@ -5922,22 +6028,102 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       setStatus(`Refreshing ${ids.length} kits…`);
 
-      let i = 0;
       const results = { ok: 0, fail: 0, total: ids.length };
+      const queue = ids.slice();
+      let processed = 0;
+      let encounteredError = null;
+
+      async function worker() {
+        while (queue.length) {
+          const id = queue.shift();
+          try {
+            await refreshTrackingForOrder(id, mode);
+            results.ok++;
+          } catch (error) {
+            console.warn(`${mode} refresh failed`, id, error);
+            results.fail++;
+          } finally {
+            processed++;
+            setStatus(config.progressStatus(processed, ids.length));
+          }
+        }
+      }
+
+      try {
+        const workerCount = Math.min(concurrency, ids.length);
+        await Promise.all(Array.from({ length: workerCount }, worker));
+      } catch (error) {
+        encounteredError = error;
+      } finally {
+        toggleBtnState(refreshBtn, false);
+        toggleBtnState(targetBtn, false);
+      }
+
+      if (encounteredError) {
+        setStatus('Tracking refresh failed.');
+        showOrdersFeedback(`Failed to refresh ${mode} tracking.`, 'error');
+        return results;
+      }
+
+      setStatus(config.completeStatus(results));
+      const feedbackMessage = config.feedback(results);
+      showOrdersFeedback(feedbackMessage, results.fail ? 'error' : 'success');
+
+      if (results.ok && refreshBtn) {
+        setTimeout(() => refreshBtn.click(), 150);
+      }
+
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
+      setStatus(`Batch refresh complete: ${results.ok} ok, ${results.fail} failed`);
+      return results;
+    }
+
+    async function refreshInboundTrackingForOrder(orderId) {
+      const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/sync-label-tracking`;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        return { skipped: true };
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      try {
+        return await res.json();
+      } catch {
+        return {};
+      }
+    }
+
+    async function runLabelRefresh({ concurrency = 4 } = {}) {
+      const ids = collectOrderIdsFromTable();
+      if (!ids.length) {
+        console.log("No order rows found to refresh inbound labels for.");
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
+      }
+
+      setStatus(`Refreshing inbound labels… 0/${ids.length}`);
+
+      let i = 0;
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
       const queue = ids.slice();
 
       async function worker() {
         while (queue.length) {
           const id = queue.shift();
           try {
-            await refreshKitTrackingForOrder(id);
-            results.ok++;
-          } catch (e) {
-            console.warn("Kit refresh failed", id, e);
+            const response = await refreshInboundTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
+          } catch (error) {
             results.fail++;
+            console.warn("Inbound refresh failed", id, error);
           } finally {
             i++;
-            setStatus(`Refreshing kits… ${i}/${ids.length}`);
+            setStatus(`Refreshing inbound labels… ${i}/${ids.length}`);
           }
         }
       }
@@ -6039,16 +6225,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!toolbar) return;
 
       const btn = document.createElement("button");
-      btn.id = "refresh-all-kits-btn";
+      btn.id = config.buttonId;
       btn.className = "refresh-btn";
       btn.innerHTML = '<i class="fas fa-sync-alt"></i><span>Refresh kits + labels</span>';
       btn.addEventListener("click", () => runCombinedRefresh({ concurrency: 4 }));
       // Place it next to the existing Refresh data button
       const actions = toolbar.querySelector(".refresh-btn")?.parentElement || toolbar;
       actions.appendChild(btn);
-    })();
+    }
 
-    // Make the existing "Refresh data" also run batch kit refresh first (toggleable)
+    ensureButton("kit");
+    ensureButton("label");
+
     const DO_BATCH_BEFORE_REFRESH = true;
     if (refreshBtn && !refreshBtn.__batchPatched) {
       refreshBtn.__batchPatched = true;
@@ -6080,7 +6268,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }, AUTO_LABEL_REFRESH_INTERVAL);
   } catch (e) {
-    console.warn("Batch kit refresh bootstrap failed", e);
+    console.warn("Batch tracking refresh bootstrap failed", e);
   }
 })();
-/* --- END BATCH KIT REFRESH --- */
+/* --- END BATCH TRACKING REFRESH --- */
