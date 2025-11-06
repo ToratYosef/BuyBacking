@@ -297,6 +297,7 @@ const modalLabelStatus = document.getElementById('modal-label-status');
 const modalLastReminderDate = document.getElementById('modal-last-reminder-date');
 const modalOrderAge = document.getElementById('modal-order-age');
 const modalKitTrackingRow = document.getElementById('modal-kit-tracking-row');
+const modalKitTrackingTitle = document.getElementById('modal-kit-tracking-title');
 const modalKitTrackingStatus = document.getElementById('modal-kit-tracking-status');
 const modalKitTrackingUpdated = document.getElementById('modal-kit-tracking-updated');
 
@@ -579,7 +580,7 @@ minute: '2-digit'
 function formatLabelStatus(order) {
 if (!order) return '';
 const normalizedStatus = (order.status || '').toLowerCase();
-if (!['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way'].includes(normalizedStatus)) {
+if (!['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way', 'kit_delivered'].includes(normalizedStatus)) {
 return '';
 }
 let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
@@ -4081,6 +4082,15 @@ modalLabelRow.classList.add('hidden');
 modalSecondaryLabelRow.classList.add('hidden');
 modalReturnLabelRow.classList.add('hidden');
 modalKitTrackingRow.classList.add('hidden');
+if (modalKitTrackingTitle) {
+modalKitTrackingTitle.textContent = 'Kit Delivery Status';
+}
+if (modalKitTrackingStatus) {
+modalKitTrackingStatus.textContent = '';
+}
+if (modalKitTrackingUpdated) {
+modalKitTrackingUpdated.textContent = '';
+}
 if (modalLabelStatusRow) {
 modalLabelStatusRow.classList.add('hidden');
 }
@@ -4194,6 +4204,10 @@ closeStatusDropdown();
 // 1. Outbound Kit (if requested)
 if (order.shippingPreference === 'Shipping Kit Requested') {
 
+if (modalKitTrackingTitle) {
+modalKitTrackingTitle.textContent = 'Kit Delivery Status';
+}
+
 // Outbound Label (Kit)
 if (order.outboundTrackingNumber) {
 modalLabelLink.href = order.outboundLabelUrl || '#'; // PDF link
@@ -4248,6 +4262,32 @@ modalLabelLink.href = order.uspsLabelUrl;
 modalTrackingNumber.textContent = 'N/A';
 modalLabelDescription.textContent = 'Shipping Label (PDF)';
 modalLabelRow.classList.remove('hidden');
+}
+
+const labelStatusText = formatLabelStatus(order) || order.labelTrackingStatusDescription || order.labelTrackingStatus || '';
+
+if (labelStatusText) {
+if (modalKitTrackingTitle) {
+modalKitTrackingTitle.textContent = 'Label Delivery Status';
+}
+if (modalKitTrackingStatus) {
+modalKitTrackingStatus.textContent = labelStatusText;
+}
+if (modalKitTrackingUpdated) {
+modalKitTrackingUpdated.textContent = order.labelTrackingLastSyncedAt ? `Last update: ${formatDate(order.labelTrackingLastSyncedAt)}` : '';
+}
+modalKitTrackingRow.classList.remove('hidden');
+} else if (order.trackingNumber || order.inboundTrackingNumber) {
+if (modalKitTrackingTitle) {
+modalKitTrackingTitle.textContent = 'Label Delivery Status';
+}
+if (modalKitTrackingStatus) {
+modalKitTrackingStatus.textContent = 'Label tracking available. Refresh to see the latest scans.';
+}
+if (modalKitTrackingUpdated) {
+modalKitTrackingUpdated.textContent = '';
+}
+modalKitTrackingRow.classList.remove('hidden');
 }
 }
 

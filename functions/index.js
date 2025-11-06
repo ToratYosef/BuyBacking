@@ -2066,6 +2066,19 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
       kitTrackingLastRefreshedAt: timestamp,
     });
 
+    if (delivered && shipengineKey) {
+      try {
+        if (shouldTrackInbound(updatedOrder)) {
+          await syncInboundTrackingForOrder(updatedOrder, { shipengineKey });
+        }
+      } catch (inboundError) {
+        console.error(
+          `Error syncing inbound tracking after kit delivery for order ${orderId}:`,
+          inboundError
+        );
+      }
+    }
+
     res.json({
       message: delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.',
       delivered,
