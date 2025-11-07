@@ -205,7 +205,6 @@ function createOrdersRouter({
         to: orderData.shippingInfo.email,
         subject: `Your SecondHandCell Order #${orderId} Has Been Received!`,
         html: customerEmailHtml,
-        bcc: ['sales@secondhandcell.com'],
       };
 
       const adminMailOptions = {
@@ -417,7 +416,6 @@ function createOrdersRouter({
           to: order.shippingInfo.email,
           subject: customerEmailSubject,
           html: customerEmailHtml,
-          bcc: ['sales@secondhandcell.com'],
         };
       } else if (order.shippingPreference === 'Email Label Requested') {
         customerLabelData = await createShipEngineLabel(
@@ -483,7 +481,6 @@ function createOrdersRouter({
           to: order.shippingInfo.email,
           subject: customerEmailSubject,
           html: customerEmailHtml,
-          bcc: ['sales@secondhandcell.com'],
         };
       } else {
         throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
