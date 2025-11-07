@@ -50,8 +50,7 @@ router.post("/check-esn", async (req, res) => {
             const blacklistEmailHtml = BLACKLISTED_EMAIL_HTML
                 .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName || 'Customer')
                 .replace(/\*\*ORDER_ID\*\*/g, orderId)
-                .replace(/\*\*STATUS_REASON\*\*/g, mockApiResponse.blacklistStatus)
-                .replace(/\*\*LEGAL_TEXT\*\*/g, 'As per our policy and legal requirements, we are obligated to report this device.');
+                .replace(/\*\*STATUS_REASON\*\*/g, mockApiResponse.blacklistStatus);
 
             const mailOptions = {
                 from: "SecondHandCell <" + functions.config().email.user + ">",
