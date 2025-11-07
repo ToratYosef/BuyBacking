@@ -2740,7 +2740,7 @@ async function runAutomaticLabelVoidSweep() {
   }
 }
 
-exports.autoRefreshInboundTracking = functions.pubsub
+const autoRefreshInboundTracking = functions.pubsub
   .schedule("every 30 minutes")
   .onRun(async () => {
     const shipengineKey = process.env.SHIPENGINE_KEY || null;
@@ -2779,7 +2779,7 @@ exports.autoRefreshInboundTracking = functions.pubsub
     return null;
   });
 
-exports.autoVoidExpiredLabels = functions.pubsub
+const autoVoidExpiredLabels = functions.pubsub
   .schedule("every 60 minutes")
   .onRun(async () => {
     try {
@@ -2790,7 +2790,7 @@ exports.autoVoidExpiredLabels = functions.pubsub
     return null;
   });
 
-exports.autoAcceptOffers = functions.pubsub
+const autoAcceptOffers = functions.pubsub
   .schedule("every 24 hours")
   .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
@@ -2863,7 +2863,7 @@ async function runAutoCancellationSweep() {
   }
 }
 
-exports.autoCancelDormantOrders = functions.pubsub
+const autoCancelDormantOrders = functions.pubsub
   .schedule("every 24 hours")
   .onRun(async () => {
     try {
@@ -2875,7 +2875,7 @@ exports.autoCancelDormantOrders = functions.pubsub
   });
 
 // This function creates a user document in the 'users' collection, but NOT in the 'admins' collection.
-exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
+const createUserRecord = functions.auth.user().onCreate(async (user) => {
   try {
     // Do not create a user record if the user is anonymous (no email)
     if (!user.email) {
@@ -2901,7 +2901,7 @@ exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
 });
 
 // Send Reminder Email for label_generated orders
-exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
+const sendReminderEmail = functions.https.onCall(async (data, context) => {
   try {
     // 1. Verify user is authenticated
     if (!context.auth) {
@@ -3332,7 +3332,7 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
   }
 });
 
-exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context) => {
+const sendExpiringReminderEmail = functions.https.onCall(async (data, context) => {
   try {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
@@ -3540,7 +3540,7 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
   }
 });
 
-exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
+const sendKitReminderEmail = functions.https.onCall(async (data, context) => {
   try {
     if (!context.auth) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
@@ -3707,7 +3707,7 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
   }
 });
 
-exports.onChatTransferUpdate = functions.firestore
+const onChatTransferUpdate = functions.firestore
   .document("chats/{chatId}")
   .onUpdate(async (change, context) => {
     // Removed all chat transfer notification logic
@@ -3715,7 +3715,7 @@ exports.onChatTransferUpdate = functions.firestore
   });
 
 // FCM Push Notifications for New Chat Messages
-exports.onNewChatOpened = functions.firestore
+const onNewChatOpened = functions.firestore
   .document("chats/{chatId}/messages/{messageId}")
   .onCreate(async (snap, context) => {
     const newMessage = snap.data();
@@ -3818,7 +3818,7 @@ exports.onNewChatOpened = functions.firestore
   });
 
 // NEW FUNCTION: Triggers on new chat document creation to send email notification.
-exports.onNewChatCreated = functions.firestore
+const onNewChatCreated = functions.firestore
   .document("chats/{chatId}")
   .onCreate(async (snap, context) => {
     const chatId = context.params.chatId;
@@ -4106,7 +4106,7 @@ async function sendWholesaleEmail({ to, subject, html, text }) {
   }
 }
 
-exports.notifyWholesaleOfferCreated = functions.firestore
+const notifyWholesaleOfferCreated = functions.firestore
   .document("wholesale/{userId}/offers/{offerDocId}")
   .onCreate(async (snap, context) => {
     const offer = snap.data() || {};
@@ -4150,7 +4150,7 @@ exports.notifyWholesaleOfferCreated = functions.firestore
     return null;
   });
 
-exports.notifyWholesaleOfferUpdated = functions.firestore
+const notifyWholesaleOfferUpdated = functions.firestore
   .document("wholesale/{userId}/offers/{offerDocId}")
   .onUpdate(async (change, context) => {
     const before = change.before.data() || {};
@@ -4351,4 +4351,19 @@ exports.notifyWholesaleOfferUpdated = functions.firestore
     return null;
   });
 
-module.exports = { app };
+module.exports = {
+  app,
+  autoRefreshInboundTracking,
+  autoVoidExpiredLabels,
+  autoAcceptOffers,
+  autoCancelDormantOrders,
+  createUserRecord,
+  sendReminderEmail,
+  sendExpiringReminderEmail,
+  sendKitReminderEmail,
+  onChatTransferUpdate,
+  onNewChatOpened,
+  onNewChatCreated,
+  notifyWholesaleOfferCreated,
+  notifyWholesaleOfferUpdated,
+};
