@@ -199,6 +199,7 @@ const orderPendingCount = document.getElementById('order-pending-count');
 const kitNeedsPrintingCount = document.getElementById('kit-needs-printing-count');
 const kitSentCount = document.getElementById('kit-sent-count');
 const kitDeliveredCount = document.getElementById('kit-delivered-count');
+const deliveredToUsCount = document.getElementById('delivered-to-us-count');
 const labelGeneratedCount = document.getElementById('label-generated-count');
 const emailedCount = document.getElementById('emailed-count');
 const receivedCount = document.getElementById('received-count');
@@ -2810,6 +2811,9 @@ kitSentCount.textContent = statusCounts['kit_sent'];
 }
 if (kitDeliveredCount) {
 kitDeliveredCount.textContent = statusCounts['kit_delivered'];
+}
+if (deliveredToUsCount) {
+deliveredToUsCount.textContent = statusCounts['delivered_to_us'];
 }
 if (labelGeneratedCount) {
 labelGeneratedCount.textContent = statusCounts['label_generated'];
@@ -5953,6 +5957,14 @@ document.addEventListener('DOMContentLoaded', () => {
     async function refreshKitTrackingForOrder(orderId) {
       const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/refresh-kit-tracking`;
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        try {
+          const body = await res.json();
+          return { skipped: true, ...body };
+        } catch (_) {
+          return { skipped: true };
+        }
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       try { return await res.json(); } catch { return {}; }
     }
@@ -5961,7 +5973,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const ids = collectOrderIdsForKitRefresh();
       if (!ids.length) {
         console.log("No order rows found to refresh.");
-        return { ok: 0, fail: 0, total: 0 };
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
       }
 
       const kitBtn = document.getElementById("refresh-all-kits-btn");
@@ -5972,15 +5984,19 @@ document.addEventListener('DOMContentLoaded', () => {
       setStatus(`Refreshing ${ids.length} kits…`);
 
       let i = 0;
-      const results = { ok: 0, fail: 0, total: ids.length };
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
       const queue = ids.slice();
 
       async function worker() {
         while (queue.length) {
           const id = queue.shift();
           try {
-            await refreshKitTrackingForOrder(id);
-            results.ok++;
+            const response = await refreshKitTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
           } catch (e) {
             console.warn("Kit refresh failed", id, e);
             results.fail++;
@@ -5998,7 +6014,9 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleBtnState(refreshBtn, false);
         if (kitBtn) toggleBtnState(kitBtn, false);
       }
-      setStatus(`Batch refresh complete: ${results.ok} ok, ${results.fail} failed`);
+      setStatus(
+        `Batch refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
+      );
       return results;
     }
 
@@ -6067,9 +6085,19 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const kitResult = await runBatchRefresh({ concurrency, manageRefreshButton: false });
         const labelResult = await runLabelRefresh({ concurrency });
-        setStatus(
-          `Kits refreshed (${kitResult.ok}/${kitResult.total}); labels refreshed (${labelResult.ok}/${labelResult.total}, ${labelResult.skipped} skipped, ${labelResult.fail} failed)`
-        );
+        const kitSummaryDetails = [
+          `${kitResult.ok}/${kitResult.total}`,
+          `${kitResult.skipped} skipped`,
+          `${kitResult.fail} failed`,
+        ];
+        const labelSummaryDetails = [
+          `${labelResult.ok}/${labelResult.total}`,
+          `${labelResult.skipped} skipped`,
+          `${labelResult.fail} failed`,
+        ];
+        const kitSummary = `Kits refreshed (${kitSummaryDetails.join(', ')})`;
+        const labelSummary = `labels refreshed (${labelSummaryDetails.join(', ')})`;
+        setStatus(`${kitSummary}; ${labelSummary}`);
         return { kitResult, labelResult };
       } catch (error) {
         console.warn("Combined refresh error", error);

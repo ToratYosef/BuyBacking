@@ -2062,8 +2062,11 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const order = { id: doc.id, ...doc.data() };
 
-    if (!order.outboundTrackingNumber && !order.inboundTrackingNumber) {
-      return res.status(400).json({ error: 'No tracking numbers available for this order' });
+    const hasOutbound = Boolean(order.outboundTrackingNumber);
+    const hasInbound = Boolean(order.inboundTrackingNumber || order.trackingNumber);
+
+    if (!hasOutbound && !hasInbound) {
+      return res.json({ skipped: true, reason: 'No tracking numbers available for this order.' });
     }
 
     const shipengineKey = process.env.SHIPENGINE_KEY;
@@ -2071,12 +2074,28 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
       return res.status(500).json({ error: 'ShipEngine API key not configured.' });
     }
 
-    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
-      axiosClient: axios,
-      shipengineKey,
-      defaultCarrierCode: DEFAULT_CARRIER_CODE,
-      serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
-    });
+    let updatePayload;
+    let delivered;
+    let direction;
+
+    try {
+      ({ updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
+        axiosClient: axios,
+        shipengineKey,
+        defaultCarrierCode: DEFAULT_CARRIER_CODE,
+        serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+      }));
+    } catch (error) {
+      const message = typeof error?.message === 'string' ? error.message : '';
+      if (
+        message.includes('Tracking number not available') ||
+        message.includes('Tracking number is required') ||
+        message.includes('Carrier code is required')
+      ) {
+        return res.json({ skipped: true, reason: message });
+      }
+      throw error;
+    }
 
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
     const updateData = {

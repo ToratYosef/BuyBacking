@@ -95,6 +95,7 @@ function buildTrackingUrl({ trackingNumber, carrierCode, defaultCarrierCode = DE
 }
 const INBOUND_TRACKING_STATUSES = new Set([
     'kit_delivered',
+    'kit_on_the_way_to_us',
     'delivered_to_us',
     'label_generated',
     'emailed',
