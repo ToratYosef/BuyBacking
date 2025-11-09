@@ -2127,6 +2127,15 @@ function isEligibleForAutoRequote(order = {}) {
     return false;
   }
 
+  if (status !== 'received') {
+    return false;
+  }
+
+  const lastEmailAt = getLastCustomerEmailTimestamp(order);
+  if (!lastEmailAt) {
+    return false;
+  }
+
   if (hasAutoRequoteCompleted(order)) {
     return false;
   }
