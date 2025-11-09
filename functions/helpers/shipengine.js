@@ -353,6 +353,21 @@ async function buildKitTrackingUpdate(
         }
     }
 
+    if (useInbound && delivered) {
+        if (isShippingKit) {
+            updatePayload.status = 'delivered_to_us';
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.kitDeliveredToUsAt = serverTimestamp();
+            }
+        } else {
+            updatePayload.status = 'received';
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.receivedAt = serverTimestamp();
+            }
+            updatePayload.autoReceived = true;
+        }
+    }
+
     return { updatePayload, delivered, direction };
 }
 
