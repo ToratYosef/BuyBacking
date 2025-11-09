@@ -1,6 +1,98 @@
 const axios = require('axios');
 
 const DEFAULT_CARRIER_CODE = 'stamps_com';
+
+function normalizeCarrierCode(code) {
+    if (!code || typeof code !== 'string') {
+        return null;
+    }
+    const trimmed = code.trim();
+    return trimmed ? trimmed : null;
+}
+
+function findCarrierCodeInLabels(labels) {
+    if (!labels || typeof labels !== 'object') {
+        return null;
+    }
+
+    for (const value of Object.values(labels)) {
+        if (!value || typeof value !== 'object') {
+            continue;
+        }
+
+        const direct =
+            normalizeCarrierCode(value.carrier_code) || normalizeCarrierCode(value.carrierCode);
+        if (direct) {
+            return direct;
+        }
+
+        const shipmentCarrier =
+            normalizeCarrierCode(value.shipment?.carrier_code) ||
+            normalizeCarrierCode(value.shipment?.carrierCode);
+        if (shipmentCarrier) {
+            return shipmentCarrier;
+        }
+    }
+
+    return null;
+}
+
+function resolveCarrierCode(order = {}, direction = 'outbound', defaultCarrierCode = DEFAULT_CARRIER_CODE) {
+    const candidates = [];
+
+    if (direction === 'inbound') {
+        candidates.push(order?.inboundCarrierCode);
+        candidates.push(order?.labelTrackingCarrierCode);
+    } else {
+        candidates.push(order?.outboundCarrierCode);
+    }
+
+    const shipEngineLabels = order?.shipEngineLabels;
+    if (shipEngineLabels && typeof shipEngineLabels === 'object') {
+        if (direction === 'inbound') {
+            candidates.push(shipEngineLabels.inbound?.shipment?.carrier_code);
+            candidates.push(shipEngineLabels.inbound?.shipment?.carrierCode);
+            candidates.push(shipEngineLabels.customer?.shipment?.carrier_code);
+            candidates.push(shipEngineLabels.customer?.shipment?.carrierCode);
+            candidates.push(shipEngineLabels.return?.shipment?.carrier_code);
+            candidates.push(shipEngineLabels.return?.shipment?.carrierCode);
+        } else {
+            candidates.push(shipEngineLabels.outbound?.shipment?.carrier_code);
+            candidates.push(shipEngineLabels.outbound?.shipment?.carrierCode);
+            candidates.push(shipEngineLabels.kit?.shipment?.carrier_code);
+            candidates.push(shipEngineLabels.kit?.shipment?.carrierCode);
+        }
+
+        candidates.push(shipEngineLabels.primary?.shipment?.carrier_code);
+        candidates.push(shipEngineLabels.primary?.shipment?.carrierCode);
+    }
+
+    const directCandidate = candidates
+        .map((value) => normalizeCarrierCode(value))
+        .find(Boolean);
+
+    if (directCandidate) {
+        return directCandidate;
+    }
+
+    const labelCandidate = findCarrierCodeInLabels(shipEngineLabels);
+    return labelCandidate || defaultCarrierCode;
+}
+
+function buildTrackingUrl({ trackingNumber, carrierCode, defaultCarrierCode = DEFAULT_CARRIER_CODE }) {
+    if (!trackingNumber) {
+        throw new Error('Tracking number is required to build a ShipEngine tracking URL.');
+    }
+
+    const normalizedCarrier = normalizeCarrierCode(carrierCode) || normalizeCarrierCode(defaultCarrierCode);
+    if (!normalizedCarrier) {
+        throw new Error('Carrier code is required to build a ShipEngine tracking URL.');
+    }
+
+    return `https://api.shipengine.com/v1/tracking?carrier_code=${encodeURIComponent(
+        normalizedCarrier
+    )}&tracking_number=${encodeURIComponent(trackingNumber)}`;
+}
 const INBOUND_TRACKING_STATUSES = new Set([
     'kit_delivered',
     'label_generated',
@@ -70,12 +162,8 @@ async function buildKitTrackingUpdate(
         throw new Error('Tracking number not available for this order');
     }
 
-    const carrierCode = useInbound
-        ? order.inboundCarrierCode || defaultCarrierCode
-        : order.outboundCarrierCode || defaultCarrierCode;
-    const trackingUrl = `https://api.shipengine.com/v1/tracking?carrier_code=${encodeURIComponent(
-        carrierCode
-    )}&tracking_number=${encodeURIComponent(trackingNumber)}`;
+    const carrierCode = resolveCarrierCode(order, useInbound ? 'inbound' : 'outbound', defaultCarrierCode);
+    const trackingUrl = buildTrackingUrl({ trackingNumber, carrierCode, defaultCarrierCode });
 
     const response = await axiosClient.get(trackingUrl, {
         headers: {
@@ -122,5 +210,7 @@ module.exports = {
     DEFAULT_CARRIER_CODE,
     extractTrackingFields,
     buildKitTrackingUpdate,
+    buildTrackingUrl,
+    resolveCarrierCode,
     INBOUND_TRACKING_STATUSES,
 };

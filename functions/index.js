@@ -6,7 +6,12 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
-const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
+const {
+  DEFAULT_CARRIER_CODE,
+  buildKitTrackingUpdate,
+  buildTrackingUrl,
+  resolveCarrierCode,
+} = require('./helpers/shipengine');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
 const createEmailsRouter = require('./routes/emails');
 const createOrdersRouter = require('./routes/orders');
@@ -2130,7 +2135,13 @@ app.post('/orders/:id/sync-outbound-tracking', async (req, res) => {
       return res.status(500).json({ error: 'ShipEngine API key not configured.' });
     }
 
-    const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
+    const carrierCode = resolveCarrierCode(order, 'outbound', DEFAULT_CARRIER_CODE);
+    const trackingUrl = buildTrackingUrl({
+      trackingNumber,
+      carrierCode,
+      defaultCarrierCode: DEFAULT_CARRIER_CODE,
+    });
+
     const response = await axios.get(trackingUrl, {
       headers: { 'API-Key': shipEngineKey },
     });
@@ -2225,7 +2236,12 @@ async function syncInboundTrackingForOrder(order, options = {}) {
   }
 
   const axiosClient = options.axiosClient || axios;
-  const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
+  const carrierCode = resolveCarrierCode(order, 'inbound', DEFAULT_CARRIER_CODE);
+  const trackingUrl = buildTrackingUrl({
+    trackingNumber,
+    carrierCode,
+    defaultCarrierCode: DEFAULT_CARRIER_CODE,
+  });
 
   const response = await axiosClient.get(trackingUrl, {
     headers: { 'API-Key': shipEngineKey },

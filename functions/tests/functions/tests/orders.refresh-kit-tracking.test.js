@@ -38,6 +38,10 @@ test('marks kit as delivered when ShipEngine reports delivery', async () => {
         axiosStub.calls[0].url.includes('tracking_number=9400TEST123'),
         'Tracking number should be included in ShipEngine request'
     );
+    assert.ok(
+        axiosStub.calls[0].url.includes('carrier_code=usps'),
+        'Carrier code should be included in ShipEngine request'
+    );
     assert.equal(axiosStub.calls[0].options.headers['API-Key'], 'demo-key');
 
     assert.equal(delivered, true);
@@ -74,6 +78,11 @@ test('returns in-transit tracking data without forcing delivery status', async (
     assert.equal(direction, 'outbound');
     assert.ok(!('status' in updatePayload), 'Order status should remain unchanged when not delivered');
     assert.ok(!('kitDeliveredAt' in updatePayload));
+    assert.ok(
+        axiosStub.calls[0].url.includes('carrier_code=stamps_com'),
+        'Default carrier code should be used when none is provided'
+    );
+
     assert.deepEqual(updatePayload.kitTrackingStatus, {
         statusCode: null,
         statusDescription: 'In transit to destination facility',
@@ -106,6 +115,11 @@ test('prefers inbound tracking once the kit is delivered', async () => {
     assert.equal(delivered, false);
     assert.equal(direction, 'inbound');
     assert.ok(!('status' in updatePayload));
+    assert.ok(
+        axiosStub.calls[0].url.includes('carrier_code=stamps_com'),
+        'Inbound tracking should default to the standard carrier code when unspecified'
+    );
+
     assert.deepEqual(updatePayload.kitTrackingStatus, {
         statusCode: 'IT',
         statusDescription: 'Inbound in transit',
