@@ -131,6 +131,77 @@ test('prefers inbound tracking once the kit is delivered', async () => {
     });
 });
 
+test('marks inbound kits as delivered to us when ShipEngine reports delivery', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'DE',
+        status_description: 'Delivered back to warehouse'
+    });
+
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(
+        {
+            status: 'kit_on_the_way_to_us',
+            shippingPreference: 'Shipping Kit Requested',
+            outboundTrackingNumber: '9400OUT',
+            inboundTrackingNumber: '9400IN'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key',
+            serverTimestamp: () => 'server-ts'
+        }
+    );
+
+    assert.equal(delivered, true);
+    assert.equal(direction, 'inbound');
+    assert.equal(updatePayload.status, 'delivered_to_us');
+    assert.equal(updatePayload.kitDeliveredToUsAt, 'server-ts');
+    assert.ok(!('autoReceived' in updatePayload));
+    assert.deepEqual(updatePayload.kitTrackingStatus, {
+        statusCode: 'DE',
+        statusDescription: 'Delivered back to warehouse',
+        carrierCode: 'stamps_com',
+        lastUpdated: null,
+        estimatedDelivery: null,
+        trackingNumber: '9400IN',
+        direction: 'inbound'
+    });
+});
+
+test('marks emailed label orders as received when inbound delivery is detected', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'DE',
+        status_description: 'Delivered to processing center'
+    });
+
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(
+        {
+            status: 'phone_on_the_way',
+            shippingPreference: 'Email Label Requested',
+            trackingNumber: '1ZEMAIL12345'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key',
+            serverTimestamp: () => 'timestamp'
+        }
+    );
+
+    assert.equal(delivered, true);
+    assert.equal(direction, 'inbound');
+    assert.equal(updatePayload.status, 'received');
+    assert.equal(updatePayload.receivedAt, 'timestamp');
+    assert.equal(updatePayload.autoReceived, true);
+    assert.deepEqual(updatePayload.kitTrackingStatus, {
+        statusCode: 'DE',
+        statusDescription: 'Delivered to processing center',
+        carrierCode: 'stamps_com',
+        lastUpdated: null,
+        estimatedDelivery: null,
+        trackingNumber: '1ZEMAIL12345',
+        direction: 'inbound'
+    });
+});
+
 test('throws a descriptive error when ShipEngine API key is missing', async () => {
     const axiosStub = createAxiosStub({});
 

@@ -95,6 +95,7 @@ function buildTrackingUrl({ trackingNumber, carrierCode, defaultCarrierCode = DE
 }
 const INBOUND_TRACKING_STATUSES = new Set([
     'kit_delivered',
+    'delivered_to_us',
     'label_generated',
     'emailed',
     'received',
@@ -137,7 +138,7 @@ async function buildKitTrackingUpdate(
     } = {}
 ) {
     const hasOutbound = Boolean(order?.outboundTrackingNumber);
-    const hasInbound = Boolean(order?.inboundTrackingNumber);
+    const hasInbound = Boolean(order?.inboundTrackingNumber || order?.trackingNumber);
 
     if (!hasOutbound && !hasInbound) {
         throw new Error('Tracking number not available for this order');
@@ -155,7 +156,7 @@ async function buildKitTrackingUpdate(
 
     const useInbound = (!hasOutbound && hasInbound) || prefersInbound;
     const trackingNumber = useInbound
-        ? order.inboundTrackingNumber
+        ? order.inboundTrackingNumber || order.trackingNumber
         : order.outboundTrackingNumber;
 
     if (!trackingNumber) {
@@ -196,10 +197,28 @@ async function buildKitTrackingUpdate(
         kitTrackingStatus: statusPayload,
     };
 
+    const shippingPreference = String(order?.shippingPreference || '').toLowerCase();
+    const isShippingKit = shippingPreference === 'shipping kit requested';
+
     if (!useInbound && delivered) {
         updatePayload.status = 'kit_delivered';
         if (typeof serverTimestamp === 'function') {
             updatePayload.kitDeliveredAt = serverTimestamp();
+        }
+    }
+
+    if (useInbound && delivered) {
+        if (isShippingKit) {
+            updatePayload.status = 'delivered_to_us';
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.kitDeliveredToUsAt = serverTimestamp();
+            }
+        } else {
+            updatePayload.status = 'received';
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.receivedAt = serverTimestamp();
+            }
+            updatePayload.autoReceived = true;
         }
     }
 
