@@ -4,11 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bulk Print Shipping Kits</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="/admin/css/admin-tailwind.css">
-    <link rel="stylesheet" href="/admin/css/admin-base.css">
-    <link rel="stylesheet" href="/admin/css/dashboard.css">
-    <link rel="stylesheet" href="/admin/css/bulk-print.css">
+    <link rel="stylesheet" href="/assets/css/admin-tailwind.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Google Tag Manager -->
 <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -26,13 +23,145 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             gtag('config', 'AW-17534255111');
             gtag('config', 'G-8JYPJDKSP8');
         </script>
-    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            background: radial-gradient(circle at 12% -10%, rgba(56, 189, 248, 0.22) 0%, rgba(8, 47, 73, 0.8) 32%, rgba(2, 6, 23, 1) 85%);
+            color: #0f172a;
+            padding: 0 16px 56px;
+        }
+        h1, h2, h3, h4 { font-family: 'Space Grotesk', sans-serif; }
+        .main-content {
+            margin: 48px auto;
+            padding: 32px;
+            max-width: 1320px;
+            position: relative;
+        }
+        .main-content::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            border-radius: 28px;
+            background: linear-gradient(135deg, rgba(241,245,249,0.92), rgba(226,232,240,0.55));
+            border: 1px solid rgba(148,163,184,0.25);
+            box-shadow: 0 45px 120px -60px rgba(15,23,42,0.85);
+            backdrop-filter: blur(22px);
+        }
+        .top-nav {
+            position: sticky;
+            top: -16px;
+            margin: -48px -32px 36px -32px;
+            padding: 28px 36px;
+            border-radius: 26px 26px 22px 22px;
+            background: linear-gradient(120deg, rgba(15, 23, 42, 0.92), rgba(17, 94, 163, 0.82), rgba(14, 116, 144, 0.78));
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            box-shadow: 0 35px 80px -55px rgba(15, 23, 42, 0.9);
+            display: flex;
+            justify-content: space-between;
+            gap: 24px;
+        }
+        .top-nav > div:first-child { flex: 1; padding-right: 20px; }
+        .top-nav h1 { color: #f8fafc; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+        .top-nav p { color: rgba(226,232,240,0.78); margin-top: 6px; font-size: 14px; line-height: 1.5; }
+        .top-nav-actions { display:flex; align-items:center; gap:18px; }
+        .search-container { position:relative; width:300px; }
+        .search-container input { width:100%; padding:10px 12px 10px 40px; border:1px solid #e2e8f0; border-radius:8px; }
+        .search-container i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; }
+        .admin-subnav { margin-top:14px; display:inline-flex; gap:10px; flex-wrap:wrap; }
+        .admin-subnav__link {
+            padding:6px 12px; border-radius:9999px; background:rgba(255,255,255,0.08);
+            color:rgba(226,232,240,0.85); font-size:13px; font-weight:600; text-decoration:none;
+        }
+        .admin-subnav__link:hover { background:rgba(255,255,255,0.16); color:#fff; }
+        .admin-subnav__link--active { background:linear-gradient(135deg, rgba(16,185,129,0.45), rgba(59,130,246,0.45)); color:#fff; }
+        .quick-stat { display:flex; flex-direction:column; align-items:flex-end; color:rgba(226,232,240,0.9); }
+        .quick-stat strong { font-size:18px; }
+        .logout-btn {
+            background: rgba(255,255,255,0.12);
+            color: #f8fafc;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 16px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .bulk-print-callout {
+            margin-bottom: 28px;
+            padding: 20px;
+            border-radius: 18px;
+            background: rgba(14, 165, 233, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+        }
+        .bulk-print-callout h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #0f172a;
+        }
+        .bag-label-note {
+            margin-top: 12px;
+            padding: 16px;
+            border-radius: 14px;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px dashed rgba(16, 185, 129, 0.45);
+            color: rgba(15, 118, 110, 0.95);
+        }
+        .orders-table-container { margin-top: 24px; }
+        .floating-chat-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #2563eb, #38bdf8);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 18px 45px rgba(37, 99, 235, 0.4);
+            border: none;
+            cursor: pointer;
+            z-index: 100;
+        }
+        .floating-chat-btn .unread-badge {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #ef4444;
+            color: #fff;
+            border-radius: 9999px;
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .loading-screen {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .loading-screen.hidden {
+            display: none;
+        }
+    </style>
 </head>
 <body data-admin-page="bulk-print">
     <div id="auth-loading-screen" class="loading-screen">
-        <div class="loading-screen-content">
-            <div class="loading-spinner"></div>
-            <p class="loading-screen-message">Checking authentication...</p>
+        <div style="text-align: center;">
+            <div class="loading-spinner" style="margin: 0 auto;"></div>
+            <p style="margin-top: 20px; color: #64748b; font-weight: 600;">Checking authentication...</p>
         </div>
     </div>
 
@@ -70,7 +199,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
         <section class="bulk-print-callout">
             <h2>How bulk printing works</h2>
-            <ol class="instructions-list">
+            <ol style="margin-left: 18px; color: rgba(30, 64, 175, 0.95); line-height: 1.6;">
                 <li>Select kit orders that need shipping labels.</li>
                 <li>Click <strong>Print selected kits</strong> to merge outbound/inbound PDFs.</li>
                 <li>Each bundle now includes a <strong>4" × 2" device bag sticker</strong> with the quote, customer contact, and device details.</li>
@@ -338,10 +467,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
     <button class="floating-chat-btn" onclick="window.location.href='../chat/index.html'" title="Open Chat Dashboard">
         <i class="fas fa-comments"></i>
-        <span class="unread-badge hidden" id="floating-chat-badge">0</span>
+        <span class="unread-badge" id="floating-chat-badge" style="display: none;">0</span>
     </button>
 
-    <script type="module" src="/admin/js/admin-index.js"></script>
+    <script type="module" src="/assets/js/pages/admin-index.js"></script>
 
   <script defer src="/assets/js/cookie-consent.js"></script>
 </body>
