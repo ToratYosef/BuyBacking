@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install root dependencies
+        run: npm install
+      - name: Install web dependencies
+        run: npm install
+        working-directory: apps/web
+      - name: Install functions dependencies
+        run: npm install
+        working-directory: functions
+      - name: Lint web
+        run: npm run lint
+        working-directory: apps/web
+      - name: Unit tests
+        run: npm run test:unit -- --runInBand
+      - name: Build web app
+        run: npm run build
+      - name: Build functions
+        run: npm run build
+        working-directory: functions
+      - name: Playwright tests
+        run: |
+          npx playwright install --with-deps
+          npm run e2e --workspace buybacking-web
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+        continue-on-error: true

@@ -1,0 +1,25 @@
+"use strict";
+/*
+ * ATTENTION: An "eval-source-map" devtool has been used.
+ * This devtool is neither made for production nor for readable output files.
+ * It uses "eval()" calls to create a separate source file with attached SourceMaps in the browser devtools.
+ * If you are trying to read the output file, select a different devtool (https://webpack.js.org/configuration/devtool/)
+ * or disable the default devtool with "devtool: false".
+ * If you are looking for production-ready output files, see mode: "production" (https://webpack.js.org/configuration/mode/).
+ */
+exports.id = "vendor-chunks/@heroicons";
+exports.ids = ["vendor-chunks/@heroicons"];
+exports.modules = {
+
+/***/ "(ssr)/./node_modules/@heroicons/react/24/outline/esm/ChevronDownIcon.js":
+/*!*************************************************************************!*\
+  !*** ./node_modules/@heroicons/react/24/outline/esm/ChevronDownIcon.js ***!
+  \*************************************************************************/
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+eval("__webpack_require__.r(__webpack_exports__);\n/* harmony export */ __webpack_require__.d(__webpack_exports__, {\n/* harmony export */   \"default\": () => (__WEBPACK_DEFAULT_EXPORT__)\n/* harmony export */ });\n/* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ \"(ssr)/./node_modules/next/dist/server/future/route-modules/app-page/vendored/ssr/react.js\");\n\nfunction ChevronDownIcon({ title, titleId, ...props }, svgRef) {\n    return /*#__PURE__*/ react__WEBPACK_IMPORTED_MODULE_0__.createElement(\"svg\", Object.assign({\n        xmlns: \"http://www.w3.org/2000/svg\",\n        fill: \"none\",\n        viewBox: \"0 0 24 24\",\n        strokeWidth: 1.5,\n        stroke: \"currentColor\",\n        \"aria-hidden\": \"true\",\n        \"data-slot\": \"icon\",\n        ref: svgRef,\n        \"aria-labelledby\": titleId\n    }, props), title ? /*#__PURE__*/ react__WEBPACK_IMPORTED_MODULE_0__.createElement(\"title\", {\n        id: titleId\n    }, title) : null, /*#__PURE__*/ react__WEBPACK_IMPORTED_MODULE_0__.createElement(\"path\", {\n        strokeLinecap: \"round\",\n        strokeLinejoin: \"round\",\n        d: \"m19.5 8.25-7.5 7.5-7.5-7.5\"\n    }));\n}\nconst ForwardRef = /*#__PURE__*/ react__WEBPACK_IMPORTED_MODULE_0__.forwardRef(ChevronDownIcon);\n/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (ForwardRef);\n//# sourceURL=[module]\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiKHNzcikvLi9ub2RlX21vZHVsZXMvQGhlcm9pY29ucy9yZWFjdC8yNC9vdXRsaW5lL2VzbS9DaGV2cm9uRG93bkljb24uanMiLCJtYXBwaW5ncyI6Ijs7Ozs7QUFBK0I7QUFDL0IsU0FBU0MsZ0JBQWdCLEVBQ3ZCQyxLQUFLLEVBQ0xDLE9BQU8sRUFDUCxHQUFHQyxPQUNKLEVBQUVDLE1BQU07SUFDUCxPQUFPLFdBQVcsR0FBRUwsZ0RBQW1CLENBQUMsT0FBT08sT0FBT0MsTUFBTSxDQUFDO1FBQzNEQyxPQUFPO1FBQ1BDLE1BQU07UUFDTkMsU0FBUztRQUNUQyxhQUFhO1FBQ2JDLFFBQVE7UUFDUixlQUFlO1FBQ2YsYUFBYTtRQUNiQyxLQUFLVDtRQUNMLG1CQUFtQkY7SUFDckIsR0FBR0MsUUFBUUYsUUFBUSxXQUFXLEdBQUVGLGdEQUFtQixDQUFDLFNBQVM7UUFDM0RlLElBQUlaO0lBQ04sR0FBR0QsU0FBUyxNQUFNLFdBQVcsR0FBRUYsZ0RBQW1CLENBQUMsUUFBUTtRQUN6RGdCLGVBQWU7UUFDZkMsZ0JBQWdCO1FBQ2hCQyxHQUFHO0lBQ0w7QUFDRjtBQUNBLE1BQU1DLGFBQWEsV0FBVyxHQUFHbkIsNkNBQWdCLENBQUNDO0FBQ2xELGlFQUFla0IsVUFBVUEsRUFBQyIsInNvdXJjZXMiOlsid2VicGFjazovL2J1eWJhY2tpbmctd2ViLy4vbm9kZV9tb2R1bGVzL0BoZXJvaWNvbnMvcmVhY3QvMjQvb3V0bGluZS9lc20vQ2hldnJvbkRvd25JY29uLmpzPzZmOTAiXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0ICogYXMgUmVhY3QgZnJvbSBcInJlYWN0XCI7XG5mdW5jdGlvbiBDaGV2cm9uRG93bkljb24oe1xuICB0aXRsZSxcbiAgdGl0bGVJZCxcbiAgLi4ucHJvcHNcbn0sIHN2Z1JlZikge1xuICByZXR1cm4gLyojX19QVVJFX18qL1JlYWN0LmNyZWF0ZUVsZW1lbnQoXCJzdmdcIiwgT2JqZWN0LmFzc2lnbih7XG4gICAgeG1sbnM6IFwiaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmdcIixcbiAgICBmaWxsOiBcIm5vbmVcIixcbiAgICB2aWV3Qm94OiBcIjAgMCAyNCAyNFwiLFxuICAgIHN0cm9rZVdpZHRoOiAxLjUsXG4gICAgc3Ryb2tlOiBcImN1cnJlbnRDb2xvclwiLFxuICAgIFwiYXJpYS1oaWRkZW5cIjogXCJ0cnVlXCIsXG4gICAgXCJkYXRhLXNsb3RcIjogXCJpY29uXCIsXG4gICAgcmVmOiBzdmdSZWYsXG4gICAgXCJhcmlhLWxhYmVsbGVkYnlcIjogdGl0bGVJZFxuICB9LCBwcm9wcyksIHRpdGxlID8gLyojX19QVVJFX18qL1JlYWN0LmNyZWF0ZUVsZW1lbnQoXCJ0aXRsZVwiLCB7XG4gICAgaWQ6IHRpdGxlSWRcbiAgfSwgdGl0bGUpIDogbnVsbCwgLyojX19QVVJFX18qL1JlYWN0LmNyZWF0ZUVsZW1lbnQoXCJwYXRoXCIsIHtcbiAgICBzdHJva2VMaW5lY2FwOiBcInJvdW5kXCIsXG4gICAgc3Ryb2tlTGluZWpvaW46IFwicm91bmRcIixcbiAgICBkOiBcIm0xOS41IDguMjUtNy41IDcuNS03LjUtNy41XCJcbiAgfSkpO1xufVxuY29uc3QgRm9yd2FyZFJlZiA9IC8qI19fUFVSRV9fKi8gUmVhY3QuZm9yd2FyZFJlZihDaGV2cm9uRG93bkljb24pO1xuZXhwb3J0IGRlZmF1bHQgRm9yd2FyZFJlZjsiXSwibmFtZXMiOlsiUmVhY3QiLCJDaGV2cm9uRG93bkljb24iLCJ0aXRsZSIsInRpdGxlSWQiLCJwcm9wcyIsInN2Z1JlZiIsImNyZWF0ZUVsZW1lbnQiLCJPYmplY3QiLCJhc3NpZ24iLCJ4bWxucyIsImZpbGwiLCJ2aWV3Qm94Iiwic3Ryb2tlV2lkdGgiLCJzdHJva2UiLCJyZWYiLCJpZCIsInN0cm9rZUxpbmVjYXAiLCJzdHJva2VMaW5lam9pbiIsImQiLCJGb3J3YXJkUmVmIiwiZm9yd2FyZFJlZiJdLCJzb3VyY2VSb290IjoiIn0=\n//# sourceURL=webpack-internal:///(ssr)/./node_modules/@heroicons/react/24/outline/esm/ChevronDownIcon.js\n");
+
+/***/ })
+
+};
+;
