@@ -6,7 +6,12 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
-const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
+const {
+  DEFAULT_CARRIER_CODE,
+  buildKitTrackingUpdate,
+  buildTrackingUrl,
+  resolveCarrierCode,
+} = require('./helpers/shipengine');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
 const createEmailsRouter = require('./routes/emails');
 const createOrdersRouter = require('./routes/orders');
@@ -132,11 +137,14 @@ const AUTO_CANCEL_MONITORED_STATUSES = [
   "phone_on_the_way",
 ];
 
+const AUTO_CANCELLATION_ENABLED = false;
+
 const INBOUND_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 const RETURN_REMINDER_DELAY_MS = 13 * 24 * 60 * 60 * 1000;
 const RETURN_AUTO_VOID_DELAY_MS = 15 * 24 * 60 * 60 * 1000;
 const INBOUND_TRACKABLE_STATUSES = new Set([
   "kit_delivered",
+  "delivered_to_us",
   "kit_on_the_way_to_us",
   "label_generated",
   "emailed",
@@ -1380,7 +1388,17 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus) {
   const upper = String(normalizedStatus).toUpperCase();
 
   if (upper === "DELIVERED" || upper === "DELIVERED_TO_AGENT") {
-    if ((order.status || "").toLowerCase() === "received") {
+    const normalizedStatus = (order.status || "").toLowerCase();
+    const kitOrder = isKitOrder(order);
+
+    if (kitOrder) {
+      if (normalizedStatus === "delivered_to_us" || normalizedStatus === "received") {
+        return null;
+      }
+      return { nextStatus: "delivered_to_us", delivered: true };
+    }
+
+    if (normalizedStatus === "received") {
       return null;
     }
     return { nextStatus: "received", delivered: true };
@@ -2072,14 +2090,19 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
 
-    const message =
-      direction === 'inbound'
-        ? delivered
-          ? 'Inbound device marked as delivered.'
-          : 'Inbound tracking status refreshed.'
-        : delivered
-          ? 'Kit marked as delivered.'
-          : 'Kit tracking status refreshed.';
+    const message = (() => {
+      if (direction === 'inbound') {
+        if (delivered) {
+          if (updatePayload.status === 'delivered_to_us') {
+            return 'Inbound kit marked as delivered to us.';
+          }
+          return 'Inbound device marked as delivered.';
+        }
+        return 'Inbound tracking status refreshed.';
+      }
+
+      return delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.';
+    })();
 
     if (delivered && shipengineKey) {
       try {
@@ -2130,7 +2153,13 @@ app.post('/orders/:id/sync-outbound-tracking', async (req, res) => {
       return res.status(500).json({ error: 'ShipEngine API key not configured.' });
     }
 
-    const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
+    const carrierCode = resolveCarrierCode(order, 'outbound', DEFAULT_CARRIER_CODE);
+    const trackingUrl = buildTrackingUrl({
+      trackingNumber,
+      carrierCode,
+      defaultCarrierCode: DEFAULT_CARRIER_CODE,
+    });
+
     const response = await axios.get(trackingUrl, {
       headers: { 'API-Key': shipEngineKey },
     });
@@ -2225,7 +2254,12 @@ async function syncInboundTrackingForOrder(order, options = {}) {
   }
 
   const axiosClient = options.axiosClient || axios;
-  const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
+  const carrierCode = resolveCarrierCode(order, 'inbound', DEFAULT_CARRIER_CODE);
+  const trackingUrl = buildTrackingUrl({
+    trackingNumber,
+    carrierCode,
+    defaultCarrierCode: DEFAULT_CARRIER_CODE,
+  });
 
   const response = await axiosClient.get(trackingUrl, {
     headers: { 'API-Key': shipEngineKey },
@@ -2295,6 +2329,8 @@ async function syncInboundTrackingForOrder(order, options = {}) {
     if (statusUpdate.nextStatus === 'received') {
       updatePayload.receivedAt = timestamp;
       updatePayload.autoReceived = true;
+    } else if (statusUpdate.nextStatus === 'delivered_to_us') {
+      updatePayload.kitDeliveredToUsAt = timestamp;
     }
     logEntries.push({
       type: 'status',
@@ -2379,6 +2415,10 @@ async function maybeSendReturnReminder(order) {
     return order;
   }
 
+  if (status === 'delivered_to_us') {
+    return order;
+  }
+
   if (order.returnReminderSentAt) {
     return order;
   }
@@ -2437,6 +2477,10 @@ async function maybeSendReturnReminder(order) {
 
 async function maybeAutoCancelAgingOrder(order, options = {}) {
   if (!order || !order.id) {
+    return order;
+  }
+
+  if (!AUTO_CANCELLATION_ENABLED) {
     return order;
   }
 
@@ -3193,7 +3237,10 @@ exports.autoRefreshInboundTracking = functions.pubsub
         }
 
         currentOrder = (await maybeSendReturnReminder(currentOrder)) || currentOrder;
-        currentOrder = (await maybeAutoCancelAgingOrder(currentOrder, { shipengineKey })) || currentOrder;
+        if (AUTO_CANCELLATION_ENABLED) {
+          currentOrder =
+            (await maybeAutoCancelAgingOrder(currentOrder, { shipengineKey })) || currentOrder;
+        }
       } catch (error) {
         console.error(`Inbound tracking sweep failed for order ${order.id}:`, error);
       }
@@ -3261,6 +3308,11 @@ exports.autoAcceptOffers = functions.pubsub
   });
 
 async function runAutoCancellationSweep() {
+  if (!AUTO_CANCELLATION_ENABLED) {
+    console.log('Auto cancellation sweep skipped: feature disabled.');
+    return;
+  }
+
   const thresholdTimestamp = admin.firestore.Timestamp.fromMillis(
     Date.now() - AUTO_CANCEL_DELAY_MS
   );
