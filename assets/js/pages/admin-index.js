@@ -68,6 +68,7 @@ const STATUS_CHART_CONFIG = [
 { key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
 { key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
 { key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
+ { key: 'delivered_to_us', label: 'Delivered To Us', color: '#0d9488' },
 { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
 { key: 'emailed', label: 'Emailed', color: '#38bdf8' },
 { key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0284c7' },
@@ -88,6 +89,7 @@ const STATUS_DROPDOWN_OPTIONS = [
   'kit_in_transit',
   'kit_delivered',
   'kit_on_the_way_to_us',
+  'delivered_to_us',
   'label_generated',
   'emailed',
   'phone_on_the_way',
@@ -197,6 +199,7 @@ const orderPendingCount = document.getElementById('order-pending-count');
 const kitNeedsPrintingCount = document.getElementById('kit-needs-printing-count');
 const kitSentCount = document.getElementById('kit-sent-count');
 const kitDeliveredCount = document.getElementById('kit-delivered-count');
+const deliveredToUsCount = document.getElementById('delivered-to-us-count');
 const labelGeneratedCount = document.getElementById('label-generated-count');
 const emailedCount = document.getElementById('emailed-count');
 const receivedCount = document.getElementById('received-count');
@@ -2786,6 +2789,7 @@ const statusCounts = {
 'kit_needs_printing': ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
 'kit_sent': ordersData.filter(o => o.status === 'kit_sent').length,
 'kit_delivered': ordersData.filter(o => o.status === 'kit_delivered').length,
+'delivered_to_us': ordersData.filter(o => o.status === 'delivered_to_us').length,
 'label_generated': ordersData.filter(o => o.status === 'label_generated').length,
 'emailed': ordersData.filter(o => o.status === 'emailed').length,
 'received': ordersData.filter(o => o.status === 'received').length,
@@ -2807,6 +2811,9 @@ kitSentCount.textContent = statusCounts['kit_sent'];
 }
 if (kitDeliveredCount) {
 kitDeliveredCount.textContent = statusCounts['kit_delivered'];
+}
+if (deliveredToUsCount) {
+deliveredToUsCount.textContent = statusCounts['delivered_to_us'];
 }
 if (labelGeneratedCount) {
 labelGeneratedCount.textContent = statusCounts['label_generated'];
@@ -3630,6 +3637,9 @@ return 'Kit Delivered';
 }
 if (status === 'kit_on_the_way_to_us') {
 return 'Kit On The Way To Us';
+}
+if (status === 'delivered_to_us') {
+return 'Delivered To Us';
 }
 if (status === 'label_generated') {
 // If the user requested an emailed label, display "Label Generated"
@@ -5883,7 +5893,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    function collectOrderIdsFromTable() {
+    function collectOrderIdsFromDom() {
       if (!ordersTbody) return [];
       const ids = new Set();
       for (const tr of ordersTbody.querySelectorAll("tr")) {
@@ -5901,18 +5911,69 @@ document.addEventListener('DOMContentLoaded', () => {
       return Array.from(ids);
     }
 
+    function getOrdersSnapshot() {
+      return Array.isArray(allOrders) ? allOrders : [];
+    }
+
+    function hasTrackingValue(value) {
+      return typeof value === "string" && value.trim().length > 0;
+    }
+
+    function collectOrderIdsForKitRefresh() {
+      const collected = new Set();
+      for (const order of getOrdersSnapshot()) {
+        if (!order || !order.id) continue;
+        const outbound = order.outboundTrackingNumber;
+        const inbound = order.inboundTrackingNumber || order.trackingNumber;
+        if (hasTrackingValue(outbound) || hasTrackingValue(inbound)) {
+          collected.add(order.id);
+        }
+      }
+
+      if (collected.size) {
+        return Array.from(collected);
+      }
+
+      return collectOrderIdsFromDom();
+    }
+
+    function collectOrderIdsForInboundRefresh() {
+      const collected = new Set();
+      for (const order of getOrdersSnapshot()) {
+        if (!order || !order.id) continue;
+        const inbound = order.inboundTrackingNumber || order.trackingNumber;
+        if (hasTrackingValue(inbound)) {
+          collected.add(order.id);
+        }
+      }
+
+      if (collected.size) {
+        return Array.from(collected);
+      }
+
+      return collectOrderIdsFromDom();
+    }
+
     async function refreshKitTrackingForOrder(orderId) {
       const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/refresh-kit-tracking`;
       const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        try {
+          const body = await res.json();
+          return { skipped: true, ...body };
+        } catch (_) {
+          return { skipped: true };
+        }
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       try { return await res.json(); } catch { return {}; }
     }
 
     async function runBatchRefresh({ concurrency = 4, manageRefreshButton = true } = {}) {
-      const ids = collectOrderIdsFromTable();
+      const ids = collectOrderIdsForKitRefresh();
       if (!ids.length) {
         console.log("No order rows found to refresh.");
-        return { ok: 0, fail: 0, total: 0 };
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
       }
 
       const kitBtn = document.getElementById("refresh-all-kits-btn");
@@ -5923,15 +5984,19 @@ document.addEventListener('DOMContentLoaded', () => {
       setStatus(`Refreshing ${ids.length} kits…`);
 
       let i = 0;
-      const results = { ok: 0, fail: 0, total: ids.length };
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
       const queue = ids.slice();
 
       async function worker() {
         while (queue.length) {
           const id = queue.shift();
           try {
-            await refreshKitTrackingForOrder(id);
-            results.ok++;
+            const response = await refreshKitTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
           } catch (e) {
             console.warn("Kit refresh failed", id, e);
             results.fail++;
@@ -5949,7 +6014,9 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleBtnState(refreshBtn, false);
         if (kitBtn) toggleBtnState(kitBtn, false);
       }
-      setStatus(`Batch refresh complete: ${results.ok} ok, ${results.fail} failed`);
+      setStatus(
+        `Batch refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
+      );
       return results;
     }
 
@@ -5968,7 +6035,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function runLabelRefresh({ concurrency = 4 } = {}) {
-      const ids = collectOrderIdsFromTable();
+      const ids = collectOrderIdsForInboundRefresh();
       if (!ids.length) {
         console.log("No order rows found to refresh inbound labels for.");
         return { ok: 0, fail: 0, skipped: 0, total: 0 };
@@ -6018,9 +6085,19 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const kitResult = await runBatchRefresh({ concurrency, manageRefreshButton: false });
         const labelResult = await runLabelRefresh({ concurrency });
-        setStatus(
-          `Kits refreshed (${kitResult.ok}/${kitResult.total}); labels refreshed (${labelResult.ok}/${labelResult.total}, ${labelResult.skipped} skipped, ${labelResult.fail} failed)`
-        );
+        const kitSummaryDetails = [
+          `${kitResult.ok}/${kitResult.total}`,
+          `${kitResult.skipped} skipped`,
+          `${kitResult.fail} failed`,
+        ];
+        const labelSummaryDetails = [
+          `${labelResult.ok}/${labelResult.total}`,
+          `${labelResult.skipped} skipped`,
+          `${labelResult.fail} failed`,
+        ];
+        const kitSummary = `Kits refreshed (${kitSummaryDetails.join(', ')})`;
+        const labelSummary = `labels refreshed (${labelSummaryDetails.join(', ')})`;
+        setStatus(`${kitSummary}; ${labelSummary}`);
         return { kitResult, labelResult };
       } catch (error) {
         console.warn("Combined refresh error", error);
