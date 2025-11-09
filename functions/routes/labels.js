@@ -12,6 +12,7 @@ const { SHIPPING_LABEL_EMAIL_HTML, SHIPPING_KIT_EMAIL_HTML } = require('../helpe
 const functions = require('firebase-functions');
 const db = getFirestore();
 const storage = getStorage();
+const { DEFAULT_CARRIER_CODE } = require('../helpers/shipengine');
 
 // Generate initial shipping label(s) and send email to buyer
 router.post("/generate-label/:id", async (req, res) => {
@@ -88,6 +89,13 @@ router.post("/generate-label/:id", async (req, res) => {
             mainLabelData = inboundLabelData.labelData;
             mainTrackingNumber = inboundLabelData.trackingNumber;
 
+            const outboundCarrierCode =
+                outboundLabelData?.carrierCode ||
+                outboundLabelData?.carrier_code ||
+                DEFAULT_CARRIER_CODE;
+            const inboundCarrierCode =
+                inboundLabelData?.carrierCode || inboundLabelData?.carrier_code || DEFAULT_CARRIER_CODE;
+
             updateData = {
                 ...updateData,
                 outboundLabelUrl: outboundLabelUrl, // Save URL for outbound label
@@ -95,8 +103,8 @@ router.post("/generate-label/:id", async (req, res) => {
                 outboundTrackingNumber: outboundLabelData.trackingNumber,
                 inboundTrackingNumber: inboundLabelData.trackingNumber,
                 trackingNumber: inboundLabelData.trackingNumber, // Set primary tracking for simplicity
-                outboundCarrierCode: 'stamps_com',
-                inboundCarrierCode: 'stamps_com',
+                outboundCarrierCode,
+                inboundCarrierCode,
                 kitLabelGeneratedAt: timestamp,
             };
 
@@ -154,12 +162,18 @@ router.post("/generate-label/:id", async (req, res) => {
 
             const uspsLabelUrl = await uploadLabelToCloudStorage(order.id, mainLabelData);
 
+            const labelCarrierCode =
+                mainLabelData.carrier_code ||
+                mainLabelData.carrierCode ||
+                DEFAULT_CARRIER_CODE;
+
             updateData = {
                 ...updateData,
                 status: 'emailed',
                 trackingNumber: mainTrackingNumber,
                 uspsLabelUrl: uspsLabelUrl,
                 emailedAt: timestamp,
+                labelTrackingCarrierCode: labelCarrierCode,
                 labelTrackingStatus: mainLabelData.status_code || mainLabelData.statusCode || 'LABEL_CREATED',
                 labelTrackingStatusDescription: mainLabelData.status_description || mainLabelData.statusDescription || 'Label created',
                 labelTrackingCarrierStatusCode: mainLabelData.carrier_status_code || mainLabelData.carrierStatusCode || null,
