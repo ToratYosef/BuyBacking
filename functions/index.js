@@ -6,7 +6,13 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
-const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('./helpers/shipengine');
+const {
+  DEFAULT_CARRIER_CODE,
+  buildKitTrackingUpdate,
+  buildManualKitScanUpdate,
+  buildTrackingUrl,
+  resolveCarrierCode,
+} = require('./helpers/shipengine');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
 const createEmailsRouter = require('./routes/emails');
 const createOrdersRouter = require('./routes/orders');
@@ -104,11 +110,17 @@ const EXPIRING_REMINDER_ALLOWED_STATUSES = new Set([
   "needs_printing",
   "label_generated",
   "emailed",
+  "kit_on_the_way_to_customer",
   "kit_on_the_way_to_us",
   "phone_on_the_way",
 ]);
 
-const KIT_REMINDER_ALLOWED_STATUSES = new Set(["kit_sent", "kit_delivered", "kit_on_the_way_to_us"]);
+const KIT_REMINDER_ALLOWED_STATUSES = new Set([
+  "kit_sent",
+  "kit_on_the_way_to_customer",
+  "kit_delivered",
+  "kit_on_the_way_to_us",
+]);
 
 const MANUAL_AUTO_REQUOTE_INELIGIBLE_STATUSES = new Set([
   'completed',
@@ -125,18 +137,21 @@ const AUTO_CANCEL_MONITORED_STATUSES = [
   "shipping_kit_requested",
   "kit_needs_printing",
   "kit_sent",
-  "kit_in_transit",
+  "kit_on_the_way_to_customer",
   "kit_on_the_way_to_us",
   "label_generated",
   "emailed",
   "phone_on_the_way",
 ];
 
+const AUTO_CANCELLATION_ENABLED = false;
+
 const INBOUND_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 const RETURN_REMINDER_DELAY_MS = 13 * 24 * 60 * 60 * 1000;
 const RETURN_AUTO_VOID_DELAY_MS = 15 * 24 * 60 * 60 * 1000;
 const INBOUND_TRACKABLE_STATUSES = new Set([
   "kit_delivered",
+  "delivered_to_us",
   "kit_on_the_way_to_us",
   "label_generated",
   "emailed",
@@ -1311,7 +1326,15 @@ function stringifyData(obj = {}) {
   return out;
 }
 
-const kitStatusOrder = ['needs_printing', 'kit_sent', 'kit_in_transit', 'kit_delivered'];
+const kitStatusOrder = [
+  'needs_printing',
+  'kit_sent',
+  'kit_in_transit',
+  'kit_on_the_way_to_customer',
+  'kit_delivered',
+  'kit_on_the_way_to_us',
+  'delivered_to_us',
+];
 
 function mapShipEngineStatus(code) {
   if (!code) return null;
@@ -1324,9 +1347,10 @@ function mapShipEngineStatus(code) {
     case 'IN_TRANSIT':
     case 'ACCEPTED':
     case 'SHIPMENT_ACCEPTED':
-    case 'LABEL_CREATED':
     case 'UNKNOWN':
-      return 'kit_in_transit';
+      return 'kit_on_the_way_to_customer';
+    case 'LABEL_CREATED':
+      return 'kit_sent';
     default:
       return null;
   }
@@ -1380,7 +1404,17 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus) {
   const upper = String(normalizedStatus).toUpperCase();
 
   if (upper === "DELIVERED" || upper === "DELIVERED_TO_AGENT") {
-    if ((order.status || "").toLowerCase() === "received") {
+    const normalizedStatus = (order.status || "").toLowerCase();
+    const kitOrder = isKitOrder(order);
+
+    if (kitOrder) {
+      if (normalizedStatus === "delivered_to_us" || normalizedStatus === "received") {
+        return null;
+      }
+      return { nextStatus: "delivered_to_us", delivered: true };
+    }
+
+    if (normalizedStatus === "received") {
       return null;
     }
     return { nextStatus: "received", delivered: true };
@@ -2044,8 +2078,56 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const order = { id: doc.id, ...doc.data() };
 
-    if (!order.outboundTrackingNumber && !order.inboundTrackingNumber) {
-      return res.status(400).json({ error: 'No tracking numbers available for this order' });
+    const scanParam =
+      (req.query && (req.query.scan ?? req.query.scan_status ?? req.query.scanStatus)) ??
+      (req.body && (req.body.scan ?? req.body.scan_status ?? req.body.scanStatus));
+
+    if (scanParam) {
+      const manualResult = buildManualKitScanUpdate(order, scanParam, {
+        serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+        defaultCarrierCode: DEFAULT_CARRIER_CODE,
+      });
+
+      if (!manualResult) {
+        return res.status(400).json({ error: 'Unsupported scan parameter provided.' });
+      }
+
+      const timestamp = admin.firestore.FieldValue.serverTimestamp();
+      const updateData = {
+        ...manualResult.updatePayload,
+        kitTrackingLastRefreshedAt: timestamp,
+      };
+
+      if (manualResult.direction === 'inbound') {
+        updateData.inboundTrackingLastRefreshedAt = timestamp;
+      }
+
+      const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
+
+      const manualMessage = manualResult.statusApplied && manualResult.appliedStatus
+        ? manualResult.message || `Manual scan applied: ${manualResult.appliedStatus.replace(/_/g, ' ')}.`
+        : `${manualResult.message || 'Manual scan recorded.'} Status unchanged.`;
+
+      return res.json({
+        message: manualMessage,
+        manualScan: true,
+        delivered: manualResult.delivered,
+        direction: manualResult.direction,
+        statusApplied: manualResult.statusApplied,
+        scan: manualResult.scan,
+        tracking: manualResult.updatePayload?.kitTrackingStatus || null,
+        order: {
+          id: updatedOrder.id,
+          status: updatedOrder.status,
+        },
+      });
+    }
+
+    const hasOutbound = Boolean(order.outboundTrackingNumber);
+    const hasInbound = Boolean(order.inboundTrackingNumber || order.trackingNumber);
+
+    if (!hasOutbound && !hasInbound) {
+      return res.json({ skipped: true, reason: 'No tracking numbers available for this order.' });
     }
 
     const shipengineKey = process.env.SHIPENGINE_KEY;
@@ -2053,12 +2135,28 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
       return res.status(500).json({ error: 'ShipEngine API key not configured.' });
     }
 
-    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
-      axiosClient: axios,
-      shipengineKey,
-      defaultCarrierCode: DEFAULT_CARRIER_CODE,
-      serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
-    });
+    let updatePayload;
+    let delivered;
+    let direction;
+
+    try {
+      ({ updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
+        axiosClient: axios,
+        shipengineKey,
+        defaultCarrierCode: DEFAULT_CARRIER_CODE,
+        serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+      }));
+    } catch (error) {
+      const message = typeof error?.message === 'string' ? error.message : '';
+      if (
+        message.includes('Tracking number not available') ||
+        message.includes('Tracking number is required') ||
+        message.includes('Carrier code is required')
+      ) {
+        return res.json({ skipped: true, reason: message });
+      }
+      throw error;
+    }
 
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
     const updateData = {
@@ -2072,14 +2170,19 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
 
-    const message =
-      direction === 'inbound'
-        ? delivered
-          ? 'Inbound device marked as delivered.'
-          : 'Inbound tracking status refreshed.'
-        : delivered
-          ? 'Kit marked as delivered.'
-          : 'Kit tracking status refreshed.';
+    const message = (() => {
+      if (direction === 'inbound') {
+        if (delivered) {
+          if (updatePayload.status === 'delivered_to_us') {
+            return 'Inbound kit marked as delivered to us.';
+          }
+          return 'Inbound device marked as delivered.';
+        }
+        return 'Inbound tracking status refreshed.';
+      }
+
+      return delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.';
+    })();
 
     if (delivered && shipengineKey) {
       try {
@@ -2130,7 +2233,13 @@ app.post('/orders/:id/sync-outbound-tracking', async (req, res) => {
       return res.status(500).json({ error: 'ShipEngine API key not configured.' });
     }
 
-    const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
+    const carrierCode = resolveCarrierCode(order, 'outbound', DEFAULT_CARRIER_CODE);
+    const trackingUrl = buildTrackingUrl({
+      trackingNumber,
+      carrierCode,
+      defaultCarrierCode: DEFAULT_CARRIER_CODE,
+    });
+
     const response = await axios.get(trackingUrl, {
       headers: { 'API-Key': shipEngineKey },
     });
@@ -2186,7 +2295,7 @@ app.post('/orders/:id/sync-outbound-tracking', async (req, res) => {
       if (normalizedStatus === 'kit_delivered') {
         updatePayload.kitDeliveredAt = timestamp;
       }
-      if (normalizedStatus === 'kit_in_transit' && !order.kitSentAt) {
+      if (normalizedStatus === 'kit_on_the_way_to_customer' && !order.kitSentAt) {
         updatePayload.kitSentAt = timestamp;
       }
     }
@@ -2225,7 +2334,12 @@ async function syncInboundTrackingForOrder(order, options = {}) {
   }
 
   const axiosClient = options.axiosClient || axios;
-  const trackingUrl = `https://api.shipengine.com/v1/tracking?tracking_number=${encodeURIComponent(trackingNumber)}`;
+  const carrierCode = resolveCarrierCode(order, 'inbound', DEFAULT_CARRIER_CODE);
+  const trackingUrl = buildTrackingUrl({
+    trackingNumber,
+    carrierCode,
+    defaultCarrierCode: DEFAULT_CARRIER_CODE,
+  });
 
   const response = await axiosClient.get(trackingUrl, {
     headers: { 'API-Key': shipEngineKey },
@@ -2295,6 +2409,8 @@ async function syncInboundTrackingForOrder(order, options = {}) {
     if (statusUpdate.nextStatus === 'received') {
       updatePayload.receivedAt = timestamp;
       updatePayload.autoReceived = true;
+    } else if (statusUpdate.nextStatus === 'delivered_to_us') {
+      updatePayload.kitDeliveredToUsAt = timestamp;
     }
     logEntries.push({
       type: 'status',
@@ -2379,6 +2495,10 @@ async function maybeSendReturnReminder(order) {
     return order;
   }
 
+  if (status === 'delivered_to_us') {
+    return order;
+  }
+
   if (order.returnReminderSentAt) {
     return order;
   }
@@ -2437,6 +2557,10 @@ async function maybeSendReturnReminder(order) {
 
 async function maybeAutoCancelAgingOrder(order, options = {}) {
   if (!order || !order.id) {
+    return order;
+  }
+
+  if (!AUTO_CANCELLATION_ENABLED) {
     return order;
   }
 
@@ -3193,7 +3317,10 @@ exports.autoRefreshInboundTracking = functions.pubsub
         }
 
         currentOrder = (await maybeSendReturnReminder(currentOrder)) || currentOrder;
-        currentOrder = (await maybeAutoCancelAgingOrder(currentOrder, { shipengineKey })) || currentOrder;
+        if (AUTO_CANCELLATION_ENABLED) {
+          currentOrder =
+            (await maybeAutoCancelAgingOrder(currentOrder, { shipengineKey })) || currentOrder;
+        }
       } catch (error) {
         console.error(`Inbound tracking sweep failed for order ${order.id}:`, error);
       }
@@ -3261,6 +3388,11 @@ exports.autoAcceptOffers = functions.pubsub
   });
 
 async function runAutoCancellationSweep() {
+  if (!AUTO_CANCELLATION_ENABLED) {
+    console.log('Auto cancellation sweep skipped: feature disabled.');
+    return;
+  }
+
   const thresholdTimestamp = admin.firestore.Timestamp.fromMillis(
     Date.now() - AUTO_CANCEL_DELAY_MS
   );
