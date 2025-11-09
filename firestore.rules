@@ -1,26 +1,51 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Anyone can read all documents.
-    match /{document=**} {
-      allow read: if true;
-      // Only signed-in users can write to all other collections.
-      allow write: if request.auth != null;
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // This allows anyone to read and write chat messages.
-    match /chats/{document=**} {
-      allow read, write: if true;
+    function isAdmin() {
+      return isSignedIn() && (request.auth.token.admin == true ||
+        request.auth.token.email in split(env.get("ADMIN_ALLOWED_EMAILS"), ","));
     }
-    
-    // 💡 Add this new rule to allow anyone to write to device_clicks.
-    match /device_clicks/{document=**} {
-      allow write: if true;
+
+    match /orders/{orderId} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == resource.data.userId);
+      allow write: if false;
     }
-    
-    // 💡 Add this new rule to allow anyone to write to device_clicks.
-    match /device_clicks/{document=**} {
-      allow write: if true;
+
+    match /users/{userId} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow write: if request.auth.uid == userId;
+
+      match /orders/{orderId} {
+        allow read: if request.auth.uid == userId || isAdmin();
+        allow write: if request.auth.uid == userId;
+      }
+    }
+
+    match /adminAuditLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /devices/{deviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /referrals/{referralId} {
+      allow create: if true;
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /shippingKits/{kitId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read: if isAdmin();
     }
   }
 }
