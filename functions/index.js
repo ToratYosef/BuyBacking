@@ -9,6 +9,7 @@ const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require
 const {
   DEFAULT_CARRIER_CODE,
   buildKitTrackingUpdate,
+  buildManualKitScanUpdate,
   buildTrackingUrl,
   resolveCarrierCode,
 } = require('./helpers/shipengine');
@@ -109,11 +110,17 @@ const EXPIRING_REMINDER_ALLOWED_STATUSES = new Set([
   "needs_printing",
   "label_generated",
   "emailed",
+  "kit_on_the_way_to_customer",
   "kit_on_the_way_to_us",
   "phone_on_the_way",
 ]);
 
-const KIT_REMINDER_ALLOWED_STATUSES = new Set(["kit_sent", "kit_delivered", "kit_on_the_way_to_us"]);
+const KIT_REMINDER_ALLOWED_STATUSES = new Set([
+  "kit_sent",
+  "kit_on_the_way_to_customer",
+  "kit_delivered",
+  "kit_on_the_way_to_us",
+]);
 
 const MANUAL_AUTO_REQUOTE_INELIGIBLE_STATUSES = new Set([
   'completed',
@@ -130,7 +137,7 @@ const AUTO_CANCEL_MONITORED_STATUSES = [
   "shipping_kit_requested",
   "kit_needs_printing",
   "kit_sent",
-  "kit_in_transit",
+  "kit_on_the_way_to_customer",
   "kit_on_the_way_to_us",
   "label_generated",
   "emailed",
@@ -1319,7 +1326,15 @@ function stringifyData(obj = {}) {
   return out;
 }
 
-const kitStatusOrder = ['needs_printing', 'kit_sent', 'kit_in_transit', 'kit_delivered'];
+const kitStatusOrder = [
+  'needs_printing',
+  'kit_sent',
+  'kit_in_transit',
+  'kit_on_the_way_to_customer',
+  'kit_delivered',
+  'kit_on_the_way_to_us',
+  'delivered_to_us',
+];
 
 function mapShipEngineStatus(code) {
   if (!code) return null;
@@ -1332,9 +1347,10 @@ function mapShipEngineStatus(code) {
     case 'IN_TRANSIT':
     case 'ACCEPTED':
     case 'SHIPMENT_ACCEPTED':
-    case 'LABEL_CREATED':
     case 'UNKNOWN':
-      return 'kit_in_transit';
+      return 'kit_on_the_way_to_customer';
+    case 'LABEL_CREATED':
+      return 'kit_sent';
     default:
       return null;
   }
@@ -2062,6 +2078,51 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const order = { id: doc.id, ...doc.data() };
 
+    const scanParam =
+      (req.query && (req.query.scan ?? req.query.scan_status ?? req.query.scanStatus)) ??
+      (req.body && (req.body.scan ?? req.body.scan_status ?? req.body.scanStatus));
+
+    if (scanParam) {
+      const manualResult = buildManualKitScanUpdate(order, scanParam, {
+        serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+        defaultCarrierCode: DEFAULT_CARRIER_CODE,
+      });
+
+      if (!manualResult) {
+        return res.status(400).json({ error: 'Unsupported scan parameter provided.' });
+      }
+
+      const timestamp = admin.firestore.FieldValue.serverTimestamp();
+      const updateData = {
+        ...manualResult.updatePayload,
+        kitTrackingLastRefreshedAt: timestamp,
+      };
+
+      if (manualResult.direction === 'inbound') {
+        updateData.inboundTrackingLastRefreshedAt = timestamp;
+      }
+
+      const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
+
+      const manualMessage = manualResult.statusApplied && manualResult.appliedStatus
+        ? manualResult.message || `Manual scan applied: ${manualResult.appliedStatus.replace(/_/g, ' ')}.`
+        : `${manualResult.message || 'Manual scan recorded.'} Status unchanged.`;
+
+      return res.json({
+        message: manualMessage,
+        manualScan: true,
+        delivered: manualResult.delivered,
+        direction: manualResult.direction,
+        statusApplied: manualResult.statusApplied,
+        scan: manualResult.scan,
+        tracking: manualResult.updatePayload?.kitTrackingStatus || null,
+        order: {
+          id: updatedOrder.id,
+          status: updatedOrder.status,
+        },
+      });
+    }
+
     const hasOutbound = Boolean(order.outboundTrackingNumber);
     const hasInbound = Boolean(order.inboundTrackingNumber || order.trackingNumber);
 
@@ -2234,7 +2295,7 @@ app.post('/orders/:id/sync-outbound-tracking', async (req, res) => {
       if (normalizedStatus === 'kit_delivered') {
         updatePayload.kitDeliveredAt = timestamp;
       }
-      if (normalizedStatus === 'kit_in_transit' && !order.kitSentAt) {
+      if (normalizedStatus === 'kit_on_the_way_to_customer' && !order.kitSentAt) {
         updatePayload.kitSentAt = timestamp;
       }
     }
