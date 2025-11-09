@@ -72,6 +72,7 @@ const STATUS_CHART_CONFIG = [
   { key: 'delivered_to_us', label: 'Delivered To Us', color: '#0d9488' },
   { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
   { key: 'emailed', label: 'Emailed', color: '#38bdf8' },
+  { key: 'accepted', label: 'Label Sent', color: '#facc15' },
   { key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0284c7' },
   { key: 'received', label: 'Received', color: '#0ea5e9' },
   { key: 'completed', label: 'Completed', color: '#22c55e' },
@@ -94,6 +95,7 @@ const STATUS_DROPDOWN_OPTIONS = [
   'delivered_to_us',
   'label_generated',
   'emailed',
+  'accepted',
   'phone_on_the_way',
   'received',
   'completed',
@@ -609,15 +611,18 @@ if (![
 ].includes(normalizedStatus)) {
 return '';
 }
-let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
-if (!description) return '';
-description = description
-.toString()
-.replace(/[_-]+/g, ' ')
-.replace(/\s+/g, ' ')
-.trim()
-.replace(/\b\w/g, c => c.toUpperCase());
-const parts = [description];
+  let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
+  if (!description) return '';
+  const normalizedDescription = description.toString().trim().toLowerCase();
+  const displayDescription = normalizedDescription && normalizedDescription.includes('accept')
+    ? 'Label Sent'
+    : description
+        .toString()
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, c => c.toUpperCase());
+  const parts = [displayDescription];
 if (order.labelTrackingEstimatedDelivery) {
 parts.push(`ETA ${formatDate(order.labelTrackingEstimatedDelivery)}`);
 }
@@ -3684,6 +3689,9 @@ return 'Label Generated';
 // Otherwise (for Shipping Kit Requested), display "Shipping Kit on the Way"
 return 'Shipping Kit on the Way';
 }
+if (status === 'accepted') {
+return 'Label Sent';
+}
 if (status === 'emailed') {
 return 'Emailed';
 }
@@ -3951,7 +3959,9 @@ return 'bg-emerald-100 text-emerald-800 status-bubble';
 case 'kit_on_the_way_to_us':
 return 'bg-teal-100 text-teal-800 status-bubble';
 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
-case 'emailed': return 'bg-yellow-100 text-yellow-800 status-bubble';
+case 'emailed':
+case 'accepted':
+return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'phone_on_the_way': return 'bg-sky-100 text-sky-800 status-bubble';
 case 'received': return 'bg-green-100 text-green-800 status-bubble';
 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
@@ -5057,14 +5067,40 @@ headers: { 'Content-Type': 'application/json' },
 body: method === 'GET' || method === 'HEAD' ? null : (body ? JSON.stringify(body) : null)
 });
 
-if (!response.ok) {
-const errorText = await response.text();
-console.error("Backend error response for action:", response.status, errorText);
-throw new Error(errorText || `Failed to perform action: ${response.status} - ${errorText.substring(0, 100)}`);
+const rawText = await response.text();
+let payload = {};
+if (rawText) {
+try {
+payload = JSON.parse(rawText);
+} catch (parseError) {
+console.warn('Failed to parse action response JSON:', parseError);
 }
-const result = await response.json();
+}
 
-displayModalMessage(result.message, 'success');
+if (response.status === 400) {
+const message = payload.message || payload.reason || payload.error || 'Request skipped.';
+displayModalMessage(message, 'info');
+if (actionType === 'deleteOrder') {
+closeOrderDetailsModal();
+} else {
+openOrderDetailsModal(orderId);
+}
+return;
+}
+
+if (!response.ok) {
+console.error("Backend error response for action:", response.status, rawText);
+const errorMessage = payload.error || payload.message || rawText || `Failed to perform action: ${response.status}`;
+throw new Error(errorMessage);
+}
+
+const result = payload && typeof payload === 'object' ? payload : {};
+const wasSkipped = Boolean(result.skipped);
+const message = wasSkipped
+? (result.message || result.reason || 'No changes were needed for this order.')
+: (result.message || 'Action completed successfully.');
+
+displayModalMessage(message, wasSkipped ? 'info' : 'success');
 
 if (actionType === 'deleteOrder') {
 // Close the modal and rely on the snapshot listener to refresh the list

@@ -1,5 +1,6 @@
 const express = require('express');
 const admin = require('firebase-admin');
+const { shouldApplyStatus } = require('../helpers/shipengine');
 
 module.exports = function createEmailsRouter({
   transporter,
@@ -97,28 +98,48 @@ module.exports = function createEmailsRouter({
 
       await transporter.sendMail(mailOptions);
 
-      await updateOrderBoth(
-        req.params.id,
+      const trimmedNotes = typeof notes === 'string' ? notes.trim() : '';
+      const shouldUpdateStatus = shouldApplyStatus(order.status, 'emailed');
+
+      const updateData = {
+        lastCustomerEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastConditionEmailReason: reason,
+        ...(trimmedNotes ? { lastConditionEmailNotes: trimmedNotes } : {}),
+        ...(shouldUpdateStatus
+          ? {
+              status: 'emailed',
+              lastStatusUpdateAt: admin.firestore.FieldValue.serverTimestamp(),
+            }
+          : {}),
+      };
+
+      const logEntries = [
         {
-          lastCustomerEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastConditionEmailReason: reason,
-          ...(notes && notes.trim() ? { lastConditionEmailNotes: notes.trim() } : {}),
+          type: 'email',
+          message: `Sent ${labelText || subject} email to customer.`,
+          metadata: {
+            reason,
+            label: labelText || null,
+            notes: trimmedNotes || null,
+          },
         },
-        {
-          autoLogStatus: false,
-          logEntries: [
-            {
-              type: 'email',
-              message: `Sent ${labelText || subject} email to customer.`,
-              metadata: {
-                reason,
-                label: labelText || null,
-                notes: notes && notes.trim() ? notes.trim() : null,
-              },
-            },
-          ],
-        }
-      );
+      ];
+
+      if (shouldUpdateStatus) {
+        logEntries.push({
+          type: 'status',
+          message: 'Order status set to emailed after condition email was sent.',
+          metadata: {
+            reason,
+            source: 'condition-email',
+          },
+        });
+      }
+
+      await updateOrderBoth(req.params.id, updateData, {
+        autoLogStatus: false,
+        logEntries,
+      });
 
       res.json({ message: 'Email sent successfully.' });
     } catch (error) {
