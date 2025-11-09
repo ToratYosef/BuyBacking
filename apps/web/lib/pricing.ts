@@ -1,4 +1,5 @@
-import { adminDb } from './firebaseAdmin';
+import { tryAdminDb } from './firebaseAdmin';
+import devicesSample from '../samples/devices.sample.json';
 
 export interface QuoteRequest {
   deviceSlug: string;
@@ -22,10 +23,21 @@ export interface QuoteResponse {
 }
 
 export async function calculateQuote(input: QuoteRequest): Promise<QuoteResponse> {
-  const db = adminDb();
-  const deviceSnapshot = await db.collection('devices').where('slug', '==', input.deviceSlug).limit(1).get();
+  let device: any | undefined;
 
-  if (deviceSnapshot.empty) {
+  const db = tryAdminDb();
+  if (db) {
+    const deviceSnapshot = await db.collection('devices').where('slug', '==', input.deviceSlug).limit(1).get();
+    if (!deviceSnapshot.empty) {
+      device = deviceSnapshot.docs[0].data();
+    }
+  }
+
+  if (!device) {
+    device = (devicesSample as any[]).find((doc) => doc.slug === input.deviceSlug);
+  }
+
+  if (!device) {
     return {
       bestPrice: 0,
       breakdown: { basePrice: 0, adjustments: [] },
@@ -34,7 +46,6 @@ export async function calculateQuote(input: QuoteRequest): Promise<QuoteResponse
     };
   }
 
-  const device = deviceSnapshot.docs[0].data() as any;
   const basePrice = device.basePrice ?? 50;
   const conditionMultiplier = device.conditionMultipliers?.[input.condition] ?? 1;
   const capacityAdjustment = device.capacityAdjustments?.[input.capacity] ?? 0;
