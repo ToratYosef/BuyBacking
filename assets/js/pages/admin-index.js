@@ -63,20 +63,22 @@ return: 'Return Label',
 
 const TREND_LOOKBACK_DAYS = 14;
 const STATUS_CHART_CONFIG = [
-{ key: 'order_pending', label: 'Order Pending', color: '#6366f1' },
-{ key: 'kit_needs_printing', label: 'Needs Printing', color: '#8b5cf6' },
-{ key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
-{ key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
-{ key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
-{ key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
-{ key: 'emailed', label: 'Emailed', color: '#38bdf8' },
-{ key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0284c7' },
-{ key: 'received', label: 'Received', color: '#0ea5e9' },
-{ key: 'completed', label: 'Completed', color: '#22c55e' },
-{ key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
-{ key: 're-offered-accepted', label: 'Reoffer Accepted', color: '#14b8a6' },
-{ key: 're-offered-declined', label: 'Reoffer Declined', color: '#ef4444' },
-{ key: 'return-label-generated', label: 'Return Label', color: '#64748b' },
+  { key: 'order_pending', label: 'Order Pending', color: '#6366f1' },
+  { key: 'kit_needs_printing', label: 'Needs Printing', color: '#8b5cf6' },
+  { key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
+  { key: 'kit_on_the_way_to_customer', label: 'Kit On The Way To Customer', color: '#fbbf24' },
+  { key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
+  { key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
+  { key: 'delivered_to_us', label: 'Delivered To Us', color: '#0d9488' },
+  { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
+  { key: 'emailed', label: 'Emailed', color: '#38bdf8' },
+  { key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0284c7' },
+  { key: 'received', label: 'Received', color: '#0ea5e9' },
+  { key: 'completed', label: 'Completed', color: '#22c55e' },
+  { key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
+  { key: 're-offered-accepted', label: 'Reoffer Accepted', color: '#14b8a6' },
+  { key: 're-offered-declined', label: 'Reoffer Declined', color: '#ef4444' },
+  { key: 'return-label-generated', label: 'Return Label', color: '#64748b' },
 ];
 
 const STATUS_DROPDOWN_OPTIONS = [
@@ -85,9 +87,11 @@ const STATUS_DROPDOWN_OPTIONS = [
   'kit_needs_printing',
   'needs_printing',
   'kit_sent',
+  'kit_on_the_way_to_customer',
   'kit_in_transit',
   'kit_delivered',
   'kit_on_the_way_to_us',
+  'delivered_to_us',
   'label_generated',
   'emailed',
   'phone_on_the_way',
@@ -196,7 +200,10 @@ const receivedDevicesCount = document.getElementById('received-devices-count');
 const orderPendingCount = document.getElementById('order-pending-count');
 const kitNeedsPrintingCount = document.getElementById('kit-needs-printing-count');
 const kitSentCount = document.getElementById('kit-sent-count');
+const kitOnTheWayToCustomerCount = document.getElementById('kit-on-the-way-to-customer-count');
 const kitDeliveredCount = document.getElementById('kit-delivered-count');
+const kitOnTheWayToUsCount = document.getElementById('kit-on-the-way-to-us-count');
+const deliveredToUsCount = document.getElementById('delivered-to-us-count');
 const labelGeneratedCount = document.getElementById('label-generated-count');
 const emailedCount = document.getElementById('emailed-count');
 const receivedCount = document.getElementById('received-count');
@@ -421,16 +428,28 @@ filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
 }
 
 const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printing', 'needs_printing'];
-const REMINDER_ELIGIBLE_STATUSES = ['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way'];
+const REMINDER_ELIGIBLE_STATUSES = [
+  'label_generated',
+  'emailed',
+  'kit_on_the_way_to_customer',
+  'kit_on_the_way_to_us',
+  'phone_on_the_way',
+];
 const EXPIRING_REMINDER_STATUSES = [
   'order_pending',
   ...KIT_PRINT_PENDING_STATUSES,
   'label_generated',
   'emailed',
+  'kit_on_the_way_to_customer',
   'kit_on_the_way_to_us',
   'phone_on_the_way',
 ];
-const KIT_REMINDER_STATUSES = ['kit_sent', 'kit_delivered', 'kit_on_the_way_to_us'];
+const KIT_REMINDER_STATUSES = [
+  'kit_sent',
+  'kit_on_the_way_to_customer',
+  'kit_delivered',
+  'kit_on_the_way_to_us',
+];
 const AGING_EXCLUDED_STATUSES = new Set([
   'completed',
   'return-label-generated',
@@ -580,7 +599,14 @@ minute: '2-digit'
 function formatLabelStatus(order) {
 if (!order) return '';
 const normalizedStatus = (order.status || '').toLowerCase();
-if (!['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way', 'kit_delivered'].includes(normalizedStatus)) {
+if (![
+  'label_generated',
+  'emailed',
+  'kit_on_the_way_to_customer',
+  'kit_on_the_way_to_us',
+  'phone_on_the_way',
+  'kit_delivered',
+].includes(normalizedStatus)) {
 return '';
 }
 let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
@@ -2781,11 +2807,15 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function updateDashboardCounts(ordersData) {
+const kitOnTheWayToCustomerStatuses = ['kit_on_the_way_to_customer', 'kit_in_transit'];
 const statusCounts = {
 'order_pending': ordersData.filter(o => o.status === 'order_pending').length,
 'kit_needs_printing': ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
 'kit_sent': ordersData.filter(o => o.status === 'kit_sent').length,
+'kit_on_the_way_to_customer': ordersData.filter(o => kitOnTheWayToCustomerStatuses.includes(o.status)).length,
 'kit_delivered': ordersData.filter(o => o.status === 'kit_delivered').length,
+'kit_on_the_way_to_us': ordersData.filter(o => o.status === 'kit_on_the_way_to_us').length,
+'delivered_to_us': ordersData.filter(o => o.status === 'delivered_to_us').length,
 'label_generated': ordersData.filter(o => o.status === 'label_generated').length,
 'emailed': ordersData.filter(o => o.status === 'emailed').length,
 'received': ordersData.filter(o => o.status === 'received').length,
@@ -2805,8 +2835,17 @@ kitNeedsPrintingCount.textContent = statusCounts['kit_needs_printing'];
 if (kitSentCount) {
 kitSentCount.textContent = statusCounts['kit_sent'];
 }
+if (kitOnTheWayToCustomerCount) {
+kitOnTheWayToCustomerCount.textContent = statusCounts['kit_on_the_way_to_customer'];
+}
 if (kitDeliveredCount) {
 kitDeliveredCount.textContent = statusCounts['kit_delivered'];
+}
+if (kitOnTheWayToUsCount) {
+kitOnTheWayToUsCount.textContent = statusCounts['kit_on_the_way_to_us'];
+}
+if (deliveredToUsCount) {
+deliveredToUsCount.textContent = statusCounts['delivered_to_us'];
 }
 if (labelGeneratedCount) {
 labelGeneratedCount.textContent = statusCounts['label_generated'];
@@ -3625,11 +3664,17 @@ return 'Needs Printing';
 if (status === 'kit_sent') {
 return 'Kit Sent';
 }
+if (status === 'kit_on_the_way_to_customer' || status === 'kit_in_transit') {
+return 'Kit On The Way To Customer';
+}
 if (status === 'kit_delivered') {
 return 'Kit Delivered';
 }
 if (status === 'kit_on_the_way_to_us') {
 return 'Kit On The Way To Us';
+}
+if (status === 'delivered_to_us') {
+return 'Delivered To Us';
 }
 if (status === 'label_generated') {
 // If the user requested an emailed label, display "Label Generated"
@@ -3897,8 +3942,10 @@ case 'kit_needs_printing':
 case 'needs_printing':
 return 'bg-indigo-100 text-indigo-800 status-bubble';
 case 'kit_sent':
-case 'kit_in_transit':
 return 'bg-orange-100 text-orange-800 status-bubble';
+case 'kit_on_the_way_to_customer':
+case 'kit_in_transit':
+return 'bg-amber-100 text-amber-800 status-bubble';
 case 'kit_delivered':
 return 'bg-emerald-100 text-emerald-800 status-bubble';
 case 'kit_on_the_way_to_us':
@@ -5883,7 +5930,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    function collectOrderIdsFromTable() {
+    function collectOrderIdsFromDom() {
       if (!ordersTbody) return [];
       const ids = new Set();
       for (const tr of ordersTbody.querySelectorAll("tr")) {
@@ -5901,18 +5948,73 @@ document.addEventListener('DOMContentLoaded', () => {
       return Array.from(ids);
     }
 
+    function getOrdersSnapshot() {
+      return Array.isArray(allOrders) ? allOrders : [];
+    }
+
+    function hasTrackingValue(value) {
+      return typeof value === "string" && value.trim().length > 0;
+    }
+
+    function collectOrderIdsForKitRefresh() {
+      const collected = new Set();
+      for (const order of getOrdersSnapshot()) {
+        if (!order || !order.id) continue;
+        const outbound = order.outboundTrackingNumber;
+        const inbound = order.inboundTrackingNumber || order.trackingNumber;
+        if (hasTrackingValue(outbound) || hasTrackingValue(inbound)) {
+          collected.add(order.id);
+        }
+      }
+
+      if (collected.size) {
+        return Array.from(collected);
+      }
+
+      return collectOrderIdsFromDom();
+    }
+
+    function collectOrderIdsForInboundRefresh() {
+      const collected = new Set();
+      for (const order of getOrdersSnapshot()) {
+        if (!order || !order.id) continue;
+        const inbound = order.inboundTrackingNumber || order.trackingNumber;
+        if (hasTrackingValue(inbound)) {
+          collected.add(order.id);
+        }
+      }
+
+      if (collected.size) {
+        return Array.from(collected);
+      }
+
+      return collectOrderIdsFromDom();
+    }
+
     async function refreshKitTrackingForOrder(orderId) {
       const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/refresh-kit-tracking`;
-      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: '{}',
+      });
+      if (res.status === 400) {
+        try {
+          const body = await res.json();
+          return { skipped: true, ...body };
+        } catch (_) {
+          return { skipped: true };
+        }
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       try { return await res.json(); } catch { return {}; }
     }
 
     async function runBatchRefresh({ concurrency = 4, manageRefreshButton = true } = {}) {
-      const ids = collectOrderIdsFromTable();
+      const ids = collectOrderIdsForKitRefresh();
       if (!ids.length) {
         console.log("No order rows found to refresh.");
-        return { ok: 0, fail: 0, total: 0 };
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
       }
 
       const kitBtn = document.getElementById("refresh-all-kits-btn");
@@ -5923,15 +6025,19 @@ document.addEventListener('DOMContentLoaded', () => {
       setStatus(`Refreshing ${ids.length} kits…`);
 
       let i = 0;
-      const results = { ok: 0, fail: 0, total: ids.length };
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
       const queue = ids.slice();
 
       async function worker() {
         while (queue.length) {
           const id = queue.shift();
           try {
-            await refreshKitTrackingForOrder(id);
-            results.ok++;
+            const response = await refreshKitTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
           } catch (e) {
             console.warn("Kit refresh failed", id, e);
             results.fail++;
@@ -5949,7 +6055,9 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleBtnState(refreshBtn, false);
         if (kitBtn) toggleBtnState(kitBtn, false);
       }
-      setStatus(`Batch refresh complete: ${results.ok} ok, ${results.fail} failed`);
+      setStatus(
+        `Batch refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
+      );
       return results;
     }
 
@@ -5968,7 +6076,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function runLabelRefresh({ concurrency = 4 } = {}) {
-      const ids = collectOrderIdsFromTable();
+      const ids = collectOrderIdsForInboundRefresh();
       if (!ids.length) {
         console.log("No order rows found to refresh inbound labels for.");
         return { ok: 0, fail: 0, skipped: 0, total: 0 };
@@ -6018,9 +6126,19 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const kitResult = await runBatchRefresh({ concurrency, manageRefreshButton: false });
         const labelResult = await runLabelRefresh({ concurrency });
-        setStatus(
-          `Kits refreshed (${kitResult.ok}/${kitResult.total}); labels refreshed (${labelResult.ok}/${labelResult.total}, ${labelResult.skipped} skipped, ${labelResult.fail} failed)`
-        );
+        const kitSummaryDetails = [
+          `${kitResult.ok}/${kitResult.total}`,
+          `${kitResult.skipped} skipped`,
+          `${kitResult.fail} failed`,
+        ];
+        const labelSummaryDetails = [
+          `${labelResult.ok}/${labelResult.total}`,
+          `${labelResult.skipped} skipped`,
+          `${labelResult.fail} failed`,
+        ];
+        const kitSummary = `Kits refreshed (${kitSummaryDetails.join(', ')})`;
+        const labelSummary = `labels refreshed (${labelSummaryDetails.join(', ')})`;
+        setStatus(`${kitSummary}; ${labelSummary}`);
         return { kitResult, labelResult };
       } catch (error) {
         console.warn("Combined refresh error", error);
