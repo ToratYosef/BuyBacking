@@ -463,6 +463,13 @@ const AGING_EXCLUDED_STATUSES = new Set([
 ]);
 const MIN_AGING_MS = 15 * 24 * 60 * 60 * 1000;
 
+const TRACKING_ONLY_STATUSES = new Set([
+  'phone_on_the_way',
+  'kit_on_the_way_to_customer',
+  'kit_on_the_way_to_us',
+  'kit_in_transit',
+]);
+
 window.addEventListener('message', (event) => {
 if (!event.data || event.data.type !== 'kit-print-complete') {
 return;
@@ -4424,24 +4431,31 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function renderActionButtons(order) {
-modalActionButtons.innerHTML = '';
-const createButton = (text, onClick, className = 'bg-blue-600 hover:bg-blue-700') => {
-const button = document.createElement('button');
-button.textContent = text;
+  modalActionButtons.innerHTML = '';
+  const createButton = (text, onClick, className = 'bg-blue-600 hover:bg-blue-700') => {
+    const button = document.createElement('button');
+    button.textContent = text;
 button.className = `${className} text-white font-bold py-2 px-4 rounded-md transition-colors duration-200 shadow`;
 button.onclick = onClick;
 return button;
 };
 
-const currentStatus = order.status;
-const labelOptions = getLabelOptions(order);
-const clearDataOptions = getClearDataOptions(order);
-const hasGeneratedLabels = labelOptions.length > 0 || Boolean(
-order.uspsLabelUrl ||
-order.outboundLabelUrl ||
-order.inboundLabelUrl ||
-order.shipEngineLabelId
-);
+  const currentStatus = order.status;
+  const labelOptions = getLabelOptions(order);
+  const clearDataOptions = getClearDataOptions(order);
+  const hasGeneratedLabels = labelOptions.length > 0 || Boolean(
+    order.uspsLabelUrl ||
+    order.outboundLabelUrl ||
+    order.inboundLabelUrl ||
+    order.shipEngineLabelId
+  );
+
+  if (TRACKING_ONLY_STATUSES.has(currentStatus)) {
+    modalActionButtons.appendChild(
+      createButton('Refresh Tracking', () => handleAction(order.id, 'refreshKitTracking'), 'bg-sky-600 hover:bg-sky-700')
+    );
+    return;
+  }
 switch (currentStatus) {
 case 'order_pending':
 case 'shipping_kit_requested':
