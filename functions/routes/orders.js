@@ -47,6 +47,26 @@ function createOrdersRouter({
     'https://www.secondhandcell.com',
   ]);
 
+  const PRINT_BUNDLE_ALLOWED_METHODS = 'GET,POST,OPTIONS';
+  const PRINT_BUNDLE_ALLOWED_HEADERS = 'Authorization, Content-Type, X-Requested-With';
+
+  function applyPrintBundleCorsHeaders(res, origin) {
+    if (origin && PRINT_BUNDLE_ALLOWED_ORIGINS.has(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+      res.header('Vary', 'Origin');
+    }
+
+    res.header('Access-Control-Allow-Methods', PRINT_BUNDLE_ALLOWED_METHODS);
+    res.header('Access-Control-Allow-Headers', PRINT_BUNDLE_ALLOWED_HEADERS);
+    res.header('Access-Control-Expose-Headers', 'X-Printed-Order-Ids, X-Kit-Sent-Order-Ids');
+  }
+
+  function handlePrintBundlePreflight(req, res) {
+    applyPrintBundleCorsHeaders(res, req.headers.origin);
+    res.sendStatus(204);
+  }
+
   function toMillis(value) {
     if (!value) return null;
     if (typeof value === 'number') return value;
@@ -277,12 +297,7 @@ function createOrdersRouter({
       return res.status(400).json({ error: 'At least one order ID must be provided.' });
     }
 
-    if (origin && PRINT_BUNDLE_ALLOWED_ORIGINS.has(origin)) {
-      res.header('Access-Control-Allow-Origin', origin);
-      res.header('Vary', 'Origin');
-    }
-
-    res.header('Access-Control-Expose-Headers', 'X-Printed-Order-Ids, X-Kit-Sent-Order-Ids');
+    applyPrintBundleCorsHeaders(res, origin);
 
     const orders = await fetchPrintQueueOrders(cleanedOrderIds);
     if (!orders.length) {
@@ -440,6 +455,28 @@ function createOrdersRouter({
     }
   });
 
+  router.options('/orders/needs-printing/bundle', handlePrintBundlePreflight);
+
+  router.post('/merge-print', async (req, res) => {
+    try {
+      const orderIds = Array.isArray(req.body?.orderIds)
+        ? req.body.orderIds.filter(Boolean)
+        : [];
+
+      await buildPrintBundleResponse({
+        orderIds,
+        res,
+        origin: req.headers.origin,
+        allowEmptySelection: false,
+      });
+    } catch (error) {
+      console.error('Failed to generate merge print bundle (POST):', error);
+      res.status(500).json({ error: 'Failed to merge print documents' });
+    }
+  });
+
+  router.options('/merge-print', handlePrintBundlePreflight);
+
   router.get('/merge-print/:orderIds', async (req, res) => {
     try {
       const rawIds = String(req.params.orderIds || '')
@@ -458,6 +495,8 @@ function createOrdersRouter({
       res.status(500).json({ error: 'Failed to merge print documents' });
     }
   });
+
+  router.options('/merge-print/:orderIds', handlePrintBundlePreflight);
 
   router.get('/orders/:id', async (req, res) => {
     try {

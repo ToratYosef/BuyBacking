@@ -336,9 +336,20 @@ async function requestPrintBundle(orderIds) {
   try {
     return await fetchPrintBundleFromEndpoint(primaryPath);
   } catch (primaryError) {
-    console.warn("Primary merge-print request failed, attempting legacy bundle endpoint:", primaryError);
+    console.warn("Primary merge-print GET request failed, attempting POST fallback:", primaryError);
 
     try {
+      return await fetchPrintBundleFromEndpoint("/merge-print", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+    } catch (postError) {
+      console.warn("POST merge-print request failed, attempting legacy bundle endpoint:", postError);
+
+      try {
       return await fetchPrintBundleFromEndpoint("/orders/needs-printing/bundle", {
         method: "POST",
         headers: {
@@ -346,9 +357,11 @@ async function requestPrintBundle(orderIds) {
         },
         body: JSON.stringify({ orderIds }),
       });
-    } catch (legacyError) {
-      legacyError.previous = primaryError;
-      throw legacyError;
+      } catch (legacyError) {
+        legacyError.previous = postError;
+        legacyError.initial = primaryError;
+        throw legacyError;
+      }
     }
   }
 }
