@@ -1,70 +1,98 @@
 const express = require('express');
 const router = express.Router();
-const axios = require("axios");
-const { ordersCollection, adminsCollection, updateOrderBoth } = require('../db/db');
+const admin = require('firebase-admin');
+const { updateOrderBoth } = require('../db/db');
 const { sendEmail } = require('../services/notifications');
 const { BLACKLISTED_EMAIL_HTML } = require('../helpers/templates');
 const functions = require('firebase-functions');
+const { checkEsn } = require('../services/phonecheck');
 
 // NEW ENDPOINT for IMEI/ESN Check
-router.post("/check-esn", async (req, res) => {
-    const { imei, orderId, customerName, customerEmail } = req.body;
+router.post('/check-esn', async (req, res) => {
+    const {
+        imei,
+        orderId,
+        customerName,
+        customerEmail,
+        carrier,
+        deviceType,
+        brand,
+        checkAll,
+    } = req.body || {};
 
     if (!imei || !orderId) {
-        return res.status(400).json({ error: "IMEI and Order ID are required." });
+        return res.status(400).json({ error: 'IMEI and Order ID are required.' });
     }
 
     try {
-        // This is a MOCK API call. Replace this with your actual ESN check provider API call.
-        console.log(`Simulating ESN check for IMEI: ${imei}`);
-        const isClean = Math.random() > 0.1; // 90% chance of being clean for demonstration
+        let checkAllFlag = false;
+        if (typeof checkAll === 'boolean') {
+            checkAllFlag = checkAll;
+        } else if (typeof checkAll === 'number') {
+            checkAllFlag = checkAll !== 0;
+        } else if (typeof checkAll === 'string') {
+            checkAllFlag = ['1', 'true', 'yes'].includes(checkAll.trim().toLowerCase());
+        }
 
-        const mockApiResponse = {
-            overall: isClean ? 'Clean' : 'Fail',
-            blacklistStatus: isClean ? 'Clean' : 'Lost Or Stolen',
-            imei: imei,
-            make: "Apple",
-            model: "iPhone 14 Pro",
-            operatingSys: "iOS 16.5",
-            deviceType: "phone",
-            imeiHistory: isClean ? [] : [{ action: 'BLACKLISTED', reasoncodedesc: 'Reported Lost or Stolen', date: new Date().toISOString() }]
+        const esnResult = await checkEsn({
+            imei: String(imei).trim(),
+            carrier,
+            deviceType,
+            brand,
+            checkAll: checkAllFlag,
+        });
+
+        const normalized = {
+            ...esnResult.normalized,
+            raw: esnResult.raw,
         };
 
         const updateData = {
-            status: 'imei_checked',
+            imei: String(imei).trim(),
+            imeiChecked: true,
+            imeiCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
+            imeiCheckResult: normalized,
             fulfilledOrders: {
-                imei: imei,
-                rawResponse: mockApiResponse
-            }
+                imei: String(imei).trim(),
+                rawResponse: esnResult.raw,
+            },
         };
 
-        if (!isClean) {
-            updateData.status = 'blacklisted'; // Update status if blacklisted
+        if (typeof normalized.blacklisted === 'boolean') {
+            updateData.status = normalized.blacklisted ? 'blacklisted' : 'imei_checked';
         }
 
-        const { order } = await updateOrderBoth(orderId, updateData);
+        await updateOrderBoth(orderId, updateData);
 
-        // If the device is not clean, send a notification email.
-        if (!isClean) {
-            console.log(`Device for order ${orderId} is blacklisted. Sending notification.`);
+        if (normalized.blacklisted && customerEmail) {
+            const statusReason = normalized.summary || normalized.remarks || 'Blacklisted';
             const blacklistEmailHtml = BLACKLISTED_EMAIL_HTML
                 .replace(/\*\*CUSTOMER_NAME\*\*/g, customerName || 'Customer')
                 .replace(/\*\*ORDER_ID\*\*/g, orderId)
-                .replace(/\*\*STATUS_REASON\*\*/g, mockApiResponse.blacklistStatus);
+                .replace(/\*\*STATUS_REASON\*\*/g, statusReason);
 
             const mailOptions = {
-                from: "SecondHandCell <" + functions.config().email.user + ">",
+                from: `SecondHandCell <${functions.config().email.user}>`,
                 to: customerEmail,
                 subject: `Important Notice Regarding Your Device for Order #${orderId}`,
                 html: blacklistEmailHtml,
             };
-            await sendEmail(mailOptions);
+
+            try {
+                await sendEmail(mailOptions);
+            } catch (emailError) {
+                console.error(`Failed to send blacklist notification for order ${orderId}:`, emailError);
+            }
         }
 
-        res.json(mockApiResponse);
+        res.json(normalized);
     } catch (error) {
-        console.error("Error during IMEI check:", error);
-        res.status(500).json({ error: "Failed to perform IMEI check." });
+        console.error('Error during IMEI check:', error);
+        if (error.code && typeof error.code === 'string' && error.code.startsWith('phonecheck/')) {
+            const statusCode = typeof error.status === 'number' ? error.status : 502;
+            return res.status(statusCode >= 400 ? statusCode : 502).json({ error: error.message || 'Phonecheck IMEI lookup failed.' });
+        }
+        res.status(500).json({ error: 'Failed to perform IMEI check.' });
     }
 });
 
