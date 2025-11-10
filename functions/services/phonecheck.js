@@ -31,28 +31,69 @@ function normalizePhonecheckBoolean(value) {
     if (!normalized) {
       return null;
     }
-    if (['yes', 'y', 'true', '1', 'clean', 'clear', 'good', 'eligible', 'no issues'].some((token) => normalized.includes(token))) {
-      return false;
-    }
+
+    const collapsed = normalized.replace(/[^a-z0-9]+/g, ' ').trim();
+    const tokens = collapsed ? collapsed.split(/\s+/) : [];
+
+    const containsPhrase = (phrase) => collapsed.includes(phrase);
+    const containsToken = (list) => list.some((token) => tokens.includes(token));
+
     if (
-      [
-        'no',
-        'n',
-        'false',
-        '0',
+      containsToken([
         'bad',
         'barred',
         'blacklist',
+        'blacklisted',
+        'blocked',
         'lost',
         'stolen',
         'unpaid',
-        'outstanding',
-        'blocked',
+        'delinquent',
         'negative',
-        'fail'
-      ].some((token) => normalized.includes(token))
+        'fail',
+        'failed',
+        'ub',
+        'ob',
+        'fraud',
+        'financial',
+        'stole',
+        'theft',
+      ]) ||
+      containsPhrase('outstanding balance') ||
+      containsPhrase('unpaid bill') ||
+      containsPhrase('unpaid bills') ||
+      containsPhrase('active payment') ||
+      containsPhrase('payment plan') ||
+      containsPhrase('finance') ||
+      containsPhrase('financed') ||
+      containsPhrase('ineligible') ||
+      containsPhrase('not eligible') ||
+      containsPhrase('not clean') ||
+      containsPhrase('not clear') ||
+      containsPhrase('not good') ||
+      containsPhrase('not paid') ||
+      containsPhrase('past due')
     ) {
       return true;
+    }
+
+    if (
+      containsToken([
+        'clean',
+        'clear',
+        'good',
+        'eligible',
+        'pass',
+        'passed',
+        'paid',
+      ]) ||
+      containsPhrase('no issues') ||
+      containsPhrase('no issue') ||
+      containsPhrase('device is eligible') ||
+      containsPhrase('esn good') ||
+      containsPhrase('status clean')
+    ) {
+      return false;
     }
   }
   return null;
