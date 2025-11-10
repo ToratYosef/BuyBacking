@@ -28,6 +28,27 @@ let isAuthReady = false;
 let finalQuote = 0.00; // Final calculated price
 let currentUserId = null; // New: to store user ID
 let pendingShippingUnlock = false;
+const SHIPPING_KIT_FEE = 10;
+
+function formatCurrency(amount) {
+    const numeric = Number(amount) || 0;
+    return `$${numeric.toFixed(2)}`;
+}
+
+function getSelectedShippingPreferenceValue() {
+    return document.querySelector('input[name="shipping_preference"]:checked')?.value || null;
+}
+
+function calculateShippingFee(preferenceValue = null) {
+    return preferenceValue === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+}
+
+function calculateFinalPayout(preferenceValue = null) {
+    const baseQuote = Number(finalQuote) || 0;
+    const fee = calculateShippingFee(preferenceValue);
+    const payout = baseQuote - fee;
+    return payout > 0 ? payout : 0;
+}
 
 const US_STATES = [
 { name: "Alabama", code: "AL" }, { name: "Alaska", code: "AK" }, { name: "Arizona", code: "AZ" }, { name: "Arkansas", code: "AR" },
@@ -636,7 +657,7 @@ const displayedModel = selectedDevice.replace(/-/g, ' ').split(' ').map(w => w.c
 document.getElementById('device-name').textContent = `${displayedBrand} ${displayedModel}`;
 document.getElementById('device-specs').textContent = `${storage} | ${carrier.toUpperCase()}`;
 document.getElementById('original-price').textContent = basePrice.toFixed(2);
-document.getElementById('final-price').textContent = finalQuote.toFixed(2);
+document.getElementById('final-price').textContent = calculateFinalPayout(getSelectedShippingPreferenceValue()).toFixed(2);
 
 document.getElementById('condition-power').classList.toggle('hidden', conditions.power !== 'yes');
 document.getElementById('condition-screen').classList.toggle('hidden', conditions.screen !== 'yes');
@@ -651,6 +672,10 @@ document.getElementById('placeholder-summary').classList.add('hidden');
 document.getElementById('price-summary').classList.remove('hidden');
 
 document.getElementById('price-summary').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+if (typeof window.updateOverview === 'function') {
+    window.updateOverview();
+}
 }
 
 function proceedToShippingSection() {
@@ -667,7 +692,6 @@ function proceedToShippingSection() {
 
     document.getElementById('overviewDevice').textContent = `${displayedBrand} ${displayedModel} - ${document.getElementById('storage-select').value}`;
     document.getElementById('overviewCarrier').textContent = carrier;
-    document.getElementById('overviewQuote').textContent = `$${finalQuote.toFixed(2)}`;
 
     const storedInfo = loadStoredShippingInfo();
     if (storedInfo) {
@@ -705,25 +729,81 @@ window.continueAsGuest = function() {
 };
 
 window.updateOverview = function() {
-const shippingPreference = document.querySelector('input[name="shipping_preference"]:checked')?.value;
+    const shippingPreference = getSelectedShippingPreferenceValue();
 
-let displayShippingText = 'Not Selected';
-if (shippingPreference === 'ship_kit') {
-displayShippingText = 'Shipping Kit Requested';
-} else if (shippingPreference === 'email_label') {
-displayShippingText = 'Email Label Requested';
-}
-document.getElementById('overviewShippingPreference').textContent = displayShippingText;
+    let displayShippingText = 'Not Selected';
+    if (shippingPreference === 'ship_kit') {
+        displayShippingText = 'Shipping Kit Requested';
+    } else if (shippingPreference === 'email_label') {
+        displayShippingText = 'Email Label Requested';
+    }
 
-const fullName = document.getElementById('fullName')?.value || '';
-const streetAddress = document.getElementById('street-address')?.value || '';
-const city = document.getElementById('city')?.value || '';
-const state = document.getElementById('state')?.value || '';
-const zipCode = document.getElementById('zip-code')?.value || '';
+    const overviewShippingPreference = document.getElementById('overviewShippingPreference');
+    if (overviewShippingPreference) {
+        overviewShippingPreference.textContent = displayShippingText;
+    }
 
-const address = [streetAddress, city, state, zipCode].filter(Boolean).join(', ');
-document.getElementById('overviewAddress').textContent = (fullName && address) ? `${fullName}, ${address}` : 'Not Entered';
-}
+    const baseQuote = Number(finalQuote) || 0;
+    const finalPayout = calculateFinalPayout(shippingPreference);
+
+    const overviewQuote = document.getElementById('overviewQuote');
+    if (overviewQuote) {
+        overviewQuote.textContent = formatCurrency(finalPayout);
+    }
+
+    const finalPriceEl = document.getElementById('final-price');
+    if (finalPriceEl) {
+        finalPriceEl.textContent = finalPayout.toFixed(2);
+    }
+
+    const breakdownQuoteAmount = document.getElementById('breakdownQuoteAmount');
+    if (breakdownQuoteAmount) {
+        breakdownQuoteAmount.textContent = formatCurrency(baseQuote);
+    }
+
+    const breakdownShippingLabel = document.getElementById('breakdownShippingLabel');
+    const breakdownShippingAmount = document.getElementById('breakdownShippingAmount');
+    if (breakdownShippingLabel && breakdownShippingAmount) {
+        breakdownShippingAmount.classList.remove('text-emerald-600', 'text-rose-600', 'text-slate-500');
+
+        if (shippingPreference === 'ship_kit') {
+            breakdownShippingLabel.textContent = 'Shipping Kit';
+            breakdownShippingAmount.textContent = `-$${SHIPPING_KIT_FEE.toFixed(2)}`;
+            breakdownShippingAmount.classList.add('text-rose-600');
+        } else if (shippingPreference === 'email_label') {
+            breakdownShippingLabel.textContent = 'Email Label';
+            breakdownShippingAmount.textContent = 'Free';
+            breakdownShippingAmount.classList.add('text-emerald-600');
+        } else {
+            breakdownShippingLabel.textContent = 'Shipping Option';
+            breakdownShippingAmount.textContent = 'Select an option';
+            breakdownShippingAmount.classList.add('text-slate-500');
+        }
+    }
+
+    const breakdownFinalPayout = document.getElementById('breakdownFinalPayout');
+    if (breakdownFinalPayout) {
+        breakdownFinalPayout.textContent = formatCurrency(finalPayout);
+    }
+
+    const fullName = document.getElementById('fullName')?.value || '';
+    const streetAddress = document.getElementById('street-address')?.value || '';
+    const city = document.getElementById('city')?.value || '';
+    const state = document.getElementById('state')?.value || '';
+    const zipCode = document.getElementById('zip-code')?.value || '';
+
+    const address = [streetAddress, city, state, zipCode].filter(Boolean).join(', ');
+    const overviewAddress = document.getElementById('overviewAddress');
+    if (overviewAddress) {
+        overviewAddress.textContent = (fullName && address) ? `${fullName}, ${address}` : 'Not Entered';
+    }
+
+    const overviewPhone = document.getElementById('overviewPhone');
+    if (overviewPhone) {
+        const phoneValue = document.getElementById('phone')?.value || '';
+        overviewPhone.textContent = phoneValue ? phoneValue : 'Not Entered';
+    }
+};
 
 window.validateShippingAndOpenPayment = function() {
 const shippingPref = document.querySelector('input[name="shipping_preference"]:checked');
@@ -883,6 +963,11 @@ submitBtn.classList.add('btn-disabled');
 // --- 2. Construct Final Order Data ---
 const selectedPayment = document.querySelector('input[name="payment_method"]:checked');
 const phoneInput = document.getElementById('phone');
+const shippingPreferenceInput = document.querySelector('input[name="shipping_preference"]:checked');
+const rawShippingPreference = shippingPreferenceInput.value;
+const shippingPreferenceLabel = rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested';
+const shippingKitFee = calculateShippingFee(rawShippingPreference);
+const finalPayoutForOrder = calculateFinalPayout(rawShippingPreference);
 
 const orderData = {
 device: document.getElementById('overviewDevice').textContent,
@@ -893,8 +978,11 @@ storage: document.getElementById('storage-select').value,
 condition_power_on: conditions.power,
 condition_functional: conditions.screen,
 condition_cosmetic: conditions.cracks, // 3-tier value: flawless, scratched, damaged
-estimatedQuote: finalQuote,
-shippingPreference: document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+estimatedQuote: finalPayoutForOrder,
+originalQuote: Number(finalQuote) || 0,
+shippingPreference: shippingPreferenceLabel,
+shippingPreferenceValue: rawShippingPreference,
+shippingKitFee,
 paymentMethod: selectedPayment.value,
 paymentDetails: {},
 shippingInfo: {
@@ -983,6 +1071,14 @@ const signupPasswordInput = document.getElementById('signupPassword');
 const loginForm = document.getElementById('loginForm');
 const signupForm = document.getElementById('signupForm');
 const guestCheckoutBtn = document.getElementById('guestCheckoutBtn');
+const shippingPreferenceRadios = document.querySelectorAll('input[name="shipping_preference"]');
+
+shippingPreferenceRadios.forEach((radio) => {
+    radio.addEventListener('change', () => {
+        persistShippingInfo({ shippingPreference: radio.value });
+        window.updateOverview();
+    });
+});
 
 // Tab switching
 loginTabBtn.addEventListener('click', () => showTab('login'));
