@@ -174,7 +174,6 @@ const averagePayoutAmount = document.getElementById('average-payout-amount');
 const mobileLiveOrdersCount = document.getElementById('mobile-live-orders-count');
 const mobileAveragePayoutAmount = document.getElementById('mobile-average-payout-amount');
 const compactDensityToggle = document.getElementById('compact-density-toggle');
-const refreshOrdersBtn = document.getElementById('refresh-orders-btn');
 const lastRefreshAt = document.getElementById('last-refresh-at');
 if (lastRefreshAt) {
 lastRefreshAt.textContent = 'Listening for updates…';
@@ -386,7 +385,6 @@ let currentPage = 1;
 let lastKnownTotalPages = 1;
 const ORDERS_PER_PAGE = 10;
 let currentActiveStatus = 'all';
-let refreshInterval = null;
 let currentOrderDetails = null;
 let feedPricingDataCache = null;
 let feedPricingDataPromise = null;
@@ -5743,22 +5741,6 @@ if (!lastRefreshAt) return;
 const now = new Date();
 lastRefreshAt.textContent = `Updated ${now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
-
-if (refreshOrdersBtn) {
-refreshOrdersBtn.addEventListener('click', () => {
-if (refreshOrdersBtn.disabled) return;
-const originalLabel = refreshOrdersBtn.innerHTML;
-refreshOrdersBtn.disabled = true;
-refreshOrdersBtn.innerHTML = '<i class="fas fa-rotate fa-spin"></i> Refreshing';
-filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
-updateLastRefreshTimestamp();
-setTimeout(() => {
-refreshOrdersBtn.disabled = false;
-refreshOrdersBtn.innerHTML = originalLabel;
-}, 900);
-});
-}
-
 
 if (closeModalButton) {
 closeModalButton.addEventListener('click', closeOrderDetailsModal);
