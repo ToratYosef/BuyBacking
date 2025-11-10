@@ -78,28 +78,6 @@ async function generateCustomLabelPdf(order) {
         cursorY -= 4;
     };
 
-    const drawBullet = (text) => {
-        const bulletPrefix = '• ';
-        const bulletWidth = regularFont.widthOfTextAtSize(bulletPrefix, 9);
-        const availableWidth = width - PACKING_SLIP_MARGIN * 2 - bulletWidth;
-        const lines = wrapText(text, availableWidth, regularFont, 9);
-        ensureSpace(lines.length);
-
-        lines.forEach((line, index) => {
-            const prefix = index === 0 ? bulletPrefix : '  ';
-            page.drawText(`${prefix}${line}`, {
-                x: PACKING_SLIP_MARGIN,
-                y: cursorY - index * LINE_HEIGHT,
-                size: 9,
-                font: regularFont,
-                color: rgb(0.22, 0.22, 0.24),
-            });
-        });
-
-        cursorY -= LINE_HEIGHT * lines.length;
-        cursorY -= 2;
-    };
-
     const formatPhoneNumber = (raw) => {
         if (!raw) return '—';
         const digits = String(raw).replace(/\D+/g, '');
@@ -163,15 +141,8 @@ async function generateCustomLabelPdf(order) {
     drawKeyValue('Any Cracks?', formatValue(order.condition_cracks));
     drawKeyValue('Cosmetic Condition', formatValue(order.condition_cosmetic));
 
-    drawSectionTitle('Prep Checklist');
-    [
-        'Remove SIM cards and accessories from the device.',
-        'Factory reset and sign out of any Apple, Google, or Samsung accounts.',
-        'Place the device in the protective sleeve and include this sheet in the box.',
-    ].forEach((item) => drawBullet(item));
-
     ensureSpace(4);
-    const barcodeSvg = await buildBarcode(order.id || String(order.orderId || '')); 
+    const barcodeSvg = await buildBarcode(order.id || String(order.orderId || ''));
     const barcodeImage = await pdfDoc.embedSvg(barcodeSvg);
     const maxBarcodeWidth = width - PACKING_SLIP_MARGIN * 2;
     const barcodeScale = Math.min(maxBarcodeWidth / barcodeImage.width, 1.1);
@@ -210,15 +181,17 @@ async function generateBagLabelPdf(order) {
     let cursorY = height - BAG_LABEL_MARGIN_Y;
 
     const drawLine = (text, options = {}) => {
-        const { font = regularFont, size = 10, color = rgb(0, 0, 0), gap = 4 } = options;
+        const { font = regularFont, size = 10, color = rgb(0, 0, 0), gap = 6 } = options;
+        const lineHeight = size + 4;
+
         if (!text) {
             cursorY = Math.max(cursorY - gap, barcodeReserve);
             return;
         }
+
         const lines = wrapText(text, width - BAG_LABEL_MARGIN_X * 2, font, size);
         lines.forEach((line) => {
-            cursorY -= LINE_HEIGHT;
-            cursorY = Math.max(cursorY, barcodeReserve);
+            cursorY = Math.max(cursorY - lineHeight, barcodeReserve);
             page.drawText(line, {
                 x: BAG_LABEL_MARGIN_X,
                 y: cursorY,
@@ -227,6 +200,7 @@ async function generateBagLabelPdf(order) {
                 color,
             });
         });
+
         cursorY = Math.max(cursorY - gap, barcodeReserve);
     };
 
