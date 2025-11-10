@@ -64,7 +64,7 @@ self.addEventListener('notificationclick', function(event) {
                 for (let i = 0; i < clientList.length; i++) {
                     const client = clientList[i];
                     // If the admin dashboard is already open, focus it and navigate
-                    if (client.url.includes('admin-dashboard.html')) {
+                    if (client.url.includes('admin')) {
                         return client.focus().then(() => client.navigate(chatUrl));
                     }
                 }
