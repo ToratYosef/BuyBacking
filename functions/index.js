@@ -90,10 +90,10 @@ app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
 
 app.post("/checkImei", async (req, res) => {
-  const { deviceId, imei } = req.body || {};
+  const { orderId, imei } = req.body || {};
 
-  if (!deviceId || typeof deviceId !== "string") {
-    return res.status(400).json({ error: "deviceId is required." });
+  if (!orderId || typeof orderId !== "string") {
+    return res.status(400).json({ error: "orderId is required." });
   }
 
   if (!isValidImei(imei)) {
@@ -101,31 +101,48 @@ app.post("/checkImei", async (req, res) => {
   }
 
   try {
-    const deviceRef = db.collection("devices").doc(deviceId);
-    const snapshot = await deviceRef.get();
+    const orderRef = db.collection("orders").doc(orderId);
+    const snapshot = await orderRef.get();
 
     if (!snapshot.exists) {
-      return res.status(404).json({ error: "Device not found." });
+      return res.status(404).json({ error: "Order not found." });
     }
 
     const data = snapshot.data() || {};
     if (data.status !== "received") {
-      return res.status(400).json({ error: "Device is not ready for IMEI checks." });
+      return res.status(400).json({ error: "Order is not eligible for IMEI checks." });
     }
 
-    const imeiApiKey = process.env.IMEI_INFO_KEY;
-    const imeiApiBase = process.env.IMEI_INFO_BASE;
+    const imeiApiConfig = process.env.IMEI_API;
+    const imeiApiFallbackUrl = process.env.IMEI_API_URL || "https://imei.info/api/check";
 
-    if (!imeiApiKey || !imeiApiBase) {
+    if (!imeiApiConfig && !imeiApiFallbackUrl) {
       console.error("Missing IMEI provider environment configuration.");
       return res.status(500).json({ error: "IMEI provider is not configured." });
     }
 
+    let providerUrl;
+    try {
+      if (imeiApiConfig && /^https?:\/\//i.test(imeiApiConfig)) {
+        const url = new URL(imeiApiConfig);
+        url.searchParams.set("imei", imei);
+        providerUrl = url.toString();
+      } else {
+        const baseUrl = new URL(imeiApiFallbackUrl);
+        if (imeiApiConfig) {
+          baseUrl.searchParams.set("api_key", imeiApiConfig);
+        }
+        baseUrl.searchParams.set("imei", imei);
+        providerUrl = baseUrl.toString();
+      }
+    } catch (error) {
+      console.error("Failed to construct IMEI provider URL:", error);
+      return res.status(500).json({ error: "IMEI provider configuration is invalid." });
+    }
+
     let providerResponse;
     try {
-      providerResponse = await fetch(`${imeiApiBase}?imei=${imei}`, {
-        headers: { Authorization: `Bearer ${imeiApiKey}` }
-      });
+      providerResponse = await fetch(providerUrl);
     } catch (error) {
       console.error("IMEI provider request failed:", error);
       return res.status(502).json({ error: "Failed to reach IMEI provider." });
@@ -164,7 +181,7 @@ app.post("/checkImei", async (req, res) => {
       raw: providerData
     };
 
-    await deviceRef.set({
+    await orderRef.set({
       imeiChecked: true,
       imeiCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
       imeiCheckResult: normalized

@@ -147,7 +147,7 @@ let db;
 let auth;
 let functions;
 let currentUserId = 'anonymous_user';
-let currentDeviceDocId = null;
+let currentOrderDocId = null;
 let imeiUnsubscribe = null;
 let isImeiChecking = false;
 let pendingImeiOrder = null;
@@ -307,7 +307,7 @@ const modalImeiButton = document.getElementById('modal-imei-button');
 const modalImeiError = document.getElementById('modal-imei-error');
 const modalImeiResult = document.getElementById('modal-imei-result');
 const modalImeiResultList = document.getElementById('modal-imei-result-list');
-const modalImeiDeviceId = document.getElementById('modal-imei-device-id');
+const modalImeiOrderId = document.getElementById('modal-imei-order-id');
 const modalImeiCheckedAt = document.getElementById('modal-imei-checked-at');
 const modalImeiRawDetails = document.getElementById('modal-imei-raw-details');
 const modalImeiRaw = document.getElementById('modal-imei-raw');
@@ -522,7 +522,7 @@ function resetImeiSection() {
     modalImeiStatus.textContent = '';
   }
   if (modalImeiMessage) {
-    modalImeiMessage.textContent = 'Loading device record…';
+    modalImeiMessage.textContent = 'Loading order record…';
   }
   if (modalImeiForm) {
     modalImeiForm.classList.add('hidden');
@@ -545,8 +545,8 @@ function resetImeiSection() {
   if (modalImeiResultList) {
     modalImeiResultList.innerHTML = '';
   }
-  if (modalImeiDeviceId) {
-    modalImeiDeviceId.textContent = '';
+  if (modalImeiOrderId) {
+    modalImeiOrderId.textContent = '';
   }
   if (modalImeiCheckedAt) {
     modalImeiCheckedAt.textContent = '';
@@ -565,48 +565,43 @@ function teardownImeiListener() {
     imeiUnsubscribe();
     imeiUnsubscribe = null;
   }
-  currentDeviceDocId = null;
+  currentOrderDocId = null;
   isImeiChecking = false;
 }
 
-function resolveDeviceDocumentId(order) {
+function resolveOrderDocumentId(order) {
   if (!order) {
     return null;
   }
   const candidates = [
-    order.deviceDocId,
-    order.deviceDocID,
-    order.deviceDocumentId,
-    order.deviceDocumentID,
-    order.deviceDocument,
-    order.deviceDocumentPath,
-    order.deviceDocPath,
-    order.deviceRecordId,
-    order.deviceRecordID,
-    order.deviceRefId,
-    order.deviceRefID,
-    order.deviceFirestoreId,
-    order.deviceFirestoreID,
-    order.deviceFirestoreDocId,
-    order.deviceFirestoreDocID,
-    order.deviceInventoryId,
-    order.deviceInventoryID,
-    order.deviceId,
-    order.deviceID,
-    order.inventoryDeviceId,
-    order.inventoryDeviceID,
-    order.device?.id,
-    order.device?.deviceId,
-    order.deviceInfo?.id,
-    order.deviceInfo?.deviceId,
-    order.deviceStatus?.id,
-    order.deviceStatus?.deviceId
+    order.orderDocId,
+    order.orderDocID,
+    order.orderDocumentId,
+    order.orderDocumentID,
+    order.orderDocument,
+    order.orderDocumentPath,
+    order.firestoreDocId,
+    order.firestoreDocID,
+    order.firestoreDocumentId,
+    order.firestoreDocumentID,
+    order.firestoreDocument,
+    order.firestoreDocumentPath,
+    order.firestoreId,
+    order.firestoreID,
+    order.orderRef,
+    order.orderRefId,
+    order.orderRefID,
+    order.orderFirestoreId,
+    order.orderFirestoreID,
+    order.id,
+    order.orderId,
+    order.orderID
   ];
   const sanitize = (value) => {
-    if (typeof value !== 'string') {
+    if (value === null || value === undefined) {
       return null;
     }
-    const trimmed = value.trim();
+    const trimmed = String(value).trim();
     if (!trimmed) {
       return null;
     }
@@ -619,7 +614,7 @@ function resolveDeviceDocumentId(order) {
       return sanitized;
     }
   }
-  return sanitize(order.id) || null;
+  return null;
 }
 
 function startImeiListener(order) {
@@ -635,32 +630,41 @@ function startImeiListener(order) {
     pendingImeiOrder = order;
     return;
   }
-  const deviceDocId = resolveDeviceDocumentId(order);
-  if (!deviceDocId) {
-    modalImeiSection.classList.remove('hidden');
+  const orderDocId = resolveOrderDocumentId(order);
+  modalImeiSection.classList.remove('hidden');
+  if (!orderDocId) {
     if (modalImeiMessage) {
-      modalImeiMessage.textContent = 'No device record is linked to this order.';
+      modalImeiMessage.textContent = 'No order record is linked to this entry.';
+    }
+    if (modalImeiOrderId) {
+      modalImeiOrderId.textContent = '';
+    }
+    if (modalImeiButton) {
+      modalImeiButton.disabled = true;
+      modalImeiButton.textContent = imeiButtonDefaultText;
+    }
+    if (modalImeiInput) {
+      modalImeiInput.disabled = true;
     }
     return;
   }
-  currentDeviceDocId = deviceDocId;
-  modalImeiSection.classList.remove('hidden');
-  if (modalImeiDeviceId) {
-    modalImeiDeviceId.textContent = deviceDocId;
+  currentOrderDocId = orderDocId;
+  if (modalImeiOrderId) {
+    modalImeiOrderId.textContent = orderDocId;
   }
   if (modalImeiMessage) {
     modalImeiMessage.textContent = 'Listening for IMEI status…';
   }
-  const deviceRef = doc(db, 'devices', deviceDocId);
+  const orderRef = doc(db, 'orders', orderDocId);
   imeiUnsubscribe = onSnapshot(
-    deviceRef,
+    orderRef,
     (snapshot) => {
       handleImeiSnapshot(snapshot);
     },
     (error) => {
-      console.error('Failed to subscribe to device document', error);
+      console.error('Failed to subscribe to order document', error);
       if (modalImeiMessage) {
-        modalImeiMessage.textContent = 'Failed to load device record.';
+        modalImeiMessage.textContent = 'Failed to load order record.';
       }
       if (modalImeiError) {
         modalImeiError.textContent = error?.message || 'Unexpected Firestore error.';
@@ -681,6 +685,9 @@ function handleImeiSnapshot(snapshot) {
   if (!modalImeiSection) {
     return;
   }
+  if (modalImeiOrderId) {
+    modalImeiOrderId.textContent = (snapshot && snapshot.id) || currentOrderDocId || '';
+  }
   if (modalImeiError) {
     modalImeiError.classList.add('hidden');
     modalImeiError.textContent = '';
@@ -690,7 +697,7 @@ function handleImeiSnapshot(snapshot) {
       modalImeiStatus.textContent = '';
     }
     if (modalImeiMessage) {
-      modalImeiMessage.textContent = 'No device record found for this order.';
+      modalImeiMessage.textContent = 'No order record found for this ID.';
     }
     if (modalImeiForm) {
       modalImeiForm.classList.add('hidden');
@@ -709,7 +716,7 @@ function handleImeiSnapshot(snapshot) {
     modalImeiStatus.textContent = status;
   }
 
-  const isEligible = status === 'received' && (!data.imei || data.imeiChecked === false);
+  const isEligible = status === 'received' && (!data.imei || data.imeiChecked !== true);
 
   if (isEligible) {
     if (modalImeiForm) {
@@ -718,7 +725,7 @@ function handleImeiSnapshot(snapshot) {
     if (modalImeiMessage) {
       modalImeiMessage.textContent = data.imei
         ? 'IMEI saved. Awaiting verification to complete.'
-        : 'Enter the device IMEI to start the check.';
+        : 'Enter the IMEI to start the check.';
     }
     if (!isImeiChecking && modalImeiButton) {
       modalImeiButton.disabled = false;
@@ -745,13 +752,13 @@ function handleImeiSnapshot(snapshot) {
     }
     if (modalImeiMessage) {
       if (status !== 'received') {
-        modalImeiMessage.textContent = 'Device status must be “received” before running an IMEI check.';
+        modalImeiMessage.textContent = 'Order status must be “received” before running an IMEI check.';
       } else if (data.imeiChecked) {
         modalImeiMessage.textContent = 'IMEI check completed.';
       } else if (data.imei) {
         modalImeiMessage.textContent = 'IMEI saved. Awaiting backend verification.';
       } else {
-        modalImeiMessage.textContent = 'IMEI entry unavailable for this device.';
+        modalImeiMessage.textContent = 'IMEI entry unavailable for this order.';
       }
     }
   }
@@ -864,9 +871,9 @@ async function handleImeiSubmit() {
     }
     return;
   }
-  if (!currentDeviceDocId) {
+  if (!currentOrderDocId) {
     if (modalImeiError) {
-      modalImeiError.textContent = 'Device record is unavailable for this order.';
+      modalImeiError.textContent = 'Order record is unavailable for this entry.';
       modalImeiError.classList.remove('hidden');
     }
     return;
@@ -894,24 +901,23 @@ async function handleImeiSubmit() {
       modalImeiMessage.textContent = 'Checking IMEI…';
     }
 
-    const deviceRef = doc(db, 'devices', currentDeviceDocId);
+    const orderRef = doc(db, 'orders', currentOrderDocId);
     try {
-      await setDoc(deviceRef, { imei: imeiValue, imeiChecked: false }, { merge: true });
+      await setDoc(orderRef, { imei: imeiValue }, { merge: true });
     } catch (error) {
       if (
         error &&
         (error.code === 'permission-denied' || /Missing or insufficient permissions/i.test(error.message || ''))
       ) {
-        await setDoc(deviceRef, { imei: imeiValue }, { merge: true });
-      } else {
-        throw error;
+        throw new Error('Missing or insufficient permissions to update the order IMEI.');
       }
+      throw new Error(error?.message || 'Failed to save IMEI to the order record.');
     }
 
     const response = await fetch('/checkImei', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: currentDeviceDocId, imei: imeiValue })
+      body: JSON.stringify({ orderId: currentOrderDocId, imei: imeiValue })
     });
 
     if (!response.ok) {
@@ -932,7 +938,7 @@ async function handleImeiSubmit() {
 
     completed = true;
     if (modalImeiMessage) {
-      modalImeiMessage.textContent = 'IMEI check requested. Results will appear once the device record updates.';
+      modalImeiMessage.textContent = 'IMEI check requested. Results will appear once the order record updates.';
     }
   } catch (error) {
     console.error('IMEI check failed', error);
