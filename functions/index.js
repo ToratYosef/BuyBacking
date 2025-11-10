@@ -3283,17 +3283,6 @@ exports.autoRefreshInboundTracking = functions.pubsub
     return null;
   });
 
-exports.autoVoidExpiredLabels = functions.pubsub
-  .schedule("every 60 minutes")
-  .onRun(async () => {
-    try {
-      await runAutomaticLabelVoidSweep();
-    } catch (error) {
-      console.error("Automatic label void sweep failed:", error);
-    }
-    return null;
-  });
-
 exports.autoAcceptOffers = functions.pubsub
   .schedule("every 24 hours")
   .onRun(async (context) => {
