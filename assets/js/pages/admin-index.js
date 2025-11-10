@@ -674,13 +674,16 @@ if (orderDetailsModal) {
 const USPS_TRACKING_URL = 'https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=';
 
 const IMEI_RESULT_FIELDS = [
+  { key: 'remarks', label: 'ESN Remarks' },
+  { key: 'carrier', label: 'Carrier' },
+  { key: 'blacklisted', label: 'Blacklisted' },
+  { key: 'api', label: 'Phonecheck API Plan' },
+  { key: 'deviceId', label: 'Reported Device ID' },
   { key: 'brand', label: 'Brand' },
   { key: 'model', label: 'Model' },
   { key: 'color', label: 'Color' },
   { key: 'storage', label: 'Storage' },
-  { key: 'carrier', label: 'Carrier' },
-  { key: 'carrierLock', label: 'Carrier Lock' },
-  { key: 'blacklisted', label: 'Blacklisted' }
+  { key: 'carrierLock', label: 'Carrier Lock' }
 ];
 
 function resetImeiSection() {

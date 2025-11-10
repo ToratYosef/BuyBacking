@@ -6,6 +6,7 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
+const { checkEsn } = require('./services/phonecheck');
 const {
   DEFAULT_CARRIER_CODE,
   buildKitTrackingUpdate,
@@ -24,6 +25,7 @@ const ordersCollection = db.collection("orders");
 const usersCollection = db.collection("users");
 const adminsCollection = db.collection("admins"); // This collection should only contain manually designated admin UIDs
 const chatsCollection = db.collection("chats");
+const devicesCollection = db.collection("devices");
 
 function isValidImei(imei) {
   if (typeof imei !== "string" || !/^\d{15}$/.test(imei)) {
@@ -44,6 +46,107 @@ function isValidImei(imei) {
   }
 
   return sum % 10 === 0;
+}
+
+function sanitizeDocumentId(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parts = trimmed.split('/');
+  return parts[parts.length - 1] || null;
+}
+
+function pickFirstString(...values) {
+  for (const value of values) {
+    if (typeof value !== 'string') {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
+function normalizeStatusValue(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function isStatusEligibleForImeiCheck(status) {
+  if (!status) {
+    return true;
+  }
+  if (status === 'received' || status === 'device_received') {
+    return true;
+  }
+  if (status.includes('received')) {
+    return true;
+  }
+  if (status === 'imei_checked' || status === 'blacklisted') {
+    return true;
+  }
+  return false;
+}
+
+function resolveDeviceDocumentIdFromOrder(order = {}) {
+  const candidates = [
+    order.deviceFirestoreDocId,
+    order.deviceFirestoreDocID,
+    order.deviceInventoryId,
+    order.deviceInventoryID,
+    order.deviceId,
+    order.deviceID,
+    order.inventoryDeviceId,
+    order.inventoryDeviceID,
+    order.device?.id,
+    order.device?.deviceId,
+    order.deviceInfo?.id,
+    order.deviceInfo?.deviceId,
+    order.deviceStatus?.id,
+    order.deviceStatus?.deviceId,
+  ];
+
+  for (const candidate of candidates) {
+    const sanitized = sanitizeDocumentId(candidate);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+
+  return sanitizeDocumentId(order.id);
+}
+
+function resolveOrderIdFromDevice(device = {}) {
+  const candidates = [
+    device.orderId,
+    device.orderID,
+    device.order?.id,
+    device.order?.orderId,
+    device.orderInfo?.id,
+    device.orderInfo?.orderId,
+    device.meta?.orderId,
+  ];
+
+  for (const candidate of candidates) {
+    const sanitized = sanitizeDocumentId(candidate);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+
+  return null;
 }
 
 const app = express();
@@ -90,108 +193,223 @@ app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
 
 app.post("/checkImei", async (req, res) => {
-  const { orderId, imei } = req.body || {};
+  const {
+    orderId: requestOrderId,
+    deviceId: requestDeviceId,
+    imei: imeiRaw,
+    carrier: carrierOverride,
+    deviceType: deviceTypeOverride,
+    brand: brandOverride,
+    checkAll,
+  } = req.body || {};
 
-  if (!orderId || typeof orderId !== "string") {
-    return res.status(400).json({ error: "orderId is required." });
-  }
+  const imei = typeof imeiRaw === "string" ? imeiRaw.trim() : "";
 
   if (!isValidImei(imei)) {
     return res.status(400).json({ error: "Invalid IMEI. Expecting a 15-digit Luhn-compliant value." });
   }
 
-  try {
-    const orderRef = db.collection("orders").doc(orderId);
-    const snapshot = await orderRef.get();
+  let orderId = sanitizeDocumentId(requestOrderId);
+  let deviceDocId = sanitizeDocumentId(requestDeviceId);
 
-    if (!snapshot.exists) {
-      return res.status(404).json({ error: "Order not found." });
-    }
+  if (!orderId && !deviceDocId) {
+    return res.status(400).json({ error: "orderId or deviceId is required." });
+  }
 
-    const data = snapshot.data() || {};
-    if (data.status !== "received") {
-      return res.status(400).json({ error: "Order is not eligible for IMEI checks." });
-    }
+  let orderRef = orderId ? ordersCollection.doc(orderId) : null;
+  let orderData = null;
 
-    const imeiApiConfig = process.env.IMEI_API;
-    const imeiApiFallbackUrl = process.env.IMEI_API_URL || "https://imei.info/api/check";
-
-    if (!imeiApiConfig && !imeiApiFallbackUrl) {
-      console.error("Missing IMEI provider environment configuration.");
-      return res.status(500).json({ error: "IMEI provider is not configured." });
-    }
-
-    let providerUrl;
+  if (orderRef) {
     try {
-      if (imeiApiConfig && /^https?:\/\//i.test(imeiApiConfig)) {
-        const url = new URL(imeiApiConfig);
-        url.searchParams.set("imei", imei);
-        providerUrl = url.toString();
+      const snapshot = await orderRef.get();
+      if (snapshot.exists) {
+        orderData = snapshot.data() || {};
       } else {
-        const baseUrl = new URL(imeiApiFallbackUrl);
-        if (imeiApiConfig) {
-          baseUrl.searchParams.set("api_key", imeiApiConfig);
-        }
-        baseUrl.searchParams.set("imei", imei);
-        providerUrl = baseUrl.toString();
+        orderId = null;
+        orderRef = null;
       }
     } catch (error) {
-      console.error("Failed to construct IMEI provider URL:", error);
-      return res.status(500).json({ error: "IMEI provider configuration is invalid." });
+      console.error(`Failed to load order ${orderId} for IMEI check:`, error);
+      return res.status(500).json({ error: "Failed to load order for IMEI check." });
     }
-
-    let providerResponse;
-    try {
-      providerResponse = await fetch(providerUrl);
-    } catch (error) {
-      console.error("IMEI provider request failed:", error);
-      return res.status(502).json({ error: "Failed to reach IMEI provider." });
-    }
-
-    if (!providerResponse.ok) {
-      const body = await providerResponse.text();
-      console.error("IMEI provider returned error:", providerResponse.status, body);
-      return res.status(502).json({ error: "IMEI provider returned an error response." });
-    }
-
-    let providerData;
-    try {
-      providerData = await providerResponse.json();
-    } catch (error) {
-      console.error("Failed to parse IMEI provider response:", error);
-      return res.status(502).json({ error: "Invalid IMEI provider response." });
-    }
-
-    const normalized = {
-      brand: providerData?.brand ?? providerData?.Brand ?? null,
-      model: providerData?.model ?? providerData?.Model ?? null,
-      color: providerData?.color ?? providerData?.Color ?? null,
-      storage: providerData?.storage ?? providerData?.Storage ?? null,
-      carrier: providerData?.carrier ?? providerData?.Carrier ?? null,
-      carrierLock:
-        providerData?.carrierLock ??
-        providerData?.carrier_lock ??
-        providerData?.lock ??
-        null,
-      blacklisted:
-        providerData?.blacklisted ??
-        providerData?.Blacklisted ??
-        providerData?.isBlacklisted ??
-        null,
-      raw: providerData
-    };
-
-    await orderRef.set({
-      imeiChecked: true,
-      imeiCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
-      imeiCheckResult: normalized
-    }, { merge: true });
-
-    return res.json({ ok: true, result: normalized });
-  } catch (error) {
-    console.error("Unexpected IMEI check failure:", error);
-    return res.status(500).json({ error: "Unexpected error while checking IMEI." });
   }
+
+  let deviceRef = deviceDocId ? devicesCollection.doc(deviceDocId) : null;
+  let deviceData = null;
+
+  if (deviceRef) {
+    try {
+      const snapshot = await deviceRef.get();
+      if (snapshot.exists) {
+        deviceData = snapshot.data() || {};
+      } else {
+        deviceDocId = null;
+        deviceRef = null;
+      }
+    } catch (error) {
+      console.error(`Failed to load device ${deviceDocId} for IMEI check:`, error);
+      return res.status(500).json({ error: "Failed to load device for IMEI check." });
+    }
+  }
+
+  if (!orderData && deviceData) {
+    const derivedOrderId = resolveOrderIdFromDevice(deviceData);
+    if (derivedOrderId) {
+      orderId = derivedOrderId;
+      orderRef = ordersCollection.doc(orderId);
+      try {
+        const snapshot = await orderRef.get();
+        if (snapshot.exists) {
+          orderData = snapshot.data() || {};
+        } else {
+          orderId = null;
+          orderRef = null;
+        }
+      } catch (error) {
+        console.error(`Failed to load derived order ${orderId} for IMEI check:`, error);
+        return res.status(500).json({ error: "Failed to load derived order for IMEI check." });
+      }
+    }
+  }
+
+  if (!deviceDocId && orderData) {
+    const derivedDeviceDocId = resolveDeviceDocumentIdFromOrder(orderData);
+    if (derivedDeviceDocId) {
+      deviceDocId = derivedDeviceDocId;
+      deviceRef = devicesCollection.doc(deviceDocId);
+      try {
+        const snapshot = await deviceRef.get();
+        if (snapshot.exists) {
+          deviceData = { ...(deviceData || {}), ...(snapshot.data() || {}) };
+        }
+      } catch (error) {
+        console.error(`Failed to load derived device ${deviceDocId} for IMEI check:`, error);
+      }
+    }
+  }
+
+  if (!orderData && !deviceData) {
+    return res.status(404).json({ error: "Device or order record not found." });
+  }
+
+  const statusCandidates = [
+    normalizeStatusValue(orderData?.status),
+    normalizeStatusValue(orderData?.currentStatus),
+    normalizeStatusValue(orderData?.deviceStatus),
+    normalizeStatusValue(deviceData?.status),
+    normalizeStatusValue(deviceData?.currentStatus),
+    normalizeStatusValue(deviceData?.deviceStatus),
+  ].filter(Boolean);
+  const status = statusCandidates[0] || null;
+
+  if (status && !isStatusEligibleForImeiCheck(status)) {
+    return res.status(400).json({ error: "Device status must be received before running an IMEI check." });
+  }
+
+  const carrier = pickFirstString(
+    carrierOverride,
+    orderData?.carrier,
+    orderData?.carrierName,
+    orderData?.device?.carrier,
+    deviceData?.carrier,
+    deviceData?.carrierName,
+    deviceData?.device?.carrier,
+  );
+
+  const brand = pickFirstString(
+    brandOverride,
+    orderData?.brand,
+    orderData?.manufacturer,
+    orderData?.deviceBrand,
+    orderData?.device?.brand,
+    deviceData?.brand,
+    deviceData?.brandName,
+    deviceData?.manufacturer,
+    deviceData?.device?.brand,
+  );
+
+  const deviceType = pickFirstString(
+    deviceTypeOverride,
+    orderData?.deviceType,
+    orderData?.device_category,
+    orderData?.category,
+    deviceData?.deviceType,
+    deviceData?.device_category,
+    deviceData?.category,
+  );
+
+  let checkAllFlag = false;
+  if (typeof checkAll === 'boolean') {
+    checkAllFlag = checkAll;
+  } else if (typeof checkAll === 'number') {
+    checkAllFlag = checkAll !== 0;
+  } else if (typeof checkAll === 'string') {
+    checkAllFlag = ['1', 'true', 'yes'].includes(checkAll.trim().toLowerCase());
+  }
+
+  let esnResult;
+  try {
+    esnResult = await checkEsn({
+      imei,
+      carrier,
+      brand,
+      deviceType,
+      checkAll: checkAllFlag,
+    });
+  } catch (error) {
+    console.error('Phonecheck ESN request failed:', error);
+    if (error.code && typeof error.code === 'string' && error.code.startsWith('phonecheck/')) {
+      const statusCode = typeof error.status === 'number' ? error.status : 502;
+      return res.status(statusCode >= 400 ? statusCode : 502).json({
+        error: error.message || 'Phonecheck IMEI lookup failed.',
+      });
+    }
+    return res.status(502).json({ error: 'Failed to verify IMEI with Phonecheck.' });
+  }
+
+  const normalized = {
+    ...esnResult.normalized,
+    raw: esnResult.raw,
+  };
+
+  const updatePayload = {
+    imei,
+    imeiChecked: true,
+    imeiCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
+    imeiCheckResult: normalized,
+  };
+
+  if (typeof normalized.blacklisted === 'boolean') {
+    updatePayload.status = normalized.blacklisted ? 'blacklisted' : 'imei_checked';
+  }
+
+  const updateTasks = [];
+
+  if (orderId) {
+    updateTasks.push(
+      updateOrderBoth(orderId, updatePayload, {
+        autoLogStatus: false,
+        skipStatusTimestamp: typeof updatePayload.status === 'undefined',
+      })
+    );
+  }
+
+  if (deviceDocId) {
+    updateTasks.push(
+      devicesCollection
+        .doc(deviceDocId)
+        .set(updatePayload, { merge: true })
+    );
+  }
+
+  try {
+    await Promise.all(updateTasks);
+  } catch (error) {
+    console.error('Failed to persist IMEI results:', error);
+    return res.status(500).json({ error: 'Failed to persist IMEI check results.' });
+  }
+
+  return res.json({ ok: true, result: normalized });
 });
 
 const transporter = nodemailer.createTransport({
