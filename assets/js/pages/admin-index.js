@@ -108,13 +108,11 @@ const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
-// Custom logo URL for the packing slip header - UPDATED LOGO URL
-const LOGO_URL = "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
-
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+import { createOrderInfoLabelPdf, createBagLabelPdf } from "/assets/js/pdf/order-labels.js";
 /* --- API BASE URL FIX: Redirect /api/* to Cloud Functions base --- */
 (function () {
   try {
@@ -2518,185 +2516,33 @@ bytes[i] = binaryString.charCodeAt(i);
 return bytes.buffer;
 };
 
-// 1. Fetch ShipEngine labels using the proxy
-const labelPdfBuffers = await Promise.all(labelUrls.map((url) => fetchPdfProxy(url)));
+  // 1. Fetch ShipEngine labels using the proxy
+  const labelPdfBuffers = await Promise.all(labelUrls.map((url) => fetchPdfProxy(url)));
 
-// 2. Fetch Logo (optional)
-let logoImage = null;
-let logoDims = { width: 0, height: 0 };
-try {
-// This logo retrieval is done client-side since it's a generic public URL
-const logoResponse = await fetch(LOGO_URL);
-if (!logoResponse.ok) throw new Error("Logo fetch failed");
+  // 2. Generate the custom info + bag labels client-side
+  const orderInfoLabelBytes = await createOrderInfoLabelPdf(order);
+  const bagLabelBytes = await createBagLabelPdf(order);
 
-const logoArrayBuffer = await logoResponse.arrayBuffer();
+  // Merge shipping labels followed by the info and bag labels
+  const mergedPdf = await PDFLib.PDFDocument.create();
 
-// Embed image in a new PDFDocument temporarily to get the image object
-const tempPdf = await PDFLib.PDFDocument.create();
-const mimeType = LOGO_URL.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+  for (const bytes of labelPdfBuffers) {
+    const pdf = await PDFLib.PDFDocument.load(bytes);
+    const copied = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+    copied.forEach(p => mergedPdf.addPage(p));
+  }
 
-logoImage = mimeType === 'image/png'
-? await tempPdf.embedPng(logoArrayBuffer)
-: await tempPdf.embedJpg(logoArrayBuffer);
+  if (orderInfoLabelBytes) {
+    const infoPdf = await PDFLib.PDFDocument.load(orderInfoLabelBytes);
+    const copiedInfo = await mergedPdf.copyPages(infoPdf, infoPdf.getPageIndices());
+    copiedInfo.forEach((page) => mergedPdf.addPage(page));
+  }
 
-logoDims = logoImage.scale(0.3); // Scale factor
-} catch (e) {
-console.warn("Could not load logo image:", e);
-}
-
-const { PDFDocument, StandardFonts, rgb } = PDFLib;
-const pageWidth = 288; // 4 in
-const pageHeight = 432; // 6 in
-const margin = 18;
-
-const wrapTextLines = (text, font, size, maxWidth) => {
-if (!text) {
-return [''];
-}
-const words = String(text).split(/\s+/);
-const lines = [];
-let currentLine = '';
-
-words.forEach((word) => {
-const candidate = currentLine ? `${currentLine} ${word}` : word;
-if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-currentLine = candidate;
-} else {
-if (currentLine) {
-lines.push(currentLine);
-}
-currentLine = word;
-}
-});
-
-if (currentLine) {
-lines.push(currentLine);
-}
-
-return lines.length ? lines : [''];
-};
-
-const createBagLabelPdf = async () => {
-const bagDoc = await PDFDocument.create();
-const bagPage = bagDoc.addPage([pageWidth, pageHeight]);
-const bagFont = await bagDoc.embedFont(StandardFonts.Helvetica);
-const bagBold = await bagDoc.embedFont(StandardFonts.HelveticaBold);
-let bagY = pageHeight - margin;
-const maxWidth = pageWidth - margin * 2;
-
-const formatDisplayValue = (value) => {
-const normalized = normalizeConditionInput(value);
-
-if (normalized === null || normalized === undefined) {
-return null;
-}
-
-if (typeof normalized === 'boolean') {
-return normalized ? 'Yes' : 'No';
-}
-
-if (typeof normalized === 'number') {
-return String(normalized);
-}
-
-const cleaned = String(normalized)
-.replace(/[_-]+/g, ' ')
-.replace(/\s+/g, ' ')
-.trim();
-
-if (!cleaned) {
-return null;
-}
-
-const lower = cleaned.toLowerCase();
-if (lower === 'na' || lower === 'n/a') {
-return 'N/A';
-}
-
-return cleaned
-.split(' ')
-.filter(Boolean)
-.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-.join(' ');
-};
-
-const drawBlock = (text, options = {}) => {
-const { font = bagFont, size = 11, color = rgb(0, 0, 0), spacing = 12 } = options;
-wrapTextLines(text, font, size, maxWidth).forEach((line) => {
-bagPage.drawText(line, { x: margin, y: bagY, size, font, color });
-bagY -= spacing;
-});
-};
-
-if (logoImage) {
-const scaledLogo = logoImage.scale(0.18);
-bagPage.drawImage(logoImage, {
-x: margin,
-y: bagY - scaledLogo.height,
-width: scaledLogo.width,
-height: scaledLogo.height,
-});
-bagY -= scaledLogo.height + 12;
-}
-
-drawBlock('SecondHandCell Bag Label', { font: bagBold, size: 14, color: rgb(0.1, 0.1, 0.1) });
-drawBlock(`Order #${order.id}`, { font: bagBold, size: 22, color: rgb(0.1, 0.1, 0.4), spacing: 18 });
-
-const deviceParts = [];
-if (order.brand) {
-deviceParts.push(order.brand);
-}
-if (order.device) {
-deviceParts.push(order.device);
-}
-if (deviceParts.length) {
-drawBlock(`Device: ${deviceParts.join(' • ')}`);
-}
-
-if (order.storage) {
-drawBlock(`Storage: ${order.storage}`);
-}
-
-if (order.carrier) {
-drawBlock(`Carrier: ${formatDisplayValue(order.carrier)}`);
-}
-
-const conditionSegments = [];
-if (order.condition_power_on) {
-conditionSegments.push(`Powers On: ${formatDisplayValue(order.condition_power_on)}`);
-}
-if (order.condition_functional) {
-conditionSegments.push(`Functional: ${formatDisplayValue(order.condition_functional)}`);
-}
-if (order.condition_cosmetic) {
-conditionSegments.push(`Cosmetic: ${formatDisplayValue(order.condition_cosmetic)}`);
-}
-if (conditionSegments.length) {
-drawBlock(`Condition: ${conditionSegments.join(' • ')}`);
-}
-
-const payoutAmount = getOrderPayout(order).toFixed(2);
-drawBlock(`Quoted Price: $${payoutAmount}`, { font: bagBold, size: 13, color: rgb(0.1, 0.45, 0.2), spacing: 16 });
-
-drawBlock('Attach this label to the device bag before shipping.', { size: 10, color: rgb(0.35, 0.35, 0.35), spacing: 16 });
-
-return bagDoc.save();
-};
-
-const bagLabelBytes = await createBagLabelPdf();
-
-// Merge shipping labels followed by the bag label
-const mergedPdf = await PDFLib.PDFDocument.create();
-
-for (const bytes of labelPdfBuffers) {
-const pdf = await PDFLib.PDFDocument.load(bytes);
-const copied = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-copied.forEach(p => mergedPdf.addPage(p));
-}
-
-const bagLabelPdf = await PDFLib.PDFDocument.load(bagLabelBytes);
-const copiedBag = await mergedPdf.copyPages(bagLabelPdf, bagLabelPdf.getPageIndices());
-copiedBag.forEach(p => mergedPdf.addPage(p));
+  if (bagLabelBytes) {
+    const bagLabelPdf = await PDFLib.PDFDocument.load(bagLabelBytes);
+    const copiedBag = await mergedPdf.copyPages(bagLabelPdf, bagLabelPdf.getPageIndices());
+    copiedBag.forEach((page) => mergedPdf.addPage(page));
+  }
 
 // 5. Display merged PDF in a dedicated print window
 const mergedBytes = await mergedPdf.save();

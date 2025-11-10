@@ -94,6 +94,10 @@ function createOrdersRouter({
       }
     };
 
+    pushUrl(order.outboundLabelUrl);
+    pushUrl(order.inboundLabelUrl);
+    pushUrl(order.uspsLabelUrl);
+
     Object.keys(order)
       .filter((key) => key && key.toLowerCase().includes('label') && key.toLowerCase().includes('url'))
       .forEach((key) => pushUrl(order[key]));
