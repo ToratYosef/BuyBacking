@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 
 function createOrdersRouter({
   axios,
@@ -18,6 +19,12 @@ function createOrdersRouter({
 }) {
   const router = express.Router();
 
+  const storageBucket =
+    typeof admin?.storage === 'function' && typeof admin.storage().bucket === 'function'
+      ? admin.storage().bucket()
+      : null;
+  const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET || '6LfltQcsAAAAAKHC04DfTW0mEGHWTTGvGUzzKNjT';
+
   const {
     ORDER_RECEIVED_EMAIL_HTML,
     ORDER_PLACED_ADMIN_EMAIL_HTML,
@@ -33,6 +40,405 @@ function createOrdersRouter({
     handleLabelVoid,
     sendVoidNotificationEmail,
   } = shipEngine;
+
+  const PRINT_QUEUE_STATUSES = [
+    'shipping_kit_requested',
+    'kit_needs_printing',
+    'needs_printing',
+  ];
+
+  function toMillis(value) {
+    if (!value) return null;
+    if (typeof value === 'number') return value;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (typeof value === 'object') {
+      const seconds = value._seconds ?? value.seconds ?? null;
+      if (typeof seconds === 'number') {
+        const nanos = value._nanoseconds ?? value.nanoseconds ?? 0;
+        return seconds * 1000 + Math.floor(nanos / 1e6);
+      }
+    }
+    return null;
+  }
+
+  function resolveCreatedAtMillis(order = {}) {
+    const candidates = [
+      order.createdAt,
+      order.created_at,
+      order.createdAtMillis,
+      order.createdAtMs,
+      order.created_at_ms,
+      order.created_at_millis,
+    ];
+
+    for (const candidate of candidates) {
+      const millis = toMillis(candidate);
+      if (millis) {
+        return millis;
+      }
+    }
+
+    if (typeof order.createdAtSeconds === 'number') {
+      return order.createdAtSeconds * 1000;
+    }
+
+    return null;
+  }
+
+  function normaliseBuffer(data) {
+    if (!data) return null;
+    return Buffer.isBuffer(data) ? data : Buffer.from(data);
+  }
+
+  function collectLabelUrlCandidates(order = {}) {
+    const urls = new Set();
+    const pushUrl = (value) => {
+      if (!value) return;
+      const stringValue = String(value).trim();
+      if (!stringValue) return;
+      if (/^https?:\/\//i.test(stringValue)) {
+        urls.add(stringValue);
+      }
+    };
+
+    pushUrl(order.outboundLabelUrl);
+    pushUrl(order.inboundLabelUrl);
+    pushUrl(order.uspsLabelUrl);
+
+    Object.keys(order)
+      .filter((key) => key && key.toLowerCase().includes('label') && key.toLowerCase().includes('url'))
+      .forEach((key) => pushUrl(order[key]));
+
+    const collections = [order.shipEngineLabels, order.labelRecords, order.labels, order.labelUrls];
+
+    collections.forEach((collection) => {
+      if (!collection) return;
+      if (Array.isArray(collection)) {
+        collection.forEach((entry) => {
+          if (!entry) return;
+          if (typeof entry === 'string') {
+            pushUrl(entry);
+            return;
+          }
+          if (typeof entry === 'object') {
+            Object.values(entry).forEach((value) => pushUrl(value));
+            if (entry.label_download && typeof entry.label_download === 'object') {
+              Object.values(entry.label_download).forEach((value) => pushUrl(value));
+            }
+          }
+        });
+      } else if (typeof collection === 'object') {
+        Object.values(collection).forEach((entry) => {
+          if (!entry) return;
+          if (typeof entry === 'string') {
+            pushUrl(entry);
+            return;
+          }
+          if (typeof entry === 'object') {
+            Object.values(entry).forEach((value) => pushUrl(value));
+            if (entry.label_download && typeof entry.label_download === 'object') {
+              Object.values(entry.label_download).forEach((value) => pushUrl(value));
+            }
+          }
+        });
+      }
+    });
+
+    return urls;
+  }
+
+  function pushOrderedUrl(seen, list, value) {
+    if (!value) return;
+    const stringValue = String(value).trim();
+    if (!stringValue) return;
+    if (!/^https?:\/\//i.test(stringValue)) return;
+    if (seen.has(stringValue)) return;
+    seen.add(stringValue);
+    list.push(stringValue);
+  }
+
+  function addLabelObjectCandidates(seen, list, source) {
+    if (!source || typeof source !== 'object') {
+      return;
+    }
+
+    const directKeys = ['downloadUrl', 'download_url', 'labelUrl', 'label_url', 'url', 'href', 'pdf'];
+    directKeys.forEach((key) => {
+      if (source[key]) {
+        pushOrderedUrl(seen, list, source[key]);
+      }
+    });
+
+    if (source.label_download && typeof source.label_download === 'object') {
+      Object.values(source.label_download).forEach((value) => pushOrderedUrl(seen, list, value));
+    }
+  }
+
+  function buildOrderedLabelUrlList(order = {}) {
+    const seen = new Set();
+    const ordered = [];
+
+    const outboundPrimaries = [
+      order.outboundDownloadUrl,
+      order.outboundDownloadURL,
+      order.outboundLabelUrl,
+      order.outboundLabel && order.outboundLabel.downloadUrl,
+      order.outboundLabel && order.outboundLabel.download_url,
+    ];
+    outboundPrimaries.forEach((value) => pushOrderedUrl(seen, ordered, value));
+    addLabelObjectCandidates(seen, ordered, order.outboundLabel);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.outbound);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.kit);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.primary);
+
+    const inboundPrimaries = [
+      order.inboundDownloadUrl,
+      order.inboundDownloadURL,
+      order.inboundLabelUrl,
+      order.inboundLabel && order.inboundLabel.downloadUrl,
+      order.inboundLabel && order.inboundLabel.download_url,
+      order.trackingLabelUrl,
+    ];
+    inboundPrimaries.forEach((value) => pushOrderedUrl(seen, ordered, value));
+    addLabelObjectCandidates(seen, ordered, order.inboundLabel);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.inbound);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.customer);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.return);
+
+    const uspsPrimaries = [order.uspsDownloadUrl, order.uspsLabelUrl];
+    uspsPrimaries.forEach((value) => pushOrderedUrl(seen, ordered, value));
+    addLabelObjectCandidates(seen, ordered, order.uspsLabel);
+
+    const additional = collectLabelUrlCandidates(order);
+    additional.forEach((url) => pushOrderedUrl(seen, ordered, url));
+
+    return ordered;
+  }
+
+  async function fetchPrintQueueOrders(orderIds = []) {
+    const results = new Map();
+
+    if (Array.isArray(orderIds) && orderIds.length) {
+      const docs = await Promise.all(
+        orderIds.map((id) =>
+          ordersCollection
+            .doc(String(id))
+            .get()
+            .catch((error) => {
+              console.error(`Failed to load order ${id} for print queue:`, error);
+              return null;
+            })
+        )
+      );
+
+      docs.forEach((doc) => {
+        if (doc && doc.exists) {
+          results.set(doc.id, { id: doc.id, ...doc.data() });
+        }
+      });
+    } else {
+      await Promise.all(
+        PRINT_QUEUE_STATUSES.map(async (status) => {
+          try {
+            const snapshot = await ordersCollection.where('status', '==', status).get();
+            snapshot.docs.forEach((doc) => {
+              results.set(doc.id, { id: doc.id, ...doc.data() });
+            });
+          } catch (error) {
+            console.error(`Failed to load ${status} orders for print queue:`, error);
+          }
+        })
+      );
+    }
+
+    const orders = Array.from(results.values());
+    orders.sort((a, b) => {
+      const aMillis = resolveCreatedAtMillis(a) ?? Number.MAX_SAFE_INTEGER;
+      const bMillis = resolveCreatedAtMillis(b) ?? Number.MAX_SAFE_INTEGER;
+      return aMillis - bMillis;
+    });
+    return orders;
+  }
+
+  function serialisePrintQueueOrder(order = {}) {
+    const shippingInfo = order.shippingInfo || {};
+    const labelUrls = buildOrderedLabelUrlList(order);
+
+    return {
+      id: order.id,
+      status: order.status || null,
+      shippingPreference: order.shippingPreference || null,
+      shippingInfo: {
+        fullName: shippingInfo.fullName || shippingInfo.name || '',
+        email: shippingInfo.email || '',
+        phone:
+          shippingInfo.phone ||
+          shippingInfo.phoneNumber ||
+          shippingInfo.phone_number ||
+          shippingInfo.contactPhone ||
+          '',
+        city: shippingInfo.city || '',
+        state: shippingInfo.state || '',
+      },
+      device: order.device || '',
+      brand: order.brand || '',
+      storage: order.storage || order.memory || '',
+      carrier: order.carrier || '',
+      estimatedQuote:
+        typeof order.estimatedQuote === 'number'
+          ? order.estimatedQuote
+          : Number(order.estimatedQuote) || null,
+      createdAtMillis: resolveCreatedAtMillis(order),
+      labelUrls,
+    };
+  }
+
+  async function downloadPdfBuffer(url) {
+    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
+    return Buffer.from(response.data);
+  }
+
+  function buildCachedFilePath(orderId, url, index) {
+    const safeOrderId = String(orderId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+    let fileName = '';
+    try {
+      const parsed = new URL(url);
+      fileName = (parsed.pathname.split('/').pop() || '').replace(/[^a-zA-Z0-9_.-]/g, '_');
+    } catch (_) {
+      fileName = '';
+    }
+
+    if (!fileName) {
+      const digest = crypto.createHash('sha1').update(`${url}:${index}`).digest('hex').slice(0, 16);
+      fileName = `label-${digest}.pdf`;
+    }
+
+    const timestamp = Date.now();
+    return `print-cache/${safeOrderId}/${timestamp}-${index}-${fileName}`;
+  }
+
+  async function fetchAndCacheLabel(orderId, url, index) {
+    const buffer = await downloadPdfBuffer(url);
+
+    if (!storageBucket) {
+      return { buffer, storagePath: null };
+    }
+
+    const objectPath = buildCachedFilePath(orderId, url, index);
+    const file = storageBucket.file(objectPath);
+
+    await file.save(buffer, {
+      contentType: 'application/pdf',
+      resumable: false,
+      metadata: {
+        cacheControl: 'private, max-age=0, no-cache',
+      },
+    });
+
+    return { buffer, storagePath: objectPath };
+  }
+
+  async function cleanupCachedFiles(paths = []) {
+    if (!storageBucket || !Array.isArray(paths) || !paths.length) {
+      return;
+    }
+
+    const unique = Array.from(new Set(paths.filter(Boolean)));
+    if (!unique.length) {
+      return;
+    }
+
+    await Promise.all(
+      unique.map(async (objectPath) => {
+        try {
+          await storageBucket.file(objectPath).delete({ ignoreNotFound: true });
+        } catch (error) {
+          if (error?.code !== 404) {
+            console.warn(`Failed to delete cached PDF ${objectPath}:`, error.message || error);
+          }
+        }
+      })
+    );
+  }
+
+  async function collectOrderPrintBuffers(order) {
+    const buffers = [];
+    const cachedPaths = [];
+    const labelUrls = buildOrderedLabelUrlList(order);
+
+    for (let index = 0; index < labelUrls.length; index += 1) {
+      const url = labelUrls[index];
+      try {
+        const { buffer, storagePath } = await fetchAndCacheLabel(order.id, url, index);
+        if (buffer) {
+          buffers.push(buffer);
+        }
+        if (storagePath) {
+          cachedPaths.push(storagePath);
+        }
+      } catch (error) {
+        console.error(`Failed to download label for order ${order.id} from ${url}:`, error.message || error);
+      }
+    }
+
+    try {
+      const infoLabel = await generateCustomLabelPdf(order);
+      const infoBuffer = normaliseBuffer(infoLabel);
+      if (infoBuffer) {
+        buffers.push(infoBuffer);
+      }
+    } catch (error) {
+      console.error(`Failed to generate info label PDF for order ${order.id}:`, error);
+    }
+
+    try {
+      const bagLabel = await generateBagLabelPdf(order);
+      const bagBuffer = normaliseBuffer(bagLabel);
+      if (bagBuffer) {
+        buffers.push(bagBuffer);
+      }
+    } catch (error) {
+      console.error(`Failed to generate bag label PDF for order ${order.id}:`, error);
+    }
+
+    return { buffers, cachedPaths };
+  }
+
+  async function verifyRecaptchaToken(token, expectedAction, remoteIp) {
+    if (!token) {
+      return null;
+    }
+
+    if (!RECAPTCHA_SECRET) {
+      console.warn('reCAPTCHA secret key is not configured; skipping verification.');
+      return null;
+    }
+
+    try {
+      const params = new URLSearchParams();
+      params.append('secret', RECAPTCHA_SECRET);
+      params.append('response', token);
+      if (remoteIp) {
+        params.append('remoteip', remoteIp);
+      }
+
+      const response = await axios.post('https://www.google.com/recaptcha/api/siteverify', params.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        timeout: 10000,
+      });
+
+      const payload = response.data || {};
+      if (expectedAction) {
+        payload.expectedAction = expectedAction;
+      }
+      return payload;
+    } catch (error) {
+      console.error('Failed to verify reCAPTCHA token:', error.response?.data || error.message || error);
+      return null;
+    }
+  }
 
   router.post('/fetch-pdf', async (req, res) => {
     const { url } = req.body;
@@ -81,6 +487,74 @@ function createOrdersRouter({
     } catch (err) {
       console.error('Error fetching orders:', err);
       res.status(500).json({ error: 'Failed to fetch orders' });
+    }
+  });
+
+  router.get('/orders/needs-printing', async (req, res) => {
+    try {
+      const orders = await fetchPrintQueueOrders();
+      const payload = orders.map(serialisePrintQueueOrder);
+      res.json({ orders: payload });
+    } catch (error) {
+      console.error('Failed to load print queue orders:', error);
+      res.status(500).json({ error: 'Failed to load print queue orders' });
+    }
+  });
+
+  router.post('/orders/needs-printing/bundle', async (req, res) => {
+    try {
+      const orderIds = Array.isArray(req.body?.orderIds)
+        ? req.body.orderIds.filter(Boolean)
+        : [];
+
+      const orders = await fetchPrintQueueOrders(orderIds);
+      if (!orders.length) {
+        return res.status(404).json({ error: 'No orders require printing.' });
+      }
+
+      const printableOrderIds = [];
+      const mergedParts = [];
+      const cachedPaths = [];
+
+      for (const order of orders) {
+        const { buffers: parts, cachedPaths: orderCachedPaths } = await collectOrderPrintBuffers(order);
+        if (!parts.length) {
+          console.warn(`No printable documents generated for order ${order.id}`);
+          continue;
+        }
+        printableOrderIds.push(order.id);
+        mergedParts.push(...parts);
+        cachedPaths.push(...orderCachedPaths);
+      }
+
+      if (!mergedParts.length) {
+        return res
+          .status(404)
+          .json({ error: 'No printable documents available for the requested orders.' });
+      }
+
+      const mergedPdf = await mergePdfBuffers(mergedParts);
+      const mergedBuffer = normaliseBuffer(mergedPdf);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="print-queue-bundle.pdf"');
+      res.setHeader('X-Printed-Order-Ids', JSON.stringify(printableOrderIds));
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        cleanupCachedFiles(cachedPaths).catch((error) =>
+          console.warn('Failed to clean cached print queue PDFs:', error?.message || error)
+        );
+      };
+
+      res.on('finish', cleanup);
+      res.on('close', cleanup);
+
+      res.send(mergedBuffer);
+    } catch (error) {
+      console.error('Failed to generate print queue bundle:', error);
+      res.status(500).json({ error: 'Failed to build print queue bundle' });
     }
   });
 
@@ -155,9 +629,22 @@ function createOrdersRouter({
 
   router.post('/submit-order', async (req, res) => {
     try {
-      const orderData = req.body;
+      const incomingData = req.body || {};
+      const recaptchaToken = incomingData.recaptchaToken || null;
+      const recaptchaAction = incomingData.recaptchaAction || 'submit_order';
+      const orderData = { ...incomingData };
+      delete orderData.recaptchaToken;
+      delete orderData.recaptchaAction;
+
       if (!orderData?.shippingInfo || !orderData?.estimatedQuote) {
         return res.status(400).json({ error: 'Invalid order data' });
+      }
+
+      let recaptchaResult = null;
+      try {
+        recaptchaResult = await verifyRecaptchaToken(recaptchaToken, recaptchaAction, req.ip);
+      } catch (verificationError) {
+        console.error('Unexpected error during reCAPTCHA verification:', verificationError);
       }
 
       const fullStateName = orderData.shippingInfo.state;
@@ -254,6 +741,24 @@ function createOrdersRouter({
         status: newOrderStatus,
         id: orderId,
       };
+
+      if (recaptchaResult) {
+        const recaptchaSummary = {
+          score: typeof recaptchaResult.score === 'number' ? recaptchaResult.score : null,
+          action: recaptchaResult.action || null,
+          expectedAction: recaptchaResult.expectedAction || null,
+          success: Boolean(recaptchaResult.success),
+          hostname: recaptchaResult.hostname || null,
+          challengeTs: recaptchaResult.challenge_ts || null,
+          errorCodes: Array.isArray(recaptchaResult['error-codes'])
+            ? recaptchaResult['error-codes']
+            : recaptchaResult.errorCodes || null,
+          verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        toSave.recaptcha = recaptchaSummary;
+      }
+
       await writeOrderBoth(orderId, toSave);
 
       res.status(201).json({ message: 'Order submitted', orderId: orderId });
@@ -587,44 +1092,26 @@ function createOrdersRouter({
       }
 
       const order = { id: doc.id, ...doc.data() };
-      const labelUrlCandidates = [];
+      const { buffers, cachedPaths } = await collectOrderPrintBuffers(order);
 
-      if (order.shippingPreference === 'Shipping Kit Requested') {
-        labelUrlCandidates.push(order.outboundLabelUrl, order.inboundLabelUrl);
-      } else if (order.uspsLabelUrl) {
-        labelUrlCandidates.push(order.uspsLabelUrl);
-      } else {
-        labelUrlCandidates.push(order.outboundLabelUrl, order.inboundLabelUrl);
+      if (!buffers.length) {
+        return res.status(404).json({ error: 'No printable documents available for this order.' });
       }
 
-      const uniqueLabelUrls = Array.from(
-        new Set(labelUrlCandidates.filter(Boolean))
-      );
+      const merged = await mergePdfBuffers(buffers);
+      const mergedBuffer = normaliseBuffer(merged);
 
-      const downloadedLabels = await Promise.all(
-        uniqueLabelUrls.map(async (url) => {
-          try {
-            const response = await axios.get(url, { responseType: 'arraybuffer' });
-            return Buffer.from(response.data);
-          } catch (downloadError) {
-            console.error(
-              `Failed to download label from ${url}:`,
-              downloadError.message || downloadError
-            );
-            return null;
-          }
-        })
-      );
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        cleanupCachedFiles(cachedPaths).catch((error) =>
+          console.warn(`Failed to clean cached PDFs for order ${order.id}:`, error?.message || error)
+        );
+      };
 
-      const bagLabelData = await generateBagLabelPdf(order);
-
-      const pdfParts = [
-        ...downloadedLabels.filter(Boolean),
-        Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData),
-      ].filter(Boolean);
-
-      const merged = await mergePdfBuffers(pdfParts);
-      const mergedBuffer = Buffer.isBuffer(merged) ? merged : Buffer.from(merged);
+      res.on('finish', cleanup);
+      res.on('close', cleanup);
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(
@@ -635,100 +1122,6 @@ function createOrdersRouter({
     } catch (error) {
       console.error('Failed to generate print bundle:', error);
       res.status(500).json({ error: 'Failed to prepare print bundle' });
-    }
-  });
-
-  router.post('/print-bundle/bulk', async (req, res) => {
-    try {
-      const rawIds = Array.isArray(req.body?.orderIds) ? req.body.orderIds : [];
-      const orderIds = rawIds
-        .map((id) => (typeof id === 'string' ? id.trim() : String(id || '').trim()))
-        .filter(Boolean);
-
-      if (!orderIds.length) {
-        return res.status(400).json({ error: 'orderIds array is required.' });
-      }
-
-      const uniqueIds = Array.from(new Set(orderIds));
-      const pdfBuffers = [];
-      const printed = [];
-      const skipped = [];
-
-      for (const orderId of uniqueIds) {
-        try {
-          const doc = await ordersCollection.doc(orderId).get();
-          if (!doc.exists) {
-            skipped.push({ id: orderId, reason: 'not_found' });
-            continue;
-          }
-
-          const order = { id: doc.id, ...doc.data() };
-          const preference = (order.shippingPreference || '').toString().toLowerCase();
-          if (preference !== 'shipping kit requested') {
-            skipped.push({ id: orderId, reason: 'not_kit_order' });
-            continue;
-          }
-
-          const labelUrls = [order.outboundLabelUrl, order.inboundLabelUrl]
-            .filter((url) => typeof url === 'string' && url.trim());
-
-          if (labelUrls.length < 2) {
-            skipped.push({ id: orderId, reason: 'missing_labels' });
-            continue;
-          }
-
-          const downloadedLabels = await Promise.all(
-            labelUrls.map(async (url) => {
-              try {
-                const response = await axios.get(url, { responseType: 'arraybuffer' });
-                return Buffer.from(response.data);
-              } catch (downloadError) {
-                console.error(
-                  `Failed to download label for order ${orderId} from ${url}:`,
-                  downloadError.message || downloadError
-                );
-                return null;
-              }
-            })
-          );
-
-          const validLabels = downloadedLabels.filter(Boolean);
-          if (!validLabels.length) {
-            skipped.push({ id: orderId, reason: 'label_download_failed' });
-            continue;
-          }
-
-          const bagLabelData = await generateBagLabelPdf(order);
-          const bagBuffer = Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData);
-
-          pdfBuffers.push(...validLabels, bagBuffer);
-          printed.push(orderId);
-        } catch (orderError) {
-          console.error(
-            `Failed to prepare bundle for order ${orderId}:`,
-            orderError.message || orderError
-          );
-          skipped.push({ id: orderId, reason: 'processing_error' });
-        }
-      }
-
-      if (!pdfBuffers.length) {
-        return res.status(400).json({
-          error: 'No valid orders were provided for bulk printing.',
-          printed,
-          skipped,
-        });
-      }
-
-      const merged = await mergePdfBuffers(pdfBuffers);
-      const mergedBuffer = Buffer.isBuffer(merged) ? merged : Buffer.from(merged);
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename="bulk-print-bundle.pdf"');
-      res.send(mergedBuffer);
-    } catch (error) {
-      console.error('Failed to generate bulk print bundle:', error);
-      res.status(500).json({ error: 'Failed to prepare bulk print bundle' });
     }
   });
 

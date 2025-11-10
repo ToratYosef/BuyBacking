@@ -14,6 +14,36 @@ const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 const initialAuthToken = null;
 
+const globalWindow = typeof window !== 'undefined' ? window : {};
+const RECAPTCHA_SITE_KEY = globalWindow.RECAPTCHA_SITE_KEY || '6LfltQcsAAAAAJb9Q5rWRlzSGA-O-SbXvYfjC1-k';
+
+async function executeRecaptcha(action = 'submit_order') {
+  if (typeof window === 'undefined' || !RECAPTCHA_SITE_KEY) {
+    return null;
+  }
+
+  if (typeof window.grecaptcha === 'undefined' || !window.grecaptcha?.ready) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    try {
+      window.grecaptcha.ready(() => {
+        window.grecaptcha
+          .execute(RECAPTCHA_SITE_KEY, { action })
+          .then((token) => resolve(token || null))
+          .catch((error) => {
+            console.warn('reCAPTCHA execution failed:', error);
+            resolve(null);
+          });
+      });
+    } catch (error) {
+      console.warn('reCAPTCHA is not available:', error);
+      resolve(null);
+    }
+  });
+}
+
 const app = firebaseApp;
 const analytics = getAnalytics(app);
 const db = getFirestore(app);
@@ -911,19 +941,29 @@ termsAccepted: document.getElementById('termsAccepted').checked,
 userId: auth.currentUser?.uid || currentUserId,
 };
 
-if (selectedPayment.value === 'venmo') {
-orderData.paymentDetails.venmoUsername = document.getElementById('venmoUsername').value;
-} else if (selectedPayment.value === 'zelle') {
-orderData.paymentDetails.zelleIdentifier = document.getElementById('zelleIdentifier').value;
-} else if (selectedPayment.value === 'paypal') {
-orderData.paymentDetails.paypalEmail = document.getElementById('paypalEmail').value;
-}
+  if (selectedPayment.value === 'venmo') {
+    orderData.paymentDetails.venmoUsername = document.getElementById('venmoUsername').value;
+  } else if (selectedPayment.value === 'zelle') {
+    orderData.paymentDetails.zelleIdentifier = document.getElementById('zelleIdentifier').value;
+  } else if (selectedPayment.value === 'paypal') {
+    orderData.paymentDetails.paypalEmail = document.getElementById('paypalEmail').value;
+  }
 
-// --- 3. Send to Backend ---
-try {
-const response = await fetch(`${BACKEND_API_URL}/submit-order`, {
-method: 'POST',
-headers: {
+  try {
+    const token = await executeRecaptcha('submit_order');
+    if (token) {
+      orderData.recaptchaToken = token;
+      orderData.recaptchaAction = 'submit_order';
+    }
+  } catch (recaptchaError) {
+    console.warn('Unable to fetch reCAPTCHA token:', recaptchaError);
+  }
+
+  // --- 3. Send to Backend ---
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/submit-order`, {
+      method: 'POST',
+      headers: {
 'Content-Type': 'application/json',
 },
 body: JSON.stringify(orderData),
