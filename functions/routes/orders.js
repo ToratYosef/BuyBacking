@@ -1,925 +1,530 @@
 const express = require('express');
+const router = express.Router();
+const { getFirestore } = require('firebase-admin/firestore');
+const admin = require("firebase-admin");
+const axios = require('axios');
+const functions = require('firebase-functions');
 
-function createOrdersRouter({
-  axios,
-  admin,
-  ordersCollection,
-  adminsCollection,
-  writeOrderBoth,
-  updateOrderBoth,
-  generateNextOrderNumber,
-  stateAbbreviations,
-  templates,
-  notifications,
-  pdf,
-  shipEngine,
-  createShipEngineLabel,
-  transporter,
-}) {
-  const router = express.Router();
+// Corrected import from the helpers module
+const {
+    ordersCollection,
+    usersCollection,
+    adminsCollection,
+    writeOrderBoth,
+    updateOrderBoth
+} = require('../db/db');
+const { sendAdminPushNotification, addAdminFirestoreNotification, sendEmail } = require('../services/notifications');
+const { sendZendeskComment } = require('../services/zendesk');
+const { generateNextOrderNumber, formatStatusForEmail } = require('../helpers/order');
+const { ORDER_RECEIVED_EMAIL_HTML, DEVICE_RECEIVED_EMAIL_HTML } = require('../helpers/templates');
+const { DEFAULT_CARRIER_CODE, buildKitTrackingUpdate } = require('../helpers/shipengine');
 
-  const {
-    ORDER_RECEIVED_EMAIL_HTML,
-    ORDER_PLACED_ADMIN_EMAIL_HTML,
-    SHIPPING_KIT_EMAIL_HTML,
-    SHIPPING_LABEL_EMAIL_HTML,
-  } = templates;
-  const { sendAdminPushNotification, addAdminFirestoreNotification } = notifications;
-  const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = pdf;
-  const {
-    cloneShipEngineLabelMap,
-    buildLabelIdList,
-    isLabelPendingVoid,
-    handleLabelVoid,
-    sendVoidNotificationEmail,
-  } = shipEngine;
-
-  const PRINT_QUEUE_STATUSES = [
-    'shipping_kit_requested',
-    'kit_needs_printing',
-    'needs_printing',
-  ];
-
-  function toMillis(value) {
-    if (!value) return null;
-    if (typeof value === 'number') return value;
-    if (typeof value.toMillis === 'function') return value.toMillis();
-    if (typeof value === 'object') {
-      const seconds = value._seconds ?? value.seconds ?? null;
-      if (typeof seconds === 'number') {
-        const nanos = value._nanoseconds ?? value.nanoseconds ?? 0;
-        return seconds * 1000 + Math.floor(nanos / 1e6);
-      }
-    }
-    return null;
-  }
-
-  function resolveCreatedAtMillis(order = {}) {
-    const candidates = [
-      order.createdAt,
-      order.created_at,
-      order.createdAtMillis,
-      order.createdAtMs,
-      order.created_at_ms,
-      order.created_at_millis,
-    ];
-
-    for (const candidate of candidates) {
-      const millis = toMillis(candidate);
-      if (millis) {
-        return millis;
-      }
-    }
-
-    if (typeof order.createdAtSeconds === 'number') {
-      return order.createdAtSeconds * 1000;
-    }
-
-    return null;
-  }
-
-  function normaliseBuffer(data) {
-    if (!data) return null;
-    return Buffer.isBuffer(data) ? data : Buffer.from(data);
-  }
-
-  function collectLabelUrlCandidates(order = {}) {
-    const urls = new Set();
-    const pushUrl = (value) => {
-      if (!value) return;
-      const stringValue = String(value).trim();
-      if (!stringValue) return;
-      if (/^https?:\/\//i.test(stringValue)) {
-        urls.add(stringValue);
-      }
-    };
-
-    pushUrl(order.outboundLabelUrl);
-    pushUrl(order.inboundLabelUrl);
-    pushUrl(order.uspsLabelUrl);
-
-    Object.keys(order)
-      .filter((key) => key && key.toLowerCase().includes('label') && key.toLowerCase().includes('url'))
-      .forEach((key) => pushUrl(order[key]));
-
-    const collections = [order.shipEngineLabels, order.labelRecords, order.labels, order.labelUrls];
-
-    collections.forEach((collection) => {
-      if (!collection) return;
-      if (Array.isArray(collection)) {
-        collection.forEach((entry) => {
-          if (!entry) return;
-          if (typeof entry === 'string') {
-            pushUrl(entry);
-            return;
-          }
-          if (typeof entry === 'object') {
-            Object.values(entry).forEach((value) => pushUrl(value));
-            if (entry.label_download && typeof entry.label_download === 'object') {
-              Object.values(entry.label_download).forEach((value) => pushUrl(value));
-            }
-          }
-        });
-      } else if (typeof collection === 'object') {
-        Object.values(collection).forEach((entry) => {
-          if (!entry) return;
-          if (typeof entry === 'string') {
-            pushUrl(entry);
-            return;
-          }
-          if (typeof entry === 'object') {
-            Object.values(entry).forEach((value) => pushUrl(value));
-            if (entry.label_download && typeof entry.label_download === 'object') {
-              Object.values(entry.label_download).forEach((value) => pushUrl(value));
-            }
-          }
-        });
-      }
-    });
-
-    return urls;
-  }
-
-  async function fetchPrintQueueOrders(orderIds = []) {
-    const results = new Map();
-
-    if (Array.isArray(orderIds) && orderIds.length) {
-      const docs = await Promise.all(
-        orderIds.map((id) =>
-          ordersCollection
-            .doc(String(id))
-            .get()
-            .catch((error) => {
-              console.error(`Failed to load order ${id} for print queue:`, error);
-              return null;
-            })
-        )
-      );
-
-      docs.forEach((doc) => {
-        if (doc && doc.exists) {
-          results.set(doc.id, { id: doc.id, ...doc.data() });
-        }
-      });
-    } else {
-      await Promise.all(
-        PRINT_QUEUE_STATUSES.map(async (status) => {
-          try {
-            const snapshot = await ordersCollection.where('status', '==', status).get();
-            snapshot.docs.forEach((doc) => {
-              results.set(doc.id, { id: doc.id, ...doc.data() });
-            });
-          } catch (error) {
-            console.error(`Failed to load ${status} orders for print queue:`, error);
-          }
-        })
-      );
-    }
-
-    const orders = Array.from(results.values());
-    orders.sort((a, b) => {
-      const aMillis = resolveCreatedAtMillis(a) ?? Number.MAX_SAFE_INTEGER;
-      const bMillis = resolveCreatedAtMillis(b) ?? Number.MAX_SAFE_INTEGER;
-      return aMillis - bMillis;
-    });
-    return orders;
-  }
-
-  function serialisePrintQueueOrder(order = {}) {
-    const shippingInfo = order.shippingInfo || {};
-    const labelUrls = Array.from(collectLabelUrlCandidates(order));
-
-    return {
-      id: order.id,
-      status: order.status || null,
-      shippingPreference: order.shippingPreference || null,
-      shippingInfo: {
-        fullName: shippingInfo.fullName || shippingInfo.name || '',
-        email: shippingInfo.email || '',
-        phone:
-          shippingInfo.phone ||
-          shippingInfo.phoneNumber ||
-          shippingInfo.phone_number ||
-          shippingInfo.contactPhone ||
-          '',
-        city: shippingInfo.city || '',
-        state: shippingInfo.state || '',
-      },
-      device: order.device || '',
-      brand: order.brand || '',
-      storage: order.storage || order.memory || '',
-      carrier: order.carrier || '',
-      estimatedQuote:
-        typeof order.estimatedQuote === 'number'
-          ? order.estimatedQuote
-          : Number(order.estimatedQuote) || null,
-      createdAtMillis: resolveCreatedAtMillis(order),
-      labelUrls,
-    };
-  }
-
-  async function downloadPdfBuffer(url) {
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
-    return Buffer.from(response.data);
-  }
-
-  async function collectOrderPrintBuffers(order) {
-    const buffers = [];
-    const labelUrls = Array.from(collectLabelUrlCandidates(order));
-
-    await Promise.all(
-      labelUrls.map(async (url) => {
-        try {
-          const buffer = await downloadPdfBuffer(url);
-          buffers.push(buffer);
-        } catch (error) {
-          console.error(`Failed to download label for order ${order.id} from ${url}:`, error.message || error);
-        }
-      })
-    );
-
+// Get all orders (Admin only)
+router.get("/orders", async (req, res) => {
     try {
-      const infoLabel = await generateCustomLabelPdf(order);
-      const infoBuffer = normaliseBuffer(infoLabel);
-      if (infoBuffer) {
-        buffers.push(infoBuffer);
-      }
-    } catch (error) {
-      console.error(`Failed to generate info label PDF for order ${order.id}:`, error);
-    }
-
-    try {
-      const bagLabel = await generateBagLabelPdf(order);
-      const bagBuffer = normaliseBuffer(bagLabel);
-      if (bagBuffer) {
-        buffers.push(bagBuffer);
-      }
-    } catch (error) {
-      console.error(`Failed to generate bag label PDF for order ${order.id}:`, error);
-    }
-
-    return buffers;
-  }
-
-  router.post('/fetch-pdf', async (req, res) => {
-    const { url } = req.body;
-
-    if (!url) {
-      return res.status(400).json({ error: 'PDF URL is required.' });
-    }
-
-    try {
-      const response = await axios.get(url, {
-        responseType: 'arraybuffer',
-      });
-
-      const base64Data = Buffer.from(response.data).toString('base64');
-
-      res.json({
-        base64: base64Data,
-        mimeType: response.headers['content-type'] || 'application/pdf',
-      });
-    } catch (error) {
-      console.error('Error fetching external PDF:', error.message);
-      if (error.response) {
-        console.error('External API Response Status:', error.response.status);
-        console.error(
-          'External API Response Data (partial):',
-          error.response.data
-            ? Buffer.from(error.response.data)
-                .toString('utf-8')
-                .substring(0, 200)
-            : 'No data'
-        );
-        return res.status(error.response.status).json({
-          error: `Failed to fetch PDF from external service. Status: ${error.response.status}`,
-          details: error.message,
-        });
-      }
-      res.status(500).json({ error: 'Internal server error during PDF proxy fetch.' });
-    }
-  });
-
-  router.get('/orders', async (req, res) => {
-    try {
-      const snapshot = await ordersCollection.get();
-      const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      res.json(orders);
+        const snapshot = await ordersCollection.get();
+        const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        res.json(orders);
     } catch (err) {
-      console.error('Error fetching orders:', err);
-      res.status(500).json({ error: 'Failed to fetch orders' });
+        console.error("Error fetching orders:", err);
+        res.status(500).json({ error: "Failed to fetch orders" });
     }
-  });
+});
 
-  router.get('/orders/needs-printing', async (req, res) => {
+// Get a single order by its SHC-XXXXX order ID
+router.get("/orders/:id", async (req, res) => {
     try {
-      const orders = await fetchPrintQueueOrders();
-      const payload = orders.map(serialisePrintQueueOrder);
-      res.json({ orders: payload });
-    } catch (error) {
-      console.error('Failed to load print queue orders:', error);
-      res.status(500).json({ error: 'Failed to load print queue orders' });
-    }
-  });
-
-  router.post('/orders/needs-printing/bundle', async (req, res) => {
-    try {
-      const orderIds = Array.isArray(req.body?.orderIds)
-        ? req.body.orderIds.filter(Boolean)
-        : [];
-
-      const orders = await fetchPrintQueueOrders(orderIds);
-      if (!orders.length) {
-        return res.status(404).json({ error: 'No orders require printing.' });
-      }
-
-      const printableOrderIds = [];
-      const mergedParts = [];
-
-      for (const order of orders) {
-        const parts = await collectOrderPrintBuffers(order);
-        if (!parts.length) {
-          console.warn(`No printable documents generated for order ${order.id}`);
-          continue;
+        const docRef = ordersCollection.doc(req.params.id);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
         }
-        printableOrderIds.push(order.id);
-        mergedParts.push(...parts);
-      }
-
-      if (!mergedParts.length) {
-        return res
-          .status(404)
-          .json({ error: 'No printable documents available for the requested orders.' });
-      }
-
-      const mergedPdf = await mergePdfBuffers(mergedParts);
-      const mergedBuffer = normaliseBuffer(mergedPdf);
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'inline; filename="print-queue-bundle.pdf"');
-      res.setHeader('X-Printed-Order-Ids', JSON.stringify(printableOrderIds));
-      res.send(mergedBuffer);
-    } catch (error) {
-      console.error('Failed to generate print queue bundle:', error);
-      res.status(500).json({ error: 'Failed to build print queue bundle' });
-    }
-  });
-
-  router.get('/orders/:id', async (req, res) => {
-    try {
-      const docRef = ordersCollection.doc(req.params.id);
-      const doc = await docRef.get();
-      if (!doc.exists) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
-      res.json({ id: doc.id, ...doc.data() });
+        res.json({ id: doc.id, ...doc.data() });
     } catch (err) {
-      console.error('Error fetching single order:', err);
-      res.status(500).json({ error: 'Failed to fetch order' });
+        console.error("Error fetching single order:", err);
+        res.status(500).json({ error: "Failed to fetch order" });
     }
-  });
+});
 
-  router.get('/orders/find', async (req, res) => {
+// Find by identifier (SHC-XXXXX or other external ID)
+router.get("/orders/find", async (req, res) => {
     try {
-      const { identifier } = req.query;
-      if (!identifier) {
-        return res
-          .status(400)
-          .json({ error: 'Identifier query parameter is required.' });
-      }
+        const { identifier } = req.query;
+        if (!identifier) {
+            return res.status(400).json({ error: "Identifier query parameter is required." });
+        }
 
-      let orderDoc;
-      if (identifier.match(/^SHC-\d{5}$/)) {
-        orderDoc = await ordersCollection.doc(identifier).get();
-      } else if (identifier.length === 26 && identifier.match(/^\d+$/)) {
+        let orderDoc;
+        if (identifier.match(/^SHC-\d{5}$/)) {
+            orderDoc = await ordersCollection.doc(identifier).get();
+        } else {
+            const snapshot = await ordersCollection
+                .where("externalId", "==", identifier)
+                .limit(1)
+                .get();
+            if (!snapshot.empty) {
+                orderDoc = snapshot.docs[0];
+            }
+        }
+
+        if (!orderDoc || !orderDoc.exists) {
+            return res.status(404).json({ error: "Order not found with provided identifier." });
+        }
+
+        res.json({ id: orderDoc.id, ...orderDoc.data() });
+    } catch (err) {
+        console.error("Error finding order:", err);
+        res.status(500).json({ error: "Failed to find order" });
+    }
+});
+
+// Get all orders for a specific user ID (from top-level collection)
+router.get("/orders/by-user/:userId", async (req, res) => {
+    try {
+        const { userId } = req.params;
+        if (!userId) {
+            return res.status(400).json({ error: "User ID is required." });
+        }
+
         const snapshot = await ordersCollection
-          .where('externalId', '==', identifier)
-          .limit(1)
-          .get();
-        if (!snapshot.empty) {
-          orderDoc = snapshot.docs[0];
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .get();
+        const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+        res.json(orders);
+    } catch (err) {
+        console.error("Error fetching user's orders:", err);
+        res.status(500).json({ error: "Failed to fetch user orders" });
+    }
+});
+
+// Submit a new order
+router.post("/submit-order", async (req, res) => {
+    try {
+        const orderData = req.body;
+        if (!orderData?.shippingInfo || !orderData?.estimatedQuote) {
+            return res.status(400).json({ error: "Invalid order data" });
         }
-      }
+        
+        // This is a public route, so we can't get the UID from req.user
+        // unless the user is logged in.
+        const userId = req.headers['x-user-id'] || null;
 
-      if (!orderDoc || !orderDoc.exists) {
-        return res
-          .status(404)
-          .json({ error: 'Order not found with provided identifier.' });
-      }
+        const orderId = await generateNextOrderNumber();
 
-      res.json({ id: orderDoc.id, ...orderDoc.data() });
-    } catch (err) {
-      console.error('Error finding order:', err);
-      res.status(500).json({ error: 'Failed to find order' });
-    }
-  });
+        let shippingInstructions = "";
+        let newOrderStatus = "order_pending";
 
-  router.get('/orders/by-user/:userId', async (req, res) => {
-    try {
-      const { userId } = req.params;
-      if (!userId) {
-        return res.status(400).json({ error: 'User ID is required.' });
-      }
-
-      const snapshot = await ordersCollection
-        .where('userId', '==', userId)
-        .orderBy('createdAt', 'desc')
-        .get();
-      const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-
-      res.json(orders);
-    } catch (err) {
-      console.error("Error fetching user's orders:", err);
-      res.status(500).json({ error: "Failed to fetch user orders" });
-    }
-  });
-
-  router.post('/submit-order', async (req, res) => {
-    try {
-      const orderData = req.body;
-      if (!orderData?.shippingInfo || !orderData?.estimatedQuote) {
-        return res.status(400).json({ error: 'Invalid order data' });
-      }
-
-      const fullStateName = orderData.shippingInfo.state;
-      if (fullStateName && stateAbbreviations[fullStateName]) {
-        orderData.shippingInfo.state = stateAbbreviations[fullStateName];
-      } else {
-        console.warn(
-          `Could not find abbreviation for state: ${fullStateName}. Assuming it is already an abbreviation or is invalid.`
-        );
-      }
-
-      const orderId = await generateNextOrderNumber();
-
-      let shippingInstructions = '';
-      let newOrderStatus = 'order_pending';
-
-      if (orderData.shippingPreference === 'Shipping Kit Requested') {
-        shippingInstructions = `
-        <p style="margin-top: 24px;">Please note: You requested a shipping kit, which will be sent to you shortly. When it arrives, you'll find a return label inside to send us your device.</p>
-        <p>If you have any questions, please reply to this email.</p>
-      `;
-        newOrderStatus = 'shipping_kit_requested';
-      } else {
-        shippingInstructions = `
-        <p style="margin-top: 24px;">We will send your shipping label shortly.</p>
-        <p>If you have any questions, please reply to this email.</p>
-      `;
-      }
-
-      const customerEmailHtml = ORDER_RECEIVED_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*DEVICE_NAME\*\*/g, `${orderData.device} ${orderData.storage}`)
-        .replace(/\*\*SHIPPING_INSTRUCTION\*\*/g, shippingInstructions);
-
-      const adminEmailHtml = ORDER_PLACED_ADMIN_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
-        .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*DEVICE_NAME\*\*/g, `${orderData.device} ${orderData.storage}`)
-        .replace(/\*\*ESTIMATED_QUOTE\*\*/g, orderData.estimatedQuote.toFixed(2))
-        .replace(/\*\*SHIPPING_PREFERENCE\*\*/g, orderData.shippingPreference);
-
-      const customerMailOptions = {
-        from: process.env.EMAIL_USER,
-        to: orderData.shippingInfo.email,
-        subject: `Your SecondHandCell Order #${orderId} Has Been Received!`,
-        html: customerEmailHtml,
-      };
-
-      const adminMailOptions = {
-        from: process.env.EMAIL_USER,
-        to: 'sales@secondhandcell.com',
-        subject: `${orderData.shippingInfo.fullName} - placed an order for a ${orderData.device}`,
-        html: adminEmailHtml,
-        bcc: ['saulsetton16@gmail.com'],
-      };
-
-      const notificationPromises = [
-        transporter.sendMail(customerMailOptions),
-        transporter.sendMail(adminMailOptions),
-        sendAdminPushNotification(
-          '⚡ New Order Placed!',
-          `Order #${orderId} for ${orderData.device} from ${orderData.shippingInfo.fullName}.`,
-          {
-            orderId: orderId,
-            userId: orderData.userId || 'guest',
-            relatedDocType: 'order',
-            relatedDocId: orderId,
-            relatedUserId: orderData.userId,
-          }
-        ).catch((e) => console.error('FCM Send Error (New Order):', e)),
-      ];
-
-      const adminsSnapshot = await adminsCollection.get();
-      adminsSnapshot.docs.forEach((adminDoc) => {
-        notificationPromises.push(
-          addAdminFirestoreNotification(
-            adminDoc.id,
-            `New Order: #${orderId} from ${orderData.shippingInfo.fullName}.`,
-            'order',
-            orderId,
-            orderData.userId
-          ).catch((e) =>
-            console.error('Firestore Notification Error (New Order):', e)
-          )
-        );
-      });
-
-      await Promise.all(notificationPromises);
-
-      const toSave = {
-        ...orderData,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: newOrderStatus,
-        id: orderId,
-      };
-      await writeOrderBoth(orderId, toSave);
-
-      res.status(201).json({ message: 'Order submitted', orderId: orderId });
-    } catch (err) {
-      console.error('Error submitting order:', err);
-      res.status(500).json({ error: 'Failed to submit order' });
-    }
-  });
-
-  router.post('/generate-label/:id', async (req, res) => {
-    try {
-      const doc = await ordersCollection.doc(req.params.id).get();
-      if (!doc.exists) return res.status(404).json({ error: 'Order not found' });
-
-      const order = { id: doc.id, ...doc.data() };
-      const buyerShippingInfo = order.shippingInfo;
-      const orderIdForLabel = order.id || 'N/A';
-      const nowTimestamp = admin.firestore.Timestamp.now();
-      const statusTimestamp = nowTimestamp;
-      const labelRecords = cloneShipEngineLabelMap(order.shipEngineLabels);
-      const generatedStatus =
-        order.shippingPreference === 'Shipping Kit Requested'
-          ? 'needs_printing'
-          : 'label_generated';
-
-      const outboundPackageData = {
-        service_code: 'usps_first_class_mail',
-        dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
-        weight: { ounces: 4, unit: 'ounce' },
-      };
-
-      const inboundPackageData = {
-        service_code: 'usps_first_class_mail',
-        dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
-        weight: { ounces: 8, unit: 'ounce' },
-      };
-
-      const swiftBuyBackAddress = {
-        name: 'SHC Returns',
-        company_name: 'SecondHandCell',
-        phone: '3475591707',
-        address_line1: '1602 MCDONALD AVE STE REAR ENTRANCE',
-        city_locality: 'Brooklyn',
-        state_province: 'NY',
-        postal_code: '11230-6336',
-        country_code: 'US',
-      };
-
-      const buyerAddress = {
-        name: buyerShippingInfo.fullName,
-        phone: '3475591707',
-        address_line1: buyerShippingInfo.streetAddress,
-        city_locality: buyerShippingInfo.city,
-        state_province: buyerShippingInfo.state,
-        postal_code: buyerShippingInfo.zipCode,
-        country_code: 'US',
-      };
-
-      let customerLabelData;
-      let updateData = {
-        status: generatedStatus,
-        labelGeneratedAt: statusTimestamp,
-        lastStatusUpdateAt: statusTimestamp,
-      };
-      if (generatedStatus === 'needs_printing') {
-        updateData.needsPrintingAt = statusTimestamp;
-      }
-      let customerEmailSubject = '';
-      let customerEmailHtml = '';
-      let customerMailOptions;
-
-      if (order.shippingPreference === 'Shipping Kit Requested') {
-        const outboundLabelData = await createShipEngineLabel(
-          swiftBuyBackAddress,
-          buyerAddress,
-          `${orderIdForLabel}-OUTBOUND-KIT`,
-          outboundPackageData
-        );
-
-        const inboundLabelData = await createShipEngineLabel(
-          buyerAddress,
-          swiftBuyBackAddress,
-          `${orderIdForLabel}-INBOUND-DEVICE`,
-          inboundPackageData
-        );
-
-        customerLabelData = outboundLabelData;
-
-        labelRecords.outbound = {
-          id:
-            outboundLabelData.label_id ||
-            outboundLabelData.labelId ||
-            outboundLabelData.shipengine_label_id ||
-            null,
-          trackingNumber: outboundLabelData.tracking_number || null,
-          downloadUrl: outboundLabelData.label_download?.pdf || null,
-          carrierCode:
-            outboundLabelData.shipment?.carrier_id ||
-            outboundLabelData.carrier_code ||
-            null,
-          serviceCode:
-            outboundLabelData.shipment?.service_code ||
-            outboundPackageData.service_code ||
-            null,
-          generatedAt: nowTimestamp,
-          createdAt: nowTimestamp,
-          status: 'active',
-          voidStatus: 'active',
-          message: null,
-          displayName: 'Outbound Shipping Label',
-          labelReference: `${orderIdForLabel}-OUTBOUND-KIT`,
-        };
-
-        labelRecords.inbound = {
-          id:
-            inboundLabelData.label_id ||
-            inboundLabelData.labelId ||
-            inboundLabelData.shipengine_label_id ||
-            null,
-          trackingNumber: inboundLabelData.tracking_number || null,
-          downloadUrl: inboundLabelData.label_download?.pdf || null,
-          carrierCode:
-            inboundLabelData.shipment?.carrier_id ||
-            inboundLabelData.carrier_code ||
-            null,
-          serviceCode:
-            inboundLabelData.shipment?.service_code ||
-            inboundPackageData.service_code ||
-            null,
-          generatedAt: nowTimestamp,
-          createdAt: nowTimestamp,
-          status: 'active',
-          voidStatus: 'active',
-          message: null,
-          displayName: 'Inbound Shipping Label',
-          labelReference: `${orderIdForLabel}-INBOUND-DEVICE`,
-        };
-
-        updateData = {
-          ...updateData,
-          outboundLabelUrl: outboundLabelData.label_download?.pdf,
-          outboundTrackingNumber: outboundLabelData.tracking_number,
-          inboundLabelUrl: inboundLabelData.label_download?.pdf,
-          inboundTrackingNumber: inboundLabelData.tracking_number,
-          uspsLabelUrl: inboundLabelData.label_download?.pdf,
-          trackingNumber: inboundLabelData.tracking_number,
-        };
-
-        customerEmailSubject = `Your SecondHandCell Shipping Kit for Order #${order.id} is on its Way!`;
-        customerEmailHtml = SHIPPING_KIT_EMAIL_HTML
-          .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-          .replace(/\*\*ORDER_ID\*\*/g, order.id)
-          .replace(
-            /\*\*TRACKING_NUMBER\*\*/g,
-            customerLabelData.tracking_number || 'N/A'
-          );
-
-        customerMailOptions = {
-          from: process.env.EMAIL_USER,
-          to: order.shippingInfo.email,
-          subject: customerEmailSubject,
-          html: customerEmailHtml,
-        };
-      } else if (order.shippingPreference === 'Email Label Requested') {
-        customerLabelData = await createShipEngineLabel(
-          buyerAddress,
-          swiftBuyBackAddress,
-          `${orderIdForLabel}-INBOUND-DEVICE`,
-          inboundPackageData
-        );
-
-        const labelDownloadLink = customerLabelData.label_download?.pdf;
-        if (!labelDownloadLink) {
-          console.error(
-            'ShipEngine did not return a downloadable label PDF for order:',
-            order.id,
-            customerLabelData
-          );
-          throw new Error('Label PDF link not available from ShipEngine.');
+        if (orderData.shippingPreference === "Shipping Kit Requested") {
+            shippingInstructions = `
+                <p style="margin-top: 24px;">Please note: You requested a shipping kit, which will be sent to you shortly. When it arrives, you'll find a return label inside to send us your device.</p>
+                <p>If you have any questions, please reply to this email.</p>
+            `;
+            newOrderStatus = "kit_needs_printing";
+        } else {
+            shippingInstructions = `
+                <p style="margin-top: 24px;">We will send your shipping label in a separate email shortly.</p>
+                <p>If you have any questions, please reply to this email.</p>
+            `;
         }
 
-        labelRecords.email = {
-          id:
-            customerLabelData.label_id ||
-            customerLabelData.labelId ||
-            customerLabelData.shipengine_label_id ||
-            null,
-          trackingNumber: customerLabelData.tracking_number || null,
-          downloadUrl: labelDownloadLink,
-          carrierCode:
-            customerLabelData.shipment?.carrier_id ||
-            customerLabelData.carrier_code ||
-            null,
-          serviceCode:
-            customerLabelData.shipment?.service_code ||
-            inboundPackageData.service_code ||
-            null,
-          generatedAt: nowTimestamp,
-          createdAt: nowTimestamp,
-          status: 'active',
-          voidStatus: 'active',
-          message: null,
-          displayName: 'Email Shipping Label',
-          labelReference: `${orderIdForLabel}-INBOUND-DEVICE`,
+        const customerEmailHtml = ORDER_RECEIVED_EMAIL_HTML
+            .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
+            .replace(/\*\*ORDER_ID\*\*/g, orderId)
+            .replace(/\*\*DEVICE_NAME\*\*/g, `${orderData.device} ${orderData.storage}`)
+            .replace(/\*\*SHIPPING_INSTRUCTION\*\*/g, shippingInstructions);
+
+        const customerMailOptions = {
+            from: "SecondHandCell <" + functions.config().email.user + ">",
+            to: orderData.shippingInfo.email,
+            subject: `Your SecondHandCell Order #${orderId} Has Been Received!`,
+            html: customerEmailHtml,
         };
 
-        updateData = {
-          ...updateData,
-          uspsLabelUrl: labelDownloadLink,
-          trackingNumber: customerLabelData.tracking_number,
+        const internalSubject = `New Order Placed: #${orderId}`;
+        const internalHtmlBody = `
+            <p>A new order has been placed by <strong>${orderData.shippingInfo.fullName}</strong> (Email: ${orderData.shippingInfo.email}).</p>
+            <p>Order ID: <strong>${orderId}</strong></p>
+            <p>Estimated Quote: <strong>$${orderData.estimatedQuote.toFixed(2)}</strong></p>
+            ${
+                userId
+                    ? `<p>Associated User ID: <strong>${userId}</strong></p>`
+                    : "<p>Not associated with a logged-in user.</p>"
+            }
+            <p><strong>Shipping Preference:</strong> ${orderData.shippingPreference}</p>
+            <p>The current status is: <strong>${formatStatusForEmail(
+                newOrderStatus
+            )}</strong></p>
+            <p>Please generate and send the shipping label from the admin dashboard.</p>
+        `;
+
+        await Promise.all([
+            sendEmail(customerMailOptions),
+            sendZendeskComment({
+                id: orderId,
+                shippingInfo: orderData.shippingInfo
+            }, internalSubject, internalHtmlBody, false),
+            sendAdminPushNotification(
+                "⚡ New Order Placed!",
+                `Order #${orderId} for ${orderData.device} from ${orderData.shippingInfo.fullName}.`,
+                {
+                    orderId: orderId,
+                    userId: userId || "guest",
+                    relatedDocType: "order",
+                    relatedDocId: orderId,
+                    relatedUserId: userId,
+                }
+            ).catch((e) => console.error("FCM Send Error (New Order):", e)),
+            addAdminFirestoreNotification(
+                "New Order",
+                `New Order: #${orderId} from ${orderData.shippingInfo.fullName}.`,
+                "order",
+                orderId,
+                userId
+            ).catch((e) => console.error("Firestore Notification Error (New Order):", e)),
+        ]);
+        
+        const toSave = {
+            ...orderData,
+            userId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            status: newOrderStatus,
+            id: orderId,
         };
+        await writeOrderBoth(orderId, toSave);
 
-        customerEmailSubject = `Your SecondHandCell Shipping Label for Order #${order.id}`;
-        customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
-          .replace(/\*\*CUSTOMER_NAME\*\*/g, order.shippingInfo.fullName)
-          .replace(/\*\*ORDER_ID\*\*/g, order.id)
-          .replace(
-            /\*\*TRACKING_NUMBER\*\*/g,
-            customerLabelData.tracking_number || 'N/A'
-          )
-          .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
-
-        customerMailOptions = {
-          from: process.env.EMAIL_USER,
-          to: order.shippingInfo.email,
-          subject: customerEmailSubject,
-          html: customerEmailHtml,
-        };
-      } else {
-        throw new Error(`Unknown shipping preference: ${order.shippingPreference}`);
-      }
-
-      const labelIds = buildLabelIdList(labelRecords);
-      const hasActive = Object.values(labelRecords).some((entry) =>
-        entry && entry.id ? isLabelPendingVoid(entry) : false
-      );
-
-      updateData = {
-        ...updateData,
-        shipEngineLabels: labelRecords,
-        shipEngineLabelIds: labelIds,
-        shipEngineLabelsLastUpdatedAt: nowTimestamp,
-        hasShipEngineLabel: labelIds.length > 0,
-        hasActiveShipEngineLabel: hasActive,
-        shipEngineLabelId:
-          labelRecords.inbound?.id ||
-          labelRecords.email?.id ||
-          labelIds[0] ||
-          null,
-        labelVoidStatus: labelIds.length ? 'active' : order.labelVoidStatus || null,
-        labelVoidMessage: null,
-      };
-
-      await updateOrderBoth(req.params.id, updateData);
-
-      await transporter.sendMail(customerMailOptions);
-
-      res.json({ message: 'Label(s) generated successfully', orderId: order.id, ...updateData });
+        res.status(201).json({ message: "Order submitted", orderId: orderId });
     } catch (err) {
-      console.error('Error generating label:', err.response?.data || err.message || err);
-      res.status(500).json({ error: 'Failed to generate label' });
+        console.error("Error submitting order:", err);
+        res.status(500).json({ error: "Failed to submit order" });
     }
-  });
+});
 
-  router.post('/orders/:id/void-label', async (req, res) => {
+router.post("/orders/:id/mark-kit-printed", async (req, res) => {
     try {
-      const orderId = req.params.id;
-      const labels = Array.isArray(req.body?.labels) ? req.body.labels : [];
-      if (!labels.length) {
-        return res
-          .status(400)
-          .json({ error: 'Please select at least one label to void.' });
-      }
+        const docRef = ordersCollection.doc(req.params.id);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
 
-      const doc = await ordersCollection.doc(orderId).get();
-      if (!doc.exists) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
+        const order = doc.data();
+        if (order.shippingPreference !== "Shipping Kit Requested") {
+            return res.status(400).json({ error: "Order does not require a shipping kit" });
+        }
 
-      const order = { id: doc.id, ...doc.data() };
-      const { results } = await handleLabelVoid(order, labels, {
-        reason: 'manual',
-      });
+        await updateOrderBoth(req.params.id, {
+            status: "kit_sent",
+            kitPrintedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
 
-      try {
-        await sendVoidNotificationEmail(order, results, { reason: 'manual' });
-      } catch (notificationError) {
-        console.error(
-          `Failed to send manual void notification for order ${orderId}:`,
-          notificationError
-        );
-      }
-
-      res.json({ orderId, results });
-    } catch (error) {
-      console.error('Error voiding label(s):', error);
-      res.status(500).json({
-        error: error.message || 'Failed to void the selected label(s).',
-      });
+        res.json({ message: "Order marked as kit sent after printing." });
+    } catch (err) {
+        console.error("Error marking kit as printed:", err);
+        res.status(500).json({ error: "Failed to update kit status" });
     }
-  });
+});
 
-  router.get('/packing-slip/:id', async (req, res) => {
+router.post("/orders/:id/refresh-kit-tracking", async (req, res) => {
     try {
-      const doc = await ordersCollection.doc(req.params.id).get();
-      if (!doc.exists) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
+        const docRef = ordersCollection.doc(req.params.id);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
 
-      const order = { id: doc.id, ...doc.data() };
-      const pdfData = await generateCustomLabelPdf(order);
-      const buffer = Buffer.isBuffer(pdfData) ? pdfData : Buffer.from(pdfData);
+        const order = doc.data();
+        if (!order.outboundTrackingNumber) {
+            return res.status(400).json({ error: "Outbound tracking number not available for this order" });
+        }
 
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader(
-        'Content-Disposition',
-        `inline; filename="packing-slip-${order.id}.pdf"`
-      );
-      res.send(buffer);
-    } catch (error) {
-      console.error('Failed to generate packing slip PDF:', error);
-      res.status(500).json({ error: 'Failed to generate packing slip PDF' });
+        const shipengineKey = functions.config().shipengine?.key || process.env.SHIPENGINE_KEY;
+        if (!shipengineKey) {
+            return res.status(500).json({ error: "ShipEngine API key not configured" });
+        }
+
+        const { updatePayload, delivered } = await buildKitTrackingUpdate(order, {
+            axiosClient: axios,
+            shipengineKey,
+            defaultCarrierCode: DEFAULT_CARRIER_CODE,
+            serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        await updateOrderBoth(req.params.id, updatePayload);
+
+        res.json({
+            message: delivered ? "Kit marked as delivered." : "Kit tracking status refreshed.",
+            delivered,
+            tracking: updatePayload.kitTrackingStatus,
+        });
+    } catch (err) {
+        console.error("Error refreshing kit tracking:", err.response?.data || err);
+        const errorMessage = err.response?.data?.error || err.message || "Failed to refresh kit tracking";
+        const statusCode =
+            errorMessage === 'Outbound tracking number not available for this order'
+                ? 400
+                : errorMessage === 'ShipEngine API key not configured'
+                    ? 500
+                    : 500;
+        res.status(statusCode).json({ error: errorMessage });
     }
-  });
+});
 
-  router.get('/print-bundle/:id', async (req, res) => {
+// Update order status
+router.put("/orders/:id/status", async (req, res) => {
     try {
-      const doc = await ordersCollection.doc(req.params.id).get();
-      if (!doc.exists) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
+        const { status } = req.body;
+        const orderId = req.params.id;
+        if (!status) return res.status(400).json({ error: "Status is required" });
 
-      const order = { id: doc.id, ...doc.data() };
-      const labelUrlCandidates = [];
+        const docRef = ordersCollection.doc(orderId);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
 
-      if (order.shippingPreference === 'Shipping Kit Requested') {
-        labelUrlCandidates.push(order.outboundLabelUrl, order.inboundLabelUrl);
-      } else if (order.uspsLabelUrl) {
-        labelUrlCandidates.push(order.uspsLabelUrl);
-      } else {
-        labelUrlCandidates.push(order.outboundLabelUrl, order.inboundLabelUrl);
-      }
+        const currentOrder = { id: doc.id, ...doc.data() };
+        const logEntries = [];
 
-      const uniqueLabelUrls = Array.from(
-        new Set(labelUrlCandidates.filter(Boolean))
-      );
+        let customerNotificationPromise = Promise.resolve();
+        let internalNotificationPromise = Promise.resolve();
+        let internalSubject;
+        let internalHtmlBody;
 
-      const downloadedLabels = await Promise.all(
-        uniqueLabelUrls.map(async (url) => {
-          try {
-            const response = await axios.get(url, { responseType: 'arraybuffer' });
-            return Buffer.from(response.data);
-          } catch (downloadError) {
-            console.error(
-              `Failed to download label from ${url}:`,
-              downloadError.message || downloadError
-            );
-            return null;
-          }
-        })
-      );
+        switch (status) {
+            case "received": {
+                const deviceReceivedHtml = DEVICE_RECEIVED_EMAIL_HTML
+                    .replace(/\*\*CUSTOMER_NAME\*\*/g, currentOrder.shippingInfo.fullName)
+                    .replace(/\*\*ORDER_ID\*\*/g, currentOrder.id);
 
-      const bagLabelData = await generateBagLabelPdf(order);
+                customerNotificationPromise = sendEmail({
+                    from: "SecondHandCell <" + functions.config().email.user + ">",
+                    to: currentOrder.shippingInfo.email,
+                    subject: "Your SecondHandCell Device Has Arrived",
+                    html: deviceReceivedHtml,
+                });
 
-      const pdfParts = [
-        ...downloadedLabels.filter(Boolean),
-        Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData),
-      ].filter(Boolean);
+                internalSubject = `Device Received for Order #${currentOrder.id}`;
+                internalHtmlBody = `<p>The device for Order <strong>#${currentOrder.id}</strong> has been received.</p><p>It is now awaiting inspection.</p>`;
+                internalNotificationPromise = sendZendeskComment(currentOrder, internalSubject, internalHtmlBody, false);
+                logEntries.push({
+                    type: "email",
+                    message: "Device received confirmation email sent to customer.",
+                });
+                break;
+            }
+            case "completed": {
+                const customerEmailHtml = `<p>Hello ${currentOrder.shippingInfo.fullName},</p><p>Great news! Your order <strong>#${currentOrder.id}</strong> has been completed and payment has been processed.</p><p>If you have any questions about your payment, please let us know.</p><p>Thank you for choosing SecondHandCell!</p>`;
+                customerNotificationPromise = sendEmail({
+                    from: "SecondHandCell <" + functions.config().email.user + ">",
+                    to: currentOrder.shippingInfo.email,
+                    subject: "Your SecondHandCell Order is Complete",
+                    html: customerEmailHtml,
+                });
 
-      const merged = await mergePdfBuffers(pdfParts);
-      const mergedBuffer = Buffer.isBuffer(merged) ? merged : Buffer.from(merged);
+                internalSubject = `Order Completed: #${currentOrder.id}`;
+                internalHtmlBody = `<p>Order <strong>#${currentOrder.id}</strong> has been marked as completed.</p><p>Payment has been processed for this order.</p>`;
+                internalNotificationPromise = sendZendeskComment(currentOrder, internalSubject, internalHtmlBody, false);
+                logEntries.push({
+                    type: "email",
+                    message: "Order completion email sent to customer.",
+                });
+                break;
+            }
+            default: {
+                break;
+            }
+        }
 
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader(
-        'Content-Disposition',
-        `inline; filename="print-bundle-${order.id}.pdf"`
-      );
-      res.send(mergedBuffer);
-    } catch (error) {
-      console.error('Failed to generate print bundle:', error);
-      res.status(500).json({ error: 'Failed to prepare print bundle' });
+        const { order } = await updateOrderBoth(orderId, { status }, { logEntries });
+
+        await Promise.all([customerNotificationPromise, internalNotificationPromise]);
+
+        res.json({ message: `Order marked as ${status}`, order });
+    } catch (err) {
+        console.error("Error updating status:", err);
+        res.status(500).json({ error: "Failed to update status" });
     }
-  });
+});
 
-  return router;
-}
+// Submit a re-offer (send to customer via Zendesk public comment)
+router.post("/orders/:id/re-offer", async (req, res) => {
+    try {
+        const { newPrice, reasons, comments } = req.body;
+        const orderId = req.params.id;
 
-module.exports = createOrdersRouter;
+        if (!newPrice || !reasons || !Array.isArray(reasons) || reasons.length === 0) {
+            return res.status(400).json({ error: "New price and at least one reason are required" });
+        }
+
+        const orderRef = ordersCollection.doc(orderId);
+        const orderDoc = await orderRef.get();
+        if (!orderDoc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        const order = { id: orderDoc.id, ...orderDoc.data() };
+
+        await updateOrderBoth(orderId, {
+            reOffer: {
+                newPrice,
+                reasons,
+                comments,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
+            status: "re-offered-pending",
+        });
+
+        let reasonString = reasons.join(", ");
+        if (comments) reasonString += `; ${comments}`;
+
+        const zendeskHtmlContent = `
+            <div style="font-family: 'system-ui','-apple-system','BlinkMacSystemFont','Segoe UI','Roboto','Oxygen-Sans','Ubuntu','Cantarell','Helvetica Neue','Arial','sans-serif'; font-size: 14px; line-height: 1.5; color: #444444;">
+              <h2 style="color: #0056b3; font-weight: bold; text-transform: none; font-size: 20px; line-height: 26px; margin: 5px 0 10px;">Hello ${order.shippingInfo.fullName},</h2>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">We've received your device for Order #${order.id} and after inspection, we have a revised offer for you.</p>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;"><strong>Original Quote:</strong> $${order.estimatedQuote.toFixed(2)}</p>
+              <p style="font-size: 1.2em; color: #d9534f; font-weight: bold; line-height: 22px; margin: 15px 0;"><strong>New Offer Price:</strong> $${Number(newPrice).toFixed(2)}</p>
+              <p style="background-color: #f8f8f8; border-left-width: 5px; border-left-color: #d9534f; border-left-style: solid; color: #2b2e2f; line-height: 22px; margin: 15px 0; padding: 10px;"><em>"${reasonString}"</em></p>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Please review the new offer. You have two options:</p>
+              <table width="100%" cellspacing="0" cellpadding="0" style="margin-top: 20px; border-collapse: collapse; font-size: 1em; width: 100%;">
+                <tbody>
+                  <tr>
+                    <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                      <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
+                        <tbody>
+                          <tr>
+                            <td style="border-radius: 5px; background-color: #a7f3d0; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#a7f3d0" valign="top">
+                              <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderId}&action=accept" style="border-radius: 5px; font-size: 16px; color: #065f46; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #6ee7b7;" rel="noreferrer">
+                                Accept Offer ($${Number(newPrice).toFixed(2)})
+                              </a>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                    <td align="center" style="vertical-align: top; padding: 0 10px;" valign="top">
+                      <table cellspacing="0" cellpadding="0" style="width: 100%; border-collapse: collapse; font-size: 1em;">
+                        <tbody>
+                          <tr>
+                            <td style="border-radius: 5px; background-color: #fecaca; text-align: center; vertical-align: top; padding: 5px; border: 1px solid #ddd;" align="center" bgcolor="#fecaca" valign="top">
+                              <a href="${functions.config().app.frontend_url}/reoffer-action.html?orderId=${orderId}&action=return" style="border-radius: 5px; font-size: 16px; color: #991b1b; text-decoration: none; font-weight: bold; display: block; padding: 15px 25px; border: 1px solid #fca5a5;" rel="noreferrer">
+                                Return Phone Now
+                              </a>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 30px 0 15px;">If you have any questions, please reply to this email.</p>
+              <p style="color: #2b2e2f; line-height: 22px; margin: 15px 0;">Thank you,<br>The SecondHandCell Team</p>
+            </div>
+        `;
+
+        const zendeskSubject = `Re-offer for Order #${order.id}`;
+        await sendZendeskComment(order, zendeskSubject, zendeskHtmlContent, true);
+
+        res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
+    } catch (err) {
+        console.error("Error submitting re-offer:", err);
+        res.status(500).json({ error: "Failed to submit re-offer" });
+    }
+});
+
+// Accept-offer action
+router.post("/accept-offer-action", async (req, res) => {
+    try {
+        const { orderId } = req.body;
+        if (!orderId) {
+            return res.status(400).json({ error: "Order ID is required" });
+        }
+        const docRef = ordersCollection.doc(orderId);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        const orderData = { id: doc.id, ...doc.data() };
+        if (orderData.status !== "re-offered-pending") {
+            return res.status(409).json({ error: "This offer has already been accepted or declined." });
+        }
+
+        await updateOrderBoth(orderId, {
+            status: "re-offered-accepted",
+            acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const customerHtmlBody = `
+            <p>Thank you for accepting the revised offer for Order <strong>#${orderData.id}</strong>.</p>
+            <p>We've received your confirmation, and payment processing will now begin.</p>
+        `;
+
+        const internalSubject = `Re-offer Accepted for Order #${orderData.id}`;
+        const internalHtmlBody = `
+            <p>The customer has <strong>accepted</strong> the revised offer of <strong>$${orderData.reOffer.newPrice.toFixed(2)}</strong> for Order #${orderData.id}.</p>
+            <p>Please proceed with payment processing.</p>
+        `;
+
+        await Promise.all([
+            sendZendeskComment(orderData, `Offer Accepted for Order #${orderData.id}`, customerHtmlBody, true),
+            sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
+        ]);
+
+        res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
+    } catch (err) {
+        console.error("Error accepting offer:", err);
+        res.status(500).json({ error: "Failed to accept offer" });
+    }
+});
+
+// Return-phone action
+router.post("/return-phone-action", async (req, res) => {
+    try {
+        const { orderId } = req.body;
+        if (!orderId) {
+            return res.status(400).json({ error: "Order ID is required" });
+        }
+        const docRef = ordersCollection.doc(orderId);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        const orderData = { id: doc.id, ...doc.data() };
+        if (orderData.status !== "re-offered-pending") {
+            return res.status(409).json({ error: "This offer has already been accepted or declined." });
+        }
+
+        await updateOrderBoth(orderId, {
+            status: "re-offered-declined",
+            declinedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const customerHtmlBody = `
+            <p>We have received your request to decline the revised offer and have your device returned. We are now processing your request and will send a return shipping label to your email shortly.</p>
+        `;
+
+        const internalSubject = `Return Requested for Order #${orderData.id}`;
+        const internalHtmlBody = `
+            <p>The customer has <strong>declined</strong> the revised offer for Order #${orderData.id} and has requested that their phone be returned.</p>
+            <p>Please initiate the return process and send a return shipping label.</p>
+        `;
+        
+        await Promise.all([
+            sendZendeskComment(orderData, `Return Request for Order #${orderData.id}`, customerHtmlBody, true),
+            sendZendeskComment(orderData, internalSubject, internalHtmlBody, false),
+        ]);
+
+        res.json({ message: "Return requested successfully. Admin has been notified to generate the label.", orderId: orderData.id });
+    } catch (err) {
+        console.error("Error processing return request:", err);
+        res.status(500).json({ error: "Failed to process return request" });
+    }
+});
+
+module.exports = router;
+module.exports.buildKitTrackingUpdate = buildKitTrackingUpdate;
