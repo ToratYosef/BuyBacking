@@ -748,68 +748,6 @@ async function processLabelVoid(order, labelRequests, triggerSource = "manual") 
   return { results, order: updatedOrder };
 }
 
-let autoVoidRunning = false;
-
-async function autoVoidExpiredLabels() {
-  if (autoVoidRunning) return;
-  if (!process.env.SS_API_KEY) {
-    console.warn("Skipping automatic label void sweep because SS_API_KEY is not configured.");
-    return;
-  }
-
-  autoVoidRunning = true;
-  try {
-    const thresholdMillis = Date.now() - AUTO_VOID_DELAY_MS;
-    const thresholdTimestamp = admin.firestore.Timestamp.fromMillis(thresholdMillis);
-
-    const snapshot = await ordersCollection
-      .where("latestLabelGeneratedAt", "<=", thresholdTimestamp)
-      .get();
-
-    if (snapshot.empty) {
-      return;
-    }
-
-    for (const doc of snapshot.docs) {
-      const order = { id: doc.id, ...doc.data() };
-      const { definitions, mutated } = buildLabelDefinitions(order);
-      if (!definitions.size) continue;
-
-      if (mutated) {
-        await ordersCollection
-          .doc(order.id)
-          .set({ shipEngineLabels: order.shipEngineLabels }, { merge: true });
-      }
-
-      const labelsToVoid = [];
-      const nowMs = Date.now();
-
-      definitions.forEach((definition, key) => {
-        if (!definition.labelId) return;
-        const generatedAt = definition.generatedAt;
-        const generatedAtMs = generatedAt ? generatedAt.toMillis() : null;
-        if (!generatedAtMs) return;
-        if (nowMs - generatedAtMs < AUTO_VOID_DELAY_MS) return;
-        const status = (definition.status || "").toLowerCase();
-        if (status === "voided" || status === "void_denied") return;
-        labelsToVoid.push({ key, id: definition.labelId });
-      });
-
-      if (!labelsToVoid.length) continue;
-
-      try {
-        await processLabelVoid(order, labelsToVoid, "automatic");
-      } catch (error) {
-        console.error(`Automatic void failed for order ${order.id}:`, error);
-      }
-    }
-  } catch (error) {
-    console.error("Automatic label void sweep failed:", error);
-  } finally {
-    autoVoidRunning = false;
-  }
-}
-
 // Serve admin.html
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
@@ -1133,14 +1071,3 @@ app.listen(PORT, () => {
   console.log(`🚀 Backend running at http://localhost:${PORT}`);
 });
 
-if (AUTO_VOID_INTERVAL_MS > 0) {
-  setInterval(() => {
-    autoVoidExpiredLabels().catch((error) =>
-      console.error("Error during scheduled automatic void sweep:", error)
-    );
-  }, AUTO_VOID_INTERVAL_MS);
-}
-
-autoVoidExpiredLabels().catch((error) =>
-  console.error("Initial automatic void sweep failed:", error)
-);

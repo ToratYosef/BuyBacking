@@ -3,7 +3,7 @@ const bwipjs = require('bwip-js');
 
 const PACKING_SLIP_WIDTH = 288; // 4 inches (72 pts per inch)
 const PACKING_SLIP_HEIGHT = 432; // 6 inches
-const PACKING_SLIP_MARGIN = 20;
+const PACKING_SLIP_MARGIN = 24;
 const BAG_LABEL_WIDTH = 288; // 4 inches wide
 const BAG_LABEL_HEIGHT = 144; // 2 inches tall
 const BAG_LABEL_MARGIN_X = 16;
@@ -24,110 +24,176 @@ async function generateCustomLabelPdf(order) {
     let { width, height } = page.getSize();
     let cursorY = height - PACKING_SLIP_MARGIN;
 
-    const ensureSpace = (requiredLines = 1) => {
-        if (cursorY - requiredLines * LINE_HEIGHT < PACKING_SLIP_MARGIN + 60) {
+    const ensureSpace = (lineCount = 1) => {
+        const required = lineCount * LINE_HEIGHT + 36;
+        if (cursorY - required < PACKING_SLIP_MARGIN) {
             page = pdfDoc.addPage([PACKING_SLIP_WIDTH, PACKING_SLIP_HEIGHT]);
             ({ width, height } = page.getSize());
             cursorY = height - PACKING_SLIP_MARGIN;
         }
     };
 
-    const drawText = (text, options = {}) => {
-        const { font = regularFont, size = 11, color = rgb(0, 0, 0) } = options;
-        const lines = wrapText(text, width - MARGIN * 2, font, size);
-        lines.forEach((line) => {
-            ensureSpace();
-            page.drawText(line, {
-                x: PACKING_SLIP_MARGIN,
-                y: cursorY,
-                size,
-                font,
-                color,
-            });
-            cursorY -= LINE_HEIGHT;
-        });
-        cursorY -= 2; // small gap after block
-    };
-
     const drawSectionTitle = (title) => {
-        ensureSpace();
+        ensureSpace(2);
+        cursorY -= 6;
         page.drawText(title, {
             x: PACKING_SLIP_MARGIN,
             y: cursorY,
-            size: 14,
+            size: 13,
             font: boldFont,
-            color: rgb(0.16, 0.16, 0.16),
+            color: rgb(0.16, 0.18, 0.22),
         });
-        cursorY -= LINE_HEIGHT;
+        cursorY -= 6;
     };
 
-    // Header
-    drawSectionTitle('SecondHandCell Packing Slip');
-    drawText(`Order #${order.id}`, { font: boldFont, size: 12 });
+    const drawKeyValue = (label, value) => {
+        const labelText = `${label}:`;
+        const labelSize = 10;
+        const valueSize = 10;
+        const safeValue = value && String(value).trim().length ? String(value).trim() : '—';
+        const labelWidth = boldFont.widthOfTextAtSize(labelText, labelSize);
+        const availableWidth = width - PACKING_SLIP_MARGIN * 2 - labelWidth - 8;
+        const lines = wrapText(safeValue, availableWidth, regularFont, valueSize);
+        ensureSpace(lines.length);
+
+        page.drawText(labelText, {
+            x: PACKING_SLIP_MARGIN,
+            y: cursorY,
+            size: labelSize,
+            font: boldFont,
+            color: rgb(0.12, 0.12, 0.14),
+        });
+
+        lines.forEach((line, index) => {
+            page.drawText(line, {
+                x: PACKING_SLIP_MARGIN + labelWidth + 8,
+                y: cursorY - index * LINE_HEIGHT,
+                size: valueSize,
+                font: regularFont,
+                color: rgb(0.1, 0.1, 0.1),
+            });
+        });
+
+        cursorY -= LINE_HEIGHT * lines.length;
+        cursorY -= 6;
+    };
+
+    const drawBullet = (text) => {
+        const bulletPrefix = '• ';
+        const bulletWidth = regularFont.widthOfTextAtSize(bulletPrefix, 9);
+        const availableWidth = width - PACKING_SLIP_MARGIN * 2 - bulletWidth;
+        const lines = wrapText(text, availableWidth, regularFont, 9);
+        ensureSpace(lines.length);
+
+        lines.forEach((line, index) => {
+            const prefix = index === 0 ? bulletPrefix : '  ';
+            page.drawText(`${prefix}${line}`, {
+                x: PACKING_SLIP_MARGIN,
+                y: cursorY - index * LINE_HEIGHT,
+                size: 9,
+                font: regularFont,
+                color: rgb(0.22, 0.22, 0.24),
+            });
+        });
+
+        cursorY -= LINE_HEIGHT * lines.length;
+        cursorY -= 6;
+    };
+
+    const formatPhoneNumber = (raw) => {
+        if (!raw) return '—';
+        const digits = String(raw).replace(/\D+/g, '');
+        if (digits.length === 11 && digits.startsWith('1')) {
+            return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+        }
+        if (digits.length === 10) {
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+        }
+        return String(raw);
+    };
 
     const shippingInfo = order.shippingInfo || {};
-    const customerLines = [
-        shippingInfo.fullName,
-        shippingInfo.streetAddress,
-        [shippingInfo.city, shippingInfo.state].filter(Boolean).join(', '),
-        shippingInfo.zipCode,
-    ].filter(Boolean);
+    const contactPhone =
+        shippingInfo.phone ||
+        shippingInfo.phoneNumber ||
+        shippingInfo.phone_number ||
+        shippingInfo.contactPhone ||
+        '';
 
-    drawSectionTitle('Ship To');
-    customerLines.forEach((line) => drawText(line, { size: 10 }));
+    const deviceParts = [];
+    if (order.brand) deviceParts.push(String(order.brand));
+    if (order.device) deviceParts.push(String(order.device));
+    const itemLabel = deviceParts.join(' ').trim();
 
-    drawSectionTitle('Contact');
-    drawText(`Email: ${shippingInfo.email || '—'}`, { size: 10 });
-    drawText(`Phone: ${shippingInfo.phone || shippingInfo.phoneNumber || '—'}`, { size: 10 });
+    const estimatedPayout = resolveOrderPayout(order);
+
+    page.drawText('SecondHandCell', {
+        x: PACKING_SLIP_MARGIN,
+        y: cursorY,
+        size: 16,
+        font: boldFont,
+        color: rgb(0.07, 0.2, 0.47),
+    });
+    cursorY -= LINE_HEIGHT + 2;
+
+    page.drawText(`Order #${order.id || '—'}`, {
+        x: PACKING_SLIP_MARGIN,
+        y: cursorY,
+        size: 12,
+        font: boldFont,
+        color: rgb(0.12, 0.12, 0.14),
+    });
+    cursorY -= LINE_HEIGHT + 4;
+
+    drawSectionTitle('Customer Information');
+    drawKeyValue('Customer Name', shippingInfo.fullName || shippingInfo.name || '—');
+    drawKeyValue('Email', shippingInfo.email || '—');
+    drawKeyValue('Phone', formatPhoneNumber(contactPhone));
 
     drawSectionTitle('Device Details');
-    drawText(`${order.device || 'Device'} • ${order.storage || 'Storage'} • ${order.carrier || 'Carrier'}`, {
-        size: 10,
-    });
-    drawText(`Quoted: $${Number(order.estimatedQuote || 0).toFixed(2)}`, { size: 10 });
-    drawText(`Shipping Preference: ${formatValue(order.shippingPreference)}`, { size: 10 });
+    drawKeyValue('Item (Make/Model)', itemLabel || '—');
+    drawKeyValue('Storage', order.storage || order.memory || '—');
+    drawKeyValue('Carrier', formatValue(order.carrier));
+    drawKeyValue('Estimated Payout', `$${formatCurrency(estimatedPayout)}`);
 
-    if (order.paymentMethod) {
-        drawText(`Payment: ${formatValue(order.paymentMethod)}`, { size: 10 });
-    }
-
-    const answers = order.answers || {};
-    const answerEntries = Object.entries(answers);
-    if (answerEntries.length) {
-        drawSectionTitle('Condition Notes');
-        answerEntries.forEach(([question, answer]) => {
-            const label = formatLabel(question);
-            drawText(`${label}: ${answer}`, { size: 9 });
-        });
-    }
+    drawSectionTitle('Conditions');
+    drawKeyValue('Powers On?', formatValue(order.condition_power_on));
+    drawKeyValue('Fully Functional?', formatValue(order.condition_functional));
+    drawKeyValue('Any Cracks?', formatValue(order.condition_cracks));
+    drawKeyValue('Cosmetic Condition', formatValue(order.condition_cosmetic));
 
     drawSectionTitle('Prep Checklist');
     [
-        'Remove SIM cards and accessories.',
-        'Factory reset the device & sign out of iCloud/Google.',
-        'Place device in provided protective sleeve.',
-        'Insert this slip inside the kit before sealing.',
-    ].forEach((item) => drawText(`• ${item}`, { size: 9 }));
+        'Remove SIM cards and accessories from the device.',
+        'Factory reset and sign out of any Apple, Google, or Samsung accounts.',
+        'Place the device in the protective sleeve and include this sheet in the box.',
+    ].forEach((item) => drawBullet(item));
 
     ensureSpace(4);
-    const barcodeSvg = await buildBarcode(order.id);
+    const barcodeSvg = await buildBarcode(order.id || String(order.orderId || '')); 
     const barcodeImage = await pdfDoc.embedSvg(barcodeSvg);
-    const svgWidth = barcodeImage.width;
-    const barcodeScale = Math.min(
-        (width - MARGIN * 2) / svgWidth,
-        1.2
-    );
+    const maxBarcodeWidth = width - PACKING_SLIP_MARGIN * 2;
+    const barcodeScale = Math.min(maxBarcodeWidth / barcodeImage.width, 1.1);
     const dims = barcodeImage.scale(barcodeScale);
+    const barcodeY = Math.max(PACKING_SLIP_MARGIN + 18, cursorY - dims.height - 10);
 
     page.drawImage(barcodeImage, {
         x: (width - dims.width) / 2,
-        y: Math.max(PACKING_SLIP_MARGIN, cursorY - dims.height - 10),
+        y: barcodeY,
         width: dims.width,
         height: dims.height,
     });
 
-    cursorY = Math.max(PACKING_SLIP_MARGIN, cursorY - dims.height - 18);
-    drawText('Scan to view order in dashboard', { size: 8, font: boldFont });
+    const caption = 'Scan to view order details';
+    const captionSize = 8;
+    const captionWidth = boldFont.widthOfTextAtSize(caption, captionSize);
+    page.drawText(caption, {
+        x: (width - captionWidth) / 2,
+        y: barcodeY - 12,
+        size: captionSize,
+        font: boldFont,
+        color: rgb(0.28, 0.28, 0.32),
+    });
 
     return pdfDoc.save();
 }
@@ -143,14 +209,15 @@ async function generateBagLabelPdf(order) {
     let cursorY = height - BAG_LABEL_MARGIN_Y;
 
     const drawLine = (text, options = {}) => {
-        const { font = regularFont, size = 10, color = rgb(0, 0, 0), gap = 4 } = options;
+        const { font = regularFont, size = 10, color = rgb(0, 0, 0), gap = 6 } = options;
         if (!text) {
             cursorY = Math.max(cursorY - gap, barcodeReserve);
             return;
         }
+        const lineHeight = size + 2;
         const lines = wrapText(text, width - BAG_LABEL_MARGIN_X * 2, font, size);
         lines.forEach((line) => {
-            cursorY -= LINE_HEIGHT;
+            cursorY -= lineHeight;
             cursorY = Math.max(cursorY, barcodeReserve);
             page.drawText(line, {
                 x: BAG_LABEL_MARGIN_X,
@@ -187,13 +254,13 @@ async function generateBagLabelPdf(order) {
         font: boldFont,
         size: 9,
         color: rgb(0.32, 0.32, 0.36),
-        gap: 2,
+        gap: 6,
     });
     drawLine(`Order #${order.id}`, {
         font: boldFont,
         size: 18,
         color: rgb(0.12, 0.16, 0.48),
-        gap: 6,
+        gap: 8,
     });
 
     const deviceLineParts = [];
@@ -203,7 +270,7 @@ async function generateBagLabelPdf(order) {
         font: boldFont,
         size: 11,
         color: rgb(0.08, 0.08, 0.1),
-        gap: 2,
+        gap: 4,
     });
 
     const specParts = [];
@@ -212,7 +279,7 @@ async function generateBagLabelPdf(order) {
     drawLine(specParts.join('    '), {
         size: 9,
         color: rgb(0.28, 0.28, 0.32),
-        gap: 3,
+        gap: 6,
     });
 
     const contactParts = [contactName];
@@ -224,20 +291,20 @@ async function generateBagLabelPdf(order) {
     drawLine(contactParts.join(' • '), {
         size: 9,
         color: rgb(0.24, 0.24, 0.28),
-        gap: 3,
+        gap: 6,
     });
 
     drawLine(`Quote: $${formatCurrency(payoutAmount)}`, {
         font: boldFont,
         size: 14,
         color: rgb(0.1, 0.5, 0.26),
-        gap: 8,
+        gap: 10,
     });
 
     drawLine('Attach this label to the device bag.', {
         size: 8,
         color: rgb(0.45, 0.45, 0.45),
-        gap: 6,
+        gap: 8,
     });
 
     const barcodeSvg = await buildBarcode(order.id);

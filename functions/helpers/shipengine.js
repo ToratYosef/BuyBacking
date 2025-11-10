@@ -209,15 +209,21 @@ async function buildKitTrackingUpdate(
     }
 
     if (useInbound && delivered) {
+        const deliveredStamp = typeof serverTimestamp === 'function' ? serverTimestamp() : null;
+        if (deliveredStamp) {
+            updatePayload.labelDeliveredAt = deliveredStamp;
+        }
+        updatePayload.inboundTrackingLocked = true;
+
         if (isShippingKit) {
             updatePayload.status = 'delivered_to_us';
-            if (typeof serverTimestamp === 'function') {
-                updatePayload.kitDeliveredToUsAt = serverTimestamp();
+            if (deliveredStamp) {
+                updatePayload.kitDeliveredToUsAt = deliveredStamp;
             }
         } else {
             updatePayload.status = 'received';
-            if (typeof serverTimestamp === 'function') {
-                updatePayload.receivedAt = serverTimestamp();
+            if (deliveredStamp) {
+                updatePayload.receivedAt = deliveredStamp;
             }
             updatePayload.autoReceived = true;
         }
