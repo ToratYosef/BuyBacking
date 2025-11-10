@@ -10,23 +10,20 @@ const BACKEND_BASE_URL = "https://us-central1-buyback-a0f05.cloudfunctions.net/a
 
 const PRINT_QUEUE_STATUSES = ["shipping_kit_requested", "kit_needs_printing", "needs_printing"];
 
-const ICON_REFRESH = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 1 12.73-5.303L19.5 9M19.5 9V4.5M19.5 9h-4.5m-3 10.5A7.5 7.5 0 0 1 4.5 12l2.27-2.303M4.5 12H9m0 0v4.5" /></svg>';
 const ICON_PRINTER = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25V4.5h9v3.75M6 12h12a2.25 2.25 0 0 1 2.25 2.25v4.5A2.25 2.25 0 0 1 18 21H6a2.25 2.25 0 0 1-2.25-2.25v-4.5A2.25 2.25 0 0 1 6 12zm1.5 4.5h3m3 0h3" /></svg>';
 const ICON_SPINNER = '<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-30" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"></circle><path class="opacity-80" d="M21 12a9 9 0 0 1-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>';
 
-const REFRESH_BUTTON_IDLE = `${ICON_REFRESH} Refresh`;
-const REFRESH_BUTTON_BUSY = `${ICON_SPINNER} Refreshing`;
-const PRINT_BUTTON_IDLE = `${ICON_PRINTER} Print All`;
 const PRINT_BUTTON_BUSY = `${ICON_SPINNER} Preparing PDF`;
 
 const queuedCountEl = document.getElementById("queued-count");
 const labelCountEl = document.getElementById("label-count");
+const selectedCountEl = document.getElementById("selected-count");
 const lastSyncEl = document.getElementById("last-sync");
 const queueStatusEl = document.getElementById("queue-status");
 const tableBody = document.getElementById("print-queue-table");
 const emptyStateEl = document.getElementById("empty-state");
-const refreshBtn = document.getElementById("refresh-btn");
 const printAllBtn = document.getElementById("print-all-btn");
+const selectAllCheckbox = document.getElementById("select-all-checkbox");
 const logoutBtn = document.getElementById("logout-btn");
 const displayUserIdEl = document.getElementById("display-user-id");
 const loadingOverlay = document.getElementById("auth-loading-screen");
@@ -35,6 +32,7 @@ const printFrame = document.getElementById("print-preview-frame");
 let queueOrders = [];
 let isLoadingQueue = false;
 let isPrinting = false;
+const selectedOrderIds = new Set();
 
 const STATUS_LABELS = {
   shipping_kit_requested: "Shipping Kit Requested",
@@ -126,14 +124,96 @@ function updateStats() {
   queuedCountEl.textContent = queuedTotal;
   labelCountEl.textContent = labelTotal;
 
-  if (queuedTotal) {
-    queueStatusEl.textContent = `Ready to batch ${queuedTotal} order${queuedTotal === 1 ? "" : "s"}.`;
-  } else if (!isLoadingQueue) {
-    queueStatusEl.textContent = "All caught up — no pending labels.";
+  lastSyncEl.textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  updateSelectionUi();
+}
+
+function updateSelectionUi() {
+  const selectedTotal = selectedOrderIds.size;
+
+  if (selectedCountEl) {
+    selectedCountEl.textContent = selectedTotal;
   }
 
-  lastSyncEl.textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  updateSelectAllState();
   updatePrintButtonState();
+
+  if (isPrinting) {
+    return;
+  }
+
+  if (!queueOrders.length && !isLoadingQueue) {
+    queueStatusEl.textContent = "All caught up — no pending labels.";
+    return;
+  }
+
+  if (selectedTotal) {
+    queueStatusEl.textContent = `Ready to batch ${selectedTotal} selected order${selectedTotal === 1 ? "" : "s"}.`;
+  } else if (queueOrders.length) {
+    queueStatusEl.textContent = "Select orders to include in the next bulk print.";
+  }
+}
+
+function updateSelectAllState() {
+  if (!selectAllCheckbox) {
+    return;
+  }
+
+  const total = queueOrders.length;
+  const selectedTotal = selectedOrderIds.size;
+
+  if (!total) {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
+    selectAllCheckbox.disabled = true;
+    return;
+  }
+
+  selectAllCheckbox.disabled = false;
+  selectAllCheckbox.checked = selectedTotal === total;
+  selectAllCheckbox.indeterminate = selectedTotal > 0 && selectedTotal < total;
+}
+
+function reconcileSelectedOrderIds() {
+  const validIds = new Set(queueOrders.map((order) => order.id));
+  let changed = false;
+
+  Array.from(selectedOrderIds).forEach((id) => {
+    if (!validIds.has(id)) {
+      selectedOrderIds.delete(id);
+      changed = true;
+    }
+  });
+
+  return changed;
+}
+
+function setOrderSelection(orderId, selected) {
+  if (!orderId) {
+    return;
+  }
+
+  const normalisedId = String(orderId).trim();
+  if (!normalisedId) {
+    return;
+  }
+
+  if (selected) {
+    selectedOrderIds.add(normalisedId);
+  } else {
+    selectedOrderIds.delete(normalisedId);
+  }
+
+  updateSelectionUi();
+}
+
+function buildPrintButtonIdleLabel() {
+  const count = selectedOrderIds.size;
+  if (count > 0) {
+    const noun = count === 1 ? "Order" : "Orders";
+    return `${ICON_PRINTER} Print ${count} ${noun}`;
+  }
+  return `${ICON_PRINTER} Print Selected`;
 }
 
 function renderTable() {
@@ -147,6 +227,8 @@ function renderTable() {
   emptyStateEl?.classList.add("hidden");
 
   const rows = queueOrders.map((order) => {
+    const rawOrderId = String(order.id ?? "");
+    const isSelected = rawOrderId && selectedOrderIds.has(rawOrderId);
     const deviceSummary = [order.device, order.storage].filter(Boolean).join(" · ") || "—";
     const payout = order.estimatedQuote != null && !Number.isNaN(Number(order.estimatedQuote))
       ? `$${Number(order.estimatedQuote).toFixed(2)}`
@@ -155,11 +237,22 @@ function renderTable() {
     const customer = order.shippingInfo || {};
     const email = customer.email ? `<span class="block text-xs text-slate-300/60">${escapeHtml(normaliseEmail(customer.email))}</span>` : "";
     const location = formatLocation(customer);
+    const orderId = escapeHtml(rawOrderId);
+    const rowClasses = isSelected ? "bg-slate-900/40" : "";
 
     return `
-      <tr>
+      <tr data-order-id="${orderId}" data-selected="${isSelected ? "true" : "false"}" class="${rowClasses}">
+        <td class="px-4 py-4 align-top">
+          <input
+            type="checkbox"
+            class="order-select-checkbox h-4 w-4 rounded border-slate-600/60 bg-slate-900/40 text-emerald-400 focus:ring-emerald-400"
+            data-order-id="${orderId}"
+            aria-label="Select order ${orderId || ""}"
+            ${isSelected ? "checked" : ""}
+          />
+        </td>
         <td class="px-6 py-4 align-top">
-          <div class="font-semibold text-white">${escapeHtml(order.id || "—")}</div>
+          <div class="font-semibold text-white">${orderId || "—"}</div>
           <div class="text-xs text-slate-300/60">${escapeHtml(order.shippingPreference || "")}</div>
         </td>
         <td class="px-6 py-4 align-top">
@@ -188,18 +281,17 @@ function renderTable() {
 
 function setQueueLoading(state) {
   isLoadingQueue = state;
-  if (refreshBtn) {
-    refreshBtn.disabled = state;
-    refreshBtn.innerHTML = state ? REFRESH_BUTTON_BUSY : REFRESH_BUTTON_IDLE;
-  }
   updatePrintButtonState();
+  if (!state) {
+    updateSelectionUi();
+  }
 }
 
 function updatePrintButtonState() {
   if (!printAllBtn) return;
-  const disabled = isLoadingQueue || isPrinting || !queueOrders.length;
+  const disabled = isLoadingQueue || isPrinting || !selectedOrderIds.size;
   printAllBtn.disabled = disabled;
-  printAllBtn.innerHTML = isPrinting ? PRINT_BUTTON_BUSY : PRINT_BUTTON_IDLE;
+  printAllBtn.innerHTML = isPrinting ? PRINT_BUTTON_BUSY : buildPrintButtonIdleLabel();
 }
 
 async function fetchQueueOrders() {
@@ -232,12 +324,14 @@ async function fetchQueueOrders() {
 
 async function loadQueue() {
   setQueueLoading(true);
+  queueStatusEl.textContent = "Loading queue…";
   try {
     const orders = await fetchQueueOrders();
     queueOrders = orders.map((order) => ({
       ...order,
       labelUrls: gatherOrderLabelUrls(order),
     }));
+    reconcileSelectedOrderIds();
     renderTable();
     updateStats();
     if (!queueOrders.length) {
@@ -245,7 +339,7 @@ async function loadQueue() {
     }
   } catch (error) {
     console.error("Failed to load print queue:", error);
-    queueStatusEl.textContent = "Unable to load the print queue. Please refresh.";
+    queueStatusEl.textContent = "Unable to load the print queue. Please try again.";
   } finally {
     setQueueLoading(false);
   }
@@ -317,11 +411,15 @@ async function fetchPrintBundleFromEndpoint(path, options = {}) {
   const buffer = await response.arrayBuffer();
   const printedIds = parseHeaderJson(response.headers.get("x-printed-order-ids"));
   const updatedIds = parseHeaderJson(response.headers.get("x-kit-sent-order-ids"));
+  const bulkFolder = response.headers.get("x-bulk-print-folder");
+  const bulkJobId = response.headers.get("x-bulk-print-job-id");
 
   return {
     bytes: new Uint8Array(buffer),
     printedIds,
     updatedIds,
+    bulkFolder: bulkFolder || null,
+    bulkJobId: bulkJobId || null,
   };
 }
 
@@ -426,7 +524,12 @@ function openPrintPreview(bytes) {
 }
 
 async function handleBatchPrint() {
-  if (!queueOrders.length || isPrinting) {
+  if (isPrinting) {
+    return;
+  }
+
+  if (!selectedOrderIds.size) {
+    queueStatusEl.textContent = "Select at least one order to print.";
     return;
   }
 
@@ -435,13 +538,13 @@ async function handleBatchPrint() {
   queueStatusEl.textContent = "Preparing merged PDF bundle…";
 
   try {
-    const orderIds = queueOrders.map((order) => order.id).filter(Boolean);
+    const orderIds = Array.from(selectedOrderIds).filter(Boolean);
     if (!orderIds.length) {
       queueStatusEl.textContent = "No orders available to print.";
       return;
     }
 
-    const { bytes, printedIds, updatedIds } = await requestPrintBundle(orderIds);
+    const { bytes, printedIds, updatedIds, bulkFolder, bulkJobId } = await requestPrintBundle(orderIds);
 
     if (!printedIds.length) {
       console.warn("Print bundle did not report any printed orders.");
@@ -462,10 +565,17 @@ async function handleBatchPrint() {
 
     const totalUpdated = new Set([...updatedIds, ...fallbackUpdates]);
 
-    queueStatusEl.textContent = `Merged ${printedIds.length || orderIds.length} order${
-      (printedIds.length || orderIds.length) === 1 ? "" : "s"
-    } into a single PDF. Marked ${totalUpdated.size} as Kit Sent.`;
+    const printedTotal = printedIds.length || orderIds.length;
+    const folderDetail = bulkFolder
+      ? ` Saved PDF copies to ${bulkFolder}${bulkJobId ? ` (job ${bulkJobId})` : ""}.`
+      : "";
 
+    queueStatusEl.textContent = `Merged ${printedTotal} order${printedTotal === 1 ? "" : "s"} into a single PDF. Marked ${
+      totalUpdated.size
+    } as Kit Sent.${folderDetail}`;
+
+    selectedOrderIds.clear();
+    updateSelectionUi();
     await loadQueue();
   } catch (error) {
     console.error("Failed to prepare print bundle:", error);
@@ -484,23 +594,63 @@ function attachEventListeners() {
     });
   }
 
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", () => {
-      if (!isLoadingQueue) {
-        loadQueue();
-      }
-    });
-    refreshBtn.innerHTML = REFRESH_BUTTON_IDLE;
-  }
-
   if (printAllBtn) {
     printAllBtn.addEventListener("click", handleBatchPrint);
-    printAllBtn.innerHTML = PRINT_BUTTON_IDLE;
+    updatePrintButtonState();
+  }
+
+  if (tableBody) {
+    tableBody.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement)) {
+        return;
+      }
+      if (!target.classList.contains("order-select-checkbox")) {
+        return;
+      }
+
+      const { orderId } = target.dataset;
+      setOrderSelection(orderId || "", target.checked);
+
+      const row = target.closest("tr");
+      if (row) {
+        row.dataset.selected = target.checked ? "true" : "false";
+        row.classList.toggle("bg-slate-900/40", target.checked);
+      }
+    });
+  }
+
+  if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener("change", () => {
+      if (!queueOrders.length) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+        return;
+      }
+
+      if (selectAllCheckbox.checked) {
+        queueOrders.forEach((order) => {
+          if (order?.id) {
+            selectedOrderIds.add(String(order.id));
+          }
+        });
+      } else {
+        queueOrders.forEach((order) => {
+          if (order?.id) {
+            selectedOrderIds.delete(String(order.id));
+          }
+        });
+      }
+
+      renderTable();
+      updateSelectionUi();
+    });
   }
 }
 
 function initialise() {
   attachEventListeners();
+  updateSelectionUi();
 
   onAuthStateChanged(auth, (user) => {
     if (!user) {
