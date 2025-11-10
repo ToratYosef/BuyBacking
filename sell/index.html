@@ -1368,48 +1368,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         let device = null;
         let deviceInfo = null; // Declare globally to hold parsed info
 
-        /**
-         * Formats the phone number as the user types: (###) ###-####.
-         * It restricts input to digits and automatically adds parentheses and dashes.
-         * It handles optional leading '1' (country code).
-         * @param {HTMLInputElement} input 
-         */
-        function formatPhoneNumber(input) {
-            // 1. Get current value and strip all non-digits
-            let cleaned = ('' + input.value).replace(/\D/g, '');
-            
-            // 2. Adjust for optional country code '1'
-            if (cleaned.length === 11 && cleaned.startsWith('1')) {
-                // If it's 11 digits and starts with '1', treat it as a US number with country code.
-                cleaned = cleaned.substring(1);
-            }
-            
-            // Limit to a maximum of 10 digits for formatting
-            cleaned = cleaned.substring(0, 10);
-
-            let formatted = '';
-
-            // 3. Format based on the cleaned 10-digit number
-            if (cleaned.length > 0) {
-                // (XXX)
-                formatted += '(' + cleaned.substring(0, 3);
-            }
-            if (cleaned.length >= 4) {
-                // (XXX) XXX
-                formatted += ') ' + cleaned.substring(3, 6);
-            }
-            if (cleaned.length >= 7) {
-                // (XXX) XXX-XXXX
-                formatted += '-' + cleaned.substring(6, 10);
-            }
-
-            // 4. Update the input value and limit length
-            input.value = formatted;
-            
-            // Call updateOverview to update the display in real-time
-            updateOverview();
-        }
-
         document.addEventListener('DOMContentLoaded', async function() {
             // --- UPDATED: Populate the state select on load ---
             populateStateSelect();
@@ -1856,6 +1814,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             let isGuestCheckout = false;
             let currentUserId = null;
             let finalQuote = 0;
+
+            const SHIPPING_KIT_FEE = 10;
+
+            function formatPhoneNumber(input) {
+                if (!input) return;
+
+                let cleaned = ('' + input.value).replace(/\D/g, '');
+
+                if (cleaned.length === 11 && cleaned.startsWith('1')) {
+                    cleaned = cleaned.substring(1);
+                }
+
+                cleaned = cleaned.substring(0, 10);
+
+                let formatted = '';
+                if (cleaned.length > 0) {
+                    formatted += '(' + cleaned.substring(0, 3);
+                }
+                if (cleaned.length >= 4) {
+                    formatted += ') ' + cleaned.substring(3, 6);
+                }
+                if (cleaned.length >= 7) {
+                    formatted += '-' + cleaned.substring(6, 10);
+                }
+
+                input.value = formatted;
+
+                if (typeof updateOverview === 'function') {
+                    updateOverview();
+                }
+            }
             
             // Basic modal controls for the new modals
             const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
@@ -2445,9 +2434,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
                 
                 finalQuote = finalPrice ? parseFloat(finalPrice.toFixed(2)) : 0;
-                
+
                 finalQuoteAmountMainText.textContent = `$${finalQuote.toFixed(2)}`;
                 finalQuoteAmountPopup.textContent = `$${finalQuote.toFixed(2)}`;
+
+                updateOverview();
 
                 showQuotePopup();
             }
@@ -3203,7 +3194,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             function updateOverview() {
                 const selectedShippingPreference = document.querySelector('input[name="shipping_preference"]:checked')?.value;
                 const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
-                
+
                 let displayShippingPreferenceText = 'Not Selected';
                 if (selectedShippingPreference === 'ship_kit') {
                     displayShippingPreferenceText = 'Shipping Kit Requested';
@@ -3223,6 +3214,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     }
                 }
 
+                const baseQuote = Number(finalQuote) || 0;
+                const shippingFee = selectedShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+                const totalPayout = Math.max(baseQuote - shippingFee, 0);
+
                 const fullName = fullNameInput?.value || '';
                 const phone = phoneInput?.value || '';
                 const streetAddress = streetAddressInput?.value || '';
@@ -3234,10 +3229,40 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const state = stateInput?.value || '';
                 const zipCode = zipCodeInput?.value || '';
 
-                overviewQuote.textContent = `$${finalQuote.toFixed(2)}`;
+                overviewQuote.textContent = `$${totalPayout.toFixed(2)}`;
                 overviewShippingPreference.textContent = displayShippingPreferenceText;
                 overviewCarrier.textContent = displayCarrierText;
-                
+
+                const breakdownQuoteAmount = document.getElementById('breakdownQuoteAmount');
+                if (breakdownQuoteAmount) {
+                    breakdownQuoteAmount.textContent = `$${baseQuote.toFixed(2)}`;
+                }
+
+                const breakdownShippingLabel = document.getElementById('breakdownShippingLabel');
+                const breakdownShippingAmount = document.getElementById('breakdownShippingAmount');
+                if (breakdownShippingLabel && breakdownShippingAmount) {
+                    breakdownShippingAmount.classList.remove('text-emerald-600', 'text-rose-600', 'text-slate-500');
+
+                    if (selectedShippingPreference === 'ship_kit') {
+                        breakdownShippingLabel.textContent = 'Shipping Kit';
+                        breakdownShippingAmount.textContent = `-$${SHIPPING_KIT_FEE.toFixed(2)}`;
+                        breakdownShippingAmount.classList.add('text-rose-600');
+                    } else if (selectedShippingPreference === 'email_label') {
+                        breakdownShippingLabel.textContent = 'Email Label';
+                        breakdownShippingAmount.textContent = 'Free';
+                        breakdownShippingAmount.classList.add('text-emerald-600');
+                    } else {
+                        breakdownShippingLabel.textContent = 'Shipping Option';
+                        breakdownShippingAmount.textContent = 'Select an option';
+                        breakdownShippingAmount.classList.add('text-slate-500');
+                    }
+                }
+
+                const breakdownFinalPayout = document.getElementById('breakdownFinalPayout');
+                if (breakdownFinalPayout) {
+                    breakdownFinalPayout.textContent = `$${totalPayout.toFixed(2)}`;
+                }
+
                 // NEW: Update phone overview display
                 overviewPhone.textContent = phone || 'Not Entered';
 
@@ -3305,6 +3330,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 submitOrderBtn.classList.add('btn-disabled');
                 
                 const rawShippingPreference = document.querySelector('input[name="shipping_preference"]:checked').value;
+                const shippingFee = rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+                const totalPayout = Math.max(finalQuote - shippingFee, 0);
 
                 const orderData = {
                     device: device.name,
@@ -3317,6 +3344,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
                     estimatedQuote: finalQuote,
+                    shippingFee,
+                    totalPayout,
                     shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
                     paymentMethod: selectedPayment.value,
                     paymentDetails: {},
