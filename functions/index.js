@@ -1383,13 +1383,22 @@ function shouldRefreshInbound(order = {}) {
   return Date.now() - lastSyncedMs >= INBOUND_REFRESH_INTERVAL_MS;
 }
 
-function deriveInboundStatusUpdate(order = {}, normalizedStatus) {
+function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadata = {}) {
   if (!normalizedStatus) return null;
   const upper = String(normalizedStatus).toUpperCase();
+  const hasEstimatedDelivery = Boolean(
+    trackingMetadata &&
+    (
+      trackingMetadata.labelTrackingEstimatedDelivery ||
+      trackingMetadata.estimatedDelivery ||
+      trackingMetadata.estimated_delivery_date
+    )
+  );
+  const kitOrder = isKitOrder(order);
+  const emailLabelOrder = isEmailLabelOrder(order);
 
   if (upper === "DELIVERED" || upper === "DELIVERED_TO_AGENT") {
     const normalizedStatus = (order.status || "").toLowerCase();
-    const kitOrder = isKitOrder(order);
 
     if (kitOrder) {
       if (normalizedStatus === "delivered_to_us" || normalizedStatus === "received") {
@@ -1414,13 +1423,19 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus) {
   ]);
 
   if (transitStatuses.has(upper)) {
-    if (isKitOrder(order)) {
+    if (kitOrder) {
       if ((order.status || "").toLowerCase() === "kit_on_the_way_to_us") {
         return null;
       }
       return { nextStatus: "kit_on_the_way_to_us", delivered: false };
     }
-    if (isEmailLabelOrder(order)) {
+    if (emailLabelOrder) {
+      if (upper !== "IN_TRANSIT") {
+        return null;
+      }
+      if (!hasEstimatedDelivery) {
+        return null;
+      }
       if ((order.status || "").toLowerCase() === "phone_on_the_way") {
         return null;
       }
@@ -2333,7 +2348,7 @@ async function syncInboundTrackingForOrder(order, options = {}) {
     updatePayload.labelDeliveredAt = timestamp;
   }
 
-  const statusUpdate = deriveInboundStatusUpdate(order, normalizedStatus);
+  const statusUpdate = deriveInboundStatusUpdate(order, normalizedStatus, updatePayload);
 
   const logEntries = [
     {

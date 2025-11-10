@@ -154,7 +154,6 @@ const ADMIN_PAGE = document.body?.dataset?.adminPage || 'orders';
 const IS_ORDERS_PAGE = ADMIN_PAGE === 'orders';
 const IS_ANALYTICS_PAGE = ADMIN_PAGE === 'analytics';
 const IS_AGING_PAGE = ADMIN_PAGE === 'aging';
-const IS_BULK_PRINT_PAGE = ADMIN_PAGE === 'bulk-print';
 
 const ordersTableBody = document.getElementById('orders-table-body');
 const noOrdersMessage = document.getElementById('no-orders-message');
@@ -175,13 +174,6 @@ const mobileAveragePayoutAmount = document.getElementById('mobile-average-payout
 const compactDensityToggle = document.getElementById('compact-density-toggle');
 const refreshOrdersBtn = document.getElementById('refresh-orders-btn');
 const lastRefreshAt = document.getElementById('last-refresh-at');
-const ordersSelectAllCheckbox = document.getElementById('orders-select-all');
-const massPrintBtn = document.getElementById('mass-print-btn');
-const ordersToolbarFeedback = document.getElementById('orders-toolbar-feedback');
-const MASS_PRINT_DEFAULT_LABEL = '<i class="fas fa-print"></i> Print selected kits';
-const selectedOrderIds = new Set();
-let lastRenderedOrderIds = [];
-let ordersFeedbackTimeout = null;
 if (lastRefreshAt) {
 lastRefreshAt.textContent = 'Listening for updates…';
 }
@@ -367,7 +359,7 @@ let currentFilteredOrders = [];
 let currentPage = 1;
 let lastKnownTotalPages = 1;
 const ORDERS_PER_PAGE = 10;
-let currentActiveStatus = IS_BULK_PRINT_PAGE ? 'kit_needs_printing' : 'all';
+let currentActiveStatus = 'all';
 let refreshInterval = null;
 let currentOrderDetails = null;
 let feedPricingDataCache = null;
@@ -3182,123 +3174,6 @@ ordersStatusChart.update();
 }
 }
 
-function hideOrdersFeedback() {
-if (!ordersToolbarFeedback) return;
-ordersToolbarFeedback.classList.add('hidden');
-ordersToolbarFeedback.classList.remove('success', 'error');
-ordersToolbarFeedback.textContent = '';
-if (ordersFeedbackTimeout) {
-clearTimeout(ordersFeedbackTimeout);
-ordersFeedbackTimeout = null;
-}
-}
-
-function showOrdersFeedback(message, type = 'info', duration = 6000) {
-if (!ordersToolbarFeedback) return;
-if (ordersFeedbackTimeout) {
-clearTimeout(ordersFeedbackTimeout);
-ordersFeedbackTimeout = null;
-}
-ordersToolbarFeedback.textContent = message;
-ordersToolbarFeedback.classList.remove('hidden', 'success', 'error');
-if (type === 'success') {
-ordersToolbarFeedback.classList.add('success');
-} else if (type === 'error') {
-ordersToolbarFeedback.classList.add('error');
-}
-ordersFeedbackTimeout = window.setTimeout(() => {
-hideOrdersFeedback();
-}, duration);
-}
-
-function updateMassPrintButtonLabel({ force } = {}) {
-if (!massPrintBtn) return;
-const isLoading = massPrintBtn.dataset.loading === 'true';
-const count = selectedOrderIds.size;
-massPrintBtn.disabled = isLoading || count === 0;
-if (isLoading && !force) {
-return;
-}
-const label =
-count > 0
-? `<i class="fas fa-print"></i> Print ${count} kit${count === 1 ? '' : 's'}`
-: MASS_PRINT_DEFAULT_LABEL;
-massPrintBtn.innerHTML = label;
-}
-
-const SKIP_REASON_LABELS = {
-  not_found: 'order not found',
-  not_kit_order: 'not a kit order',
-  missing_labels: 'missing shipping labels',
-  label_download_failed: 'label download failed',
-  processing_error: 'processing error',
-};
-
-function normalizeSkippedEntries(raw = []) {
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-
-  return raw
-    .map((entry) => {
-      if (!entry) return null;
-      if (typeof entry === 'string') {
-        return { id: entry, reason: null };
-      }
-
-      const idValue = typeof entry.id === 'string' ? entry.id : String(entry.id || '').trim();
-      if (!idValue) {
-        return null;
-      }
-
-      return {
-        id: idValue,
-        reason: entry.reason || null,
-      };
-    })
-    .filter(Boolean);
-}
-
-function formatSkippedReason(reason) {
-  if (!reason) return '';
-  return SKIP_REASON_LABELS[reason] || reason;
-}
-
-function setSelectAllState(displayedIds = lastRenderedOrderIds) {
-  if (!ordersSelectAllCheckbox) return;
-  const ids = Array.isArray(displayedIds) ? displayedIds : [];
-  if (!ids.length) {
-    ordersSelectAllCheckbox.checked = false;
-    ordersSelectAllCheckbox.indeterminate = false;
-    return;
-  }
-  const selectedCount = ids.filter((id) => selectedOrderIds.has(id)).length;
-  ordersSelectAllCheckbox.checked = selectedCount === ids.length;
-  ordersSelectAllCheckbox.indeterminate = selectedCount > 0 && selectedCount < ids.length;
-}
-
-function clearSelectedOrderCheckboxes() {
-  if (!ordersTableBody) return;
-  const checkboxes = ordersTableBody.querySelectorAll('.order-select-checkbox');
-  checkboxes.forEach((checkbox) => {
-    if (checkbox && typeof checkbox === 'object' && 'checked' in checkbox) {
-      checkbox.checked = false;
-    }
-  });
-}
-
-function cleanupSelectedOrderIds() {
-  if (!selectedOrderIds.size) {
-    return;
-  }
-  const knownIds = new Set(allOrders.map((order) => order.id));
-selectedOrderIds.forEach((id) => {
-if (!knownIds.has(id)) {
-selectedOrderIds.delete(id);
-}
-});
-}
-
 function isKitOrder(order = {}) {
   const preference = (order.shippingPreference || order.shipping_preference || '')
     .toString()
@@ -3363,7 +3238,6 @@ sendKitReminderBtn.onclick = null;
 }
 
 function renderOrders() {
-cleanupSelectedOrderIds();
 if (!ordersTableBody) {
 return;
 }
@@ -3375,10 +3249,7 @@ if (!total) {
 if (noOrdersMessage) {
 noOrdersMessage.classList.remove('hidden');
 }
-ordersTableBody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
-lastRenderedOrderIds = [];
-setSelectAllState([]);
-updateMassPrintButtonLabel();
+ordersTableBody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
 if (paginationControls) {
 paginationControls.classList.add('hidden');
 }
@@ -3397,10 +3268,8 @@ currentPage = totalPages;
 const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
 const endIndex = startIndex + ORDERS_PER_PAGE;
 const ordersToDisplay = source.slice(startIndex, endIndex);
-const displayedIds = [];
 
 ordersToDisplay.forEach(order => {
-displayedIds.push(order.id);
 const row = document.createElement('tr');
 row.className = 'transition-colors duration-200';
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
@@ -3412,7 +3281,6 @@ const lastUpdatedDate = formatDateTime(lastUpdatedRaw);
 const reofferTimer = formatAutoAcceptTimer(order);
 const statusText = formatStatus(order);
 const labelStatus = formatLabelStatus(order);
-const isSelected = selectedOrderIds.has(order.id);
 
 const trackingNumber = order.trackingNumber;
 const trackingCellContent = trackingNumber
@@ -3420,9 +3288,6 @@ const trackingCellContent = trackingNumber
 : 'N/A';
 
 row.innerHTML = `
-<td class="px-3 py-4 text-center align-top">
-  <input type="checkbox" class="order-select-checkbox" data-order-id="${order.id}" ${isSelected ? 'checked' : ''}>
-</td>
 <td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${order.id}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
   <div>${orderDate}</div>
@@ -3448,19 +3313,6 @@ row.innerHTML = `
 
 ordersTableBody.appendChild(row);
 
-const checkbox = row.querySelector('.order-select-checkbox');
-if (checkbox) {
-checkbox.addEventListener('change', (event) => {
-if (event.target.checked) {
-selectedOrderIds.add(order.id);
-} else {
-selectedOrderIds.delete(order.id);
-}
-updateMassPrintButtonLabel();
-setSelectAllState(displayedIds);
-});
-}
-
 const detailsButton = row.querySelector('.view-details-btn');
 if (detailsButton) {
 detailsButton.addEventListener('click', (event) => {
@@ -3469,10 +3321,6 @@ openOrderDetailsModal(order.id);
 });
 }
 });
-
-lastRenderedOrderIds = displayedIds;
-setSelectAllState(displayedIds);
-updateMassPrintButtonLabel();
 }
 
 function buildPageSequence(totalPages, currentPage) {
@@ -5431,155 +5279,6 @@ refreshOrdersBtn.innerHTML = originalLabel;
 }
 
 
-if (massPrintBtn) {
-  massPrintBtn.dataset.loading = 'false';
-  updateMassPrintButtonLabel({ force: true });
-  massPrintBtn.addEventListener('click', async () => {
-    if (massPrintBtn.disabled || massPrintBtn.dataset.loading === 'true') {
-      return;
-    }
-
-    hideOrdersFeedback();
-    const selectedIds = Array.from(selectedOrderIds);
-    if (!selectedIds.length) {
-      return;
-    }
-
-    const selectedOrders = allOrders.filter((order) => selectedOrderIds.has(order.id));
-    const kitOrders = selectedOrders.filter((order) => isKitOrder(order));
-    const nonKitOrders = selectedOrders
-      .filter((order) => !isKitOrder(order))
-      .map((order) => order.id);
-
-    if (!kitOrders.length) {
-      showOrdersFeedback('Select at least one kit order to mass print shipping labels.', 'error');
-      return;
-    }
-
-    massPrintBtn.dataset.loading = 'true';
-    massPrintBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing…';
-    massPrintBtn.disabled = true;
-
-    try {
-      const response = await fetch(`${BACKEND_BASE_URL}/print-bundle/bulk`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds: kitOrders.map((order) => order.id) }),
-      });
-
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        const message = errorPayload?.error || `Mass print failed with status ${response.status}`;
-        const errorDetails = new Error(message);
-        if (errorPayload && errorPayload.skipped) {
-          errorDetails.skipped = errorPayload.skipped;
-        }
-        throw errorDetails;
-      }
-
-      const result = await response.json();
-      const base64 = result?.base64;
-      const skippedEntries = normalizeSkippedEntries(result?.skipped);
-      const printedIds = Array.isArray(result?.printed)
-        ? result.printed
-        : kitOrders.map((order) => order.id);
-
-      if (!base64) {
-        throw new Error('The bulk print response did not include printable data.');
-      }
-
-      const binaryString = atob(base64);
-      const buffer = new Uint8Array(binaryString.length);
-      for (let index = 0; index < binaryString.length; index += 1) {
-        buffer[index] = binaryString.charCodeAt(index);
-      }
-
-      const blob = new Blob([buffer], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-
-      let printWindow = null;
-      try {
-        printWindow = window.open(url, '_blank', 'noopener');
-      } catch (error) {
-        printWindow = null;
-      }
-
-      if (printWindow && printWindow.focus) {
-        try {
-          printWindow.focus();
-        } catch (focusError) {
-          console.warn('Unable to focus mass print window:', focusError);
-        }
-      } else {
-        const downloadLink = document.createElement('a');
-        downloadLink.href = url;
-        downloadLink.download = 'mass-print-bundle.pdf';
-        downloadLink.rel = 'noopener';
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-        showOrdersFeedback('Pop-up blocked. The combined label PDF was downloaded instead.', 'error');
-      }
-
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-
-      const summaryParts = [];
-      summaryParts.push(`Prepared ${printedIds.length} kit${printedIds.length === 1 ? '' : 's'} for printing.`);
-      if (nonKitOrders.length) {
-        summaryParts.push(`Ignored non-kit orders: ${nonKitOrders.join(', ')}`);
-      }
-      if (skippedEntries.length) {
-        const skippedSummary = skippedEntries
-          .map((entry) => {
-            const reasonText = formatSkippedReason(entry.reason);
-            return reasonText ? `${entry.id} (${reasonText})` : entry.id;
-          })
-          .join(', ');
-        summaryParts.push(`Skipped ${skippedEntries.length} order${skippedEntries.length === 1 ? '' : 's'}: ${skippedSummary}`);
-      }
-
-      const feedbackType = skippedEntries.length ? 'error' : 'success';
-      showOrdersFeedback(summaryParts.join(' '), feedbackType);
-      selectedOrderIds.clear();
-      clearSelectedOrderCheckboxes();
-      updateMassPrintButtonLabel({ force: true });
-      setSelectAllState([]);
-    } catch (error) {
-      console.error('Mass print failed:', error);
-      const skippedEntries = normalizeSkippedEntries(error.skipped);
-      let message = error.message || 'Failed to prepare mass print bundle.';
-      if (skippedEntries.length) {
-        const skippedSummary = skippedEntries
-          .map((entry) => {
-            const reasonText = formatSkippedReason(entry.reason);
-            return reasonText ? `${entry.id} (${reasonText})` : entry.id;
-          })
-          .join(', ');
-        message = `${message} Skipped: ${skippedSummary}.`;
-      }
-      showOrdersFeedback(message, 'error');
-    } finally {
-      massPrintBtn.dataset.loading = 'false';
-      updateMassPrintButtonLabel({ force: true });
-    }
-  });
-} else {
-  updateMassPrintButtonLabel({ force: true });
-}
-if (ordersSelectAllCheckbox) {
-ordersSelectAllCheckbox.addEventListener('change', (event) => {
-const displayed = Array.from(lastRenderedOrderIds);
-if (event.target.checked) {
-displayed.forEach((id) => selectedOrderIds.add(id));
-} else {
-displayed.forEach((id) => selectedOrderIds.delete(id));
-}
-ordersSelectAllCheckbox.indeterminate = false;
-updateMassPrintButtonLabel();
-setSelectAllState(displayed);
-});
-}
-
 if (closeModalButton) {
 closeModalButton.addEventListener('click', closeOrderDetailsModal);
 }
@@ -5656,7 +5355,7 @@ initializeAnalyticsDashboard();
 } catch (error) {
 console.error("Error initializing Firebase:", error);
 if (ordersTableBody) {
-ordersTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+ordersTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
 }
 document.getElementById('auth-loading-screen')?.classList.add('hidden');
 }
@@ -5683,7 +5382,7 @@ updateLastRefreshTimestamp();
 } catch (error) {
 console.error('Error fetching real-time orders:', error);
 if (ordersTableBody) {
-ordersTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+ordersTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
 }
 }
 }
@@ -5720,10 +5419,6 @@ order.id.toLowerCase().includes(lowerCaseSearchTerm) ||
 
 if (IS_AGING_PAGE) {
 filtered = filtered.filter(isAgingCandidate);
-}
-
-if (IS_BULK_PRINT_PAGE) {
-filtered = filtered.filter(isKitOrder);
 }
 
 filtered.sort((a, b) => {
