@@ -1,8 +1,30 @@
+const LOGO_URL = "https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png";
+let cachedLogoBytes = null;
+
 function ensurePdfLib() {
   if (!window.PDFLib) {
     throw new Error("PDFLib library is not loaded. Please include https://unpkg.com/pdf-lib/dist/pdf-lib.min.js before using order label helpers.");
   }
   return window.PDFLib;
+}
+
+async function fetchLogoBytes() {
+  if (cachedLogoBytes) {
+    return cachedLogoBytes;
+  }
+  try {
+    const response = await fetch(LOGO_URL);
+    if (!response.ok) {
+      throw new Error(`Failed to load logo: ${response.status}`);
+    }
+    const buffer = await response.arrayBuffer();
+    cachedLogoBytes = new Uint8Array(buffer);
+    return cachedLogoBytes;
+  } catch (error) {
+    console.warn("Unable to download logo asset for PDF labels:", error);
+    cachedLogoBytes = null;
+    return null;
+  }
 }
 
 function formatCurrency(value) {
@@ -13,9 +35,6 @@ function formatCurrency(value) {
   return number.toFixed(2);
 }
 
-/**
- * Wraps text based on max width and returns an array of lines.
- */
 function wrapText(text, font, fontSize, maxWidth) {
   if (!text) {
     return ["—"];
@@ -127,109 +146,201 @@ function buildDeviceLabel(order = {}) {
 export async function createOrderInfoLabelPdf(order = {}) {
   const { PDFDocument, StandardFonts, rgb } = ensurePdfLib();
   const doc = await PDFDocument.create();
-  // Standard Label Size: 4in x 6in (288pt x 432pt)
   const page = doc.addPage([288, 432]);
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
   const margin = 20;
-  const lineSpacing = 14; // Space between text baselines
-  let cursorY = page.getHeight() - margin; // cursorY tracks the TOP available Y position
+  const lineHeight = 14;
+  let cursorY = page.getHeight() - margin;
 
   const drawHeading = (text) => {
-    const size = 16;
-    const paddingAfter = 8;
-    cursorY -= size; // Move down by text size for baseline
+    cursorY -= lineHeight;
     page.drawText(text, {
       x: margin,
       y: cursorY,
-      size: size,
+      size: 16,
       font: bold,
-      color: rgb(0.07, 0.2, 0.47), // Dark Blue Heading
+      color: rgb(0.07, 0.2, 0.47),
     });
-    cursorY -= paddingAfter; // Extra spacing after heading
+    cursorY -= 6;
   };
 
   const drawSection = (title) => {
-    const size = 12;
-    const paddingAfter = 6;
-    cursorY -= size; // Move down by text size for baseline
+    cursorY -= lineHeight - 2;
     page.drawText(title, {
       x: margin,
       y: cursorY,
-      size: size,
+      size: 12,
       font: bold,
-      color: rgb(0.16, 0.18, 0.22), // Dark Gray Section
+      color: rgb(0.16, 0.18, 0.22),
     });
-    cursorY -= paddingAfter; // Extra spacing after section title
+    cursorY -= 4;
   };
 
-  /**
-   * Renders a Key: Value pair, handling multi-line value wrapping.
-   * cursorY is decremented for each line to prevent overlap.
-   */
   const drawKeyValue = (label, value) => {
-    const textHeight = 10;
     const keyText = `${label}:`;
-    const keyWidth = bold.widthOfTextAtSize(keyText, textHeight);
-    const valueMaxWidth = page.getWidth() - margin * 2 - keyWidth - 6;
-    const lines = wrapText(value ?? "—", regular, textHeight, valueMaxWidth);
-    const paddingBottom = 8; // Spacing before the next item
-
+    const keyWidth = bold.widthOfTextAtSize(keyText, 10);
+    const maxWidth = page.getWidth() - margin * 2 - keyWidth - 6;
+    const lines = wrapText(value ?? "—", regular, 10, maxWidth);
     lines.forEach((line, index) => {
-      // 1. Move the cursor down to the baseline of the new line.
-      cursorY -= lineSpacing; 
-
-      // 2. The new baseline Y is now `cursorY`.
-      const baselineY = cursorY;
-
-      // Draw Key (only on the first line)
-      if (index === 0) {
-        page.drawText(keyText, {
-          x: margin,
-          y: baselineY,
-          size: textHeight,
-          font: bold,
-          color: rgb(0.12, 0.12, 0.14),
-        });
-      }
-      
-      // Draw Value
+      page.drawText(index === 0 ? keyText : "", {
+        x: margin,
+        y: cursorY - index * lineHeight,
+        size: 10,
+        font: bold,
+        color: rgb(0.12, 0.12, 0.14),
+      });
       page.drawText(line, {
         x: margin + keyWidth + 6,
-        y: baselineY,
-        size: textHeight,
+        y: cursorY - index * lineHeight,
+        size: 10,
         font: regular,
         color: rgb(0.1, 0.1, 0.1),
       });
     });
-    
-    // Add spacing after the entire key/value block
-    cursorY -= paddingBottom;
+    cursorY -= lineHeight * lines.length + 6;
   };
 
   drawHeading(`Order #${order.id || "—"}`);
 
-  // --- Customer Information ---
   drawSection("Customer Information");
   const shippingInfo = order.shippingInfo || {};
   drawKeyValue("Customer Name", shippingInfo.fullName || shippingInfo.name || "—");
   drawKeyValue("Email", shippingInfo.email || "—");
   drawKeyValue("Phone", resolvePhone(shippingInfo));
 
-  // --- Device Details ---
   drawSection("Device Details");
   drawKeyValue("Item (Make/Model)", buildDeviceLabel(order) || "—");
   drawKeyValue("Storage", order.storage || order.memory || "—");
   drawKeyValue("Carrier", formatValue(order.carrier));
   drawKeyValue("Estimated Payout", `$${formatCurrency(resolvePayout(order))}`);
 
-  // --- Conditions ---
   drawSection("Conditions");
   drawKeyValue("Powers On?", formatBooleanish(order.condition_power_on));
   drawKeyValue("Fully Functional?", formatBooleanish(order.condition_functional));
   drawKeyValue("Any Cracks?", formatBooleanish(order.condition_cracks));
   drawKeyValue("Cosmetic Condition", formatBooleanish(order.condition_cosmetic));
+
+  return doc.save();
+}
+
+async function embedLogoImage(pdfDoc) {
+  const logoBytes = await fetchLogoBytes();
+  if (!logoBytes) {
+    return null;
+  }
+  try {
+    if (LOGO_URL.toLowerCase().endsWith(".png")) {
+      return await pdfDoc.embedPng(logoBytes);
+    }
+    return await pdfDoc.embedJpg(logoBytes);
+  } catch (error) {
+    console.warn("Failed to embed logo in PDF:", error);
+    return null;
+  }
+}
+
+function normalizeConditionText(value) {
+  if (value == null) return null;
+  const formatted = formatBooleanish(value);
+  if (formatted === "—") return null;
+  return formatted;
+}
+
+export async function createBagLabelPdf(order = {}) {
+  const { PDFDocument, StandardFonts, rgb } = ensurePdfLib();
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([288, 432]);
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  const margin = 18;
+  let cursorY = page.getHeight() - margin;
+  const maxWidth = page.getWidth() - margin * 2;
+
+  const draw = (
+    text,
+    { font = regular, size = 11, color = rgb(0.12, 0.12, 0.14), spacing = 10 } = {}
+  ) => {
+    if (!text) {
+      cursorY -= spacing;
+      return;
+    }
+
+    const lines = wrapText(text, font, size, maxWidth);
+    const lineHeight = size + 4;
+
+    lines.forEach((line) => {
+      cursorY -= lineHeight;
+      page.drawText(line, {
+        x: margin,
+        y: cursorY,
+        size,
+        font,
+        color,
+      });
+    });
+
+    cursorY -= spacing;
+  };
+
+  const logoImage = await embedLogoImage(doc);
+  if (logoImage) {
+    const scaled = logoImage.scale(0.3);
+    page.drawImage(logoImage, {
+      x: margin,
+      y: cursorY - scaled.height,
+      width: scaled.width,
+      height: scaled.height,
+    });
+    cursorY -= scaled.height + 16;
+  }
+
+  draw("SecondHandCell Bag Label", { font: bold, size: 14, spacing: 14 });
+  draw(`Order #${order.id || "—"}`, { font: bold, size: 24, color: rgb(0.07, 0.2, 0.47), spacing: 16 });
+
+  const deviceLabel = buildDeviceLabel(order);
+  if (deviceLabel) {
+    draw(`Device: ${deviceLabel}`, { size: 12, spacing: 10 });
+  }
+
+  if (order.storage) {
+    draw(`Storage: ${String(order.storage)}`, { size: 11, spacing: 10 });
+  }
+
+  if (order.carrier) {
+    draw(`Carrier: ${formatValue(order.carrier)}`, { size: 11, spacing: 10 });
+  }
+
+  const conditionParts = [];
+  const powerText = normalizeConditionText(order.condition_power_on);
+  if (powerText) conditionParts.push(`Powers On: ${powerText}`);
+  const functionalText = normalizeConditionText(order.condition_functional);
+  if (functionalText) conditionParts.push(`Functional: ${functionalText}`);
+  const cosmeticText = normalizeConditionText(order.condition_cosmetic);
+  if (cosmeticText) conditionParts.push(`Cosmetic: ${cosmeticText}`);
+  const cracksText = normalizeConditionText(order.condition_cracks);
+  if (cracksText) conditionParts.push(`Cracks: ${cracksText}`);
+
+  if (conditionParts.length) {
+    draw(`Condition: ${conditionParts.join(" • ")}`, { size: 11, spacing: 12 });
+  }
+
+  const payout = formatCurrency(resolvePayout(order));
+  draw(`Quoted Price: $${payout}`, { font: bold, size: 13, color: rgb(0.1, 0.45, 0.2), spacing: 14 });
+
+  draw("Attach this label to the device bag before shipping.", {
+    size: 10,
+    color: rgb(0.35, 0.35, 0.35),
+    spacing: 10,
+  });
+
+  draw("Include this sheet with the device inside the return box.", {
+    size: 10,
+    color: rgb(0.35, 0.35, 0.35),
+    spacing: 12,
+  });
 
   return doc.save();
 }
@@ -283,3 +394,4 @@ export function serialiseQueueOrder(doc) {
   payload.labelUrls = gatherOrderLabelUrls(payload);
   return payload;
 }
+

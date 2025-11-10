@@ -112,7 +112,7 @@ import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
-import { createOrderInfoLabelPdf, createBagLabelPdf } from "/assets/js/pdf/order-labels.js";
+import { createOrderInfoLabelPdf } from "/assets/js/pdf/order-labels.js";
 /* --- API BASE URL FIX: Redirect /api/* to Cloud Functions base --- */
 (function () {
   try {
@@ -2521,7 +2521,6 @@ return bytes.buffer;
 
   // 2. Generate the custom info + bag labels client-side
   const orderInfoLabelBytes = await createOrderInfoLabelPdf(order);
-  const bagLabelBytes = await createBagLabelPdf(order);
 
   // Merge shipping labels followed by the info and bag labels
   const mergedPdf = await PDFLib.PDFDocument.create();
@@ -2536,12 +2535,6 @@ return bytes.buffer;
     const infoPdf = await PDFLib.PDFDocument.load(orderInfoLabelBytes);
     const copiedInfo = await mergedPdf.copyPages(infoPdf, infoPdf.getPageIndices());
     copiedInfo.forEach((page) => mergedPdf.addPage(page));
-  }
-
-  if (bagLabelBytes) {
-    const bagLabelPdf = await PDFLib.PDFDocument.load(bagLabelBytes);
-    const copiedBag = await mergedPdf.copyPages(bagLabelPdf, bagLabelPdf.getPageIndices());
-    copiedBag.forEach((page) => mergedPdf.addPage(page));
   }
 
 // 5. Display merged PDF in a dedicated print window
