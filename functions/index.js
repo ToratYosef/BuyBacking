@@ -25,6 +25,27 @@ const usersCollection = db.collection("users");
 const adminsCollection = db.collection("admins"); // This collection should only contain manually designated admin UIDs
 const chatsCollection = db.collection("chats");
 
+function isValidImei(imei) {
+  if (typeof imei !== "string" || !/^\d{15}$/.test(imei)) {
+    return false;
+  }
+
+  let sum = 0;
+  for (let index = 0; index < imei.length; index += 1) {
+    const digitIndexFromRight = imei.length - 1 - index;
+    let digit = Number(imei[digitIndexFromRight]);
+    if (index % 2 === 1) {
+      digit *= 2;
+      if (digit > 9) {
+        digit -= 9;
+      }
+    }
+    sum += digit;
+  }
+
+  return sum % 10 === 0;
+}
+
 const app = express();
 
 const allowedOrigins = [
@@ -67,6 +88,111 @@ app.use((req, res, next) => {
 app.options("*", cors(corsOptions));
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
+
+app.post("/checkImei", async (req, res) => {
+  const { orderId, imei } = req.body || {};
+
+  if (!orderId || typeof orderId !== "string") {
+    return res.status(400).json({ error: "orderId is required." });
+  }
+
+  if (!isValidImei(imei)) {
+    return res.status(400).json({ error: "Invalid IMEI. Expecting a 15-digit Luhn-compliant value." });
+  }
+
+  try {
+    const orderRef = db.collection("orders").doc(orderId);
+    const snapshot = await orderRef.get();
+
+    if (!snapshot.exists) {
+      return res.status(404).json({ error: "Order not found." });
+    }
+
+    const data = snapshot.data() || {};
+    if (data.status !== "received") {
+      return res.status(400).json({ error: "Order is not eligible for IMEI checks." });
+    }
+
+    const imeiApiConfig = process.env.IMEI_API;
+    const imeiApiFallbackUrl = process.env.IMEI_API_URL || "https://imei.info/api/check";
+
+    if (!imeiApiConfig && !imeiApiFallbackUrl) {
+      console.error("Missing IMEI provider environment configuration.");
+      return res.status(500).json({ error: "IMEI provider is not configured." });
+    }
+
+    let providerUrl;
+    try {
+      if (imeiApiConfig && /^https?:\/\//i.test(imeiApiConfig)) {
+        const url = new URL(imeiApiConfig);
+        url.searchParams.set("imei", imei);
+        providerUrl = url.toString();
+      } else {
+        const baseUrl = new URL(imeiApiFallbackUrl);
+        if (imeiApiConfig) {
+          baseUrl.searchParams.set("api_key", imeiApiConfig);
+        }
+        baseUrl.searchParams.set("imei", imei);
+        providerUrl = baseUrl.toString();
+      }
+    } catch (error) {
+      console.error("Failed to construct IMEI provider URL:", error);
+      return res.status(500).json({ error: "IMEI provider configuration is invalid." });
+    }
+
+    let providerResponse;
+    try {
+      providerResponse = await fetch(providerUrl);
+    } catch (error) {
+      console.error("IMEI provider request failed:", error);
+      return res.status(502).json({ error: "Failed to reach IMEI provider." });
+    }
+
+    if (!providerResponse.ok) {
+      const body = await providerResponse.text();
+      console.error("IMEI provider returned error:", providerResponse.status, body);
+      return res.status(502).json({ error: "IMEI provider returned an error response." });
+    }
+
+    let providerData;
+    try {
+      providerData = await providerResponse.json();
+    } catch (error) {
+      console.error("Failed to parse IMEI provider response:", error);
+      return res.status(502).json({ error: "Invalid IMEI provider response." });
+    }
+
+    const normalized = {
+      brand: providerData?.brand ?? providerData?.Brand ?? null,
+      model: providerData?.model ?? providerData?.Model ?? null,
+      color: providerData?.color ?? providerData?.Color ?? null,
+      storage: providerData?.storage ?? providerData?.Storage ?? null,
+      carrier: providerData?.carrier ?? providerData?.Carrier ?? null,
+      carrierLock:
+        providerData?.carrierLock ??
+        providerData?.carrier_lock ??
+        providerData?.lock ??
+        null,
+      blacklisted:
+        providerData?.blacklisted ??
+        providerData?.Blacklisted ??
+        providerData?.isBlacklisted ??
+        null,
+      raw: providerData
+    };
+
+    await orderRef.set({
+      imeiChecked: true,
+      imeiCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
+      imeiCheckResult: normalized
+    }, { merge: true });
+
+    return res.json({ ok: true, result: normalized });
+  } catch (error) {
+    console.error("Unexpected IMEI check failure:", error);
+    return res.status(500).json({ error: "Unexpected error while checking IMEI." });
+  }
+});
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
