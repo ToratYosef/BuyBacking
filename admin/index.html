@@ -1181,6 +1181,58 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             flex-wrap: wrap;
         }
 
+        .bulk-status-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 12px;
+            border-radius: 12px;
+            background: rgba(241, 245, 249, 0.7);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            flex-wrap: wrap;
+        }
+
+        .bulk-status-select {
+            min-width: 200px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.6);
+            background: white;
+            font-size: 13px;
+            color: #0f172a;
+        }
+
+        .bulk-status-apply {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(34, 197, 94, 0.35);
+            background: linear-gradient(120deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.18));
+            color: #047857;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .bulk-status-apply:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .bulk-status-note {
+            font-size: 12px;
+            color: #475569;
+            font-weight: 500;
+        }
+
+        .bulk-selection-count {
+            font-size: 12px;
+            color: #1e293b;
+            font-weight: 600;
+        }
+
         .view-controls {
             display: flex;
             align-items: center;
@@ -1268,6 +1320,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             padding: 14px 18px;
             background: rgba(241, 245, 249, 0.7);
             border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .orders-table thead th.select-column,
+        .orders-table tbody td.select-column {
+            width: 44px;
+            text-align: center;
+        }
+
+        .orders-table tbody td.select-column {
+            padding: 16px 12px;
+        }
+
+        .order-select-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #2563eb;
         }
 
         .orders-table tbody td {
@@ -2195,25 +2263,39 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         
         <div class="orders-table-container">
             <div class="orders-table-header">Orders List</div>
-            <div class="orders-toolbar">
-                <div class="view-controls">
-                    <label class="density-toggle" for="compact-density-toggle">
-                        <input type="checkbox" id="compact-density-toggle">
-                        Compact rows
-                    </label>
-                    <span class="orders-toolbar-note" id="last-refresh-at">Updated just now</span>
-                </div>
-                <div class="orders-toolbar-actions">
-                    <button class="refresh-btn" id="refresh-orders-btn">
-                        <i class="fas fa-rotate"></i>
-                        Refresh data
-                    </button>
-                </div>
+                <div class="orders-toolbar">
+                    <div class="view-controls">
+                        <label class="density-toggle" for="compact-density-toggle">
+                            <input type="checkbox" id="compact-density-toggle">
+                            Compact rows
+                        </label>
+                        <span class="orders-toolbar-note" id="last-refresh-at">Updated just now</span>
+                    </div>
+                    <div class="orders-toolbar-actions">
+                        <div class="bulk-status-controls">
+                            <select id="bulk-status-select" class="bulk-status-select">
+                                <option value="">Bulk update status…</option>
+                            </select>
+                            <button type="button" id="bulk-status-apply" class="bulk-status-apply" disabled>
+                                <i class="fas fa-check"></i>
+                                Update
+                            </button>
+                            <span class="bulk-status-note">Customer will not be emailed.</span>
+                            <span class="bulk-selection-count" id="bulk-selection-count">No orders selected</span>
+                        </div>
+                        <button class="refresh-btn" id="refresh-orders-btn">
+                            <i class="fas fa-rotate"></i>
+                            Refresh data
+                        </button>
+                    </div>
             </div>
             <div class="orders-table-wrapper">
                 <table class="orders-table">
                     <thead>
                         <tr>
+                            <th class="select-column">
+                                <input type="checkbox" id="select-all-orders" class="order-select-checkbox" aria-label="Select all orders on this page">
+                            </th>
                             <th>Order ID</th>
                             <th>Order Date</th>
                             <th>Last Updated</th>
@@ -2225,7 +2307,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         </tr>
                     </thead>
                     <tbody id="orders-table-body">
-                        <tr><td colspan="8" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
+                        <tr><td colspan="9" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
                     </tbody>
                 </table>
             </div>
