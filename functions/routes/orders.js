@@ -49,6 +49,15 @@ function createOrdersRouter({
 
   const PRINT_BUNDLE_ALLOWED_METHODS = 'GET,POST,OPTIONS';
   const PRINT_BUNDLE_ALLOWED_HEADERS = 'Authorization, Content-Type, X-Requested-With';
+  const firestore = admin.firestore();
+  const FieldValue = admin.firestore.FieldValue;
+  let storageBucket = null;
+
+  try {
+    storageBucket = admin.storage().bucket();
+  } catch (error) {
+    console.warn('Bulk print storage bucket unavailable:', error?.message || error);
+  }
 
   function applyPrintBundleCorsHeaders(res, origin) {
     if (origin && PRINT_BUNDLE_ALLOWED_ORIGINS.has(origin)) {
@@ -59,7 +68,10 @@ function createOrdersRouter({
 
     res.header('Access-Control-Allow-Methods', PRINT_BUNDLE_ALLOWED_METHODS);
     res.header('Access-Control-Allow-Headers', PRINT_BUNDLE_ALLOWED_HEADERS);
-    res.header('Access-Control-Expose-Headers', 'X-Printed-Order-Ids, X-Kit-Sent-Order-Ids');
+    res.header(
+      'Access-Control-Expose-Headers',
+      'X-Printed-Order-Ids, X-Kit-Sent-Order-Ids, X-Bulk-Print-Folder, X-Bulk-Print-Job-Id'
+    );
   }
 
   function handlePrintBundlePreflight(req, res) {
@@ -250,26 +262,72 @@ function createOrdersRouter({
     return Buffer.from(response.data);
   }
 
-  async function collectOrderPrintBuffers(order) {
-    const buffers = [];
-    const labelUrls = Array.from(collectLabelUrlCandidates(order));
+  function sanitisePathSegment(value) {
+    return String(value || '')
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]+/g, '-');
+  }
 
-    await Promise.all(
-      labelUrls.map(async (url) => {
-        try {
-          const buffer = await downloadPdfBuffer(url);
-          buffers.push(buffer);
-        } catch (error) {
-          console.error(`Failed to download label for order ${order.id} from ${url}:`, error.message || error);
+  async function collectOrderPrintParts(order) {
+    const parts = [];
+    const seenUrls = new Set();
+
+    async function pushLabelPart(url, kind) {
+      if (!url) {
+        return;
+      }
+
+      const stringUrl = String(url).trim();
+      if (!stringUrl || seenUrls.has(stringUrl)) {
+        return;
+      }
+
+      try {
+        const buffer = await downloadPdfBuffer(stringUrl);
+        if (buffer && buffer.length) {
+          parts.push({ kind, buffer, sourceUrl: stringUrl });
+          seenUrls.add(stringUrl);
         }
-      })
-    );
+      } catch (error) {
+        console.error(`Failed to download label for order ${order?.id} from ${stringUrl}:`, error.message || error);
+      }
+    }
+
+    let hasInboundLabel = false;
+
+    await pushLabelPart(order.outboundLabelUrl, 'outbound');
+
+    if (order.inboundLabelUrl) {
+      await pushLabelPart(order.inboundLabelUrl, 'inbound');
+      hasInboundLabel = true;
+    }
+
+    if (order.uspsLabelUrl) {
+      if (!hasInboundLabel) {
+        await pushLabelPart(order.uspsLabelUrl, 'inbound');
+        hasInboundLabel = true;
+      } else {
+        await pushLabelPart(order.uspsLabelUrl, 'extra');
+      }
+    }
+
+    const labelUrls = Array.from(collectLabelUrlCandidates(order));
+    for (const url of labelUrls) {
+      if (seenUrls.has(url)) {
+        continue;
+      }
+      const nextKind = hasInboundLabel ? 'extra' : 'inbound';
+      await pushLabelPart(url, nextKind);
+      if (nextKind === 'inbound') {
+        hasInboundLabel = true;
+      }
+    }
 
     try {
       const infoLabel = await generateCustomLabelPdf(order);
       const infoBuffer = normaliseBuffer(infoLabel);
-      if (infoBuffer) {
-        buffers.push(infoBuffer);
+      if (infoBuffer && infoBuffer.length) {
+        parts.push({ kind: 'info', buffer: infoBuffer });
       }
     } catch (error) {
       console.error(`Failed to generate info label PDF for order ${order.id}:`, error);
@@ -278,14 +336,127 @@ function createOrdersRouter({
     try {
       const bagLabel = await generateBagLabelPdf(order);
       const bagBuffer = normaliseBuffer(bagLabel);
-      if (bagBuffer) {
-        buffers.push(bagBuffer);
+      if (bagBuffer && bagBuffer.length) {
+        parts.push({ kind: 'bag', buffer: bagBuffer });
       }
     } catch (error) {
       console.error(`Failed to generate bag label PDF for order ${order.id}:`, error);
     }
 
-    return buffers;
+    return parts;
+  }
+
+  function createSuffixResolver(parts = []) {
+    const used = new Set();
+    const baseSuffixes = new Map([
+      ['outbound', '1'],
+      ['inbound', '2'],
+      ['info', '3'],
+      ['bag', '4'],
+    ]);
+    let fallbackIndex = 1;
+
+    return (part = {}) => {
+      const base = baseSuffixes.get(part.kind);
+      if (base && !used.has(base)) {
+        used.add(base);
+        return base;
+      }
+
+      while (used.has(String(fallbackIndex))) {
+        fallbackIndex += 1;
+      }
+
+      const suffix = String(fallbackIndex);
+      used.add(suffix);
+      fallbackIndex += 1;
+      return suffix;
+    };
+  }
+
+  async function persistBulkPrintAssets(context, plans = []) {
+    if (!context || !context.folderName || !Array.isArray(plans) || !plans.length) {
+      return null;
+    }
+
+    if (!storageBucket) {
+      return null;
+    }
+
+    const uploads = [];
+
+    plans.forEach(({ order, parts }) => {
+      if (!order?.id || !Array.isArray(parts) || !parts.length) {
+        return;
+      }
+
+      const orderId = String(order.id).trim();
+      if (!orderId) {
+        return;
+      }
+
+      const suffixResolver = createSuffixResolver(parts);
+
+      parts.forEach((part) => {
+        if (!part?.buffer) {
+          return;
+        }
+
+        const suffix = suffixResolver(part);
+        const filePath = `${context.folderName}/${sanitisePathSegment(orderId)}-${suffix}.pdf`;
+
+        uploads.push(
+          storageBucket
+            .file(filePath)
+            .save(part.buffer, { contentType: 'application/pdf' })
+            .catch((error) => {
+              console.error(`Failed to upload bulk print asset ${filePath}:`, error);
+            })
+        );
+      });
+    });
+
+    if (uploads.length) {
+      await Promise.all(uploads);
+    }
+
+    return null;
+  }
+
+  async function reserveBulkPrintContext(orderIds = []) {
+    if (!firestore) {
+      return null;
+    }
+
+    const counterRef = firestore.collection('adminCounters').doc('bulkPrint');
+    let sequence = 0;
+
+    await firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(counterRef);
+      const current = snapshot.exists && typeof snapshot.data()?.sequence === 'number'
+        ? snapshot.data().sequence
+        : 0;
+      sequence = current + 1;
+      transaction.set(counterRef, { sequence }, { merge: true });
+    });
+
+    const folderName = `bulk-print-${sequence}`;
+    let jobId = null;
+
+    try {
+      const jobRef = firestore.collection('bulkPrintJobs').doc();
+      jobId = jobRef.id;
+      await jobRef.set({
+        createdAt: FieldValue.serverTimestamp(),
+        orderIds,
+        folder: folderName,
+        sequence,
+      });
+    } catch (error) {
+      console.error('Failed to record bulk print job metadata:', error);
+    }
+
+    return { folderName, sequence, jobId };
   }
 
   async function buildPrintBundleResponse({ orderIds = [], res, origin, allowEmptySelection = false }) {
@@ -307,16 +478,22 @@ function createOrdersRouter({
     const printableOrderIds = [];
     const printableOrders = [];
     const mergedParts = [];
+    const bulkPlans = [];
 
     for (const order of orders) {
-      const parts = await collectOrderPrintBuffers(order);
+      const parts = await collectOrderPrintParts(order);
       if (!parts.length) {
         console.warn(`No printable documents generated for order ${order.id}`);
         continue;
       }
       printableOrderIds.push(order.id);
       printableOrders.push(order);
-      mergedParts.push(...parts);
+      parts.forEach((part) => {
+        if (part?.buffer) {
+          mergedParts.push(part.buffer);
+        }
+      });
+      bulkPlans.push({ order, parts });
     }
 
     if (!mergedParts.length) {
@@ -327,6 +504,19 @@ function createOrdersRouter({
 
     const mergedPdf = await mergePdfBuffers(mergedParts);
     const mergedBuffer = normaliseBuffer(mergedPdf);
+
+    let bulkContext = null;
+    if (printableOrderIds.length) {
+      try {
+        const context = await reserveBulkPrintContext(printableOrderIds);
+        if (context) {
+          await persistBulkPrintAssets(context, bulkPlans);
+          bulkContext = context;
+        }
+      } catch (storageError) {
+        console.error('Failed to persist bulk print assets:', storageError);
+      }
+    }
 
     let kitSentOrderIds = [];
     try {
@@ -339,6 +529,12 @@ function createOrdersRouter({
     res.setHeader('Content-Disposition', 'inline; filename="print-queue-bundle.pdf"');
     res.setHeader('X-Printed-Order-Ids', JSON.stringify(printableOrderIds));
     res.setHeader('X-Kit-Sent-Order-Ids', JSON.stringify(kitSentOrderIds));
+    if (bulkContext?.folderName) {
+      res.setHeader('X-Bulk-Print-Folder', bulkContext.folderName);
+    }
+    if (bulkContext?.jobId) {
+      res.setHeader('X-Bulk-Print-Job-Id', bulkContext.jobId);
+    }
     res.send(mergedBuffer);
 
     return null;
