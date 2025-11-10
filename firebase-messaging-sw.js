@@ -75,7 +75,7 @@ self.addEventListener('notificationclick', function(event) {
     } else {
         // Fallback if no specific chat data is present
         event.waitUntil(
-            clients.openWindow('https://secondhandcell.com/chat/chat.html') // Default dashboard URL
+            clients.openWindow('https://secondhandcell.com/admin') // Default dashboard URL
         );
     }
 });
