@@ -39,31 +39,19 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    return callback(new Error("Not allowed by CORS"));
+    // console.warn("CORS rejection: Origin not allowed", origin); // Optionally log rejections
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  // ✅ FIX 1: Allows the browser to process requests that include credentials (like the Authorization header)
+  credentials: true, 
 };
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-  res.header("Vary", "Origin");
-  res.header("Access-Control-Allow-Methods", corsOptions.methods.join(","));
-  res.header(
-    "Access-Control-Allow-Headers",
-    corsOptions.allowedHeaders.join(",")
-  );
+// ✅ FIX 2: Apply the CORS middleware globally. This replaces the entire problematic manual block.
+app.use(cors(corsOptions)); 
 
-  if (req.method === "OPTIONS") {
-    return res.status(204).send("");
-  }
-
-  return cors(corsOptions)(req, res, next);
-});
-
+// Handles pre-flight OPTIONS requests (required for POST requests with custom headers like Authorization)
 app.options("*", cors(corsOptions));
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
@@ -4842,4 +4830,4 @@ exports.notifyWholesaleOfferUpdated = functions.firestore
     return null;
   });
 
-exports.api = functions.https.onRequest(app);
+exports.api = functions.runWith({ timeoutSeconds: 540, memory: '4GB' }).https.onRequest(app);
