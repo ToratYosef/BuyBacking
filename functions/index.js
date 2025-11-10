@@ -2028,6 +2028,57 @@ app.post('/orders/:id/send-review-request', async (req, res) => {
   }
 });
 
+app.post('/orders/:id/mark-kit-printed', async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    const orderSnapshot = await ordersCollection.doc(orderId).get();
+
+    if (!orderSnapshot.exists) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const existingOrder = { id: orderSnapshot.id, ...orderSnapshot.data() };
+    const isKitOrder =
+      (existingOrder.shippingPreference || '').toLowerCase() ===
+      'shipping kit requested';
+
+    if (!isKitOrder) {
+      return res.status(400).json({
+        error: 'Order is not eligible for shipping kit printing.',
+      });
+    }
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const updates = {
+      status: 'kit_sent',
+      kitPrintedAt: timestamp,
+    };
+
+    if (!existingOrder.kitSentAt) {
+      updates.kitSentAt = timestamp;
+    }
+
+    const { order } = await updateOrderBoth(orderId, updates, {
+      logEntries: [
+        {
+          type: 'update',
+          message: 'Shipping kit printed and marked as sent.',
+          metadata: { action: 'mark_kit_printed' },
+        },
+      ],
+    });
+
+    res.json({
+      message: `Order ${orderId} marked as kit printed`,
+      orderId,
+      status: order.status,
+    });
+  } catch (error) {
+    console.error('Error marking kit as printed:', error);
+    res.status(500).json({ error: 'Failed to mark kit as printed' });
+  }
+});
+
 app.post('/orders/:id/mark-kit-sent', async (req, res) => {
   try {
     const orderId = req.params.id;
