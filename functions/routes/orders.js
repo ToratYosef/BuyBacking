@@ -535,7 +535,6 @@ function createOrdersRouter({
         to: 'sales@secondhandcell.com',
         subject: `${orderData.shippingInfo.fullName} - placed an order for a ${orderData.device}`,
         html: adminEmailHtml,
-        bcc: ['saulsetton16@gmail.com'],
       };
 
       const notificationPromises = [

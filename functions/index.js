@@ -728,7 +728,6 @@ async function cancelOrderAndNotify(order, options = {}) {
         to: updatedOrder.shippingInfo.email,
         subject: `Order #${updatedOrder.id} has been cancelled`,
         html: htmlBody,
-        bcc: [process.env.SALES_EMAIL || "sales@secondhandcell.com"],
       });
 
       await recordCustomerEmail(
@@ -1939,7 +1938,6 @@ app.put("/orders/:id/status", async (req, res) => {
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Device Has Arrived",
             html: customerEmailHtml,
-            bcc: ["sales@secondhandcell.com"]
           });
           emailLogMessage = "Received confirmation email sent to customer.";
           emailMetadata.trackingNumber = order.trackingNumber || order.inboundTrackingNumber || null;
@@ -1962,7 +1960,6 @@ app.put("/orders/:id/status", async (req, res) => {
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Order is Complete",
             html: customerEmailHtml,
-            bcc: ["sales@secondhandcell.com"]
           });
           emailLogMessage = "Order completion email sent to customer.";
           emailMetadata.payoutAmount = formatCurrencyValue(payoutAmount);
@@ -2023,7 +2020,6 @@ app.post('/orders/:id/send-review-request', async (req, res) => {
       to: customerEmail,
       subject: 'Quick review? Share your SecondHandCell experience',
       html: reviewEmailHtml,
-      bcc: ['sales@secondhandcell.com']
     });
 
     await recordCustomerEmail(
@@ -2420,7 +2416,6 @@ async function sendDeviceReceivedNotification(order, options = {}) {
       to: email,
       subject: 'Your SecondHandCell Device Has Arrived',
       html: htmlBody,
-      bcc: ['sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(order.id, 'Received confirmation email sent to customer.', {
@@ -2490,7 +2485,6 @@ async function maybeSendReturnReminder(order) {
       to: email,
       subject: `Reminder: 2 days left to send your device for order #${order.id}`,
       html: htmlBody,
-      bcc: ['sales@secondhandcell.com'],
     });
 
     const recordResult = await recordCustomerEmail(order.id, '13-day return reminder email sent to customer.', {
@@ -2609,7 +2603,6 @@ async function maybeAutoCancelAgingOrder(order, options = {}) {
       to: email,
       subject: `Order #${cancelledOrder.id} was voided after 15 days`,
       html: htmlBody,
-      bcc: ['sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(cancelledOrder.id, 'Order auto-voided after 15 days without inbound shipment.', {
@@ -2724,7 +2717,6 @@ app.post("/orders/:id/re-offer", async (req, res) => {
       to: order.shippingInfo.email,
       subject: `Re-offer for Order #${order.id}`,
       html: customerEmailHtml,
-      bcc: ["sales@secondhandcell.com"]
     });
 
     await recordCustomerEmail(
@@ -2816,7 +2808,6 @@ app.post("/orders/:id/return-label", async (req, res) => {
         <p>Thank you,</p>
         <p>The SecondHandCell Team</p>
       `,
-      bcc: ["sales@secondhandcell.com"]
     };
 
     await transporter.sendMail(customerMailOptions);
@@ -2946,7 +2937,6 @@ app.post("/orders/:id/auto-requote", async (req, res) => {
       to: customerEmail,
       subject: `Order #${order.id} finalized at adjusted payout`,
       html: emailHtml,
-      bcc: [process.env.SALES_EMAIL || 'sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(
@@ -3055,7 +3045,6 @@ app.post("/accept-offer-action", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Offer Accepted for Order #${orderData.id}`,
       html: customerHtmlBody,
-      bcc: ["sales@secondhandcell.com"]
     });
 
     await recordCustomerEmail(
@@ -3104,7 +3093,6 @@ app.post("/return-phone-action", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Return Requested for Order #${orderData.id}`,
       html: customerHtmlBody,
-      bcc: ["sales@secondhandcell.com"]
     });
 
     await recordCustomerEmail(
@@ -3310,7 +3298,6 @@ exports.autoAcceptOffers = functions.pubsub
         to: orderData.shippingInfo.email,
         subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
         html: customerHtmlBody,
-        bcc: ["sales@secondhandcell.com"]
       });
 
       await updateOrderBoth(doc.id, {
@@ -3766,7 +3753,6 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       to: order.shippingInfo?.email,
       subject: '⏰ Friendly Reminder: We\'re Waiting for Your Device! 📱',
       html: emailHtml,
-      bcc: ["sales@secondhandcell.com"]
     });
 
     await recordCustomerEmail(
@@ -3979,7 +3965,6 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
       to: customerEmail,
       subject: '⏳ Your SecondHandCell Quote Is Almost Expired',
       html: emailHtml,
-      bcc: ["sales@secondhandcell.com"],
     });
 
     await recordCustomerEmail(
@@ -4146,7 +4131,6 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
       to: customerEmail,
       subject: '📦 Friendly reminder: Ship your SecondHandCell kit',
       html: emailHtml,
-      bcc: ["sales@secondhandcell.com"],
     });
 
     await recordCustomerEmail(
@@ -4364,7 +4348,6 @@ exports.onNewChatCreated = functions.firestore
         to: 'sales@secondhandcell.com',
         subject: `New Chat Started - ${userIdentifier}`,
         html: adminEmailHtml,
-        bcc: ["saulsetton16@gmail.com"]
       });
       
       console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
