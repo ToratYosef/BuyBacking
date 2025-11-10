@@ -2052,6 +2052,7 @@ app.post('/orders/:id/mark-kit-printed', async (req, res) => {
     const updates = {
       status: 'kit_sent',
       kitPrintedAt: timestamp,
+      lastStatusUpdateAt: timestamp,
     };
 
     if (!existingOrder.kitSentAt) {
@@ -2706,24 +2707,62 @@ app.post("/orders/:id/re-offer", async (req, res) => {
 
     const order = { id: orderDoc.id, ...orderDoc.data() };
 
+    const priceValue = Number.parseFloat(newPrice);
+    if (!Number.isFinite(priceValue) || priceValue <= 0) {
+      return res.status(400).json({ error: "A valid re-offer price is required" });
+    }
+
+    const normalizedReasons = reasons
+      .map((reason) => String(reason || "").trim())
+      .filter(Boolean);
+
+    if (!normalizedReasons.length) {
+      return res.status(400).json({ error: "At least one reason must be provided" });
+    }
+
+    const shippingInfo = order.shippingInfo || {};
+    if (!shippingInfo.email) {
+      return res.status(400).json({ error: "Order is missing a customer email" });
+    }
+
+    const trimmedComments = typeof comments === "string" ? comments.trim() : "";
+
+    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+    const autoAcceptDate = admin.firestore.Timestamp.fromMillis(
+      Date.now() + 7 * 24 * 60 * 60 * 1000
+    );
+
     await updateOrderBoth(orderId, {
       reOffer: {
-        newPrice,
-        reasons,
-        comments,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        newPrice: priceValue,
+        reasons: normalizedReasons,
+        comments: trimmedComments || undefined,
+        createdAt: timestamp,
+        autoAcceptDate,
       },
       status: "re-offered-pending",
+      lastStatusUpdateAt: timestamp,
+    }, {
+      logEntries: [
+        {
+          type: 'update',
+          message: `Re-offer sent for $${priceValue.toFixed(2)}`,
+          metadata: {
+            action: 'send_reoffer',
+            reasons: normalizedReasons,
+            hasComments: Boolean(trimmedComments),
+          },
+        },
+      ],
     });
 
-    let reasonString = reasons.join(", ");
-    if (comments) reasonString += `; ${comments}`;
+    let reasonString = normalizedReasons.join(", ");
+    if (trimmedComments) reasonString += `; ${trimmedComments}`;
 
     const safeReason = escapeHtml(reasonString).replace(/\n/g, "<br>");
     const originalQuoteValue = Number(order.estimatedQuote || order.originalQuote || 0).toFixed(2);
-    const newOfferValue = Number(newPrice).toFixed(2);
-    const customerName = order.shippingInfo.fullName || "there";
+    const newOfferValue = priceValue.toFixed(2);
+    const customerName = shippingInfo.fullName || "there";
     const acceptUrl = `${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=accept`;
     const returnUrl = `${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=return`;
 
@@ -2753,7 +2792,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: order.shippingInfo.email,
+      to: shippingInfo.email,
       subject: `Re-offer for Order #${order.id}`,
       html: customerEmailHtml,
     });
@@ -2762,12 +2801,16 @@ app.post("/orders/:id/re-offer", async (req, res) => {
       orderId,
       'Re-offer email sent to customer.',
       {
-        newPrice: Number(newPrice).toFixed(2),
+        newPrice: priceValue.toFixed(2),
         originalQuote: Number(order.estimatedQuote || order.originalQuote || 0).toFixed(2),
       }
     );
 
-    res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
+    res.json({
+      message: "Re-offer submitted successfully",
+      newPrice: priceValue,
+      orderId: order.id,
+    });
   } catch (err) {
     console.error("Error submitting re-offer:", err);
     res.status(500).json({ error: "Failed to submit re-offer" });
