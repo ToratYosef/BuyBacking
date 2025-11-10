@@ -265,7 +265,6 @@ const AUTO_CANCEL_MONITORED_STATUSES = [
 
 const AUTO_CANCELLATION_ENABLED = false;
 
-const INBOUND_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 const RETURN_REMINDER_DELAY_MS = 13 * 24 * 60 * 60 * 1000;
 const RETURN_AUTO_VOID_DELAY_MS = 15 * 24 * 60 * 60 * 1000;
 const INBOUND_TRACKABLE_STATUSES = new Set([
@@ -1502,13 +1501,6 @@ function shouldTrackInbound(order = {}) {
   return Boolean(getInboundTrackingNumber(order));
 }
 
-function shouldRefreshInbound(order = {}) {
-  if (!shouldTrackInbound(order)) return false;
-  const lastSyncedMs = getTimestampMillis(order.labelTrackingLastSyncedAt);
-  if (!lastSyncedMs) return true;
-  return Date.now() - lastSyncedMs >= INBOUND_REFRESH_INTERVAL_MS;
-}
-
 function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadata = {}) {
   if (!normalizedStatus) return null;
   const upper = String(normalizedStatus).toUpperCase();
@@ -2476,13 +2468,7 @@ async function syncInboundTrackingForOrder(order, options = {}) {
 
   const statusUpdate = deriveInboundStatusUpdate(order, normalizedStatus, updatePayload);
 
-  const logEntries = [
-    {
-      type: 'tracking',
-      message: `Inbound label tracking synchronized (${updatePayload.labelTrackingStatusDescription || updatePayload.labelTrackingStatus || 'unknown'})`,
-      metadata: { trackingNumber },
-    },
-  ];
+  const logEntries = [];
 
   if (statusUpdate && statusUpdate.nextStatus && statusUpdate.nextStatus !== order.status) {
     updatePayload.status = statusUpdate.nextStatus;
@@ -3366,48 +3352,6 @@ async function runAutomaticLabelVoidSweep() {
     }
   }
 }
-
-exports.autoRefreshInboundTracking = functions.pubsub
-  .schedule("every 30 minutes")
-  .onRun(async () => {
-    const shipengineKey = process.env.SHIPENGINE_KEY || null;
-    const statuses = Array.from(INBOUND_TRACKABLE_STATUSES);
-    const processed = new Set();
-    const orders = [];
-
-    for (const status of statuses) {
-      try {
-        const snapshot = await ordersCollection.where('status', '==', status).get();
-        snapshot.forEach((doc) => {
-          if (processed.has(doc.id)) return;
-          processed.add(doc.id);
-          orders.push({ id: doc.id, ...doc.data() });
-        });
-      } catch (error) {
-        console.error(`Failed to fetch orders for status ${status}:`, error);
-      }
-    }
-
-    for (const order of orders) {
-      try {
-        let currentOrder = order;
-        if (shipengineKey && shouldRefreshInbound(currentOrder)) {
-          const result = await syncInboundTrackingForOrder(currentOrder, { shipengineKey });
-          currentOrder = result.order || currentOrder;
-        }
-
-        currentOrder = (await maybeSendReturnReminder(currentOrder)) || currentOrder;
-        if (AUTO_CANCELLATION_ENABLED) {
-          currentOrder =
-            (await maybeAutoCancelAgingOrder(currentOrder, { shipengineKey })) || currentOrder;
-        }
-      } catch (error) {
-        console.error(`Inbound tracking sweep failed for order ${order.id}:`, error);
-      }
-    }
-
-    return null;
-  });
 
 exports.autoVoidExpiredLabels = functions.pubsub
   .schedule("every 60 minutes")
