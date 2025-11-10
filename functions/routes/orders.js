@@ -40,6 +40,13 @@ function createOrdersRouter({
     'needs_printing',
   ];
 
+  const PRINT_BUNDLE_ALLOWED_ORIGINS = new Set([
+    'https://toratyosef.github.io',
+    'https://buyback-a0f05.web.app',
+    'https://secondhandcell.com',
+    'https://www.secondhandcell.com',
+  ]);
+
   function toMillis(value) {
     if (!value) return null;
     if (typeof value === 'number') return value;
@@ -359,6 +366,13 @@ function createOrdersRouter({
       const orderIds = Array.isArray(req.body?.orderIds)
         ? req.body.orderIds.filter(Boolean)
         : [];
+
+      const origin = req.headers.origin;
+      if (origin && PRINT_BUNDLE_ALLOWED_ORIGINS.has(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Vary', 'Origin');
+      }
+      res.header('Access-Control-Expose-Headers', 'X-Printed-Order-Ids, X-Kit-Sent-Order-Ids');
 
       const orders = await fetchPrintQueueOrders(orderIds);
       if (!orders.length) {

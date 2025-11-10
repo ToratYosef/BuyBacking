@@ -278,9 +278,16 @@ async function authorisedFetch(path, options = {}) {
     method: options.method || "GET",
     headers,
     body: options.body,
+    mode: "cors",
+    credentials: "include",
   };
 
-  return fetch(`${BACKEND_BASE_URL}${path}`, finalOptions);
+  try {
+    return await fetch(`${BACKEND_BASE_URL}${path}`, finalOptions);
+  } catch (error) {
+    console.error("Network request failed:", { path, error });
+    throw error;
+  }
 }
 
 async function requestPrintBundle(orderIds) {
