@@ -10,12 +10,9 @@ const BACKEND_BASE_URL = "https://us-central1-buyback-a0f05.cloudfunctions.net/a
 
 const PRINT_QUEUE_STATUSES = ["shipping_kit_requested", "kit_needs_printing", "needs_printing"];
 
-const ICON_REFRESH = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 1 12.73-5.303L19.5 9M19.5 9V4.5M19.5 9h-4.5m-3 10.5A7.5 7.5 0 0 1 4.5 12l2.27-2.303M4.5 12H9m0 0v4.5" /></svg>';
 const ICON_PRINTER = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25V4.5h9v3.75M6 12h12a2.25 2.25 0 0 1 2.25 2.25v4.5A2.25 2.25 0 0 1 18 21H6a2.25 2.25 0 0 1-2.25-2.25v-4.5A2.25 2.25 0 0 1 6 12zm1.5 4.5h3m3 0h3" /></svg>';
 const ICON_SPINNER = '<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-30" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"></circle><path class="opacity-80" d="M21 12a9 9 0 0 1-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg>';
 
-const REFRESH_BUTTON_IDLE = `${ICON_REFRESH} Refresh`;
-const REFRESH_BUTTON_BUSY = `${ICON_SPINNER} Refreshing`;
 const PRINT_BUTTON_BUSY = `${ICON_SPINNER} Preparing PDF`;
 
 const queuedCountEl = document.getElementById("queued-count");
@@ -25,7 +22,6 @@ const lastSyncEl = document.getElementById("last-sync");
 const queueStatusEl = document.getElementById("queue-status");
 const tableBody = document.getElementById("print-queue-table");
 const emptyStateEl = document.getElementById("empty-state");
-const refreshBtn = document.getElementById("refresh-btn");
 const printAllBtn = document.getElementById("print-all-btn");
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
 const logoutBtn = document.getElementById("logout-btn");
@@ -285,10 +281,6 @@ function renderTable() {
 
 function setQueueLoading(state) {
   isLoadingQueue = state;
-  if (refreshBtn) {
-    refreshBtn.disabled = state;
-    refreshBtn.innerHTML = state ? REFRESH_BUTTON_BUSY : REFRESH_BUTTON_IDLE;
-  }
   updatePrintButtonState();
   if (!state) {
     updateSelectionUi();
@@ -347,7 +339,7 @@ async function loadQueue() {
     }
   } catch (error) {
     console.error("Failed to load print queue:", error);
-    queueStatusEl.textContent = "Unable to load the print queue. Please refresh.";
+    queueStatusEl.textContent = "Unable to load the print queue. Please try again.";
   } finally {
     setQueueLoading(false);
   }
@@ -600,15 +592,6 @@ function attachEventListeners() {
     logoutBtn.addEventListener("click", async () => {
       await signOut(auth);
     });
-  }
-
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", () => {
-      if (!isLoadingQueue) {
-        loadQueue();
-      }
-    });
-    refreshBtn.innerHTML = REFRESH_BUTTON_IDLE;
   }
 
   if (printAllBtn) {
