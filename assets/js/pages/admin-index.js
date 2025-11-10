@@ -103,6 +103,18 @@ const STATUS_DROPDOWN_OPTIONS = [
   'cancelled',
 ];
 
+const STATUS_LABEL_OVERRIDES = Object.freeze({
+  shipping_kit_requested: 'Shipping Kit Requested',
+  needs_printing: 'Needs Printing',
+  kit_in_transit: 'Kit In Transit',
+  phone_on_the_way: 'Phone On The Way To Us',
+  're-offered-pending': 'Reoffer Pending',
+  're-offered-accepted': 'Reoffer Accepted',
+  're-offered-declined': 'Reoffer Declined',
+  're-offered-auto-accepted': 'Reoffer Auto Accepted',
+  'return-label-generated': 'Return Label Generated',
+});
+
 const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold text-xs px-3 py-1 rounded-full border border-transparent shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-400';
 
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
@@ -436,8 +448,12 @@ function getStatusLabelText(status) {
   if (!status) {
     return '';
   }
-  if (STATUS_LABEL_OVERRIDES[status]) {
-    return STATUS_LABEL_OVERRIDES[status];
+  const overrides =
+    typeof STATUS_LABEL_OVERRIDES !== 'undefined' && STATUS_LABEL_OVERRIDES
+      ? STATUS_LABEL_OVERRIDES
+      : null;
+  if (overrides && overrides[status]) {
+    return overrides[status];
   }
   return status
     .replace(/_/g, ' ')
@@ -548,7 +564,11 @@ async function handleBulkStatusUpdate() {
   updateBulkSelectionUI();
 }
 
-populateBulkStatusSelect();
+try {
+  populateBulkStatusSelect();
+} catch (error) {
+  console.error('Failed to populate bulk status dropdown', error);
+}
 updateBulkSelectionUI();
 
 if (bulkStatusSelect) {
