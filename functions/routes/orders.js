@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 
 function createOrdersRouter({
   axios,
@@ -17,6 +18,12 @@ function createOrdersRouter({
   transporter,
 }) {
   const router = express.Router();
+
+  const storageBucket =
+    typeof admin?.storage === 'function' && typeof admin.storage().bucket === 'function'
+      ? admin.storage().bucket()
+      : null;
+  const RECAPTCHA_SECRET = process.env.RECAPTCHA_SECRET || '6LfltQcsAAAAAKHC04DfTW0mEGHWTTGvGUzzKNjT';
 
   const {
     ORDER_RECEIVED_EMAIL_HTML,
@@ -287,18 +294,88 @@ function createOrdersRouter({
   }
 
   async function downloadPdfBuffer(url) {
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
     return Buffer.from(response.data);
+  }
+
+  function buildCachedFilePath(orderId, url, index) {
+    const safeOrderId = String(orderId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+    let fileName = '';
+    try {
+      const parsed = new URL(url);
+      fileName = (parsed.pathname.split('/').pop() || '').replace(/[^a-zA-Z0-9_.-]/g, '_');
+    } catch (_) {
+      fileName = '';
+    }
+
+    if (!fileName) {
+      const digest = crypto.createHash('sha1').update(`${url}:${index}`).digest('hex').slice(0, 16);
+      fileName = `label-${digest}.pdf`;
+    }
+
+    const timestamp = Date.now();
+    return `print-cache/${safeOrderId}/${timestamp}-${index}-${fileName}`;
+  }
+
+  async function fetchAndCacheLabel(orderId, url, index) {
+    const buffer = await downloadPdfBuffer(url);
+
+    if (!storageBucket) {
+      return { buffer, storagePath: null };
+    }
+
+    const objectPath = buildCachedFilePath(orderId, url, index);
+    const file = storageBucket.file(objectPath);
+
+    await file.save(buffer, {
+      contentType: 'application/pdf',
+      resumable: false,
+      metadata: {
+        cacheControl: 'private, max-age=0, no-cache',
+      },
+    });
+
+    return { buffer, storagePath: objectPath };
+  }
+
+  async function cleanupCachedFiles(paths = []) {
+    if (!storageBucket || !Array.isArray(paths) || !paths.length) {
+      return;
+    }
+
+    const unique = Array.from(new Set(paths.filter(Boolean)));
+    if (!unique.length) {
+      return;
+    }
+
+    await Promise.all(
+      unique.map(async (objectPath) => {
+        try {
+          await storageBucket.file(objectPath).delete({ ignoreNotFound: true });
+        } catch (error) {
+          if (error?.code !== 404) {
+            console.warn(`Failed to delete cached PDF ${objectPath}:`, error.message || error);
+          }
+        }
+      })
+    );
   }
 
   async function collectOrderPrintBuffers(order) {
     const buffers = [];
+    const cachedPaths = [];
     const labelUrls = buildOrderedLabelUrlList(order);
 
-    for (const url of labelUrls) {
+    for (let index = 0; index < labelUrls.length; index += 1) {
+      const url = labelUrls[index];
       try {
-        const buffer = await downloadPdfBuffer(url);
-        buffers.push(buffer);
+        const { buffer, storagePath } = await fetchAndCacheLabel(order.id, url, index);
+        if (buffer) {
+          buffers.push(buffer);
+        }
+        if (storagePath) {
+          cachedPaths.push(storagePath);
+        }
       } catch (error) {
         console.error(`Failed to download label for order ${order.id} from ${url}:`, error.message || error);
       }
@@ -324,7 +401,43 @@ function createOrdersRouter({
       console.error(`Failed to generate bag label PDF for order ${order.id}:`, error);
     }
 
-    return buffers;
+    return { buffers, cachedPaths };
+  }
+
+  async function verifyRecaptchaToken(token, expectedAction, remoteIp) {
+    if (!token) {
+      return null;
+    }
+
+    if (!RECAPTCHA_SECRET) {
+      console.warn('reCAPTCHA secret key is not configured; skipping verification.');
+      return null;
+    }
+
+    try {
+      const params = new URLSearchParams();
+      params.append('secret', RECAPTCHA_SECRET);
+      params.append('response', token);
+      if (remoteIp) {
+        params.append('remoteip', remoteIp);
+      }
+
+      const response = await axios.post('https://www.google.com/recaptcha/api/siteverify', params.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        timeout: 10000,
+      });
+
+      const payload = response.data || {};
+      if (expectedAction) {
+        payload.expectedAction = expectedAction;
+      }
+      return payload;
+    } catch (error) {
+      console.error('Failed to verify reCAPTCHA token:', error.response?.data || error.message || error);
+      return null;
+    }
   }
 
   router.post('/fetch-pdf', async (req, res) => {
@@ -401,15 +514,17 @@ function createOrdersRouter({
 
       const printableOrderIds = [];
       const mergedParts = [];
+      const cachedPaths = [];
 
       for (const order of orders) {
-        const parts = await collectOrderPrintBuffers(order);
+        const { buffers: parts, cachedPaths: orderCachedPaths } = await collectOrderPrintBuffers(order);
         if (!parts.length) {
           console.warn(`No printable documents generated for order ${order.id}`);
           continue;
         }
         printableOrderIds.push(order.id);
         mergedParts.push(...parts);
+        cachedPaths.push(...orderCachedPaths);
       }
 
       if (!mergedParts.length) {
@@ -424,6 +539,18 @@ function createOrdersRouter({
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'inline; filename="print-queue-bundle.pdf"');
       res.setHeader('X-Printed-Order-Ids', JSON.stringify(printableOrderIds));
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        cleanupCachedFiles(cachedPaths).catch((error) =>
+          console.warn('Failed to clean cached print queue PDFs:', error?.message || error)
+        );
+      };
+
+      res.on('finish', cleanup);
+      res.on('close', cleanup);
+
       res.send(mergedBuffer);
     } catch (error) {
       console.error('Failed to generate print queue bundle:', error);
@@ -502,9 +629,22 @@ function createOrdersRouter({
 
   router.post('/submit-order', async (req, res) => {
     try {
-      const orderData = req.body;
+      const incomingData = req.body || {};
+      const recaptchaToken = incomingData.recaptchaToken || null;
+      const recaptchaAction = incomingData.recaptchaAction || 'submit_order';
+      const orderData = { ...incomingData };
+      delete orderData.recaptchaToken;
+      delete orderData.recaptchaAction;
+
       if (!orderData?.shippingInfo || !orderData?.estimatedQuote) {
         return res.status(400).json({ error: 'Invalid order data' });
+      }
+
+      let recaptchaResult = null;
+      try {
+        recaptchaResult = await verifyRecaptchaToken(recaptchaToken, recaptchaAction, req.ip);
+      } catch (verificationError) {
+        console.error('Unexpected error during reCAPTCHA verification:', verificationError);
       }
 
       const fullStateName = orderData.shippingInfo.state;
@@ -601,6 +741,24 @@ function createOrdersRouter({
         status: newOrderStatus,
         id: orderId,
       };
+
+      if (recaptchaResult) {
+        const recaptchaSummary = {
+          score: typeof recaptchaResult.score === 'number' ? recaptchaResult.score : null,
+          action: recaptchaResult.action || null,
+          expectedAction: recaptchaResult.expectedAction || null,
+          success: Boolean(recaptchaResult.success),
+          hostname: recaptchaResult.hostname || null,
+          challengeTs: recaptchaResult.challenge_ts || null,
+          errorCodes: Array.isArray(recaptchaResult['error-codes'])
+            ? recaptchaResult['error-codes']
+            : recaptchaResult.errorCodes || null,
+          verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        toSave.recaptcha = recaptchaSummary;
+      }
+
       await writeOrderBoth(orderId, toSave);
 
       res.status(201).json({ message: 'Order submitted', orderId: orderId });
@@ -934,44 +1092,26 @@ function createOrdersRouter({
       }
 
       const order = { id: doc.id, ...doc.data() };
-      const labelUrlCandidates = [];
+      const { buffers, cachedPaths } = await collectOrderPrintBuffers(order);
 
-      if (order.shippingPreference === 'Shipping Kit Requested') {
-        labelUrlCandidates.push(order.outboundLabelUrl, order.inboundLabelUrl);
-      } else if (order.uspsLabelUrl) {
-        labelUrlCandidates.push(order.uspsLabelUrl);
-      } else {
-        labelUrlCandidates.push(order.outboundLabelUrl, order.inboundLabelUrl);
+      if (!buffers.length) {
+        return res.status(404).json({ error: 'No printable documents available for this order.' });
       }
 
-      const uniqueLabelUrls = Array.from(
-        new Set(labelUrlCandidates.filter(Boolean))
-      );
+      const merged = await mergePdfBuffers(buffers);
+      const mergedBuffer = normaliseBuffer(merged);
 
-      const downloadedLabels = await Promise.all(
-        uniqueLabelUrls.map(async (url) => {
-          try {
-            const response = await axios.get(url, { responseType: 'arraybuffer' });
-            return Buffer.from(response.data);
-          } catch (downloadError) {
-            console.error(
-              `Failed to download label from ${url}:`,
-              downloadError.message || downloadError
-            );
-            return null;
-          }
-        })
-      );
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        cleanupCachedFiles(cachedPaths).catch((error) =>
+          console.warn(`Failed to clean cached PDFs for order ${order.id}:`, error?.message || error)
+        );
+      };
 
-      const bagLabelData = await generateBagLabelPdf(order);
-
-      const pdfParts = [
-        ...downloadedLabels.filter(Boolean),
-        Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData),
-      ].filter(Boolean);
-
-      const merged = await mergePdfBuffers(pdfParts);
-      const mergedBuffer = Buffer.isBuffer(merged) ? merged : Buffer.from(merged);
+      res.on('finish', cleanup);
+      res.on('close', cleanup);
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(

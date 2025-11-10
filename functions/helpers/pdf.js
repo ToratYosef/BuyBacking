@@ -205,29 +205,111 @@ async function generateBagLabelPdf(order) {
 
     const page = pdfDoc.addPage([BAG_LABEL_WIDTH, BAG_LABEL_HEIGHT]);
     const { width, height } = page.getSize();
+    const contentWidth = width - BAG_LABEL_MARGIN_X * 2;
     const barcodeReserve = BAG_LABEL_MARGIN_Y + 48;
+    const lineHeight = 12;
     let cursorY = height - BAG_LABEL_MARGIN_Y;
 
-    const drawLine = (text, options = {}) => {
-        const { font = regularFont, size = 10, color = rgb(0, 0, 0), gap = 6 } = options;
-        if (!text) {
-            cursorY = Math.max(cursorY - gap, barcodeReserve);
-            return;
+    const stepFor = (size) => size + 2;
+
+    const ensureSpace = (lineCount = 1, gap = 0, lineStep = lineHeight) => {
+        const required = lineCount * lineStep + gap;
+        if (cursorY - required < barcodeReserve) {
+            cursorY = barcodeReserve + required;
         }
-        const lineHeight = size + 2;
-        const lines = wrapText(text, width - BAG_LABEL_MARGIN_X * 2, font, size);
+    };
+
+    const drawHeading = (text, { size = 20, color = rgb(0.12, 0.16, 0.48), spacing = 10 } = {}) => {
+        const step = stepFor(size);
+        ensureSpace(1, spacing, step);
+        cursorY -= step;
+        page.drawText(text, {
+            x: BAG_LABEL_MARGIN_X,
+            y: cursorY,
+            size,
+            font: boldFont,
+            color,
+        });
+        cursorY -= spacing;
+    };
+
+    const drawLabel = (text, { size = 9, color = rgb(0.35, 0.35, 0.35), spacing = 6 } = {}) => {
+        const step = stepFor(size);
+        ensureSpace(1, spacing, step);
+        cursorY -= step;
+        page.drawText(text, {
+            x: BAG_LABEL_MARGIN_X,
+            y: cursorY,
+            size,
+            font: boldFont,
+            color,
+        });
+        cursorY -= spacing;
+    };
+
+    const drawKeyValue = (label, value, {
+        size = 10,
+        valueFont = regularFont,
+        color = rgb(0.12, 0.12, 0.14),
+        spacing = 4,
+    } = {}) => {
+        const keyText = `${label}:`;
+        const safeValue = value && String(value).trim().length ? String(value).trim() : '—';
+        const keyWidth = boldFont.widthOfTextAtSize(keyText, size);
+        const availableWidth = contentWidth - keyWidth - 6;
+        const lines = wrapText(safeValue, availableWidth, valueFont, size);
+
+        const step = stepFor(size);
+        ensureSpace(lines.length, spacing, step);
+
+        lines.forEach((line, index) => {
+            cursorY -= step;
+            page.drawText(index === 0 ? keyText : '', {
+                x: BAG_LABEL_MARGIN_X,
+                y: cursorY,
+                size,
+                font: boldFont,
+                color: rgb(0.32, 0.32, 0.36),
+            });
+            page.drawText(line, {
+                x: BAG_LABEL_MARGIN_X + keyWidth + 6,
+                y: cursorY,
+                size,
+                font: valueFont,
+                color,
+            });
+        });
+
+        cursorY -= spacing;
+    };
+
+    const drawNote = (text, { size = 8, color = rgb(0.4, 0.4, 0.4), spacing = 6 } = {}) => {
+        const lines = wrapText(text, contentWidth, regularFont, size);
+        const step = stepFor(size);
+        ensureSpace(lines.length, spacing, step);
         lines.forEach((line) => {
-            cursorY -= lineHeight;
-            cursorY = Math.max(cursorY, barcodeReserve);
+            cursorY -= step;
             page.drawText(line, {
                 x: BAG_LABEL_MARGIN_X,
                 y: cursorY,
                 size,
-                font,
+                font: regularFont,
                 color,
             });
         });
-        cursorY = Math.max(cursorY - gap, barcodeReserve);
+        cursorY -= spacing;
+    };
+
+    const formatPhoneNumber = (raw) => {
+        if (!raw) return '';
+        const digits = String(raw).replace(/\D+/g, '');
+        if (digits.length === 11 && digits.startsWith('1')) {
+            return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+        }
+        if (digits.length === 10) {
+            return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+        }
+        return String(raw);
     };
 
     const shippingInfo = order.shippingInfo || {};
@@ -236,80 +318,56 @@ async function generateBagLabelPdf(order) {
         shippingInfo.phone ||
         shippingInfo.phoneNumber ||
         shippingInfo.phone_number ||
+        shippingInfo.contactPhone ||
         '';
 
     const deviceParts = [];
     if (order.brand) deviceParts.push(String(order.brand));
     if (order.device) deviceParts.push(String(order.device));
-    const deviceLabel = deviceParts.join(' ');
+    const deviceLabel = deviceParts.join(' ').trim();
     const storageLabel = order.storage || order.memory || '';
-    const lockLabel = formatValue(order.carrier);
+    const carrierLabel = formatValue(order.carrier);
     const conditionSummary = order.condition || order.deviceCondition || buildConditionSummary(order);
     const qualityLabel = conditionSummary && conditionSummary !== '—'
         ? conditionSummary
         : formatValue(order.condition_grade || order.quality);
     const payoutAmount = resolveOrderPayout(order);
 
-    drawLine('SecondHandCell', {
-        font: boldFont,
-        size: 9,
-        color: rgb(0.32, 0.32, 0.36),
-        gap: 6,
-    });
-    drawLine(`Order #${order.id}`, {
-        font: boldFont,
-        size: 18,
-        color: rgb(0.12, 0.16, 0.48),
-        gap: 8,
-    });
+    drawLabel('SecondHandCell Bag Label');
+    drawHeading(`Order #${order.id || '—'}`);
 
-    const deviceLineParts = [];
-    if (deviceLabel) deviceLineParts.push(deviceLabel);
-    if (storageLabel) deviceLineParts.push(storageLabel);
-    drawLine(deviceLineParts.join(' • '), {
-        font: boldFont,
-        size: 11,
-        color: rgb(0.08, 0.08, 0.1),
-        gap: 4,
-    });
+    const deviceLine = [deviceLabel, storageLabel].filter(Boolean).join(' • ');
+    drawKeyValue('Device', deviceLine || deviceLabel || '—');
+    if (carrierLabel && carrierLabel !== '—') {
+        drawKeyValue('Carrier', carrierLabel);
+    }
+    if (qualityLabel && qualityLabel !== '—') {
+        drawKeyValue('Condition', qualityLabel);
+    }
 
-    const specParts = [];
-    if (lockLabel && lockLabel !== '—') specParts.push(`Lock: ${lockLabel}`);
-    if (qualityLabel && qualityLabel !== '—') specParts.push(`Quality: ${qualityLabel}`);
-    drawLine(specParts.join('    '), {
-        size: 9,
-        color: rgb(0.28, 0.28, 0.32),
-        gap: 6,
-    });
-
-    const contactParts = [contactName];
-    if (contactPhone) contactParts.push(contactPhone);
-    const cityLine = [shippingInfo.city, shippingInfo.state]
-        .filter(Boolean)
-        .join(', ');
-    if (cityLine) contactParts.push(cityLine);
-    drawLine(contactParts.join(' • '), {
-        size: 9,
-        color: rgb(0.24, 0.24, 0.28),
-        gap: 6,
-    });
-
-    drawLine(`Quote: $${formatCurrency(payoutAmount)}`, {
-        font: boldFont,
-        size: 14,
+    drawKeyValue('Quoted Price', `$${formatCurrency(payoutAmount)}`, {
+        size: 12,
+        valueFont: boldFont,
         color: rgb(0.1, 0.5, 0.26),
-        gap: 10,
+        spacing: 8,
     });
 
-    drawLine('Attach this label to the device bag.', {
-        size: 8,
-        color: rgb(0.45, 0.45, 0.45),
-        gap: 8,
-    });
+    const phoneLine = formatPhoneNumber(contactPhone);
+    drawKeyValue('Customer', contactName);
+    if (phoneLine) {
+        drawKeyValue('Phone', phoneLine);
+    }
+    const cityLine = [shippingInfo.city, shippingInfo.state].filter(Boolean).join(', ');
+    if (cityLine) {
+        drawKeyValue('Location', cityLine);
+    }
 
-    const barcodeSvg = await buildBarcode(order.id);
+    drawNote('Attach this label directly to the device bag before shipping.', { spacing: 4 });
+    drawNote('Include the full info sheet in the box with your device.', { spacing: 12 });
+
+    const barcodeSvg = await buildBarcode(order.id || String(order.orderId || ''));
     const barcodeImage = await pdfDoc.embedSvg(barcodeSvg);
-    const maxBarcodeWidth = width - BAG_LABEL_MARGIN_X * 2;
+    const maxBarcodeWidth = contentWidth;
     const maxBarcodeHeight = 36;
     const barcodeScale = Math.min(
         maxBarcodeWidth / barcodeImage.width,
@@ -334,8 +392,11 @@ async function generateBagLabelPdf(order) {
         y: barcodeY - 10,
         size: captionSize,
         font: boldFont,
-        color: rgb(0.35, 0.35, 0.35),
+        color: rgb(0.32, 0.32, 0.32),
     });
+
+    return pdfDoc.save();
+}
 
     return pdfDoc.save();
 }
