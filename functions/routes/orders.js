@@ -34,6 +34,233 @@ function createOrdersRouter({
     sendVoidNotificationEmail,
   } = shipEngine;
 
+  const PRINT_QUEUE_STATUSES = [
+    'shipping_kit_requested',
+    'kit_needs_printing',
+    'needs_printing',
+  ];
+
+  function toMillis(value) {
+    if (!value) return null;
+    if (typeof value === 'number') return value;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (typeof value === 'object') {
+      const seconds = value._seconds ?? value.seconds ?? null;
+      if (typeof seconds === 'number') {
+        const nanos = value._nanoseconds ?? value.nanoseconds ?? 0;
+        return seconds * 1000 + Math.floor(nanos / 1e6);
+      }
+    }
+    return null;
+  }
+
+  function resolveCreatedAtMillis(order = {}) {
+    const candidates = [
+      order.createdAt,
+      order.created_at,
+      order.createdAtMillis,
+      order.createdAtMs,
+      order.created_at_ms,
+      order.created_at_millis,
+    ];
+
+    for (const candidate of candidates) {
+      const millis = toMillis(candidate);
+      if (millis) {
+        return millis;
+      }
+    }
+
+    if (typeof order.createdAtSeconds === 'number') {
+      return order.createdAtSeconds * 1000;
+    }
+
+    return null;
+  }
+
+  function normaliseBuffer(data) {
+    if (!data) return null;
+    return Buffer.isBuffer(data) ? data : Buffer.from(data);
+  }
+
+  function collectLabelUrlCandidates(order = {}) {
+    const urls = new Set();
+    const pushUrl = (value) => {
+      if (!value) return;
+      const stringValue = String(value).trim();
+      if (!stringValue) return;
+      if (/^https?:\/\//i.test(stringValue)) {
+        urls.add(stringValue);
+      }
+    };
+
+    pushUrl(order.outboundLabelUrl);
+    pushUrl(order.inboundLabelUrl);
+    pushUrl(order.uspsLabelUrl);
+
+    Object.keys(order)
+      .filter((key) => key && key.toLowerCase().includes('label') && key.toLowerCase().includes('url'))
+      .forEach((key) => pushUrl(order[key]));
+
+    const collections = [order.shipEngineLabels, order.labelRecords, order.labels, order.labelUrls];
+
+    collections.forEach((collection) => {
+      if (!collection) return;
+      if (Array.isArray(collection)) {
+        collection.forEach((entry) => {
+          if (!entry) return;
+          if (typeof entry === 'string') {
+            pushUrl(entry);
+            return;
+          }
+          if (typeof entry === 'object') {
+            Object.values(entry).forEach((value) => pushUrl(value));
+            if (entry.label_download && typeof entry.label_download === 'object') {
+              Object.values(entry.label_download).forEach((value) => pushUrl(value));
+            }
+          }
+        });
+      } else if (typeof collection === 'object') {
+        Object.values(collection).forEach((entry) => {
+          if (!entry) return;
+          if (typeof entry === 'string') {
+            pushUrl(entry);
+            return;
+          }
+          if (typeof entry === 'object') {
+            Object.values(entry).forEach((value) => pushUrl(value));
+            if (entry.label_download && typeof entry.label_download === 'object') {
+              Object.values(entry.label_download).forEach((value) => pushUrl(value));
+            }
+          }
+        });
+      }
+    });
+
+    return urls;
+  }
+
+  async function fetchPrintQueueOrders(orderIds = []) {
+    const results = new Map();
+
+    if (Array.isArray(orderIds) && orderIds.length) {
+      const docs = await Promise.all(
+        orderIds.map((id) =>
+          ordersCollection
+            .doc(String(id))
+            .get()
+            .catch((error) => {
+              console.error(`Failed to load order ${id} for print queue:`, error);
+              return null;
+            })
+        )
+      );
+
+      docs.forEach((doc) => {
+        if (doc && doc.exists) {
+          results.set(doc.id, { id: doc.id, ...doc.data() });
+        }
+      });
+    } else {
+      await Promise.all(
+        PRINT_QUEUE_STATUSES.map(async (status) => {
+          try {
+            const snapshot = await ordersCollection.where('status', '==', status).get();
+            snapshot.docs.forEach((doc) => {
+              results.set(doc.id, { id: doc.id, ...doc.data() });
+            });
+          } catch (error) {
+            console.error(`Failed to load ${status} orders for print queue:`, error);
+          }
+        })
+      );
+    }
+
+    const orders = Array.from(results.values());
+    orders.sort((a, b) => {
+      const aMillis = resolveCreatedAtMillis(a) ?? Number.MAX_SAFE_INTEGER;
+      const bMillis = resolveCreatedAtMillis(b) ?? Number.MAX_SAFE_INTEGER;
+      return aMillis - bMillis;
+    });
+    return orders;
+  }
+
+  function serialisePrintQueueOrder(order = {}) {
+    const shippingInfo = order.shippingInfo || {};
+    const labelUrls = Array.from(collectLabelUrlCandidates(order));
+
+    return {
+      id: order.id,
+      status: order.status || null,
+      shippingPreference: order.shippingPreference || null,
+      shippingInfo: {
+        fullName: shippingInfo.fullName || shippingInfo.name || '',
+        email: shippingInfo.email || '',
+        phone:
+          shippingInfo.phone ||
+          shippingInfo.phoneNumber ||
+          shippingInfo.phone_number ||
+          shippingInfo.contactPhone ||
+          '',
+        city: shippingInfo.city || '',
+        state: shippingInfo.state || '',
+      },
+      device: order.device || '',
+      brand: order.brand || '',
+      storage: order.storage || order.memory || '',
+      carrier: order.carrier || '',
+      estimatedQuote:
+        typeof order.estimatedQuote === 'number'
+          ? order.estimatedQuote
+          : Number(order.estimatedQuote) || null,
+      createdAtMillis: resolveCreatedAtMillis(order),
+      labelUrls,
+    };
+  }
+
+  async function downloadPdfBuffer(url) {
+    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    return Buffer.from(response.data);
+  }
+
+  async function collectOrderPrintBuffers(order) {
+    const buffers = [];
+    const labelUrls = Array.from(collectLabelUrlCandidates(order));
+
+    await Promise.all(
+      labelUrls.map(async (url) => {
+        try {
+          const buffer = await downloadPdfBuffer(url);
+          buffers.push(buffer);
+        } catch (error) {
+          console.error(`Failed to download label for order ${order.id} from ${url}:`, error.message || error);
+        }
+      })
+    );
+
+    try {
+      const infoLabel = await generateCustomLabelPdf(order);
+      const infoBuffer = normaliseBuffer(infoLabel);
+      if (infoBuffer) {
+        buffers.push(infoBuffer);
+      }
+    } catch (error) {
+      console.error(`Failed to generate info label PDF for order ${order.id}:`, error);
+    }
+
+    try {
+      const bagLabel = await generateBagLabelPdf(order);
+      const bagBuffer = normaliseBuffer(bagLabel);
+      if (bagBuffer) {
+        buffers.push(bagBuffer);
+      }
+    } catch (error) {
+      console.error(`Failed to generate bag label PDF for order ${order.id}:`, error);
+    }
+
+    return buffers;
+  }
+
   router.post('/fetch-pdf', async (req, res) => {
     const { url } = req.body;
 
@@ -81,6 +308,60 @@ function createOrdersRouter({
     } catch (err) {
       console.error('Error fetching orders:', err);
       res.status(500).json({ error: 'Failed to fetch orders' });
+    }
+  });
+
+  router.get('/orders/needs-printing', async (req, res) => {
+    try {
+      const orders = await fetchPrintQueueOrders();
+      const payload = orders.map(serialisePrintQueueOrder);
+      res.json({ orders: payload });
+    } catch (error) {
+      console.error('Failed to load print queue orders:', error);
+      res.status(500).json({ error: 'Failed to load print queue orders' });
+    }
+  });
+
+  router.post('/orders/needs-printing/bundle', async (req, res) => {
+    try {
+      const orderIds = Array.isArray(req.body?.orderIds)
+        ? req.body.orderIds.filter(Boolean)
+        : [];
+
+      const orders = await fetchPrintQueueOrders(orderIds);
+      if (!orders.length) {
+        return res.status(404).json({ error: 'No orders require printing.' });
+      }
+
+      const printableOrderIds = [];
+      const mergedParts = [];
+
+      for (const order of orders) {
+        const parts = await collectOrderPrintBuffers(order);
+        if (!parts.length) {
+          console.warn(`No printable documents generated for order ${order.id}`);
+          continue;
+        }
+        printableOrderIds.push(order.id);
+        mergedParts.push(...parts);
+      }
+
+      if (!mergedParts.length) {
+        return res
+          .status(404)
+          .json({ error: 'No printable documents available for the requested orders.' });
+      }
+
+      const mergedPdf = await mergePdfBuffers(mergedParts);
+      const mergedBuffer = normaliseBuffer(mergedPdf);
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="print-queue-bundle.pdf"');
+      res.setHeader('X-Printed-Order-Ids', JSON.stringify(printableOrderIds));
+      res.send(mergedBuffer);
+    } catch (error) {
+      console.error('Failed to generate print queue bundle:', error);
+      res.status(500).json({ error: 'Failed to build print queue bundle' });
     }
   });
 
@@ -635,100 +916,6 @@ function createOrdersRouter({
     } catch (error) {
       console.error('Failed to generate print bundle:', error);
       res.status(500).json({ error: 'Failed to prepare print bundle' });
-    }
-  });
-
-  router.post('/print-bundle/bulk', async (req, res) => {
-    try {
-      const rawIds = Array.isArray(req.body?.orderIds) ? req.body.orderIds : [];
-      const orderIds = rawIds
-        .map((id) => (typeof id === 'string' ? id.trim() : String(id || '').trim()))
-        .filter(Boolean);
-
-      if (!orderIds.length) {
-        return res.status(400).json({ error: 'orderIds array is required.' });
-      }
-
-      const uniqueIds = Array.from(new Set(orderIds));
-      const pdfBuffers = [];
-      const printed = [];
-      const skipped = [];
-
-      for (const orderId of uniqueIds) {
-        try {
-          const doc = await ordersCollection.doc(orderId).get();
-          if (!doc.exists) {
-            skipped.push({ id: orderId, reason: 'not_found' });
-            continue;
-          }
-
-          const order = { id: doc.id, ...doc.data() };
-          const preference = (order.shippingPreference || '').toString().toLowerCase();
-          if (preference !== 'shipping kit requested') {
-            skipped.push({ id: orderId, reason: 'not_kit_order' });
-            continue;
-          }
-
-          const labelUrls = [order.outboundLabelUrl, order.inboundLabelUrl]
-            .filter((url) => typeof url === 'string' && url.trim());
-
-          if (labelUrls.length < 2) {
-            skipped.push({ id: orderId, reason: 'missing_labels' });
-            continue;
-          }
-
-          const downloadedLabels = await Promise.all(
-            labelUrls.map(async (url) => {
-              try {
-                const response = await axios.get(url, { responseType: 'arraybuffer' });
-                return Buffer.from(response.data);
-              } catch (downloadError) {
-                console.error(
-                  `Failed to download label for order ${orderId} from ${url}:`,
-                  downloadError.message || downloadError
-                );
-                return null;
-              }
-            })
-          );
-
-          const validLabels = downloadedLabels.filter(Boolean);
-          if (!validLabels.length) {
-            skipped.push({ id: orderId, reason: 'label_download_failed' });
-            continue;
-          }
-
-          const bagLabelData = await generateBagLabelPdf(order);
-          const bagBuffer = Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData);
-
-          pdfBuffers.push(...validLabels, bagBuffer);
-          printed.push(orderId);
-        } catch (orderError) {
-          console.error(
-            `Failed to prepare bundle for order ${orderId}:`,
-            orderError.message || orderError
-          );
-          skipped.push({ id: orderId, reason: 'processing_error' });
-        }
-      }
-
-      if (!pdfBuffers.length) {
-        return res.status(400).json({
-          error: 'No valid orders were provided for bulk printing.',
-          printed,
-          skipped,
-        });
-      }
-
-      const merged = await mergePdfBuffers(pdfBuffers);
-      const mergedBuffer = Buffer.isBuffer(merged) ? merged : Buffer.from(merged);
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'attachment; filename="bulk-print-bundle.pdf"');
-      res.send(mergedBuffer);
-    } catch (error) {
-      console.error('Failed to generate bulk print bundle:', error);
-      res.status(500).json({ error: 'Failed to prepare bulk print bundle' });
     }
   });
 
