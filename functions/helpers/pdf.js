@@ -398,9 +398,6 @@ async function generateBagLabelPdf(order) {
     return pdfDoc.save();
 }
 
-    return pdfDoc.save();
-}
-
 function resolveOrderPayout(order = {}) {
     const candidates = [
         order.finalPayoutAmount,
