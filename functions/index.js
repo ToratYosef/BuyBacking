@@ -32,11 +32,29 @@ const allowedOrigins = [
   "https://buyback-a0f05.web.app",
   "https://secondhandcell.com",
   "https://www.secondhandcell.com",
+  /^https:\/\/buyback-a0f05(?:-[\w-]+)?\.web\.app$/,
+  /^https:\/\/buyback-a0f05(?:-[\w-]+)?\.firebaseapp\.com$/,
+  /^https:\/\/(?:www\.)?secondhandcell\.com$/,
+  /^https:\/\/secondhandcell(?:-[\w-]+)?\.web\.app$/,
+  "http://localhost:5000",
+  "http://localhost:5001",
 ];
+
+function isAllowedOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+  return allowedOrigins.some((entry) => {
+    if (entry instanceof RegExp) {
+      return entry.test(origin);
+    }
+    return entry === origin;
+  });
+}
 
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     return callback(new Error("Not allowed by CORS"));
@@ -47,14 +65,18 @@ const corsOptions = {
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
+  if (isAllowedOrigin(origin)) {
+    res.header("Access-Control-Allow-Origin", origin || "*");
   }
   res.header("Vary", "Origin");
   res.header("Access-Control-Allow-Methods", corsOptions.methods.join(","));
   res.header(
     "Access-Control-Allow-Headers",
     corsOptions.allowedHeaders.join(",")
+  );
+  res.header(
+    "Access-Control-Expose-Headers",
+    "Content-Disposition,X-Printed-Order-Ids"
   );
 
   if (req.method === "OPTIONS") {
@@ -149,6 +171,18 @@ const INBOUND_TRACKABLE_STATUSES = new Set([
   "label_generated",
   "emailed",
   "phone_on_the_way",
+]);
+
+const FINAL_INBOUND_STATUSES = new Set([
+  "delivered_to_us",
+  "received",
+  "completed",
+  "re-offered-pending",
+  "re-offered-accepted",
+  "re-offered-declined",
+  "re-offered-auto-accepted",
+  "return-label-generated",
+  "requote_accepted",
 ]);
 
 const CONDITION_EMAIL_FROM_ADDRESS =
@@ -1378,18 +1412,58 @@ function shouldTrackInbound(order = {}) {
 
 function shouldRefreshInbound(order = {}) {
   if (!shouldTrackInbound(order)) return false;
+  if (hasInboundDeliveryLock(order)) return false;
   const lastSyncedMs = getTimestampMillis(order.labelTrackingLastSyncedAt);
   if (!lastSyncedMs) return true;
   return Date.now() - lastSyncedMs >= INBOUND_REFRESH_INTERVAL_MS;
 }
 
-function deriveInboundStatusUpdate(order = {}, normalizedStatus) {
+function hasInboundDeliveryLock(order = {}) {
+  if (!order || typeof order !== "object") {
+    return false;
+  }
+
+  if (order.inboundTrackingLocked) {
+    return true;
+  }
+
+  const deliveredAt = getTimestampMillis(order.labelDeliveredAt || order.inboundLabelDeliveredAt);
+  if (typeof deliveredAt === "number") {
+    return true;
+  }
+
+  const status = (order.status || "").toLowerCase();
+  if (FINAL_INBOUND_STATUSES.has(status)) {
+    return true;
+  }
+
+  if (isEmailLabelOrder(order)) {
+    return status === "received";
+  }
+
+  if (isKitOrder(order)) {
+    return status === "delivered_to_us";
+  }
+
+  return false;
+}
+
+function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadata = {}) {
   if (!normalizedStatus) return null;
   const upper = String(normalizedStatus).toUpperCase();
+  const hasEstimatedDelivery = Boolean(
+    trackingMetadata &&
+    (
+      trackingMetadata.labelTrackingEstimatedDelivery ||
+      trackingMetadata.estimatedDelivery ||
+      trackingMetadata.estimated_delivery_date
+    )
+  );
+  const kitOrder = isKitOrder(order);
+  const emailLabelOrder = isEmailLabelOrder(order);
 
   if (upper === "DELIVERED" || upper === "DELIVERED_TO_AGENT") {
     const normalizedStatus = (order.status || "").toLowerCase();
-    const kitOrder = isKitOrder(order);
 
     if (kitOrder) {
       if (normalizedStatus === "delivered_to_us" || normalizedStatus === "received") {
@@ -1414,13 +1488,19 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus) {
   ]);
 
   if (transitStatuses.has(upper)) {
-    if (isKitOrder(order)) {
+    if (kitOrder) {
       if ((order.status || "").toLowerCase() === "kit_on_the_way_to_us") {
         return null;
       }
       return { nextStatus: "kit_on_the_way_to_us", delivered: false };
     }
-    if (isEmailLabelOrder(order)) {
+    if (emailLabelOrder) {
+      if (upper !== "IN_TRANSIT") {
+        return null;
+      }
+      if (!hasEstimatedDelivery) {
+        return null;
+      }
       if ((order.status || "").toLowerCase() === "phone_on_the_way") {
         return null;
       }
@@ -2062,6 +2142,13 @@ app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
 
     const order = { id: doc.id, ...doc.data() };
 
+    if (hasInboundDeliveryLock(order)) {
+      const message = isKitOrder(order)
+        ? 'Return label already delivered. Further tracking refreshes are disabled to preserve status history.'
+        : 'Inbound label already delivered. Further tracking refreshes are disabled to preserve status history.';
+      return res.json({ skipped: true, reason: message, order: { id: order.id, status: order.status } });
+    }
+
     const hasOutbound = Boolean(order.outboundTrackingNumber);
     const hasInbound = Boolean(order.inboundTrackingNumber || order.trackingNumber);
 
@@ -2267,6 +2354,14 @@ async function syncInboundTrackingForOrder(order, options = {}) {
     };
   }
 
+  if (hasInboundDeliveryLock(order)) {
+    return {
+      order,
+      tracking: null,
+      skipped: 'delivered',
+    };
+  }
+
   const shipEngineKey = options.shipengineKey || process.env.SHIPENGINE_KEY;
   if (!shipEngineKey) {
     throw new Error('ShipEngine API key not configured.');
@@ -2331,9 +2426,10 @@ async function syncInboundTrackingForOrder(order, options = {}) {
   const normalizedStatus = String(updatePayload.labelTrackingStatus || '').toUpperCase();
   if (normalizedStatus === 'DELIVERED' || normalizedStatus === 'DELIVERED_TO_AGENT') {
     updatePayload.labelDeliveredAt = timestamp;
+    updatePayload.inboundTrackingLocked = true;
   }
 
-  const statusUpdate = deriveInboundStatusUpdate(order, normalizedStatus);
+  const statusUpdate = deriveInboundStatusUpdate(order, normalizedStatus, updatePayload);
 
   const logEntries = [
     {
@@ -3265,17 +3361,6 @@ exports.autoRefreshInboundTracking = functions.pubsub
       }
     }
 
-    return null;
-  });
-
-exports.autoVoidExpiredLabels = functions.pubsub
-  .schedule("every 60 minutes")
-  .onRun(async () => {
-    try {
-      await runAutomaticLabelVoidSweep();
-    } catch (error) {
-      console.error("Automatic label void sweep failed:", error);
-    }
     return null;
   });
 
