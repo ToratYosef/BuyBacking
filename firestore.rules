@@ -1,40 +1,26 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /devices/{deviceId} {
+    // Anyone can read all documents.
+    match /{document=**} {
       allow read: if true;
-
-      allow update: if request.auth != null
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["imei"])
-        && resource.data.status == "received";
+      // Only signed-in users can write to all other collections.
+      allow write: if request.auth != null;
     }
 
-    match /orders/{orderId} {
-      allow read: if true;
-
-      allow update: if request.auth != null
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["imei"])
-        && resource.data.status == "received";
-    }
-
+    // This allows anyone to read and write chat messages.
     match /chats/{document=**} {
       allow read, write: if true;
     }
-
+    
+    // 💡 Add this new rule to allow anyone to write to device_clicks.
     match /device_clicks/{document=**} {
       allow write: if true;
     }
-
-    match /{document=**} {
-      allow read: if true;
-    }
-
-    match /{collection}/{document} {
-      allow write: if request.auth != null && collection != "devices" && collection != "orders";
-    }
-
-    match /{collection}/{document}/{subcollection=**} {
-      allow write: if request.auth != null && collection != "devices" && collection != "orders";
+    
+    // 💡 Add this new rule to allow anyone to write to device_clicks.
+    match /device_clicks/{document=**} {
+      allow write: if true;
     }
   }
 }
