@@ -1,10 +1,12 @@
 import { firebaseApp } from "/assets/js/firebase-app.js";
-import { createOrderInfoLabelPdf, createBagLabelPdf, gatherOrderLabelUrls, serialiseQueueOrder } from "/assets/js/pdf/order-labels.js";
+import { gatherOrderLabelUrls, serialiseQueueOrder } from "/assets/js/pdf/order-labels.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
+
+const BACKEND_BASE_URL = "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
 
 const PRINT_QUEUE_STATUSES = ["shipping_kit_requested", "kit_needs_printing", "needs_printing"];
 
@@ -249,20 +251,108 @@ async function loadQueue() {
   }
 }
 
-async function fetchPdfBytes(url) {
-  const response = await fetch(url, { mode: "cors" });
-  if (!response.ok) {
-    throw new Error(`Failed to download PDF (${response.status})`);
+function parseHeaderJson(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn("Unable to parse header JSON:", value, error);
+    return [];
   }
-  const buffer = await response.arrayBuffer();
-  return new Uint8Array(buffer);
 }
 
-async function appendPdfPages(targetDoc, sourceBytes) {
-  if (!sourceBytes) return;
-  const pdf = await PDFLib.PDFDocument.load(sourceBytes);
-  const copied = await targetDoc.copyPages(pdf, pdf.getPageIndices());
-  copied.forEach((page) => targetDoc.addPage(page));
+async function authorisedFetch(path, options = {}) {
+  const user = auth.currentUser;
+  const headers = new Headers(options.headers || {});
+  if (user) {
+    try {
+      const token = await user.getIdToken();
+      headers.set("Authorization", `Bearer ${token}`);
+    } catch (error) {
+      console.error("Failed to resolve ID token for request:", error);
+    }
+  }
+
+  const finalOptions = {
+    method: options.method || "GET",
+    headers,
+    body: options.body,
+  };
+
+  return fetch(`${BACKEND_BASE_URL}${path}`, finalOptions);
+}
+
+async function requestPrintBundle(orderIds) {
+  const response = await authorisedFetch("/orders/needs-printing/bundle", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ orderIds }),
+  });
+
+  if (!response.ok) {
+    let detail = "";
+    const contentType = response.headers.get("content-type") || "";
+    try {
+      if (contentType.includes("application/json")) {
+        const payload = await response.json();
+        detail = payload?.error || JSON.stringify(payload);
+      } else {
+        detail = await response.text();
+      }
+    } catch (error) {
+      console.warn("Failed to parse error response from print bundle request:", error);
+    }
+
+    const error = new Error(`Print bundle request failed (${response.status})`);
+    error.status = response.status;
+    error.detail = detail;
+    throw error;
+  }
+
+  const buffer = await response.arrayBuffer();
+  const printedIds = parseHeaderJson(response.headers.get("x-printed-order-ids"));
+  const updatedIds = parseHeaderJson(response.headers.get("x-kit-sent-order-ids"));
+
+  return {
+    bytes: new Uint8Array(buffer),
+    printedIds,
+    updatedIds,
+  };
+}
+
+async function markOrdersKitSent(orderIds) {
+  if (!orderIds.length) {
+    return [];
+  }
+
+  const results = await Promise.all(
+    orderIds.map(async (orderId) => {
+      try {
+        const response = await authorisedFetch(`/orders/${encodeURIComponent(orderId)}/mark-kit-sent`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({}),
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`Status ${response.status}: ${text}`);
+        }
+
+        return orderId;
+      } catch (error) {
+        console.error(`Failed to mark order ${orderId} as kit sent:`, error);
+        return null;
+      }
+    })
+  );
+
+  return results.filter(Boolean);
 }
 
 function openPrintPreview(bytes) {
@@ -302,64 +392,42 @@ async function handleBatchPrint() {
   queueStatusEl.textContent = "Preparing merged PDF bundle…";
 
   try {
-    const mergedPdf = await PDFLib.PDFDocument.create();
-    const printableOrders = [];
-
-    for (const order of queueOrders) {
-      const labelUrls = gatherOrderLabelUrls(order);
-      if (!labelUrls.length) {
-        console.warn(`No label URLs found for order ${order.id}`);
-        continue;
-      }
-
-      const labelBuffers = await Promise.all(
-        labelUrls.map(async (url) => {
-          try {
-            return await fetchPdfBytes(url);
-          } catch (error) {
-            console.error(`Failed to fetch label ${url} for order ${order.id}:`, error);
-            return null;
-          }
-        })
-      );
-
-      const validBuffers = labelBuffers.filter(Boolean);
-      if (!validBuffers.length) {
-        continue;
-      }
-
-      for (const bytes of validBuffers) {
-        await appendPdfPages(mergedPdf, bytes);
-      }
-
-      try {
-        const infoLabel = await createOrderInfoLabelPdf(order);
-        await appendPdfPages(mergedPdf, infoLabel);
-      } catch (error) {
-        console.error(`Failed to build order info label for ${order.id}:`, error);
-      }
-
-      try {
-        const bagLabel = await createBagLabelPdf(order);
-        await appendPdfPages(mergedPdf, bagLabel);
-      } catch (error) {
-        console.error(`Failed to build bag label for ${order.id}:`, error);
-      }
-
-      printableOrders.push(order.id);
-    }
-
-    if (!printableOrders.length) {
-      queueStatusEl.textContent = "No printable documents were generated. Please verify label URLs.";
+    const orderIds = queueOrders.map((order) => order.id).filter(Boolean);
+    if (!orderIds.length) {
+      queueStatusEl.textContent = "No orders available to print.";
       return;
     }
 
-    const mergedBytes = await mergedPdf.save();
-    openPrintPreview(mergedBytes);
-    queueStatusEl.textContent = `Merged ${printableOrders.length} order${printableOrders.length === 1 ? "" : "s"} into a single PDF.`;
+    const { bytes, printedIds, updatedIds } = await requestPrintBundle(orderIds);
+
+    if (!printedIds.length) {
+      console.warn("Print bundle did not report any printed orders.");
+    }
+
+    openPrintPreview(bytes);
+
+    const missingKitSent = printedIds.filter((id) => !updatedIds.includes(id));
+    let fallbackUpdates = [];
+
+    if (missingKitSent.length) {
+      console.warn(
+        "Some orders were not marked as kit sent by the bundle endpoint. Attempting fallback updates:",
+        missingKitSent
+      );
+      fallbackUpdates = await markOrdersKitSent(missingKitSent);
+    }
+
+    const totalUpdated = new Set([...updatedIds, ...fallbackUpdates]);
+
+    queueStatusEl.textContent = `Merged ${printedIds.length || orderIds.length} order${
+      (printedIds.length || orderIds.length) === 1 ? "" : "s"
+    } into a single PDF. Marked ${totalUpdated.size} as Kit Sent.`;
+
+    await loadQueue();
   } catch (error) {
-    console.error("Failed to merge labels:", error);
-    queueStatusEl.textContent = "Failed to merge labels. Please try again.";
+    console.error("Failed to prepare print bundle:", error);
+    const detail = error?.detail ? ` Details: ${error.detail}` : "";
+    queueStatusEl.textContent = `Failed to merge labels. Please try again.${detail}`;
   } finally {
     isPrinting = false;
     updatePrintButtonState();

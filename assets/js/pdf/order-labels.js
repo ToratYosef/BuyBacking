@@ -202,26 +202,6 @@ export async function createOrderInfoLabelPdf(order = {}) {
     cursorY -= lineHeight * lines.length + 6;
   };
 
-  const drawBulletList = (items) => {
-    const bullet = "• ";
-    const bulletWidth = regular.widthOfTextAtSize(bullet, 9);
-    const maxWidth = page.getWidth() - margin * 2 - bulletWidth;
-    items.forEach((item) => {
-      const lines = wrapText(item, regular, 9, maxWidth);
-      lines.forEach((line, index) => {
-        const prefix = index === 0 ? bullet : "  ";
-        page.drawText(`${prefix}${line}`, {
-          x: margin,
-          y: cursorY - index * lineHeight,
-          size: 9,
-          font: regular,
-          color: rgb(0.22, 0.22, 0.24),
-        });
-      });
-      cursorY -= lineHeight * lines.length + 4;
-    });
-  };
-
   drawHeading(`Order #${order.id || "—"}`);
 
   drawSection("Customer Information");
@@ -241,13 +221,6 @@ export async function createOrderInfoLabelPdf(order = {}) {
   drawKeyValue("Fully Functional?", formatBooleanish(order.condition_functional));
   drawKeyValue("Any Cracks?", formatBooleanish(order.condition_cracks));
   drawKeyValue("Cosmetic Condition", formatBooleanish(order.condition_cosmetic));
-
-  drawSection("Prep Checklist");
-  drawBulletList([
-    "Remove SIM cards and accessories from the device.",
-    "Factory reset and sign out of Apple, Google, or Samsung accounts.",
-    "Place the device in the protective sleeve and include this sheet in the box.",
-  ]);
 
   return doc.save();
 }
@@ -286,18 +259,30 @@ export async function createBagLabelPdf(order = {}) {
   let cursorY = page.getHeight() - margin;
   const maxWidth = page.getWidth() - margin * 2;
 
-  const draw = (text, { font = regular, size = 11, color = rgb(0.12, 0.12, 0.14), spacing = 12 } = {}) => {
+  const draw = (
+    text,
+    { font = regular, size = 11, color = rgb(0.12, 0.12, 0.14), spacing = 10 } = {}
+  ) => {
+    if (!text) {
+      cursorY -= spacing;
+      return;
+    }
+
     const lines = wrapText(text, font, size, maxWidth);
-    lines.forEach((line, index) => {
+    const lineHeight = size + 4;
+
+    lines.forEach((line) => {
+      cursorY -= lineHeight;
       page.drawText(line, {
         x: margin,
-        y: cursorY - index * (size + 2),
+        y: cursorY,
         size,
         font,
         color,
       });
     });
-    cursorY -= lines.length * (size + 2) + spacing - 12;
+
+    cursorY -= spacing;
   };
 
   const logoImage = await embedLogoImage(doc);
