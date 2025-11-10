@@ -150,12 +150,14 @@ export async function createOrderInfoLabelPdf(order = {}) {
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  const margin = 20;
+  const margin = 24;
   const lineHeight = 14;
+  const sectionSpacing = 14;
+  const keyValueSpacing = 8;
   let cursorY = page.getHeight() - margin;
 
   const drawHeading = (text) => {
-    cursorY -= lineHeight;
+    cursorY -= sectionSpacing;
     page.drawText(text, {
       x: margin,
       y: cursorY,
@@ -163,11 +165,11 @@ export async function createOrderInfoLabelPdf(order = {}) {
       font: bold,
       color: rgb(0.07, 0.2, 0.47),
     });
-    cursorY -= 6;
+    cursorY -= 8;
   };
 
   const drawSection = (title) => {
-    cursorY -= lineHeight - 2;
+    cursorY -= sectionSpacing;
     page.drawText(title, {
       x: margin,
       y: cursorY,
@@ -175,7 +177,7 @@ export async function createOrderInfoLabelPdf(order = {}) {
       font: bold,
       color: rgb(0.16, 0.18, 0.22),
     });
-    cursorY -= 4;
+    cursorY -= 6;
   };
 
   const drawKeyValue = (label, value) => {
@@ -199,7 +201,7 @@ export async function createOrderInfoLabelPdf(order = {}) {
         color: rgb(0.1, 0.1, 0.1),
       });
     });
-    cursorY -= lineHeight * lines.length + 6;
+    cursorY -= lineHeight * lines.length + keyValueSpacing;
   };
 
   const drawBulletList = (items) => {
@@ -218,7 +220,7 @@ export async function createOrderInfoLabelPdf(order = {}) {
           color: rgb(0.22, 0.22, 0.24),
         });
       });
-      cursorY -= lineHeight * lines.length + 4;
+      cursorY -= lineHeight * lines.length + 6;
     });
   };
 
@@ -286,18 +288,19 @@ export async function createBagLabelPdf(order = {}) {
   let cursorY = page.getHeight() - margin;
   const maxWidth = page.getWidth() - margin * 2;
 
-  const draw = (text, { font = regular, size = 11, color = rgb(0.12, 0.12, 0.14), spacing = 12 } = {}) => {
+  const draw = (text, { font = regular, size = 11, color = rgb(0.12, 0.12, 0.14), spacing = 10 } = {}) => {
     const lines = wrapText(text, font, size, maxWidth);
+    const lineStep = size + 2;
     lines.forEach((line, index) => {
       page.drawText(line, {
         x: margin,
-        y: cursorY - index * (size + 2),
+        y: cursorY - index * lineStep,
         size,
         font,
         color,
       });
     });
-    cursorY -= lines.length * (size + 2) + spacing - 12;
+    cursorY -= lines.length * lineStep + spacing;
   };
 
   const logoImage = await embedLogoImage(doc);
@@ -312,20 +315,20 @@ export async function createBagLabelPdf(order = {}) {
     cursorY -= scaled.height + 16;
   }
 
-  draw("SecondHandCell Bag Label", { font: bold, size: 14, spacing: 14 });
-  draw(`Order #${order.id || "—"}`, { font: bold, size: 24, color: rgb(0.07, 0.2, 0.47), spacing: 16 });
+  draw("SecondHandCell Bag Label", { font: bold, size: 14, spacing: 12 });
+  draw(`Order #${order.id || "—"}`, { font: bold, size: 24, color: rgb(0.07, 0.2, 0.47), spacing: 14 });
 
   const deviceLabel = buildDeviceLabel(order);
   if (deviceLabel) {
-    draw(`Device: ${deviceLabel}`, { size: 12, spacing: 10 });
+    draw(`Device: ${deviceLabel}`, { size: 12, spacing: 8 });
   }
 
   if (order.storage) {
-    draw(`Storage: ${String(order.storage)}`, { size: 11, spacing: 10 });
+    draw(`Storage: ${String(order.storage)}`, { size: 11, spacing: 8 });
   }
 
   if (order.carrier) {
-    draw(`Carrier: ${formatValue(order.carrier)}`, { size: 11, spacing: 10 });
+    draw(`Carrier: ${formatValue(order.carrier)}`, { size: 11, spacing: 8 });
   }
 
   const conditionParts = [];
@@ -339,11 +342,11 @@ export async function createBagLabelPdf(order = {}) {
   if (cracksText) conditionParts.push(`Cracks: ${cracksText}`);
 
   if (conditionParts.length) {
-    draw(`Condition: ${conditionParts.join(" • ")}`, { size: 11, spacing: 12 });
+    draw(`Condition: ${conditionParts.join(" • ")}`, { size: 11, spacing: 10 });
   }
 
   const payout = formatCurrency(resolvePayout(order));
-  draw(`Quoted Price: $${payout}`, { font: bold, size: 13, color: rgb(0.1, 0.45, 0.2), spacing: 14 });
+  draw(`Quoted Price: $${payout}`, { font: bold, size: 13, color: rgb(0.1, 0.45, 0.2), spacing: 12 });
 
   draw("Attach this label to the device bag before shipping.", {
     size: 10,
@@ -360,45 +363,90 @@ export async function createBagLabelPdf(order = {}) {
   return doc.save();
 }
 
-export function gatherOrderLabelUrls(order = {}) {
-  const urls = new Set();
-  const push = (value) => {
-    if (!value) return;
-    const stringValue = String(value).trim();
-    if (!stringValue) return;
-    if (/^https?:\/\//i.test(stringValue)) {
-      urls.add(stringValue);
-    }
-  };
+function pushOrderedUrl(list, seen, value) {
+  if (!value) return;
+  const stringValue = String(value).trim();
+  if (!stringValue) return;
+  if (!/^https?:\/\//i.test(stringValue)) return;
+  if (seen.has(stringValue)) return;
+  seen.add(stringValue);
+  list.push(stringValue);
+}
 
-  push(order.outboundLabelUrl);
-  push(order.inboundLabelUrl);
-  push(order.uspsLabelUrl);
+function addLabelObjectCandidates(list, seen, source) {
+  if (!source || typeof source !== "object") {
+    return;
+  }
 
-  const labelRecords = order.labelRecords || {};
-  Object.values(labelRecords).forEach((entry) => {
-    if (!entry) return;
-    push(entry.downloadUrl || entry.download_url || entry.labelUrl || entry.url);
-    if (entry.label_download && typeof entry.label_download === "object") {
-      Object.values(entry.label_download).forEach(push);
+  const directKeys = ["downloadUrl", "download_url", "labelUrl", "label_url", "url", "href", "pdf"];
+  directKeys.forEach((key) => {
+    if (source[key]) {
+      pushOrderedUrl(list, seen, source[key]);
     }
   });
 
+  if (source.label_download && typeof source.label_download === "object") {
+    Object.values(source.label_download).forEach((value) => pushOrderedUrl(list, seen, value));
+  }
+}
+
+export function gatherOrderLabelUrls(order = {}) {
+  const seen = new Set();
+  const ordered = [];
+
+  const outboundPrimaries = [
+    order.outboundDownloadUrl,
+    order.outboundDownloadURL,
+    order.outboundLabelUrl,
+    order.outboundLabel?.downloadUrl,
+    order.outboundLabel?.download_url,
+  ];
+  outboundPrimaries.forEach((value) => pushOrderedUrl(ordered, seen, value));
+  addLabelObjectCandidates(ordered, seen, order.outboundLabel);
+  addLabelObjectCandidates(ordered, seen, order.shipEngineLabels?.outbound);
+  addLabelObjectCandidates(ordered, seen, order.shipEngineLabels?.kit);
+  addLabelObjectCandidates(ordered, seen, order.shipEngineLabels?.primary);
+
+  const inboundPrimaries = [
+    order.inboundDownloadUrl,
+    order.inboundDownloadURL,
+    order.inboundLabelUrl,
+    order.inboundLabel?.downloadUrl,
+    order.inboundLabel?.download_url,
+    order.trackingLabelUrl,
+  ];
+  inboundPrimaries.forEach((value) => pushOrderedUrl(ordered, seen, value));
+  addLabelObjectCandidates(ordered, seen, order.inboundLabel);
+  addLabelObjectCandidates(ordered, seen, order.shipEngineLabels?.inbound);
+  addLabelObjectCandidates(ordered, seen, order.shipEngineLabels?.customer);
+  addLabelObjectCandidates(ordered, seen, order.shipEngineLabels?.return);
+
+  const uspsPrimaries = [order.uspsDownloadUrl, order.uspsLabelUrl];
+  uspsPrimaries.forEach((value) => pushOrderedUrl(ordered, seen, value));
+  addLabelObjectCandidates(ordered, seen, order.uspsLabel);
+
+  const labelRecords = order.labelRecords || {};
+  Object.values(labelRecords).forEach((entry) => addLabelObjectCandidates(ordered, seen, entry));
+
+  if (order.labels && typeof order.labels === "object" && !Array.isArray(order.labels)) {
+    Object.values(order.labels).forEach((entry) => addLabelObjectCandidates(ordered, seen, entry));
+  }
+
   if (Array.isArray(order.labelUrls)) {
-    order.labelUrls.forEach(push);
+    order.labelUrls.forEach((value) => pushOrderedUrl(ordered, seen, value));
   }
 
   if (Array.isArray(order.shipEngineLabels)) {
     order.shipEngineLabels.forEach((entry) => {
       if (entry && typeof entry === "object") {
-        Object.values(entry).forEach(push);
+        Object.values(entry).forEach((value) => pushOrderedUrl(ordered, seen, value));
       } else {
-        push(entry);
+        pushOrderedUrl(ordered, seen, entry);
       }
     });
   }
 
-  return Array.from(urls);
+  return ordered;
 }
 
 export function serialiseQueueOrder(doc) {

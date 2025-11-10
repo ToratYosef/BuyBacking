@@ -112,7 +112,7 @@ import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
-import { createOrderInfoLabelPdf, createBagLabelPdf } from "/assets/js/pdf/order-labels.js";
+import { gatherOrderLabelUrls } from "/assets/js/pdf/order-labels.js";
 /* --- API BASE URL FIX: Redirect /api/* to Cloud Functions base --- */
 (function () {
   try {
@@ -2464,98 +2464,50 @@ reofferPricingMessage.classList.remove('hidden');
 * @param {Object} order - The full order object.
 */
 async function generateAndMergeShippingDocument(order) {
-const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
-const rawLabelUrls = [];
+  const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
+  const labelUrls = gatherOrderLabelUrls(order);
 
-if (isKitOrder) {
-rawLabelUrls.push(order.outboundLabelUrl, order.inboundLabelUrl);
-} else {
-rawLabelUrls.push(order.uspsLabelUrl || order.outboundLabelUrl || order.inboundLabelUrl);
-}
-
-const labelUrls = Array.from(new Set(rawLabelUrls.filter(Boolean)));
-
-if (!labelUrls.length) {
-displayModalMessage('No shipping labels are available yet. Generate the label before printing.', 'error');
-return;
-}
-
-if (isKitOrder && labelUrls.length < 2) {
-displayModalMessage('Kit orders require both outbound and inbound labels before printing.', 'error');
-return;
-}
-
-modalLoadingMessage.classList.remove('hidden');
-modalActionButtons.classList.add('hidden');
-displayModalMessage('Fetching labels and generating packing slip...', 'info');
-
-try {
-// --- FETCH PDFs via Proxy ---
-// Function to fetch PDF data as ArrayBuffer via the Cloud Function proxy
-const fetchPdfProxy = async (url) => {
-if (!url) throw new Error("URL is null or empty.");
-
-const response = await fetch(`${BACKEND_BASE_URL}/fetch-pdf`, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ url: url })
-});
-
-if (!response.ok) {
-const errorData = await response.json();
-throw new Error(errorData.error || `Failed to fetch PDF from proxy. Status: ${response.status}`);
-}
-
-const result = await response.json();
-// Decode Base64 back to ArrayBuffer
-const binaryString = atob(result.base64);
-const bytes = new Uint8Array(binaryString.length);
-for (let i = 0; i < binaryString.length; i++) {
-bytes[i] = binaryString.charCodeAt(i);
-}
-return bytes.buffer;
-};
-
-  // 1. Fetch ShipEngine labels using the proxy
-  const labelPdfBuffers = await Promise.all(labelUrls.map((url) => fetchPdfProxy(url)));
-
-  // 2. Generate the custom info + bag labels client-side
-  const orderInfoLabelBytes = await createOrderInfoLabelPdf(order);
-  const bagLabelBytes = await createBagLabelPdf(order);
-
-  // Merge shipping labels followed by the info and bag labels
-  const mergedPdf = await PDFLib.PDFDocument.create();
-
-  for (const bytes of labelPdfBuffers) {
-    const pdf = await PDFLib.PDFDocument.load(bytes);
-    const copied = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
-    copied.forEach(p => mergedPdf.addPage(p));
+  if (!labelUrls.length) {
+    displayModalMessage('No shipping labels are available yet. Generate the label before printing.', 'error');
+    return;
   }
 
-  if (orderInfoLabelBytes) {
-    const infoPdf = await PDFLib.PDFDocument.load(orderInfoLabelBytes);
-    const copiedInfo = await mergedPdf.copyPages(infoPdf, infoPdf.getPageIndices());
-    copiedInfo.forEach((page) => mergedPdf.addPage(page));
+  if (isKitOrder && labelUrls.length < 2) {
+    displayModalMessage('Kit orders require both outbound and inbound labels before printing.', 'error');
+    return;
   }
 
-  if (bagLabelBytes) {
-    const bagLabelPdf = await PDFLib.PDFDocument.load(bagLabelBytes);
-    const copiedBag = await mergedPdf.copyPages(bagLabelPdf, bagLabelPdf.getPageIndices());
-    copiedBag.forEach((page) => mergedPdf.addPage(page));
-  }
+  modalLoadingMessage.classList.remove('hidden');
+  modalActionButtons.classList.add('hidden');
+  displayModalMessage('Preparing merged shipping packet…', 'info');
 
-// 5. Display merged PDF in a dedicated print window
-const mergedBytes = await mergedPdf.save();
-const blob = new Blob([mergedBytes], { type: "application/pdf" });
-const url = URL.createObjectURL(blob);
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/orders/needs-printing/bundle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderIds: [order.id] })
+    });
 
-// OPEN PRINT WINDOW AND WRITE MERGED PDF VIEW
-const printWindow = window.open('', `print-${order.id}`, 'width=420,height=640');
-if (printWindow) {
-  try { printWindow.focus(); } catch (e) { console.warn('Unable to focus print window:', e); }
+    if (!response.ok) {
+      let details = '';
+      try {
+        const payload = await response.json();
+        details = payload?.error || payload?.message || '';
+      } catch (_) {
+        details = '';
+      }
+      throw new Error(details || `Print bundle request failed (${response.status})`);
+    }
 
-  // Important: open with a back-tick and CLOSE it before the );
-  printWindow.document.write(`<!DOCTYPE html>
+    const buffer = await response.arrayBuffer();
+    const blob = new Blob([buffer], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+
+    const printWindow = window.open('', `print-${order.id}`, 'width=420,height=640');
+    if (printWindow) {
+      try { printWindow.focus(); } catch (e) { console.warn('Unable to focus print window:', e); }
+
+      printWindow.document.write(`<!DOCTYPE html>
 <html>
 <head>
   <title>Print Kit ${order.id}</title>
@@ -2580,45 +2532,44 @@ if (printWindow) {
 
     window.onafterprint = () => {
       if (shouldNotify && window.opener) {
-window.opener.postMessage({ type: 'kit-print-complete', orderId }, '*');
+        window.opener.postMessage({ type: 'kit-print-complete', orderId }, '*');
       }
       setTimeout(() => window.close(), 300);
     };
   <\/script>
 </body>
 </html>`);
-  printWindow.document.close();
-} else {
-  displayModalMessage('Pop-up blocked. Allow pop-ups for this site to print shipping kits automatically.', 'error');
-  window.open(url, '_blank');
-}
+      printWindow.document.close();
+    } else {
+      displayModalMessage('Pop-up blocked. Allow pop-ups for this site to print shipping kits automatically.', 'error');
+      window.open(url, '_blank');
+    }
 
-setTimeout(() => URL.revokeObjectURL(url), 60000);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
 
-const baseSuccessMessage = 'Merged document (Labels + Slip) generated. Printing window opened.';
-if (isKitOrder) {
-const marked = await markKitAsPrinted(order.id);
-if (marked) {
-displayModalMessage('Merged document (Labels + Slip) generated and kit status updated to sent.', 'success');
-updateReminderButtons(order);
-} else {
-renderActionButtons(order);
-modalActionButtons.classList.remove('hidden');
-updateReminderButtons(order);
-}
-} else {
-displayModalMessage(baseSuccessMessage, 'success');
-renderActionButtons(order);
-modalActionButtons.classList.remove('hidden');
-updateReminderButtons(order);
-}
-
-} catch (error) {
-console.error("Error during PDF generation and merging:", error);
-displayModalMessage(`Failed to generate PDF document: ${error.message}`, 'error');
-} finally {
-modalLoadingMessage.classList.add('hidden');
-}
+    const baseSuccessMessage = 'Merged document generated. Printing window opened.';
+    if (isKitOrder) {
+      const marked = await markKitAsPrinted(order.id);
+      if (marked) {
+        displayModalMessage('Merged document generated and kit status updated to sent.', 'success');
+        updateReminderButtons(order);
+      } else {
+        renderActionButtons(order);
+        modalActionButtons.classList.remove('hidden');
+        updateReminderButtons(order);
+      }
+    } else {
+      displayModalMessage(baseSuccessMessage, 'success');
+      renderActionButtons(order);
+      modalActionButtons.classList.remove('hidden');
+      updateReminderButtons(order);
+    }
+  } catch (error) {
+    console.error('Error during PDF generation and merging:', error);
+    displayModalMessage(`Failed to generate PDF document: ${error.message}`, 'error');
+  } finally {
+    modalLoadingMessage.classList.add('hidden');
+  }
 }
 
 function updateDashboardCounts(ordersData) {

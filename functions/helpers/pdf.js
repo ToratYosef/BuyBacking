@@ -3,7 +3,7 @@ const bwipjs = require('bwip-js');
 
 const PACKING_SLIP_WIDTH = 288; // 4 inches (72 pts per inch)
 const PACKING_SLIP_HEIGHT = 432; // 6 inches
-const PACKING_SLIP_MARGIN = 20;
+const PACKING_SLIP_MARGIN = 24;
 const BAG_LABEL_WIDTH = 288; // 4 inches wide
 const BAG_LABEL_HEIGHT = 144; // 2 inches tall
 const BAG_LABEL_MARGIN_X = 16;
@@ -35,6 +35,7 @@ async function generateCustomLabelPdf(order) {
 
     const drawSectionTitle = (title) => {
         ensureSpace(2);
+        cursorY -= 6;
         page.drawText(title, {
             x: PACKING_SLIP_MARGIN,
             y: cursorY,
@@ -42,8 +43,7 @@ async function generateCustomLabelPdf(order) {
             font: boldFont,
             color: rgb(0.16, 0.18, 0.22),
         });
-        cursorY -= LINE_HEIGHT;
-        cursorY -= 2;
+        cursorY -= 6;
     };
 
     const drawKeyValue = (label, value) => {
@@ -75,7 +75,7 @@ async function generateCustomLabelPdf(order) {
         });
 
         cursorY -= LINE_HEIGHT * lines.length;
-        cursorY -= 4;
+        cursorY -= 6;
     };
 
     const drawBullet = (text) => {
@@ -97,7 +97,7 @@ async function generateCustomLabelPdf(order) {
         });
 
         cursorY -= LINE_HEIGHT * lines.length;
-        cursorY -= 2;
+        cursorY -= 6;
     };
 
     const formatPhoneNumber = (raw) => {
@@ -134,7 +134,7 @@ async function generateCustomLabelPdf(order) {
         font: boldFont,
         color: rgb(0.07, 0.2, 0.47),
     });
-    cursorY -= LINE_HEIGHT;
+    cursorY -= LINE_HEIGHT + 2;
 
     page.drawText(`Order #${order.id || '—'}`, {
         x: PACKING_SLIP_MARGIN,
@@ -143,8 +143,7 @@ async function generateCustomLabelPdf(order) {
         font: boldFont,
         color: rgb(0.12, 0.12, 0.14),
     });
-    cursorY -= LINE_HEIGHT;
-    cursorY -= 6;
+    cursorY -= LINE_HEIGHT + 4;
 
     drawSectionTitle('Customer Information');
     drawKeyValue('Customer Name', shippingInfo.fullName || shippingInfo.name || '—');
@@ -210,14 +209,15 @@ async function generateBagLabelPdf(order) {
     let cursorY = height - BAG_LABEL_MARGIN_Y;
 
     const drawLine = (text, options = {}) => {
-        const { font = regularFont, size = 10, color = rgb(0, 0, 0), gap = 4 } = options;
+        const { font = regularFont, size = 10, color = rgb(0, 0, 0), gap = 6 } = options;
         if (!text) {
             cursorY = Math.max(cursorY - gap, barcodeReserve);
             return;
         }
+        const lineHeight = size + 2;
         const lines = wrapText(text, width - BAG_LABEL_MARGIN_X * 2, font, size);
         lines.forEach((line) => {
-            cursorY -= LINE_HEIGHT;
+            cursorY -= lineHeight;
             cursorY = Math.max(cursorY, barcodeReserve);
             page.drawText(line, {
                 x: BAG_LABEL_MARGIN_X,
@@ -254,13 +254,13 @@ async function generateBagLabelPdf(order) {
         font: boldFont,
         size: 9,
         color: rgb(0.32, 0.32, 0.36),
-        gap: 2,
+        gap: 6,
     });
     drawLine(`Order #${order.id}`, {
         font: boldFont,
         size: 18,
         color: rgb(0.12, 0.16, 0.48),
-        gap: 6,
+        gap: 8,
     });
 
     const deviceLineParts = [];
@@ -270,7 +270,7 @@ async function generateBagLabelPdf(order) {
         font: boldFont,
         size: 11,
         color: rgb(0.08, 0.08, 0.1),
-        gap: 2,
+        gap: 4,
     });
 
     const specParts = [];
@@ -279,7 +279,7 @@ async function generateBagLabelPdf(order) {
     drawLine(specParts.join('    '), {
         size: 9,
         color: rgb(0.28, 0.28, 0.32),
-        gap: 3,
+        gap: 6,
     });
 
     const contactParts = [contactName];
@@ -291,20 +291,20 @@ async function generateBagLabelPdf(order) {
     drawLine(contactParts.join(' • '), {
         size: 9,
         color: rgb(0.24, 0.24, 0.28),
-        gap: 3,
+        gap: 6,
     });
 
     drawLine(`Quote: $${formatCurrency(payoutAmount)}`, {
         font: boldFont,
         size: 14,
         color: rgb(0.1, 0.5, 0.26),
-        gap: 8,
+        gap: 10,
     });
 
     drawLine('Attach this label to the device bag.', {
         size: 8,
         color: rgb(0.45, 0.45, 0.45),
-        gap: 6,
+        gap: 8,
     });
 
     const barcodeSvg = await buildBarcode(order.id);

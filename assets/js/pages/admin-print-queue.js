@@ -1,12 +1,12 @@
 import { firebaseApp } from "/assets/js/firebase-app.js";
-import { createOrderInfoLabelPdf, createBagLabelPdf, gatherOrderLabelUrls, serialiseQueueOrder } from "/assets/js/pdf/order-labels.js";
+import { gatherOrderLabelUrls } from "/assets/js/pdf/order-labels.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
 
-const PRINT_QUEUE_STATUSES = ["shipping_kit_requested", "kit_needs_printing", "needs_printing"];
+const API_BASE =
+  (typeof window !== "undefined" && (window.API_BASE || window.CLOUD_FUNCTIONS_BASE)) ||
+  "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
 
 const ICON_REFRESH = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 1 12.73-5.303L19.5 9M19.5 9V4.5M19.5 9h-4.5m-3 10.5A7.5 7.5 0 0 1 4.5 12l2.27-2.303M4.5 12H9m0 0v4.5" /></svg>';
 const ICON_PRINTER = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25V4.5h9v3.75M6 12h12a2.25 2.25 0 0 1 2.25 2.25v4.5A2.25 2.25 0 0 1 18 21H6a2.25 2.25 0 0 1-2.25-2.25v-4.5A2.25 2.25 0 0 1 6 12zm1.5 4.5h3m3 0h3" /></svg>';
@@ -200,32 +200,51 @@ function updatePrintButtonState() {
   printAllBtn.innerHTML = isPrinting ? PRINT_BUTTON_BUSY : PRINT_BUTTON_IDLE;
 }
 
+function buildApiUrl(path = "") {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE}${normalized}`;
+}
+
 async function fetchQueueOrders() {
-  const results = new Map();
+  const response = await fetch(buildApiUrl("/orders/needs-printing"));
+  if (!response.ok) {
+    let details = '';
+    try {
+      const errorPayload = await response.json();
+      details = errorPayload?.error || '';
+    } catch (_) {
+      details = '';
+    }
+    throw new Error(details || `Request failed with status ${response.status}`);
+  }
 
-  await Promise.all(
-    PRINT_QUEUE_STATUSES.map(async (status) => {
-      try {
-        const snapshot = await getDocs(query(collection(db, "orders"), where("status", "==", status)));
-        snapshot.docs.forEach((doc) => {
-          const payload = serialiseQueueOrder(doc);
-          if (!payload) return;
-          payload.createdAtMillis = resolveCreatedAtMillis(payload);
-          results.set(payload.id, payload);
-        });
-      } catch (error) {
-        console.error(`Failed to load ${status} orders for print queue:`, error);
-      }
-    })
-  );
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw new Error(`Unable to parse print queue response: ${error.message || error}`);
+  }
 
-  const orders = Array.from(results.values());
-  orders.sort((a, b) => {
+  const orders = Array.isArray(payload?.orders) ? payload.orders : [];
+  const normalised = orders.map((order) => {
+    const entry = { ...order };
+    entry.createdAtMillis = resolveCreatedAtMillis(entry);
+    if (!Array.isArray(entry.labelUrls) || !entry.labelUrls.length) {
+      entry.labelUrls = gatherOrderLabelUrls(entry);
+    }
+    return entry;
+  });
+
+  normalised.sort((a, b) => {
     const aMillis = a.createdAtMillis ?? Number.MAX_SAFE_INTEGER;
     const bMillis = b.createdAtMillis ?? Number.MAX_SAFE_INTEGER;
     return aMillis - bMillis;
   });
-  return orders;
+
+  return normalised;
 }
 
 async function loadQueue() {
@@ -247,22 +266,6 @@ async function loadQueue() {
   } finally {
     setQueueLoading(false);
   }
-}
-
-async function fetchPdfBytes(url) {
-  const response = await fetch(url, { mode: "cors" });
-  if (!response.ok) {
-    throw new Error(`Failed to download PDF (${response.status})`);
-  }
-  const buffer = await response.arrayBuffer();
-  return new Uint8Array(buffer);
-}
-
-async function appendPdfPages(targetDoc, sourceBytes) {
-  if (!sourceBytes) return;
-  const pdf = await PDFLib.PDFDocument.load(sourceBytes);
-  const copied = await targetDoc.copyPages(pdf, pdf.getPageIndices());
-  copied.forEach((page) => targetDoc.addPage(page));
 }
 
 function openPrintPreview(bytes) {
@@ -292,6 +295,41 @@ function openPrintPreview(bytes) {
   };
 }
 
+async function downloadPrintBundle(orderIds) {
+  const response = await fetch(buildApiUrl("/orders/needs-printing/bundle"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ orderIds }),
+  });
+
+  if (!response.ok) {
+    let details = "";
+    try {
+      const payload = await response.json();
+      details = payload?.error || payload?.message || "";
+    } catch (_) {
+      details = "";
+    }
+    throw new Error(details || `Failed to prepare print bundle (${response.status})`);
+  }
+
+  const buffer = await response.arrayBuffer();
+  let printedOrderIds = [];
+  const headerValue = response.headers.get("X-Printed-Order-Ids");
+  if (headerValue) {
+    try {
+      const parsed = JSON.parse(headerValue);
+      if (Array.isArray(parsed)) {
+        printedOrderIds = parsed;
+      }
+    } catch (error) {
+      console.warn("Unable to parse X-Printed-Order-Ids header:", error);
+    }
+  }
+
+  return { bytes: new Uint8Array(buffer), printedOrderIds };
+}
+
 async function handleBatchPrint() {
   if (!queueOrders.length || isPrinting) {
     return;
@@ -301,68 +339,33 @@ async function handleBatchPrint() {
   updatePrintButtonState();
   queueStatusEl.textContent = "Preparing merged PDF bundle…";
 
+  let refreshAfterPrint = false;
+
   try {
-    const mergedPdf = await PDFLib.PDFDocument.create();
-    const printableOrders = [];
-
-    for (const order of queueOrders) {
-      const labelUrls = gatherOrderLabelUrls(order);
-      if (!labelUrls.length) {
-        console.warn(`No label URLs found for order ${order.id}`);
-        continue;
-      }
-
-      const labelBuffers = await Promise.all(
-        labelUrls.map(async (url) => {
-          try {
-            return await fetchPdfBytes(url);
-          } catch (error) {
-            console.error(`Failed to fetch label ${url} for order ${order.id}:`, error);
-            return null;
-          }
-        })
-      );
-
-      const validBuffers = labelBuffers.filter(Boolean);
-      if (!validBuffers.length) {
-        continue;
-      }
-
-      for (const bytes of validBuffers) {
-        await appendPdfPages(mergedPdf, bytes);
-      }
-
-      try {
-        const infoLabel = await createOrderInfoLabelPdf(order);
-        await appendPdfPages(mergedPdf, infoLabel);
-      } catch (error) {
-        console.error(`Failed to build order info label for ${order.id}:`, error);
-      }
-
-      try {
-        const bagLabel = await createBagLabelPdf(order);
-        await appendPdfPages(mergedPdf, bagLabel);
-      } catch (error) {
-        console.error(`Failed to build bag label for ${order.id}:`, error);
-      }
-
-      printableOrders.push(order.id);
-    }
-
-    if (!printableOrders.length) {
-      queueStatusEl.textContent = "No printable documents were generated. Please verify label URLs.";
+    const orderIds = queueOrders.map((order) => order.id).filter(Boolean);
+    if (!orderIds.length) {
+      queueStatusEl.textContent = "No printable orders in the queue.";
       return;
     }
 
-    const mergedBytes = await mergedPdf.save();
-    openPrintPreview(mergedBytes);
-    queueStatusEl.textContent = `Merged ${printableOrders.length} order${printableOrders.length === 1 ? "" : "s"} into a single PDF.`;
+    const { bytes, printedOrderIds } = await downloadPrintBundle(orderIds);
+    openPrintPreview(bytes);
+
+    if (printedOrderIds.length) {
+      queueStatusEl.textContent = `Merged ${printedOrderIds.length} order${printedOrderIds.length === 1 ? "" : "s"} into a single PDF.`;
+    } else {
+      queueStatusEl.textContent = "Merged print bundle generated.";
+    }
+    refreshAfterPrint = true;
   } catch (error) {
     console.error("Failed to merge labels:", error);
     queueStatusEl.textContent = "Failed to merge labels. Please try again.";
   } finally {
     isPrinting = false;
     updatePrintButtonState();
+    if (refreshAfterPrint) {
+      loadQueue();
+    }
   }
 }
 

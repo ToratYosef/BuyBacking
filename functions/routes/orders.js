@@ -140,6 +140,74 @@ function createOrdersRouter({
     return urls;
   }
 
+  function pushOrderedUrl(seen, list, value) {
+    if (!value) return;
+    const stringValue = String(value).trim();
+    if (!stringValue) return;
+    if (!/^https?:\/\//i.test(stringValue)) return;
+    if (seen.has(stringValue)) return;
+    seen.add(stringValue);
+    list.push(stringValue);
+  }
+
+  function addLabelObjectCandidates(seen, list, source) {
+    if (!source || typeof source !== 'object') {
+      return;
+    }
+
+    const directKeys = ['downloadUrl', 'download_url', 'labelUrl', 'label_url', 'url', 'href', 'pdf'];
+    directKeys.forEach((key) => {
+      if (source[key]) {
+        pushOrderedUrl(seen, list, source[key]);
+      }
+    });
+
+    if (source.label_download && typeof source.label_download === 'object') {
+      Object.values(source.label_download).forEach((value) => pushOrderedUrl(seen, list, value));
+    }
+  }
+
+  function buildOrderedLabelUrlList(order = {}) {
+    const seen = new Set();
+    const ordered = [];
+
+    const outboundPrimaries = [
+      order.outboundDownloadUrl,
+      order.outboundDownloadURL,
+      order.outboundLabelUrl,
+      order.outboundLabel && order.outboundLabel.downloadUrl,
+      order.outboundLabel && order.outboundLabel.download_url,
+    ];
+    outboundPrimaries.forEach((value) => pushOrderedUrl(seen, ordered, value));
+    addLabelObjectCandidates(seen, ordered, order.outboundLabel);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.outbound);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.kit);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.primary);
+
+    const inboundPrimaries = [
+      order.inboundDownloadUrl,
+      order.inboundDownloadURL,
+      order.inboundLabelUrl,
+      order.inboundLabel && order.inboundLabel.downloadUrl,
+      order.inboundLabel && order.inboundLabel.download_url,
+      order.trackingLabelUrl,
+    ];
+    inboundPrimaries.forEach((value) => pushOrderedUrl(seen, ordered, value));
+    addLabelObjectCandidates(seen, ordered, order.inboundLabel);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.inbound);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.customer);
+    addLabelObjectCandidates(seen, ordered, order.shipEngineLabels?.return);
+
+    const uspsPrimaries = [order.uspsDownloadUrl, order.uspsLabelUrl];
+    uspsPrimaries.forEach((value) => pushOrderedUrl(seen, ordered, value));
+    addLabelObjectCandidates(seen, ordered, order.uspsLabel);
+
+    const additional = collectLabelUrlCandidates(order);
+    additional.forEach((url) => pushOrderedUrl(seen, ordered, url));
+
+    return ordered;
+  }
+
   async function fetchPrintQueueOrders(orderIds = []) {
     const results = new Map();
 
@@ -187,7 +255,7 @@ function createOrdersRouter({
 
   function serialisePrintQueueOrder(order = {}) {
     const shippingInfo = order.shippingInfo || {};
-    const labelUrls = Array.from(collectLabelUrlCandidates(order));
+    const labelUrls = buildOrderedLabelUrlList(order);
 
     return {
       id: order.id,
@@ -225,18 +293,16 @@ function createOrdersRouter({
 
   async function collectOrderPrintBuffers(order) {
     const buffers = [];
-    const labelUrls = Array.from(collectLabelUrlCandidates(order));
+    const labelUrls = buildOrderedLabelUrlList(order);
 
-    await Promise.all(
-      labelUrls.map(async (url) => {
-        try {
-          const buffer = await downloadPdfBuffer(url);
-          buffers.push(buffer);
-        } catch (error) {
-          console.error(`Failed to download label for order ${order.id} from ${url}:`, error.message || error);
-        }
-      })
-    );
+    for (const url of labelUrls) {
+      try {
+        const buffer = await downloadPdfBuffer(url);
+        buffers.push(buffer);
+      } catch (error) {
+        console.error(`Failed to download label for order ${order.id} from ${url}:`, error.message || error);
+      }
+    }
 
     try {
       const infoLabel = await generateCustomLabelPdf(order);
