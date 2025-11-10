@@ -40,6 +40,13 @@ function createOrdersRouter({
     'needs_printing',
   ];
 
+  const PRINT_BUNDLE_ALLOWED_ORIGINS = new Set([
+    'https://toratyosef.github.io',
+    'https://buyback-a0f05.web.app',
+    'https://secondhandcell.com',
+    'https://www.secondhandcell.com',
+  ]);
+
   function toMillis(value) {
     if (!value) return null;
     if (typeof value === 'number') return value;
@@ -261,6 +268,38 @@ function createOrdersRouter({
     return buffers;
   }
 
+  async function markOrdersKitSent(orders = []) {
+    if (!Array.isArray(orders) || !orders.length) {
+      return [];
+    }
+
+    const results = await Promise.all(
+      orders.map(async (order) => {
+        if (!order || !order.id) {
+          return null;
+        }
+
+        try {
+          const updatePayload = {
+            status: 'kit_sent',
+          };
+
+          if (!order.kitSentAt) {
+            updatePayload.kitSentAt = admin.firestore.FieldValue.serverTimestamp();
+          }
+
+          await updateOrderBoth(order.id, updatePayload);
+          return order.id;
+        } catch (error) {
+          console.error(`Failed to mark order ${order.id} as kit sent after bundle:`, error);
+          return null;
+        }
+      })
+    );
+
+    return results.filter(Boolean);
+  }
+
   router.post('/fetch-pdf', async (req, res) => {
     const { url } = req.body;
 
@@ -328,12 +367,20 @@ function createOrdersRouter({
         ? req.body.orderIds.filter(Boolean)
         : [];
 
+      const origin = req.headers.origin;
+      if (origin && PRINT_BUNDLE_ALLOWED_ORIGINS.has(origin)) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Vary', 'Origin');
+      }
+      res.header('Access-Control-Expose-Headers', 'X-Printed-Order-Ids, X-Kit-Sent-Order-Ids');
+
       const orders = await fetchPrintQueueOrders(orderIds);
       if (!orders.length) {
         return res.status(404).json({ error: 'No orders require printing.' });
       }
 
       const printableOrderIds = [];
+      const printableOrders = [];
       const mergedParts = [];
 
       for (const order of orders) {
@@ -343,6 +390,7 @@ function createOrdersRouter({
           continue;
         }
         printableOrderIds.push(order.id);
+        printableOrders.push(order);
         mergedParts.push(...parts);
       }
 
@@ -355,9 +403,17 @@ function createOrdersRouter({
       const mergedPdf = await mergePdfBuffers(mergedParts);
       const mergedBuffer = normaliseBuffer(mergedPdf);
 
+      let kitSentOrderIds = [];
+      try {
+        kitSentOrderIds = await markOrdersKitSent(printableOrders);
+      } catch (updateError) {
+        console.error('Failed to update kit sent status after bundle:', updateError);
+      }
+
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', 'inline; filename="print-queue-bundle.pdf"');
       res.setHeader('X-Printed-Order-Ids', JSON.stringify(printableOrderIds));
+      res.setHeader('X-Kit-Sent-Order-Ids', JSON.stringify(kitSentOrderIds));
       res.send(mergedBuffer);
     } catch (error) {
       console.error('Failed to generate print queue bundle:', error);
@@ -493,7 +549,6 @@ function createOrdersRouter({
         to: 'sales@secondhandcell.com',
         subject: `${orderData.shippingInfo.fullName} - placed an order for a ${orderData.device}`,
         html: adminEmailHtml,
-        bcc: ['saulsetton16@gmail.com'],
       };
 
       const notificationPromises = [
