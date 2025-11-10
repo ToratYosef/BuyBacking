@@ -290,14 +290,8 @@ async function authorisedFetch(path, options = {}) {
   }
 }
 
-async function requestPrintBundle(orderIds) {
-  const response = await authorisedFetch("/orders/needs-printing/bundle", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ orderIds }),
-  });
+async function fetchPrintBundleFromEndpoint(path, options = {}) {
+  const response = await authorisedFetch(path, options);
 
   if (!response.ok) {
     let detail = "";
@@ -316,6 +310,7 @@ async function requestPrintBundle(orderIds) {
     const error = new Error(`Print bundle request failed (${response.status})`);
     error.status = response.status;
     error.detail = detail;
+    error.endpoint = path;
     throw error;
   }
 
@@ -328,6 +323,34 @@ async function requestPrintBundle(orderIds) {
     printedIds,
     updatedIds,
   };
+}
+
+async function requestPrintBundle(orderIds) {
+  if (!Array.isArray(orderIds) || !orderIds.length) {
+    throw new Error("No order IDs provided for print bundle request.");
+  }
+
+  const encodedIds = orderIds.map((id) => encodeURIComponent(String(id))).join(",");
+  const primaryPath = `/merge-print/${encodedIds}`;
+
+  try {
+    return await fetchPrintBundleFromEndpoint(primaryPath);
+  } catch (primaryError) {
+    console.warn("Primary merge-print request failed, attempting legacy bundle endpoint:", primaryError);
+
+    try {
+      return await fetchPrintBundleFromEndpoint("/orders/needs-printing/bundle", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+    } catch (legacyError) {
+      legacyError.previous = primaryError;
+      throw legacyError;
+    }
+  }
 }
 
 async function markOrdersKitSent(orderIds) {
