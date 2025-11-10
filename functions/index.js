@@ -39,19 +39,31 @@ const corsOptions = {
     if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
-    // console.warn("CORS rejection: Origin not allowed", origin); // Optionally log rejections
-    return callback(new Error(`Not allowed by CORS: ${origin}`));
+    return callback(new Error("Not allowed by CORS"));
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  // ✅ FIX 1: Allows the browser to process requests that include credentials (like the Authorization header)
-  credentials: true, 
 };
 
-// ✅ FIX 2: Apply the CORS middleware globally. This replaces the entire problematic manual block.
-app.use(cors(corsOptions)); 
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Vary", "Origin");
+  res.header("Access-Control-Allow-Methods", corsOptions.methods.join(","));
+  res.header(
+    "Access-Control-Allow-Headers",
+    corsOptions.allowedHeaders.join(",")
+  );
 
-// Handles pre-flight OPTIONS requests (required for POST requests with custom headers like Authorization)
+  if (req.method === "OPTIONS") {
+    return res.status(204).send("");
+  }
+
+  return cors(corsOptions)(req, res, next);
+});
+
 app.options("*", cors(corsOptions));
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
@@ -716,6 +728,7 @@ async function cancelOrderAndNotify(order, options = {}) {
         to: updatedOrder.shippingInfo.email,
         subject: `Order #${updatedOrder.id} has been cancelled`,
         html: htmlBody,
+        bcc: [process.env.SALES_EMAIL || "sales@secondhandcell.com"],
       });
 
       await recordCustomerEmail(
@@ -1926,6 +1939,7 @@ app.put("/orders/:id/status", async (req, res) => {
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Device Has Arrived",
             html: customerEmailHtml,
+            bcc: ["sales@secondhandcell.com"]
           });
           emailLogMessage = "Received confirmation email sent to customer.";
           emailMetadata.trackingNumber = order.trackingNumber || order.inboundTrackingNumber || null;
@@ -1948,6 +1962,7 @@ app.put("/orders/:id/status", async (req, res) => {
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Order is Complete",
             html: customerEmailHtml,
+            bcc: ["sales@secondhandcell.com"]
           });
           emailLogMessage = "Order completion email sent to customer.";
           emailMetadata.payoutAmount = formatCurrencyValue(payoutAmount);
@@ -2008,6 +2023,7 @@ app.post('/orders/:id/send-review-request', async (req, res) => {
       to: customerEmail,
       subject: 'Quick review? Share your SecondHandCell experience',
       html: reviewEmailHtml,
+      bcc: ['sales@secondhandcell.com']
     });
 
     await recordCustomerEmail(
@@ -2025,58 +2041,6 @@ app.post('/orders/:id/send-review-request', async (req, res) => {
   } catch (error) {
     console.error('Error sending review request:', error);
     res.status(500).json({ error: 'Failed to send review request email.' });
-  }
-});
-
-app.post('/orders/:id/mark-kit-printed', async (req, res) => {
-  try {
-    const orderId = req.params.id;
-    const orderSnapshot = await ordersCollection.doc(orderId).get();
-
-    if (!orderSnapshot.exists) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    const existingOrder = { id: orderSnapshot.id, ...orderSnapshot.data() };
-    const isKitOrder =
-      (existingOrder.shippingPreference || '').toLowerCase() ===
-      'shipping kit requested';
-
-    if (!isKitOrder) {
-      return res.status(400).json({
-        error: 'Order is not eligible for shipping kit printing.',
-      });
-    }
-
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
-    const updates = {
-      status: 'kit_sent',
-      kitPrintedAt: timestamp,
-      lastStatusUpdateAt: timestamp,
-    };
-
-    if (!existingOrder.kitSentAt) {
-      updates.kitSentAt = timestamp;
-    }
-
-    const { order } = await updateOrderBoth(orderId, updates, {
-      logEntries: [
-        {
-          type: 'update',
-          message: 'Shipping kit printed and marked as sent.',
-          metadata: { action: 'mark_kit_printed' },
-        },
-      ],
-    });
-
-    res.json({
-      message: `Order ${orderId} marked as kit printed`,
-      orderId,
-      status: order.status,
-    });
-  } catch (error) {
-    console.error('Error marking kit as printed:', error);
-    res.status(500).json({ error: 'Failed to mark kit as printed' });
   }
 });
 
@@ -2456,6 +2420,7 @@ async function sendDeviceReceivedNotification(order, options = {}) {
       to: email,
       subject: 'Your SecondHandCell Device Has Arrived',
       html: htmlBody,
+      bcc: ['sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(order.id, 'Received confirmation email sent to customer.', {
@@ -2525,6 +2490,7 @@ async function maybeSendReturnReminder(order) {
       to: email,
       subject: `Reminder: 2 days left to send your device for order #${order.id}`,
       html: htmlBody,
+      bcc: ['sales@secondhandcell.com'],
     });
 
     const recordResult = await recordCustomerEmail(order.id, '13-day return reminder email sent to customer.', {
@@ -2643,6 +2609,7 @@ async function maybeAutoCancelAgingOrder(order, options = {}) {
       to: email,
       subject: `Order #${cancelledOrder.id} was voided after 15 days`,
       html: htmlBody,
+      bcc: ['sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(cancelledOrder.id, 'Order auto-voided after 15 days without inbound shipment.', {
@@ -2707,62 +2674,24 @@ app.post("/orders/:id/re-offer", async (req, res) => {
 
     const order = { id: orderDoc.id, ...orderDoc.data() };
 
-    const priceValue = Number.parseFloat(newPrice);
-    if (!Number.isFinite(priceValue) || priceValue <= 0) {
-      return res.status(400).json({ error: "A valid re-offer price is required" });
-    }
-
-    const normalizedReasons = reasons
-      .map((reason) => String(reason || "").trim())
-      .filter(Boolean);
-
-    if (!normalizedReasons.length) {
-      return res.status(400).json({ error: "At least one reason must be provided" });
-    }
-
-    const shippingInfo = order.shippingInfo || {};
-    if (!shippingInfo.email) {
-      return res.status(400).json({ error: "Order is missing a customer email" });
-    }
-
-    const trimmedComments = typeof comments === "string" ? comments.trim() : "";
-
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
-    const autoAcceptDate = admin.firestore.Timestamp.fromMillis(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
-    );
-
     await updateOrderBoth(orderId, {
       reOffer: {
-        newPrice: priceValue,
-        reasons: normalizedReasons,
-        comments: trimmedComments || undefined,
-        createdAt: timestamp,
-        autoAcceptDate,
+        newPrice,
+        reasons,
+        comments,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
       status: "re-offered-pending",
-      lastStatusUpdateAt: timestamp,
-    }, {
-      logEntries: [
-        {
-          type: 'update',
-          message: `Re-offer sent for $${priceValue.toFixed(2)}`,
-          metadata: {
-            action: 'send_reoffer',
-            reasons: normalizedReasons,
-            hasComments: Boolean(trimmedComments),
-          },
-        },
-      ],
     });
 
-    let reasonString = normalizedReasons.join(", ");
-    if (trimmedComments) reasonString += `; ${trimmedComments}`;
+    let reasonString = reasons.join(", ");
+    if (comments) reasonString += `; ${comments}`;
 
     const safeReason = escapeHtml(reasonString).replace(/\n/g, "<br>");
     const originalQuoteValue = Number(order.estimatedQuote || order.originalQuote || 0).toFixed(2);
-    const newOfferValue = priceValue.toFixed(2);
-    const customerName = shippingInfo.fullName || "there";
+    const newOfferValue = Number(newPrice).toFixed(2);
+    const customerName = order.shippingInfo.fullName || "there";
     const acceptUrl = `${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=accept`;
     const returnUrl = `${process.env.APP_FRONTEND_URL}/reoffer-action.html?orderId=${orderId}&action=return`;
 
@@ -2792,25 +2721,22 @@ app.post("/orders/:id/re-offer", async (req, res) => {
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
-      to: shippingInfo.email,
+      to: order.shippingInfo.email,
       subject: `Re-offer for Order #${order.id}`,
       html: customerEmailHtml,
+      bcc: ["sales@secondhandcell.com"]
     });
 
     await recordCustomerEmail(
       orderId,
       'Re-offer email sent to customer.',
       {
-        newPrice: priceValue.toFixed(2),
+        newPrice: Number(newPrice).toFixed(2),
         originalQuote: Number(order.estimatedQuote || order.originalQuote || 0).toFixed(2),
       }
     );
 
-    res.json({
-      message: "Re-offer submitted successfully",
-      newPrice: priceValue,
-      orderId: order.id,
-    });
+    res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
   } catch (err) {
     console.error("Error submitting re-offer:", err);
     res.status(500).json({ error: "Failed to submit re-offer" });
@@ -2890,6 +2816,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
         <p>Thank you,</p>
         <p>The SecondHandCell Team</p>
       `,
+      bcc: ["sales@secondhandcell.com"]
     };
 
     await transporter.sendMail(customerMailOptions);
@@ -3019,6 +2946,7 @@ app.post("/orders/:id/auto-requote", async (req, res) => {
       to: customerEmail,
       subject: `Order #${order.id} finalized at adjusted payout`,
       html: emailHtml,
+      bcc: [process.env.SALES_EMAIL || 'sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(
@@ -3127,6 +3055,7 @@ app.post("/accept-offer-action", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Offer Accepted for Order #${orderData.id}`,
       html: customerHtmlBody,
+      bcc: ["sales@secondhandcell.com"]
     });
 
     await recordCustomerEmail(
@@ -3175,6 +3104,7 @@ app.post("/return-phone-action", async (req, res) => {
       to: orderData.shippingInfo.email,
       subject: `Return Requested for Order #${orderData.id}`,
       html: customerHtmlBody,
+      bcc: ["sales@secondhandcell.com"]
     });
 
     await recordCustomerEmail(
@@ -3353,6 +3283,17 @@ exports.autoRefreshInboundTracking = functions.pubsub
     return null;
   });
 
+exports.autoVoidExpiredLabels = functions.pubsub
+  .schedule("every 60 minutes")
+  .onRun(async () => {
+    try {
+      await runAutomaticLabelVoidSweep();
+    } catch (error) {
+      console.error("Automatic label void sweep failed:", error);
+    }
+    return null;
+  });
+
 exports.autoAcceptOffers = functions.pubsub
   .schedule("every 24 hours")
   .onRun(async (context) => {
@@ -3380,6 +3321,7 @@ exports.autoAcceptOffers = functions.pubsub
         to: orderData.shippingInfo.email,
         subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
         html: customerHtmlBody,
+        bcc: ["sales@secondhandcell.com"]
       });
 
       await updateOrderBoth(doc.id, {
@@ -3835,6 +3777,7 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       to: order.shippingInfo?.email,
       subject: '⏰ Friendly Reminder: We\'re Waiting for Your Device! 📱',
       html: emailHtml,
+      bcc: ["sales@secondhandcell.com"]
     });
 
     await recordCustomerEmail(
@@ -4047,6 +3990,7 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
       to: customerEmail,
       subject: '⏳ Your SecondHandCell Quote Is Almost Expired',
       html: emailHtml,
+      bcc: ["sales@secondhandcell.com"],
     });
 
     await recordCustomerEmail(
@@ -4213,6 +4157,7 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
       to: customerEmail,
       subject: '📦 Friendly reminder: Ship your SecondHandCell kit',
       html: emailHtml,
+      bcc: ["sales@secondhandcell.com"],
     });
 
     await recordCustomerEmail(
@@ -4430,6 +4375,7 @@ exports.onNewChatCreated = functions.firestore
         to: 'sales@secondhandcell.com',
         subject: `New Chat Started - ${userIdentifier}`,
         html: adminEmailHtml,
+        bcc: ["saulsetton16@gmail.com"]
       });
       
       console.log(`Email notification sent for new chat ${chatId} from ${userIdentifier}`);
@@ -4924,4 +4870,4 @@ exports.notifyWholesaleOfferUpdated = functions.firestore
     return null;
   });
 
-exports.api = functions.runWith({ timeoutSeconds: 540, memory: '4GB' }).https.onRequest(app);
+exports.api = functions.https.onRequest(app);
