@@ -1181,80 +1181,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             flex-wrap: wrap;
         }
 
-        .bulk-status-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .bulk-selection-summary {
-            font-size: 13px;
-            font-weight: 600;
-            color: #1f2937;
-        }
-
-        .bulk-status-select {
-            padding: 8px 10px;
-            border-radius: 10px;
-            border: 1px solid rgba(148, 163, 184, 0.45);
-            background: rgba(255, 255, 255, 0.9);
-            font-size: 13px;
-            font-weight: 600;
-            color: #0f172a;
-            min-width: 160px;
-        }
-
-        .bulk-status-select:focus {
-            outline: none;
-            border-color: rgba(14, 165, 233, 0.65);
-            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.25);
-        }
-
-        .bulk-status-apply {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, rgba(14, 165, 233, 0.92), rgba(56, 189, 248, 0.85));
-            color: #0f172a;
-            font-size: 13px;
-            font-weight: 700;
-            border: none;
-            cursor: pointer;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-            box-shadow: 0 10px 30px -15px rgba(14, 165, 233, 0.6);
-        }
-
-        .bulk-status-apply:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: 0 18px 38px -18px rgba(14, 165, 233, 0.65);
-        }
-
-        .bulk-status-apply:disabled {
-            opacity: 0.55;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        .bulk-status-message {
-            font-size: 13px;
-            font-weight: 600;
-        }
-
-        .bulk-status-message--success {
-            color: #047857;
-        }
-
-        .bulk-status-message--error {
-            color: #dc2626;
-        }
-
-        .orders-table tr.bulk-selected {
-            background: rgba(59, 130, 246, 0.08);
-        }
-
         .view-controls {
             display: flex;
             align-items: center;
@@ -2275,29 +2201,19 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         <input type="checkbox" id="compact-density-toggle">
                         Compact rows
                     </label>
-                    <span class="orders-toolbar-note" id="last-refresh-at">Listening for live updates…</span>
+                    <span class="orders-toolbar-note" id="last-refresh-at">Updated just now</span>
                 </div>
                 <div class="orders-toolbar-actions">
-                    <div class="bulk-status-controls">
-                        <span class="bulk-selection-summary" id="bulk-selection-summary">No orders selected</span>
-                        <select id="bulk-status-select" class="bulk-status-select">
-                            <option value="">Choose status…</option>
-                        </select>
-                        <button id="bulk-status-apply" class="bulk-status-apply" type="button" disabled>
-                            <i class="fas fa-layer-group"></i>
-                            Update Status
-                        </button>
-                        <span id="bulk-status-message" class="bulk-status-message" aria-live="polite"></span>
-                    </div>
+                    <button class="refresh-btn" id="refresh-orders-btn">
+                        <i class="fas fa-rotate"></i>
+                        Refresh data
+                    </button>
                 </div>
             </div>
             <div class="orders-table-wrapper">
                 <table class="orders-table">
                     <thead>
                         <tr>
-                            <th class="w-10">
-                                <input type="checkbox" id="bulk-select-all" aria-label="Select all orders on this page">
-                            </th>
                             <th>Order ID</th>
                             <th>Order Date</th>
                             <th>Last Updated</th>
@@ -2309,7 +2225,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                         </tr>
                     </thead>
                     <tbody id="orders-table-body">
-                        <tr><td colspan="9" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
+                        <tr><td colspan="8" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -2588,37 +2504,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <div id="modal-activity-log" class="hidden">
                     <h4>Recent Activity</h4>
                     <ul id="modal-activity-log-list"></ul>
-                </div>
-
-                <div id="modal-imei-section" class="hidden mt-6 rounded-xl border border-slate-200 bg-white/60 p-4 shadow-sm">
-                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <h4 class="text-lg font-semibold text-slate-900">IMEI Check</h4>
-                        <div class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
-                            <span>Status:</span>
-                            <span id="modal-imei-status" class="ml-2 text-slate-700"></span>
-                        </div>
-                    </div>
-                    <p id="modal-imei-message" class="mt-2 text-sm text-slate-600">Loading order record…</p>
-                    <div id="modal-imei-form" class="mt-3 hidden flex-col gap-3 sm:flex-row sm:items-center">
-                        <label class="text-sm font-medium text-slate-700" for="modal-imei-input">Enter IMEI to test</label>
-                        <input id="modal-imei-input" type="text" maxlength="15" inputmode="numeric" autocomplete="off" placeholder="15-digit IMEI" class="w-full flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tracking-widest text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200" />
-                        <button id="modal-imei-button" type="button" class="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-1 disabled:cursor-not-allowed disabled:bg-slate-400">Check IMEI</button>
-                    </div>
-                    <p id="modal-imei-error" class="mt-2 hidden text-sm text-rose-600"></p>
-                    <div id="modal-imei-result" class="mt-4 hidden rounded-lg border border-slate-200 bg-slate-50 p-4">
-                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <p class="text-sm font-semibold text-slate-700">Latest provider result</p>
-                                <p class="text-xs text-slate-500">Order ID: <span id="modal-imei-order-id" class="font-mono text-slate-700"></span></p>
-                            </div>
-                            <p id="modal-imei-checked-at" class="text-xs text-slate-500"></p>
-                        </div>
-                        <dl id="modal-imei-result-list" class="mt-3 grid gap-2 text-sm text-slate-700"></dl>
-                        <details id="modal-imei-raw-details" class="mt-3 hidden">
-                            <summary class="cursor-pointer text-sm font-semibold text-slate-600">View raw provider data</summary>
-                            <pre id="modal-imei-raw" class="mt-2 max-h-64 overflow-auto rounded-lg bg-white p-3 text-xs leading-relaxed text-slate-700"></pre>
-                        </details>
-                    </div>
                 </div>
 
                 <div id="modal-action-buttons" class="mt-6"></div>

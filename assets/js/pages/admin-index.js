@@ -147,11 +147,10 @@ let db;
 let auth;
 let functions;
 let currentUserId = 'anonymous_user';
-let currentOrderDocId = null;
+let currentDeviceDocId = null;
 let imeiUnsubscribe = null;
 let isImeiChecking = false;
 let pendingImeiOrder = null;
-let isBulkStatusUpdating = false;
 
 const ADMIN_PAGE = document.body?.dataset?.adminPage || 'orders';
 const IS_ORDERS_PAGE = ADMIN_PAGE === 'orders';
@@ -175,16 +174,11 @@ const averagePayoutAmount = document.getElementById('average-payout-amount');
 const mobileLiveOrdersCount = document.getElementById('mobile-live-orders-count');
 const mobileAveragePayoutAmount = document.getElementById('mobile-average-payout-amount');
 const compactDensityToggle = document.getElementById('compact-density-toggle');
+const refreshOrdersBtn = document.getElementById('refresh-orders-btn');
 const lastRefreshAt = document.getElementById('last-refresh-at');
 if (lastRefreshAt) {
-  lastRefreshAt.textContent = 'Listening for live updates…';
+lastRefreshAt.textContent = 'Listening for updates…';
 }
-const bulkSelectAllCheckbox = document.getElementById('bulk-select-all');
-const bulkStatusSelect = document.getElementById('bulk-status-select');
-const bulkStatusApplyBtn = document.getElementById('bulk-status-apply');
-const bulkSelectionSummary = document.getElementById('bulk-selection-summary');
-const bulkStatusMessage = document.getElementById('bulk-status-message');
-const BULK_STATUS_APPLY_IDLE_HTML = bulkStatusApplyBtn ? bulkStatusApplyBtn.innerHTML : '';
 /* REMOVED STATUS LINKS REFERENCE */
 const displayUserId = document.getElementById('display-user-id');
 
@@ -313,7 +307,7 @@ const modalImeiButton = document.getElementById('modal-imei-button');
 const modalImeiError = document.getElementById('modal-imei-error');
 const modalImeiResult = document.getElementById('modal-imei-result');
 const modalImeiResultList = document.getElementById('modal-imei-result-list');
-const modalImeiOrderId = document.getElementById('modal-imei-order-id');
+const modalImeiDeviceId = document.getElementById('modal-imei-device-id');
 const modalImeiCheckedAt = document.getElementById('modal-imei-checked-at');
 const modalImeiRawDetails = document.getElementById('modal-imei-raw-details');
 const modalImeiRaw = document.getElementById('modal-imei-raw');
@@ -384,11 +378,10 @@ let currentPage = 1;
 let lastKnownTotalPages = 1;
 const ORDERS_PER_PAGE = 10;
 let currentActiveStatus = 'all';
+let refreshInterval = null;
 let currentOrderDetails = null;
 let feedPricingDataCache = null;
 let feedPricingDataPromise = null;
-let currentlyRenderedOrderIds = [];
-const bulkSelectedOrderIds = new Set();
 const autoRefreshedTracking = new Set();
 
 let ordersTrendChart = null;
@@ -529,7 +522,7 @@ function resetImeiSection() {
     modalImeiStatus.textContent = '';
   }
   if (modalImeiMessage) {
-    modalImeiMessage.textContent = 'Loading order record…';
+    modalImeiMessage.textContent = 'Loading device record…';
   }
   if (modalImeiForm) {
     modalImeiForm.classList.add('hidden');
@@ -552,8 +545,8 @@ function resetImeiSection() {
   if (modalImeiResultList) {
     modalImeiResultList.innerHTML = '';
   }
-  if (modalImeiOrderId) {
-    modalImeiOrderId.textContent = '';
+  if (modalImeiDeviceId) {
+    modalImeiDeviceId.textContent = '';
   }
   if (modalImeiCheckedAt) {
     modalImeiCheckedAt.textContent = '';
@@ -572,43 +565,48 @@ function teardownImeiListener() {
     imeiUnsubscribe();
     imeiUnsubscribe = null;
   }
-  currentOrderDocId = null;
+  currentDeviceDocId = null;
   isImeiChecking = false;
 }
 
-function resolveOrderDocumentId(order) {
+function resolveDeviceDocumentId(order) {
   if (!order) {
     return null;
   }
   const candidates = [
-    order.orderDocId,
-    order.orderDocID,
-    order.orderDocumentId,
-    order.orderDocumentID,
-    order.orderDocument,
-    order.orderDocumentPath,
-    order.firestoreDocId,
-    order.firestoreDocID,
-    order.firestoreDocumentId,
-    order.firestoreDocumentID,
-    order.firestoreDocument,
-    order.firestoreDocumentPath,
-    order.firestoreId,
-    order.firestoreID,
-    order.orderRef,
-    order.orderRefId,
-    order.orderRefID,
-    order.orderFirestoreId,
-    order.orderFirestoreID,
-    order.id,
-    order.orderId,
-    order.orderID
+    order.deviceDocId,
+    order.deviceDocID,
+    order.deviceDocumentId,
+    order.deviceDocumentID,
+    order.deviceDocument,
+    order.deviceDocumentPath,
+    order.deviceDocPath,
+    order.deviceRecordId,
+    order.deviceRecordID,
+    order.deviceRefId,
+    order.deviceRefID,
+    order.deviceFirestoreId,
+    order.deviceFirestoreID,
+    order.deviceFirestoreDocId,
+    order.deviceFirestoreDocID,
+    order.deviceInventoryId,
+    order.deviceInventoryID,
+    order.deviceId,
+    order.deviceID,
+    order.inventoryDeviceId,
+    order.inventoryDeviceID,
+    order.device?.id,
+    order.device?.deviceId,
+    order.deviceInfo?.id,
+    order.deviceInfo?.deviceId,
+    order.deviceStatus?.id,
+    order.deviceStatus?.deviceId
   ];
   const sanitize = (value) => {
-    if (value === null || value === undefined) {
+    if (typeof value !== 'string') {
       return null;
     }
-    const trimmed = String(value).trim();
+    const trimmed = value.trim();
     if (!trimmed) {
       return null;
     }
@@ -621,7 +619,7 @@ function resolveOrderDocumentId(order) {
       return sanitized;
     }
   }
-  return null;
+  return sanitize(order.id) || null;
 }
 
 function startImeiListener(order) {
@@ -637,41 +635,32 @@ function startImeiListener(order) {
     pendingImeiOrder = order;
     return;
   }
-  const orderDocId = resolveOrderDocumentId(order);
-  modalImeiSection.classList.remove('hidden');
-  if (!orderDocId) {
+  const deviceDocId = resolveDeviceDocumentId(order);
+  if (!deviceDocId) {
+    modalImeiSection.classList.remove('hidden');
     if (modalImeiMessage) {
-      modalImeiMessage.textContent = 'No order record is linked to this entry.';
-    }
-    if (modalImeiOrderId) {
-      modalImeiOrderId.textContent = '';
-    }
-    if (modalImeiButton) {
-      modalImeiButton.disabled = true;
-      modalImeiButton.textContent = imeiButtonDefaultText;
-    }
-    if (modalImeiInput) {
-      modalImeiInput.disabled = true;
+      modalImeiMessage.textContent = 'No device record is linked to this order.';
     }
     return;
   }
-  currentOrderDocId = orderDocId;
-  if (modalImeiOrderId) {
-    modalImeiOrderId.textContent = orderDocId;
+  currentDeviceDocId = deviceDocId;
+  modalImeiSection.classList.remove('hidden');
+  if (modalImeiDeviceId) {
+    modalImeiDeviceId.textContent = deviceDocId;
   }
   if (modalImeiMessage) {
     modalImeiMessage.textContent = 'Listening for IMEI status…';
   }
-  const orderRef = doc(db, 'orders', orderDocId);
+  const deviceRef = doc(db, 'devices', deviceDocId);
   imeiUnsubscribe = onSnapshot(
-    orderRef,
+    deviceRef,
     (snapshot) => {
       handleImeiSnapshot(snapshot);
     },
     (error) => {
-      console.error('Failed to subscribe to order document', error);
+      console.error('Failed to subscribe to device document', error);
       if (modalImeiMessage) {
-        modalImeiMessage.textContent = 'Failed to load order record.';
+        modalImeiMessage.textContent = 'Failed to load device record.';
       }
       if (modalImeiError) {
         modalImeiError.textContent = error?.message || 'Unexpected Firestore error.';
@@ -692,9 +681,6 @@ function handleImeiSnapshot(snapshot) {
   if (!modalImeiSection) {
     return;
   }
-  if (modalImeiOrderId) {
-    modalImeiOrderId.textContent = (snapshot && snapshot.id) || currentOrderDocId || '';
-  }
   if (modalImeiError) {
     modalImeiError.classList.add('hidden');
     modalImeiError.textContent = '';
@@ -704,7 +690,7 @@ function handleImeiSnapshot(snapshot) {
       modalImeiStatus.textContent = '';
     }
     if (modalImeiMessage) {
-      modalImeiMessage.textContent = 'No order record found for this ID.';
+      modalImeiMessage.textContent = 'No device record found for this order.';
     }
     if (modalImeiForm) {
       modalImeiForm.classList.add('hidden');
@@ -723,7 +709,7 @@ function handleImeiSnapshot(snapshot) {
     modalImeiStatus.textContent = status;
   }
 
-  const isEligible = status === 'received' && (!data.imei || data.imeiChecked !== true);
+  const isEligible = status === 'received' && (!data.imei || data.imeiChecked === false);
 
   if (isEligible) {
     if (modalImeiForm) {
@@ -732,7 +718,7 @@ function handleImeiSnapshot(snapshot) {
     if (modalImeiMessage) {
       modalImeiMessage.textContent = data.imei
         ? 'IMEI saved. Awaiting verification to complete.'
-        : 'Enter the IMEI to start the check.';
+        : 'Enter the device IMEI to start the check.';
     }
     if (!isImeiChecking && modalImeiButton) {
       modalImeiButton.disabled = false;
@@ -759,13 +745,13 @@ function handleImeiSnapshot(snapshot) {
     }
     if (modalImeiMessage) {
       if (status !== 'received') {
-        modalImeiMessage.textContent = 'Order status must be “received” before running an IMEI check.';
+        modalImeiMessage.textContent = 'Device status must be “received” before running an IMEI check.';
       } else if (data.imeiChecked) {
         modalImeiMessage.textContent = 'IMEI check completed.';
       } else if (data.imei) {
         modalImeiMessage.textContent = 'IMEI saved. Awaiting backend verification.';
       } else {
-        modalImeiMessage.textContent = 'IMEI entry unavailable for this order.';
+        modalImeiMessage.textContent = 'IMEI entry unavailable for this device.';
       }
     }
   }
@@ -878,9 +864,9 @@ async function handleImeiSubmit() {
     }
     return;
   }
-  if (!currentOrderDocId) {
+  if (!currentDeviceDocId) {
     if (modalImeiError) {
-      modalImeiError.textContent = 'Order record is unavailable for this entry.';
+      modalImeiError.textContent = 'Device record is unavailable for this order.';
       modalImeiError.classList.remove('hidden');
     }
     return;
@@ -908,23 +894,24 @@ async function handleImeiSubmit() {
       modalImeiMessage.textContent = 'Checking IMEI…';
     }
 
-    const orderRef = doc(db, 'orders', currentOrderDocId);
+    const deviceRef = doc(db, 'devices', currentDeviceDocId);
     try {
-      await setDoc(orderRef, { imei: imeiValue }, { merge: true });
+      await setDoc(deviceRef, { imei: imeiValue, imeiChecked: false }, { merge: true });
     } catch (error) {
       if (
         error &&
         (error.code === 'permission-denied' || /Missing or insufficient permissions/i.test(error.message || ''))
       ) {
-        throw new Error('Missing or insufficient permissions to update the order IMEI.');
+        await setDoc(deviceRef, { imei: imeiValue }, { merge: true });
+      } else {
+        throw error;
       }
-      throw new Error(error?.message || 'Failed to save IMEI to the order record.');
     }
 
     const response = await fetch('/checkImei', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderId: currentOrderDocId, imei: imeiValue })
+      body: JSON.stringify({ deviceId: currentDeviceDocId, imei: imeiValue })
     });
 
     if (!response.ok) {
@@ -945,7 +932,7 @@ async function handleImeiSubmit() {
 
     completed = true;
     if (modalImeiMessage) {
-      modalImeiMessage.textContent = 'IMEI check requested. Results will appear once the order record updates.';
+      modalImeiMessage.textContent = 'IMEI check requested. Results will appear once the device record updates.';
     }
   } catch (error) {
     console.error('IMEI check failed', error);
@@ -3555,302 +3542,89 @@ sendKitReminderBtn.onclick = null;
 }
 
 function renderOrders() {
-  if (!ordersTableBody) {
-    return;
-  }
-  const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-  limitSelectionToFilteredOrders(source);
-  const total = source.length;
-  ordersTableBody.innerHTML = '';
-  currentlyRenderedOrderIds = [];
+if (!ordersTableBody) {
+return;
+}
+const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
+const total = source.length;
+ordersTableBody.innerHTML = '';
 
-  if (!total) {
-    if (noOrdersMessage) {
-      noOrdersMessage.classList.remove('hidden');
-    }
-    ordersTableBody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
-    if (paginationControls) {
-      paginationControls.classList.add('hidden');
-    }
-    updateBulkSelectAllState();
-    return;
-  }
-
-  if (noOrdersMessage) {
-    noOrdersMessage.classList.add('hidden');
-  }
-
-  const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
-  if (currentPage > totalPages) {
-    currentPage = totalPages;
-  }
-
-  const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
-  const endIndex = startIndex + ORDERS_PER_PAGE;
-  const ordersToDisplay = source.slice(startIndex, endIndex);
-  currentlyRenderedOrderIds = ordersToDisplay.map((order) => String(order.id));
-
-  ordersToDisplay.forEach((order) => {
-    const orderId = String(order.id);
-    const isSelected = bulkSelectedOrderIds.has(orderId);
-    const row = document.createElement('tr');
-    row.className = 'transition-colors duration-200';
-    if (isSelected) {
-      row.classList.add('bulk-selected');
-    }
-    const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-    const itemDescription = `${order.device || 'Device'} ${order.storage || ''}`.trim();
-    const orderDate = formatDate(order.createdAt);
-    const orderAge = formatOrderAge(order.createdAt);
-    const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
-    const lastUpdatedDate = formatDateTime(lastUpdatedRaw);
-    const reofferTimer = formatAutoAcceptTimer(order);
-    const statusText = formatStatus(order);
-    const labelStatus = formatLabelStatus(order);
-
-    const trackingNumber = order.trackingNumber;
-    const trackingCellContent = trackingNumber
-      ? `<a href="${USPS_TRACKING_URL}${trackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${trackingNumber}</a>`
-      : 'N/A';
-
-    row.innerHTML = `
-      <td class="px-3 py-4 text-center align-middle">
-        <input type="checkbox" class="bulk-select-row" data-order-id="${orderId}" ${isSelected ? 'checked' : ''} aria-label="Select order ${orderId}">
-      </td>
-      <td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${orderId}</td>
-      <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
-        <div>${orderDate}</div>
-        <div class="text-xs text-slate-400">${orderAge}</div>
-      </td>
-      <td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
-      <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
-      <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}</td>
-      <td class="px-3 py-4 whitespace-normal text-sm">
-        <span class="${getStatusClass(order.status)}">
-          <span class="status-bubble-text">${statusText}</span>
-          ${labelStatus ? `<span class="status-bubble-subtext">${labelStatus}</span>` : ''}
-          ${reofferTimer}
-        </span>
-      </td>
-      <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
-      <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
-        <button data-order-id="${orderId}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
-          View Details
-        </button>
-      </td>
-    `;
-
-    ordersTableBody.appendChild(row);
-
-    const detailsButton = row.querySelector('.view-details-btn');
-    if (detailsButton) {
-      detailsButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        openOrderDetailsModal(orderId);
-      });
-    }
-  });
-
-  updateBulkSelectAllState();
-  updateBulkSelectionSummary();
+if (!total) {
+if (noOrdersMessage) {
+noOrdersMessage.classList.remove('hidden');
+}
+ordersTableBody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
+if (paginationControls) {
+paginationControls.classList.add('hidden');
+}
+return;
 }
 
-function updateBulkSelectAllState() {
-  if (!bulkSelectAllCheckbox) {
-    return;
-  }
-
-  if (!currentlyRenderedOrderIds.length) {
-    bulkSelectAllCheckbox.checked = false;
-    bulkSelectAllCheckbox.indeterminate = false;
-    bulkSelectAllCheckbox.disabled = true;
-    return;
-  }
-
-  const selectedOnPage = currentlyRenderedOrderIds.filter((id) => bulkSelectedOrderIds.has(id));
-  bulkSelectAllCheckbox.disabled = false;
-  bulkSelectAllCheckbox.checked = selectedOnPage.length === currentlyRenderedOrderIds.length;
-  bulkSelectAllCheckbox.indeterminate = selectedOnPage.length > 0 && selectedOnPage.length < currentlyRenderedOrderIds.length;
+if (noOrdersMessage) {
+noOrdersMessage.classList.add('hidden');
 }
 
-function updateBulkSelectionSummary() {
-  if (bulkSelectionSummary) {
-    const count = bulkSelectedOrderIds.size;
-    bulkSelectionSummary.textContent = count
-      ? `${count} order${count === 1 ? '' : 's'} selected`
-      : 'No orders selected';
-  }
-
-  const shouldDisableApply =
-    isBulkStatusUpdating ||
-    !bulkSelectedOrderIds.size ||
-    !bulkStatusSelect ||
-    !bulkStatusSelect.value;
-
-  if (bulkStatusApplyBtn) {
-    bulkStatusApplyBtn.disabled = shouldDisableApply;
-  }
+const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
+if (currentPage > totalPages) {
+currentPage = totalPages;
 }
 
-function populateBulkStatusSelect() {
-  if (!bulkStatusSelect) {
-    return;
-  }
+const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
+const endIndex = startIndex + ORDERS_PER_PAGE;
+const ordersToDisplay = source.slice(startIndex, endIndex);
 
-  const previousValue = bulkStatusSelect.value;
-  bulkStatusSelect.innerHTML = '<option value="">Choose status…</option>';
+ordersToDisplay.forEach(order => {
+const row = document.createElement('tr');
+row.className = 'transition-colors duration-200';
+const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
+const itemDescription = `${order.device || 'Device'} ${order.storage || ''}`.trim();
+const orderDate = formatDate(order.createdAt);
+const orderAge = formatOrderAge(order.createdAt);
+const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
+const lastUpdatedDate = formatDateTime(lastUpdatedRaw);
+const reofferTimer = formatAutoAcceptTimer(order);
+const statusText = formatStatus(order);
+const labelStatus = formatLabelStatus(order);
 
-  STATUS_DROPDOWN_OPTIONS.forEach((statusKey) => {
-    const option = document.createElement('option');
-    option.value = statusKey;
-    option.textContent = getStatusDisplayLabel(statusKey);
-    bulkStatusSelect.appendChild(option);
-  });
+const trackingNumber = order.trackingNumber;
+const trackingCellContent = trackingNumber
+? `<a href="${USPS_TRACKING_URL}${trackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${trackingNumber}</a>`
+: 'N/A';
 
-  if (previousValue && STATUS_DROPDOWN_OPTIONS.includes(previousValue)) {
-    bulkStatusSelect.value = previousValue;
-  }
+row.innerHTML = `
+<td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${order.id}</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
+  <div>${orderDate}</div>
+  <div class="text-xs text-slate-400">${orderAge}</div>
+</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}</td>
+<td class="px-3 py-4 whitespace-normal text-sm">
+  <span class="${getStatusClass(order.status)}">
+    <span class="status-bubble-text">${statusText}</span>
+    ${labelStatus ? `<span class="status-bubble-subtext">${labelStatus}</span>` : ''}
+    ${reofferTimer}
+  </span>
+</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
+<td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
+  <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
+    View Details
+  </button>
+</td>
+`;
+
+ordersTableBody.appendChild(row);
+
+const detailsButton = row.querySelector('.view-details-btn');
+if (detailsButton) {
+detailsButton.addEventListener('click', (event) => {
+event.preventDefault();
+openOrderDetailsModal(order.id);
+});
 }
-
-function showBulkStatusMessage(message, variant = 'success') {
-  if (!bulkStatusMessage) {
-    return;
-  }
-
-  bulkStatusMessage.textContent = message || '';
-  bulkStatusMessage.classList.remove('bulk-status-message--success', 'bulk-status-message--error');
-
-  if (!message) {
-    return;
-  }
-
-  if (variant === 'error') {
-    bulkStatusMessage.classList.add('bulk-status-message--error');
-  } else {
-    bulkStatusMessage.classList.add('bulk-status-message--success');
-  }
-}
-
-function clearBulkStatusMessage() {
-  showBulkStatusMessage('', 'success');
-}
-
-function pruneBulkSelection() {
-  if (!bulkSelectedOrderIds.size) {
-    return;
-  }
-  const validIds = new Set(allOrders.map((order) => String(order.id)));
-  let changed = false;
-  for (const id of Array.from(bulkSelectedOrderIds)) {
-    if (!validIds.has(id)) {
-      bulkSelectedOrderIds.delete(id);
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    updateBulkSelectionSummary();
-  }
-}
-
-function limitSelectionToFilteredOrders(filteredOrders) {
-  if (!bulkSelectedOrderIds.size) {
-    return false;
-  }
-
-  const allowedIds = new Set(filteredOrders.map((order) => String(order.id)));
-  let changed = false;
-
-  for (const id of Array.from(bulkSelectedOrderIds)) {
-    if (!allowedIds.has(id)) {
-      bulkSelectedOrderIds.delete(id);
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    updateBulkSelectionSummary();
-  }
-
-  return changed;
-}
-
-async function handleBulkStatusApply() {
-  if (isBulkStatusUpdating) {
-    return;
-  }
-
-  const selectedIds = Array.from(bulkSelectedOrderIds);
-  if (!selectedIds.length) {
-    showBulkStatusMessage('Select at least one order to update.', 'error');
-    return;
-  }
-
-  const targetStatus = bulkStatusSelect ? bulkStatusSelect.value : '';
-  if (!targetStatus) {
-    showBulkStatusMessage('Choose a status before applying it.', 'error');
-    return;
-  }
-
-  isBulkStatusUpdating = true;
-  updateBulkSelectionSummary();
-  clearBulkStatusMessage();
-
-  if (bulkStatusApplyBtn) {
-    bulkStatusApplyBtn.disabled = true;
-    bulkStatusApplyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating…';
-  }
-
-  try {
-    let updatedCount = 0;
-    const failed = [];
-
-    for (const orderId of selectedIds) {
-      try {
-        await updateOrderStatusInline(orderId, targetStatus, { notifyCustomer: false });
-        updatedCount += 1;
-        bulkSelectedOrderIds.delete(orderId);
-      } catch (error) {
-        console.error(`Failed to update status for order ${orderId}:`, error);
-        failed.push({ orderId, error });
-      }
-    }
-
-    const statusLabel = getStatusDisplayLabel(targetStatus);
-    if (failed.length) {
-      const failedList = failed.map(({ orderId }) => orderId).join(', ');
-      if (updatedCount > 0) {
-        showBulkStatusMessage(
-          `Updated ${updatedCount} order${updatedCount === 1 ? '' : 's'} to ${statusLabel}, but ${failed.length} ` +
-            `order${failed.length === 1 ? '' : 's'} failed (${failedList}).`,
-          'error'
-        );
-      } else {
-        showBulkStatusMessage(
-          `Unable to update ${failed.length} order${failed.length === 1 ? '' : 's'}: ${failedList}.`,
-          'error'
-        );
-      }
-    } else {
-      showBulkStatusMessage(
-        `Updated ${updatedCount} order${updatedCount === 1 ? '' : 's'} to ${statusLabel} without emailing customers.`,
-        'success'
-      );
-    }
-
-    filterAndRenderOrders(currentActiveStatus, currentSearchTerm, { preservePage: true });
-  } catch (error) {
-    console.error('Bulk status update failed:', error);
-    const message = error?.message || 'Failed to update order statuses.';
-    showBulkStatusMessage(message, 'error');
-  } finally {
-    isBulkStatusUpdating = false;
-    if (bulkStatusApplyBtn) {
-      bulkStatusApplyBtn.innerHTML = BULK_STATUS_APPLY_IDLE_HTML || '<i class="fas fa-layer-group"></i> Update Status';
-    }
-    updateBulkSelectionSummary();
-    updateBulkSelectAllState();
-  }
+});
 }
 
 function buildPageSequence(totalPages, currentPage) {
@@ -4793,19 +4567,12 @@ case 'kit_delivered':
 modalActionButtons.appendChild(createButton('Refresh Kit Tracking', () => handleAction(order.id, 'refreshKitTracking'), 'bg-emerald-600 hover:bg-emerald-700'));
 modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
 break;
-case 'kit_on_the_way_to_us':
-modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
-break;
 case 'label_generated':
 if (order.shippingPreference === 'Shipping Kit Requested') {
 modalActionButtons.appendChild(
 createButton('Mark I Sent', () => handleAction(order.id, 'markKitSent'), 'bg-orange-600 hover:bg-orange-700')
 );
 }
-modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
-break;
-case 'phone_on_the_way':
-case 'delivered_to_us':
 modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
 break;
 case 'received':
@@ -5805,86 +5572,19 @@ const now = new Date();
 lastRefreshAt.textContent = `Updated ${now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
-populateBulkStatusSelect();
-updateBulkSelectionSummary();
-
-if (bulkStatusSelect) {
-  bulkStatusSelect.addEventListener('change', () => {
-    clearBulkStatusMessage();
-    updateBulkSelectionSummary();
-  });
-}
-
-if (bulkStatusApplyBtn) {
-  bulkStatusApplyBtn.addEventListener('click', handleBulkStatusApply);
-}
-
-if (bulkSelectAllCheckbox) {
-  bulkSelectAllCheckbox.addEventListener('change', () => {
-    if (!currentlyRenderedOrderIds.length) {
-      bulkSelectAllCheckbox.checked = false;
-      bulkSelectAllCheckbox.indeterminate = false;
-      return;
-    }
-
-    const shouldSelect = bulkSelectAllCheckbox.checked;
-    currentlyRenderedOrderIds.forEach((id) => {
-      if (!id) {
-        return;
-      }
-      if (shouldSelect) {
-        bulkSelectedOrderIds.add(id);
-      } else {
-        bulkSelectedOrderIds.delete(id);
-      }
-    });
-
-    if (ordersTableBody) {
-      ordersTableBody.querySelectorAll('.bulk-select-row').forEach((checkbox) => {
-        checkbox.checked = shouldSelect;
-        const row = checkbox.closest('tr');
-        if (row) {
-          row.classList.toggle('bulk-selected', checkbox.checked);
-        }
-      });
-    }
-
-    clearBulkStatusMessage();
-    updateBulkSelectAllState();
-    updateBulkSelectionSummary();
-  });
-}
-
-if (ordersTableBody) {
-  ordersTableBody.addEventListener('change', (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement)) {
-      return;
-    }
-    if (!target.classList.contains('bulk-select-row')) {
-      return;
-    }
-
-    const orderId = target.dataset.orderId;
-    if (!orderId) {
-      return;
-    }
-
-    if (target.checked) {
-      bulkSelectedOrderIds.add(orderId);
-    } else {
-      bulkSelectedOrderIds.delete(orderId);
-    }
-
-    const row = target.closest('tr');
-    if (row) {
-      row.classList.toggle('bulk-selected', target.checked);
-    }
-
-    clearBulkStatusMessage();
-    updateBulkSelectAllState();
-    updateBulkSelectionSummary();
-  });
+if (refreshOrdersBtn) {
+refreshOrdersBtn.addEventListener('click', () => {
+if (refreshOrdersBtn.disabled) return;
+const originalLabel = refreshOrdersBtn.innerHTML;
+refreshOrdersBtn.disabled = true;
+refreshOrdersBtn.innerHTML = '<i class="fas fa-rotate fa-spin"></i> Refreshing';
+filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
+updateLastRefreshTimestamp();
+setTimeout(() => {
+refreshOrdersBtn.disabled = false;
+refreshOrdersBtn.innerHTML = originalLabel;
+}, 900);
+});
 }
 
 
@@ -5913,4 +5613,581 @@ if (modalImeiInput) {
   });
 }
 
+document.addEventListener('DOMContentLoaded', async () => {
+try {
+// IMPORTANT: Firebase initialization
+const app = firebaseApp;
+db = getFirestore(app);
+auth = getAuth(app);
+functions = getFunctions(app);
+if (pendingImeiOrder) {
+  const orderNeedingImeiListener = pendingImeiOrder;
+  pendingImeiOrder = null;
+  startImeiListener(orderNeedingImeiListener);
+}
 
+const authLoadingScreen = document.getElementById('auth-loading-screen');
+
+// Logout functionality - added AFTER auth is initialized
+const logoutBtn = document.getElementById('logout-btn');
+if (logoutBtn) {
+logoutBtn.addEventListener('click', async () => {
+try {
+await signOut(auth);
+console.log('User signed out successfully');
+// Redirect to the login page (assuming index.html is the login page)
+window.location.href = '/index.html';
+} catch (error) {
+console.error('Error signing out:', error);
+// Using console.error instead of alert()
+console.error('Failed to logout. Please try again.');
+}
+});
+}
+
+// Notification bell dropdown functionality - added AFTER auth is initialized
+const notificationBellContainer = document.getElementById('notification-bell-container');
+const notificationDropdown = document.getElementById('notification-dropdown');
+
+if (notificationBellContainer && notificationDropdown) {
+notificationBellContainer.addEventListener('click', (e) => {
+e.stopPropagation();
+notificationDropdown.classList.toggle('show');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+if (!notificationBellContainer.contains(e.target)) {
+notificationDropdown.classList.remove('show');
+}
+});
+}
+
+onAuthStateChanged(auth, (user) => {
+if (!user || user.isAnonymous) {
+console.log('Auth state changed: No authenticated user or anonymous user detected, redirecting...');
+// Redirect to the login page (assuming index.html is the login page)
+window.location.href = '/index.html';
+return;
+}
+
+console.log('Auth state changed: User logged in, UID:', user.uid);
+authLoadingScreen?.classList.add('hidden');
+
+currentUserId = user.uid;
+/* REMOVED SIDEBAR USER ID DISPLAY, NOW JUST LOGGED IN */
+// displayUserId.textContent = user.email || user.uid;
+
+fetchAndRenderOrders();
+/* REMOVED NOTIFICATION LIST UPDATES - ONLY BADGE REMAINS FOR PERFORMANCE */
+/* updateNotifications(); */
+updateActiveChatsCount(); // <-- Moved here for safety
+if (IS_ANALYTICS_PAGE) {
+initializeAnalyticsDashboard();
+}
+});
+
+} catch (error) {
+console.error("Error initializing Firebase:", error);
+if (ordersTableBody) {
+ordersTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+}
+document.getElementById('auth-loading-screen')?.classList.add('hidden');
+}
+});
+
+async function fetchAndRenderOrders() {
+try {
+const ordersCollectionRef = collection(db, "orders");
+// IMPORTANT: Removed orderBy() to avoid index requirement errors, sorting will happen client-side if needed.
+onSnapshot(ordersCollectionRef, (snapshot) => {
+allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+// Client-side sort: newest first
+allOrders.sort((a, b) => {
+const dateA = extractTimestampMillis(a.createdAt) || 0;
+const dateB = extractTimestampMillis(b.createdAt) || 0;
+return dateB - dateA;
+});
+
+updateDashboardCounts(allOrders);
+filterAndRenderOrders(currentActiveStatus, currentSearchTerm, { preservePage: true });
+updateLastRefreshTimestamp();
+});
+} catch (error) {
+console.error('Error fetching real-time orders:', error);
+if (ordersTableBody) {
+ordersTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-red-500 py-4">Failed to load orders.</td></tr>`;
+}
+}
+}
+
+function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options = {}) {
+currentSearchTerm = typeof searchTerm === 'string' ? searchTerm : '';
+syncSearchInputs(currentSearchTerm);
+
+const preservePage = options.preservePage === true;
+const previousPage = currentPage;
+
+let filtered = allOrders;
+
+if (status !== 'all') {
+if (status === 'kit_needs_printing') {
+filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
+} else if (status === 'label_generated') {
+filtered = filtered.filter(order => order.status === 'label_generated' || order.status === 'emailed');
+} else {
+filtered = filtered.filter(order => order.status === status);
+}
+}
+
+if (currentSearchTerm) {
+const lowerCaseSearchTerm = currentSearchTerm.toLowerCase();
+filtered = filtered.filter(order =>
+order.id.toLowerCase().includes(lowerCaseSearchTerm) ||
+(order.shippingInfo && order.shippingInfo.fullName.toLowerCase().includes(lowerCaseSearchTerm)) ||
+(order.device && order.device.toLowerCase().includes(lowerCaseSearchTerm)) ||
+(order.storage && order.storage.toLowerCase().includes(lowerCaseSearchTerm)) ||
+(order.trackingNumber && order.trackingNumber.toLowerCase().includes(lowerCaseSearchTerm))
+);
+}
+
+if (IS_AGING_PAGE) {
+filtered = filtered.filter(isAgingCandidate);
+}
+
+filtered.sort((a, b) => {
+const dateA = extractTimestampMillis(a.createdAt) || 0;
+const dateB = extractTimestampMillis(b.createdAt) || 0;
+return dateB - dateA;
+});
+
+currentFilteredOrders = filtered;
+const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
+if (preservePage) {
+currentPage = Math.min(Math.max(previousPage, 1), totalPages);
+} else {
+currentPage = 1;
+}
+renderOrders();
+renderPagination();
+}
+
+// Update current time and date display
+function updateTimeDate() {
+const now = new Date();
+const options = {
+weekday: 'short',
+year: 'numeric',
+month: 'short',
+day: 'numeric',
+hour: '2-digit',
+minute: '2-digit'
+};
+const timeDate = now.toLocaleDateString('en-US', options);
+const timeDisplay = document.getElementById('current-time-date');
+if (timeDisplay) {
+timeDisplay.textContent = timeDate;
+}
+}
+
+// Update time every minute
+updateTimeDate();
+setInterval(updateTimeDate, 60000);
+
+// Simulate fetching active chats count (in real implementation, fetch from Firebase)
+async function updateActiveChatsCount() {
+// Check if db is defined before trying to access collection
+if (!db) {
+console.warn('Firestore database not yet initialized for chat count.');
+return;
+}
+
+try {
+const chatsCollectionRef = collection(db, "chats");
+const q = query(chatsCollectionRef, where("status", "==", "active"));
+onSnapshot(q, (snapshot) => {
+const count = snapshot.size;
+const activeChatsEl = document.getElementById('active-chats-count');
+if (activeChatsEl) {
+activeChatsEl.textContent = count;
+}
+
+// Update floating button badge
+const floatingBadge = document.getElementById('floating-chat-badge');
+if (count > 0) {
+if (floatingBadge) {
+floatingBadge.textContent = count;
+floatingBadge.style.display = 'block';
+}
+} else {
+if (floatingBadge) {
+floatingBadge.style.display = 'none';
+}
+}
+});
+} catch (error) {
+console.log('Chats collection not available or error fetching:', error);
+const activeChatsEl = document.getElementById('active-chats-count');
+if (activeChatsEl) {
+activeChatsEl.textContent = '0';
+}
+}
+}
+
+// Update notification badge for new orders
+function updateNotificationBadge(orders) {
+const newOrders = orders.filter(order =>
+order.status === 'order_pending' || KIT_PRINT_PENDING_STATUSES.includes(order.status)
+).length;
+
+const notificationBadge = document.getElementById('notification-badge');
+if (!notificationBadge) {
+return;
+}
+if (newOrders > 0) {
+notificationBadge.textContent = newOrders;
+notificationBadge.style.display = 'block';
+} else {
+notificationBadge.style.display = 'none';
+}
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const refreshAllTrackingBtn = document.getElementById('refresh-all-tracking-btn');
+    const refreshOrdersBtn = document.getElementById('refresh-orders-btn');
+
+    if (refreshAllTrackingBtn) {
+        refreshAllTrackingBtn.addEventListener('click', async () => {
+            refreshAllTrackingBtn.disabled = true;
+            refreshAllTrackingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+            try {
+                // Fetch all orders (replace with your Firestore or API call)
+                const orders = await fetch('/api/orders').then(r => r.json());
+
+                // Filter only ones with kits sent or delivered
+                const kitOrders = orders.filter(o =>
+                    ['kit_sent', 'kit_delivered'].includes(o.status)
+                );
+
+                for (const order of kitOrders) {
+                    try {
+                        await fetch(`/api/track-kit/${order.id}`, { method: 'POST' });
+                        console.log(`Refreshed tracking for ${order.id}`);
+                    } catch (err) {
+                        console.warn(`Failed to refresh ${order.id}`, err);
+                    }
+                }
+
+                alert(`✅ Refreshed ${kitOrders.length} kit tracking updates.`);
+                // Optionally reload order list
+                if (refreshOrdersBtn) {
+                    refreshOrdersBtn.click();
+                }
+            } catch (err) {
+                alert('⚠️ Failed to refresh kit tracking data. Check console for details.');
+                console.error(err);
+            } finally {
+                refreshAllTrackingBtn.disabled = false;
+                refreshAllTrackingBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh All Kit Tracking';
+            }
+        });
+    }
+});
+
+/* --- BATCH KIT REFRESH (auto UI + logic) --- */
+(function () {
+  try {
+    if (window.__BATCH_KIT_REFRESH_INSTALLED__) return;
+    window.__BATCH_KIT_REFRESH_INSTALLED__ = true;
+
+    const API_BASE =
+      (typeof window !== "undefined" && (window.API_BASE || window.BACKEND_BASE_URL)) ||
+      (typeof BACKEND_BASE_URL !== "undefined" && BACKEND_BASE_URL) ||
+      "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
+
+    const ordersTbody = document.getElementById("orders-table-body");
+    const refreshBtn = document.getElementById("refresh-orders-btn");
+    const lastRefreshAt = document.getElementById("last-refresh-at");
+
+    function setStatus(text) {
+      if (lastRefreshAt) lastRefreshAt.textContent = text;
+    }
+
+    function toggleBtnState(btn, on, label) {
+      if (!btn) return;
+      btn.disabled = on;
+      btn.classList.toggle("is-loading", on);
+      if (label) {
+        const span = btn.querySelector("span.status");
+        if (span) span.textContent = label;
+      }
+    }
+
+    function collectOrderIdsFromDom() {
+      if (!ordersTbody) return [];
+      const ids = new Set();
+      for (const tr of ordersTbody.querySelectorAll("tr")) {
+        const idAttr = tr.getAttribute("data-order-id") || (tr.dataset && tr.dataset.orderId);
+        if (idAttr) {
+          ids.add(idAttr);
+          continue;
+        }
+        const firstCell = tr.querySelector("td");
+        if (!firstCell) continue;
+        const text = (firstCell.textContent || "").trim();
+        const m = text.match(/SHC-\d+|[A-Z]{2,}-\d+/);
+        if (m) ids.add(m[0]);
+      }
+      return Array.from(ids);
+    }
+
+    function getOrdersSnapshot() {
+      return Array.isArray(allOrders) ? allOrders : [];
+    }
+
+    function hasTrackingValue(value) {
+      return typeof value === "string" && value.trim().length > 0;
+    }
+
+    function collectOrderIdsForKitRefresh() {
+      const collected = new Set();
+      for (const order of getOrdersSnapshot()) {
+        if (!order || !order.id) continue;
+        const outbound = order.outboundTrackingNumber;
+        const inbound = order.inboundTrackingNumber || order.trackingNumber;
+        if (hasTrackingValue(outbound) || hasTrackingValue(inbound)) {
+          collected.add(order.id);
+        }
+      }
+
+      if (collected.size) {
+        return Array.from(collected);
+      }
+
+      return collectOrderIdsFromDom();
+    }
+
+    function collectOrderIdsForInboundRefresh() {
+      const collected = new Set();
+      for (const order of getOrdersSnapshot()) {
+        if (!order || !order.id) continue;
+        const inbound = order.inboundTrackingNumber || order.trackingNumber;
+        if (hasTrackingValue(inbound)) {
+          collected.add(order.id);
+        }
+      }
+
+      if (collected.size) {
+        return Array.from(collected);
+      }
+
+      return collectOrderIdsFromDom();
+    }
+
+    async function refreshKitTrackingForOrder(orderId) {
+      const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/refresh-kit-tracking`;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        try {
+          const body = await res.json();
+          return { skipped: true, ...body };
+        } catch (_) {
+          return { skipped: true };
+        }
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      try { return await res.json(); } catch { return {}; }
+    }
+
+    async function runBatchRefresh({ concurrency = 4, manageRefreshButton = true } = {}) {
+      const ids = collectOrderIdsForKitRefresh();
+      if (!ids.length) {
+        console.log("No order rows found to refresh.");
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
+      }
+
+      const kitBtn = document.getElementById("refresh-all-kits-btn");
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, true);
+        if (kitBtn) toggleBtnState(kitBtn, true);
+      }
+      setStatus(`Refreshing ${ids.length} kits…`);
+
+      let i = 0;
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
+      const queue = ids.slice();
+
+      async function worker() {
+        while (queue.length) {
+          const id = queue.shift();
+          try {
+            const response = await refreshKitTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
+          } catch (e) {
+            console.warn("Kit refresh failed", id, e);
+            results.fail++;
+          } finally {
+            i++;
+            setStatus(`Refreshing kits… ${i}/${ids.length}`);
+          }
+        }
+      }
+
+      const N = Math.min(concurrency, ids.length);
+      await Promise.all(Array.from({ length: N }, worker));
+
+      if (manageRefreshButton) {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
+      setStatus(
+        `Batch refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
+      );
+      return results;
+    }
+
+    async function refreshInboundTrackingForOrder(orderId) {
+      const url = `${API_BASE}/orders/${encodeURIComponent(orderId)}/sync-label-tracking`;
+      const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (res.status === 400) {
+        return { skipped: true };
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      try {
+        return await res.json();
+      } catch {
+        return {};
+      }
+    }
+
+    async function runLabelRefresh({ concurrency = 4 } = {}) {
+      const ids = collectOrderIdsForInboundRefresh();
+      if (!ids.length) {
+        console.log("No order rows found to refresh inbound labels for.");
+        return { ok: 0, fail: 0, skipped: 0, total: 0 };
+      }
+
+      setStatus(`Refreshing inbound labels… 0/${ids.length}`);
+
+      let i = 0;
+      const results = { ok: 0, fail: 0, skipped: 0, total: ids.length };
+      const queue = ids.slice();
+
+      async function worker() {
+        while (queue.length) {
+          const id = queue.shift();
+          try {
+            const response = await refreshInboundTrackingForOrder(id);
+            if (response && response.skipped) {
+              results.skipped++;
+            } else {
+              results.ok++;
+            }
+          } catch (error) {
+            results.fail++;
+            console.warn("Inbound refresh failed", id, error);
+          } finally {
+            i++;
+            setStatus(`Refreshing inbound labels… ${i}/${ids.length}`);
+          }
+        }
+      }
+
+      const N = Math.min(concurrency, ids.length);
+      await Promise.all(Array.from({ length: N }, worker));
+
+      setStatus(
+        `Inbound refresh complete: ${results.ok} updated, ${results.skipped} skipped, ${results.fail} failed`
+      );
+      return results;
+    }
+
+    async function runCombinedRefresh({ concurrency = 4 } = {}) {
+      const kitBtn = document.getElementById("refresh-all-kits-btn");
+      toggleBtnState(refreshBtn, true);
+      if (kitBtn) toggleBtnState(kitBtn, true);
+      setStatus("Refreshing kits and labels…");
+
+      try {
+        const kitResult = await runBatchRefresh({ concurrency, manageRefreshButton: false });
+        const labelResult = await runLabelRefresh({ concurrency });
+        const kitSummaryDetails = [
+          `${kitResult.ok}/${kitResult.total}`,
+          `${kitResult.skipped} skipped`,
+          `${kitResult.fail} failed`,
+        ];
+        const labelSummaryDetails = [
+          `${labelResult.ok}/${labelResult.total}`,
+          `${labelResult.skipped} skipped`,
+          `${labelResult.fail} failed`,
+        ];
+        const kitSummary = `Kits refreshed (${kitSummaryDetails.join(', ')})`;
+        const labelSummary = `labels refreshed (${labelSummaryDetails.join(', ')})`;
+        setStatus(`${kitSummary}; ${labelSummary}`);
+        return { kitResult, labelResult };
+      } catch (error) {
+        console.warn("Combined refresh error", error);
+        setStatus("Combined refresh failed. Check console for details.");
+        throw error;
+      } finally {
+        toggleBtnState(refreshBtn, false);
+        if (kitBtn) toggleBtnState(kitBtn, false);
+      }
+    }
+
+    // Create and insert the "Refresh all kit tracking" button if not present
+    (function insertButton() {
+      if (document.getElementById("refresh-all-kits-btn")) return;
+      const toolbar = document.querySelector(".orders-toolbar");
+      if (!toolbar) return;
+
+      const btn = document.createElement("button");
+      btn.id = "refresh-all-kits-btn";
+      btn.className = "refresh-btn";
+      btn.innerHTML = '<i class="fas fa-sync-alt"></i><span>Refresh kits + labels</span>';
+      btn.addEventListener("click", () => runCombinedRefresh({ concurrency: 4 }));
+      // Place it next to the existing Refresh data button
+      const actions = toolbar.querySelector(".refresh-btn")?.parentElement || toolbar;
+      actions.appendChild(btn);
+    })();
+
+    // Make the existing "Refresh data" also run batch kit refresh first (toggleable)
+    const DO_BATCH_BEFORE_REFRESH = true;
+    if (refreshBtn && !refreshBtn.__batchPatched) {
+      refreshBtn.__batchPatched = true;
+      const clone = refreshBtn.cloneNode(true);
+      refreshBtn.parentNode.replaceChild(clone, refreshBtn);
+      clone.addEventListener("click", async (ev) => {
+        if (!DO_BATCH_BEFORE_REFRESH) return; // fall through to the original handler
+        ev.preventDefault();
+        try {
+          await runCombinedRefresh({ concurrency: 4 });
+        } catch (e) {
+          console.warn("Batch refresh error", e);
+        }
+        // Trigger a real data refresh by dispatching a click again (bubbles to other listeners)
+        setTimeout(() => clone.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: false })), 0);
+      }, { capture: true });
+    }
+
+    const AUTO_LABEL_REFRESH_INTERVAL = 30 * 60 * 1000;
+    let labelRefreshInFlight = false;
+    setInterval(() => {
+      if (labelRefreshInFlight) return;
+      if (!ordersTbody || !ordersTbody.children || !ordersTbody.children.length) return;
+      labelRefreshInFlight = true;
+      runLabelRefresh({ concurrency: 2 })
+        .catch((error) => console.warn("Auto inbound refresh failed", error))
+        .finally(() => {
+          labelRefreshInFlight = false;
+        });
+    }, AUTO_LABEL_REFRESH_INTERVAL);
+  } catch (e) {
+    console.warn("Batch kit refresh bootstrap failed", e);
+  }
+})();
+/* --- END BATCH KIT REFRESH --- */
