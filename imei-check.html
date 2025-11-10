@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Device IMEI Check</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 24px;
+      background-color: #f7fafc;
+      color: #1a202c;
+    }
+
+    .container {
+      max-width: 420px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.1);
+      padding: 32px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cbd5f5;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    button {
+      margin-top: 16px;
+      background-color: #2563eb;
+      border: none;
+      color: #ffffff;
+      padding: 12px 20px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+
+    button:disabled {
+      background-color: #93c5fd;
+      cursor: wait;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .status-message {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-size: 15px;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .error {
+      color: #b91c1c;
+      background: #fee2e2;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>IMEI Checker</h1>
+    <p id="instructions">Waiting for device data…</p>
+
+    <div id="imei-form" class="hidden">
+      <label for="imei-input">Enter IMEI to test</label>
+      <input id="imei-input" type="text" placeholder="15-digit IMEI" maxlength="15" autocomplete="off">
+      <button id="check-button" type="button">Check IMEI</button>
+    </div>
+
+    <div id="result" class="status-message hidden"></div>
+  </div>
+
+  <script type="module">
+    import { firebaseApp } from './assets/js/firebase-app.js';
+    import {
+      getFirestore,
+      doc,
+      onSnapshot,
+      setDoc
+    } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+    const db = getFirestore(firebaseApp);
+
+    const imeiForm = document.getElementById('imei-form');
+    const imeiInput = document.getElementById('imei-input');
+    const instructionsEl = document.getElementById('instructions');
+    const button = document.getElementById('check-button');
+    const resultEl = document.getElementById('result');
+
+    const params = new URLSearchParams(window.location.search);
+    const deviceId = params.get('deviceId');
+
+    if (!deviceId) {
+      instructionsEl.textContent = 'Missing deviceId query parameter.';
+      instructionsEl.classList.add('error', 'status-message');
+      throw new Error('Device ID is required in the query string.');
+    }
+
+    const deviceRef = doc(db, 'devices', deviceId);
+
+    let isChecking = false;
+
+    const updateButtonState = () => {
+      if (isChecking) {
+        button.textContent = 'Checking…';
+        button.disabled = true;
+      } else {
+        button.textContent = 'Check IMEI';
+        button.disabled = false;
+      }
+    };
+
+    const renderResult = (result) => {
+      if (!result) {
+        resultEl.classList.add('hidden');
+        resultEl.textContent = '';
+        return;
+      }
+
+      const pretty = JSON.stringify(result, null, 2);
+      resultEl.textContent = pretty;
+      resultEl.classList.remove('error');
+      resultEl.classList.remove('hidden');
+    };
+
+    onSnapshot(deviceRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        instructionsEl.textContent = 'Device not found.';
+        instructionsEl.classList.add('error', 'status-message');
+        imeiForm.classList.add('hidden');
+        return;
+      }
+
+      const data = snapshot.data();
+      renderResult(data.imeiCheckResult || null);
+
+      const shouldShowForm =
+        data.status === 'received' &&
+        (!data.imei || data.imeiChecked === false);
+
+      if (shouldShowForm) {
+        instructionsEl.textContent = 'Enter the IMEI to test for this device.';
+        instructionsEl.classList.remove('error', 'status-message');
+        imeiForm.classList.remove('hidden');
+        if (data.imei && !imeiInput.value) {
+          imeiInput.value = data.imei;
+        }
+      } else {
+        imeiForm.classList.add('hidden');
+        if (data.status !== 'received') {
+          instructionsEl.textContent = 'Device is not in a receivable state for IMEI checks.';
+          instructionsEl.classList.add('status-message');
+        } else {
+          instructionsEl.textContent = 'IMEI check completed or already recorded.';
+          instructionsEl.classList.add('status-message');
+        }
+      }
+    }, (error) => {
+      instructionsEl.textContent = `Failed to load device: ${error.message}`;
+      instructionsEl.classList.add('error', 'status-message');
+    });
+
+    button.addEventListener('click', async () => {
+      if (isChecking) {
+        return;
+      }
+
+      const imeiValue = imeiInput.value.trim();
+      if (!/^\d{15}$/.test(imeiValue)) {
+        resultEl.textContent = 'Please enter a 15-digit IMEI number.';
+        resultEl.classList.remove('hidden');
+        resultEl.classList.add('error');
+        return;
+      }
+
+      resultEl.classList.remove('error');
+      resultEl.textContent = '';
+      resultEl.classList.add('hidden');
+
+      try {
+        isChecking = true;
+        updateButtonState();
+
+        await setDoc(deviceRef, {
+          imei: imeiValue,
+          imeiChecked: false
+        }, { merge: true });
+
+        const response = await fetch('/checkImei', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId, imei: imeiValue })
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Failed to check IMEI.' }));
+          throw new Error(error.error || 'Failed to check IMEI.');
+        }
+
+        const payload = await response.json();
+        if (payload.result) {
+          renderResult(payload.result);
+        }
+      } catch (error) {
+        resultEl.textContent = error.message || 'Failed to check IMEI.';
+        resultEl.classList.remove('hidden');
+        resultEl.classList.add('error');
+        console.error('IMEI check failed:', error);
+      } finally {
+        isChecking = false;
+        updateButtonState();
+      }
+    });
+
+    updateButtonState();
+  </script>
+</body>
+</html>
