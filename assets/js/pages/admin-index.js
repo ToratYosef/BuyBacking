@@ -110,7 +110,7 @@ const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.
 
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 import { createOrderInfoLabelPdf } from "/assets/js/pdf/order-labels.js";
 /* --- API BASE URL FIX: Redirect /api/* to Cloud Functions base --- */
@@ -147,6 +147,10 @@ let db;
 let auth;
 let functions;
 let currentUserId = 'anonymous_user';
+let currentDeviceDocId = null;
+let imeiUnsubscribe = null;
+let isImeiChecking = false;
+let pendingImeiOrder = null;
 
 const ADMIN_PAGE = document.body?.dataset?.adminPage || 'orders';
 const IS_ORDERS_PAGE = ADMIN_PAGE === 'orders';
@@ -293,6 +297,22 @@ const modalKitTrackingRow = document.getElementById('modal-kit-tracking-row');
 const modalKitTrackingTitle = document.getElementById('modal-kit-tracking-title');
 const modalKitTrackingStatus = document.getElementById('modal-kit-tracking-status');
 const modalKitTrackingUpdated = document.getElementById('modal-kit-tracking-updated');
+
+const modalImeiSection = document.getElementById('modal-imei-section');
+const modalImeiStatus = document.getElementById('modal-imei-status');
+const modalImeiMessage = document.getElementById('modal-imei-message');
+const modalImeiForm = document.getElementById('modal-imei-form');
+const modalImeiInput = document.getElementById('modal-imei-input');
+const modalImeiButton = document.getElementById('modal-imei-button');
+const modalImeiError = document.getElementById('modal-imei-error');
+const modalImeiResult = document.getElementById('modal-imei-result');
+const modalImeiResultList = document.getElementById('modal-imei-result-list');
+const modalImeiDeviceId = document.getElementById('modal-imei-device-id');
+const modalImeiCheckedAt = document.getElementById('modal-imei-checked-at');
+const modalImeiRawDetails = document.getElementById('modal-imei-raw-details');
+const modalImeiRaw = document.getElementById('modal-imei-raw');
+const imeiButtonDefaultText = modalImeiButton ? modalImeiButton.textContent : 'Check IMEI';
+const IMEI_NUMBER_REGEX = /^\d{15}$/;
 
 const modalActionButtons = document.getElementById('modal-action-buttons');
 const modalLoadingMessage = document.getElementById('modal-loading-message');
@@ -482,6 +502,451 @@ if (orderDetailsModal) {
 
 
 const USPS_TRACKING_URL = 'https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=';
+
+const IMEI_RESULT_FIELDS = [
+  { key: 'brand', label: 'Brand' },
+  { key: 'model', label: 'Model' },
+  { key: 'color', label: 'Color' },
+  { key: 'storage', label: 'Storage' },
+  { key: 'carrier', label: 'Carrier' },
+  { key: 'carrierLock', label: 'Carrier Lock' },
+  { key: 'blacklisted', label: 'Blacklisted' }
+];
+
+function resetImeiSection() {
+  if (!modalImeiSection) {
+    return;
+  }
+  modalImeiSection.classList.add('hidden');
+  if (modalImeiStatus) {
+    modalImeiStatus.textContent = '';
+  }
+  if (modalImeiMessage) {
+    modalImeiMessage.textContent = 'Loading device record…';
+  }
+  if (modalImeiForm) {
+    modalImeiForm.classList.add('hidden');
+  }
+  if (modalImeiInput) {
+    modalImeiInput.value = '';
+    modalImeiInput.disabled = true;
+  }
+  if (modalImeiButton) {
+    modalImeiButton.disabled = true;
+    modalImeiButton.textContent = imeiButtonDefaultText;
+  }
+  if (modalImeiError) {
+    modalImeiError.classList.add('hidden');
+    modalImeiError.textContent = '';
+  }
+  if (modalImeiResult) {
+    modalImeiResult.classList.add('hidden');
+  }
+  if (modalImeiResultList) {
+    modalImeiResultList.innerHTML = '';
+  }
+  if (modalImeiDeviceId) {
+    modalImeiDeviceId.textContent = '';
+  }
+  if (modalImeiCheckedAt) {
+    modalImeiCheckedAt.textContent = '';
+  }
+  if (modalImeiRawDetails) {
+    modalImeiRawDetails.classList.add('hidden');
+  }
+  if (modalImeiRaw) {
+    modalImeiRaw.textContent = '';
+  }
+  isImeiChecking = false;
+}
+
+function teardownImeiListener() {
+  if (imeiUnsubscribe) {
+    imeiUnsubscribe();
+    imeiUnsubscribe = null;
+  }
+  currentDeviceDocId = null;
+  isImeiChecking = false;
+}
+
+function resolveDeviceDocumentId(order) {
+  if (!order) {
+    return null;
+  }
+  const candidates = [
+    order.deviceDocId,
+    order.deviceDocID,
+    order.deviceDocumentId,
+    order.deviceDocumentID,
+    order.deviceDocument,
+    order.deviceDocumentPath,
+    order.deviceDocPath,
+    order.deviceRecordId,
+    order.deviceRecordID,
+    order.deviceRefId,
+    order.deviceRefID,
+    order.deviceFirestoreId,
+    order.deviceFirestoreID,
+    order.deviceFirestoreDocId,
+    order.deviceFirestoreDocID,
+    order.deviceInventoryId,
+    order.deviceInventoryID,
+    order.deviceId,
+    order.deviceID,
+    order.inventoryDeviceId,
+    order.inventoryDeviceID,
+    order.device?.id,
+    order.device?.deviceId,
+    order.deviceInfo?.id,
+    order.deviceInfo?.deviceId,
+    order.deviceStatus?.id,
+    order.deviceStatus?.deviceId
+  ];
+  const sanitize = (value) => {
+    if (typeof value !== 'string') {
+      return null;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const parts = trimmed.split('/');
+    return parts[parts.length - 1] || null;
+  };
+  for (const candidate of candidates) {
+    const sanitized = sanitize(candidate);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+  return sanitize(order.id) || null;
+}
+
+function startImeiListener(order) {
+  if (!modalImeiSection) {
+    return;
+  }
+  resetImeiSection();
+  teardownImeiListener();
+  if (!order) {
+    return;
+  }
+  if (!db) {
+    pendingImeiOrder = order;
+    return;
+  }
+  const deviceDocId = resolveDeviceDocumentId(order);
+  if (!deviceDocId) {
+    modalImeiSection.classList.remove('hidden');
+    if (modalImeiMessage) {
+      modalImeiMessage.textContent = 'No device record is linked to this order.';
+    }
+    return;
+  }
+  currentDeviceDocId = deviceDocId;
+  modalImeiSection.classList.remove('hidden');
+  if (modalImeiDeviceId) {
+    modalImeiDeviceId.textContent = deviceDocId;
+  }
+  if (modalImeiMessage) {
+    modalImeiMessage.textContent = 'Listening for IMEI status…';
+  }
+  const deviceRef = doc(db, 'devices', deviceDocId);
+  imeiUnsubscribe = onSnapshot(
+    deviceRef,
+    (snapshot) => {
+      handleImeiSnapshot(snapshot);
+    },
+    (error) => {
+      console.error('Failed to subscribe to device document', error);
+      if (modalImeiMessage) {
+        modalImeiMessage.textContent = 'Failed to load device record.';
+      }
+      if (modalImeiError) {
+        modalImeiError.textContent = error?.message || 'Unexpected Firestore error.';
+        modalImeiError.classList.remove('hidden');
+      }
+      if (modalImeiForm) {
+        modalImeiForm.classList.add('hidden');
+      }
+      if (modalImeiButton) {
+        modalImeiButton.disabled = true;
+        modalImeiButton.textContent = imeiButtonDefaultText;
+      }
+    }
+  );
+}
+
+function handleImeiSnapshot(snapshot) {
+  if (!modalImeiSection) {
+    return;
+  }
+  if (modalImeiError) {
+    modalImeiError.classList.add('hidden');
+    modalImeiError.textContent = '';
+  }
+  if (!snapshot.exists()) {
+    if (modalImeiStatus) {
+      modalImeiStatus.textContent = '';
+    }
+    if (modalImeiMessage) {
+      modalImeiMessage.textContent = 'No device record found for this order.';
+    }
+    if (modalImeiForm) {
+      modalImeiForm.classList.add('hidden');
+    }
+    if (modalImeiButton) {
+      modalImeiButton.disabled = true;
+      modalImeiButton.textContent = imeiButtonDefaultText;
+    }
+    renderImeiResult(null, null);
+    return;
+  }
+
+  const data = snapshot.data() || {};
+  const status = data.status || 'unknown';
+  if (modalImeiStatus) {
+    modalImeiStatus.textContent = status;
+  }
+
+  const isEligible = status === 'received' && (!data.imei || data.imeiChecked === false);
+
+  if (isEligible) {
+    if (modalImeiForm) {
+      modalImeiForm.classList.remove('hidden');
+    }
+    if (modalImeiMessage) {
+      modalImeiMessage.textContent = data.imei
+        ? 'IMEI saved. Awaiting verification to complete.'
+        : 'Enter the device IMEI to start the check.';
+    }
+    if (!isImeiChecking && modalImeiButton) {
+      modalImeiButton.disabled = false;
+      modalImeiButton.textContent = imeiButtonDefaultText;
+    }
+    if (modalImeiInput) {
+      if (!isImeiChecking) {
+        modalImeiInput.disabled = false;
+      }
+      if (!isImeiChecking && typeof data.imei === 'string' && data.imei && modalImeiInput.value !== data.imei) {
+        modalImeiInput.value = data.imei;
+      }
+    }
+  } else {
+    if (modalImeiForm) {
+      modalImeiForm.classList.add('hidden');
+    }
+    if (modalImeiButton) {
+      modalImeiButton.disabled = true;
+      modalImeiButton.textContent = imeiButtonDefaultText;
+    }
+    if (modalImeiInput) {
+      modalImeiInput.disabled = true;
+    }
+    if (modalImeiMessage) {
+      if (status !== 'received') {
+        modalImeiMessage.textContent = 'Device status must be “received” before running an IMEI check.';
+      } else if (data.imeiChecked) {
+        modalImeiMessage.textContent = 'IMEI check completed.';
+      } else if (data.imei) {
+        modalImeiMessage.textContent = 'IMEI saved. Awaiting backend verification.';
+      } else {
+        modalImeiMessage.textContent = 'IMEI entry unavailable for this device.';
+      }
+    }
+  }
+
+  renderImeiResult(data.imeiCheckResult || null, data.imeiCheckedAt || null);
+
+  if (isImeiChecking && data.imeiChecked) {
+    setImeiCheckingState(false);
+  }
+}
+
+function renderImeiResult(result, checkedAt) {
+  if (!modalImeiResult) {
+    return;
+  }
+  if (!result) {
+    modalImeiResult.classList.add('hidden');
+    if (modalImeiResultList) {
+      modalImeiResultList.innerHTML = '';
+    }
+    if (modalImeiCheckedAt) {
+      modalImeiCheckedAt.textContent = '';
+    }
+    if (modalImeiRawDetails) {
+      modalImeiRawDetails.classList.add('hidden');
+    }
+    if (modalImeiRaw) {
+      modalImeiRaw.textContent = '';
+    }
+    return;
+  }
+
+  if (modalImeiResultList) {
+    const rows = [];
+    for (const field of IMEI_RESULT_FIELDS) {
+      if (!(field.key in result)) {
+        continue;
+      }
+      const value = result[field.key];
+      if (value === undefined || value === null || value === '') {
+        continue;
+      }
+      let displayValue = value;
+      if (value === true) {
+        displayValue = 'Yes';
+      } else if (value === false) {
+        displayValue = 'No';
+      }
+      rows.push(
+        `<div class="flex items-center justify-between gap-3"><dt class="font-medium text-slate-600">${escapeHtml(field.label)}</dt><dd class="text-right text-slate-800">${escapeHtml(String(displayValue))}</dd></div>`
+      );
+    }
+    modalImeiResultList.innerHTML = rows.length
+      ? rows.join('')
+      : '<p class="text-sm text-slate-600">No summarized IMEI data available.</p>';
+  }
+
+  if (modalImeiCheckedAt) {
+    modalImeiCheckedAt.textContent = checkedAt ? formatDateTime(checkedAt) : '';
+  }
+
+  if (modalImeiRawDetails) {
+    if ('raw' in result && result.raw !== undefined) {
+      if (modalImeiRaw) {
+        try {
+          modalImeiRaw.textContent =
+            typeof result.raw === 'string' ? result.raw : JSON.stringify(result.raw, null, 2);
+        } catch (error) {
+          modalImeiRaw.textContent = String(result.raw);
+        }
+      }
+      modalImeiRawDetails.classList.remove('hidden');
+    } else {
+      modalImeiRawDetails.classList.add('hidden');
+      if (modalImeiRaw) {
+        modalImeiRaw.textContent = '';
+      }
+    }
+  }
+
+  modalImeiResult.classList.remove('hidden');
+}
+
+function setImeiCheckingState(isLoading) {
+  isImeiChecking = isLoading;
+  if (modalImeiButton) {
+    if (isLoading) {
+      modalImeiButton.disabled = true;
+      modalImeiButton.textContent = 'Checking…';
+    } else {
+      const shouldDisable = !modalImeiForm || modalImeiForm.classList.contains('hidden');
+      modalImeiButton.disabled = shouldDisable;
+      modalImeiButton.textContent = imeiButtonDefaultText;
+    }
+  }
+  if (modalImeiInput) {
+    const shouldDisable = isLoading || !modalImeiForm || modalImeiForm.classList.contains('hidden');
+    modalImeiInput.disabled = shouldDisable;
+  }
+}
+
+async function handleImeiSubmit() {
+  if (!modalImeiInput || !modalImeiButton) {
+    return;
+  }
+  if (!db) {
+    if (modalImeiError) {
+      modalImeiError.textContent = 'Firestore is not initialized. Please retry in a moment.';
+      modalImeiError.classList.remove('hidden');
+    }
+    return;
+  }
+  if (!currentDeviceDocId) {
+    if (modalImeiError) {
+      modalImeiError.textContent = 'Device record is unavailable for this order.';
+      modalImeiError.classList.remove('hidden');
+    }
+    return;
+  }
+
+  const imeiValue = (modalImeiInput.value || '').trim();
+  if (!IMEI_NUMBER_REGEX.test(imeiValue)) {
+    if (modalImeiError) {
+      modalImeiError.textContent = 'Enter a valid 15-digit IMEI before checking.';
+      modalImeiError.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (modalImeiError) {
+    modalImeiError.classList.add('hidden');
+    modalImeiError.textContent = '';
+  }
+
+  let completed = false;
+
+  try {
+    setImeiCheckingState(true);
+    if (modalImeiMessage) {
+      modalImeiMessage.textContent = 'Checking IMEI…';
+    }
+
+    const deviceRef = doc(db, 'devices', currentDeviceDocId);
+    try {
+      await setDoc(deviceRef, { imei: imeiValue, imeiChecked: false }, { merge: true });
+    } catch (error) {
+      if (
+        error &&
+        (error.code === 'permission-denied' || /Missing or insufficient permissions/i.test(error.message || ''))
+      ) {
+        await setDoc(deviceRef, { imei: imeiValue }, { merge: true });
+      } else {
+        throw error;
+      }
+    }
+
+    const response = await fetch('/checkImei', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: currentDeviceDocId, imei: imeiValue })
+    });
+
+    if (!response.ok) {
+      let message = `IMEI check failed with status ${response.status}.`;
+      try {
+        const errorBody = await response.json();
+        if (errorBody && errorBody.error) {
+          message = errorBody.error;
+        }
+      } catch (_) {}
+      throw new Error(message);
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    if (payload && payload.error) {
+      throw new Error(payload.error);
+    }
+
+    completed = true;
+    if (modalImeiMessage) {
+      modalImeiMessage.textContent = 'IMEI check requested. Results will appear once the device record updates.';
+    }
+  } catch (error) {
+    console.error('IMEI check failed', error);
+    if (modalImeiError) {
+      modalImeiError.textContent = error?.message || 'Failed to check IMEI. Please try again.';
+      modalImeiError.classList.remove('hidden');
+    }
+    setImeiCheckingState(false);
+  } finally {
+    if (!completed) {
+      setImeiCheckingState(false);
+    }
+  }
+}
 
 /**
 * Converts a Firestore Timestamp object or Date into a string formatted as "Month Day, Year".
@@ -3754,11 +4219,13 @@ async function handleStatusDropdownSelection(newStatus) {
 }
 
 async function openOrderDetailsModal(orderId) {
-if (!orderDetailsModal) {
-return;
-}
-// Hide all action/form containers
-modalActionButtons.innerHTML = '';
+  if (!orderDetailsModal) {
+    return;
+  }
+  resetImeiSection();
+  teardownImeiListener();
+  // Hide all action/form containers
+  modalActionButtons.innerHTML = '';
 modalLoadingMessage.classList.add('hidden');
 modalMessage.classList.add('hidden');
 modalMessage.textContent = '';
@@ -3824,10 +4291,11 @@ const errorText = await response.text();
 console.error("Backend error response:", response.status, errorText);
 throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
 }
-const order = await response.json();
-currentOrderDetails = order;
+    const order = await response.json();
+    currentOrderDetails = order;
+    startImeiListener(order);
 
-modalOrderId.textContent = order.id;
+    modalOrderId.textContent = order.id;
 modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
 modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
 modalCustomerPhone.textContent = order.shippingInfo ? order.shippingInfo.phone : 'N/A';
@@ -4955,6 +5423,8 @@ function closeOrderDetailsModal() {
 if (!orderDetailsModal) {
 return;
 }
+teardownImeiListener();
+resetImeiSection();
 closeStatusDropdown();
 orderDetailsModal.classList.add('hidden');
 if (cancelOrderFormContainer) {
@@ -5122,6 +5592,27 @@ if (closeModalButton) {
 closeModalButton.addEventListener('click', closeOrderDetailsModal);
 }
 
+if (modalImeiButton) {
+  modalImeiButton.addEventListener('click', handleImeiSubmit);
+}
+
+if (modalImeiInput) {
+  modalImeiInput.addEventListener('input', () => {
+    const digitsOnly = modalImeiInput.value.replace(/[^0-9]/g, '');
+    if (digitsOnly !== modalImeiInput.value) {
+      modalImeiInput.value = digitsOnly;
+    }
+  });
+  modalImeiInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (modalImeiButton && !modalImeiButton.disabled) {
+        handleImeiSubmit();
+      }
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
 try {
 // IMPORTANT: Firebase initialization
@@ -5129,6 +5620,11 @@ const app = firebaseApp;
 db = getFirestore(app);
 auth = getAuth(app);
 functions = getFunctions(app);
+if (pendingImeiOrder) {
+  const orderNeedingImeiListener = pendingImeiOrder;
+  pendingImeiOrder = null;
+  startImeiListener(orderNeedingImeiListener);
+}
 
 const authLoadingScreen = document.getElementById('auth-loading-screen');
 
