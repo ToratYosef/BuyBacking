@@ -268,6 +268,67 @@ function createOrdersRouter({
     return buffers;
   }
 
+  async function buildPrintBundleResponse({ orderIds = [], res, origin, allowEmptySelection = false }) {
+    const cleanedOrderIds = Array.isArray(orderIds)
+      ? orderIds.map((id) => String(id).trim()).filter(Boolean)
+      : [];
+
+    if (!cleanedOrderIds.length && !allowEmptySelection) {
+      return res.status(400).json({ error: 'At least one order ID must be provided.' });
+    }
+
+    if (origin && PRINT_BUNDLE_ALLOWED_ORIGINS.has(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+    }
+
+    res.header('Access-Control-Expose-Headers', 'X-Printed-Order-Ids, X-Kit-Sent-Order-Ids');
+
+    const orders = await fetchPrintQueueOrders(cleanedOrderIds);
+    if (!orders.length) {
+      return res.status(404).json({ error: 'No printable orders available for the requested selection.' });
+    }
+
+    const printableOrderIds = [];
+    const printableOrders = [];
+    const mergedParts = [];
+
+    for (const order of orders) {
+      const parts = await collectOrderPrintBuffers(order);
+      if (!parts.length) {
+        console.warn(`No printable documents generated for order ${order.id}`);
+        continue;
+      }
+      printableOrderIds.push(order.id);
+      printableOrders.push(order);
+      mergedParts.push(...parts);
+    }
+
+    if (!mergedParts.length) {
+      return res
+        .status(404)
+        .json({ error: 'No printable documents available for the requested orders.' });
+    }
+
+    const mergedPdf = await mergePdfBuffers(mergedParts);
+    const mergedBuffer = normaliseBuffer(mergedPdf);
+
+    let kitSentOrderIds = [];
+    try {
+      kitSentOrderIds = await markOrdersKitSent(printableOrders);
+    } catch (updateError) {
+      console.error('Failed to update kit sent status after bundle:', updateError);
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="print-queue-bundle.pdf"');
+    res.setHeader('X-Printed-Order-Ids', JSON.stringify(printableOrderIds));
+    res.setHeader('X-Kit-Sent-Order-Ids', JSON.stringify(kitSentOrderIds));
+    res.send(mergedBuffer);
+
+    return null;
+  }
+
   async function markOrdersKitSent(orders = []) {
     if (!Array.isArray(orders) || !orders.length) {
       return [];
@@ -367,57 +428,34 @@ function createOrdersRouter({
         ? req.body.orderIds.filter(Boolean)
         : [];
 
-      const origin = req.headers.origin;
-      if (origin && PRINT_BUNDLE_ALLOWED_ORIGINS.has(origin)) {
-        res.header('Access-Control-Allow-Origin', origin);
-        res.header('Vary', 'Origin');
-      }
-      res.header('Access-Control-Expose-Headers', 'X-Printed-Order-Ids, X-Kit-Sent-Order-Ids');
-
-      const orders = await fetchPrintQueueOrders(orderIds);
-      if (!orders.length) {
-        return res.status(404).json({ error: 'No orders require printing.' });
-      }
-
-      const printableOrderIds = [];
-      const printableOrders = [];
-      const mergedParts = [];
-
-      for (const order of orders) {
-        const parts = await collectOrderPrintBuffers(order);
-        if (!parts.length) {
-          console.warn(`No printable documents generated for order ${order.id}`);
-          continue;
-        }
-        printableOrderIds.push(order.id);
-        printableOrders.push(order);
-        mergedParts.push(...parts);
-      }
-
-      if (!mergedParts.length) {
-        return res
-          .status(404)
-          .json({ error: 'No printable documents available for the requested orders.' });
-      }
-
-      const mergedPdf = await mergePdfBuffers(mergedParts);
-      const mergedBuffer = normaliseBuffer(mergedPdf);
-
-      let kitSentOrderIds = [];
-      try {
-        kitSentOrderIds = await markOrdersKitSent(printableOrders);
-      } catch (updateError) {
-        console.error('Failed to update kit sent status after bundle:', updateError);
-      }
-
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', 'inline; filename="print-queue-bundle.pdf"');
-      res.setHeader('X-Printed-Order-Ids', JSON.stringify(printableOrderIds));
-      res.setHeader('X-Kit-Sent-Order-Ids', JSON.stringify(kitSentOrderIds));
-      res.send(mergedBuffer);
+      await buildPrintBundleResponse({
+        orderIds,
+        res,
+        origin: req.headers.origin,
+        allowEmptySelection: true,
+      });
     } catch (error) {
       console.error('Failed to generate print queue bundle:', error);
       res.status(500).json({ error: 'Failed to build print queue bundle' });
+    }
+  });
+
+  router.get('/merge-print/:orderIds', async (req, res) => {
+    try {
+      const rawIds = String(req.params.orderIds || '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+
+      await buildPrintBundleResponse({
+        orderIds: rawIds,
+        res,
+        origin: req.headers.origin,
+        allowEmptySelection: false,
+      });
+    } catch (error) {
+      console.error('Failed to generate merge print bundle:', error);
+      res.status(500).json({ error: 'Failed to merge print documents' });
     }
   });
 
