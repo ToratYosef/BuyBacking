@@ -80,6 +80,8 @@ const STATUS_CHART_CONFIG = [
 { key: 'return-label-generated', label: 'Return Label', color: '#64748b' },
 ];
 
+const CONVERSION_STATUSES = new Set(['completed', 're-offered-accepted']);
+
 const STATUS_DROPDOWN_OPTIONS = [
   'order_pending',
   'shipping_kit_requested',
@@ -120,7 +122,7 @@ const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
-function escapeHtml(value) {
+const escapeHtml = (value) => {
   if (value === null || value === undefined) {
     return "";
   }
@@ -131,10 +133,21 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+};
+
+if (typeof window !== "undefined" && !window.escapeHtml) {
+  window.escapeHtml = escapeHtml;
 }
 
 import { firebaseApp } from "/assets/js/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signOut,
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 import { createOrderInfoLabelPdf } from "/assets/js/pdf/order-labels.js";
@@ -194,6 +207,113 @@ const paginationPages = document.getElementById('pagination-pages');
 const paginationInfo = document.getElementById('pagination-info');
 const searchInput = document.getElementById('search-orders');
 const mobileSearchInput = document.getElementById('mobile-search-orders');
+const adminAppShell = document.getElementById('admin-app');
+const adminLoginScreen = document.getElementById('admin-login-screen');
+const adminLoginForm = document.getElementById('admin-login-form');
+const adminLoginEmail = document.getElementById('admin-login-email');
+const adminLoginPassword = document.getElementById('admin-login-password');
+const adminLoginSubmit = document.getElementById('admin-login-submit');
+const adminLoginError = document.getElementById('admin-login-error');
+const adminGoogleButton = document.getElementById('admin-google-signin');
+const adminGoogleButtonText = document.getElementById('admin-google-signin-text');
+const adminUserEmailDisplay = document.getElementById('admin-user-email');
+const adminUserMonogram = document.getElementById('admin-user-monogram');
+
+const defaultSubmitLabel = adminLoginSubmit?.textContent?.trim() || 'Sign in';
+const defaultGoogleLabel = adminGoogleButtonText?.textContent?.trim() || 'Continue with Google';
+
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+const setLoginError = (message = '') => {
+  if (!adminLoginError) return;
+  if (!message) {
+    adminLoginError.classList.add('hidden');
+    adminLoginError.textContent = '';
+    return;
+  }
+  adminLoginError.textContent = message;
+  adminLoginError.classList.remove('hidden');
+};
+
+const setSubmitBusy = (isBusy) => {
+  if (!adminLoginSubmit) return;
+  adminLoginSubmit.disabled = isBusy;
+  adminLoginSubmit.classList.toggle('is-loading', isBusy);
+  adminLoginSubmit.textContent = isBusy ? 'Signing in…' : defaultSubmitLabel;
+};
+
+const setGoogleBusy = (isBusy) => {
+  if (!adminGoogleButton) return;
+  adminGoogleButton.disabled = isBusy;
+  adminGoogleButton.classList.toggle('is-loading', isBusy);
+  if (adminGoogleButtonText) {
+    adminGoogleButtonText.textContent = isBusy ? 'Connecting…' : defaultGoogleLabel;
+  }
+};
+
+const computeMonogram = (input) => {
+  if (!input) return 'SC';
+  const cleaned = String(input)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((segment) => segment[0]?.toUpperCase())
+    .join('');
+  return cleaned.slice(0, 2) || 'SC';
+};
+
+const updateUserBadge = (user) => {
+  if (!user) return;
+  if (adminUserEmailDisplay) {
+    adminUserEmailDisplay.textContent = user.email || user.displayName || 'Authenticated user';
+  }
+  if (adminUserMonogram) {
+    const source = user.displayName || user.email || 'SC';
+    adminUserMonogram.textContent = computeMonogram(source);
+  }
+};
+
+const showLoginView = () => {
+  setSubmitBusy(false);
+  setGoogleBusy(false);
+  setLoginError('');
+  adminAppShell?.classList.add('hidden');
+  adminLoginScreen?.classList.remove('hidden');
+  adminLoginScreen?.setAttribute('aria-hidden', 'false');
+};
+
+const showDashboardView = (user) => {
+  setSubmitBusy(false);
+  setGoogleBusy(false);
+  setLoginError('');
+  adminLoginScreen?.classList.add('hidden');
+  adminLoginScreen?.setAttribute('aria-hidden', 'true');
+  adminAppShell?.classList.remove('hidden');
+  if (adminLoginForm) {
+    adminLoginForm.reset();
+  }
+  updateUserBadge(user);
+};
+
+const describeAuthError = (error) => {
+  if (!error) return 'Unable to complete the request. Please try again.';
+  const { code } = error;
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+      return 'We couldn’t sign you in with those credentials. Check your email and password and try again.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a moment before trying again or continue with Google.';
+    case 'auth/popup-closed-by-user':
+      return 'Google sign-in was closed before completion. Try again when you’re ready.';
+    case 'auth/network-request-failed':
+      return 'A network error interrupted the request. Check your connection and try again.';
+    default:
+      return 'Something went wrong while signing in. Please try again.';
+  }
+};
 const statusFilterButtons = document.querySelectorAll('#status-filter-bar .filter-chip');
 const liveOrdersCount = document.getElementById('live-orders-count');
 const averagePayoutAmount = document.getElementById('average-payout-amount');
@@ -240,6 +360,8 @@ const statusCountAll = document.getElementById('status-count-all');
 // Analytics elements
 const ordersTrendCanvas = document.getElementById('orders-trend-chart');
 const ordersTrendDelta = document.getElementById('orders-trend-delta');
+const conversionsComparisonCanvas = document.getElementById('orders-conversion-chart');
+const ordersByStateCanvas = document.getElementById('orders-by-state-chart');
 const ordersStatusCanvas = document.getElementById('orders-status-chart');
 const statusBreakdownList = document.getElementById('status-breakdown-list');
 const statusBreakdownItems = statusBreakdownList ? Array.from(statusBreakdownList.querySelectorAll('.status-breakdown-item')) : [];
@@ -417,6 +539,8 @@ let feedPricingDataPromise = null;
 
 let ordersTrendChart = null;
 let ordersStatusChart = null;
+let conversionsComparisonChart = null;
+let ordersByStateChart = null;
 
 const analyticsSection = document.getElementById('site-analytics');
 const analyticsWindowSelect = document.getElementById('analytics-window-select');
@@ -3613,6 +3737,8 @@ return;
 }
 
 updateTrendChart(orders);
+updateConversionsChart(orders);
+updateOrdersByStateChart(orders);
 updateStatusChart(statusCounts);
 }
 
@@ -3703,6 +3829,175 @@ return createdAt && createdAt >= startTimestamp && createdAt < endTimestamp
 
 labels.push(dayStart.toLocaleDateString('en-US', { month: "short", day: "numeric" }));
 dataPoints.push(count);
+}
+
+function updateConversionsChart(orders) {
+  if (!conversionsComparisonCanvas || typeof Chart === "undefined") {
+    return;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const labels = [];
+  const orderSeries = [];
+  const conversionSeries = [];
+
+  for (let offset = TREND_LOOKBACK_DAYS - 1; offset >= 0; offset--) {
+    const dayStart = new Date(today);
+    dayStart.setDate(today.getDate() - offset);
+    const startTimestamp = dayStart.getTime();
+    const endTimestamp = startTimestamp + 24 * 60 * 60 * 1000;
+
+    let ordersCount = 0;
+    let conversionsCount = 0;
+
+    orders.forEach((order) => {
+      const createdAt = extractTimestampMillis(order.createdAt);
+      if (!createdAt || createdAt < startTimestamp || createdAt >= endTimestamp) {
+        return;
+      }
+      ordersCount += 1;
+      const status = (order.status || "").toString().toLowerCase();
+      if (CONVERSION_STATUSES.has(status)) {
+        conversionsCount += 1;
+      }
+    });
+
+    labels.push(dayStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    orderSeries.push(ordersCount);
+    conversionSeries.push(conversionsCount);
+  }
+
+  const datasets = [
+    {
+      label: 'Orders',
+      data: orderSeries,
+      backgroundColor: 'rgba(37, 99, 235, 0.65)',
+      borderRadius: 6,
+      maxBarThickness: 24,
+    },
+    {
+      label: 'Conversions',
+      data: conversionSeries,
+      backgroundColor: 'rgba(16, 185, 129, 0.7)',
+      borderRadius: 6,
+      maxBarThickness: 24,
+    },
+  ];
+
+  if (!conversionsComparisonChart) {
+    conversionsComparisonChart = new Chart(conversionsComparisonCanvas, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#0f172a', padding: 16 } },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const value = context.parsed.y;
+                const label = context.dataset.label || '';
+                return `${label}: ${value}`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            stacked: false,
+            ticks: { color: '#475569', maxRotation: 0, minRotation: 0 },
+            grid: { color: 'rgba(148, 163, 184, 0.2)' },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { color: '#475569', precision: 0 },
+            grid: { color: 'rgba(148, 163, 184, 0.2)' },
+          },
+        },
+      },
+    });
+  } else {
+    conversionsComparisonChart.data.labels = labels;
+    conversionsComparisonChart.data.datasets[0].data = orderSeries;
+    conversionsComparisonChart.data.datasets[1].data = conversionSeries;
+    conversionsComparisonChart.update();
+  }
+}
+
+function updateOrdersByStateChart(orders) {
+  if (!ordersByStateCanvas || typeof Chart === "undefined") {
+    return;
+  }
+
+  const stateCounts = new Map();
+  orders.forEach((order = {}) => {
+    const info = order.shippingInfo || {};
+    const rawState = (info.state || info.stateAbbr || info.region || '').toString().trim();
+    if (!rawState) {
+      return;
+    }
+    const normalized = rawState.length === 2 ? rawState.toUpperCase() : rawState.replace(/\s+/g, ' ').trim();
+    stateCounts.set(normalized, (stateCounts.get(normalized) || 0) + 1);
+  });
+
+  const sorted = Array.from(stateCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const labels = sorted.map(([state]) => state);
+  const data = sorted.map(([, count]) => count);
+
+  const chartLabels = labels.length ? labels : ['No data'];
+  const chartData = labels.length ? data : [0];
+
+  const dataset = {
+    label: 'Orders',
+    data: chartData,
+    backgroundColor: 'rgba(37, 99, 235, 0.7)',
+    borderRadius: 6,
+    maxBarThickness: 24,
+  };
+
+  if (!ordersByStateChart) {
+    ordersByStateChart = new Chart(ordersByStateCanvas, {
+      type: 'bar',
+      data: {
+        labels: chartLabels,
+        datasets: [dataset],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const value = context.parsed.x;
+                return `${value} orders`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            ticks: { color: '#475569', precision: 0 },
+            grid: { color: 'rgba(148, 163, 184, 0.2)' },
+          },
+          y: {
+            ticks: { color: '#1e293b' },
+            grid: { display: false },
+          },
+        },
+      },
+    });
+  } else {
+    ordersByStateChart.data.labels = chartLabels;
+    ordersByStateChart.data.datasets[0].data = chartData;
+    ordersByStateChart.update();
+  }
 }
 
 const midpoint = Math.floor(TREND_LOOKBACK_DAYS / 2);
@@ -6019,18 +6314,56 @@ const authLoadingScreen = document.getElementById('auth-loading-screen');
 // Logout functionality - added AFTER auth is initialized
 const logoutBtn = document.getElementById('logout-btn');
 if (logoutBtn) {
-logoutBtn.addEventListener('click', async () => {
-try {
-await signOut(auth);
-console.log('User signed out successfully');
-// Redirect to the login page (assuming index.html is the login page)
-window.location.href = '/index.html';
-} catch (error) {
-console.error('Error signing out:', error);
-// Using console.error instead of alert()
-console.error('Failed to logout. Please try again.');
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await signOut(auth);
+      console.log('User signed out successfully');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      setLoginError('We could not sign you out. Refresh the page and try again.');
+    }
+  });
 }
-});
+
+if (adminLoginForm) {
+  adminLoginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!auth) return;
+    const email = adminLoginEmail?.value?.trim();
+    const password = adminLoginPassword?.value || '';
+    if (!email || !password) {
+      setLoginError('Please provide both your email and password to continue.');
+      return;
+    }
+    setLoginError('');
+    setSubmitBusy(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      console.error('Email/password sign-in error:', error);
+      setLoginError(describeAuthError(error));
+    } finally {
+      setSubmitBusy(false);
+    }
+  });
+}
+
+if (adminGoogleButton) {
+  adminGoogleButton.addEventListener('click', async () => {
+    if (!auth) return;
+    setLoginError('');
+    setGoogleBusy(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      if (error?.code !== 'auth/popup-closed-by-user') {
+        console.error('Google sign-in error:', error);
+      }
+      setLoginError(describeAuthError(error));
+    } finally {
+      setGoogleBusy(false);
+    }
+  });
 }
 
 // Notification bell dropdown functionality - added AFTER auth is initialized
@@ -6052,27 +6385,24 @@ notificationDropdown.classList.remove('show');
 }
 
 onAuthStateChanged(auth, (user) => {
-if (!user || user.isAnonymous) {
-console.log('Auth state changed: No authenticated user or anonymous user detected, redirecting...');
-// Redirect to the login page (assuming index.html is the login page)
-window.location.href = '/index.html';
-return;
-}
+  if (!user || user.isAnonymous) {
+    console.log('Auth state changed: No authenticated user. Presenting login screen.');
+    currentUserId = 'anonymous_user';
+    authLoadingScreen?.classList.add('hidden');
+    showLoginView();
+    return;
+  }
 
-console.log('Auth state changed: User logged in, UID:', user.uid);
-authLoadingScreen?.classList.add('hidden');
+  console.log('Auth state changed: User logged in, UID:', user.uid);
+  currentUserId = user.uid;
+  authLoadingScreen?.classList.add('hidden');
+  showDashboardView(user);
 
-currentUserId = user.uid;
-/* REMOVED SIDEBAR USER ID DISPLAY, NOW JUST LOGGED IN */
-// displayUserId.textContent = user.email || user.uid;
-
-fetchAndRenderOrders();
-/* REMOVED NOTIFICATION LIST UPDATES - ONLY BADGE REMAINS FOR PERFORMANCE */
-/* updateNotifications(); */
-updateActiveChatsCount(); // <-- Moved here for safety
-if (IS_ANALYTICS_PAGE) {
-initializeAnalyticsDashboard();
-}
+  fetchAndRenderOrders();
+  updateActiveChatsCount(); // <-- Moved here for safety
+  if (IS_ANALYTICS_PAGE) {
+    initializeAnalyticsDashboard();
+  }
 });
 
 } catch (error) {

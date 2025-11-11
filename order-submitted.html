@@ -71,7 +71,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 mb-4">Thank You for Your Order, <span id="heroName">Friend</span>! 🎉</h1>
 
             <p class="text-lg text-slate-600 mb-6 max-w-xl mx-auto">
-                We've locked in your quote of <span id="heroPrice" class="font-semibold text-slate-900">$0.00</span> for your <span id="heroDevice" class="font-semibold text-slate-900">device</span>. Look out for confirmation emails from us shortly.
+                We've locked in your final payout of <span id="heroPrice" class="font-semibold text-slate-900">$0.00</span> for your <span id="heroDevice" class="font-semibold text-slate-900">device</span>. Look out for confirmation emails from us shortly.
             </p>
 
             <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left mb-6">
@@ -90,7 +90,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <dd id="summaryDevice" class="mt-1 text-slate-900">Device details</dd>
                     </div>
                     <div>
-                        <dt class="font-semibold text-slate-600">Estimated Payout</dt>
+                        <dt class="font-semibold text-slate-600">Final Payout</dt>
                         <dd id="summaryPrice" class="mt-1 text-slate-900">$0.00</dd>
                     </div>
                     <div>
@@ -172,6 +172,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 return '';
             };
 
+            const coalesceNumber = (...keys) => {
+                for (const key of keys) {
+                    if (!key) continue;
+                    const value = coalesceValue(key);
+                    if (value === '') continue;
+                    const numeric = Number(value);
+                    if (Number.isFinite(numeric)) {
+                        return numeric;
+                    }
+                }
+                return null;
+            };
+
             const formatDisplayText = (value) => {
                 if (!value) return '';
                 return value
@@ -191,13 +204,40 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const summaryPriceEl = document.getElementById('summaryPrice');
             const summaryPaymentMethodEl = document.getElementById('summaryPaymentMethod');
 
+            const SHIPPING_KIT_FEE = 10;
+            const storedShippingPreference = sessionSummary?.shippingPreference ? String(sessionSummary.shippingPreference) : '';
+
             const name = coalesceValue('name').trim();
             const orderId = coalesceValue('orderId').trim();
-            const rawPrice = coalesceValue('price');
-            const priceNumber = Number(rawPrice);
-            const formattedPrice = Number.isFinite(priceNumber)
-                ? priceNumber.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                : '$0.00';
+
+            const shippingParam = urlParams.get('shipping');
+            const shippingPreferenceSource = coalesceValue('shippingPreference');
+            const normalizedShippingPreference = (shippingParam || shippingPreferenceSource || storedShippingPreference || 'email_label').toLowerCase();
+
+            const shippingFeeOverride = coalesceNumber('shippingKitFee', 'shipping_fee');
+            const originalQuoteNumber = coalesceNumber('originalQuote', 'original_quote', 'originalQuoteValue', 'quote');
+            const rawFinalCandidate = coalesceNumber('finalPayout', 'final_payout', 'totalPayout', 'total_payout', 'price');
+
+            const appliedShippingFee = Number.isFinite(shippingFeeOverride) ? shippingFeeOverride : SHIPPING_KIT_FEE;
+
+            let finalPayoutNumber = Number.isFinite(rawFinalCandidate) ? rawFinalCandidate : null;
+
+            if (normalizedShippingPreference === 'ship_kit' && Number.isFinite(originalQuoteNumber)) {
+                const expectedFinal = Math.max(originalQuoteNumber - appliedShippingFee, 0);
+                if (!Number.isFinite(finalPayoutNumber) || Math.abs(finalPayoutNumber - expectedFinal) > 0.01) {
+                    finalPayoutNumber = expectedFinal;
+                }
+            }
+
+            if (!Number.isFinite(finalPayoutNumber) && Number.isFinite(originalQuoteNumber)) {
+                finalPayoutNumber = Math.max(originalQuoteNumber, 0);
+            }
+
+            if (!Number.isFinite(finalPayoutNumber)) {
+                finalPayoutNumber = 0;
+            }
+
+            const formattedPrice = finalPayoutNumber.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
             const deviceParts = [];
             const deviceName = coalesceValue('device').trim();
@@ -220,8 +260,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             summaryPriceEl.textContent = formattedPrice;
             summaryPaymentMethodEl.textContent = paymentSummary;
 
-            const shippingPreference = urlParams.get('shipping') || 'email_label';
-            if (shippingPreference === 'ship_kit') {
+            if (normalizedShippingPreference === 'ship_kit') {
                 shippingInstruction.innerHTML = `
                     <strong>Shipping Kit Instructions:</strong>
                     <span class="block mt-2">
@@ -231,7 +270,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
 
             const transactionId = orderId;
-            const basketTotal = Number.isFinite(priceNumber) ? priceNumber : null;
+            const basketTotal = Number.isFinite(finalPayoutNumber) ? finalPayoutNumber : null;
 
             // Tracking pixel for affiliate conversion
             if (transactionId && transactionId !== 'unknown' && basketTotal && basketTotal > 0) {

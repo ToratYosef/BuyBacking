@@ -2687,7 +2687,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         }
     </style>
 </head>
-<body data-admin-page="dashboard">
+<body data-admin-page="orders">
     <div id="auth-loading-screen" class="loading-screen">
         <div style="text-align: center;">
             <div class="loading-spinner" style="margin: 0 auto;"></div>
@@ -2735,8 +2735,8 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                 <div class="admin-header__left">
                     <span class="admin-logo">SecondHandCell Admin</span>
                     <nav class="admin-nav" aria-label="Admin navigation">
-                        <a class="admin-nav__pill admin-nav__pill--active" href="/admin/index.html">Dashboard</a>
-                        <a class="admin-nav__pill" href="/admin/orders/index.html">Orders</a>
+                        <a class="admin-nav__pill" href="/admin/index.html">Dashboard</a>
+                        <a class="admin-nav__pill admin-nav__pill--active" href="/admin/orders/index.html">Orders</a>
                         <a class="admin-nav__pill" href="/admin/analytics/index.html">Analytics</a>
                         <a class="admin-nav__pill" href="/admin/print-queue/index.html">Bulk Print</a>
                         <a class="admin-nav__pill" href="/admin/users/index.html">Users</a>
@@ -2763,13 +2763,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <section class="admin-hero">
                 <div class="admin-hero__heading">
                     <div class="admin-hero__title-block">
-                        <span class="admin-hero__badge">Insight Hub</span>
-                        <h1 class="admin-hero__title">SecondHandCell Admin Dashboard</h1>
-                        <p class="admin-hero__subtitle">Monitor orders, payouts, and performance with the streamlined SecondHandCell control center inspired by the BH Auto Protect aesthetic.</p>
+                        <span class="admin-hero__badge">Order Control</span>
+                        <h1 class="admin-hero__title">SecondHandCell Orders Command Center</h1>
+                        <p class="admin-hero__subtitle">Work every shipment, status update, and payout from a streamlined queue tailored for SecondHandCell operations.</p>
                     </div>
                     <div class="admin-hero__actions">
-                        <a class="hero-button hero-button--primary" href="/admin/orders/index.html">Manage orders</a>
-                        <a class="hero-button hero-button--ghost" href="/">Return to site</a>
+                        <a class="hero-button hero-button--primary" href="#status-filter-bar">Jump to queue</a>
+                        <a class="hero-button hero-button--ghost" href="/admin/index.html">View analytics</a>
                     </div>
                 </div>
 
@@ -2796,6 +2796,125 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
                     </div>
                 </div>
             </section>
+
+            <div class="admin-toolbar">
+                <div class="admin-toolbar__search">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <label class="sr-only" for="search-orders">Search orders</label>
+                    <input type="text" id="search-orders" placeholder="Search orders, customers, tracking...">
+                </div>
+                <div class="admin-toolbar__meta">
+                    <div class="toolbar-time">
+                        <span>Current Time</span>
+                        <strong class="time-display" id="current-time-date"></strong>
+                    </div>
+                    <div class="notification-bell" id="notification-bell-container">
+                        <i class="fas fa-bell" aria-hidden="true"></i>
+                        <span class="badge" id="notification-badge" style="display: none;">0</span>
+                        <div id="notification-dropdown" class="notification-dropdown">
+                            <div class="notification-dropdown-header">
+                                <h4>Recent Notifications</h4>
+                            </div>
+                            <div id="notification-list" style="max-height: 360px; overflow-y: auto;">
+                                <div class="notification-item" style="text-align: center; color: #94a3b8;">
+                                    <p>No new notifications</p>
+                                </div>
+                            </div>
+                            <div class="notification-dropdown-footer">
+                                <a href="#" onclick="document.querySelectorAll('.status-link')[0].click(); document.getElementById('notification-dropdown').classList.remove('show'); return false;">View All Orders</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        <div class="mobile-quick-actions">
+            <div class="mobile-search">
+                <i class="fas fa-search"></i>
+                <input type="text" id="mobile-search-orders" placeholder="Search orders, customers, tracking...">
+            </div>
+            <div class="mobile-stat-row">
+                <div class="mobile-stat">
+                    <span>Live Orders</span>
+                    <strong id="mobile-live-orders-count">0</strong>
+                </div>
+                <div class="mobile-stat">
+                    <span>Avg. Payout</span>
+                    <strong id="mobile-average-payout-amount">$0.00</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-bar" id="status-filter-bar">
+            <button class="filter-chip active" data-status-filter="all" style="--dot-color: #38bdf8; --dot-shadow: rgba(56, 189, 248, 0.22)">
+                <span class="dot"></span>
+                All orders
+            </button>
+            <button class="filter-chip" data-status-filter="order_pending" style="--dot-color: #22c55e; --dot-shadow: rgba(34, 197, 94, 0.22)">
+                <span class="dot"></span>
+                New quotes
+            </button>
+            <button class="filter-chip" data-status-filter="kit_needs_printing" style="--dot-color: #a855f7; --dot-shadow: rgba(168, 85, 247, 0.22)">
+                <span class="dot"></span>
+                Needs printing
+            </button>
+            <button class="filter-chip" data-status-filter="kit_sent" style="--dot-color: #f97316; --dot-shadow: rgba(249, 115, 22, 0.22)">
+                <span class="dot"></span>
+                Kits in transit
+            </button>
+            <button class="filter-chip" data-status-filter="kit_delivered" style="--dot-color: #10b981; --dot-shadow: rgba(16, 185, 129, 0.22)">
+                <span class="dot"></span>
+                Kits delivered
+            </button>
+            <button class="filter-chip" data-status-filter="received" style="--dot-color: #0ea5e9; --dot-shadow: rgba(14, 165, 233, 0.22)">
+                <span class="dot"></span>
+                Received & processing
+            </button>
+            <button class="filter-chip" data-status-filter="completed" style="--dot-color: #6366f1; --dot-shadow: rgba(99, 102, 241, 0.22)">
+                <span class="dot"></span>
+                Paid out
+            </button>
+            <button class="filter-chip" data-status-filter="re-offered-pending" style="--dot-color: #facc15; --dot-shadow: rgba(250, 204, 21, 0.22)">
+                <span class="dot"></span>
+                Reoffer pending
+            </button>
+            <button class="filter-chip" data-status-filter="return-label-generated" style="--dot-color: #ef4444; --dot-shadow: rgba(239, 68, 68, 0.22)">
+                <span class="dot"></span>
+                Return label sent
+            </button>
+        </div>
+
+        <div class="insight-strip">
+            <div class="insight-pill">
+                <span class="label">Orders Today</span>
+                <span class="value" id="orders-today-count">0</span>
+                <span class="subtext">New submissions</span>
+            </div>
+            <div class="insight-pill">
+                <span class="label">Total Completed Payout</span>
+                <span class="value" id="total-payout-amount">$0.00</span>
+                <span class="subtext">Across closed orders</span>
+            </div>
+            <div class="insight-pill">
+                <span class="label">Completion Rate</span>
+                <span class="value" id="conversion-rate">0.0%</span>
+                <span class="subtext">Quotes to payouts</span>
+            </div>
+            <div class="insight-pill">
+                <span class="label">Devices Received</span>
+                <span class="value" id="received-devices-count">0</span>
+                <span class="subtext">Awaiting inspection</span>
+            </div>
+            <a class="insight-pill insight-pill-link" href="chat/index.html">
+                <span class="label">Active Chats</span>
+                <span class="value" id="active-chats-count">0</span>
+                <span class="subtext">Support queue</span>
+                <i class="fas fa-arrow-up-right-from-square"></i>
+            </a>
+        </div>
+
+        
+
         <div class="analytics-grid">
             <div class="analytics-card">
                 <div class="analytics-card-header">
@@ -2812,29 +2931,447 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <div class="analytics-card">
                 <div class="analytics-card-header">
                     <div>
-                        <h3>Orders vs. Conversions</h3>
-                        <p>Daily comparison across the last 14 days</p>
+                        <h3>Status Breakdown</h3>
+                        <p>Tap a status to filter the table</p>
                     </div>
                 </div>
-                <div class="chart-wrapper chart-wrapper--bar">
-                    <canvas id="orders-conversion-chart" height="100"></canvas>
+                <div class="chart-wrapper chart-wrapper--pie">
+                    <canvas id="orders-status-chart" height="100"></canvas>
                 </div>
+                <ul id="status-breakdown-list" class="status-breakdown-list">
+                    <li class="status-breakdown-item active" data-status="all" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-all"></span>
+                            <span class="status-label">All Orders</span>
+                        </div>
+                        <span class="status-count" id="status-count-all">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="order_pending" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-pending"></span>
+                            <span class="status-label">Order Pending</span>
+                        </div>
+                        <span class="status-count" id="order-pending-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="kit_needs_printing" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-printing"></span>
+                            <span class="status-label">Needs Printing</span>
+                        </div>
+                        <span class="status-count" id="kit-needs-printing-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="kit_sent" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-kit-sent"></span>
+                            <span class="status-label">Kit Sent</span>
+                        </div>
+                        <span class="status-count" id="kit-sent-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="kit_delivered" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-kit-delivered"></span>
+                            <span class="status-label">Kit Delivered</span>
+                        </div>
+                        <span class="status-count" id="kit-delivered-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="delivered_to_us" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-delivered-to-us"></span>
+                            <span class="status-label">Delivered To Us</span>
+                        </div>
+                        <span class="status-count" id="delivered-to-us-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="label_generated" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-label"></span>
+                            <span class="status-label">Label Generated</span>
+                        </div>
+                        <span class="status-count" id="label-generated-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="emailed" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-emailed"></span>
+                            <span class="status-label">Emailed</span>
+                        </div>
+                        <span class="status-count" id="emailed-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="received" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-received"></span>
+                            <span class="status-label">Received</span>
+                        </div>
+                        <span class="status-count" id="received-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="completed" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-completed"></span>
+                            <span class="status-label">Completed</span>
+                        </div>
+                        <span class="status-count" id="completed-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="re-offered-pending" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-reoffer-pending"></span>
+                            <span class="status-label">Reoffer Pending</span>
+                        </div>
+                        <span class="status-count" id="re-offered-pending-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="re-offered-accepted" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-reoffer-accepted"></span>
+                            <span class="status-label">Reoffer Accepted</span>
+                        </div>
+                        <span class="status-count" id="re-offered-accepted-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="re-offered-declined" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-reoffer-declined"></span>
+                            <span class="status-label">Reoffer Declined</span>
+                        </div>
+                        <span class="status-count" id="re-offered-declined-count">0</span>
+                    </li>
+                    <li class="status-breakdown-item" data-status="return-label-generated" role="button" tabindex="0">
+                        <div class="status-info">
+                            <span class="status-dot status-dot-return"></span>
+                            <span class="status-label">Return Label Sent</span>
+                        </div>
+                        <span class="status-count" id="return-label-generated-count">0</span>
+                    </li>
+                </ul>
             </div>
-            <div class="analytics-card">
-                <div class="analytics-card-header">
-                    <div>
-                        <h3>Top States</h3>
-                        <p>Where devices are shipping from</p>
+        </div>
+
+        
+        <div class="orders-table-container">
+            <div class="orders-table-header">Orders List</div>
+                <div class="orders-toolbar">
+                    <div class="view-controls">
+                        <label class="density-toggle" for="compact-density-toggle">
+                            <input type="checkbox" id="compact-density-toggle">
+                            Compact rows
+                        </label>
+                        <span class="orders-toolbar-note" id="last-refresh-at">Updated just now</span>
                     </div>
-                </div>
-                <div class="chart-wrapper chart-wrapper--bar">
-                    <canvas id="orders-by-state-chart" height="100"></canvas>
+                    <div class="orders-toolbar-actions">
+                        <div class="bulk-status-controls">
+                            <select id="bulk-status-select" class="bulk-status-select">
+                                <option value="">Bulk update status…</option>
+                            </select>
+                            <button type="button" id="bulk-status-apply" class="bulk-status-apply" disabled>
+                                <i class="fas fa-check"></i>
+                                Update
+                            </button>
+                            <span class="bulk-status-note">Customer will not be emailed.</span>
+                            <span class="bulk-selection-count" id="bulk-selection-count">No orders selected</span>
+                        </div>
+                    </div>
+            </div>
+            <div class="orders-table-wrapper">
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th class="select-column">
+                                <input type="checkbox" id="select-all-orders" class="order-select-checkbox" aria-label="Select all orders on this page">
+                            </th>
+                            <th>Order ID</th>
+                            <th>Order Date</th>
+                            <th>Last Updated</th>
+                            <th>Customer</th>
+                            <th>Item</th>
+                            <th>Status</th>
+                            <th>Tracking #</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orders-table-body">
+                        <tr><td colspan="9" class="py-8 text-center text-slate-500">Loading orders...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="no-orders-message" class="hidden">No orders found for this status.</div>
+            <div id="pagination-controls" class="pagination-controls hidden">
+                <span class="pagination-info" id="pagination-info">Page 1 of 1</span>
+                <div class="pagination-actions">
+                    <button id="pagination-first" class="pagination-button" disabled>
+                        <i class="fas fa-angles-left"></i>
+                        First
+                    </button>
+                    <button id="pagination-prev" class="pagination-button" disabled>
+                        <i class="fas fa-arrow-left"></i>
+                        Previous
+                    </button>
+                    <div id="pagination-pages" class="pagination-pages"></div>
+                    <button id="pagination-next" class="pagination-button">
+                        Next
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                    <button id="pagination-last" class="pagination-button">
+                        Last
+                        <i class="fas fa-angles-right"></i>
+                    </button>
                 </div>
             </div>
         </div>
+
+        <footer class="admin-footer">
+            <div class="admin-footer-copy">
+                <strong>SecondHandCell Operations</strong>
+                <span>© <span id="admin-footer-year"></span> All rights reserved.</span>
+            </div>
+            <div class="admin-footer-links">
+                <a href="mailto:support@secondhandcell.com">Support</a>
+                <a href="../terms.html" target="_blank" rel="noopener">Terms</a>
+                <a href="../privacy.html" target="_blank" rel="noopener">Privacy</a>
+            </div>
+            <div class="admin-footer-logos">
+                <a id="trustpilot-footer-link" href="#" target="_blank" rel="noopener" aria-label="Read our Trustpilot reviews">
+                    <img id="trustpilot-footer-image" class="trustpilot-stars" src="" alt="Trustpilot rating" loading="lazy">
+                </a>
+            </div>
+        </footer>
         </div>
     </main>
-<!-- Floating Chat Button -->
+
+    <div id="order-details-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="relative">
+            <button id="close-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="space-y-4 text-slate-700">
+                <h3 class="text-2xl font-bold text-slate-900">Order Details <span id="modal-order-id" class="text-sky-600"></span></h3>
+                <div class="grid gap-3 text-sm">
+                    <p><strong>Customer:</strong> <span id="modal-customer-name"></span></p>
+                    <p><strong>Email:</strong> <span id="modal-customer-email"></span></p>
+                    <p><strong>Phone:</strong> <span id="modal-customer-phone"></span></p>
+                    <p><strong>Item:</strong> <span id="modal-item"></span></p>
+                    <p><strong>Storage:</strong> <span id="modal-storage"></span></p>
+                    <p><strong>Carrier:</strong> <span id="modal-carrier"></span></p>
+                    <p><strong>Estimated Payout:</strong> $<span id="modal-price"></span></p>
+                    <p><strong>Payment Method:</strong> <span id="modal-payment-method"></span></p>
+                    <p id="modal-venmo-username-row" class="hidden"><strong>Venmo Username:</strong> <span id="modal-venmo-username"></span></p>
+                    <p id="modal-paypal-email-row" class="hidden"><strong>PayPal Email:</strong> <span id="modal-paypal-email"></span></p>
+                    <p id="modal-zelle-details-row" class="hidden"><strong>Zelle Info:</strong> <span id="modal-zelle-details"></span></p>
+                    <p><strong>Shipping Address:</strong> <span id="modal-shipping-address"></span></p>
+                    <div id="modal-imei-section" class="hidden rounded-xl border border-slate-200 bg-white/60 p-4 shadow-sm">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <h4 class="text-lg font-semibold text-slate-900">IMEI Check</h4>
+                            <div class="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">
+                                <span>Status:</span>
+                                <span id="modal-imei-status" class="ml-2 text-slate-700"></span>
+                            </div>
+                        </div>
+                        <p id="modal-imei-message" class="mt-2 text-sm text-slate-600">Loading device record…</p>
+                        <div id="modal-imei-form" class="mt-3 hidden flex-col gap-3 sm:flex-row sm:items-center">
+                            <label class="text-sm font-medium text-slate-700" for="modal-imei-input">Enter IMEI to test</label>
+                            <input id="modal-imei-input" type="text" maxlength="15" inputmode="numeric" autocomplete="off" placeholder="15-digit IMEI" class="w-full flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tracking-widest text-slate-900 shadow-sm focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200" />
+                            <button id="modal-imei-button" type="button" class="inline-flex items-center justify-center rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-offset-1 disabled:cursor-not-allowed disabled:bg-slate-400">Check IMEI</button>
+                        </div>
+                        <p id="modal-imei-error" class="mt-2 hidden text-sm text-rose-600"></p>
+                        <div id="modal-imei-result" class="mt-4 hidden rounded-lg border border-slate-200 bg-slate-50 p-4">
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-700">Latest provider result</p>
+                                    <p class="text-xs text-slate-500">Device ID: <span id="modal-imei-device-id" class="font-mono text-slate-700"></span></p>
+                                </div>
+                                <p id="modal-imei-checked-at" class="text-xs text-slate-500"></p>
+                            </div>
+                            <dl id="modal-imei-result-list" class="mt-3 grid gap-2 text-sm text-slate-700"></dl>
+                            <details id="modal-imei-raw-details" class="mt-3 hidden">
+                                <summary class="cursor-pointer text-sm font-semibold text-slate-600">View raw provider data</summary>
+                                <pre id="modal-imei-raw" class="mt-2 max-h-64 overflow-auto rounded-lg bg-white p-3 text-xs leading-relaxed text-slate-700"></pre>
+                            </details>
+                        </div>
+                    </div>
+                    <div>
+                        <strong>Conditions:</strong>
+                        <ul class="list-disc list-inside ml-4 mt-1 space-y-1">
+                            <li>Powers On: <span id="modal-condition-power-on"></span></li>
+                            <li>Fully Functional: <span id="modal-condition-functional"></span></li>
+                            <li>No Cracks: <span id="modal-condition-cracks"></span></li>
+                            <li>Cosmetic: <span id="modal-condition-cosmetic"></span></li>
+                        </ul>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <strong>Current Status:</strong>
+                        <div id="modal-status-wrapper" class="relative">
+                            <button id="modal-status" type="button" class="inline-flex items-center gap-2 font-semibold text-xs px-3 py-1 rounded-full border border-transparent shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-400">
+                                <span id="modal-status-text"></span>
+                                <svg id="modal-status-caret" class="h-3 w-3 text-current transition-transform" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
+                            <div id="modal-status-dropdown" class="hidden absolute z-30 mt-2 w-64 rounded-lg border border-slate-200 bg-white shadow-xl py-2"></div>
+                        </div>
+                    </div>
+                    <p><strong>Order Age:</strong> <span id="modal-order-age">Calculating…</span></p>
+                    <p><strong>Last Reminder:</strong> <span id="modal-last-reminder-date">N/A</span></p>
+                    <p id="modal-label-row" class="hidden"><strong><span id="modal-label-description">Shipping Label</span>:</strong> <a id="modal-label-link" href="#" target="_blank" class="text-sky-600 hover:underline">View Label</a> (<span id="modal-tracking-number"></span>)</p>
+                    <p id="modal-secondary-label-row" class="hidden"><strong><span id="modal-secondary-label-description">Secondary Label</span>:</strong> <a id="modal-secondary-label-link" href="#" target="_blank" class="text-sky-600 hover:underline">View Label</a> (<span id="modal-secondary-tracking-number-display"></span>)</p>
+                    <p id="modal-return-label-row" class="hidden"><strong><span id="modal-return-label-description">Return Label</span>:</strong> <a id="modal-return-label-link" href="#" target="_blank" class="text-rose-600 hover:underline">View Return Label</a> (<span id="modal-return-tracking-number-display"></span>)</p>
+                    <div id="modal-label-status-row" class="hidden bg-slate-100 border border-slate-200 rounded-lg p-3 space-y-2">
+                        <div class="flex items-center justify-between gap-3">
+                            <p id="modal-label-status-title" class="text-sm font-semibold text-slate-700">Label Delivery Status</p>
+                            <button id="modal-refresh-label-tracking" type="button" class="hidden inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-slate-400">
+                                <i class="fas fa-rotate"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <p id="modal-label-status" class="text-sm text-slate-600"></p>
+                    </div>
+                    <div id="modal-kit-tracking-row" class="hidden bg-slate-100 border border-slate-200 rounded-lg p-3">
+                        <p id="modal-kit-tracking-title" class="text-sm font-semibold text-slate-700">Kit Delivery Status</p>
+                        <p id="modal-kit-tracking-status" class="mt-1 text-slate-600"></p>
+                        <p id="modal-kit-tracking-updated" class="mt-1 text-xs text-slate-500"></p>
+                    </div>
+                    <div id="modal-loading-message" class="hidden">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Processing request…
+                    </div>
+                </div>
+
+                <div id="reoffer-form-container" class="mt-6 p-4 border border-slate-200 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-slate-900 mb-4">Propose New Offer</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="reoffer-new-price" class="block text-sm font-medium text-slate-700">New Offer Price ($)</label>
+                            <input type="number" id="reoffer-new-price" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="e.g., 150.00">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700">Reasons</label>
+                            <div class="mt-1 space-y-2">
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-damaged" name="reoffer-reasons" type="checkbox" value="damaged" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-damaged" class="text-sm text-slate-700">Damaged (includes cracks)</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-deep-scratches" name="reoffer-reasons" type="checkbox" value="deep-scratches" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-deep-scratches" class="text-sm text-slate-700">Deep Scratches</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-wrong-device" name="reoffer-reasons" type="checkbox" value="wrong-device" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-wrong-device" class="text-sm text-slate-700">Wrong Device Sent</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-non-functional" name="reoffer-reasons" type="checkbox" value="non-functional" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-non-functional" class="text-sm text-slate-700">Non-Functional Component</label>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input id="reason-other" name="reoffer-reasons" type="checkbox" value="other" class="h-4 w-4 text-sky-600 border-slate-300 rounded focus:ring-sky-500">
+                                    <label for="reason-other" class="text-sm text-slate-700">Other</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="reoffer-pricing-helper" class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded-lg hidden">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                <p class="text-sm font-semibold text-slate-700">Feed Pricing Suggestions</p>
+                                <span id="reoffer-pricing-model" class="text-xs uppercase tracking-wide text-slate-500"></span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Click a value below to populate the new offer amount.</p>
+                            <div id="reoffer-pricing-values" class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+                            <p id="reoffer-pricing-message" class="mt-2 text-xs text-rose-500 hidden"></p>
+                        </div>
+                        <div>
+                            <label for="reoffer-comments" class="block text-sm font-medium text-slate-700">Additional Comments</label>
+                            <textarea id="reoffer-comments" rows="3" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="Enter additional details here..."></textarea>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-reoffer-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="submit-reoffer-btn" type="button" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Send Re-offer</button>
+                    </div>
+                    <span id="orders-trend-delta" class="trend-delta trend-neutral">0%</span>
+                </div>
+
+                <div id="manual-fulfillment-form-container" class="mt-6 p-4 border border-slate-200 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-slate-900 mb-4">Manually Fulfill Order (External Label)</h4>
+                    <p id="manual-fulfillment-message" class="text-sm text-slate-600 mb-4">Enter the tracking number(s) generated externally. This will update the order status and notify the customer.</p>
+                    <div class="space-y-4">
+                        <div id="manual-outbound-tracking-group">
+                            <label for="manual-outbound-tracking" class="block text-sm font-medium text-slate-700">Outbound Kit Tracking # (Required for Kits)</label>
+                            <input type="text" id="manual-outbound-tracking" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="e.g., 9400 1000 0000 0000 0000 00">
+                        </div>
+                        <div id="manual-inbound-tracking-group">
+                            <label for="manual-inbound-tracking" class="block text-sm font-medium text-slate-700">Inbound Device Tracking # (Required)</label>
+                            <input type="text" id="manual-inbound-tracking" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="e.g., 9400 1000 0000 0000 0000 01">
+                        </div>
+                        <div>
+                            <label for="manual-label-url" class="block text-sm font-medium text-slate-700">Inbound Label URL (Optional - direct PDF link)</label>
+                            <input type="url" id="manual-label-url" class="mt-1 block w-full rounded-md border-slate-300 shadow-sm focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2" placeholder="https://example.com/label.pdf">
+                        </div>
+                    </div>
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-manual-fulfillment-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="submit-manual-fulfillment-btn" type="button" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Confirm Fulfillment</button>
+                    </div>
+                </div>
+
+                <div id="cancel-order-form-container" class="mt-6 p-4 border border-rose-200 bg-rose-50 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-rose-600 mb-2">Cancel Order &amp; Void Labels</h4>
+                    <p id="cancel-order-message" class="text-sm text-rose-700">Select the shipping labels that should be voided before cancelling this order.</p>
+                    <div id="cancel-order-void-options" class="mt-4 space-y-3"></div>
+                    <p id="cancel-order-error" class="mt-3 text-sm text-rose-600 hidden"></p>
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-cancel-order-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Back</button>
+                        <button id="confirm-cancel-order-btn" type="button" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Void Labels &amp; Cancel Order</button>
+                    </div>
+                </div>
+
+                <div id="void-label-form-container" class="mt-6 p-4 border border-rose-200 bg-rose-50 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-rose-600 mb-2">Void Shipping Labels</h4>
+                    <p class="text-sm text-rose-700">Select the labels you would like to cancel. Carrier approval may vary based on label age and usage.</p>
+                    <div id="void-label-options" class="mt-4 space-y-3"></div>
+                    <p id="void-label-message" class="mt-3 text-sm hidden"></p>
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-void-label-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="submit-void-label-btn" type="button" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Void Selected Labels</button>
+                    </div>
+                </div>
+
+                <div id="clear-data-form-container" class="mt-6 p-4 border border-amber-200 bg-amber-50 rounded-lg hidden">
+                    <h4 class="text-lg font-semibold text-amber-700 mb-2">Clear Saved Shipping Data</h4>
+                    <p class="text-sm text-amber-700">Remove outdated tracking numbers or label records so you can regenerate the correct documents without visiting Firestore.</p>
+                    <p id="clear-data-message" class="mt-3 text-sm hidden"></p>
+                    <div id="clear-data-options" class="mt-4 space-y-3"></div>
+                    <div class="mt-4 flex justify-end gap-3">
+                        <button id="cancel-clear-data-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="submit-clear-data-btn" type="button" class="bg-amber-600 hover:bg-amber-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Clear Selected Data</button>
+                    </div>
+                </div>
+
+                <div id="delete-confirmation-container" class="mt-6 p-4 bg-rose-100 border border-rose-300 rounded-lg hidden">
+                    <p class="text-sm font-semibold text-rose-700 mb-3">⚠️ Are you sure you want to permanently delete this order? This action cannot be undone.</p>
+                    <div class="flex justify-end gap-3">
+                        <button id="cancel-delete-btn" type="button" class="bg-slate-400 hover:bg-slate-500 text-white font-semibold py-2 px-4 rounded-md transition-colors">Cancel</button>
+                        <button id="confirm-delete-btn" type="button" class="bg-rose-600 hover:bg-rose-700 text-white font-semibold py-2 px-4 rounded-md transition-colors">Yes, Delete Permanently</button>
+                    </div>
+                </div>
+
+                <button id="send-reminder-btn" class="hidden mt-6 w-full px-4 py-3 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-envelope"></i>
+                    <span>Send Reminder Email</span>
+                </button>
+                <button id="send-expiring-reminder-btn" class="hidden mt-3 w-full px-4 py-3 bg-rose-500 text-white font-semibold rounded-lg hover:bg-rose-600 transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-hourglass-half"></i>
+                    <span>Send Expiration Reminder</span>
+                </button>
+                <button id="send-kit-reminder-btn" class="hidden mt-3 w-full px-4 py-3 bg-emerald-500 text-white font-semibold rounded-lg hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-truck"></i>
+                    <span>Send Kit Follow-up</span>
+                </button>
+
+                
+
+                <div id="modal-activity-log" class="hidden">
+                    <h4>Recent Activity</h4>
+                    <ul id="modal-activity-log-list"></ul>
+                </div>
+
+                <div id="modal-action-buttons" class="mt-6"></div>
+                <div id="modal-message" class="mt-4 p-3 text-sm rounded-md hidden"></div>
+            </div>
+        </div>
+    </div>
+    <!-- Floating Chat Button -->
     <button class="floating-chat-btn" onclick="window.location.href='chat/index.html'" title="Open Chat Dashboard">
         <i class="fas fa-comments"></i>
         <span class="unread-badge" id="floating-chat-badge" style="display: none;">0</span>
