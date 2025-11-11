@@ -766,8 +766,31 @@ function createOrdersRouter({
   router.post('/submit-order', async (req, res) => {
     try {
       const orderData = req.body;
-      if (!orderData?.shippingInfo || !orderData?.estimatedQuote) {
+      if (!orderData?.shippingInfo || (typeof orderData.estimatedQuote === 'undefined' && typeof orderData.totalPayout === 'undefined')) {
         return res.status(400).json({ error: 'Invalid order data' });
+      }
+
+      const normalizeAmount = (value) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric : null;
+      };
+
+      const normalizedOriginal = normalizeAmount(orderData.originalQuote);
+      const normalizedTotal = normalizeAmount(orderData.totalPayout);
+      const normalizedEstimated = normalizeAmount(orderData.estimatedQuote);
+
+      const payoutToPersist =
+        normalizedTotal ?? normalizedEstimated ?? normalizedOriginal ?? 0;
+      const originalToPersist =
+        normalizedOriginal ?? normalizedEstimated ?? normalizedTotal ?? payoutToPersist;
+
+      orderData.originalQuote = originalToPersist;
+      orderData.totalPayout = payoutToPersist;
+      orderData.estimatedQuote = payoutToPersist;
+
+      if (typeof orderData.shippingKitFee !== 'undefined') {
+        const normalizedFee = normalizeAmount(orderData.shippingKitFee);
+        orderData.shippingKitFee = normalizedFee ?? 0;
       }
 
       const fullStateName = orderData.shippingInfo.state;

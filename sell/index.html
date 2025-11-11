@@ -1859,6 +1859,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             let isUserLoggedIn = false;
             let isGuestCheckout = false;
             let currentUserId = null;
+            const SHIPPING_KIT_FEE = 10;
             let finalQuote = 0;
 
             const SHIPPING_KIT_FEE = 10;
@@ -3237,8 +3238,28 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             loadSavedShippingInfo();
 
+            function getSelectedShippingPreference() {
+                return document.querySelector('input[name="shipping_preference"]:checked')?.value || null;
+            }
+
+            function calculateShippingFee(preference) {
+                return preference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+            }
+
+            function calculateTotalPayout(baseAmount, preference) {
+                const numericBase = Number(baseAmount) || 0;
+                const fee = calculateShippingFee(preference);
+                const payout = numericBase - fee;
+                return payout > 0 ? payout : 0;
+            }
+
+            function formatCurrency(amount) {
+                const numeric = Number(amount) || 0;
+                return `$${numeric.toFixed(2)}`;
+            }
+
             function updateOverview() {
-                const selectedShippingPreference = document.querySelector('input[name="shipping_preference"]:checked')?.value;
+                const selectedShippingPreference = getSelectedShippingPreference();
                 const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
 
                 let displayShippingPreferenceText = 'Not Selected';
@@ -3275,7 +3296,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const state = stateInput?.value || '';
                 const zipCode = zipCodeInput?.value || '';
 
-                overviewQuote.textContent = `$${totalPayout.toFixed(2)}`;
+                const finalPayout = calculateTotalPayout(finalQuote, selectedShippingPreference);
+
+                overviewQuote.textContent = formatCurrency(finalPayout);
                 overviewShippingPreference.textContent = displayShippingPreferenceText;
                 overviewCarrier.textContent = displayCarrierText;
 
@@ -3381,6 +3404,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const shippingFee = rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
                 const totalPayout = Math.max(finalQuote - shippingFee, 0);
 
+                const shippingKitFee = calculateShippingFee(rawShippingPreference);
+                const totalPayout = calculateTotalPayout(finalQuote, rawShippingPreference);
+
                 const orderData = {
                     device: device.name,
                     brand: deviceInfo.brand, // FIXED: Use parsed brand from deviceInfo
@@ -3391,10 +3417,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     condition_functional: document.querySelector('input[name="q2_fully_functional"]:checked')?.value || 'N/A',
                     condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
-                    estimatedQuote: finalQuote,
-                    shippingFee,
+                    estimatedQuote: totalPayout,
+                    originalQuote: finalQuote,
                     totalPayout,
                     shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+                    shippingPreferenceValue: rawShippingPreference,
+                    shippingKitFee,
                     paymentMethod: selectedPayment.value,
                     paymentDetails: {},
                     shippingInfo: {
@@ -3457,7 +3485,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                     // Get order ID from response and estimated price from deviceInfo or orderData
                     const orderId = result.orderId || result.id || Date.now().toString();
-                    const totalPrice = deviceInfo.estimatedPrice || orderData.estimatedQuote || finalQuote || '0';
+                    const totalPrice = deviceInfo.estimatedPrice || orderData.totalPayout || orderData.estimatedQuote || finalQuote || '0';
 
                     try {
                         const summaryPayload = {

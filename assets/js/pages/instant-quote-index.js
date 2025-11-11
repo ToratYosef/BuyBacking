@@ -980,6 +980,7 @@ condition_functional: conditions.screen,
 condition_cosmetic: conditions.cracks, // 3-tier value: flawless, scratched, damaged
 estimatedQuote: finalPayoutForOrder,
 originalQuote: Number(finalQuote) || 0,
+totalPayout: finalPayoutForOrder,
 shippingPreference: shippingPreferenceLabel,
 shippingPreferenceValue: rawShippingPreference,
 shippingKitFee,
