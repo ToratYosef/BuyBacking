@@ -132,6 +132,129 @@ trackButtonClick(`External_Review_Click_${platformName.replace(/\s/g, '_')}`);
 });
 });
 
+const customerReviewsTrack = document.getElementById('customerReviewsTrack');
+if (customerReviewsTrack) {
+const testimonialData = [
+    {
+        name: 'Jennifer Martinez',
+        role: 'iPhone 15 Pro Max Seller',
+        rating: 5,
+        review: 'SecondHandCell handled my iPhone trade-in in days. The shipping kit arrived quickly, inspection was honest, and the payout hit my account the same afternoon.',
+        avatar: 'https://thispersondoesnotexist.com/?id=shc1'
+    },
+    {
+        name: 'Robert Johnson',
+        role: 'Galaxy S23 Ultra Seller',
+        rating: 4.5,
+        review: 'The $10 shipping kit deduction was worth it—everything I needed was in the box. Their portal kept me updated until the payout cleared the next morning.',
+        avatar: 'https://thispersondoesnotexist.com/?id=shc2'
+    },
+    {
+        name: 'Lisa Thompson',
+        role: 'Teacher • Chicago, IL',
+        rating: 5,
+        review: 'As a teacher with zero free time, I loved how transparent the process was. I chose an email label, shipped the same day, and had my Zelle transfer within 24 hours.',
+        avatar: 'https://thispersondoesnotexist.com/?id=shc3'
+    },
+    {
+        name: 'Avery Chen',
+        role: 'Entrepreneur • Austin, TX',
+        rating: 4.5,
+        review: 'I recycle phones from my business upgrades. Every order with SecondHandCell has been smooth, and they always explain any adjustments before finalizing the quote.',
+        avatar: 'https://thispersondoesnotexist.com/?id=shc4'
+    },
+    {
+        name: 'Marisol Rivera',
+        role: 'Nurse • Tampa, FL',
+        rating: 5,
+        review: 'Customer support answered my questions in minutes and the payout matched what I was promised. It felt like working with a friend instead of a company.',
+        avatar: 'https://thispersondoesnotexist.com/?id=shc5'
+    },
+    {
+        name: 'Darius Patel',
+        role: 'Software Engineer • Seattle, WA',
+        rating: 4.8,
+        review: 'I compared half a dozen services and this one actually paid what they quoted. The dashboard makes tracking each step effortless.',
+        avatar: 'https://thispersondoesnotexist.com/?id=shc6'
+    }
+];
+
+const createStarMarkup = (rating) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i += 1) {
+        if (rating >= i) {
+            stars.push('<i class="fa-solid fa-star"></i>');
+        } else if (rating >= i - 0.5) {
+            stars.push('<i class="fa-solid fa-star-half-stroke"></i>');
+        } else {
+            stars.push('<i class="fa-regular fa-star"></i>');
+        }
+    }
+    return stars.join('');
+};
+
+const renderReviewCard = (testimonial) => `
+    <article class="testimonial-card testimonial-card-enter">
+        <div>
+            <div class="testimonial-stars" aria-hidden="true">
+                ${createStarMarkup(testimonial.rating)}
+            </div>
+            <p class="mt-3 text-slate-600 leading-relaxed">“${testimonial.review}”</p>
+        </div>
+        <div class="testimonial-profile">
+            <img src="${testimonial.avatar}" alt="Portrait of ${testimonial.name}" class="testimonial-avatar">
+            <div>
+                <p class="testimonial-name">${testimonial.name}</p>
+                <p class="testimonial-role">${testimonial.role}</p>
+            </div>
+        </div>
+    </article>
+`;
+
+let carouselIndex = 0;
+const testimonialsPerSlide = 3;
+
+const renderTestimonials = () => {
+    const cards = [];
+    for (let offset = 0; offset < testimonialsPerSlide; offset += 1) {
+        const data = testimonialData[(carouselIndex + offset) % testimonialData.length];
+        cards.push(renderReviewCard(data));
+    }
+    customerReviewsTrack.innerHTML = cards.join('');
+};
+
+const advanceCarousel = () => {
+    carouselIndex = (carouselIndex + testimonialsPerSlide) % testimonialData.length;
+    renderTestimonials();
+};
+
+renderTestimonials();
+
+const intervalDelay = 5000;
+let carouselTimer = window.setInterval(advanceCarousel, intervalDelay);
+
+const pauseCarousel = () => {
+    if (carouselTimer) {
+        window.clearInterval(carouselTimer);
+        carouselTimer = null;
+    }
+};
+
+const startCarousel = () => {
+    if (!carouselTimer) {
+        carouselTimer = window.setInterval(advanceCarousel, intervalDelay);
+    }
+};
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        pauseCarousel();
+    } else {
+        startCarousel();
+    }
+});
+}
+
 const footerEmailSignupForm = document.getElementById('footerEmailSignupForm');
 const footerSignupMessage = document.getElementById('footerSignupMessage');
 footerEmailSignupForm.addEventListener('submit', async (e) => {
