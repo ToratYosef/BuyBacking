@@ -525,7 +525,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 <h1 class="text-4xl font-extrabold text-slate-900 mb-4 sm:text-3xl">Sell Your <span id="deviceDisplayName"></span></h1>
                 <p class="text-lg text-slate-600 mb-8 max-w-xl mx-auto lg:mx-0 sm:text-base">
                     Ready to sell your <span id="deviceDisplayNameText"></span>? Get an instant, competitive quote for your device today.
-                    We offer a quick, transparent, and hassle-free process with free shipping and certified inspection.
+                    We offer a quick, transparent, and hassle-free process with flexible shipping options and certified inspection.
                 </p>
                 
                 <div id="loadingIndicator" class="loading-container">
@@ -683,6 +683,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 <label for="ship_kit" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
                                     <i class="fa-solid fa-box text-4xl text-indigo-600 mb-2 sm:text-2xl"></i>
                                     <span class="font-semibold block sm:text-sm">Ship Me a Box (Shipping Kit)</span>
+                                    <p class="text-xs text-slate-500 mt-1">Shipping kit available — a $10 convenience fee is deducted from your payout when you choose this option.</p>
                                     <p class="text-xs text-slate-500 mt-1">Receive a grey bag with a prepaid label and another grey bag inside to send your device to us.</p>
                                 </label>
                             </div>
@@ -3215,8 +3216,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
 
                 const baseQuote = Number(finalQuote) || 0;
-                const shippingFee = selectedShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
-                const totalPayout = Math.max(baseQuote - shippingFee, 0);
+                const shippingKitFee = selectedShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+                const totalPayout = Math.max(baseQuote - shippingKitFee, 0);
 
                 const fullName = fullNameInput?.value || '';
                 const phone = phoneInput?.value || '';
@@ -3244,8 +3245,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     breakdownShippingAmount.classList.remove('text-emerald-600', 'text-rose-600', 'text-slate-500');
 
                     if (selectedShippingPreference === 'ship_kit') {
-                        breakdownShippingLabel.textContent = 'Shipping Kit';
-                        breakdownShippingAmount.textContent = `-$${SHIPPING_KIT_FEE.toFixed(2)}`;
+                        breakdownShippingLabel.textContent = 'Shipping Kit Fee';
+                        breakdownShippingAmount.textContent = 'Applied';
                         breakdownShippingAmount.classList.add('text-rose-600');
                     } else if (selectedShippingPreference === 'email_label') {
                         breakdownShippingLabel.textContent = 'Email Label';
@@ -3330,8 +3331,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 submitOrderBtn.classList.add('btn-disabled');
                 
                 const rawShippingPreference = document.querySelector('input[name="shipping_preference"]:checked').value;
-                const shippingFee = rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
-                const totalPayout = Math.max(finalQuote - shippingFee, 0);
+                const shippingKitFee = rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+                const totalPayout = Math.max(finalQuote - shippingKitFee, 0);
 
                 const orderData = {
                     device: device.name,
@@ -3343,8 +3344,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     condition_functional: document.querySelector('input[name="q2_fully_functional"]:checked')?.value || 'N/A',
                     condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
-                    estimatedQuote: finalQuote,
-                    shippingFee,
+                    estimatedQuote: totalPayout,
+                    originalQuote: finalQuote,
+                    shippingKitFee,
                     totalPayout,
                     shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
                     paymentMethod: selectedPayment.value,
@@ -3409,7 +3411,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                     // Get order ID from response and estimated price from deviceInfo or orderData
                     const orderId = result.orderId || result.id || Date.now().toString();
-                    const totalPrice = deviceInfo.estimatedPrice || orderData.estimatedQuote || finalQuote || '0';
+                    const totalPrice = Number(orderData.totalPayout ?? orderData.estimatedQuote ?? finalQuote ?? deviceInfo.estimatedPrice ?? 0);
 
                     try {
                         const summaryPayload = {

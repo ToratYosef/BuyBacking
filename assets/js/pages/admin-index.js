@@ -120,7 +120,7 @@ const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
 const TRUSTPILOT_STARS_IMAGE_URL = "https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png";
 
-function escapeHtml(value) {
+const escapeHtml = (value) => {
   if (value === null || value === undefined) {
     return "";
   }
@@ -131,6 +131,10 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+};
+
+if (typeof window !== "undefined" && !window.escapeHtml) {
+  window.escapeHtml = escapeHtml;
 }
 
 import { firebaseApp } from "/assets/js/firebase-app.js";
