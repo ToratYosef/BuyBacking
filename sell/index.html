@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SecondHandCell - Sell Your Device</title>
     <link rel="icon" href="/favicon/favicon.ico">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/css/output.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9evSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <!-- Google tag (gtag.js) -->
@@ -773,6 +773,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 <p><span class="font-semibold">Shipping Address:</span> <span id="overviewAddress">Not Entered</span></p>
                             </div>
 
+                            <div id="orderBreakdown" class="mt-6 p-4 bg-white rounded-lg shadow-sm sm:p-3">
+                                <h4 class="text-lg font-semibold text-slate-800 mb-3 sm:text-base">Order Breakdown</h4>
+                                <div class="space-y-2 text-base sm:text-sm">
+                                    <div class="flex items-center justify-between">
+                                        <span>Quote</span>
+                                        <span id="breakdownQuoteAmount" class="font-medium text-slate-800">$0.00</span>
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span id="breakdownShippingLabel">Shipping Option</span>
+                                        <span id="breakdownShippingAmount" class="font-medium text-slate-500">Select an option</span>
+                                    </div>
+                                    <hr class="border-slate-200">
+                                    <div class="flex items-center justify-between font-semibold text-indigo-700">
+                                        <span>Total Payout</span>
+                                        <span id="breakdownFinalPayout">$0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="mt-6 p-4 rounded-lg bg-white shadow-sm sm:p-3">
                                 <label class="custom-checkbox flex items-start cursor-pointer">
                                     <input type="checkbox" id="termsAccepted">
@@ -1349,6 +1368,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         let device = null;
         let deviceInfo = null; // Declare globally to hold parsed info
 
+        window.updateOverview = window.updateOverview || function() {};
+
         /**
          * Formats the phone number as the user types: (###) ###-####.
          * It restricts input to digits and automatically adds parentheses and dashes.
@@ -1388,7 +1409,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             input.value = formatted;
             
             // Call updateOverview to update the display in real-time
-            updateOverview();
+            if (typeof window.updateOverview === 'function') {
+                window.updateOverview();
+            }
         }
 
         document.addEventListener('DOMContentLoaded', async function() {
@@ -1836,6 +1859,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             let isUserLoggedIn = false;
             let isGuestCheckout = false;
             let currentUserId = null;
+            const SHIPPING_KIT_FEE = 10;
             let finalQuote = 0;
             
             // Basic modal controls for the new modals
@@ -3181,10 +3205,30 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             loadSavedShippingInfo();
 
+            function getSelectedShippingPreference() {
+                return document.querySelector('input[name="shipping_preference"]:checked')?.value || null;
+            }
+
+            function calculateShippingFee(preference) {
+                return preference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+            }
+
+            function calculateTotalPayout(baseAmount, preference) {
+                const numericBase = Number(baseAmount) || 0;
+                const fee = calculateShippingFee(preference);
+                const payout = numericBase - fee;
+                return payout > 0 ? payout : 0;
+            }
+
+            function formatCurrency(amount) {
+                const numeric = Number(amount) || 0;
+                return `$${numeric.toFixed(2)}`;
+            }
+
             function updateOverview() {
-                const selectedShippingPreference = document.querySelector('input[name="shipping_preference"]:checked')?.value;
+                const selectedShippingPreference = getSelectedShippingPreference();
                 const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
-                
+
                 let displayShippingPreferenceText = 'Not Selected';
                 if (selectedShippingPreference === 'ship_kit') {
                     displayShippingPreferenceText = 'Shipping Kit Requested';
@@ -3215,7 +3259,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const state = stateInput?.value || '';
                 const zipCode = zipCodeInput?.value || '';
 
-                overviewQuote.textContent = `$${finalQuote.toFixed(2)}`;
+                const finalPayout = calculateTotalPayout(finalQuote, selectedShippingPreference);
+
+                overviewQuote.textContent = formatCurrency(finalPayout);
                 overviewShippingPreference.textContent = displayShippingPreferenceText;
                 overviewCarrier.textContent = displayCarrierText;
                 
@@ -3243,6 +3289,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     .join(', ');
                 overviewAddress.textContent = fullAddress || 'Not Entered';
             }
+
+            window.updateOverview = updateOverview;
 
             submitOrderBtn.addEventListener('click', async () => {
                 clearPaymentMessage();
@@ -3287,6 +3335,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 
                 const rawShippingPreference = document.querySelector('input[name="shipping_preference"]:checked').value;
 
+                const shippingKitFee = calculateShippingFee(rawShippingPreference);
+                const totalPayout = calculateTotalPayout(finalQuote, rawShippingPreference);
+
                 const orderData = {
                     device: device.name,
                     brand: deviceInfo.brand, // FIXED: Use parsed brand from deviceInfo
@@ -3297,8 +3348,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     condition_functional: document.querySelector('input[name="q2_fully_functional"]:checked')?.value || 'N/A',
                     condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
-                    estimatedQuote: finalQuote,
+                    estimatedQuote: totalPayout,
+                    originalQuote: finalQuote,
+                    totalPayout,
                     shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+                    shippingPreferenceValue: rawShippingPreference,
+                    shippingKitFee,
                     paymentMethod: selectedPayment.value,
                     paymentDetails: {},
                     shippingInfo: {
@@ -3361,7 +3416,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                     // Get order ID from response and estimated price from deviceInfo or orderData
                     const orderId = result.orderId || result.id || Date.now().toString();
-                    const totalPrice = deviceInfo.estimatedPrice || orderData.estimatedQuote || finalQuote || '0';
+                    const totalPrice = deviceInfo.estimatedPrice || orderData.totalPayout || orderData.estimatedQuote || finalQuote || '0';
 
                     try {
                         const summaryPayload = {
