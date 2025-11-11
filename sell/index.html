@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SecondHandCell - Sell Your Device</title>
     <link rel="icon" href="/favicon/favicon.ico">
-    <link rel="stylesheet" href="/assets/css/output.css">
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9evSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <!-- Google tag (gtag.js) -->
@@ -1268,55 +1268,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         // NEW: Function to extract brand and slug from a single URL parameter
         function getBrandAndSlug(param) {
             if (!param || typeof param !== 'string') return null;
-
-            const raw = param.trim();
-            if (!raw) return null;
-
-            const normalized = raw
-                .toLowerCase()
-                .replace(/[\s_]+/g, '-')
-                .replace(/[^a-z0-9-]/g, '-')
-                .replace(/-+/g, '-')
-                .replace(/^-|-$/g, '');
-
-            if (!normalized) return null;
-
+            const parts = param.split('-');
+            // Define supported brands for Firestore subcollection lookup
             const brands = ['iphone', 'samsung', 'google', 'ipad'];
-            let matchedBrand = null;
-            let slugPart = '';
-
-            for (const brand of brands) {
-                if (normalized === brand) {
-                    // We need at least one additional segment beyond the brand name
-                    continue;
-                }
-
-                if (normalized.startsWith(`${brand}-`)) {
-                    matchedBrand = brand;
-                    slugPart = normalized.slice(brand.length + 1);
-                    break;
-                }
-
-                if (normalized.startsWith(brand)) {
-                    const remainder = normalized.slice(brand.length).replace(/^-+/, '');
-                    if (remainder) {
-                        matchedBrand = brand;
-                        slugPart = remainder;
-                        break;
-                    }
-                }
+            const brand = parts[0];
+            
+            if (brands.includes(brand) && parts.length > 1) {
+                return {
+                    brand: brand,
+                    slug: parts.slice(1).join('-') // Rejoin the rest of the parts as the slug
+                };
             }
-
-            if (!matchedBrand || !slugPart) {
-                return null;
-            }
-
-            return {
-                brand: matchedBrand,
-                slug: slugPart,
-                normalizedParam: `${matchedBrand}-${slugPart}`,
-                rawParam: raw
-            };
+            // If the brand is missing or unrecognized, or if there's no slug part, return null
+            return null;
         }
 
         // Global variable to hold the autocomplete instance
@@ -1404,52 +1368,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         let device = null;
         let deviceInfo = null; // Declare globally to hold parsed info
 
-        window.updateOverview = window.updateOverview || function() {};
-
-        /**
-         * Formats the phone number as the user types: (###) ###-####.
-         * It restricts input to digits and automatically adds parentheses and dashes.
-         * It handles optional leading '1' (country code).
-         * @param {HTMLInputElement} input 
-         */
-        function formatPhoneNumber(input) {
-            // 1. Get current value and strip all non-digits
-            let cleaned = ('' + input.value).replace(/\D/g, '');
-            
-            // 2. Adjust for optional country code '1'
-            if (cleaned.length === 11 && cleaned.startsWith('1')) {
-                // If it's 11 digits and starts with '1', treat it as a US number with country code.
-                cleaned = cleaned.substring(1);
-            }
-            
-            // Limit to a maximum of 10 digits for formatting
-            cleaned = cleaned.substring(0, 10);
-
-            let formatted = '';
-
-            // 3. Format based on the cleaned 10-digit number
-            if (cleaned.length > 0) {
-                // (XXX)
-                formatted += '(' + cleaned.substring(0, 3);
-            }
-            if (cleaned.length >= 4) {
-                // (XXX) XXX
-                formatted += ') ' + cleaned.substring(3, 6);
-            }
-            if (cleaned.length >= 7) {
-                // (XXX) XXX-XXXX
-                formatted += '-' + cleaned.substring(6, 10);
-            }
-
-            // 4. Update the input value and limit length
-            input.value = formatted;
-            
-            // Call updateOverview to update the display in real-time
-            if (typeof window.updateOverview === 'function') {
-                window.updateOverview();
-            }
-        }
-
         document.addEventListener('DOMContentLoaded', async function() {
             // --- UPDATED: Populate the state select on load ---
             populateStateSelect();
@@ -1529,35 +1447,25 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             deviceInfo.quality = qualityParam;
             deviceInfo.estimatedPrice = priceParam;
 
-            async function fetchDevicePricing(brand, slug, normalizedParam) {
+            async function fetchDevicePricing(brand, slug) {
                 try {
-                    const candidateIds = Array.from(new Set([
-                        slug,
-                        normalizedParam,
-                        `${brand}-${slug}`
-                    ].filter(Boolean)));
-
-                    for (const candidate of candidateIds) {
-                        const docRef = doc(db, `devices/${brand}/models`, candidate);
-                        const docSnap = await getDoc(docRef);
-
-                        if (docSnap.exists()) {
-                            if (candidate !== slug) {
-                                console.info(`Loaded device data using fallback id "${candidate}" (requested "${slug}").`);
-                            }
-                            return docSnap.data();
-                        }
+                    // Use the parsed brand and slug for the Firestore path
+                    const docRef = doc(db, `devices/${brand}/models`, slug);
+                    const docSnap = await getDoc(docRef);
+                    
+                    if (docSnap.exists()) {
+                        return docSnap.data();
+                    } else {
+                        console.error(`Device data for slug "${slug}" not found in brand "${brand}".`);
+                        return null;
                     }
-
-                    console.error(`Device data not found for slug "${slug}" in brand "${brand}". Tried: ${candidateIds.join(', ')}`);
-                    return null;
                 } catch (error) {
                     console.error("Error fetching document:", error);
                     return null;
                 }
             }
-
-            device = await fetchDevicePricing(deviceInfo.brand, deviceInfo.slug, deviceInfo.normalizedParam);
+            
+            device = await fetchDevicePricing(deviceInfo.brand, deviceInfo.slug);
             
             if (!device) {
                 loadingIndicator.classList.add('hidden');
@@ -1906,6 +1814,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             let isGuestCheckout = false;
             let currentUserId = null;
             let finalQuote = 0;
+
+            const SHIPPING_KIT_FEE = 10;
+
+            function formatPhoneNumber(input) {
+                if (!input) return;
+
+                let cleaned = ('' + input.value).replace(/\D/g, '');
+
+                if (cleaned.length === 11 && cleaned.startsWith('1')) {
+                    cleaned = cleaned.substring(1);
+                }
+
+                cleaned = cleaned.substring(0, 10);
+
+                let formatted = '';
+                if (cleaned.length > 0) {
+                    formatted += '(' + cleaned.substring(0, 3);
+                }
+                if (cleaned.length >= 4) {
+                    formatted += ') ' + cleaned.substring(3, 6);
+                }
+                if (cleaned.length >= 7) {
+                    formatted += '-' + cleaned.substring(6, 10);
+                }
+
+                input.value = formatted;
+
+                if (typeof updateOverview === 'function') {
+                    updateOverview();
+                }
+            }
             
             // Basic modal controls for the new modals
             const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
@@ -2495,9 +2434,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
                 
                 finalQuote = finalPrice ? parseFloat(finalPrice.toFixed(2)) : 0;
-                
+
                 finalQuoteAmountMainText.textContent = `$${finalQuote.toFixed(2)}`;
                 finalQuoteAmountPopup.textContent = `$${finalQuote.toFixed(2)}`;
+
+                updateOverview();
 
                 showQuotePopup();
             }
@@ -3273,6 +3214,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     }
                 }
 
+                const baseQuote = Number(finalQuote) || 0;
+                const shippingFee = selectedShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+                const totalPayout = Math.max(baseQuote - shippingFee, 0);
+
                 const fullName = fullNameInput?.value || '';
                 const phone = phoneInput?.value || '';
                 const streetAddress = streetAddressInput?.value || '';
@@ -3284,10 +3229,40 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const state = stateInput?.value || '';
                 const zipCode = zipCodeInput?.value || '';
 
-                overviewQuote.textContent = `$${finalQuote.toFixed(2)}`;
+                overviewQuote.textContent = `$${totalPayout.toFixed(2)}`;
                 overviewShippingPreference.textContent = displayShippingPreferenceText;
                 overviewCarrier.textContent = displayCarrierText;
-                
+
+                const breakdownQuoteAmount = document.getElementById('breakdownQuoteAmount');
+                if (breakdownQuoteAmount) {
+                    breakdownQuoteAmount.textContent = `$${baseQuote.toFixed(2)}`;
+                }
+
+                const breakdownShippingLabel = document.getElementById('breakdownShippingLabel');
+                const breakdownShippingAmount = document.getElementById('breakdownShippingAmount');
+                if (breakdownShippingLabel && breakdownShippingAmount) {
+                    breakdownShippingAmount.classList.remove('text-emerald-600', 'text-rose-600', 'text-slate-500');
+
+                    if (selectedShippingPreference === 'ship_kit') {
+                        breakdownShippingLabel.textContent = 'Shipping Kit';
+                        breakdownShippingAmount.textContent = `-$${SHIPPING_KIT_FEE.toFixed(2)}`;
+                        breakdownShippingAmount.classList.add('text-rose-600');
+                    } else if (selectedShippingPreference === 'email_label') {
+                        breakdownShippingLabel.textContent = 'Email Label';
+                        breakdownShippingAmount.textContent = 'Free';
+                        breakdownShippingAmount.classList.add('text-emerald-600');
+                    } else {
+                        breakdownShippingLabel.textContent = 'Shipping Option';
+                        breakdownShippingAmount.textContent = 'Select an option';
+                        breakdownShippingAmount.classList.add('text-slate-500');
+                    }
+                }
+
+                const breakdownFinalPayout = document.getElementById('breakdownFinalPayout');
+                if (breakdownFinalPayout) {
+                    breakdownFinalPayout.textContent = `$${totalPayout.toFixed(2)}`;
+                }
+
                 // NEW: Update phone overview display
                 overviewPhone.textContent = phone || 'Not Entered';
 
@@ -3312,8 +3287,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     .join(', ');
                 overviewAddress.textContent = fullAddress || 'Not Entered';
             }
-
-            window.updateOverview = updateOverview;
 
             submitOrderBtn.addEventListener('click', async () => {
                 clearPaymentMessage();
@@ -3357,6 +3330,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 submitOrderBtn.classList.add('btn-disabled');
                 
                 const rawShippingPreference = document.querySelector('input[name="shipping_preference"]:checked').value;
+                const shippingFee = rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+                const totalPayout = Math.max(finalQuote - shippingFee, 0);
 
                 const orderData = {
                     device: device.name,
@@ -3369,6 +3344,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     condition_cracks: document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'N/A',
                     condition_cosmetic: document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value || 'N/A',
                     estimatedQuote: finalQuote,
+                    shippingFee,
+                    totalPayout,
                     shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
                     paymentMethod: selectedPayment.value,
                     paymentDetails: {},
