@@ -138,7 +138,14 @@ if (typeof window !== "undefined" && !window.escapeHtml) {
 }
 
 import { firebaseApp } from "/assets/js/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import {
+  getAuth,
+  onAuthStateChanged,
+  signOut,
+  signInWithEmailAndPassword,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 import { createOrderInfoLabelPdf } from "/assets/js/pdf/order-labels.js";
@@ -198,6 +205,113 @@ const paginationPages = document.getElementById('pagination-pages');
 const paginationInfo = document.getElementById('pagination-info');
 const searchInput = document.getElementById('search-orders');
 const mobileSearchInput = document.getElementById('mobile-search-orders');
+const adminAppShell = document.getElementById('admin-app');
+const adminLoginScreen = document.getElementById('admin-login-screen');
+const adminLoginForm = document.getElementById('admin-login-form');
+const adminLoginEmail = document.getElementById('admin-login-email');
+const adminLoginPassword = document.getElementById('admin-login-password');
+const adminLoginSubmit = document.getElementById('admin-login-submit');
+const adminLoginError = document.getElementById('admin-login-error');
+const adminGoogleButton = document.getElementById('admin-google-signin');
+const adminGoogleButtonText = document.getElementById('admin-google-signin-text');
+const adminUserEmailDisplay = document.getElementById('admin-user-email');
+const adminUserMonogram = document.getElementById('admin-user-monogram');
+
+const defaultSubmitLabel = adminLoginSubmit?.textContent?.trim() || 'Sign in';
+const defaultGoogleLabel = adminGoogleButtonText?.textContent?.trim() || 'Continue with Google';
+
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+const setLoginError = (message = '') => {
+  if (!adminLoginError) return;
+  if (!message) {
+    adminLoginError.classList.add('hidden');
+    adminLoginError.textContent = '';
+    return;
+  }
+  adminLoginError.textContent = message;
+  adminLoginError.classList.remove('hidden');
+};
+
+const setSubmitBusy = (isBusy) => {
+  if (!adminLoginSubmit) return;
+  adminLoginSubmit.disabled = isBusy;
+  adminLoginSubmit.classList.toggle('is-loading', isBusy);
+  adminLoginSubmit.textContent = isBusy ? 'Signing in…' : defaultSubmitLabel;
+};
+
+const setGoogleBusy = (isBusy) => {
+  if (!adminGoogleButton) return;
+  adminGoogleButton.disabled = isBusy;
+  adminGoogleButton.classList.toggle('is-loading', isBusy);
+  if (adminGoogleButtonText) {
+    adminGoogleButtonText.textContent = isBusy ? 'Connecting…' : defaultGoogleLabel;
+  }
+};
+
+const computeMonogram = (input) => {
+  if (!input) return 'SC';
+  const cleaned = String(input)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((segment) => segment[0]?.toUpperCase())
+    .join('');
+  return cleaned.slice(0, 2) || 'SC';
+};
+
+const updateUserBadge = (user) => {
+  if (!user) return;
+  if (adminUserEmailDisplay) {
+    adminUserEmailDisplay.textContent = user.email || user.displayName || 'Authenticated user';
+  }
+  if (adminUserMonogram) {
+    const source = user.displayName || user.email || 'SC';
+    adminUserMonogram.textContent = computeMonogram(source);
+  }
+};
+
+const showLoginView = () => {
+  setSubmitBusy(false);
+  setGoogleBusy(false);
+  setLoginError('');
+  adminAppShell?.classList.add('hidden');
+  adminLoginScreen?.classList.remove('hidden');
+  adminLoginScreen?.setAttribute('aria-hidden', 'false');
+};
+
+const showDashboardView = (user) => {
+  setSubmitBusy(false);
+  setGoogleBusy(false);
+  setLoginError('');
+  adminLoginScreen?.classList.add('hidden');
+  adminLoginScreen?.setAttribute('aria-hidden', 'true');
+  adminAppShell?.classList.remove('hidden');
+  if (adminLoginForm) {
+    adminLoginForm.reset();
+  }
+  updateUserBadge(user);
+};
+
+const describeAuthError = (error) => {
+  if (!error) return 'Unable to complete the request. Please try again.';
+  const { code } = error;
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+      return 'We couldn’t sign you in with those credentials. Check your email and password and try again.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a moment before trying again or continue with Google.';
+    case 'auth/popup-closed-by-user':
+      return 'Google sign-in was closed before completion. Try again when you’re ready.';
+    case 'auth/network-request-failed':
+      return 'A network error interrupted the request. Check your connection and try again.';
+    default:
+      return 'Something went wrong while signing in. Please try again.';
+  }
+};
 const statusFilterButtons = document.querySelectorAll('#status-filter-bar .filter-chip');
 const liveOrdersCount = document.getElementById('live-orders-count');
 const averagePayoutAmount = document.getElementById('average-payout-amount');
@@ -6023,18 +6137,56 @@ const authLoadingScreen = document.getElementById('auth-loading-screen');
 // Logout functionality - added AFTER auth is initialized
 const logoutBtn = document.getElementById('logout-btn');
 if (logoutBtn) {
-logoutBtn.addEventListener('click', async () => {
-try {
-await signOut(auth);
-console.log('User signed out successfully');
-// Redirect to the login page (assuming index.html is the login page)
-window.location.href = '/index.html';
-} catch (error) {
-console.error('Error signing out:', error);
-// Using console.error instead of alert()
-console.error('Failed to logout. Please try again.');
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await signOut(auth);
+      console.log('User signed out successfully');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      setLoginError('We could not sign you out. Refresh the page and try again.');
+    }
+  });
 }
-});
+
+if (adminLoginForm) {
+  adminLoginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!auth) return;
+    const email = adminLoginEmail?.value?.trim();
+    const password = adminLoginPassword?.value || '';
+    if (!email || !password) {
+      setLoginError('Please provide both your email and password to continue.');
+      return;
+    }
+    setLoginError('');
+    setSubmitBusy(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      console.error('Email/password sign-in error:', error);
+      setLoginError(describeAuthError(error));
+    } finally {
+      setSubmitBusy(false);
+    }
+  });
+}
+
+if (adminGoogleButton) {
+  adminGoogleButton.addEventListener('click', async () => {
+    if (!auth) return;
+    setLoginError('');
+    setGoogleBusy(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      if (error?.code !== 'auth/popup-closed-by-user') {
+        console.error('Google sign-in error:', error);
+      }
+      setLoginError(describeAuthError(error));
+    } finally {
+      setGoogleBusy(false);
+    }
+  });
 }
 
 // Notification bell dropdown functionality - added AFTER auth is initialized
@@ -6056,27 +6208,24 @@ notificationDropdown.classList.remove('show');
 }
 
 onAuthStateChanged(auth, (user) => {
-if (!user || user.isAnonymous) {
-console.log('Auth state changed: No authenticated user or anonymous user detected, redirecting...');
-// Redirect to the login page (assuming index.html is the login page)
-window.location.href = '/index.html';
-return;
-}
+  if (!user || user.isAnonymous) {
+    console.log('Auth state changed: No authenticated user. Presenting login screen.');
+    currentUserId = 'anonymous_user';
+    authLoadingScreen?.classList.add('hidden');
+    showLoginView();
+    return;
+  }
 
-console.log('Auth state changed: User logged in, UID:', user.uid);
-authLoadingScreen?.classList.add('hidden');
+  console.log('Auth state changed: User logged in, UID:', user.uid);
+  currentUserId = user.uid;
+  authLoadingScreen?.classList.add('hidden');
+  showDashboardView(user);
 
-currentUserId = user.uid;
-/* REMOVED SIDEBAR USER ID DISPLAY, NOW JUST LOGGED IN */
-// displayUserId.textContent = user.email || user.uid;
-
-fetchAndRenderOrders();
-/* REMOVED NOTIFICATION LIST UPDATES - ONLY BADGE REMAINS FOR PERFORMANCE */
-/* updateNotifications(); */
-updateActiveChatsCount(); // <-- Moved here for safety
-if (IS_ANALYTICS_PAGE) {
-initializeAnalyticsDashboard();
-}
+  fetchAndRenderOrders();
+  updateActiveChatsCount(); // <-- Moved here for safety
+  if (IS_ANALYTICS_PAGE) {
+    initializeAnalyticsDashboard();
+  }
 });
 
 } catch (error) {
