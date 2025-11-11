@@ -3414,13 +3414,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     const totalPrice = Number(orderData.totalPayout ?? orderData.estimatedQuote ?? finalQuote ?? deviceInfo.estimatedPrice ?? 0);
 
                     try {
+                        const normalizedTotal = Number(totalPrice) || 0;
+                        const normalizedOriginal = Number(orderData.originalQuote ?? finalQuote ?? 0) || 0;
+                        const normalizedShippingFee = Number(orderData.shippingKitFee ?? (rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0)) || 0;
+
                         const summaryPayload = {
                             orderId,
                             name: orderData.shippingInfo.fullName,
                             device: orderData.device,
                             storage: orderData.storage,
                             carrier: orderData.carrier,
-                            price: Number(totalPrice) || 0,
+                            price: normalizedTotal,
+                            finalPayout: normalizedTotal,
+                            originalQuote: normalizedOriginal,
+                            shippingPreference: rawShippingPreference,
+                            shippingKitFee: normalizedShippingFee,
                             paymentMethod: orderData.paymentMethod
                         };
                         sessionStorage.setItem('shcOrderSummary', JSON.stringify(summaryPayload));
@@ -3432,6 +3440,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         shipping: orderData.shippingPreference === 'Shipping Kit Requested' ? 'ship_kit' : 'email_label',
                         orderId,
                         price: totalPrice,
+                        finalPayout: totalPrice,
+                        originalQuote: orderData.originalQuote ?? finalQuote ?? '',
+                        shippingKitFee: orderData.shippingKitFee ?? (rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : ''),
+                        shippingPreference: rawShippingPreference,
                         name: orderData.shippingInfo.fullName,
                         device: orderData.device,
                         storage: orderData.storage,
