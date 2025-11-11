@@ -1861,6 +1861,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             let currentUserId = null;
             const SHIPPING_KIT_FEE = 10;
             let finalQuote = 0;
+
+            const SHIPPING_KIT_FEE = 10;
+
+            function formatPhoneNumber(input) {
+                if (!input) return;
+
+                let cleaned = ('' + input.value).replace(/\D/g, '');
+
+                if (cleaned.length === 11 && cleaned.startsWith('1')) {
+                    cleaned = cleaned.substring(1);
+                }
+
+                cleaned = cleaned.substring(0, 10);
+
+                let formatted = '';
+                if (cleaned.length > 0) {
+                    formatted += '(' + cleaned.substring(0, 3);
+                }
+                if (cleaned.length >= 4) {
+                    formatted += ') ' + cleaned.substring(3, 6);
+                }
+                if (cleaned.length >= 7) {
+                    formatted += '-' + cleaned.substring(6, 10);
+                }
+
+                input.value = formatted;
+
+                if (typeof updateOverview === 'function') {
+                    updateOverview();
+                }
+            }
             
             // Basic modal controls for the new modals
             const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
@@ -2450,9 +2481,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
                 
                 finalQuote = finalPrice ? parseFloat(finalPrice.toFixed(2)) : 0;
-                
+
                 finalQuoteAmountMainText.textContent = `$${finalQuote.toFixed(2)}`;
                 finalQuoteAmountPopup.textContent = `$${finalQuote.toFixed(2)}`;
+
+                updateOverview();
 
                 showQuotePopup();
             }
@@ -3248,6 +3281,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     }
                 }
 
+                const baseQuote = Number(finalQuote) || 0;
+                const shippingFee = selectedShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+                const totalPayout = Math.max(baseQuote - shippingFee, 0);
+
                 const fullName = fullNameInput?.value || '';
                 const phone = phoneInput?.value || '';
                 const streetAddress = streetAddressInput?.value || '';
@@ -3264,7 +3301,37 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 overviewQuote.textContent = formatCurrency(finalPayout);
                 overviewShippingPreference.textContent = displayShippingPreferenceText;
                 overviewCarrier.textContent = displayCarrierText;
-                
+
+                const breakdownQuoteAmount = document.getElementById('breakdownQuoteAmount');
+                if (breakdownQuoteAmount) {
+                    breakdownQuoteAmount.textContent = `$${baseQuote.toFixed(2)}`;
+                }
+
+                const breakdownShippingLabel = document.getElementById('breakdownShippingLabel');
+                const breakdownShippingAmount = document.getElementById('breakdownShippingAmount');
+                if (breakdownShippingLabel && breakdownShippingAmount) {
+                    breakdownShippingAmount.classList.remove('text-emerald-600', 'text-rose-600', 'text-slate-500');
+
+                    if (selectedShippingPreference === 'ship_kit') {
+                        breakdownShippingLabel.textContent = 'Shipping Kit';
+                        breakdownShippingAmount.textContent = `-$${SHIPPING_KIT_FEE.toFixed(2)}`;
+                        breakdownShippingAmount.classList.add('text-rose-600');
+                    } else if (selectedShippingPreference === 'email_label') {
+                        breakdownShippingLabel.textContent = 'Email Label';
+                        breakdownShippingAmount.textContent = 'Free';
+                        breakdownShippingAmount.classList.add('text-emerald-600');
+                    } else {
+                        breakdownShippingLabel.textContent = 'Shipping Option';
+                        breakdownShippingAmount.textContent = 'Select an option';
+                        breakdownShippingAmount.classList.add('text-slate-500');
+                    }
+                }
+
+                const breakdownFinalPayout = document.getElementById('breakdownFinalPayout');
+                if (breakdownFinalPayout) {
+                    breakdownFinalPayout.textContent = `$${totalPayout.toFixed(2)}`;
+                }
+
                 // NEW: Update phone overview display
                 overviewPhone.textContent = phone || 'Not Entered';
 
@@ -3334,6 +3401,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 submitOrderBtn.classList.add('btn-disabled');
                 
                 const rawShippingPreference = document.querySelector('input[name="shipping_preference"]:checked').value;
+                const shippingFee = rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
+                const totalPayout = Math.max(finalQuote - shippingFee, 0);
 
                 const shippingKitFee = calculateShippingFee(rawShippingPreference);
                 const totalPayout = calculateTotalPayout(finalQuote, rawShippingPreference);

@@ -170,7 +170,7 @@ function buildEmailLayout({
   bodyHtml = "",
   accentColor = "#16a34a",
   includeTrustpilot = true,
-  footerText = "Need help? Reply to this email or call (888) 265-4612.",
+  footerText = "Need help? Reply to this email or call (347) 688-0662.",
   includeCountdownNotice = false,
 } = {}) {
   const headingSection = title
