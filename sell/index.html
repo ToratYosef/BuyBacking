@@ -1268,19 +1268,55 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         // NEW: Function to extract brand and slug from a single URL parameter
         function getBrandAndSlug(param) {
             if (!param || typeof param !== 'string') return null;
-            const parts = param.split('-');
-            // Define supported brands for Firestore subcollection lookup
+
+            const raw = param.trim();
+            if (!raw) return null;
+
+            const normalized = raw
+                .toLowerCase()
+                .replace(/[\s_]+/g, '-')
+                .replace(/[^a-z0-9-]/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '');
+
+            if (!normalized) return null;
+
             const brands = ['iphone', 'samsung', 'google', 'ipad'];
-            const brand = parts[0];
-            
-            if (brands.includes(brand) && parts.length > 1) {
-                return {
-                    brand: brand,
-                    slug: parts.slice(1).join('-') // Rejoin the rest of the parts as the slug
-                };
+            let matchedBrand = null;
+            let slugPart = '';
+
+            for (const brand of brands) {
+                if (normalized === brand) {
+                    // We need at least one additional segment beyond the brand name
+                    continue;
+                }
+
+                if (normalized.startsWith(`${brand}-`)) {
+                    matchedBrand = brand;
+                    slugPart = normalized.slice(brand.length + 1);
+                    break;
+                }
+
+                if (normalized.startsWith(brand)) {
+                    const remainder = normalized.slice(brand.length).replace(/^-+/, '');
+                    if (remainder) {
+                        matchedBrand = brand;
+                        slugPart = remainder;
+                        break;
+                    }
+                }
             }
-            // If the brand is missing or unrecognized, or if there's no slug part, return null
-            return null;
+
+            if (!matchedBrand || !slugPart) {
+                return null;
+            }
+
+            return {
+                brand: matchedBrand,
+                slug: slugPart,
+                normalizedParam: `${matchedBrand}-${slugPart}`,
+                rawParam: raw
+            };
         }
 
         // Global variable to hold the autocomplete instance
@@ -1493,25 +1529,35 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             deviceInfo.quality = qualityParam;
             deviceInfo.estimatedPrice = priceParam;
 
-            async function fetchDevicePricing(brand, slug) {
+            async function fetchDevicePricing(brand, slug, normalizedParam) {
                 try {
-                    // Use the parsed brand and slug for the Firestore path
-                    const docRef = doc(db, `devices/${brand}/models`, slug);
-                    const docSnap = await getDoc(docRef);
-                    
-                    if (docSnap.exists()) {
-                        return docSnap.data();
-                    } else {
-                        console.error(`Device data for slug "${slug}" not found in brand "${brand}".`);
-                        return null;
+                    const candidateIds = Array.from(new Set([
+                        slug,
+                        normalizedParam,
+                        `${brand}-${slug}`
+                    ].filter(Boolean)));
+
+                    for (const candidate of candidateIds) {
+                        const docRef = doc(db, `devices/${brand}/models`, candidate);
+                        const docSnap = await getDoc(docRef);
+
+                        if (docSnap.exists()) {
+                            if (candidate !== slug) {
+                                console.info(`Loaded device data using fallback id "${candidate}" (requested "${slug}").`);
+                            }
+                            return docSnap.data();
+                        }
                     }
+
+                    console.error(`Device data not found for slug "${slug}" in brand "${brand}". Tried: ${candidateIds.join(', ')}`);
+                    return null;
                 } catch (error) {
                     console.error("Error fetching document:", error);
                     return null;
                 }
             }
-            
-            device = await fetchDevicePricing(deviceInfo.brand, deviceInfo.slug);
+
+            device = await fetchDevicePricing(deviceInfo.brand, deviceInfo.slug, deviceInfo.normalizedParam);
             
             if (!device) {
                 loadingIndicator.classList.add('hidden');
