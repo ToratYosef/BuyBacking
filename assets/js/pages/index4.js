@@ -132,6 +132,256 @@ trackButtonClick(`External_Review_Click_${platformName.replace(/\s/g, '_')}`);
 });
 });
 
+const customerReviewsTrack = document.getElementById('customerReviewsTrack');
+if (customerReviewsTrack) {
+    const testimonialData = [
+        {
+            name: 'Jennifer Martinez',
+            role: 'iPhone 15 Pro Max Seller',
+            rating: 5,
+            review: 'SecondHandCell handled my iPhone trade-in in days. The shipping kit arrived quickly, inspection was honest, and the payout hit my account the same afternoon.',
+            avatarSeed: 'shc1',
+            avatarUrl: ''
+        },
+        {
+            name: 'Robert Johnson',
+            role: 'Galaxy S23 Ultra Seller',
+            rating: 4.5,
+            review: 'The $10 shipping kit deduction was worth it—everything I needed was in the box. Their portal kept me updated until the payout cleared the next morning.',
+            avatarSeed: 'shc2',
+            avatarUrl: ''
+        },
+        {
+            name: 'Lisa Thompson',
+            role: 'Teacher • Chicago, IL',
+            rating: 5,
+            review: 'As a teacher with zero free time, I loved how transparent the process was. I chose an email label, shipped the same day, and had my Zelle transfer within 24 hours.',
+            avatarSeed: 'shc3',
+            avatarUrl: ''
+        },
+        {
+            name: 'Avery Chen',
+            role: 'Entrepreneur • Austin, TX',
+            rating: 4.6,
+            review: 'I recycle phones from my business upgrades. Every order with SecondHandCell has been smooth, and they always explain any adjustments before finalizing the quote.',
+            avatarSeed: 'shc4',
+            avatarUrl: ''
+        },
+        {
+            name: 'Marisol Rivera',
+            role: 'Nurse • Tampa, FL',
+            rating: 5,
+            review: 'Customer support answered my questions in minutes and the payout matched what I was promised. It felt like working with a friend instead of a company.',
+            avatarSeed: 'shc5',
+            avatarUrl: ''
+        },
+        {
+            name: 'Darius Patel',
+            role: 'Software Engineer • Seattle, WA',
+            rating: 4.9,
+            review: 'I compared half a dozen services and this one actually paid what they quoted. The dashboard makes tracking each step effortless.',
+            avatarSeed: 'shc6',
+            avatarUrl: ''
+        },
+        {
+            name: 'Naomi Hassan',
+            role: 'Small Business Owner • Denver, CO',
+            rating: 5,
+            review: 'Bulk-selling our upgrade devices used to be a hassle. SecondHandCell gave me a dedicated rep and every payout has cleared next-day.',
+            avatarSeed: 'shc7',
+            avatarUrl: ''
+        },
+        {
+            name: 'Kofi Mensah',
+            role: 'Photographer • Brooklyn, NY',
+            rating: 4.7,
+            review: 'I ship in older gear every quarter. They document the condition with photos and I always get the agreed payout—no surprises.',
+            avatarSeed: 'shc8',
+            avatarUrl: ''
+        }
+    ];
+
+    const placeholderAvatar = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none"%3E%3Crect width="80" height="80" rx="40" fill="%23DBEAFE"/%3E%3Cpath d="M40 42c6.627 0 12-5.373 12-12S46.627 18 40 18s-12 5.373-12 12 5.373 12 12 12Zm0 4c-10.493 0-19 8.507-19 19h38c0-10.493-8.507-19-19-19Z" fill="%231D4ED8" opacity="0.65"/%3E%3C/svg%3E';
+
+    const createStarMarkup = (rating) => {
+        const stars = [];
+        for (let i = 1; i <= 5; i += 1) {
+            if (rating >= i) {
+                stars.push('<i class="fa-solid fa-star"></i>');
+            } else if (rating >= i - 0.5) {
+                stars.push('<i class="fa-solid fa-star-half-stroke"></i>');
+            } else {
+                stars.push('<i class="fa-regular fa-star"></i>');
+            }
+        }
+        return stars.join('');
+    };
+
+    const createCardElement = (testimonial) => {
+        const card = document.createElement('article');
+        card.className = 'testimonial-card';
+        card.innerHTML = `
+            <div>
+                <div class="testimonial-stars" aria-hidden="true">
+                    ${createStarMarkup(testimonial.rating)}
+                </div>
+                <p class="mt-3 text-slate-600 leading-relaxed">“${testimonial.review}”</p>
+            </div>
+            <div class="testimonial-profile">
+                <img src="${testimonial.avatarUrl || placeholderAvatar}" alt="Portrait of ${testimonial.name}" class="testimonial-avatar" loading="lazy" data-avatar-seed="${testimonial.avatarSeed}">
+                <div>
+                    <p class="testimonial-name">${testimonial.name}</p>
+                    <p class="testimonial-role">${testimonial.role}</p>
+                </div>
+            </div>
+        `;
+        return card;
+    };
+
+    const loadAvatarSequentially = (() => {
+        let queue = Promise.resolve();
+        const load = (imgEl, testimonial) => {
+            if (!imgEl) return Promise.resolve();
+            if (testimonial.avatarUrl) {
+                imgEl.src = testimonial.avatarUrl;
+                return Promise.resolve();
+            }
+            queue = queue.then(() => new Promise((resolve) => {
+                const cacheBust = `${testimonial.avatarSeed}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                const uniqueUrl = `https://thispersondoesnotexist.com/image?cacheBust=${cacheBust}`;
+                const loader = new Image();
+                loader.crossOrigin = 'anonymous';
+                loader.referrerPolicy = 'no-referrer';
+                loader.onload = () => {
+                    testimonial.avatarUrl = uniqueUrl;
+                    requestAnimationFrame(() => {
+                        imgEl.src = uniqueUrl;
+                        resolve();
+                    });
+                };
+                loader.onerror = () => resolve();
+                loader.src = uniqueUrl;
+            }));
+            return queue;
+        };
+        return (imgEl, testimonial) => {
+            queue = load(imgEl, testimonial).catch(() => {});
+            return queue;
+        };
+    })();
+
+    const totalTestimonials = testimonialData.length;
+    const testimonialsPerSlide = Number(customerReviewsTrack.dataset.visibleCount) || 3;
+    let currentStartIndex = 0;
+    let isAnimating = false;
+
+    const appendCardForIndex = (index, extraClass = '') => {
+        const testimonial = testimonialData[index % totalTestimonials];
+        const card = createCardElement(testimonial);
+        if (extraClass) {
+            card.classList.add(extraClass);
+        }
+        customerReviewsTrack.appendChild(card);
+        const avatarImg = card.querySelector('img[data-avatar-seed]');
+        loadAvatarSequentially(avatarImg, testimonial);
+        return card;
+    };
+
+    for (let offset = 0; offset < testimonialsPerSlide; offset += 1) {
+        appendCardForIndex((currentStartIndex + offset) % totalTestimonials, 'testimonial-card-enter');
+    }
+
+    const computeShiftDistance = () => {
+        const firstCard = customerReviewsTrack.firstElementChild;
+        if (!firstCard) return 0;
+        const cardWidth = firstCard.getBoundingClientRect().width;
+        const trackStyles = window.getComputedStyle(customerReviewsTrack);
+        const gapValue = parseFloat(trackStyles.columnGap || trackStyles.gap || '0') || 0;
+        return cardWidth + gapValue;
+    };
+
+    const finalizeShift = (leavingCard, enteringCard) => {
+        customerReviewsTrack.style.transition = 'none';
+        customerReviewsTrack.style.transform = 'translateX(0)';
+        if (leavingCard?.parentElement === customerReviewsTrack) {
+            leavingCard.remove();
+        }
+        if (enteringCard) {
+            enteringCard.classList.remove('testimonial-card-enter-from-right');
+        }
+        void customerReviewsTrack.offsetWidth;
+        customerReviewsTrack.style.transition = '';
+        isAnimating = false;
+        currentStartIndex = (currentStartIndex + 1) % totalTestimonials;
+    };
+
+    const advanceCarousel = () => {
+        if (isAnimating || totalTestimonials <= testimonialsPerSlide) {
+            return;
+        }
+
+        const leavingCard = customerReviewsTrack.firstElementChild;
+        const nextIndex = (currentStartIndex + testimonialsPerSlide) % totalTestimonials;
+        const enteringCard = appendCardForIndex(nextIndex, 'testimonial-card-enter-from-right');
+
+        const shiftDistance = computeShiftDistance();
+        if (!leavingCard || shiftDistance === 0) {
+            finalizeShift(leavingCard, enteringCard);
+            return;
+        }
+
+        isAnimating = true;
+        leavingCard.classList.add('testimonial-card-exit');
+
+        const onTransitionEnd = (event) => {
+            if (event.propertyName !== 'transform') {
+                return;
+            }
+            customerReviewsTrack.removeEventListener('transitionend', onTransitionEnd);
+            finalizeShift(leavingCard, enteringCard);
+        };
+
+        customerReviewsTrack.addEventListener('transitionend', onTransitionEnd);
+
+        requestAnimationFrame(() => {
+            customerReviewsTrack.style.transition = 'transform 0.6s ease';
+            customerReviewsTrack.style.transform = `translateX(-${shiftDistance}px)`;
+        });
+
+        window.setTimeout(() => {
+            customerReviewsTrack.removeEventListener('transitionend', onTransitionEnd);
+            finalizeShift(leavingCard, enteringCard);
+        }, 850);
+    };
+
+    const intervalDelay = 5000;
+    let carouselTimer = window.setInterval(advanceCarousel, intervalDelay);
+
+    const pauseCarousel = () => {
+        if (carouselTimer) {
+            window.clearInterval(carouselTimer);
+            carouselTimer = null;
+        }
+    };
+
+    const startCarousel = () => {
+        if (!carouselTimer) {
+            carouselTimer = window.setInterval(advanceCarousel, intervalDelay);
+        }
+    };
+
+    customerReviewsTrack.addEventListener('mouseenter', pauseCarousel);
+    customerReviewsTrack.addEventListener('mouseleave', startCarousel);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            pauseCarousel();
+        } else {
+            startCarousel();
+        }
+    });
+}
+
 const footerEmailSignupForm = document.getElementById('footerEmailSignupForm');
 const footerSignupMessage = document.getElementById('footerSignupMessage');
 footerEmailSignupForm.addEventListener('submit', async (e) => {
