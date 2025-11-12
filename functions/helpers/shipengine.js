@@ -169,14 +169,24 @@ function extractTrackingFields(trackingData = {}) {
     };
 }
 
-function isTransitStatus(statusCode, statusDescription) {
+function isTransitStatus(statusCode, statusDescription, estimatedDelivery) {
     const normalizedCode = statusCode ? String(statusCode).toUpperCase() : '';
+    const hasEstimatedDelivery = Boolean(estimatedDelivery);
+
+    if (normalizedCode === 'AC' && !hasEstimatedDelivery) {
+        return false;
+    }
+
     if (TRANSIT_STATUS_CODES.has(normalizedCode)) {
         return true;
     }
 
     const description = typeof statusDescription === 'string' ? statusDescription.toLowerCase() : '';
     if (!description) {
+        return false;
+    }
+
+    if (!hasEstimatedDelivery && /\baccept(ed|ance)\b/.test(description)) {
         return false;
     }
 
@@ -297,7 +307,7 @@ async function buildKitTrackingUpdate(
         lastUpdated,
         estimatedDelivery,
     } = extractTrackingFields(trackingData);
-    const inTransit = isTransitStatus(statusCode, statusDescription);
+    const inTransit = isTransitStatus(statusCode, statusDescription, estimatedDelivery);
 
     const direction = useInbound ? 'inbound' : 'outbound';
     const statusPayload = {

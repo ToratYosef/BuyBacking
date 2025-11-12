@@ -1759,6 +1759,13 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadat
   const kitOrder = isKitOrder(order);
   const emailLabelOrder = isEmailLabelOrder(order);
   const currentStatus = (order.status || '').toLowerCase();
+  const hasEstimatedDelivery = Boolean(
+    trackingMetadata?.labelTrackingEstimatedDelivery ||
+      trackingMetadata?.estimatedDelivery ||
+      trackingMetadata?.estimated_delivery_date ||
+      trackingMetadata?.estimatedDeliveryDate ||
+      trackingMetadata?.estimated_delivery
+  );
 
   if (upper === 'DELIVERED' || upper === 'DELIVERED_TO_AGENT') {
     if (currentStatus === 'delivered_to_us') {
@@ -1787,8 +1794,12 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadat
     'LABEL_CREATED',
     'UNKNOWN',
   ]);
+  const etaRequiredStatuses = new Set(['ACCEPTED', 'SHIPMENT_ACCEPTED']);
 
   if (transitStatuses.has(upper) && (kitOrder || emailLabelOrder)) {
+    if (etaRequiredStatuses.has(upper) && !hasEstimatedDelivery) {
+      return null;
+    }
     if (currentStatus === PHONE_TRANSIT_STATUS || currentStatus === 'phone_on_the_way') {
       return null;
     }

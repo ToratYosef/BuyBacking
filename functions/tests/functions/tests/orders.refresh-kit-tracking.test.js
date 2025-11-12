@@ -94,6 +94,53 @@ test('returns in-transit tracking data without forcing delivery status', async (
     });
 });
 
+test('requires an estimated delivery date before treating accepted kit scans as in transit', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'AC',
+        status_description: 'Accepted at USPS Origin Facility'
+    });
+
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(
+        {
+            outboundTrackingNumber: '9400ACCEPTED1'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key'
+        }
+    );
+
+    assert.equal(delivered, false);
+    assert.equal(direction, 'outbound');
+    assert.ok(!('status' in updatePayload));
+    assert.equal(updatePayload.kitTrackingStatus.statusCode, 'AC');
+    assert.equal(updatePayload.kitTrackingStatus.estimatedDelivery, null);
+});
+
+test('treats accepted kit scans with an ETA as in transit', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'AC',
+        status_description: 'Accepted at USPS Origin Facility',
+        estimated_delivery_date: '2025-11-17'
+    });
+
+    const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(
+        {
+            outboundTrackingNumber: '9400ACCEPTED2'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key'
+        }
+    );
+
+    assert.equal(delivered, false);
+    assert.equal(direction, 'outbound');
+    assert.equal(updatePayload.status, 'kit_on_the_way_to_customer');
+    assert.equal(updatePayload.kitTrackingStatus.statusCode, 'AC');
+    assert.equal(updatePayload.kitTrackingStatus.estimatedDelivery, '2025-11-17');
+});
+
 test('prefers inbound tracking once the kit is delivered', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'IT',
