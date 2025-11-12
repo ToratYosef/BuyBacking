@@ -1,6 +1,43 @@
 const axios = require('axios');
+const {
+    getShipStationCredentials,
+    fetchShipStationTracking,
+    normalizeShipStationTracking,
+} = require('../services/shipstation');
 
 const DEFAULT_CARRIER_CODE = 'stamps_com';
+const KIT_TRANSIT_STATUS = 'kit_on_the_way_to_customer';
+const PHONE_TRANSIT_STATUS = 'phone_on_the_way_to_us';
+
+const TRANSIT_STATUS_CODES = new Set([
+    'IT',
+    'OF',
+    'AC',
+    'AT',
+    'NY',
+    'PU',
+    'OC',
+    'OD',
+    'OP',
+    'PC',
+    'SC',
+    'AR',
+    'AP',
+    'IP',
+]);
+
+const TRANSIT_KEYWORDS = [
+    'in transit',
+    'out for delivery',
+    'on its way',
+    'acceptance',
+    'shipment received',
+    'arrived at',
+    'departed',
+    'processed at',
+    'moving through',
+    'package acceptance',
+];
 
 function normalizeCarrierCode(code) {
     if (!code || typeof code !== 'string') {
@@ -93,13 +130,16 @@ function buildTrackingUrl({ trackingNumber, carrierCode, defaultCarrierCode = DE
         normalizedCarrier
     )}&tracking_number=${encodeURIComponent(trackingNumber)}`;
 }
+
 const INBOUND_TRACKING_STATUSES = new Set([
     'kit_delivered',
+    KIT_TRANSIT_STATUS,
     'kit_on_the_way_to_us',
     'delivered_to_us',
     'label_generated',
     'emailed',
     'received',
+    PHONE_TRANSIT_STATUS,
     'completed',
     're-offered-pending',
     're-offered-accepted',
@@ -129,11 +169,86 @@ function extractTrackingFields(trackingData = {}) {
     };
 }
 
+function isTransitStatus(statusCode, statusDescription) {
+    const normalizedCode = statusCode ? String(statusCode).toUpperCase() : '';
+    if (TRANSIT_STATUS_CODES.has(normalizedCode)) {
+        return true;
+    }
+
+    const description = typeof statusDescription === 'string' ? statusDescription.toLowerCase() : '';
+    if (!description) {
+        return false;
+    }
+
+    if (description.includes('delivered') || description.includes('delivery complete')) {
+        return false;
+    }
+
+    return TRANSIT_KEYWORDS.some((keyword) => description.includes(keyword));
+}
+
+async function fetchTrackingData({
+    axiosClient = axios,
+    trackingNumber,
+    carrierCode,
+    defaultCarrierCode = DEFAULT_CARRIER_CODE,
+    shipengineKey,
+    shipstationCredentials,
+}) {
+    if (!trackingNumber) {
+        throw new Error('Tracking number not available for this order');
+    }
+
+    const credentials = shipstationCredentials || getShipStationCredentials();
+    const errors = [];
+
+    if (credentials) {
+        try {
+            const response = await fetchShipStationTracking({
+                trackingNumber,
+                carrierCode,
+                axiosClient,
+                credentials,
+            });
+            const normalized = normalizeShipStationTracking(response);
+            if (normalized) {
+                return normalized;
+            }
+        } catch (error) {
+            errors.push(error);
+        }
+    }
+
+    if (shipengineKey) {
+        const trackingUrl = buildTrackingUrl({
+            trackingNumber,
+            carrierCode,
+            defaultCarrierCode,
+        });
+
+        const response = await axiosClient.get(trackingUrl, {
+            headers: {
+                'API-Key': shipengineKey,
+            },
+            timeout: 20000,
+        });
+
+        return response?.data || {};
+    }
+
+    if (errors.length) {
+        throw errors[0];
+    }
+
+    throw new Error('ShipEngine or ShipStation API credentials are required to fetch tracking data.');
+}
+
 async function buildKitTrackingUpdate(
     order,
     {
         axiosClient = axios,
         shipengineKey,
+        shipstationCredentials,
         defaultCarrierCode = DEFAULT_CARRIER_CODE,
         serverTimestamp,
     } = {}
@@ -145,8 +260,10 @@ async function buildKitTrackingUpdate(
         throw new Error('Tracking number not available for this order');
     }
 
-    if (!shipengineKey) {
-        throw new Error('ShipEngine API key not configured');
+    const credentials = shipstationCredentials || getShipStationCredentials();
+
+    if (!shipengineKey && !credentials) {
+        throw new Error('ShipEngine or ShipStation API credentials not configured');
     }
 
     const normalizedStatus = String(order?.status || '').toLowerCase();
@@ -165,16 +282,14 @@ async function buildKitTrackingUpdate(
     }
 
     const carrierCode = resolveCarrierCode(order, useInbound ? 'inbound' : 'outbound', defaultCarrierCode);
-    const trackingUrl = buildTrackingUrl({ trackingNumber, carrierCode, defaultCarrierCode });
-
-    const response = await axiosClient.get(trackingUrl, {
-        headers: {
-            'API-Key': shipengineKey,
-        },
-        timeout: 20000,
+    const trackingData = await fetchTrackingData({
+        axiosClient,
+        trackingNumber,
+        carrierCode,
+        defaultCarrierCode,
+        shipengineKey,
+        shipstationCredentials: credentials,
     });
-
-    const trackingData = response.data || {};
     const {
         delivered,
         statusCode,
@@ -182,6 +297,7 @@ async function buildKitTrackingUpdate(
         lastUpdated,
         estimatedDelivery,
     } = extractTrackingFields(trackingData);
+    const inTransit = isTransitStatus(statusCode, statusDescription);
 
     const direction = useInbound ? 'inbound' : 'outbound';
     const statusPayload = {
@@ -205,21 +321,42 @@ async function buildKitTrackingUpdate(
         updatePayload.status = 'kit_delivered';
         if (typeof serverTimestamp === 'function') {
             updatePayload.kitDeliveredAt = serverTimestamp();
+            updatePayload.lastStatusUpdateAt = serverTimestamp();
+        }
+    } else if (!useInbound && inTransit) {
+        if (!['kit_delivered', KIT_TRANSIT_STATUS].includes(normalizedStatus)) {
+            updatePayload.status = KIT_TRANSIT_STATUS;
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.lastStatusUpdateAt = serverTimestamp();
+            }
+        }
+        if (!order?.kitSentAt && typeof serverTimestamp === 'function') {
+            updatePayload.kitSentAt = serverTimestamp();
         }
     }
 
     if (useInbound && delivered) {
+        updatePayload.status = 'delivered_to_us';
+        if (typeof serverTimestamp === 'function') {
+            updatePayload.lastStatusUpdateAt = serverTimestamp();
+        }
+
         if (isShippingKit) {
-            updatePayload.status = 'delivered_to_us';
             if (typeof serverTimestamp === 'function') {
                 updatePayload.kitDeliveredToUsAt = serverTimestamp();
             }
         } else {
-            updatePayload.status = 'received';
             if (typeof serverTimestamp === 'function') {
                 updatePayload.receivedAt = serverTimestamp();
             }
             updatePayload.autoReceived = true;
+        }
+    } else if (useInbound && inTransit) {
+        if (!['delivered_to_us', 'received', PHONE_TRANSIT_STATUS].includes(normalizedStatus)) {
+            updatePayload.status = PHONE_TRANSIT_STATUS;
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.lastStatusUpdateAt = serverTimestamp();
+            }
         }
     }
 
@@ -233,4 +370,7 @@ module.exports = {
     buildTrackingUrl,
     resolveCarrierCode,
     INBOUND_TRACKING_STATUSES,
+    fetchTrackingData,
+    KIT_TRANSIT_STATUS,
+    PHONE_TRANSIT_STATUS,
 };
