@@ -150,6 +150,27 @@ return 'Shipping Kit Requested';
 if (status === 'label_generated') {
 return 'Shipping Kit on the Way';
 }
+if (status === 'kit_sent') {
+return 'Kit Sent';
+}
+if (status === 'kit_on_the_way_to_customer' || status === 'kit_in_transit') {
+return 'Kit On The Way To Customer';
+}
+if (status === 'kit_delivered') {
+return 'Kit Delivered';
+}
+if (status === 'kit_on_the_way_to_us') {
+return 'Kit On The Way To Us';
+}
+if (status === 'delivered_to_us') {
+return 'Delivered To Us';
+}
+if (status === 'emailed') {
+return 'Label Emailed';
+}
+if (status === 'phone_on_the_way' || status === 'phone_on_the_way_to_us') {
+return 'Phone On The Way To Us';
+}
 return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
@@ -169,8 +190,11 @@ const STATUS_FLOW = [
 'needs_printing',
 'label_generated',
 'kit_sent',
-'kit_in_transit',
+'kit_on_the_way_to_customer',
 'kit_delivered',
+'kit_on_the_way_to_us',
+'phone_on_the_way_to_us',
+'delivered_to_us',
 'received',
 're-offered-pending',
 're-offered-accepted',
@@ -338,7 +362,7 @@ timestampFields: ['labelGeneratedAt', 'needsPrintingAt', 'kitSentAt']
 id: 'in-transit',
 title: 'On the way to us',
 description: 'Track your package as it travels to our lab.',
-completedFromStatus: 'kit_in_transit',
+completedFromStatus: 'kit_on_the_way_to_us',
 timestampFields: ['kitSentAt', 'kitTrackingStatus.lastUpdated', 'kitTrackingLastRefreshedAt']
 },
 {
