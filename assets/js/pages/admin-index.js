@@ -222,6 +222,26 @@ const bulkSelectionCount = document.getElementById('bulk-selection-count');
 const refreshAllKitTrackingBtn = document.getElementById('refresh-all-kit-tracking');
 const refreshAllEmailTrackingBtn = document.getElementById('refresh-all-email-tracking');
 
+const KIT_STATUS_HINTS = new Set([
+  'shipping_kit_requested',
+  'kit_needs_printing',
+  'kit_sent',
+  'kit_on_the_way_to_customer',
+  'kit_delivered',
+  'kit_on_the_way_to_us',
+]);
+
+const EMAIL_STATUS_HINTS = new Set([
+  'email_label_requested',
+  'label_generated',
+  'emailed',
+  'phone_on_the_way',
+  'phone_on_the_way_to_us',
+  'delivered_to_us',
+  'received',
+  'completed',
+]);
+
 const selectedOrderIds = new Set();
 let lastRenderedOrderIds = [];
 
@@ -3893,17 +3913,258 @@ ordersStatusChart.update();
 }
 }
 
-function isKitOrder(order = {}) {
-  const preference = (order.shippingPreference || order.shipping_preference || '')
+function normalizeShippingPreference(order = {}) {
+  return (order.shippingPreference || order.shipping_preference || order.shippingPreferenceValue || '')
     .toString()
+    .trim()
     .toLowerCase();
-  if (!preference) {
-    return false;
+}
+
+function normalizeStatus(order = {}) {
+  return (order.status || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+}
+
+function isKitOrder(order = {}) {
+  const preference = normalizeShippingPreference(order);
+  if (preference) {
+    if (preference === 'shipping kit requested' || preference === 'ship_kit') {
+      return true;
+    }
+    if (preference.includes('kit')) {
+      return true;
+    }
   }
-  if (preference === 'shipping kit requested' || preference === 'ship_kit') {
+
+  const status = normalizeStatus(order);
+  if (KIT_STATUS_HINTS.has(status)) {
     return true;
   }
-  return preference.includes('kit');
+
+  return status.includes('kit');
+}
+
+function isEmailLabelOrder(order = {}) {
+  const preference = normalizeShippingPreference(order);
+  if (preference) {
+    if (preference === 'email label requested' || preference === 'email_label') {
+      return true;
+    }
+    if (preference.includes('email')) {
+      return true;
+    }
+    if (preference.includes('label')) {
+      return true;
+    }
+  }
+
+  const status = normalizeStatus(order);
+  if (EMAIL_STATUS_HINTS.has(status)) {
+    return true;
+  }
+
+  return status.includes('email') || status.includes('label');
+}
+
+function hasTrackingValue(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function labelsContainTrackingNumber(labels) {
+  if (!labels || typeof labels !== 'object') {
+    return false;
+  }
+  return Object.values(labels).some((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return false;
+    }
+    return hasTrackingValue(entry.trackingNumber || entry.tracking_number);
+  });
+}
+
+function hasKitTrackingNumbers(order = {}) {
+  if (!order || typeof order !== 'object') {
+    return false;
+  }
+  if (
+    hasTrackingValue(order.outboundTrackingNumber) ||
+    hasTrackingValue(order.inboundTrackingNumber) ||
+    hasTrackingValue(order.trackingNumber)
+  ) {
+    return true;
+  }
+  if (
+    order.kitTrackingStatus &&
+    hasTrackingValue(order.kitTrackingStatus.trackingNumber || order.kitTrackingStatus.tracking_number)
+  ) {
+    return true;
+  }
+  if (labelsContainTrackingNumber(order.shipEngineLabels)) {
+    return true;
+  }
+  return false;
+}
+
+function hasEmailTrackingNumbers(order = {}) {
+  if (!order || typeof order !== 'object') {
+    return false;
+  }
+  if (
+    hasTrackingValue(order.trackingNumber) ||
+    hasTrackingValue(order.inboundTrackingNumber) ||
+    hasTrackingValue(order.labelTrackingNumber) ||
+    hasTrackingValue(order.uspsTrackingNumber) ||
+    hasTrackingValue(order.uspsLabelTrackingNumber)
+  ) {
+    return true;
+  }
+  if (
+    order.labelTrackingStatus &&
+    hasTrackingValue(order.labelTrackingStatus.trackingNumber || order.labelTrackingStatus.tracking_number)
+  ) {
+    return true;
+  }
+  if (labelsContainTrackingNumber(order.shipEngineLabels)) {
+    return true;
+  }
+  return false;
+}
+
+async function refreshTrackingForOrders(type, button) {
+  const typeLabel = type === 'kit' ? 'kit' : 'email label';
+  const sourceOrders = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
+
+  if (!Array.isArray(sourceOrders) || sourceOrders.length === 0) {
+    window.alert(`No ${typeLabel} orders are loaded yet. Try again once orders appear.`);
+    return;
+  }
+
+  const relevantOrders = type === 'kit'
+    ? sourceOrders.filter(isKitOrder)
+    : sourceOrders.filter(isEmailLabelOrder);
+
+  if (!relevantOrders.length) {
+    window.alert(`There are no ${typeLabel} orders available to refresh right now.`);
+    return;
+  }
+
+  const trackingCheck = type === 'kit' ? hasKitTrackingNumbers : hasEmailTrackingNumbers;
+  const eligibleOrders = relevantOrders.filter(trackingCheck);
+  const missingTrackingCount = relevantOrders.length - eligibleOrders.length;
+
+  if (!eligibleOrders.length) {
+    window.alert(`None of the ${typeLabel} orders have tracking numbers on file yet.`);
+    return;
+  }
+
+  const confirmMessage = `Refresh tracking for ${eligibleOrders.length} ${typeLabel} order${eligibleOrders.length === 1 ? '' : 's'}?`;
+  const confirmed = window.confirm(confirmMessage);
+  if (!confirmed) {
+    return;
+  }
+
+  let originalHtml = '';
+  if (button) {
+    originalHtml = button.innerHTML;
+    button.disabled = true;
+  }
+
+  let successCount = 0;
+  let skippedCount = Math.max(0, missingTrackingCount);
+  const skippedDetails = [];
+  if (missingTrackingCount > 0) {
+    skippedDetails.push(`${missingTrackingCount} order${missingTrackingCount === 1 ? '' : 's'} skipped: no tracking numbers on file.`);
+  }
+  let failureCount = 0;
+  const failureDetails = [];
+
+  console.groupCollapsed(`Bulk ${typeLabel} tracking refresh`);
+  console.log(`Found ${eligibleOrders.length} ${typeLabel} order(s) with tracking numbers.`);
+
+  for (let index = 0; index < eligibleOrders.length; index += 1) {
+    const order = eligibleOrders[index];
+    if (!order || !order.id) {
+      skippedCount += 1;
+      skippedDetails.push('Skipped an order without an ID.');
+      continue;
+    }
+
+    if (button) {
+      button.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>Refreshing ${index + 1} of ${eligibleOrders.length}…</span>`;
+    }
+
+    const endpoint = type === 'kit'
+      ? `${BACKEND_BASE_URL}/orders/${order.id}/refresh-kit-tracking`
+      : `${BACKEND_BASE_URL}/orders/${order.id}/sync-label-tracking`;
+
+    const logLabel = `order-${order.id}`;
+    console.groupCollapsed(`Refreshing ${logLabel}`);
+    console.log(`refreshing ${logLabel}`);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload?.error || response.statusText || 'Request failed');
+      }
+
+      if (payload && payload.skipped) {
+        skippedCount += 1;
+        if (payload.reason) {
+          skippedDetails.push(`${order.id}: ${payload.reason}`);
+        }
+        console.log(`Skipped ${logLabel}: ${payload.reason || 'No tracking available'}`);
+        continue;
+      }
+
+      successCount += 1;
+      console.log(`Completed ${logLabel}`);
+    } catch (error) {
+      failureCount += 1;
+      failureDetails.push(`${order.id}: ${error.message}`);
+      console.error(`Failed to refresh ${typeLabel} tracking for order ${order.id}:`, error);
+    } finally {
+      console.log('Complete');
+      console.groupEnd();
+    }
+  }
+
+  console.groupEnd();
+
+  if (button) {
+    button.disabled = false;
+    button.innerHTML = originalHtml;
+  }
+
+  let summary = `Finished refreshing ${typeLabel} tracking for ${eligibleOrders.length} order${eligibleOrders.length === 1 ? '' : 's'}.`;
+  summary += `\nSuccessful updates: ${successCount}`;
+  summary += `\nSkipped: ${skippedCount}`;
+  summary += `\nFailed: ${failureCount}`;
+
+  if (skippedDetails.length) {
+    const detailSample = skippedDetails.slice(0, 5).join('\n');
+    summary += `\nSkipped details:\n${detailSample}`;
+    if (skippedDetails.length > 5) {
+      summary += `\n…and ${skippedDetails.length - 5} more.`;
+    }
+  }
+
+  if (failureDetails.length) {
+    const detailSample = failureDetails.slice(0, 5).join('\n');
+    summary += `\nFailures:\n${detailSample}`;
+    if (failureDetails.length > 5) {
+      summary += `\n…and ${failureDetails.length - 5} more.`;
+    }
+  }
+
+  window.alert(summary);
 }
 
 function isEmailLabelOrder(order = {}) {
