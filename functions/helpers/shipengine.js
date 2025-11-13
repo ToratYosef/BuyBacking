@@ -230,6 +230,20 @@ function isTransitStatus(statusCode, statusDescription, estimatedDelivery) {
     return TRANSIT_KEYWORDS.some((keyword) => description.includes(keyword));
 }
 
+function isAcceptedWithoutEta(statusCode, statusDescription, estimatedDelivery) {
+    if (estimatedDelivery) {
+        return false;
+    }
+
+    const normalizedCode = statusCode ? String(statusCode).toUpperCase() : '';
+    if (normalizedCode === 'AC' || normalizedCode === 'SHIPMENT_ACCEPTED') {
+        return true;
+    }
+
+    const description = typeof statusDescription === 'string' ? statusDescription.toLowerCase() : '';
+    return Boolean(description && /\baccept(ed|ance)\b/.test(description));
+}
+
 async function fetchTrackingData({
     axiosClient = axios,
     trackingNumber,
@@ -341,6 +355,7 @@ async function buildKitTrackingUpdate(
         estimatedDelivery,
     } = extractTrackingFields(trackingData);
     const inTransit = isTransitStatus(statusCode, statusDescription, estimatedDelivery);
+    const acceptedWithoutEta = isAcceptedWithoutEta(statusCode, statusDescription, estimatedDelivery);
 
     const direction = useInbound ? 'inbound' : 'outbound';
     const statusPayload = {
@@ -360,7 +375,19 @@ async function buildKitTrackingUpdate(
     const shippingPreference = String(order?.shippingPreference || '').toLowerCase();
     const isShippingKit = shippingPreference === 'shipping kit requested';
 
-    if (!useInbound && delivered) {
+    const transitStatuses = new Set([
+        KIT_TRANSIT_STATUS,
+        'kit_on_the_way_to_us',
+        'phone_on_the_way',
+        PHONE_TRANSIT_STATUS,
+    ]);
+
+    if (acceptedWithoutEta && transitStatuses.has(normalizedStatus)) {
+        updatePayload.status = 'label_generated';
+        if (typeof serverTimestamp === 'function') {
+            updatePayload.lastStatusUpdateAt = serverTimestamp();
+        }
+    } else if (!useInbound && delivered) {
         updatePayload.status = 'kit_delivered';
         if (typeof serverTimestamp === 'function') {
             updatePayload.kitDeliveredAt = serverTimestamp();

@@ -141,6 +141,28 @@ test('treats accepted kit scans with an ETA as in transit', async () => {
     assert.equal(updatePayload.kitTrackingStatus.estimatedDelivery, '2025-11-17');
 });
 
+test('reverts kit transit status back to label_generated when only acceptance scans exist', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'AC',
+        status_description: 'Accepted at USPS Origin Facility'
+    });
+
+    const { updatePayload } = await buildKitTrackingUpdate(
+        {
+            status: 'kit_on_the_way_to_customer',
+            outboundTrackingNumber: '9400RESETKIT1'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key',
+            serverTimestamp: () => 'server-ts'
+        }
+    );
+
+    assert.equal(updatePayload.status, 'label_generated');
+    assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
+});
+
 test('prefers inbound tracking once the kit is delivered', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'IT',
@@ -212,6 +234,29 @@ test('marks inbound kits as delivered to us when ShipEngine reports delivery', a
         trackingNumber: '9400IN',
         direction: 'inbound'
     });
+});
+
+test('reverts inbound phone transit status to label_generated when only acceptance scans exist', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'AC',
+        status_description: 'Shipment accepted at USPS facility'
+    });
+
+    const { updatePayload, direction } = await buildKitTrackingUpdate(
+        {
+            status: 'phone_on_the_way_to_us',
+            trackingNumber: '1ZRESETPHONE1'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key',
+            serverTimestamp: () => 'server-ts'
+        }
+    );
+
+    assert.equal(direction, 'inbound');
+    assert.equal(updatePayload.status, 'label_generated');
+    assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
 });
 
 test('marks emailed label orders as received when inbound delivery is detected', async () => {
