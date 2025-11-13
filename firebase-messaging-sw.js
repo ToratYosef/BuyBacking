@@ -57,7 +57,7 @@ self.addEventListener('notificationclick', function(event) {
 
     if (notificationData && notificationData.chatId && notificationData.action === 'open_chat') {
         const chatId = notificationData.chatId;
-        const chatUrl = `https://secondhandcell.com/chat/chat.html?chatId=${chatId}`; // Construct dynamic URL
+        const chatUrl = `https://secondhandcell.com/admin`; // Construct dynamic URL
 
         event.waitUntil(
             clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
