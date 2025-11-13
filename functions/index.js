@@ -2437,104 +2437,120 @@ app.post('/orders/:id/mark-kit-sent', async (req, res) => {
   }
 });
 
+async function refreshKitTrackingById(orderId, options = {}) {
+  if (!orderId) {
+    const error = new Error('Order ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const doc = await ordersCollection.doc(orderId).get();
+  if (!doc.exists) {
+    const error = new Error('Order not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const order = { id: doc.id, ...doc.data() };
+
+  const hasOutbound = Boolean(order.outboundTrackingNumber);
+  const hasInbound = Boolean(order.inboundTrackingNumber || order.trackingNumber);
+
+  if (!hasOutbound && !hasInbound) {
+    return { skipped: true, reason: 'No tracking numbers available for this order.' };
+  }
+
+  const shipengineKey = options.shipengineKey || process.env.SHIPENGINE_KEY || null;
+  const shipstationCredentials = options.shipstationCredentials || getShipStationCredentials();
+  if (!shipengineKey && !shipstationCredentials) {
+    const error = new Error('Tracking API credentials are not configured.');
+    error.statusCode = 500;
+    throw error;
+  }
+
+  let updatePayload;
+  let delivered;
+  let direction;
+
+  try {
+    ({ updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
+      axiosClient: axios,
+      shipengineKey,
+      shipstationCredentials,
+      defaultCarrierCode: DEFAULT_CARRIER_CODE,
+      serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+    }));
+  } catch (error) {
+    const message = typeof error?.message === 'string' ? error.message : '';
+    if (
+      message.includes('Tracking number not available') ||
+      message.includes('Tracking number is required') ||
+      message.includes('Carrier code is required')
+    ) {
+      return { skipped: true, reason: message };
+    }
+    throw error;
+  }
+
+  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const updateData = {
+    ...updatePayload,
+    kitTrackingLastRefreshedAt: timestamp,
+  };
+
+  if (direction === 'inbound') {
+    updateData.inboundTrackingLastRefreshedAt = timestamp;
+  }
+
+  const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
+
+  const message = (() => {
+    if (direction === 'inbound') {
+      if (delivered) {
+        if (updatePayload.status === 'delivered_to_us') {
+          return 'Inbound kit marked as delivered to us.';
+        }
+        return 'Inbound device marked as delivered.';
+      }
+      return 'Inbound tracking status refreshed.';
+    }
+
+    return delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.';
+  })();
+
+  if (delivered && shipengineKey) {
+    try {
+      if (shouldTrackInbound(updatedOrder)) {
+        await syncInboundTrackingForOrder(updatedOrder, { shipengineKey });
+      }
+    } catch (inboundError) {
+      console.error(
+        `Error syncing inbound tracking after kit delivery for order ${orderId}:`,
+        inboundError
+      );
+    }
+  }
+
+  return {
+    message,
+    delivered,
+    direction,
+    tracking: updatePayload.kitTrackingStatus,
+    order: {
+      id: updatedOrder.id,
+      status: updatedOrder.status,
+    },
+  };
+}
+
 app.post('/orders/:id/refresh-kit-tracking', async (req, res) => {
   try {
-    const orderId = req.params.id;
-    const doc = await ordersCollection.doc(orderId).get();
-
-    if (!doc.exists) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    const order = { id: doc.id, ...doc.data() };
-
-    const hasOutbound = Boolean(order.outboundTrackingNumber);
-    const hasInbound = Boolean(order.inboundTrackingNumber || order.trackingNumber);
-
-    if (!hasOutbound && !hasInbound) {
-      return res.json({ skipped: true, reason: 'No tracking numbers available for this order.' });
-    }
-
-    const shipengineKey = process.env.SHIPENGINE_KEY || null;
-    const shipstationCredentials = getShipStationCredentials();
-    if (!shipengineKey && !shipstationCredentials) {
-      return res.status(500).json({ error: 'Tracking API credentials are not configured.' });
-    }
-
-    let updatePayload;
-    let delivered;
-    let direction;
-
-    try {
-      ({ updatePayload, delivered, direction } = await buildKitTrackingUpdate(order, {
-        axiosClient: axios,
-        shipengineKey,
-        shipstationCredentials,
-        defaultCarrierCode: DEFAULT_CARRIER_CODE,
-        serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
-      }));
-    } catch (error) {
-      const message = typeof error?.message === 'string' ? error.message : '';
-      if (
-        message.includes('Tracking number not available') ||
-        message.includes('Tracking number is required') ||
-        message.includes('Carrier code is required')
-      ) {
-        return res.json({ skipped: true, reason: message });
-      }
-      throw error;
-    }
-
-    const timestamp = admin.firestore.FieldValue.serverTimestamp();
-    const updateData = {
-      ...updatePayload,
-      kitTrackingLastRefreshedAt: timestamp,
-    };
-
-    if (direction === 'inbound') {
-      updateData.inboundTrackingLastRefreshedAt = timestamp;
-    }
-
-    const { order: updatedOrder } = await updateOrderBoth(orderId, updateData);
-
-    const message = (() => {
-      if (direction === 'inbound') {
-        if (delivered) {
-          if (updatePayload.status === 'delivered_to_us') {
-            return 'Inbound kit marked as delivered to us.';
-          }
-          return 'Inbound device marked as delivered.';
-        }
-        return 'Inbound tracking status refreshed.';
-      }
-
-      return delivered ? 'Kit marked as delivered.' : 'Kit tracking status refreshed.';
-    })();
-
-    if (delivered && shipengineKey) {
-      try {
-        if (shouldTrackInbound(updatedOrder)) {
-          await syncInboundTrackingForOrder(updatedOrder, { shipengineKey });
-        }
-      } catch (inboundError) {
-        console.error(
-          `Error syncing inbound tracking after kit delivery for order ${orderId}:`,
-          inboundError
-        );
-      }
-    }
-
-    res.json({
-      message,
-      delivered,
-      direction,
-      tracking: updatePayload.kitTrackingStatus,
-      order: {
-        id: updatedOrder.id,
-        status: updatedOrder.status,
-      },
-    });
+    const payload = await refreshKitTrackingById(req.params.id);
+    res.json(payload);
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
     console.error('Error refreshing kit tracking:', error);
     res.status(500).json({ error: 'Failed to refresh kit tracking' });
   }
@@ -3006,33 +3022,48 @@ async function maybeAutoCancelAgingOrder(order, options = {}) {
   return cancelledOrder;
 }
 
+async function refreshEmailLabelTrackingById(orderId) {
+  if (!orderId) {
+    const error = new Error('Order ID is required');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const doc = await ordersCollection.doc(orderId).get();
+  if (!doc.exists) {
+    const error = new Error('Order not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const order = { id: doc.id, ...doc.data() };
+  const result = await syncInboundTrackingForOrder(order);
+
+  if (result.skipped === 'no_tracking') {
+    return { skipped: true, reason: 'No inbound tracking number on file for this order.' };
+  }
+
+  if (result.skipped === 'no_data') {
+    return { skipped: true, reason: 'Tracking API returned no inbound data for this order.' };
+  }
+
+  return {
+    message: 'Label tracking synchronized.',
+    order: { id: result.order.id, status: result.order.status },
+    tracking: result.tracking ? result.tracking : result.order.labelTrackingStatus,
+    statusUpdate: result.statusUpdate || null,
+  };
+}
+
 app.post('/orders/:id/sync-label-tracking', async (req, res) => {
   try {
-    const orderId = req.params.id;
-    const doc = await ordersCollection.doc(orderId).get();
-
-    if (!doc.exists) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    const order = { id: doc.id, ...doc.data() };
-    const result = await syncInboundTrackingForOrder(order);
-
-    if (result.skipped === 'no_tracking') {
-      return res.status(400).json({ error: 'No inbound tracking number on file for this order.' });
-    }
-
-    res.json({
-      message: 'Label tracking synchronized.',
-      order: { id: result.order.id, status: result.order.status },
-      tracking: result.tracking ? result.tracking : result.order.labelTrackingStatus,
-      statusUpdate: result.statusUpdate || null,
-    });
+    const payload = await refreshEmailLabelTrackingById(req.params.id);
+    res.json(payload);
   } catch (error) {
+    const message = error?.message || 'Failed to sync label tracking';
+    const statusCode = error?.statusCode || 500;
     console.error('Error syncing label tracking:', error.response?.data || error);
-    const message =
-      error.response?.data?.error || error.message || 'Failed to sync label tracking';
-    res.status(500).json({ error: message });
+    res.status(statusCode).json({ error: message });
   }
 });
 
@@ -5210,3 +5241,45 @@ exports.notifyWholesaleOfferUpdated = functions.firestore
   });
 
 exports.api = functions.https.onRequest(app);
+
+exports.refreshTracking = functions.runWith({ timeoutSeconds: 540, memory: '1GB' }).https.onRequest(
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    if (req.method === 'OPTIONS') {
+      return res.status(204).send('');
+    }
+
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed. Use POST.' });
+    }
+
+    const { orderId, type } = req.body || {};
+    if (!orderId || !type) {
+      return res.status(400).json({ error: 'orderId and type are required.' });
+    }
+
+    const normalizedType = String(type).toLowerCase();
+    const handler = normalizedType === 'kit'
+      ? refreshKitTrackingById
+      : normalizedType === 'email'
+        ? refreshEmailLabelTrackingById
+        : null;
+
+    if (!handler) {
+      return res.status(400).json({ error: 'Invalid tracking type requested.' });
+    }
+
+    try {
+      const payload = await handler(orderId);
+      res.json({ type: normalizedType, ...payload });
+    } catch (error) {
+      const statusCode = error?.statusCode || 500;
+      const message = error?.message || 'Failed to refresh tracking';
+      console.error('refreshTracking function error:', { orderId, type: normalizedType, error });
+      res.status(statusCode).json({ error: message });
+    }
+  }
+);

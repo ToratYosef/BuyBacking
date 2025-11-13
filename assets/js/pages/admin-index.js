@@ -51,6 +51,7 @@
 
 // Corrected to include the base path for Cloud Functions
 const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+const REFRESH_TRACKING_FUNCTION_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/refreshTracking';
 const FEED_PRICING_URL = '/feeds/feed.xml';
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTO_REQUOTE_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
@@ -4032,6 +4033,8 @@ function hasEmailTrackingNumbers(order = {}) {
   return false;
 }
 
+const MAX_CONCURRENT_TRACKING_REQUESTS = 4;
+
 async function refreshTrackingForOrders(type, button) {
   const typeLabel = type === 'kit' ? 'kit' : 'email label';
   const sourceOrders = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
@@ -4083,30 +4086,33 @@ async function refreshTrackingForOrders(type, button) {
   console.groupCollapsed(`Bulk ${typeLabel} tracking refresh`);
   console.log(`Found ${eligibleOrders.length} ${typeLabel} order(s) with tracking numbers.`);
 
-  for (let index = 0; index < eligibleOrders.length; index += 1) {
-    const order = eligibleOrders[index];
+  let processedCount = 0;
+
+  const updateButtonProgress = () => {
+    if (!button) {
+      return;
+    }
+    button.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>Refreshing ${processedCount} of ${eligibleOrders.length}…</span>`;
+  };
+
+  const processOrder = async (order) => {
     if (!order || !order.id) {
       skippedCount += 1;
       skippedDetails.push('Skipped an order without an ID.');
-      continue;
+      processedCount += 1;
+      updateButtonProgress();
+      return;
     }
-
-    if (button) {
-      button.innerHTML = `<i class="fas fa-spinner fa-spin"></i><span>Refreshing ${index + 1} of ${eligibleOrders.length}…</span>`;
-    }
-
-    const endpoint = type === 'kit'
-      ? `${BACKEND_BASE_URL}/orders/${order.id}/refresh-kit-tracking`
-      : `${BACKEND_BASE_URL}/orders/${order.id}/sync-label-tracking`;
 
     const logLabel = `order-${order.id}`;
     console.groupCollapsed(`Refreshing ${logLabel}`);
     console.log(`refreshing ${logLabel}`);
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch(REFRESH_TRACKING_FUNCTION_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id, type }),
       });
 
       const payload = await response.json().catch(() => ({}));
@@ -4121,7 +4127,7 @@ async function refreshTrackingForOrders(type, button) {
           skippedDetails.push(`${order.id}: ${payload.reason}`);
         }
         console.log(`Skipped ${logLabel}: ${payload.reason || 'No tracking available'}`);
-        continue;
+        return;
       }
 
       successCount += 1;
@@ -4133,8 +4139,24 @@ async function refreshTrackingForOrders(type, button) {
     } finally {
       console.log('Complete');
       console.groupEnd();
+      processedCount += 1;
+      updateButtonProgress();
     }
-  }
+  };
+
+  const workerCount = Math.min(MAX_CONCURRENT_TRACKING_REQUESTS, eligibleOrders.length);
+  updateButtonProgress();
+
+  let nextIndex = 0;
+  const workers = Array.from({ length: workerCount }, () => (async function run() {
+    while (nextIndex < eligibleOrders.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      await processOrder(eligibleOrders[currentIndex], currentIndex);
+    }
+  })());
+
+  await Promise.all(workers);
 
   console.groupEnd();
 
@@ -5873,12 +5895,14 @@ body = {};
 }
 break;
   case 'refreshKitTracking':
-    url = `${BACKEND_BASE_URL}/orders/${orderId}/refresh-kit-tracking`;
+    url = REFRESH_TRACKING_FUNCTION_URL;
     method = 'POST';
+    body = { orderId, type: 'kit' };
     break;
   case 'refreshEmailTracking':
-    url = `${BACKEND_BASE_URL}/orders/${orderId}/sync-label-tracking`;
+    url = REFRESH_TRACKING_FUNCTION_URL;
     method = 'POST';
+    body = { orderId, type: 'email' };
     break;
   case 'cancelOrder':
     url = `${BACKEND_BASE_URL}/orders/${orderId}/cancel`;
