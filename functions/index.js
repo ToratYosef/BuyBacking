@@ -17,6 +17,7 @@ const {
   PHONE_TRANSIT_STATUS,
   normalizeInboundTrackingStatus,
 } = require('./helpers/shipengine');
+const { isStatusPastReceived } = require('./helpers/order-status');
 const { getShipStationCredentials } = require('./services/shipstation');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
 const createEmailsRouter = require('./routes/emails');
@@ -2455,6 +2456,10 @@ async function refreshKitTrackingById(orderId, options = {}) {
 
   const order = { id: doc.id, ...doc.data() };
 
+  if (isStatusPastReceived(order)) {
+    return { skipped: true, reason: 'Order already received/completed. Tracking refresh skipped.' };
+  }
+
   const hasOutbound = Boolean(order.outboundTrackingNumber);
   const hasInbound = Boolean(order.inboundTrackingNumber || order.trackingNumber);
 
@@ -3042,6 +3047,9 @@ async function refreshEmailLabelTrackingById(orderId) {
   }
 
   const order = { id: doc.id, ...doc.data() };
+  if (isStatusPastReceived(order)) {
+    return { skipped: true, reason: 'Order already received/completed. Tracking refresh skipped.' };
+  }
   const result = await syncInboundTrackingForOrder(order);
 
   if (result.skipped === 'no_tracking') {

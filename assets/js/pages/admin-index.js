@@ -243,6 +243,44 @@ const EMAIL_STATUS_HINTS = new Set([
   'completed',
 ]);
 
+const TRACKING_POST_RECEIVED_STATUSES = new Set([
+  'received',
+  'device_received',
+  'received_device',
+  'completed',
+  'complete',
+  're-offered-pending',
+  're-offered-accepted',
+  're-offered-declined',
+  're-offered-auto-accepted',
+  're_offered_pending',
+  're_offered_accepted',
+  're_offered_declined',
+  're_offered_auto_accepted',
+  'reoffer pending',
+  'reoffer accepted',
+  'reoffer declined',
+  'reoffer auto accepted',
+  'reoffer_pending',
+  'reoffer_accepted',
+  'reoffer_declined',
+  'reoffer_auto_accepted',
+  'return-label-generated',
+  'return_label_generated',
+  'return label generated',
+  'return-label-sent',
+  'return_label_sent',
+  'return label sent',
+  'return-label-requested',
+  'return_label_requested',
+  'return label requested',
+  'return-label-created',
+  'return_label_created',
+  'return label created',
+  'cancelled',
+  'canceled',
+]);
+
 const selectedOrderIds = new Set();
 let lastRenderedOrderIds = [];
 
@@ -3928,7 +3966,80 @@ function normalizeStatus(order = {}) {
     .toLowerCase();
 }
 
-function isBulkKitRefreshCandidate(order = {}) {
+function extractStatusCandidate(statusOrOrder = {}) {
+  if (typeof statusOrOrder === 'string') {
+    return statusOrOrder;
+  }
+  if (statusOrOrder && typeof statusOrOrder === 'object') {
+    return (
+      statusOrOrder.status ||
+      statusOrOrder.currentStatus ||
+      statusOrOrder.statusValue ||
+      statusOrOrder.status_value ||
+      ''
+    );
+  }
+  return '';
+}
+
+function isStatusPastReceived(statusOrOrder = {}) {
+  const rawStatus = extractStatusCandidate(statusOrOrder);
+  const normalized = (rawStatus || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) {
+    return false;
+  }
+
+  if (TRACKING_POST_RECEIVED_STATUSES.has(normalized)) {
+    return true;
+  }
+
+  const underscored = normalized.replace(/[\s-]+/g, '_');
+  if (TRACKING_POST_RECEIVED_STATUSES.has(underscored)) {
+    return true;
+  }
+
+  const hyphenated = normalized.replace(/[\s_]+/g, '-');
+  if (TRACKING_POST_RECEIVED_STATUSES.has(hyphenated)) {
+    return true;
+  }
+
+  if (
+    normalized.includes('reoffer') ||
+    normalized.includes('re-offer') ||
+    normalized.includes('re_offer')
+  ) {
+    return true;
+  }
+
+  if (
+    normalized.includes('return label') ||
+    normalized.includes('return-label') ||
+    normalized.includes('return_label') ||
+    normalized.includes('returnlabel')
+  ) {
+    return true;
+  }
+
+  if (
+    normalized.includes('received') &&
+    !normalized.includes('not_received') &&
+    !normalized.includes('kit')
+  ) {
+    return true;
+  }
+
+  if (normalized.includes('completed')) {
+    return true;
+  }
+
+  return false;
+}
+
+function matchesKitTrackingHints(order = {}) {
   const preference = normalizeShippingPreference(order);
   if (preference) {
     if (preference === 'shipping kit requested' || preference === 'ship_kit') {
@@ -3947,7 +4058,7 @@ function isBulkKitRefreshCandidate(order = {}) {
   return status.includes('kit');
 }
 
-function isBulkEmailLabelRefreshCandidate(order = {}) {
+function matchesEmailTrackingHints(order = {}) {
   const preference = normalizeShippingPreference(order);
   if (preference) {
     if (preference === 'email label requested' || preference === 'email_label') {
@@ -3967,6 +4078,20 @@ function isBulkEmailLabelRefreshCandidate(order = {}) {
   }
 
   return status.includes('email') || status.includes('label');
+}
+
+function isBulkKitRefreshCandidate(order = {}) {
+  if (isStatusPastReceived(order)) {
+    return false;
+  }
+  return matchesKitTrackingHints(order);
+}
+
+function isBulkEmailLabelRefreshCandidate(order = {}) {
+  if (isStatusPastReceived(order)) {
+    return false;
+  }
+  return matchesEmailTrackingHints(order);
 }
 
 function hasTrackingValue(value) {
@@ -4044,12 +4169,19 @@ async function refreshTrackingForOrders(type, button) {
     return;
   }
 
-  const relevantOrders = type === 'kit'
-    ? sourceOrders.filter(isBulkKitRefreshCandidate)
-    : sourceOrders.filter(isBulkEmailLabelRefreshCandidate);
+  const hintMatcher = type === 'kit' ? matchesKitTrackingHints : matchesEmailTrackingHints;
+  const candidateOrders = sourceOrders.filter(hintMatcher);
+
+  if (!candidateOrders.length) {
+    window.alert(`There are no ${typeLabel} orders available to refresh right now.`);
+    return;
+  }
+
+  const relevantOrders = candidateOrders.filter(order => !isStatusPastReceived(order));
+  const statusLockedCount = candidateOrders.length - relevantOrders.length;
 
   if (!relevantOrders.length) {
-    window.alert(`There are no ${typeLabel} orders available to refresh right now.`);
+    window.alert(`All matching ${typeLabel} orders have already been marked as received/completed.`);
     return;
   }
 
@@ -4075,8 +4207,11 @@ async function refreshTrackingForOrders(type, button) {
   }
 
   let successCount = 0;
-  let skippedCount = Math.max(0, missingTrackingCount);
+  let skippedCount = statusLockedCount + Math.max(0, missingTrackingCount);
   const skippedDetails = [];
+  if (statusLockedCount > 0) {
+    skippedDetails.push(`${statusLockedCount} order${statusLockedCount === 1 ? '' : 's'} skipped: already received or completed.`);
+  }
   if (missingTrackingCount > 0) {
     skippedDetails.push(`${missingTrackingCount} order${missingTrackingCount === 1 ? '' : 's'} skipped: no tracking numbers on file.`);
   }
@@ -4084,6 +4219,9 @@ async function refreshTrackingForOrders(type, button) {
   const failureDetails = [];
 
   console.groupCollapsed(`Bulk ${typeLabel} tracking refresh`);
+  if (statusLockedCount > 0) {
+    console.log(`${statusLockedCount} ${typeLabel} order(s) skipped because they were already received/completed.`);
+  }
   console.log(`Found ${eligibleOrders.length} ${typeLabel} order(s) with tracking numbers.`);
 
   let processedCount = 0;
@@ -5843,7 +5981,20 @@ voidLabelMessage.textContent = '';
 try {
 let url;
 let method = 'PUT';
-let body = options.body && typeof options.body === 'object' ? { ...options.body } : null;
+ let body = options.body && typeof options.body === 'object' ? { ...options.body } : null;
+ const targetOrder = allOrders.find(o => o.id === orderId) || null;
+
+ if (
+ targetOrder &&
+ (actionType === 'refreshKitTracking' || actionType === 'refreshEmailTracking') &&
+ isStatusPastReceived(targetOrder)
+ ) {
+ modalLoadingMessage.classList.add('hidden');
+ modalActionButtons.classList.remove('hidden');
+ updateReminderButtons(targetOrder);
+ displayModalMessage('Tracking refresh skipped because this order is already received/completed.', 'info');
+ return;
+ }
 
 switch(actionType) {
 case 'generateLabel':
@@ -5859,11 +6010,10 @@ url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
 body = { status: 'completed' };
 break;
 case 'payNow':
-const order = allOrders.find(o => o.id === orderId);
-if (!order) {
+if (!targetOrder) {
 throw new Error('Order data not found locally.');
 }
-const paymentLink = generatePaymentLink(order);
+const paymentLink = generatePaymentLink(targetOrder);
 if (paymentLink) {
 window.open(paymentLink, '_blank');
 displayModalMessage('Payment link generated and opened in a new tab.', 'success');
@@ -5873,7 +6023,7 @@ throw new Error('Could not generate payment link.');
 }
 modalLoadingMessage.classList.add('hidden');
 modalActionButtons.classList.remove('hidden');
-updateReminderButtons(order);
+updateReminderButtons(targetOrder);
 return;
 case 'sendReturnLabel':
 url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
