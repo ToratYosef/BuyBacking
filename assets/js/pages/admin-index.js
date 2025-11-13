@@ -64,17 +64,18 @@ return: 'Return Label',
 
 const TREND_LOOKBACK_DAYS = 14;
 const STATUS_CHART_CONFIG = [
-{ key: 'order_pending', label: 'Order Pending', color: '#6366f1' },
-{ key: 'kit_needs_printing', label: 'Needs Printing', color: '#8b5cf6' },
-{ key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
-{ key: 'kit_on_the_way_to_customer', label: 'Kit On The Way To Customer', color: '#f59e0b' },
-{ key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
-{ key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
-{ key: 'delivered_to_us', label: 'Delivered To Us', color: '#0d9488' },
-{ key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
-{ key: 'emailed', label: 'Emailed', color: '#38bdf8' },
-{ key: 'phone_on_the_way_to_us', label: 'Phone On The Way To Us', color: '#0284c7' },
-{ key: 'received', label: 'Received', color: '#0ea5e9' },
+  { key: 'order_pending', label: 'Order Pending', color: '#6366f1' },
+  { key: 'kit_needs_printing', label: 'Needs Printing', color: '#8b5cf6' },
+  { key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
+  { key: 'kit_on_the_way_to_customer', label: 'Kit On The Way To Customer', color: '#f59e0b' },
+  { key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
+  { key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
+  { key: 'delivered_to_us', label: 'Delivered To Us', color: '#0d9488' },
+  { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
+  { key: 'emailed', label: 'Emailed', color: '#38bdf8' },
+  { key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0ea5e9' },
+  { key: 'phone_on_the_way_to_us', label: 'Phone On The Way To Us', color: '#0284c7' },
+  { key: 'received', label: 'Received', color: '#0ea5e9' },
 { key: 'completed', label: 'Completed', color: '#22c55e' },
 { key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
 { key: 're-offered-accepted', label: 'Reoffer Accepted', color: '#14b8a6' },
@@ -111,7 +112,7 @@ const STATUS_LABEL_OVERRIDES = Object.freeze({
   needs_printing: 'Needs Printing',
   kit_in_transit: 'Kit On The Way To Customer',
   kit_on_the_way_to_customer: 'Kit On The Way To Customer',
-  phone_on_the_way: 'Phone On The Way To Us',
+  phone_on_the_way: 'Phone On The Way',
   phone_on_the_way_to_us: 'Phone On The Way To Us',
   're-offered-pending': 'Reoffer Pending',
   're-offered-accepted': 'Reoffer Accepted',
@@ -294,10 +295,14 @@ const receivedDevicesCount = document.getElementById('received-devices-count');
 const orderPendingCount = document.getElementById('order-pending-count');
 const kitNeedsPrintingCount = document.getElementById('kit-needs-printing-count');
 const kitSentCount = document.getElementById('kit-sent-count');
+const kitOnTheWayToCustomerCount = document.getElementById('kit-on-the-way-to-customer-count');
 const kitDeliveredCount = document.getElementById('kit-delivered-count');
+const kitOnTheWayToUsCount = document.getElementById('kit-on-the-way-to-us-count');
 const deliveredToUsCount = document.getElementById('delivered-to-us-count');
 const labelGeneratedCount = document.getElementById('label-generated-count');
 const emailedCount = document.getElementById('emailed-count');
+const phoneOnTheWayCount = document.getElementById('phone-on-the-way-count');
+const phoneOnTheWayToUsCount = document.getElementById('phone-on-the-way-to-us-count');
 const receivedCount = document.getElementById('received-count');
 const completedCount = document.getElementById('completed-count');
 const reofferedPendingCount = document.getElementById('re-offered-pending-count');
@@ -3555,44 +3560,60 @@ modalLoadingMessage.classList.add('hidden');
 
 function updateDashboardCounts(ordersData) {
 const statusCounts = {
-'order_pending': ordersData.filter(o => o.status === 'order_pending').length,
-'kit_needs_printing': ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
-'kit_sent': ordersData.filter(o => o.status === 'kit_sent').length,
-'kit_delivered': ordersData.filter(o => o.status === 'kit_delivered').length,
-'delivered_to_us': ordersData.filter(o => o.status === 'delivered_to_us').length,
-'label_generated': ordersData.filter(o => o.status === 'label_generated').length,
-'emailed': ordersData.filter(o => o.status === 'emailed').length,
-'received': ordersData.filter(o => o.status === 'received').length,
-'completed': ordersData.filter(o => o.status === 'completed').length,
-'re-offered-pending': ordersData.filter(o => o.status === 're-offered-pending').length,
-'re-offered-accepted': ordersData.filter(o => o.status === 're-offered-accepted').length,
-'re-offered-declined': ordersData.filter(o => o.status === 're-offered-declined').length,
-'return-label-generated': ordersData.filter(o => o.status === 'return-label-generated').length,
+  'order_pending': ordersData.filter(o => o.status === 'order_pending').length,
+  'kit_needs_printing': ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
+  'kit_sent': ordersData.filter(o => o.status === 'kit_sent').length,
+  'kit_on_the_way_to_customer': ordersData.filter(o => o.status === 'kit_on_the_way_to_customer' || o.status === 'kit_in_transit').length,
+  'kit_delivered': ordersData.filter(o => o.status === 'kit_delivered').length,
+  'kit_on_the_way_to_us': ordersData.filter(o => o.status === 'kit_on_the_way_to_us').length,
+  'delivered_to_us': ordersData.filter(o => o.status === 'delivered_to_us').length,
+  'label_generated': ordersData.filter(o => o.status === 'label_generated').length,
+  'emailed': ordersData.filter(o => o.status === 'emailed').length,
+  'phone_on_the_way': ordersData.filter(o => o.status === 'phone_on_the_way').length,
+  'phone_on_the_way_to_us': ordersData.filter(o => o.status === 'phone_on_the_way_to_us').length,
+  'received': ordersData.filter(o => o.status === 'received').length,
+  'completed': ordersData.filter(o => o.status === 'completed').length,
+  're-offered-pending': ordersData.filter(o => o.status === 're-offered-pending').length,
+  're-offered-accepted': ordersData.filter(o => o.status === 're-offered-accepted').length,
+  're-offered-declined': ordersData.filter(o => o.status === 're-offered-declined').length,
+  'return-label-generated': ordersData.filter(o => o.status === 'return-label-generated').length,
 };
 
 if (orderPendingCount) {
 orderPendingCount.textContent = statusCounts['order_pending'];
 }
 if (kitNeedsPrintingCount) {
-kitNeedsPrintingCount.textContent = statusCounts['kit_needs_printing'];
+  kitNeedsPrintingCount.textContent = statusCounts['kit_needs_printing'];
 }
 if (kitSentCount) {
-kitSentCount.textContent = statusCounts['kit_sent'];
+  kitSentCount.textContent = statusCounts['kit_sent'];
+}
+if (kitOnTheWayToCustomerCount) {
+  kitOnTheWayToCustomerCount.textContent = statusCounts['kit_on_the_way_to_customer'];
 }
 if (kitDeliveredCount) {
-kitDeliveredCount.textContent = statusCounts['kit_delivered'];
+  kitDeliveredCount.textContent = statusCounts['kit_delivered'];
+}
+if (kitOnTheWayToUsCount) {
+  kitOnTheWayToUsCount.textContent = statusCounts['kit_on_the_way_to_us'];
 }
 if (deliveredToUsCount) {
-deliveredToUsCount.textContent = statusCounts['delivered_to_us'];
+  deliveredToUsCount.textContent = statusCounts['delivered_to_us'];
 }
 if (labelGeneratedCount) {
-labelGeneratedCount.textContent = statusCounts['label_generated'];
+  labelGeneratedCount.textContent = statusCounts['label_generated'];
 }
 if (emailedCount) {
-emailedCount.textContent = statusCounts['emailed'];
+  emailedCount.textContent = statusCounts['emailed'];
+}
+if (phoneOnTheWayCount) {
+  phoneOnTheWayCount.textContent = statusCounts['phone_on_the_way'];
+}
+if (phoneOnTheWayToUsCount) {
+  phoneOnTheWayToUsCount.textContent = statusCounts['phone_on_the_way_to_us'];
 }
 if (receivedCount) {
-receivedCount.textContent = statusCounts['received'];
+  receivedCount.textContent = statusCounts['received'];
 }
 if (completedCount) {
 completedCount.textContent = statusCounts['completed'];
