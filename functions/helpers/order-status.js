@@ -29,6 +29,7 @@ const POST_RECEIVED_STATUS_HINTS = new Set([
   'return-label-requested',
   'return_label_requested',
   'return label requested',
+  'emailed',
   'cancelled',
   'canceled',
 ]);
