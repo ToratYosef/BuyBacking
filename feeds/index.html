@@ -541,7 +541,6 @@
   function getExtraAdjustment(brandNorm, modelNorm, quality, rules) {
     let extra = 0;
     const q = normaliseStr(quality);
-    // At runtime we match lowercase keys, but we keep original keys in JSON
     for (const key of Object.keys(rules.brands)) {
       if (normaliseStr(key) === brandNorm) {
         const v = rules.brands[key][q];
@@ -670,6 +669,7 @@
       );
     });
 
+    // NOTE: column order: Old / Feed / New / Δ
     const head = `
       <thead>
         <tr>
@@ -679,8 +679,8 @@
           <th>Storage</th>
           <th>Status</th>
           <th>Quality</th>
-          <th>Feed</th>
           <th>Old</th>
+          <th>Feed</th>
           <th>New</th>
           <th>Δ</th>
         </tr>
@@ -702,8 +702,8 @@
           <td>${r.storage}</td>
           <td><span class="badge">${r.status}</span></td>
           <td><span class="badge">${r.quality}</span></td>
-          <td>${feedStr}</td>
           <td>${oldStr}</td>
+          <td>${feedStr}</td>
           <td>
             <input
               type="number"
@@ -749,7 +749,7 @@
       row.node.textContent = val.toFixed(2);
     }
 
-    // Recompute delta
+    // Recompute delta (New - Old)
     const oldNum = row.oldNumeric;
     const delta = oldNum == null ? val : (val - oldNum);
     row.delta = delta;
@@ -872,12 +872,14 @@
               continue; // no data from feed for this combo
             }
 
-            const extra = getExtraAdjustment(brandKey, modelKey, quality, rules);
-            const newVal = feedPrice + globalAdd + extra;
-            const newValRounded = Math.round(newVal * 100) / 100;
-
             const oldVal = Number(qNode.textContent.trim());
             const oldNumeric = Number.isNaN(oldVal) ? null : oldVal;
+
+            // FIX 1: base = feedPrice (we use FEED + offsets, not OLD + offsets)
+            const extra = getExtraAdjustment(brandKey, modelKey, quality, rules);
+            const base = feedPrice;
+            const newVal = base + globalAdd + extra;
+            const newValRounded = Math.round(newVal * 100) / 100;
 
             if (onlyIncrease && oldNumeric !== null && newValRounded <= oldNumeric) {
               // Skip if we would go down or stay the same and protection is on
