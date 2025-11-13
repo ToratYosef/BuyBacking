@@ -143,6 +143,36 @@ if (typeof window !== "undefined" && !window.escapeHtml) {
   window.escapeHtml = escapeHtml;
 }
 
+const formatShippingAddress = (shippingInfo = {}) => {
+  if (!shippingInfo) {
+    return "N/A";
+  }
+
+  const segments = [];
+  if (shippingInfo.streetAddress) {
+    segments.push(shippingInfo.streetAddress);
+  }
+
+  const cityState = [shippingInfo.city, shippingInfo.state]
+    .filter((part) => part && String(part).trim().length)
+    .join(", ");
+
+  if (cityState) {
+    const withZip = shippingInfo.zipCode
+      ? `${cityState} ${shippingInfo.zipCode}`
+      : cityState;
+    segments.push(withZip);
+  } else if (shippingInfo.zipCode) {
+    segments.push(shippingInfo.zipCode);
+  }
+
+  return segments.length ? segments.join(", ") : "N/A";
+};
+
+if (typeof window !== "undefined" && !window.formatShippingAddress) {
+  window.formatShippingAddress = formatShippingAddress;
+}
+
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -371,6 +401,18 @@ const modalZelleDetailsRow = document.getElementById('modal-zelle-details-row');
 const modalZelleDetails = document.getElementById('modal-zelle-details');
 
 const modalShippingAddress = document.getElementById('modal-shipping-address');
+const shippingAddressEditTrigger = document.getElementById('shipping-address-edit-trigger');
+const shippingAddressEditContainer = document.getElementById('shipping-address-edit-container');
+const shippingAddressStreetInput = document.getElementById('shipping-address-street');
+const shippingAddressCityInput = document.getElementById('shipping-address-city');
+const shippingAddressStateInput = document.getElementById('shipping-address-state');
+const shippingAddressZipInput = document.getElementById('shipping-address-zip');
+const shippingAddressSaveButton = document.getElementById('shipping-address-save');
+const shippingAddressCancelButton = document.getElementById('shipping-address-cancel');
+const shippingAddressFeedback = document.getElementById('shipping-address-edit-feedback');
+const shippingAddressSaveButtonDefaultText = shippingAddressSaveButton
+  ? shippingAddressSaveButton.textContent
+  : 'Save Address';
 const modalConditionPowerOn = document.getElementById('modal-condition-power-on');
 const modalConditionFunctional = document.getElementById('modal-condition-functional');
 const modalConditionCracks = document.getElementById('modal-condition-cracks');
@@ -773,6 +815,38 @@ if (orderDetailsModal) {
     if (event.target === orderDetailsModal) {
       closeOrderDetailsModal();
     }
+  });
+}
+
+if (shippingAddressEditTrigger) {
+  shippingAddressEditTrigger.addEventListener('click', () => {
+    if (!currentOrderDetails) {
+      return;
+    }
+
+    if (isShippingAddressEditorVisible()) {
+      toggleShippingAddressEditor(false);
+      return;
+    }
+
+    populateShippingAddressEditor(currentOrderDetails.shippingInfo || {});
+    clearShippingAddressFeedback();
+    toggleShippingAddressEditor(true);
+    setTimeout(() => {
+      shippingAddressStreetInput?.focus();
+    }, 0);
+  });
+}
+
+if (shippingAddressCancelButton) {
+  shippingAddressCancelButton.addEventListener('click', () => {
+    resetShippingAddressEditor();
+  });
+}
+
+if (shippingAddressSaveButton) {
+  shippingAddressSaveButton.addEventListener('click', () => {
+    handleShippingAddressSave();
   });
 }
 
@@ -5108,12 +5182,162 @@ async function handleStatusDropdownSelection(newStatus) {
   }
 }
 
+function isShippingAddressEditorVisible() {
+  return !!(
+    shippingAddressEditContainer &&
+    !shippingAddressEditContainer.classList.contains('hidden')
+  );
+}
+
+function toggleShippingAddressEditor(forceState) {
+  if (!shippingAddressEditContainer) {
+    return;
+  }
+
+  const shouldShow = typeof forceState === 'boolean'
+    ? forceState
+    : !isShippingAddressEditorVisible();
+
+  shippingAddressEditContainer.classList.toggle('hidden', !shouldShow);
+  if (!shouldShow) {
+    clearShippingAddressFeedback();
+  }
+}
+
+function populateShippingAddressEditor(shippingInfo = {}) {
+  if (shippingAddressStreetInput) {
+    shippingAddressStreetInput.value = shippingInfo.streetAddress || '';
+  }
+  if (shippingAddressCityInput) {
+    shippingAddressCityInput.value = shippingInfo.city || '';
+  }
+  if (shippingAddressStateInput) {
+    shippingAddressStateInput.value = (shippingInfo.state || '').toString().toUpperCase();
+  }
+  if (shippingAddressZipInput) {
+    shippingAddressZipInput.value = shippingInfo.zipCode || '';
+  }
+}
+
+function resetShippingAddressEditor() {
+  toggleShippingAddressEditor(false);
+  populateShippingAddressEditor({});
+}
+
+function clearShippingAddressFeedback() {
+  if (!shippingAddressFeedback) {
+    return;
+  }
+  shippingAddressFeedback.textContent = '';
+  shippingAddressFeedback.classList.add('hidden');
+  shippingAddressFeedback.classList.remove('text-emerald-600', 'text-rose-600');
+}
+
+function setShippingAddressFeedback(message, tone = 'info') {
+  if (!shippingAddressFeedback) {
+    return;
+  }
+  shippingAddressFeedback.textContent = message;
+  shippingAddressFeedback.classList.remove('hidden');
+  shippingAddressFeedback.classList.remove('text-emerald-600', 'text-rose-600');
+  const toneClass = tone === 'error' ? 'text-rose-600' : 'text-emerald-600';
+  shippingAddressFeedback.classList.add(toneClass);
+}
+
+function setShippingAddressSavingState(isSaving) {
+  if (!shippingAddressSaveButton) {
+    return;
+  }
+  shippingAddressSaveButton.disabled = !!isSaving;
+  shippingAddressSaveButton.textContent = isSaving
+    ? 'Saving…'
+    : shippingAddressSaveButtonDefaultText;
+}
+
+function updateShippingAddressDisplay(shippingInfo) {
+  if (!modalShippingAddress) {
+    return;
+  }
+  modalShippingAddress.textContent = formatShippingAddress(shippingInfo);
+}
+
+async function handleShippingAddressSave() {
+  if (!currentOrderDetails || !currentOrderDetails.id) {
+    setShippingAddressFeedback('Load an order before editing the address.', 'error');
+    return;
+  }
+
+  const payload = {
+    streetAddress: shippingAddressStreetInput?.value?.trim() || '',
+    city: shippingAddressCityInput?.value?.trim() || '',
+    state: shippingAddressStateInput?.value?.trim() || '',
+    zipCode: shippingAddressZipInput?.value?.trim() || '',
+  };
+
+  if (!payload.streetAddress || !payload.city || !payload.state || !payload.zipCode) {
+    setShippingAddressFeedback('Please complete every address field before saving.', 'error');
+    return;
+  }
+
+  if (payload.state.length !== 2) {
+    setShippingAddressFeedback('Use the 2-letter state abbreviation (e.g., NY).', 'error');
+    return;
+  }
+
+  payload.state = payload.state.toUpperCase();
+  clearShippingAddressFeedback();
+  setShippingAddressSavingState(true);
+
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/orders/${currentOrderDetails.id}/shipping-info`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    let responseData = null;
+    try {
+      responseData = await response.json();
+    } catch (parseError) {
+      responseData = null;
+    }
+
+    if (!response.ok) {
+      const message = responseData?.error || 'Failed to update the shipping address.';
+      throw new Error(message);
+    }
+
+    const updatedShippingInfo = responseData?.shippingInfo
+      ? responseData.shippingInfo
+      : { ...currentOrderDetails.shippingInfo, ...payload };
+
+    if (currentOrderDetails) {
+      currentOrderDetails.shippingInfo = {
+        ...currentOrderDetails.shippingInfo,
+        ...updatedShippingInfo,
+      };
+    }
+
+    updateShippingAddressDisplay(currentOrderDetails.shippingInfo);
+    setShippingAddressFeedback('Shipping address updated.', 'success');
+
+    setTimeout(() => {
+      toggleShippingAddressEditor(false);
+    }, 800);
+  } catch (error) {
+    setShippingAddressFeedback(error.message || 'Failed to update the shipping address.', 'error');
+  } finally {
+    setShippingAddressSavingState(false);
+  }
+}
+
 async function openOrderDetailsModal(orderId) {
   if (!orderDetailsModal) {
     return;
   }
   resetImeiSection();
   teardownImeiListener();
+  resetShippingAddressEditor();
   // Hide all action/form containers
   modalActionButtons.innerHTML = '';
 modalLoadingMessage.classList.add('hidden');
@@ -5222,8 +5446,8 @@ modalZelleDetailsRow.classList.remove('hidden');
 
 const shippingInfo = order.shippingInfo;
 if (shippingInfo) {
-modalShippingAddress.textContent = `${shippingInfo.streetAddress}, ${shippingInfo.city}, ${shippingInfo.state}, ${shippingInfo.zipCode}`;
-} else {
+updateShippingAddressDisplay(shippingInfo);
+} else if (modalShippingAddress) {
 modalShippingAddress.textContent = 'N/A';
 }
 
