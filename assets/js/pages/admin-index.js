@@ -404,7 +404,7 @@ const modalShippingAddress = document.getElementById('modal-shipping-address');
 const shippingAddressDisplayRow = document.getElementById('shipping-address-display-row');
 const shippingAddressEditTrigger = document.getElementById('shipping-address-edit-trigger');
 const shippingAddressEditContainer = document.getElementById('shipping-address-edit-container');
-const shippingAddressTextarea = document.getElementById('shipping-address-text');
+const shippingAddressInput = document.getElementById('shipping-address-text');
 const shippingAddressApplyButton = document.getElementById('shipping-address-apply');
 const shippingAddressCancelButton = document.getElementById('shipping-address-cancel');
 const shippingAddressFeedback = document.getElementById('shipping-address-edit-feedback');
@@ -831,7 +831,7 @@ if (shippingAddressEditTrigger) {
     clearShippingAddressFeedback();
     toggleShippingAddressEditor(true);
     setTimeout(() => {
-      shippingAddressTextarea?.focus();
+      shippingAddressInput?.focus();
     }, 0);
   });
 }
@@ -5206,18 +5206,18 @@ function toggleShippingAddressEditor(forceState) {
 }
 
 function populateShippingAddressEditor(shippingInfo = {}) {
-  if (shippingAddressTextarea) {
-    shippingAddressTextarea.value = formatShippingAddressForEditor(shippingInfo);
+  if (shippingAddressInput) {
+    shippingAddressInput.value = formatShippingAddressForEditor(shippingInfo);
   }
 }
 
 function resetShippingAddressEditor({ restoreFromOrder = false } = {}) {
   toggleShippingAddressEditor(false);
-  if (shippingAddressTextarea) {
+  if (shippingAddressInput) {
     if (restoreFromOrder && currentOrderDetails?.shippingInfo) {
-      shippingAddressTextarea.value = formatShippingAddressForEditor(currentOrderDetails.shippingInfo);
+      shippingAddressInput.value = formatShippingAddressForEditor(currentOrderDetails.shippingInfo);
     } else {
-      shippingAddressTextarea.value = '';
+      shippingAddressInput.value = '';
     }
   }
 }
@@ -5264,60 +5264,60 @@ function formatShippingAddressForEditor(shippingInfo = {}) {
     return '';
   }
 
-  const lines = [];
   const streetLine = shippingInfo.streetAddress?.trim();
+  const cityPart = shippingInfo.city?.trim();
+  const statePart = shippingInfo.state ? shippingInfo.state.toString().toUpperCase().trim() : '';
+  const zipPart = shippingInfo.zipCode ? String(shippingInfo.zipCode).trim() : '';
+
+  const segments = [];
   if (streetLine) {
-    lines.push(streetLine);
+    segments.push(streetLine);
   }
 
-  if (shippingInfo.city || shippingInfo.state || shippingInfo.zipCode) {
-    let cityLine = shippingInfo.city ? shippingInfo.city.trim() : '';
-    const statePart = shippingInfo.state ? shippingInfo.state.toString().toUpperCase().trim() : '';
-    if (statePart) {
-      cityLine += cityLine ? `, ${statePart}` : statePart;
-    }
-    if (shippingInfo.zipCode) {
-      cityLine += cityLine ? ` ${shippingInfo.zipCode}` : shippingInfo.zipCode;
-    }
-    if (cityLine.trim()) {
-      lines.push(cityLine.trim());
-    }
+  let cityStateZip = '';
+  if (cityPart) {
+    cityStateZip += cityPart;
+  }
+  if (statePart) {
+    cityStateZip += cityStateZip ? `, ${statePart}` : statePart;
+  }
+  if (zipPart) {
+    cityStateZip += cityStateZip ? ` ${zipPart}` : zipPart;
   }
 
-  return lines.join('\n');
+  if (cityStateZip.trim()) {
+    segments.push(cityStateZip.trim());
+  }
+
+  return segments.join(', ');
 }
 
 function parseShippingAddressEditorValue(rawValue = '') {
-  const normalized = rawValue.replace(/\r/g, '').trim();
+  const normalized = rawValue.replace(/\r/g, ' ').replace(/\n/g, ' ').trim();
   if (!normalized) {
     throw new Error('Enter the full shipping address before applying.');
   }
 
-  const lines = normalized
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length < 2) {
-    throw new Error('Use at least two lines (street first, then "City, ST 12345").');
+  const stateZipMatch = normalized.match(/([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+  if (!stateZipMatch) {
+    throw new Error('End the address with a state abbreviation and ZIP (e.g., "NY 11230").');
   }
 
-  const cityStateZipLine = lines.pop();
-  const streetAddress = lines.join(', ').trim();
+  const state = stateZipMatch[1].toUpperCase();
+  const zipCode = stateZipMatch[2];
+  const beforeStateZip = normalized.slice(0, stateZipMatch.index).replace(/,\s*$/, '').trim();
+
+  const lastCommaIndex = beforeStateZip.lastIndexOf(',');
+  if (lastCommaIndex === -1) {
+    throw new Error('Separate the street and city with commas (e.g., "123 Main St, Brooklyn, NY 11230").');
+  }
+
+  const city = beforeStateZip.slice(lastCommaIndex + 1).trim();
+  const streetAddress = beforeStateZip.slice(0, lastCommaIndex).trim();
 
   if (!streetAddress) {
-    throw new Error('Add the street address on the first line.');
+    throw new Error('Add the street address before the city.');
   }
-
-  const cityStateZipMatch = cityStateZipLine.match(/^(.+?)[,\s]+([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
-  if (!cityStateZipMatch) {
-    throw new Error('Format the last line like "Brooklyn, NY 11230".');
-  }
-
-  const city = cityStateZipMatch[1].replace(/,\s*$/, '').trim();
-  const state = cityStateZipMatch[2].toUpperCase();
-  const zipCode = cityStateZipMatch[3];
-
   if (!city) {
     throw new Error('Include the city name before the state.');
   }
@@ -5333,7 +5333,7 @@ async function handleShippingAddressApply() {
 
   let payload;
   try {
-    payload = parseShippingAddressEditorValue(shippingAddressTextarea?.value || '');
+    payload = parseShippingAddressEditorValue(shippingAddressInput?.value || '');
   } catch (parseError) {
     setShippingAddressFeedback(parseError.message || 'Please check the address format.', 'error');
     return;
