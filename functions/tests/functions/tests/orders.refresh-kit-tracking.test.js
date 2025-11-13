@@ -166,7 +166,8 @@ test('reverts kit transit status back to label_generated when only acceptance sc
 test('prefers inbound tracking once the kit is delivered', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'IT',
-        status_description: 'Inbound in transit'
+        status_description: 'Inbound in transit',
+        estimated_delivery_date: '2024-10-04'
     });
 
     const { updatePayload, delivered, direction } = await buildKitTrackingUpdate(
@@ -194,7 +195,7 @@ test('prefers inbound tracking once the kit is delivered', async () => {
         statusDescription: 'Inbound in transit',
         carrierCode: 'stamps_com',
         lastUpdated: null,
-        estimatedDelivery: null,
+        estimatedDelivery: '2024-10-04',
         trackingNumber: '9400INBOUND1',
         direction: 'inbound'
     });
@@ -246,6 +247,79 @@ test('reverts inbound phone transit status to label_generated when only acceptan
         {
             status: 'phone_on_the_way_to_us',
             trackingNumber: '1ZRESETPHONE1'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key',
+            serverTimestamp: () => 'server-ts'
+        }
+    );
+
+    assert.equal(direction, 'inbound');
+    assert.equal(updatePayload.status, 'label_generated');
+    assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
+});
+
+test('rolls kit inbound transit status back to kit_delivered when no ETA exists', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'IT',
+        status_description: 'Inbound in transit'
+    });
+
+    const { updatePayload, direction } = await buildKitTrackingUpdate(
+        {
+            status: 'phone_on_the_way_to_us',
+            shippingPreference: 'Shipping Kit Requested',
+            inboundTrackingNumber: '1ZKITLEVEL1',
+            kitDeliveredAt: '2024-09-01T00:00:00Z'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key',
+            serverTimestamp: () => 'server-ts'
+        }
+    );
+
+    assert.equal(direction, 'inbound');
+    assert.equal(updatePayload.status, 'kit_delivered');
+    assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
+});
+
+test('rolls kit inbound transit status back to kit_sent when scans are not yet in transit', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'LA',
+        status_description: 'Label created'
+    });
+
+    const { updatePayload } = await buildKitTrackingUpdate(
+        {
+            status: 'phone_on_the_way_to_us',
+            shippingPreference: 'Shipping Kit Requested',
+            inboundTrackingNumber: '1ZKITLEVEL2',
+            kitSentAt: '2024-09-02T00:00:00Z'
+        },
+        {
+            axiosClient: axiosStub,
+            shipengineKey: 'demo-key',
+            serverTimestamp: () => 'server-ts'
+        }
+    );
+
+    assert.equal(updatePayload.status, 'kit_sent');
+    assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
+});
+
+test('rolls emailed label inbound transit status back to label_generated when no ETA exists', async () => {
+    const axiosStub = createAxiosStub({
+        status_code: 'IT',
+        status_description: 'Inbound in transit'
+    });
+
+    const { updatePayload, direction } = await buildKitTrackingUpdate(
+        {
+            status: 'phone_on_the_way',
+            shippingPreference: 'Email Label Requested',
+            trackingNumber: '1ZEMAILROLL1'
         },
         {
             axiosClient: axiosStub,
