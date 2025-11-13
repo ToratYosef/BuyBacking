@@ -1150,18 +1150,29 @@ if (!this.deviceData || !this.deviceData.prices) return;
 const carrierKey = this.carrier === 'unlocked' ? 'unlocked' : 'locked';
 const storageKey = this.storage;
 
-let conditionKey;
-if (this.conditions.power === 'no') {
-conditionKey = 'noPower';
-} else if (this.conditions.functionality === 'not-working') {
-conditionKey = 'broken';
-} else if (this.conditions.quality === 'flawless') {
-conditionKey = 'flawless';
-} else if (this.conditions.quality === 'scratched') {
-conditionKey = 'good';
-} else if (this.conditions.quality === 'damaged') {
-conditionKey = 'damaged';
-}
+        let conditionKey = 'good';
+        if (this.conditions.power === 'no') {
+            conditionKey = 'noPower';
+        } else if (this.conditions.functionality === 'not-working') {
+            conditionKey = 'broken';
+        } else {
+            switch (this.conditions.quality) {
+                case 'flawless':
+                    conditionKey = 'flawless';
+                    break;
+                case 'good':
+                    conditionKey = 'good';
+                    break;
+                case 'fair':
+                    conditionKey = 'fair';
+                    break;
+                case 'damaged':
+                    conditionKey = 'damaged';
+                    break;
+                default:
+                    conditionKey = 'good';
+            }
+        }
 
 const price = this.deviceData.prices?.[storageKey]?.[carrierKey]?.[conditionKey];
 if (price) {
