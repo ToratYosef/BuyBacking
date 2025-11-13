@@ -143,6 +143,36 @@ if (typeof window !== "undefined" && !window.escapeHtml) {
   window.escapeHtml = escapeHtml;
 }
 
+const formatShippingAddress = (shippingInfo = {}) => {
+  if (!shippingInfo) {
+    return "N/A";
+  }
+
+  const segments = [];
+  if (shippingInfo.streetAddress) {
+    segments.push(shippingInfo.streetAddress);
+  }
+
+  const cityState = [shippingInfo.city, shippingInfo.state]
+    .filter((part) => part && String(part).trim().length)
+    .join(", ");
+
+  if (cityState) {
+    const withZip = shippingInfo.zipCode
+      ? `${cityState} ${shippingInfo.zipCode}`
+      : cityState;
+    segments.push(withZip);
+  } else if (shippingInfo.zipCode) {
+    segments.push(shippingInfo.zipCode);
+  }
+
+  return segments.length ? segments.join(", ") : "N/A";
+};
+
+if (typeof window !== "undefined" && !window.formatShippingAddress) {
+  window.formatShippingAddress = formatShippingAddress;
+}
+
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -371,6 +401,16 @@ const modalZelleDetailsRow = document.getElementById('modal-zelle-details-row');
 const modalZelleDetails = document.getElementById('modal-zelle-details');
 
 const modalShippingAddress = document.getElementById('modal-shipping-address');
+const shippingAddressDisplayRow = document.getElementById('shipping-address-display-row');
+const shippingAddressEditTrigger = document.getElementById('shipping-address-edit-trigger');
+const shippingAddressEditContainer = document.getElementById('shipping-address-edit-container');
+const shippingAddressInput = document.getElementById('shipping-address-text');
+const shippingAddressApplyButton = document.getElementById('shipping-address-apply');
+const shippingAddressCancelButton = document.getElementById('shipping-address-cancel');
+const shippingAddressFeedback = document.getElementById('shipping-address-edit-feedback');
+const shippingAddressApplyButtonDefaultText = shippingAddressApplyButton
+  ? shippingAddressApplyButton.textContent
+  : 'Apply';
 const modalConditionPowerOn = document.getElementById('modal-condition-power-on');
 const modalConditionFunctional = document.getElementById('modal-condition-functional');
 const modalConditionCracks = document.getElementById('modal-condition-cracks');
@@ -773,6 +813,38 @@ if (orderDetailsModal) {
     if (event.target === orderDetailsModal) {
       closeOrderDetailsModal();
     }
+  });
+}
+
+if (shippingAddressEditTrigger) {
+  shippingAddressEditTrigger.addEventListener('click', () => {
+    if (!currentOrderDetails) {
+      return;
+    }
+
+    if (isShippingAddressEditorVisible()) {
+      toggleShippingAddressEditor(false);
+      return;
+    }
+
+    populateShippingAddressEditor(currentOrderDetails.shippingInfo || {});
+    clearShippingAddressFeedback();
+    toggleShippingAddressEditor(true);
+    setTimeout(() => {
+      shippingAddressInput?.focus();
+    }, 0);
+  });
+}
+
+if (shippingAddressCancelButton) {
+  shippingAddressCancelButton.addEventListener('click', () => {
+    resetShippingAddressEditor({ restoreFromOrder: true });
+  });
+}
+
+if (shippingAddressApplyButton) {
+  shippingAddressApplyButton.addEventListener('click', () => {
+    handleShippingAddressApply();
   });
 }
 
@@ -5108,12 +5180,218 @@ async function handleStatusDropdownSelection(newStatus) {
   }
 }
 
+function isShippingAddressEditorVisible() {
+  return !!(
+    shippingAddressEditContainer &&
+    !shippingAddressEditContainer.classList.contains('hidden')
+  );
+}
+
+function toggleShippingAddressEditor(forceState) {
+  if (!shippingAddressEditContainer) {
+    return;
+  }
+
+  const shouldShow = typeof forceState === 'boolean'
+    ? forceState
+    : !isShippingAddressEditorVisible();
+
+  shippingAddressEditContainer.classList.toggle('hidden', !shouldShow);
+  if (shippingAddressDisplayRow) {
+    shippingAddressDisplayRow.classList.toggle('hidden', shouldShow);
+  }
+  if (!shouldShow) {
+    clearShippingAddressFeedback();
+  }
+}
+
+function populateShippingAddressEditor(shippingInfo = {}) {
+  if (shippingAddressInput) {
+    shippingAddressInput.value = formatShippingAddressForEditor(shippingInfo);
+  }
+}
+
+function resetShippingAddressEditor({ restoreFromOrder = false } = {}) {
+  toggleShippingAddressEditor(false);
+  if (shippingAddressInput) {
+    if (restoreFromOrder && currentOrderDetails?.shippingInfo) {
+      shippingAddressInput.value = formatShippingAddressForEditor(currentOrderDetails.shippingInfo);
+    } else {
+      shippingAddressInput.value = '';
+    }
+  }
+}
+
+function clearShippingAddressFeedback() {
+  if (!shippingAddressFeedback) {
+    return;
+  }
+  shippingAddressFeedback.textContent = '';
+  shippingAddressFeedback.classList.add('hidden');
+  shippingAddressFeedback.classList.remove('text-emerald-600', 'text-rose-600');
+}
+
+function setShippingAddressFeedback(message, tone = 'info') {
+  if (!shippingAddressFeedback) {
+    return;
+  }
+  shippingAddressFeedback.textContent = message;
+  shippingAddressFeedback.classList.remove('hidden');
+  shippingAddressFeedback.classList.remove('text-emerald-600', 'text-rose-600');
+  const toneClass = tone === 'error' ? 'text-rose-600' : 'text-emerald-600';
+  shippingAddressFeedback.classList.add(toneClass);
+}
+
+function setShippingAddressSavingState(isSaving) {
+  if (!shippingAddressApplyButton) {
+    return;
+  }
+  shippingAddressApplyButton.disabled = !!isSaving;
+  shippingAddressApplyButton.textContent = isSaving
+    ? 'Applying…'
+    : shippingAddressApplyButtonDefaultText;
+}
+
+function updateShippingAddressDisplay(shippingInfo) {
+  if (!modalShippingAddress) {
+    return;
+  }
+  modalShippingAddress.textContent = formatShippingAddress(shippingInfo);
+}
+
+function formatShippingAddressForEditor(shippingInfo = {}) {
+  if (!shippingInfo) {
+    return '';
+  }
+
+  const streetLine = shippingInfo.streetAddress?.trim();
+  const cityPart = shippingInfo.city?.trim();
+  const statePart = shippingInfo.state ? shippingInfo.state.toString().toUpperCase().trim() : '';
+  const zipPart = shippingInfo.zipCode ? String(shippingInfo.zipCode).trim() : '';
+
+  const segments = [];
+  if (streetLine) {
+    segments.push(streetLine);
+  }
+
+  let cityStateZip = '';
+  if (cityPart) {
+    cityStateZip += cityPart;
+  }
+  if (statePart) {
+    cityStateZip += cityStateZip ? `, ${statePart}` : statePart;
+  }
+  if (zipPart) {
+    cityStateZip += cityStateZip ? ` ${zipPart}` : zipPart;
+  }
+
+  if (cityStateZip.trim()) {
+    segments.push(cityStateZip.trim());
+  }
+
+  return segments.join(', ');
+}
+
+function parseShippingAddressEditorValue(rawValue = '') {
+  const normalized = rawValue.replace(/\r/g, ' ').replace(/\n/g, ' ').trim();
+  if (!normalized) {
+    throw new Error('Enter the full shipping address before applying.');
+  }
+
+  const stateZipMatch = normalized.match(/([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
+  if (!stateZipMatch) {
+    throw new Error('End the address with a state abbreviation and ZIP (e.g., "NY 11230").');
+  }
+
+  const state = stateZipMatch[1].toUpperCase();
+  const zipCode = stateZipMatch[2];
+  const beforeStateZip = normalized.slice(0, stateZipMatch.index).replace(/,\s*$/, '').trim();
+
+  const lastCommaIndex = beforeStateZip.lastIndexOf(',');
+  if (lastCommaIndex === -1) {
+    throw new Error('Separate the street and city with commas (e.g., "123 Main St, Brooklyn, NY 11230").');
+  }
+
+  const city = beforeStateZip.slice(lastCommaIndex + 1).trim();
+  const streetAddress = beforeStateZip.slice(0, lastCommaIndex).trim();
+
+  if (!streetAddress) {
+    throw new Error('Add the street address before the city.');
+  }
+  if (!city) {
+    throw new Error('Include the city name before the state.');
+  }
+
+  return { streetAddress, city, state, zipCode };
+}
+
+async function handleShippingAddressApply() {
+  if (!currentOrderDetails || !currentOrderDetails.id) {
+    setShippingAddressFeedback('Load an order before editing the address.', 'error');
+    return;
+  }
+
+  let payload;
+  try {
+    payload = parseShippingAddressEditorValue(shippingAddressInput?.value || '');
+  } catch (parseError) {
+    setShippingAddressFeedback(parseError.message || 'Please check the address format.', 'error');
+    return;
+  }
+  clearShippingAddressFeedback();
+  setShippingAddressSavingState(true);
+
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/orders/${currentOrderDetails.id}/shipping-info`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    let responseData = null;
+    try {
+      responseData = await response.json();
+    } catch (parseError) {
+      responseData = null;
+    }
+
+    if (!response.ok) {
+      const message = responseData?.error || 'Failed to update the shipping address.';
+      throw new Error(message);
+    }
+
+    const updatedShippingInfo = responseData?.shippingInfo
+      ? responseData.shippingInfo
+      : { ...currentOrderDetails.shippingInfo, ...payload };
+
+    if (currentOrderDetails) {
+      currentOrderDetails.shippingInfo = {
+        ...currentOrderDetails.shippingInfo,
+        ...updatedShippingInfo,
+      };
+    }
+
+    updateShippingAddressDisplay(currentOrderDetails.shippingInfo);
+    setShippingAddressFeedback('Shipping address updated.', 'success');
+    populateShippingAddressEditor(currentOrderDetails.shippingInfo || {});
+
+    setTimeout(() => {
+      toggleShippingAddressEditor(false);
+    }, 800);
+  } catch (error) {
+    setShippingAddressFeedback(error.message || 'Failed to update the shipping address.', 'error');
+  } finally {
+    setShippingAddressSavingState(false);
+  }
+}
+
 async function openOrderDetailsModal(orderId) {
   if (!orderDetailsModal) {
     return;
   }
   resetImeiSection();
   teardownImeiListener();
+  resetShippingAddressEditor({ restoreFromOrder: false });
   // Hide all action/form containers
   modalActionButtons.innerHTML = '';
 modalLoadingMessage.classList.add('hidden');
@@ -5183,6 +5461,7 @@ throw new Error(`Failed to fetch order details: ${response.status} - ${errorText
 }
     const order = await response.json();
     currentOrderDetails = order;
+    resetShippingAddressEditor({ restoreFromOrder: true });
     startImeiListener(order);
 
     modalOrderId.textContent = order.id;
@@ -5222,8 +5501,8 @@ modalZelleDetailsRow.classList.remove('hidden');
 
 const shippingInfo = order.shippingInfo;
 if (shippingInfo) {
-modalShippingAddress.textContent = `${shippingInfo.streetAddress}, ${shippingInfo.city}, ${shippingInfo.state}, ${shippingInfo.zipCode}`;
-} else {
+updateShippingAddressDisplay(shippingInfo);
+} else if (modalShippingAddress) {
 modalShippingAddress.textContent = 'N/A';
 }
 
