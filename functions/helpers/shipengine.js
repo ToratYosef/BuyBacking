@@ -72,6 +72,24 @@ const TRANSIT_KEYWORDS = [
     'package acceptance',
 ];
 
+function resolveInboundTransitResetStatus(order = {}) {
+    const shippingPreference = String(order?.shippingPreference || '').toLowerCase();
+
+    if (shippingPreference === 'shipping kit requested') {
+        if (order?.kitDeliveredAt) {
+            return 'kit_delivered';
+        }
+
+        if (order?.kitSentAt) {
+            return 'kit_sent';
+        }
+
+        return 'kit_sent';
+    }
+
+    return 'label_generated';
+}
+
 function normalizeCarrierCode(code) {
     if (!code || typeof code !== 'string') {
         return null;
@@ -230,6 +248,20 @@ function isTransitStatus(statusCode, statusDescription, estimatedDelivery) {
     return TRANSIT_KEYWORDS.some((keyword) => description.includes(keyword));
 }
 
+function isAcceptedWithoutEta(statusCode, statusDescription, estimatedDelivery) {
+    if (estimatedDelivery) {
+        return false;
+    }
+
+    const normalizedCode = statusCode ? String(statusCode).toUpperCase() : '';
+    if (normalizedCode === 'AC' || normalizedCode === 'SHIPMENT_ACCEPTED') {
+        return true;
+    }
+
+    const description = typeof statusDescription === 'string' ? statusDescription.toLowerCase() : '';
+    return Boolean(description && /\baccept(ed|ance)\b/.test(description));
+}
+
 async function fetchTrackingData({
     axiosClient = axios,
     trackingNumber,
@@ -341,6 +373,7 @@ async function buildKitTrackingUpdate(
         estimatedDelivery,
     } = extractTrackingFields(trackingData);
     const inTransit = isTransitStatus(statusCode, statusDescription, estimatedDelivery);
+    const acceptedWithoutEta = isAcceptedWithoutEta(statusCode, statusDescription, estimatedDelivery);
 
     const direction = useInbound ? 'inbound' : 'outbound';
     const statusPayload = {
@@ -360,7 +393,36 @@ async function buildKitTrackingUpdate(
     const shippingPreference = String(order?.shippingPreference || '').toLowerCase();
     const isShippingKit = shippingPreference === 'shipping kit requested';
 
-    if (!useInbound && delivered) {
+    const transitStatuses = new Set([
+        KIT_TRANSIT_STATUS,
+        'kit_on_the_way_to_us',
+        'phone_on_the_way',
+        PHONE_TRANSIT_STATUS,
+    ]);
+
+    const shouldResetInboundTransitStatus =
+        useInbound &&
+        transitStatuses.has(normalizedStatus) &&
+        !delivered &&
+        (!inTransit || !estimatedDelivery);
+
+    const shouldResetOutboundTransitStatus =
+        !useInbound && acceptedWithoutEta && transitStatuses.has(normalizedStatus);
+
+    let inboundTransitResetApplied = false;
+
+    if (shouldResetInboundTransitStatus) {
+        updatePayload.status = resolveInboundTransitResetStatus(order);
+        if (typeof serverTimestamp === 'function') {
+            updatePayload.lastStatusUpdateAt = serverTimestamp();
+        }
+        inboundTransitResetApplied = true;
+    } else if (shouldResetOutboundTransitStatus) {
+        updatePayload.status = 'label_generated';
+        if (typeof serverTimestamp === 'function') {
+            updatePayload.lastStatusUpdateAt = serverTimestamp();
+        }
+    } else if (!useInbound && delivered) {
         updatePayload.status = 'kit_delivered';
         if (typeof serverTimestamp === 'function') {
             updatePayload.kitDeliveredAt = serverTimestamp();
@@ -378,7 +440,7 @@ async function buildKitTrackingUpdate(
         }
     }
 
-    if (useInbound && delivered) {
+    if (!inboundTransitResetApplied && useInbound && delivered) {
         updatePayload.status = 'delivered_to_us';
         if (typeof serverTimestamp === 'function') {
             updatePayload.lastStatusUpdateAt = serverTimestamp();
@@ -394,7 +456,7 @@ async function buildKitTrackingUpdate(
             }
             updatePayload.autoReceived = true;
         }
-    } else if (useInbound && inTransit) {
+    } else if (!inboundTransitResetApplied && useInbound && inTransit) {
         if (!['delivered_to_us', 'received', PHONE_TRANSIT_STATUS].includes(normalizedStatus)) {
             updatePayload.status = PHONE_TRANSIT_STATUS;
             if (typeof serverTimestamp === 'function') {
