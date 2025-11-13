@@ -15,6 +15,7 @@ const {
   fetchTrackingData,
   KIT_TRANSIT_STATUS,
   PHONE_TRANSIT_STATUS,
+  normalizeInboundTrackingStatus,
 } = require('./helpers/shipengine');
 const { getShipStationCredentials } = require('./services/shipstation');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
@@ -1793,6 +1794,7 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadat
     'SHIPMENT_ACCEPTED',
     'LABEL_CREATED',
     'UNKNOWN',
+    'NOT_YET_IN_SYSTEM',
   ]);
   const etaRequiredStatuses = new Set(['ACCEPTED', 'SHIPMENT_ACCEPTED']);
 
@@ -2729,7 +2731,10 @@ async function syncInboundTrackingForOrder(order, options = {}) {
     updatePayload.labelTrackingEvents = trackingData.activities;
   }
 
-  const normalizedStatus = String(updatePayload.labelTrackingStatus || '').toUpperCase();
+  const normalizedStatus = normalizeInboundTrackingStatus(
+    updatePayload.labelTrackingStatus,
+    updatePayload.labelTrackingStatusDescription
+  );
   if (normalizedStatus === 'DELIVERED' || normalizedStatus === 'DELIVERED_TO_AGENT') {
     updatePayload.labelDeliveredAt = timestamp;
   }

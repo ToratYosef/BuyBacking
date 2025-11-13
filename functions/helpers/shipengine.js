@@ -15,6 +15,7 @@ const TRANSIT_STATUS_CODES = new Set([
     'AC',
     'AT',
     'NY',
+    'SP',
     'PU',
     'OC',
     'OD',
@@ -24,6 +25,38 @@ const TRANSIT_STATUS_CODES = new Set([
     'AR',
     'AP',
     'IP',
+]);
+
+const INBOUND_STATUS_ALIASES = new Map([
+    ['DELIVERED', 'DELIVERED'],
+    ['DELIVERED_TO_AGENT', 'DELIVERED_TO_AGENT'],
+    ['DELIVERED TO AGENT', 'DELIVERED_TO_AGENT'],
+    ['DE', 'DELIVERED'],
+    ['DL', 'DELIVERED'],
+    ['SP', 'DELIVERED_TO_AGENT'],
+    ['IT', 'IN_TRANSIT'],
+    ['IN_TRANSIT', 'IN_TRANSIT'],
+    ['NT', 'IN_TRANSIT'],
+    ['OF', 'OUT_FOR_DELIVERY'],
+    ['OD', 'OUT_FOR_DELIVERY'],
+    ['OUT_FOR_DELIVERY', 'OUT_FOR_DELIVERY'],
+    ['AC', 'ACCEPTED'],
+    ['SHIPMENT_ACCEPTED', 'SHIPMENT_ACCEPTED'],
+    ['OC', 'SHIPMENT_ACCEPTED'],
+    ['AT', 'DELIVERY_ATTEMPT'],
+    ['NY', 'NOT_YET_IN_SYSTEM'],
+    ['OP', 'IN_TRANSIT'],
+    ['PC', 'IN_TRANSIT'],
+    ['SC', 'IN_TRANSIT'],
+    ['AR', 'IN_TRANSIT'],
+    ['AP', 'IN_TRANSIT'],
+    ['IP', 'IN_TRANSIT'],
+    ['PU', 'IN_TRANSIT'],
+    ['LA', 'LABEL_CREATED'],
+    ['LB', 'LABEL_CREATED'],
+    ['LABEL_CREATED', 'LABEL_CREATED'],
+    ['UNKNOWN', 'UNKNOWN'],
+    ['UN', 'UNKNOWN'],
 ]);
 
 const TRANSIT_KEYWORDS = [
@@ -373,6 +406,68 @@ async function buildKitTrackingUpdate(
     return { updatePayload, delivered, direction };
 }
 
+function normalizeInboundTrackingStatus(statusCode, statusDescription) {
+    const normalizeString = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
+
+    const normalizedCode = normalizeString(statusCode);
+    if (normalizedCode && INBOUND_STATUS_ALIASES.has(normalizedCode)) {
+        return INBOUND_STATUS_ALIASES.get(normalizedCode);
+    }
+
+    if (normalizedCode.includes('DELIVERED')) {
+        return normalizedCode.includes('AGENT') ? 'DELIVERED_TO_AGENT' : 'DELIVERED';
+    }
+    if (normalizedCode.includes('OUT_FOR_DELIVERY')) {
+        return 'OUT_FOR_DELIVERY';
+    }
+    if (normalizedCode.includes('ACCEPT')) {
+        return normalizedCode.includes('SHIPMENT') ? 'SHIPMENT_ACCEPTED' : 'ACCEPTED';
+    }
+    if (normalizedCode.includes('TRANSIT')) {
+        return 'IN_TRANSIT';
+    }
+    if (normalizedCode.includes('LABEL')) {
+        return 'LABEL_CREATED';
+    }
+    if (normalizedCode.includes('ATTEMPT')) {
+        return 'DELIVERY_ATTEMPT';
+    }
+    if (normalizedCode.includes('UNKNOWN')) {
+        return 'UNKNOWN';
+    }
+
+    const description = typeof statusDescription === 'string' ? statusDescription.toLowerCase() : '';
+    if (description.includes('out for delivery')) {
+        return 'OUT_FOR_DELIVERY';
+    }
+    if (description.includes('deliver') && description.includes('agent')) {
+        return 'DELIVERED_TO_AGENT';
+    }
+    if (description.includes('deliver')) {
+        return 'DELIVERED';
+    }
+    if (description.includes('in transit') || description.includes('moving through')) {
+        return 'IN_TRANSIT';
+    }
+    if (description.includes('accept')) {
+        return 'ACCEPTED';
+    }
+    if (description.includes('label')) {
+        return 'LABEL_CREATED';
+    }
+    if (description.includes('not yet')) {
+        return 'NOT_YET_IN_SYSTEM';
+    }
+    if (description.includes('attempt')) {
+        return 'DELIVERY_ATTEMPT';
+    }
+    if (description.includes('unknown')) {
+        return 'UNKNOWN';
+    }
+
+    return normalizedCode || null;
+}
+
 module.exports = {
     DEFAULT_CARRIER_CODE,
     extractTrackingFields,
@@ -383,4 +478,5 @@ module.exports = {
     fetchTrackingData,
     KIT_TRANSIT_STATUS,
     PHONE_TRANSIT_STATUS,
+    normalizeInboundTrackingStatus,
 };
