@@ -193,7 +193,7 @@
     }
     #previewContainer {
       margin-top: 0.75rem;
-      max-height: 420px;
+      max-height: 520px;
       overflow: auto;
       border-radius: 0.75rem;
       border: 1px solid #1f2937;
@@ -246,8 +246,6 @@
       font-size: 0.95rem;
     }
   </style>
-  <!-- Chart.js for profit scatter plot -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <header>
@@ -345,9 +343,9 @@
     </div>
   </section>
 
-  <!-- RIGHT: CONFIG + PREVIEW + DOWNLOAD -->
+  <!-- RIGHT: CONFIG + CONTROLS -->
   <section class="card">
-    <h2><span>Step 2</span>Rules, Preview &amp; Download</h2>
+    <h2><span>Step 2</span>Rules &amp; Download</h2>
     <p class="description">
       We group Verizon / AT&amp;T / T-Mobile / Sprint / Other as locked. Highest locked price + your offsets becomes your locked price.
       Unlocked prices still come from unlocked data in the feed.
@@ -436,51 +434,17 @@
       <span><span class="highlight">Idle.</span> Click "Preview price changes" after uploading files.</span>
       <span id="stats"></span>
     </div>
-
-    <div id="previewContainer">
-      <!-- Preview table injected here -->
-    </div>
   </section>
 
-  <!-- STEP 3: PROFIT CALCULATOR -->
+  <!-- BIG PREVIEW AREA -->
   <section class="card" style="grid-column: 1 / -1;">
-    <h2><span>Step 3</span>Profit Calculator</h2>
+    <h2><span>Step 3</span>Preview Updated Prices</h2>
     <p class="description">
-      Enter original prices for each device (one per line). We compute profit using:
-      <code>profit = original × 0.92 − 10 − 30 − 5 − 10 = 0.92 × original − 55</code>,
-      and plot a scatter chart of Original Price vs Profit.
+      After running <strong>"Preview price changes"</strong>, all updated prices will appear here. You can edit
+      the <strong>New</strong> column inline before downloading <code>output.xml</code>.
     </p>
-
-    <div class="field">
-      <label for="profitOriginalPrices">Original prices (one per line)</label>
-      <textarea
-        id="profitOriginalPrices"
-        placeholder="e.g.&#10;150&#10;200&#10;275.50&#10;350"
-        style="min-height: 120px;"
-      ></textarea>
-      <p class="small">
-        Each non-empty numeric line is one device’s original price. Non-numeric lines are ignored.
-      </p>
-    </div>
-
-    <div class="btn-row" style="justify-content:flex-start;">
-      <button class="btn-primary" id="plotProfitBtn" type="button">Plot profits</button>
-      <button class="btn-secondary" id="clearProfitBtn" type="button">Clear</button>
-    </div>
-
-    <div class="field" style="margin-top: 1rem;">
-      <label>Profit scatter plot</label>
-      <div style="background:#020617;border-radius:0.75rem;border:1px solid #1f2937;padding:0.75rem;">
-        <canvas id="profitChart" height="140"></canvas>
-      </div>
-      <p class="small">
-        X-axis: original price. Y-axis: profit (after all deductions).
-      </p>
-    </div>
-
-    <div class="status-bar" id="profitStatusBar">
-      <span><span class="highlight">Idle.</span> Enter prices and click "Plot profits".</span>
-      <span id="profitStats"></span>
+    <div id="previewContainer">
+      <!-- Preview table injected here -->
     </div>
   </section>
 </main>
@@ -1092,138 +1056,6 @@
     setStatus('Offsets rule added to JSON.', false);
   }
 
-  // ---- Profit calculator (scatter plot) ----
-  const profitOriginalPricesEl = document.getElementById('profitOriginalPrices');
-  const plotProfitBtn = document.getElementById('plotProfitBtn');
-  const clearProfitBtn = document.getElementById('clearProfitBtn');
-  const profitStatusBarEl = document.getElementById('profitStatusBar');
-  const profitStatsEl = document.getElementById('profitStats');
-  const profitChartCanvas = document.getElementById('profitChart');
-
-  let profitChart = null;
-
-  function setProfitStatus(msg, isError = false) {
-    if (!profitStatusBarEl) return;
-    const spans = profitStatusBarEl.querySelectorAll('span');
-    if (!spans[0]) return;
-    spans[0].innerHTML = isError
-      ? '<span class="error">' + msg + '</span>'
-      : '<span class="highlight">' + msg + '</span>';
-  }
-
-  function setProfitStats(msg) {
-    if (profitStatsEl) {
-      profitStatsEl.textContent = msg || '';
-    }
-  }
-
-  // profit = original * 0.92 - 10 - 30 - 5 - 10 = 0.92 * original - 55
-  function computeProfit(original) {
-    return original * 0.92 - 55;
-  }
-
-  function parseOriginalPrices() {
-    const raw = (profitOriginalPricesEl.value || '').trim();
-    if (!raw) return [];
-
-    const lines = raw.split(/\r?\n/);
-    const values = [];
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      const num = Number(trimmed);
-      if (!Number.isNaN(num)) {
-        values.push(num);
-      }
-    }
-
-    return values;
-  }
-
-  function plotProfits() {
-    const originals = parseOriginalPrices();
-    if (!originals.length) {
-      setProfitStatus('Enter at least one valid original price.', true);
-      setProfitStats('');
-      if (profitChart) {
-        profitChart.destroy();
-        profitChart = null;
-      }
-      return;
-    }
-
-    const points = originals.map(o => ({
-      x: o,
-      y: computeProfit(o)
-    }));
-
-    if (profitChart) {
-      profitChart.destroy();
-      profitChart = null;
-    }
-
-    if (profitChartCanvas && window.Chart) {
-      profitChart = new Chart(profitChartCanvas.getContext('2d'), {
-        type: 'scatter',
-        data: {
-          datasets: [{
-            label: 'Profit per device',
-            data: points,
-            pointRadius: 4,
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              title: { display: true, text: 'Original price' },
-              ticks: { callback: v => '$' + v }
-            },
-            y: {
-              title: { display: true, text: 'Profit' },
-              ticks: { callback: v => '$' + v }
-            }
-          },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: ctx => {
-                  const o = ctx.parsed.x;
-                  const p = ctx.parsed.y;
-                  return `Original: $${o.toFixed(2)}, Profit: $${p.toFixed(2)}`;
-                }
-              }
-            }
-          }
-        }
-      });
-    }
-
-    const profits = points.map(p => p.y);
-    const count = profits.length;
-    const min = Math.min(...profits);
-    const max = Math.max(...profits);
-    const avg = profits.reduce((a, b) => a + b, 0) / count;
-
-    setProfitStatus('Profit plot updated.', false);
-    setProfitStats(
-      `Devices: ${count} · Min profit: $${min.toFixed(2)} · Max profit: $${max.toFixed(2)} · Avg profit: $${avg.toFixed(2)}`
-    );
-  }
-
-  function clearProfits() {
-    if (profitOriginalPricesEl) profitOriginalPricesEl.value = '';
-    if (profitChart) {
-      profitChart.destroy();
-      profitChart = null;
-    }
-    setProfitStatus('Cleared.', false);
-    setProfitStats('');
-  }
-
   previewBtn.addEventListener('click', () => {
     downloadBtn.disabled = true;
     previewChanges().catch(err => {
@@ -1234,13 +1066,6 @@
 
   downloadBtn.addEventListener('click', downloadOutput);
   addOffsetRuleBtn.addEventListener('click', addOffsetRule);
-
-  if (plotProfitBtn) {
-    plotProfitBtn.addEventListener('click', plotProfits);
-  }
-  if (clearProfitBtn) {
-    clearProfitBtn.addEventListener('click', clearProfits);
-  }
 </script>
 </body>
 </html>
