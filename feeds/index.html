@@ -27,10 +27,10 @@
     }
     main {
       padding: 1.5rem;
-      max-width: 1400px;
+      max-width: 1700px; /* wider so preview table fits more columns */
       margin: 0 auto;
       display: grid;
-      grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); /* right card wider */
       gap: 1.5rem;
     }
     @media (max-width: 1000px) {
@@ -202,7 +202,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.78rem;
+      font-size: 0.76rem; /* slightly smaller so more fits per row */
     }
     thead {
       position: sticky;
@@ -211,7 +211,7 @@
       z-index: 1;
     }
     th, td {
-      padding: 0.35rem 0.5rem;
+      padding: 0.25rem 0.4rem; /* tighter padding */
       border-bottom: 1px solid #111827;
       text-align: left;
       white-space: nowrap;
@@ -219,7 +219,7 @@
     th {
       font-weight: 600;
       color: #9ca3af;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       background: #020617;
     }
     tbody tr:nth-child(even) {
@@ -246,6 +246,8 @@
       font-size: 0.95rem;
     }
   </style>
+  <!-- Chart.js for profit scatter plot -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <header>
@@ -439,6 +441,48 @@
       <!-- Preview table injected here -->
     </div>
   </section>
+
+  <!-- STEP 3: PROFIT CALCULATOR -->
+  <section class="card" style="grid-column: 1 / -1;">
+    <h2><span>Step 3</span>Profit Calculator</h2>
+    <p class="description">
+      Enter original prices for each device (one per line). We compute profit using:
+      <code>profit = original × 0.92 − 10 − 30 − 5 − 10 = 0.92 × original − 55</code>,
+      and plot a scatter chart of Original Price vs Profit.
+    </p>
+
+    <div class="field">
+      <label for="profitOriginalPrices">Original prices (one per line)</label>
+      <textarea
+        id="profitOriginalPrices"
+        placeholder="e.g.&#10;150&#10;200&#10;275.50&#10;350"
+        style="min-height: 120px;"
+      ></textarea>
+      <p class="small">
+        Each non-empty numeric line is one device’s original price. Non-numeric lines are ignored.
+      </p>
+    </div>
+
+    <div class="btn-row" style="justify-content:flex-start;">
+      <button class="btn-primary" id="plotProfitBtn" type="button">Plot profits</button>
+      <button class="btn-secondary" id="clearProfitBtn" type="button">Clear</button>
+    </div>
+
+    <div class="field" style="margin-top: 1rem;">
+      <label>Profit scatter plot</label>
+      <div style="background:#020617;border-radius:0.75rem;border:1px solid #1f2937;padding:0.75rem;">
+        <canvas id="profitChart" height="140"></canvas>
+      </div>
+      <p class="small">
+        X-axis: original price. Y-axis: profit (after all deductions).
+      </p>
+    </div>
+
+    <div class="status-bar" id="profitStatusBar">
+      <span><span class="highlight">Idle.</span> Enter prices and click "Plot profits".</span>
+      <span id="profitStats"></span>
+    </div>
+  </section>
 </main>
 
 <script>
@@ -500,6 +544,35 @@
     return (str || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
+  // Canonical model key so feed + input names line up (iPhone, Samsung, etc.)
+  function canonicalModelKey(brand, name) {
+    let s = ((brand || '') + ' ' + (name || '')).trim().toLowerCase();
+    s = s.replace(/\s+/g, ' ');
+
+    const stripTokens = [
+      'apple', 'iphone',
+      'samsung', 'galaxy', 'phone', 'smartphone',
+      'google', 'pixel',
+      'motorola', 'moto',
+      'oneplus',
+      '5g', '4g', 'lte', 'uw', 'uwb',
+      'unlocked', 'locked'
+    ];
+
+    stripTokens.forEach(t => {
+      const re = new RegExp('\\b' + t + '\\b', 'g');
+      s = s.replace(re, ' ');
+    });
+
+    // "plus" -> "+"
+    s = s.replace(/\bplus\b/g, '+');
+    s = s.replace(/ \+/g, '+').replace(/\+ /g, '+');
+
+    // normalize leftover spacing
+    s = s.replace(/\s+/g, ' ').trim();
+    return s;
+  }
+
   function readFileAsText(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -557,30 +630,22 @@
   }
 
   // Map SellCell network strings → locked/unlocked bucket
-  // - Verizon / AT&T / T-Mobile / Sprint / Other  => "locked"
-  // - Unlocked (any casing)                       => "unlocked"
-  // - Anything unknown or blank                   => "locked" (safe fallback)
   function networkToStatus(network, lockedCarriersSet) {
-    const n = normaliseStr(network); // e.g. "unlocked", "t-mobile", "verizon", ""
+    const n = normaliseStr(network);
 
-    if (!n) {
-      // No network specified – treat as locked to be safe
-      return 'locked';
-    }
+    if (!n) return 'locked';
 
-    // Explicitly unlocked in feed
     if (n === 'unlocked' || n.includes('unlocked')) {
       return 'unlocked';
     }
 
-    // Locked carrier group
     if (lockedCarriersSet.has('verizon') && n.includes('verizon')) return 'locked';
     if ((lockedCarriersSet.has('att') || lockedCarriersSet.has('at&t')) && (n.includes('at&t') || n.includes('att'))) return 'locked';
     if (lockedCarriersSet.has('tmobile') && (n.includes('t-mobile') || n.includes('tmobile'))) return 'locked';
     if (lockedCarriersSet.has('sprint') && n.includes('sprint')) return 'locked';
     if (lockedCarriersSet.has('other') && (n === 'other' || n.includes('other'))) return 'locked';
 
-    // Fallback: any unknown carrier → locked
+    // fallback: unknown networks count as locked
     return 'locked';
   }
 
@@ -612,6 +677,7 @@
     return true;
   }
 
+  // Build feed max map: highest price per (modelKey, capacity, quality, status)
   function buildFeedMaxMap(feedDoc, lockedCarriersSet) {
     const devices = Array.from(feedDoc.getElementsByTagName('device'));
     const maxMap = new Map();
@@ -625,11 +691,15 @@
     ];
 
     for (const dev of devices) {
+      const brandName =
+        dev.getElementsByTagName('brand_name')[0]?.textContent ||
+        dev.getElementsByTagName('brand')[0]?.textContent ||
+        '';
       const devName = dev.getElementsByTagName('device_name')[0]?.textContent || '';
       const capacity = dev.getElementsByTagName('capacity')[0]?.textContent || '';
       const network = dev.getElementsByTagName('network')[0]?.textContent || '';
 
-      const modelKey = normaliseStr(devName);
+      const modelKey = canonicalModelKey(brandName, devName);
       const capKey = (capacity || '').trim();
       const status = networkToStatus(network, lockedCarriersSet);
 
@@ -667,25 +737,28 @@
     return { maxMap, combos };
   }
 
+  // Preview table with per-model grouping: unlocked (flawless→good→fair→broken), then locked
   function renderPreviewTable(rows, stats) {
     if (!rows.length) {
-      previewContainerEl.innerHTML = '<div style="padding:0.75rem;font-size:0.8rem;color:#9ca3af;">No prices changed based on your current filters and rules.</div>';
+      previewContainerEl.innerHTML =
+        '<div style="padding:0.75rem;font-size:0.8rem;color:#9ca3af;">No prices changed based on your current filters and rules.</div>';
       setStats(stats);
       return;
     }
 
-    // Sort for nicer view
+    const statusOrder = { unlocked: 0, locked: 1 };
+    const qualityOrder = { flawless: 0, good: 1, fair: 2, broken: 3 };
+
     rows.sort((a, b) => {
       return (
         normaliseStr(a.brand).localeCompare(normaliseStr(b.brand)) ||
         normaliseStr(a.modelName).localeCompare(normaliseStr(b.modelName)) ||
         normaliseStr(a.storage).localeCompare(normaliseStr(b.storage)) ||
-        a.status.localeCompare(b.status) ||
-        a.quality.localeCompare(b.quality)
+        ((statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99)) ||
+        ((qualityOrder[a.quality] ?? 99) - (qualityOrder[b.quality] ?? 99))
       );
     });
 
-    // NOTE: column order: Old / Feed / New / Δ
     const head = `
       <thead>
         <tr>
@@ -740,7 +813,6 @@
     previewContainerEl.innerHTML = `<table>${head}<tbody>${body}</tbody></table>`;
     setStats(stats);
 
-    // Attach listeners for editable "New" price inputs
     const inputs = previewContainerEl.querySelectorAll('.new-price-input');
     inputs.forEach(input => {
       input.addEventListener('change', handleNewPriceEdit);
@@ -757,20 +829,16 @@
       return;
     }
 
-    // Update numeric value
     row.newNumeric = val;
 
-    // Update underlying XML node
     if (row.node) {
       row.node.textContent = val.toFixed(2);
     }
 
-    // Recompute delta (New - Old)
     const oldNum = row.oldNumeric;
     const delta = oldNum == null ? val : (val - oldNum);
     row.delta = delta;
 
-    // Update delta cell display
     const deltaCell = previewContainerEl.querySelector(`.delta-cell[data-delta-index="${idx}"]`);
     if (deltaCell) {
       deltaCell.classList.remove('delta-pos', 'delta-neg');
@@ -848,11 +916,13 @@
       const modelName = nameNode?.textContent || '';
       const brandText = brandNode?.textContent || parentDevice;
       const modelId = modelIdNode?.textContent || '';
-      const modelKey = normaliseStr(modelName);
-      const brandKey = normaliseStr(brandText);
+
+      const modelKeyCanonical = canonicalModelKey(brandText, modelName);
+      const brandNorm = normaliseStr(brandText);
+      const modelNorm = normaliseStr(modelName);
 
       if (!passesBrandModelFilters(brandText, modelName)) {
-        continue; // skip entire model
+        continue;
       }
 
       let modelChanged = false;
@@ -877,28 +947,24 @@
             if (!qNode) continue;
 
             const feedKey = [
-              modelKey,
+              modelKeyCanonical,
               storageSize,
               quality,
               status
             ].join('|');
 
             const feedPrice = maxMap.get(feedKey);
-            if (feedPrice == null) {
-              continue; // no data from feed for this combo
-            }
+            if (feedPrice == null) continue;
 
             const oldVal = Number(qNode.textContent.trim());
             const oldNumeric = Number.isNaN(oldVal) ? null : oldVal;
 
-            // BASE = feedPrice (we use FEED + offsets, not OLD + offsets)
-            const extra = getExtraAdjustment(brandKey, modelKey, quality, rules);
+            const extra = getExtraAdjustment(brandNorm, modelNorm, quality, rules);
             const base = feedPrice;
             const newVal = base + globalAdd + extra;
             const newValRounded = Math.round(newVal * 100) / 100;
 
             if (onlyIncrease && oldNumeric !== null && newValRounded <= oldNumeric) {
-              // Skip if we would go down or stay the same and protection is on
               continue;
             }
 
@@ -933,7 +999,7 @@
     latestInputDoc = inputDoc;
     const serializer = new XMLSerializer();
     latestOutputXml = serializer.serializeToString(inputDoc);
-    latestPreviewRows = previewRows.slice();
+    latestPreviewRows = previewRows; // IMPORTANT: same array that gets sorted in renderPreviewTable
 
     const stats = `Feed combos (highest per combo): ${combos} · Models updated: ${modelsTouched} · Prices changed: ${pricesChanged}`;
     renderPreviewTable(previewRows, stats);
@@ -943,7 +1009,7 @@
       downloadBtn.disabled = false;
     } else {
       setStatus('No changes applied with current filters/rules.', false);
-      downloadBtn.disabled = false; // still allow download if you want identical copy
+      downloadBtn.disabled = false; // still allow identical copy
     }
   }
 
@@ -952,7 +1018,6 @@
       setStatus('No output.xml generated yet – run preview first.', true);
       return;
     }
-    // Re-serialize the latest document (including any edits from the table)
     const serializer = new XMLSerializer();
     const xmlString = serializer.serializeToString(latestInputDoc);
 
@@ -968,9 +1033,8 @@
     setStatus('output.xml downloaded with your overrides.', false);
   }
 
-  // ---- Offsets builder logic ----
   function addOffsetRule() {
-    const type = offsetTargetTypeEl.value; // "brand" or "model"
+    const type = offsetTargetTypeEl.value;
     const nameRaw = offsetNameEl.value.trim();
     if (!nameRaw) {
       setStatus('Enter a brand/model name for the offsets builder.', true);
@@ -998,7 +1062,6 @@
       return;
     }
 
-    // Parse existing JSON or start fresh
     let obj;
     const raw = rulesJsonEl.value.trim();
     if (!raw) {
@@ -1020,7 +1083,6 @@
 
     rulesJsonEl.value = JSON.stringify(obj, null, 2);
 
-    // Clear inputs
     offsetNameEl.value = '';
     offsetFlawlessEl.value = '';
     offsetGoodEl.value = '';
@@ -1028,6 +1090,138 @@
     offsetBrokenEl.value = '';
 
     setStatus('Offsets rule added to JSON.', false);
+  }
+
+  // ---- Profit calculator (scatter plot) ----
+  const profitOriginalPricesEl = document.getElementById('profitOriginalPrices');
+  const plotProfitBtn = document.getElementById('plotProfitBtn');
+  const clearProfitBtn = document.getElementById('clearProfitBtn');
+  const profitStatusBarEl = document.getElementById('profitStatusBar');
+  const profitStatsEl = document.getElementById('profitStats');
+  const profitChartCanvas = document.getElementById('profitChart');
+
+  let profitChart = null;
+
+  function setProfitStatus(msg, isError = false) {
+    if (!profitStatusBarEl) return;
+    const spans = profitStatusBarEl.querySelectorAll('span');
+    if (!spans[0]) return;
+    spans[0].innerHTML = isError
+      ? '<span class="error">' + msg + '</span>'
+      : '<span class="highlight">' + msg + '</span>';
+  }
+
+  function setProfitStats(msg) {
+    if (profitStatsEl) {
+      profitStatsEl.textContent = msg || '';
+    }
+  }
+
+  // profit = original * 0.92 - 10 - 30 - 5 - 10 = 0.92 * original - 55
+  function computeProfit(original) {
+    return original * 0.92 - 55;
+  }
+
+  function parseOriginalPrices() {
+    const raw = (profitOriginalPricesEl.value || '').trim();
+    if (!raw) return [];
+
+    const lines = raw.split(/\r?\n/);
+    const values = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const num = Number(trimmed);
+      if (!Number.isNaN(num)) {
+        values.push(num);
+      }
+    }
+
+    return values;
+  }
+
+  function plotProfits() {
+    const originals = parseOriginalPrices();
+    if (!originals.length) {
+      setProfitStatus('Enter at least one valid original price.', true);
+      setProfitStats('');
+      if (profitChart) {
+        profitChart.destroy();
+        profitChart = null;
+      }
+      return;
+    }
+
+    const points = originals.map(o => ({
+      x: o,
+      y: computeProfit(o)
+    }));
+
+    if (profitChart) {
+      profitChart.destroy();
+      profitChart = null;
+    }
+
+    if (profitChartCanvas && window.Chart) {
+      profitChart = new Chart(profitChartCanvas.getContext('2d'), {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Profit per device',
+            data: points,
+            pointRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              title: { display: true, text: 'Original price' },
+              ticks: { callback: v => '$' + v }
+            },
+            y: {
+              title: { display: true, text: 'Profit' },
+              ticks: { callback: v => '$' + v }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const o = ctx.parsed.x;
+                  const p = ctx.parsed.y;
+                  return `Original: $${o.toFixed(2)}, Profit: $${p.toFixed(2)}`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    const profits = points.map(p => p.y);
+    const count = profits.length;
+    const min = Math.min(...profits);
+    const max = Math.max(...profits);
+    const avg = profits.reduce((a, b) => a + b, 0) / count;
+
+    setProfitStatus('Profit plot updated.', false);
+    setProfitStats(
+      `Devices: ${count} · Min profit: $${min.toFixed(2)} · Max profit: $${max.toFixed(2)} · Avg profit: $${avg.toFixed(2)}`
+    );
+  }
+
+  function clearProfits() {
+    if (profitOriginalPricesEl) profitOriginalPricesEl.value = '';
+    if (profitChart) {
+      profitChart.destroy();
+      profitChart = null;
+    }
+    setProfitStatus('Cleared.', false);
+    setProfitStats('');
   }
 
   previewBtn.addEventListener('click', () => {
@@ -1040,6 +1234,13 @@
 
   downloadBtn.addEventListener('click', downloadOutput);
   addOffsetRuleBtn.addEventListener('click', addOffsetRule);
+
+  if (plotProfitBtn) {
+    plotProfitBtn.addEventListener('click', plotProfits);
+  }
+  if (clearProfitBtn) {
+    clearProfitBtn.addEventListener('click', clearProfits);
+  }
 </script>
 </body>
 </html>
