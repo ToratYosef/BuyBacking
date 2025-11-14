@@ -27,10 +27,10 @@
     }
     main {
       padding: 1.5rem;
-      max-width: 1700px; /* wider so preview table fits more columns */
+      max-width: 1700px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); /* right card wider */
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
       gap: 1.5rem;
     }
     @media (max-width: 1000px) {
@@ -202,7 +202,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.76rem; /* slightly smaller so more fits per row */
+      font-size: 0.76rem;
     }
     thead {
       position: sticky;
@@ -211,7 +211,7 @@
       z-index: 1;
     }
     th, td {
-      padding: 0.25rem 0.4rem; /* tighter padding */
+      padding: 0.25rem 0.4rem;
       border-bottom: 1px solid #111827;
       text-align: left;
       white-space: nowrap;
@@ -380,7 +380,8 @@
           <label class="pill"><input type="checkbox" class="carrierCheck" value="other" checked> Other</label>
         </div>
         <p class="small">
-          These networks are merged to a single "locked" bucket. We take only the highest price for each combo.
+          These networks are merged to a single "locked" bucket. We take only the
+          highest price for each combo.
         </p>
       </div>
       <div>
@@ -419,8 +420,10 @@
   }
 }'></textarea>
       <p class="small">
-        Schema: <code>brands[brandName][quality]</code> and <code>models[modelName][quality]</code> are extra <strong>+$</strong> on top of the global amount.
-        All keys matched in lowercase at runtime. Qualities: <code>flawless</code>, <code>good</code>, <code>fair</code>, <code>broken</code>.
+        Schema: <code>brands[brandName][quality]</code> and
+        <code>models[modelName][quality]</code> are extra <strong>+$</strong> on top of the global amount.
+        All keys matched in lowercase at runtime. Qualities:
+        <code>flawless</code>, <code>good</code>, <code>fair</code>, <code>broken</code>.
         Use the generator on the left to populate this.
       </p>
     </div>
@@ -508,7 +511,7 @@
     return (str || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
-  // Canonical model key so feed + input names line up (iPhone, Samsung, etc.)
+  // Canonical model key so feed + input names line up
   function canonicalModelKey(brand, name) {
     let s = ((brand || '') + ' ' + (name || '')).trim().toLowerCase();
     s = s.replace(/\s+/g, ' ');
@@ -528,44 +531,35 @@
       s = s.replace(re, ' ');
     });
 
-    // "plus" -> "+"
     s = s.replace(/\bplus\b/g, '+');
     s = s.replace(/ \+/g, '+').replace(/\+ /g, '+');
-
-    // normalize leftover spacing
     s = s.replace(/\s+/g, ' ').trim();
     return s;
   }
 
-  // *** NEW: Only allow iPhones and Samsung S-series ***
+  // Only allow iPhones and Samsung S-series
   function isAllowedPhoneDevice(brand, name) {
     const b = normaliseStr(brand);
     const n = normaliseStr(name);
 
-    // Hard block obvious non-phone Apple devices
     const appleNonPhoneTokens = ['ipad', 'imac', 'macbook', 'mac book', 'mac mini', 'mac studio', 'watch', 'ipod'];
     if (appleNonPhoneTokens.some(t => n.includes(t) || b.includes(t))) {
       return false;
     }
 
-    // iPhones: brand Apple/iPhone and name contains "iphone"
     const isIphone =
       (b.includes('apple') || b.includes('iphone')) &&
       n.includes('iphone');
-
     if (isIphone) return true;
 
-    // Samsung Galaxy S-series:
-    // Require Samsung / Galaxy brand AND a Galaxy-S style name
     const isSamsungBrand = b.includes('samsung') || n.includes('samsung') || n.includes('galaxy');
     const isGalaxySByName =
-      n.includes('galaxy s') ||                // e.g. "galaxy s22 ultra"
-      /\bs[0-9]{1,2}\b/.test(n) ||            // e.g. "s22", "s9"
-      /\bsm-g9[0-9]{2}/.test(n);              // common S-series model codes like SM-G991, G996, etc.
+      n.includes('galaxy s') ||
+      /\bs[0-9]{1,2}\b/.test(n) ||
+      /\bsm-g9[0-9]{2}/.test(n);
 
     if (isSamsungBrand && isGalaxySByName) return true;
 
-    // Everything else is ignored (iPads, Mac, A-series, etc.)
     return false;
   }
 
@@ -625,7 +619,6 @@
     return extra;
   }
 
-  // Map SellCell network strings → locked/unlocked bucket
   function networkToStatus(network, lockedCarriersSet) {
     const n = normaliseStr(network);
 
@@ -641,7 +634,6 @@
     if (lockedCarriersSet.has('sprint') && n.includes('sprint')) return 'locked';
     if (lockedCarriersSet.has('other') && (n === 'other' || n.includes('other'))) return 'locked';
 
-    // fallback: unknown networks count as locked
     return 'locked';
   }
 
@@ -695,7 +687,6 @@
       const capacity = dev.getElementsByTagName('capacity')[0]?.textContent || '';
       const network = dev.getElementsByTagName('network')[0]?.textContent || '';
 
-      // *** Only keep iPhones + Samsung S-series from the feed ***
       if (!isAllowedPhoneDevice(brandName, devName)) {
         continue;
       }
@@ -738,7 +729,7 @@
     return { maxMap, combos };
   }
 
-  // Preview table with per-model grouping: unlocked (flawless→good→fair→broken), then locked
+  // Preview table
   function renderPreviewTable(rows, stats) {
     if (!rows.length) {
       previewContainerEl.innerHTML =
@@ -759,6 +750,8 @@
         ((qualityOrder[a.quality] ?? 99) - (qualityOrder[b.quality] ?? 99))
       );
     });
+
+    latestPreviewRows = rows;
 
     const head = `
       <thead>
@@ -785,14 +778,14 @@
       const feedStr = r.feedPrice.toFixed(2);
 
       return `
-        <tr>
+        <tr data-row-index="${idx}">
           <td>${r.brand}</td>
           <td>${r.modelName}</td>
           <td>${r.modelId || ''}</td>
           <td>${r.storage}</td>
           <td><span class="badge">${r.status}</span></td>
           <td><span class="badge">${r.quality}</span></td>
-          <td>${oldStr}</td>
+          <td class="old-cell">${oldStr}</td>
           <td>${feedStr}</td>
           <td>
             <input
@@ -830,13 +823,23 @@
       return;
     }
 
+    // Update underlying XML node
     row.newNumeric = val;
-
     if (row.node) {
       row.node.textContent = val.toFixed(2);
     }
 
-    const oldNum = row.oldNumeric;
+    // Recalculate Δ using the OLD cell from this row
+    const tr = e.target.closest('tr');
+    let oldNum = null;
+    if (tr) {
+      const oldCell = tr.querySelector('.old-cell');
+      if (oldCell) {
+        const parsed = Number((oldCell.textContent || '').trim());
+        if (!Number.isNaN(parsed)) oldNum = parsed;
+      }
+    }
+
     const delta = oldNum == null ? val : (val - oldNum);
     row.delta = delta;
 
@@ -902,7 +905,7 @@
     const rules = parseRulesJson();
     const globalAdd = Number(globalAddEl.value) || 0;
 
-    const { maxMap, combos } = buildFeedMaxMap(feedDoc, lockedCarrierSet);
+    const { maxMap, combos } = buildFeedMaxMap(feedDoc, lockedCarriersSet);
 
     const models = Array.from(inputDoc.getElementsByTagName('model'));
     let modelsTouched = 0;
@@ -918,7 +921,6 @@
       const brandText = brandNode?.textContent || parentDevice;
       const modelId = modelIdNode?.textContent || '';
 
-      // *** Skip non-iPhone / non-Samsung-S devices in your input matrix too ***
       if (!isAllowedPhoneDevice(brandText, modelName)) {
         continue;
       }
@@ -966,6 +968,8 @@
             const oldNumeric = Number.isNaN(oldVal) ? null : oldVal;
 
             const extra = getExtraAdjustment(brandNorm, modelNorm, quality, rules);
+
+            // IMPORTANT: base is FEED price, not old
             const base = feedPrice;
             const newVal = base + globalAdd + extra;
             const newValRounded = Math.round(newVal * 100) / 100;
@@ -1005,7 +1009,6 @@
     latestInputDoc = inputDoc;
     const serializer = new XMLSerializer();
     latestOutputXml = serializer.serializeToString(inputDoc);
-    latestPreviewRows = previewRows;
 
     const stats = `Feed combos (highest per combo): ${combos} · Models updated: ${modelsTouched} · Prices changed: ${pricesChanged}`;
     renderPreviewTable(previewRows, stats);
@@ -1015,7 +1018,7 @@
       downloadBtn.disabled = false;
     } else {
       setStatus('No changes applied with current filters/rules (or all non-iPhone/S-series devices).', false);
-      downloadBtn.disabled = false; // still allow identical copy
+      downloadBtn.disabled = false;
     }
   }
 
