@@ -1506,7 +1506,7 @@ async function handleImeiSubmit() {
         undefined,
     };
 
-    const response = await fetch('/checkImei', {
+    const response = await fetch('/api/checkImei', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
