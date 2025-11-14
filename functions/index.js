@@ -6,7 +6,7 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
-const { checkEsn } = require('./services/phonecheck');
+const { checkEsn, checkCarrierLock, isAppleDeviceHint } = require('./services/phonecheck');
 const {
   DEFAULT_CARRIER_CODE,
   buildKitTrackingUpdate,
@@ -443,9 +443,39 @@ app.post("/checkImei", async (req, res) => {
     return res.status(502).json({ error: 'Failed to verify IMEI with Phonecheck.' });
   }
 
+  let carrierLockResult = null;
+  const appleHintValues = [
+    brand,
+    deviceType,
+    orderData?.brand,
+    orderData?.device?.brand,
+    orderData?.device?.model,
+    orderData?.category,
+    deviceData?.brand,
+    deviceData?.device?.brand,
+    deviceData?.device?.model,
+    esnResult?.normalized?.brand,
+    esnResult?.normalized?.model,
+    esnResult?.normalized?.deviceName,
+  ];
+
+  if (isAppleDeviceHint(...appleHintValues)) {
+    try {
+      carrierLockResult = await checkCarrierLock({
+        imei,
+        deviceType: 'Apple',
+      });
+    } catch (carrierError) {
+      console.error('Phonecheck carrier lock request failed:', carrierError);
+    }
+  }
+
   const normalized = {
+    ...(carrierLockResult?.normalized || {}),
     ...esnResult.normalized,
-    raw: esnResult.raw,
+    raw: carrierLockResult
+      ? { esn: esnResult.raw, carrierLock: carrierLockResult.raw }
+      : esnResult.raw,
   };
 
   const updatePayload = {

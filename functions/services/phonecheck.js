@@ -1,6 +1,148 @@
 const axios = require('axios');
 
 const DEFAULT_PHONECHECK_BASE_URL = 'https://clientapiv2.phonecheck.com';
+const APPLE_HINT_REGEX = /(apple|iphone|ipad|ipod|ios|watch)/i;
+const COLOR_PHRASES = [
+  'natural titanium',
+  'blue titanium',
+  'black titanium',
+  'white titanium',
+  'rose gold',
+  'space gray',
+  'space grey',
+  'jet black',
+  'pacific blue',
+  'sierra blue',
+  'product red',
+  'midnight green',
+  'space black',
+  'midnight',
+  'starlight',
+  'graphite',
+  'violet',
+  'cream',
+  'purple',
+  'black',
+  'white',
+  'green',
+  'yellow',
+  'orange',
+  'coral',
+  'silver',
+  'pink',
+  'blue',
+  'gold',
+  'red',
+  'titanium',
+]
+  .map((phrase) => phrase.trim())
+  .filter(Boolean)
+  .sort((a, b) => b.length - a.length);
+
+function pickFirstString(...values) {
+  for (const value of values) {
+    if (typeof value !== 'string') {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (trimmed) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
+function stripHtml(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
+function extractSummaryValue(summary, label) {
+  if (!summary || typeof summary !== 'string') {
+    return null;
+  }
+  const sanitized = stripHtml(summary);
+  if (!sanitized) {
+    return null;
+  }
+  const regex = new RegExp(`${label}\s*:\s*([^\n]+)`, 'i');
+  const match = sanitized.match(regex);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  return null;
+}
+
+function detectStorageFromText(text) {
+  if (typeof text !== 'string') {
+    return null;
+  }
+  const match = text.match(/(\d+(?:\.\d+)?\s?(?:TB|GB|MB))/i);
+  if (match) {
+    return match[0].toUpperCase().replace(/\s+/g, '');
+  }
+  return null;
+}
+
+function detectColorFromModel(modelName) {
+  if (typeof modelName !== 'string') {
+    return null;
+  }
+  const normalized = modelName.replace(/\([^)]*\)/g, ' ').toLowerCase();
+  for (const phrase of COLOR_PHRASES) {
+    if (normalized.includes(phrase)) {
+      return phrase
+        .split(' ')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+    }
+  }
+  const storageMatch = normalized.match(/\d+(?:\.\d+)?\s?(?:tb|gb|mb)/i);
+  if (storageMatch) {
+    const after = normalized.slice(storageMatch.index + storageMatch[0].length).trim();
+    if (after) {
+      const cleaned = after.replace(/[^a-z\s]/gi, ' ').trim();
+      if (cleaned) {
+        return cleaned
+          .split(' ')
+          .filter(Boolean)
+          .slice(0, 3)
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      }
+    }
+  }
+  return null;
+}
+
+function normalizeCarrierLockValue(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const cleaned = stripHtml(value).toLowerCase();
+  if (!cleaned) {
+    return null;
+  }
+  if (cleaned.includes('unlock')) {
+    return 'Unlocked';
+  }
+  if (cleaned.includes('lock')) {
+    return 'Locked';
+  }
+  return value.trim();
+}
+
+function isAppleDeviceHint(...values) {
+  return values.some((value) => typeof value === 'string' && APPLE_HINT_REGEX.test(value));
+}
 
 function getPhonecheckConfig() {
   const apiKey = process.env.IMEI_API;
@@ -106,13 +248,19 @@ function normalizePhonecheckResponse(raw = {}) {
   const reportedDeviceId = typeof raw.deviceid === 'string' ? raw.deviceid.trim() : null;
 
   let summary = null;
+  let structuredResponse = null;
   if (typeof raw.RawResponse === 'string') {
     summary = raw.RawResponse.trim() || null;
   } else if (raw.RawResponse && typeof raw.RawResponse === 'object') {
-    try {
-      summary = JSON.stringify(raw.RawResponse);
-    } catch (error) {
-      summary = null;
+    structuredResponse = raw.RawResponse;
+    if (typeof raw.RawResponse.result === 'string') {
+      summary = raw.RawResponse.result.trim() || null;
+    } else {
+      try {
+        summary = JSON.stringify(raw.RawResponse);
+      } catch (error) {
+        summary = null;
+      }
     }
   }
 
@@ -122,7 +270,7 @@ function normalizePhonecheckResponse(raw = {}) {
     api,
     deviceId: reportedDeviceId,
     summary,
-    raw
+    raw,
   };
 
   const derivedBlacklist = normalizePhonecheckBoolean(remarks) ?? normalizePhonecheckBoolean(summary);
@@ -130,29 +278,128 @@ function normalizePhonecheckResponse(raw = {}) {
     normalized.blacklisted = derivedBlacklist;
   }
 
-  if (raw.RawResponse && typeof raw.RawResponse === 'object') {
-    const rawObject = raw.RawResponse;
-    const brand = rawObject.brandname || rawObject.brand || rawObject.BrandName || rawObject.Brand || null;
-    const model = rawObject.modelname || rawObject.model || rawObject.ModelName || rawObject.Model || rawObject.marketingname || rawObject.MarketingName || null;
-    const color = rawObject.color || rawObject.Color || rawObject.FieldColor || null;
-    const storage = rawObject.storage || rawObject.Storage || rawObject.memory || rawObject.Memory || null;
-    const blacklistStatus = rawObject.blackliststatus || rawObject.BlacklistStatus || null;
+  const nestedData = structuredResponse && typeof structuredResponse.data === 'object' && structuredResponse.data !== null
+    ? structuredResponse.data
+    : null;
 
-    if (brand) {
-      normalized.brand = brand;
-    }
-    if (model) {
-      normalized.model = model;
-    }
-    if (color) {
-      normalized.color = color;
-    }
-    if (storage) {
-      normalized.storage = storage;
-    }
-    if (blacklistStatus && normalized.blacklisted === undefined) {
-      normalized.blacklisted = normalizePhonecheckBoolean(blacklistStatus);
-    }
+  const brand = pickFirstString(
+    structuredResponse?.brandname,
+    structuredResponse?.brand,
+    structuredResponse?.BrandName,
+    structuredResponse?.Brand,
+    nestedData?.brandname,
+    nestedData?.brand,
+    nestedData?.Brand,
+  );
+
+  const model = pickFirstString(
+    structuredResponse?.modelname,
+    structuredResponse?.model,
+    structuredResponse?.ModelName,
+    structuredResponse?.Model,
+    structuredResponse?.marketingname,
+    structuredResponse?.MarketingName,
+    nestedData?.model,
+    nestedData?.modelname,
+    nestedData?.Model,
+    nestedData?.description,
+  );
+
+  const deviceName = pickFirstString(
+    structuredResponse?.deviceName,
+    structuredResponse?.DeviceName,
+    structuredResponse?.modelDescription,
+    structuredResponse?.ModelDescription,
+    nestedData?.model,
+    nestedData?.description,
+    extractSummaryValue(summary, 'Model Description'),
+    extractSummaryValue(summary, 'Model'),
+  );
+
+  const storage = pickFirstString(
+    structuredResponse?.storage,
+    structuredResponse?.Storage,
+    structuredResponse?.memory,
+    structuredResponse?.Memory,
+    nestedData?.storage,
+    nestedData?.Storage,
+    nestedData?.memory,
+    nestedData?.Memory,
+    detectStorageFromText(model),
+    detectStorageFromText(deviceName),
+    detectStorageFromText(summary),
+  );
+
+  const color = pickFirstString(
+    structuredResponse?.color,
+    structuredResponse?.Color,
+    nestedData?.color,
+    nestedData?.Color,
+    detectColorFromModel(model || deviceName || ''),
+  );
+
+  const lockedCarrier = pickFirstString(
+    structuredResponse?.lockedCarrier,
+    structuredResponse?.LockedCarrier,
+    structuredResponse?.Lockedcarrier,
+    nestedData?.carrier,
+    nestedData?.Carrier,
+    extractSummaryValue(summary, 'Locked Carrier'),
+  );
+
+  const carrierLock = pickFirstString(
+    structuredResponse?.simlock,
+    structuredResponse?.Simlock,
+    structuredResponse?.SimLockStatus,
+    structuredResponse?.SimlockStatus,
+    structuredResponse && structuredResponse['Sim-Lock Status'],
+    nestedData?.simlock,
+    nestedData?.Simlock,
+    extractSummaryValue(summary, 'Sim-Lock Status'),
+  );
+
+  const warrantyStatus = pickFirstString(
+    structuredResponse?.warrantystatus,
+    structuredResponse?.WarrantyStatus,
+    extractSummaryValue(summary, 'Warranty Status'),
+  );
+
+  const blacklistStatus = pickFirstString(
+    structuredResponse?.blackliststatus,
+    structuredResponse?.BlacklistStatus,
+    nestedData?.blackliststatus,
+    nestedData?.BlacklistStatus,
+  );
+
+  if (brand) {
+    normalized.brand = brand;
+  }
+  if (model) {
+    normalized.model = model;
+  }
+  if (deviceName) {
+    normalized.deviceName = deviceName;
+  }
+  if (color) {
+    normalized.color = color;
+  }
+  if (storage) {
+    normalized.storage = storage;
+  }
+  if (lockedCarrier) {
+    normalized.lockedCarrier = lockedCarrier;
+  }
+  const normalizedCarrierLock = normalizeCarrierLockValue(carrierLock);
+  if (normalizedCarrierLock) {
+    normalized.carrierLock = normalizedCarrierLock;
+  } else if (carrierLock) {
+    normalized.carrierLock = carrierLock;
+  }
+  if (warrantyStatus) {
+    normalized.warrantyStatus = warrantyStatus;
+  }
+  if (blacklistStatus && normalized.blacklisted === undefined) {
+    normalized.blacklisted = normalizePhonecheckBoolean(blacklistStatus);
   }
 
   return normalized;
@@ -287,9 +534,73 @@ async function checkEsn({
   };
 }
 
+async function checkCarrierLock({
+  imei,
+  deviceType = 'Apple',
+  axiosInstance = axios,
+} = {}) {
+  if (!imei || typeof imei !== 'string') {
+    const error = new Error('IMEI is required for Phonecheck carrier lock lookup.');
+    error.code = 'phonecheck/invalid-imei';
+    throw error;
+  }
+
+  const { apiKey, username, baseUrl } = getPhonecheckConfig();
+  const url = new URL('/cloud/cloudDB/CheckCarrierLock', baseUrl).toString();
+
+  const params = new URLSearchParams();
+  params.append('ApiKey', apiKey);
+  params.append('UserId', username);
+  params.append('DeviceId', imei.trim());
+  params.append('DeviceType', deviceType || 'Apple');
+
+  const response = await axiosInstance({
+    method: 'post',
+    url,
+    data: params.toString(),
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    timeout: 20000,
+    validateStatus: () => true,
+  });
+
+  const { status, data } = response;
+
+  if (status >= 400) {
+    let message = 'Phonecheck carrier lock request failed.';
+    if (data) {
+      if (typeof data === 'string') {
+        message = data;
+      } else if (typeof data === 'object' && data !== null) {
+        message = data.message || data.error || message;
+      }
+    }
+    const error = new Error(message || 'Phonecheck carrier lock request failed.');
+    error.code = 'phonecheck/http-error';
+    error.status = status;
+    error.responseData = data;
+    throw error;
+  }
+
+  if (!data || typeof data !== 'object') {
+    const error = new Error('Phonecheck returned an unexpected carrier lock response.');
+    error.code = 'phonecheck/invalid-response';
+    error.responseData = data;
+    throw error;
+  }
+
+  return {
+    raw: data,
+    normalized: normalizePhonecheckResponse(data),
+  };
+}
+
 module.exports = {
   checkEsn,
+  checkCarrierLock,
   normalizePhonecheckResponse,
   normalizeCarrierForPhonecheck,
   normalizeDeviceType,
+  isAppleDeviceHint,
 };

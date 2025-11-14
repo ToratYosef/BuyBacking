@@ -900,11 +900,14 @@ const IMEI_RESULT_FIELDS = [
   { key: 'blacklisted', label: 'Blacklisted' },
   { key: 'api', label: 'Phonecheck API Plan' },
   { key: 'deviceId', label: 'Reported Device ID' },
+  { key: 'deviceName', label: 'Device Name' },
   { key: 'brand', label: 'Brand' },
   { key: 'model', label: 'Model' },
   { key: 'color', label: 'Color' },
   { key: 'storage', label: 'Storage' },
-  { key: 'carrierLock', label: 'Carrier Lock' }
+  { key: 'warrantyStatus', label: 'Warranty Status' },
+  { key: 'carrierLock', label: 'Carrier Lock' },
+  { key: 'lockedCarrier', label: 'Locked Carrier' }
 ];
 
 const ORDER_RECEIVED_STATUSES = new Set(['received']);
