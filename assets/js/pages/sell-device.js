@@ -10,7 +10,7 @@ const MANUAL_ORDER_STATUS_OPTIONS = [
   { value: 'kit_sent', label: 'Kit Sent' },
   { value: 'kit_delivered', label: 'Kit Delivered' },
   { value: 'label_generated', label: 'Label Generated' },
-  { value: 'emailed', label: 'Emailed' },
+  { value: 'emailed', label: 'Balance Email Sent' },
   { value: 'received', label: 'Received' },
   { value: 'completed', label: 'Completed' },
   { value: 're-offered-pending', label: 'Reoffer Pending' },

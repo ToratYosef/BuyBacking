@@ -13,6 +13,40 @@ import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+function isBalanceEmailStatus(order = {}) {
+  if (!order || typeof order !== 'object') {
+    return false;
+  }
+  if ((order.status || '').toLowerCase() !== 'emailed') {
+    return false;
+  }
+  if (order.balanceEmailSentAt) {
+    return true;
+  }
+  const reason = (order.lastConditionEmailReason || order.conditionEmailReason || '')
+    .toString()
+    .toLowerCase();
+  return reason === 'outstanding_balance';
+}
+
+function isLegacyEmailLabelStatus(order = {}) {
+  return (order.status || '').toLowerCase() === 'emailed' && !isBalanceEmailStatus(order);
+}
+
+function isLabelGenerationStage(order = {}) {
+  const normalized = (order.status || '').toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (normalized === 'label_generated') {
+    return true;
+  }
+  if (normalized === 'emailed') {
+    return isLegacyEmailLabelStatus(order);
+  }
+  return false;
+}
+
 let db;
 let auth;
 let currentUserId = 'anonymous_user';
@@ -232,7 +266,7 @@ minute: '2-digit'
 function formatLabelStatus(order) {
 if (!order) return '';
 const normalizedStatus = (order.status || '').toLowerCase();
-if (!['label_generated', 'emailed'].includes(normalizedStatus)) {
+if (!isLabelGenerationStage(order)) {
 return '';
 }
 let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
@@ -668,16 +702,27 @@ carrierCard.appendChild(header);
 const priceList = document.createElement('div');
 priceList.className = 'space-y-2';
 
+const columnHeader = document.createElement('div');
+columnHeader.className = 'reoffer-pricing-columns';
+const conditionHeading = document.createElement('span');
+conditionHeading.textContent = 'Condition';
+const priceHeading = document.createElement('span');
+priceHeading.textContent = 'Price';
+columnHeader.appendChild(conditionHeading);
+columnHeader.appendChild(priceHeading);
+priceList.appendChild(columnHeader);
+
 Object.entries(conditionMap).forEach(([conditionKey, value]) => {
 const button = document.createElement('button');
 button.type = 'button';
 button.dataset.price = value;
-button.className = 'w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-md bg-white text-left hover:border-blue-400 hover:text-blue-600 transition';
+button.className = 'reoffer-price-button w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-md bg-white text-left hover:border-blue-400 hover:text-blue-600 transition';
 
 const conditionLabel = document.createElement('span');
+conditionLabel.classList.add('reoffer-price-label');
 conditionLabel.textContent = formatConditionLabel(conditionKey);
 const amount = document.createElement('span');
-amount.className = 'font-semibold';
+amount.className = 'reoffer-price-amount font-semibold';
 amount.textContent = `$${Number(value).toFixed(2)}`;
 
 button.appendChild(conditionLabel);
@@ -710,7 +755,7 @@ function updateDashboardCounts(ordersData) {
 // Updated to 'order_pending'
 orderPendingCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
 shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length;
-labelGeneratedCount.textContent = ordersData.filter(o => o.status === 'label_generated' || o.status === 'emailed').length;
+labelGeneratedCount.textContent = ordersData.filter(order => isLabelGenerationStage(order)).length;
 receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
 completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
 reofferedPendingCount.textContent = ordersData.filter(o => o.status === 're-offered-pending').length;
@@ -861,28 +906,46 @@ modalActivityLog.classList.remove('hidden');
 * @param {Object} order - The order object.
 */
 function formatStatus(order) {
-const status = order.status;
-const preference = order.shippingPreference;
+const rawStatus = order.status || '';
+const normalizedStatus = rawStatus.toLowerCase();
+const preference = (order.shippingPreference || '').toString().toLowerCase();
 
-if (status === 'order_pending') {
+switch (normalizedStatus) {
+case 'order_pending':
 return 'Order Pending';
-}
-if (status === 'shipping_kit_requested') {
+case 'shipping_kit_requested':
 return 'Shipping Kit Requested';
+case 'kit_needs_printing':
+case 'needs_printing':
+return 'Needs Printing';
+case 'kit_sent':
+return 'Kit Sent';
+case 'kit_on_the_way_to_customer':
+case 'kit_in_transit':
+return 'Kit On The Way To Customer';
+case 'kit_delivered':
+return 'Kit Delivered';
+case 'kit_on_the_way_to_us':
+return 'Kit On The Way To Us';
+case 'delivered_to_us':
+return 'Delivered To Us';
 }
-if (status === 'label_generated') {
-// If the user requested an emailed label, display "Label Generated"
-if (preference === 'Email Label Requested') {
-return 'Label Generated';
+
+const legacyEmailStatus = normalizedStatus === 'emailed' && isLegacyEmailLabelStatus(order);
+if (normalizedStatus === 'label_generated' || legacyEmailStatus) {
+return preference === 'email label requested' ? 'Label Generated' : 'Shipping Kit on the Way';
 }
-// Otherwise (for Shipping Kit Requested), display "Shipping Kit on the Way"
-return 'Shipping Kit on the Way';
+
+if (normalizedStatus === 'emailed') {
+return 'Balance Email Sent';
 }
-if (status === 'emailed') {
-return 'Emailed';
+
+if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
+return 'Phone On The Way To Us';
 }
+
 // Fallback for other statuses
-return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+return rawStatus.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
 function formatCondition(condition) {
@@ -987,7 +1050,12 @@ modalStatus.className = `font-semibold px-2 py-1 rounded-full text-xs ${getStatu
 modalLastReminderDate.textContent = order.lastReminderSentAt ? formatDate(order.lastReminderSentAt) : 'N/A';
 
 // NEW: Handle Reminder Button visibility and click
-if (['order_pending', 'shipping_kit_requested', 'label_generated', 'emailed'].includes(order.status)) {
+const normalizedStatus = (order.status || '').toLowerCase();
+const reminderEligibleStatuses = new Set(['order_pending', 'shipping_kit_requested', 'label_generated']);
+const reminderEligible =
+  reminderEligibleStatuses.has(normalizedStatus) ||
+  (normalizedStatus === 'emailed' && isLegacyEmailLabelStatus(order));
+if (reminderEligible) {
 sendReminderBtn.classList.remove('hidden');
 sendReminderBtn.onclick = () => handleAction(order.id, 'sendReminderEmail');
 } else {
@@ -1104,6 +1172,17 @@ return button;
 
 const currentStatus = order.status;
 const labelOptions = getLabelOptions(order);
+const appendLabelStageActions = () => {
+if (order.shippingPreference === 'Shipping Kit Requested') {
+modalActionButtons.appendChild(createButton('Mark I Sent', () => handleAction(order.id, 'markKitSent'), 'bg-orange-600 hover:bg-orange-700'));
+}
+modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
+};
+
+const appendPostReceivedActions = () => {
+modalActionButtons.appendChild(createButton('Mark as Completed', () => handleAction(order.id, 'markCompleted', 'bg-gray-600 hover:bg-gray-700')));
+modalActionButtons.appendChild(createButton('Propose Re-offer', () => showReofferForm(order.id), 'bg-orange-600 hover:bg-orange-700'));
+};
 switch (currentStatus) {
 case 'order_pending':
 case 'shipping_kit_requested':
@@ -1114,16 +1193,17 @@ modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => sh
 // Reminder button is now handled by sendReminderBtn at the top
 break;
 case 'label_generated':
+appendLabelStageActions();
+break;
 case 'emailed':
-if (order.shippingPreference === 'Shipping Kit Requested') {
-modalActionButtons.appendChild(createButton('Mark I Sent', () => handleAction(order.id, 'markKitSent'), 'bg-orange-600 hover:bg-orange-700'));
+if (isBalanceEmailStatus(order)) {
+appendPostReceivedActions();
+} else {
+appendLabelStageActions();
 }
-modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
-// Reminder button is now handled by sendReminderBtn at the top
 break;
 case 'received':
-modalActionButtons.appendChild(createButton('Mark as Completed', () => handleAction(order.id, 'markCompleted', 'bg-gray-600 hover:bg-gray-700')));
-modalActionButtons.appendChild(createButton('Propose Re-offer', () => showReofferForm(order.id), 'bg-orange-600 hover:bg-orange-700'));
+appendPostReceivedActions();
 break;
 case 're-offered-pending':
 if (order.reOffer && order.reOffer.newPrice) {
@@ -1294,6 +1374,16 @@ if (reofferPricingMessage) {
 reofferPricingMessage.textContent = '';
 reofferPricingMessage.classList.add('hidden');
 }
+const modalContent = orderDetailsModal?.querySelector('.space-y-4');
+const modalShell = orderDetailsModal?.querySelector('.relative');
+[orderDetailsModal, modalShell, modalContent].forEach((node) => {
+  if (!node) return;
+  if (typeof node.scrollTo === 'function') {
+    node.scrollTo({ top: 0, behavior: 'smooth' });
+  } else if (typeof node.scrollTop === 'number') {
+    node.scrollTop = 0;
+  }
+});
 document.querySelectorAll('input[name="reoffer-reasons"]').forEach(cb => {
 cb.checked = false;
 });
@@ -1681,7 +1771,9 @@ let filtered = allOrders;
 
 if (status !== 'all') {
 if (status === 'label_generated') {
-filtered = filtered.filter(order => order.status === 'label_generated' || order.status === 'emailed');
+filtered = filtered.filter(order => isLabelGenerationStage(order));
+} else if (status === 'emailed') {
+filtered = filtered.filter(order => isBalanceEmailStatus(order));
 } else {
 filtered = filtered.filter(order => order.status === status);
 }
