@@ -34,6 +34,22 @@ const POST_RECEIVED_STATUS_HINTS = new Set([
   'canceled',
 ]);
 
+function hasBalanceEmailFlag(input = {}) {
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+  const reason = (input.lastConditionEmailReason || input.conditionEmailReason || '')
+    .toString()
+    .toLowerCase();
+  if (reason === 'outstanding_balance') {
+    return true;
+  }
+  if (input.balanceEmailSentAt) {
+    return true;
+  }
+  return false;
+}
+
 function normalizeStatusString(value) {
   if (typeof value !== 'string') {
     return '';
@@ -85,6 +101,12 @@ function isStatusPastReceived(input) {
   if (!raw) {
     return false;
   }
+  if (raw === 'emailed') {
+    if (input && typeof input === 'object') {
+      return hasBalanceEmailFlag(input);
+    }
+    return false;
+  }
   if (statusMatchesHints(raw)) {
     return true;
   }
@@ -116,7 +138,19 @@ function isStatusPastReceived(input) {
   return false;
 }
 
+function isBalanceEmailStatus(input = {}) {
+  if (!input || typeof input !== 'object') {
+    return false;
+  }
+  const normalized = normalizeStatusString(extractStatusCandidate(input));
+  if (normalized !== 'emailed') {
+    return false;
+  }
+  return hasBalanceEmailFlag(input);
+}
+
 module.exports = {
   POST_RECEIVED_STATUS_HINTS,
   isStatusPastReceived,
+  isBalanceEmailStatus,
 };

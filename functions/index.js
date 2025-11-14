@@ -17,7 +17,7 @@ const {
   PHONE_TRANSIT_STATUS,
   normalizeInboundTrackingStatus,
 } = require('./helpers/shipengine');
-const { isStatusPastReceived } = require('./helpers/order-status');
+const { isStatusPastReceived, isBalanceEmailStatus } = require('./helpers/order-status');
 const { getShipStationCredentials } = require('./services/shipstation');
 const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is loaded here
 const createEmailsRouter = require('./routes/emails');
@@ -26,12 +26,22 @@ const createOrdersRouter = require('./routes/orders');
 if (!admin.apps.length) {
   admin.initializeApp();
 }
+const {
+  reserveFakeProfiles,
+  buildFakeOrderPayload,
+  getFakeOrderDayContext,
+  MS_PER_DAY,
+} = require('./helpers/fake-order-generator');
 const db = admin.firestore();
 const ordersCollection = db.collection("orders");
 const usersCollection = db.collection("users");
 const adminsCollection = db.collection("admins"); // This collection should only contain manually designated admin UIDs
 const chatsCollection = db.collection("chats");
 const devicesCollection = db.collection("devices");
+
+const FAKE_ORDER_TARGET_PER_DAY = Number(process.env.FAKE_ORDER_TARGET_PER_DAY || 20);
+const FAKE_ORDER_MAX_PER_RUN = Number(process.env.FAKE_ORDER_MAX_PER_RUN || 3);
+const FAKE_ORDER_TZ_OFFSET_MINUTES = Number(process.env.FAKE_ORDER_TZ_OFFSET_MINUTES ?? -300);
 
 function isValidImei(imei) {
   if (typeof imei !== "string" || !/^\d{15}$/.test(imei)) {
@@ -153,6 +163,66 @@ function resolveOrderIdFromDevice(device = {}) {
   }
 
   return null;
+}
+
+async function seedFakeOrdersForDay(now = new Date()) {
+  if (!Number.isFinite(FAKE_ORDER_TARGET_PER_DAY) || FAKE_ORDER_TARGET_PER_DAY <= 0) {
+    return { created: 0 };
+  }
+
+  const { dayKey, startOfDay } = getFakeOrderDayContext(now, FAKE_ORDER_TZ_OFFSET_MINUTES);
+  const existingSnapshot = await ordersCollection.where('fakeOrderDateKey', '==', dayKey).get();
+  const createdToday = existingSnapshot.size;
+
+  if (createdToday >= FAKE_ORDER_TARGET_PER_DAY) {
+    return { created: 0, dayKey };
+  }
+
+  const elapsedMs = Math.max(0, now.getTime() - startOfDay.getTime());
+  const clampedElapsed = Math.min(elapsedMs, MS_PER_DAY);
+  const progress = clampedElapsed / MS_PER_DAY;
+  const expectedCount = Math.min(
+    FAKE_ORDER_TARGET_PER_DAY,
+    Math.ceil(progress * FAKE_ORDER_TARGET_PER_DAY)
+  );
+  const remainingCapacity = FAKE_ORDER_TARGET_PER_DAY - createdToday;
+  const shortfall = expectedCount - createdToday;
+  let toCreate = Math.min(remainingCapacity, Math.max(shortfall, 0));
+
+  if (toCreate <= 0 && progress >= 1 && remainingCapacity > 0) {
+    toCreate = remainingCapacity;
+  }
+
+  toCreate = Math.min(FAKE_ORDER_MAX_PER_RUN, toCreate);
+
+  if (toCreate <= 0) {
+    return { created: 0, dayKey };
+  }
+
+  const reservedProfiles = await reserveFakeProfiles(toCreate);
+  let createdCount = 0;
+
+  for (let index = 0; index < toCreate; index += 1) {
+    const profileEntry = reservedProfiles[index];
+    if (!profileEntry) {
+      continue;
+    }
+    const orderId = await generateNextOrderNumber();
+    const createdAt = new Date(now.getTime() - index * 60000);
+    const payload = buildFakeOrderPayload({
+      orderId,
+      profile: profileEntry.profile,
+      profileIndex: profileEntry.profileIndex,
+      dayKey,
+      sequence: createdToday + index + 1,
+      createdAt,
+    });
+
+    await ordersCollection.doc(orderId).set(payload);
+    createdCount += 1;
+  }
+
+  return { created: createdCount, dayKey };
 }
 
 const app = express();
@@ -1751,6 +1821,9 @@ function getInboundTrackingNumber(order = {}) {
 function shouldTrackInbound(order = {}) {
   if (!order || typeof order !== "object") return false;
   const status = (order.status || "").toLowerCase();
+  if (status === 'emailed' && isBalanceEmailStatus(order)) {
+    return false;
+  }
   if (!INBOUND_TRACKABLE_STATUSES.has(status)) return false;
   return Boolean(getInboundTrackingNumber(order));
 }
@@ -2961,6 +3034,10 @@ async function maybeSendReturnReminder(order) {
     return order;
   }
 
+  if (status === 'emailed' && isBalanceEmailStatus(order)) {
+    return order;
+  }
+
   if (status === 'delivered_to_us') {
     return order;
   }
@@ -3039,6 +3116,10 @@ async function maybeAutoCancelAgingOrder(order, options = {}) {
   }
 
   if (!INBOUND_TRACKABLE_STATUSES.has(status)) {
+    return order;
+  }
+
+  if (status === 'emailed' && isBalanceEmailStatus(order)) {
     return order;
   }
 
@@ -3779,6 +3860,21 @@ async function runAutomaticLabelVoidSweep() {
     }
   }
 }
+
+exports.generateSimulatedOrders = functions.pubsub
+  .schedule('every 15 minutes')
+  .timeZone('Etc/UTC')
+  .onRun(async () => {
+    try {
+      const result = await seedFakeOrdersForDay(new Date());
+      if (result.created) {
+        console.log(`Simulated ${result.created} fake orders for ${result.dayKey}`);
+      }
+    } catch (error) {
+      console.error('Failed to inject simulated orders:', error);
+    }
+    return null;
+  });
 
 exports.autoVoidExpiredLabels = functions.pubsub
   .schedule("every 60 minutes")

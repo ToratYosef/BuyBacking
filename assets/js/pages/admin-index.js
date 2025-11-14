@@ -72,7 +72,7 @@ const STATUS_CHART_CONFIG = [
   { key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
   { key: 'delivered_to_us', label: 'Delivered To Us', color: '#0d9488' },
   { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
-  { key: 'emailed', label: 'Emailed', color: '#38bdf8' },
+  { key: 'emailed', label: 'Balance Email Sent', color: '#38bdf8' },
   { key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0ea5e9' },
   { key: 'phone_on_the_way_to_us', label: 'Phone On The Way To Us', color: '#0284c7' },
   { key: 'received', label: 'Received', color: '#0ea5e9' },
@@ -119,6 +119,7 @@ const STATUS_LABEL_OVERRIDES = Object.freeze({
   're-offered-declined': 'Reoffer Declined',
   're-offered-auto-accepted': 'Reoffer Auto Accepted',
   'return-label-generated': 'Return Label Generated',
+  emailed: 'Balance Email Sent',
 });
 
 const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold text-xs px-3 py-1 rounded-full border border-transparent shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-400';
@@ -171,6 +172,48 @@ const formatShippingAddress = (shippingInfo = {}) => {
 
 if (typeof window !== "undefined" && !window.formatShippingAddress) {
   window.formatShippingAddress = formatShippingAddress;
+}
+
+function isBalanceEmailStatus(order = {}) {
+  if (!order || typeof order !== 'object') {
+    return false;
+  }
+  if ((order.status || '').toLowerCase() !== 'emailed') {
+    return false;
+  }
+  if (order.balanceEmailSentAt) {
+    return true;
+  }
+  const reason = (order.lastConditionEmailReason || order.conditionEmailReason || '')
+    .toString()
+    .toLowerCase();
+  return reason === 'outstanding_balance';
+}
+
+function isLegacyEmailLabelStatus(order = {}) {
+  return (order.status || '').toLowerCase() === 'emailed' && !isBalanceEmailStatus(order);
+}
+
+function isLabelGenerationStage(order = {}) {
+  const normalized = (order.status || '').toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (normalized === 'label_generated') {
+    return true;
+  }
+  if (normalized === 'emailed') {
+    return isLegacyEmailLabelStatus(order);
+  }
+  return false;
+}
+
+function resolveReminderStatusKey(order = {}) {
+  const normalized = (order?.status || '').toLowerCase();
+  if (normalized === 'emailed' && isLegacyEmailLabelStatus(order)) {
+    return 'label_generated';
+  }
+  return normalized;
 }
 
 import { firebaseApp } from "/assets/js/firebase-app.js";
@@ -266,7 +309,6 @@ const KIT_STATUS_HINTS = new Set([
 const EMAIL_STATUS_HINTS = new Set([
   'email_label_requested',
   'label_generated',
-  'emailed',
   'phone_on_the_way',
   'phone_on_the_way_to_us',
   'delivered_to_us',
@@ -746,7 +788,6 @@ filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
 const KIT_PRINT_PENDING_STATUSES = ['shipping_kit_requested', 'kit_needs_printing', 'needs_printing'];
 const REMINDER_ELIGIBLE_STATUSES = [
   'label_generated',
-  'emailed',
   'kit_on_the_way_to_us',
   'kit_on_the_way_to_customer',
   'phone_on_the_way',
@@ -756,7 +797,6 @@ const EXPIRING_REMINDER_STATUSES = [
   'order_pending',
   ...KIT_PRINT_PENDING_STATUSES,
   'label_generated',
-  'emailed',
   'kit_on_the_way_to_us',
   'kit_on_the_way_to_customer',
   'phone_on_the_way',
@@ -1589,7 +1629,12 @@ minute: '2-digit'
 function formatLabelStatus(order) {
 if (!order) return '';
 const normalizedStatus = (order.status || '').toLowerCase();
-if (!['label_generated', 'emailed', 'kit_on_the_way_to_us', 'phone_on_the_way', 'kit_delivered'].includes(normalizedStatus)) {
+const isLabelStatus =
+  normalizedStatus === 'kit_on_the_way_to_us' ||
+  normalizedStatus === 'phone_on_the_way' ||
+  normalizedStatus === 'kit_delivered' ||
+  isLabelGenerationStage(order);
+if (!isLabelStatus) {
 return '';
 }
 let description = order.labelTrackingStatusDescription || order.labelTrackingStatus;
@@ -3436,16 +3481,27 @@ carrierCard.appendChild(header);
 const priceList = document.createElement('div');
 priceList.className = 'space-y-2';
 
+const columnHeader = document.createElement('div');
+columnHeader.className = 'reoffer-pricing-columns';
+const conditionHeading = document.createElement('span');
+conditionHeading.textContent = 'Condition';
+const priceHeading = document.createElement('span');
+priceHeading.textContent = 'Price';
+columnHeader.appendChild(conditionHeading);
+columnHeader.appendChild(priceHeading);
+priceList.appendChild(columnHeader);
+
 Object.entries(conditionMap).forEach(([conditionKey, value]) => {
 const button = document.createElement('button');
 button.type = 'button';
 button.dataset.price = value;
-button.className = 'w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-md bg-white text-left hover:border-blue-400 hover:text-blue-600 transition';
+button.className = 'reoffer-price-button w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-md bg-white text-left hover:border-blue-400 hover:text-blue-600 transition';
 
 const conditionLabel = document.createElement('span');
+conditionLabel.classList.add('reoffer-price-label');
 conditionLabel.textContent = formatConditionLabel(conditionKey);
 const amount = document.createElement('span');
-amount.className = 'font-semibold';
+amount.className = 'reoffer-price-amount font-semibold';
 amount.textContent = `$${Number(value).toFixed(2)}`;
 
 button.appendChild(conditionLabel);
@@ -3639,8 +3695,8 @@ const statusCounts = {
   'kit_delivered': ordersData.filter(o => o.status === 'kit_delivered').length,
   'kit_on_the_way_to_us': ordersData.filter(o => o.status === 'kit_on_the_way_to_us').length,
   'delivered_to_us': ordersData.filter(o => o.status === 'delivered_to_us').length,
-  'label_generated': ordersData.filter(o => o.status === 'label_generated').length,
-  'emailed': ordersData.filter(o => o.status === 'emailed').length,
+  'label_generated': ordersData.filter(order => isLabelGenerationStage(order)).length,
+  'emailed': ordersData.filter(order => isBalanceEmailStatus(order)).length,
   'phone_on_the_way': ordersData.filter(o => o.status === 'phone_on_the_way').length,
   'phone_on_the_way_to_us': ordersData.filter(o => o.status === 'phone_on_the_way_to_us').length,
   'received': ordersData.filter(o => o.status === 'received').length,
@@ -4086,6 +4142,13 @@ function isStatusPastReceived(statusOrOrder = {}) {
     return false;
   }
 
+  if (normalized === 'emailed') {
+    if (statusOrOrder && typeof statusOrOrder === 'object') {
+      return isBalanceEmailStatus(statusOrOrder);
+    }
+    return false;
+  }
+
   if (TRACKING_POST_RECEIVED_STATUSES.has(normalized)) {
     return true;
   }
@@ -4166,11 +4229,18 @@ function matchesEmailTrackingHints(order = {}) {
   }
 
   const status = normalizeStatus(order);
+  if (status === 'emailed') {
+    return isLegacyEmailLabelStatus(order);
+  }
   if (EMAIL_STATUS_HINTS.has(status)) {
     return true;
   }
 
-  return status.includes('email') || status.includes('label');
+  if (status.includes('email') || status.includes('label')) {
+    return !isBalanceEmailStatus(order);
+  }
+
+  return false;
 }
 
 function isBulkKitRefreshCandidate(order = {}) {
@@ -4437,10 +4507,10 @@ function isAgingCandidate(order = {}) {
 
 function updateReminderButtons(order) {
 const orderId = order?.id || null;
-const status = (order?.status || '').toString();
+const statusKey = resolveReminderStatusKey(order);
 
 if (sendReminderBtn) {
-if (orderId && REMINDER_ELIGIBLE_STATUSES.includes(status)) {
+if (orderId && REMINDER_ELIGIBLE_STATUSES.includes(statusKey)) {
 sendReminderBtn.classList.remove('hidden');
 sendReminderBtn.onclick = () => handleSendReminder(orderId);
 } else {
@@ -4450,7 +4520,7 @@ sendReminderBtn.onclick = null;
 }
 
 if (sendExpiringReminderBtn) {
-if (orderId && EXPIRING_REMINDER_STATUSES.includes(status)) {
+if (orderId && EXPIRING_REMINDER_STATUSES.includes(statusKey)) {
 sendExpiringReminderBtn.classList.remove('hidden');
 sendExpiringReminderBtn.onclick = () => handleSendExpiringReminder(orderId);
 } else {
@@ -4727,47 +4797,46 @@ modalActivityLog.classList.remove('hidden');
 function formatStatus(order) {
 const status = order.status;
 const preference = order.shippingPreference;
+const normalizedStatus = (status || '').toLowerCase();
+const normalizedPreference = (preference || '').toString().toLowerCase();
 
-if (status === 'order_pending') {
+if (normalizedStatus === 'order_pending') {
 return 'Order Pending';
 }
-if (status === 'shipping_kit_requested') {
+if (normalizedStatus === 'shipping_kit_requested') {
 return 'Shipping Kit Requested';
 }
-if (KIT_PRINT_PENDING_STATUSES.includes(status)) {
+if (KIT_PRINT_PENDING_STATUSES.includes(normalizedStatus)) {
 return 'Needs Printing';
 }
-if (status === 'kit_sent') {
+if (normalizedStatus === 'kit_sent') {
 return 'Kit Sent';
 }
-if (status === 'kit_on_the_way_to_customer' || status === 'kit_in_transit') {
+if (normalizedStatus === 'kit_on_the_way_to_customer' || normalizedStatus === 'kit_in_transit') {
 return 'Kit On The Way To Customer';
 }
-if (status === 'kit_delivered') {
+if (normalizedStatus === 'kit_delivered') {
 return 'Kit Delivered';
 }
-if (status === 'kit_on_the_way_to_us') {
+if (normalizedStatus === 'kit_on_the_way_to_us') {
 return 'Kit On The Way To Us';
 }
-if (status === 'delivered_to_us') {
+if (normalizedStatus === 'delivered_to_us') {
 return 'Delivered To Us';
 }
-if (status === 'label_generated') {
-// If the user requested an emailed label, display "Label Generated"
-if (preference === 'Email Label Requested') {
-return 'Label Generated';
+const legacyEmailStatus = normalizedStatus === 'emailed' && isLegacyEmailLabelStatus(order);
+if (normalizedStatus === 'label_generated' || legacyEmailStatus) {
+const isEmailPreference = normalizedPreference === 'email label requested';
+return isEmailPreference ? 'Label Generated' : 'Shipping Kit on the Way';
 }
-// Otherwise (for Shipping Kit Requested), display "Shipping Kit on the Way"
-return 'Shipping Kit on the Way';
+if (normalizedStatus === 'emailed') {
+return 'Balance Email Sent';
 }
-if (status === 'emailed') {
-return 'Emailed';
-}
-if (status === 'phone_on_the_way' || status === 'phone_on_the_way_to_us') {
+if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
 return 'Phone On The Way To Us';
 }
 // Fallback for other statuses
-return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+return normalizedStatus.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 function setSelectValue(selectElement, value) {
 if (!selectElement) {
@@ -5056,6 +5125,9 @@ function getStatusToneClasses(status) {
 }
 
 function getStatusDisplayLabel(status, order) {
+  if (STATUS_LABEL_OVERRIDES[status]) {
+    return STATUS_LABEL_OVERRIDES[status];
+  }
   const display = formatStatus({ status, shippingPreference: order?.shippingPreference });
   if (display && typeof display === 'string') {
     return display;
@@ -5708,6 +5780,35 @@ order.outboundLabelUrl ||
 order.inboundLabelUrl ||
 order.shipEngineLabelId
 );
+
+const appendLabelGenerationActions = () => {
+  if (order.shippingPreference === 'Shipping Kit Requested') {
+    modalActionButtons.appendChild(
+      createButton('Mark I Sent', () => handleAction(order.id, 'markKitSent'), 'bg-orange-600 hover:bg-orange-700')
+    );
+  }
+  modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
+};
+
+const appendPostReceivedActions = () => {
+  [
+    { label: 'Email Outstanding Balance Notice', reason: 'outstanding_balance', className: 'bg-amber-600 hover:bg-amber-700' },
+    { label: 'Email Password Lock Notice', reason: 'password_locked', className: 'bg-slate-700 hover:bg-slate-800' },
+    { label: 'Email Lost/Stolen Notice', reason: 'stolen', className: 'bg-rose-600 hover:bg-rose-700' },
+    { label: 'Email FMI / Activation Lock Notice', reason: 'fmi_active', className: 'bg-indigo-600 hover:bg-indigo-700' },
+  ].forEach(({ label, reason, className }) => {
+    modalActionButtons.appendChild(
+      createButton(label, () => sendConditionEmail(order.id, reason, label), className)
+    );
+  });
+  modalActionButtons.appendChild(
+    createButton('Mark as Completed', () => handleAction(order.id, 'markCompleted', 'bg-gray-600 hover:bg-gray-700'))
+  );
+  modalActionButtons.appendChild(
+    createButton('Propose Re-offer', () => showReofferForm(order.id), 'bg-orange-600 hover:bg-orange-700')
+  );
+};
+
 switch (currentStatus) {
   case 'order_pending':
   case 'shipping_kit_requested':
@@ -5725,32 +5826,23 @@ switch (currentStatus) {
     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
     break;
   case 'label_generated':
-    if (order.shippingPreference === 'Shipping Kit Requested') {
-      modalActionButtons.appendChild(
-        createButton('Mark I Sent', () => handleAction(order.id, 'markKitSent'), 'bg-orange-600 hover:bg-orange-700')
-      );
+    appendLabelGenerationActions();
+    break;
+  case 'emailed':
+    if (isBalanceEmailStatus(order)) {
+      appendPostReceivedActions();
+    } else {
+      appendLabelGenerationActions();
     }
-    modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
     break;
   case 'phone_on_the_way':
   case 'phone_on_the_way_to_us':
   case 'delivered_to_us':
     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
     break;
-case 'received':
-[
-{ label: 'Email Outstanding Balance Notice', reason: 'outstanding_balance', className: 'bg-amber-600 hover:bg-amber-700' },
-{ label: 'Email Password Lock Notice', reason: 'password_locked', className: 'bg-slate-700 hover:bg-slate-800' },
-{ label: 'Email Lost/Stolen Notice', reason: 'stolen', className: 'bg-rose-600 hover:bg-rose-700' },
-{ label: 'Email FMI / Activation Lock Notice', reason: 'fmi_active', className: 'bg-indigo-600 hover:bg-indigo-700' },
-].forEach(({ label, reason, className }) => {
-modalActionButtons.appendChild(
-createButton(label, () => sendConditionEmail(order.id, reason, label), className)
-);
-});
-modalActionButtons.appendChild(createButton('Mark as Completed', () => handleAction(order.id, 'markCompleted', 'bg-gray-600 hover:bg-gray-700')));
-modalActionButtons.appendChild(createButton('Propose Re-offer', () => showReofferForm(order.id), 'bg-orange-600 hover:bg-orange-700'));
-break;
+  case 'received':
+    appendPostReceivedActions();
+    break;
 case 're-offered-pending':
 if (order.reOffer && order.reOffer.newPrice) {
 const reOfferDiv = document.createElement('div');
@@ -6052,6 +6144,16 @@ if (reofferPricingMessage) {
 reofferPricingMessage.textContent = '';
 reofferPricingMessage.classList.add('hidden');
 }
+const modalContent = orderDetailsModal?.querySelector('.space-y-4');
+const modalShell = orderDetailsModal?.querySelector('.relative');
+[orderDetailsModal, modalShell, modalContent].forEach((node) => {
+  if (!node) return;
+  if (typeof node.scrollTo === 'function') {
+    node.scrollTo({ top: 0, behavior: 'smooth' });
+  } else if (typeof node.scrollTop === 'number') {
+    node.scrollTop = 0;
+  }
+});
 document.querySelectorAll('input[name="reoffer-reasons"]').forEach(cb => {
 cb.checked = false;
 });
@@ -6924,13 +7026,15 @@ const previousPage = currentPage;
 let filtered = allOrders;
 
 if (status !== 'all') {
-if (status === 'kit_needs_printing') {
-filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
-} else if (status === 'label_generated') {
-filtered = filtered.filter(order => order.status === 'label_generated' || order.status === 'emailed');
-} else {
-filtered = filtered.filter(order => order.status === status);
-}
+  if (status === 'kit_needs_printing') {
+  filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
+  } else if (status === 'label_generated') {
+  filtered = filtered.filter(order => isLabelGenerationStage(order));
+  } else if (status === 'emailed') {
+  filtered = filtered.filter(order => isBalanceEmailStatus(order));
+  } else {
+  filtered = filtered.filter(order => order.status === status);
+  }
 }
 
 if (currentSearchTerm) {

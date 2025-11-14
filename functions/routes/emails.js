@@ -97,13 +97,23 @@ module.exports = function createEmailsRouter({
 
       await transporter.sendMail(mailOptions);
 
+      const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+      const updatePayload = {
+        lastCustomerEmailSentAt: serverTimestamp,
+        lastConditionEmailReason: reason,
+        ...(notes && notes.trim() ? { lastConditionEmailNotes: notes.trim() } : {}),
+      };
+
+      if (reason === 'outstanding_balance') {
+        updatePayload.balanceEmailSentAt = serverTimestamp;
+        if ((order.status || '').toLowerCase() === 'received') {
+          updatePayload.status = 'emailed';
+        }
+      }
+
       await updateOrderBoth(
         req.params.id,
-        {
-          lastCustomerEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastConditionEmailReason: reason,
-          ...(notes && notes.trim() ? { lastConditionEmailNotes: notes.trim() } : {}),
-        },
+        updatePayload,
         {
           autoLogStatus: false,
           logEntries: [
