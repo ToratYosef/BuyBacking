@@ -166,7 +166,7 @@ if (status === 'delivered_to_us') {
 return 'Delivered To Us';
 }
 if (status === 'emailed') {
-return 'Label Emailed';
+return 'Balance Email Sent';
 }
 if (status === 'phone_on_the_way' || status === 'phone_on_the_way_to_us') {
 return 'Phone On The Way To Us';
@@ -196,6 +196,7 @@ const STATUS_FLOW = [
 'phone_on_the_way_to_us',
 'delivered_to_us',
 'received',
+'emailed',
 're-offered-pending',
 're-offered-accepted',
 're-offered-auto-accepted',

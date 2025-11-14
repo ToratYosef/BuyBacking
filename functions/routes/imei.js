@@ -5,7 +5,7 @@ const { updateOrderBoth } = require('../db/db');
 const { sendEmail } = require('../services/notifications');
 const { BLACKLISTED_EMAIL_HTML } = require('../helpers/templates');
 const functions = require('firebase-functions');
-const { checkEsn } = require('../services/phonecheck');
+const { checkEsn, checkCarrierLock, isAppleDeviceHint } = require('../services/phonecheck');
 
 // NEW ENDPOINT for IMEI/ESN Check
 router.post('/check-esn', async (req, res) => {
@@ -34,17 +34,41 @@ router.post('/check-esn', async (req, res) => {
             checkAllFlag = ['1', 'true', 'yes'].includes(checkAll.trim().toLowerCase());
         }
 
+        const trimmedImei = String(imei).trim();
         const esnResult = await checkEsn({
-            imei: String(imei).trim(),
+            imei: trimmedImei,
             carrier,
             deviceType,
             brand,
             checkAll: checkAllFlag,
         });
 
+        let carrierLockResult = null;
+        const appleHintValues = [
+            brand,
+            deviceType,
+            esnResult?.normalized?.brand,
+            esnResult?.normalized?.model,
+            esnResult?.normalized?.deviceName,
+        ];
+
+        if (isAppleDeviceHint(...appleHintValues)) {
+            try {
+                carrierLockResult = await checkCarrierLock({
+                    imei: trimmedImei,
+                    deviceType: 'Apple',
+                });
+            } catch (carrierError) {
+                console.error(`Carrier lock lookup failed for order ${orderId}:`, carrierError);
+            }
+        }
+
         const normalized = {
+            ...(carrierLockResult?.normalized || {}),
             ...esnResult.normalized,
-            raw: esnResult.raw,
+            raw: carrierLockResult
+                ? { esn: esnResult.raw, carrierLock: carrierLockResult.raw }
+                : esnResult.raw,
         };
 
         const updateData = {
