@@ -106,6 +106,7 @@ router.post("/generate-label/:id", async (req, res) => {
                 outboundCarrierCode,
                 inboundCarrierCode,
                 kitLabelGeneratedAt: timestamp,
+                labelDeliveryMethod: 'kit',
             };
 
             logEntries.push({
@@ -169,10 +170,10 @@ router.post("/generate-label/:id", async (req, res) => {
 
             updateData = {
                 ...updateData,
-                status: 'emailed',
                 trackingNumber: mainTrackingNumber,
                 uspsLabelUrl: uspsLabelUrl,
                 emailedAt: timestamp,
+                labelDeliveryMethod: 'email',
                 labelTrackingCarrierCode: labelCarrierCode,
                 labelTrackingStatus: mainLabelData.status_code || mainLabelData.statusCode || 'LABEL_CREATED',
                 labelTrackingStatusDescription: mainLabelData.status_description || mainLabelData.statusDescription || 'Label created',

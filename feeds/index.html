@@ -780,6 +780,7 @@
     const inputs = previewContainerEl.querySelectorAll('.new-price-input');
     inputs.forEach(input => {
       input.addEventListener('change', handleNewPriceEdit);
+      input.addEventListener('input', handleNewPriceEdit);
     });
   }
 
@@ -787,7 +788,9 @@
     const idx = Number(e.target.dataset.rowIndex);
     if (Number.isNaN(idx) || !latestPreviewRows[idx]) return;
     const row = latestPreviewRows[idx];
-    const val = Number(e.target.value);
+    const rawVal = e.target.value;
+    if (rawVal === '') return;
+    const val = Number(rawVal);
     if (Number.isNaN(val)) {
       setStatus('Invalid number entered for new price.', true);
       return;
@@ -813,6 +816,16 @@
     }
 
     setStatus('New price overridden for this row (will be used in output.xml).', false);
+  }
+
+  function syncPreviewRowsToDoc() {
+    if (!latestInputDoc || !latestPreviewRows.length) return;
+    latestPreviewRows.forEach(row => {
+      if (!row || !row.node) return;
+      const val = Number(row.newNumeric);
+      if (Number.isNaN(val)) return;
+      row.node.textContent = val.toFixed(2);
+    });
   }
 
   async function previewChanges() {
@@ -982,6 +995,8 @@
       setStatus('No output.xml generated yet – run preview first.', true);
       return;
     }
+    syncPreviewRowsToDoc();
+
     const serializer = new XMLSerializer();
     const xmlString = serializer.serializeToString(latestInputDoc);
 
