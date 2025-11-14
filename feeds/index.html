@@ -556,15 +556,31 @@
     return extra;
   }
 
-  // "Other" is locked now
+  // Map SellCell network strings → locked/unlocked bucket
+  // - Verizon / AT&T / T-Mobile / Sprint / Other  => "locked"
+  // - Unlocked (any casing)                       => "unlocked"
+  // - Anything unknown or blank                   => "locked" (safe fallback)
   function networkToStatus(network, lockedCarriersSet) {
-    const n = normaliseStr(network);
+    const n = normaliseStr(network); // e.g. "unlocked", "t-mobile", "verizon", ""
+
+    if (!n) {
+      // No network specified – treat as locked to be safe
+      return 'locked';
+    }
+
+    // Explicitly unlocked in feed
+    if (n === 'unlocked' || n.includes('unlocked')) {
+      return 'unlocked';
+    }
+
+    // Locked carrier group
     if (lockedCarriersSet.has('verizon') && n.includes('verizon')) return 'locked';
     if ((lockedCarriersSet.has('att') || lockedCarriersSet.has('at&t')) && (n.includes('at&t') || n.includes('att'))) return 'locked';
     if (lockedCarriersSet.has('tmobile') && (n.includes('t-mobile') || n.includes('tmobile'))) return 'locked';
     if (lockedCarriersSet.has('sprint') && n.includes('sprint')) return 'locked';
-    if (lockedCarriersSet.has('other') && n === 'other') return 'locked';
-    // fallback: unknown networks count as locked
+    if (lockedCarriersSet.has('other') && (n === 'other' || n.includes('other'))) return 'locked';
+
+    // Fallback: any unknown carrier → locked
     return 'locked';
   }
 
@@ -875,7 +891,7 @@
             const oldVal = Number(qNode.textContent.trim());
             const oldNumeric = Number.isNaN(oldVal) ? null : oldVal;
 
-            // FIX 1: base = feedPrice (we use FEED + offsets, not OLD + offsets)
+            // BASE = feedPrice (we use FEED + offsets, not OLD + offsets)
             const extra = getExtraAdjustment(brandKey, modelKey, quality, rules);
             const base = feedPrice;
             const newVal = base + globalAdd + extra;
