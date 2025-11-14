@@ -254,7 +254,7 @@
     Upload <code>input.xml</code> and <code>feed.xml</code>. We take the
     <strong>highest feed price only</strong> per combo, apply your rules,
     show a preview (with editable prices), and let you download <code>output.xml</code>.
-    <strong>Network "Other" is treated as locked.</strong>
+    <strong>Only iPhones &amp; Samsung Galaxy S-series are used.</strong>
   </p>
 </header>
 
@@ -348,7 +348,7 @@
     <h2><span>Step 2</span>Rules &amp; Download</h2>
     <p class="description">
       We group Verizon / AT&amp;T / T-Mobile / Sprint / Other as locked. Highest locked price + your offsets becomes your locked price.
-      Unlocked prices still come from unlocked data in the feed.
+      Unlocked prices still come from unlocked data in the feed. Non-phone Apple products (iPad, iMac, Watch, etc.) and non-Galaxy S Samsung devices are ignored.
     </p>
 
     <div class="field grid-2">
@@ -403,8 +403,8 @@
       </div>
       <div>
         <label for="modelFilter">Only update models (optional)</label>
-        <input type="text" id="modelFilter" placeholder="13,14 pro max">
-        <p class="small">Comma-separated; matched loosely against &lt;name&gt;, e.g. "IPHONE 13 PRO MAX".</p>
+        <input type="text" id="modelFilter" placeholder="13,14 pro max,s22,s23">
+        <p class="small">Comma-separated; matched loosely against &lt;name&gt;, e.g. "IPHONE 13 PRO MAX" or "SM-G991U GALAXY S21".</p>
       </div>
     </div>
 
@@ -537,6 +537,38 @@
     return s;
   }
 
+  // *** NEW: Only allow iPhones and Samsung S-series ***
+  function isAllowedPhoneDevice(brand, name) {
+    const b = normaliseStr(brand);
+    const n = normaliseStr(name);
+
+    // Hard block obvious non-phone Apple devices
+    const appleNonPhoneTokens = ['ipad', 'imac', 'macbook', 'mac book', 'mac mini', 'mac studio', 'watch', 'ipod'];
+    if (appleNonPhoneTokens.some(t => n.includes(t) || b.includes(t))) {
+      return false;
+    }
+
+    // iPhones: brand Apple/iPhone and name contains "iphone"
+    const isIphone =
+      (b.includes('apple') || b.includes('iphone')) &&
+      n.includes('iphone');
+
+    if (isIphone) return true;
+
+    // Samsung Galaxy S-series:
+    // Require Samsung / Galaxy brand AND a Galaxy-S style name
+    const isSamsungBrand = b.includes('samsung') || n.includes('samsung') || n.includes('galaxy');
+    const isGalaxySByName =
+      n.includes('galaxy s') ||                // e.g. "galaxy s22 ultra"
+      /\bs[0-9]{1,2}\b/.test(n) ||            // e.g. "s22", "s9"
+      /\bsm-g9[0-9]{2}/.test(n);              // common S-series model codes like SM-G991, G996, etc.
+
+    if (isSamsungBrand && isGalaxySByName) return true;
+
+    // Everything else is ignored (iPads, Mac, A-series, etc.)
+    return false;
+  }
+
   function readFileAsText(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -662,6 +694,11 @@
       const devName = dev.getElementsByTagName('device_name')[0]?.textContent || '';
       const capacity = dev.getElementsByTagName('capacity')[0]?.textContent || '';
       const network = dev.getElementsByTagName('network')[0]?.textContent || '';
+
+      // *** Only keep iPhones + Samsung S-series from the feed ***
+      if (!isAllowedPhoneDevice(brandName, devName)) {
+        continue;
+      }
 
       const modelKey = canonicalModelKey(brandName, devName);
       const capKey = (capacity || '').trim();
@@ -881,6 +918,11 @@
       const brandText = brandNode?.textContent || parentDevice;
       const modelId = modelIdNode?.textContent || '';
 
+      // *** Skip non-iPhone / non-Samsung-S devices in your input matrix too ***
+      if (!isAllowedPhoneDevice(brandText, modelName)) {
+        continue;
+      }
+
       const modelKeyCanonical = canonicalModelKey(brandText, modelName);
       const brandNorm = normaliseStr(brandText);
       const modelNorm = normaliseStr(modelName);
@@ -963,7 +1005,7 @@
     latestInputDoc = inputDoc;
     const serializer = new XMLSerializer();
     latestOutputXml = serializer.serializeToString(inputDoc);
-    latestPreviewRows = previewRows; // IMPORTANT: same array that gets sorted in renderPreviewTable
+    latestPreviewRows = previewRows;
 
     const stats = `Feed combos (highest per combo): ${combos} · Models updated: ${modelsTouched} · Prices changed: ${pricesChanged}`;
     renderPreviewTable(previewRows, stats);
@@ -972,7 +1014,7 @@
       setStatus('Preview generated. You can edit New prices inline, then download output.xml.', false);
       downloadBtn.disabled = false;
     } else {
-      setStatus('No changes applied with current filters/rules.', false);
+      setStatus('No changes applied with current filters/rules (or all non-iPhone/S-series devices).', false);
       downloadBtn.disabled = false; // still allow identical copy
     }
   }
