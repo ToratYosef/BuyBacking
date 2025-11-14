@@ -243,7 +243,6 @@ function normalizePhonecheckBoolean(value) {
 
 function normalizePhonecheckResponse(raw = {}) {
   const remarks = typeof raw.Remarks === 'string' ? raw.Remarks.trim() : null;
-  const carrier = typeof raw.Carrier === 'string' ? raw.Carrier.trim() : null;
   const api = typeof raw.API === 'string' ? raw.API.trim() : null;
   const reportedDeviceId = typeof raw.deviceid === 'string' ? raw.deviceid.trim() : null;
 
@@ -264,23 +263,36 @@ function normalizePhonecheckResponse(raw = {}) {
     }
   }
 
+  const nestedData = structuredResponse && typeof structuredResponse.data === 'object' && structuredResponse.data !== null
+    ? structuredResponse.data
+    : null;
+
+  const carrier = pickFirstString(
+    structuredResponse?.carrier,
+    structuredResponse?.Carrier,
+    nestedData?.carrier,
+    nestedData?.Carrier,
+    typeof raw.Carrier === 'string' ? raw.Carrier : null,
+    typeof raw.carrier === 'string' ? raw.carrier : null,
+  );
+
   const normalized = {
     remarks,
-    carrier,
+    carrier: carrier ? carrier.trim() : null,
     api,
     deviceId: reportedDeviceId,
     summary,
     raw,
   };
 
+  if (!normalized.carrier) {
+    delete normalized.carrier;
+  }
+
   const derivedBlacklist = normalizePhonecheckBoolean(remarks) ?? normalizePhonecheckBoolean(summary);
   if (derivedBlacklist !== null) {
     normalized.blacklisted = derivedBlacklist;
   }
-
-  const nestedData = structuredResponse && typeof structuredResponse.data === 'object' && structuredResponse.data !== null
-    ? structuredResponse.data
-    : null;
 
   const brand = pickFirstString(
     structuredResponse?.brandname,
