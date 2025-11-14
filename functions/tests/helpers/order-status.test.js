@@ -22,6 +22,14 @@ test('ignores active statuses that still need refreshes', () => {
   assert.equal(isStatusPastReceived('phone_on_the_way_to_us'), false);
 });
 
-test('treats emailed status as past received', () => {
-  assert.equal(isStatusPastReceived('emailed'), true);
+test('treats emailed status as past received only when balance email sent', () => {
+  assert.equal(
+    isStatusPastReceived({ status: 'emailed', balanceEmailSentAt: { seconds: 0, nanoseconds: 0 } }),
+    true
+  );
+  assert.equal(
+    isStatusPastReceived({ status: 'emailed', lastConditionEmailReason: 'outstanding_balance' }),
+    true
+  );
+  assert.equal(isStatusPastReceived({ status: 'emailed' }), false);
 });
