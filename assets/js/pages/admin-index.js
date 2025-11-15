@@ -296,6 +296,7 @@ const bulkStatusApplyBtn = document.getElementById('bulk-status-apply');
 const bulkSelectionCount = document.getElementById('bulk-selection-count');
 const refreshAllKitTrackingBtn = document.getElementById('refresh-all-kit-tracking');
 const refreshAllEmailTrackingBtn = document.getElementById('refresh-all-email-tracking');
+const bulkGenerateLabelsBtn = document.getElementById('bulk-generate-labels');
 
 const KIT_STATUS_HINTS = new Set([
   'shipping_kit_requested',
@@ -356,6 +357,7 @@ const TRACKING_POST_RECEIVED_STATUSES = new Set([
 
 const selectedOrderIds = new Set();
 let lastRenderedOrderIds = [];
+let isBulkLabelGenerationInProgress = false;
 
 // Insight metric elements
 const ordersTodayCount = document.getElementById('orders-today-count');
@@ -676,6 +678,16 @@ function updateBulkSelectionUI() {
     bulkStatusApplyBtn.disabled = !(selectedCount > 0 && statusChosen);
   }
 
+  if (bulkGenerateLabelsBtn) {
+    const disabled = isBulkLabelGenerationInProgress || selectedCount === 0;
+    bulkGenerateLabelsBtn.disabled = disabled;
+    if (isBulkLabelGenerationInProgress) {
+      bulkGenerateLabelsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Generating Labels…</span>';
+    } else {
+      bulkGenerateLabelsBtn.innerHTML = '<i class="fas fa-tags"></i><span>Generate Labels For Selected</span>';
+    }
+  }
+
   if (selectAllOrdersCheckbox) {
     if (!lastRenderedOrderIds.length) {
       selectAllOrdersCheckbox.checked = false;
@@ -734,6 +746,67 @@ async function handleBulkStatusUpdate() {
   updateBulkSelectionUI();
 }
 
+async function handleBulkLabelGeneration() {
+  if (isBulkLabelGenerationInProgress) {
+    return;
+  }
+
+  const orderIds = Array.from(selectedOrderIds);
+  if (!orderIds.length) {
+    updateBulkSelectionUI();
+    return;
+  }
+
+  isBulkLabelGenerationInProgress = true;
+  updateBulkSelectionUI();
+
+  let successCount = 0;
+  const failed = [];
+
+  for (const orderId of orderIds) {
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/generate-label/${orderId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let details = '';
+        try {
+          const parsed = JSON.parse(errorText);
+          details = parsed?.details || parsed?.error || '';
+        } catch (parseError) {
+          details = errorText;
+        }
+
+        const message = details
+          ? `Label generation failed (${response.status}): ${details}`
+          : `Label generation failed (${response.status}).`;
+        throw new Error(message);
+      }
+
+      successCount += 1;
+    } catch (error) {
+      console.error(`Bulk label generation failed for ${orderId}:`, error);
+      failed.push(orderId);
+    }
+  }
+
+  if (failed.length) {
+    alert(`⚠️ Generated labels for ${successCount} order${successCount === 1 ? '' : 's'}. Failed: ${failed.join(', ')}.`);
+    selectedOrderIds.clear();
+    failed.forEach((id) => selectedOrderIds.add(id));
+  } else {
+    alert(`✅ Generated labels for ${successCount} order${successCount === 1 ? '' : 's'}.`);
+    selectedOrderIds.clear();
+  }
+
+  isBulkLabelGenerationInProgress = false;
+  updateBulkSelectionUI();
+  renderOrders();
+}
+
 try {
   populateBulkStatusSelect();
 } catch (error) {
@@ -759,6 +832,10 @@ if (refreshAllEmailTrackingBtn) {
   refreshAllEmailTrackingBtn.addEventListener('click', () => {
     refreshTrackingForOrders('email', refreshAllEmailTrackingBtn);
   });
+}
+
+if (bulkGenerateLabelsBtn) {
+  bulkGenerateLabelsBtn.addEventListener('click', handleBulkLabelGeneration);
 }
 
 if (selectAllOrdersCheckbox) {
@@ -4146,10 +4223,7 @@ function isStatusPastReceived(statusOrOrder = {}) {
   }
 
   if (normalized === 'emailed') {
-    if (statusOrOrder && typeof statusOrOrder === 'object') {
-      return isBalanceEmailStatus(statusOrOrder);
-    }
-    return false;
+    return true;
   }
 
   if (TRACKING_POST_RECEIVED_STATUSES.has(normalized)) {
@@ -4803,6 +4877,20 @@ const preference = order.shippingPreference;
 const normalizedStatus = (status || '').toLowerCase();
 const normalizedPreference = (preference || '').toString().toLowerCase();
 
+const trackingSummary = [
+  order.labelTrackingStatusDescription,
+  order.labelTrackingStatus,
+  order.kitTrackingStatusDescription,
+  order.kitTrackingStatus,
+]
+  .filter(Boolean)
+  .map((value) => value.toString().toLowerCase())
+  .join(' | ');
+
+const hasEta = Boolean(order.labelTrackingEstimatedDelivery || order.kitTrackingEstimatedDelivery);
+const isInTransit = /in transit|out for delivery|arriving/i.test(trackingSummary);
+const acceptedWithoutEta = !isInTransit && !hasEta && /accepted/i.test(trackingSummary);
+
 if (normalizedStatus === 'order_pending') {
 return 'Order Pending';
 }
@@ -4822,7 +4910,7 @@ if (normalizedStatus === 'kit_delivered') {
 return 'Kit Delivered';
 }
 if (normalizedStatus === 'kit_on_the_way_to_us') {
-return 'Kit On The Way To Us';
+return isInTransit || hasEta ? 'Pending Return To Us' : 'Kit Delivered';
 }
 if (normalizedStatus === 'delivered_to_us') {
 return 'Delivered To Us';
@@ -4830,13 +4918,22 @@ return 'Delivered To Us';
 const legacyEmailStatus = normalizedStatus === 'emailed' && isLegacyEmailLabelStatus(order);
 if (normalizedStatus === 'label_generated' || legacyEmailStatus) {
 const isEmailPreference = normalizedPreference === 'email label requested';
-return isEmailPreference ? 'Label Generated' : 'Shipping Kit on the Way';
+if (isEmailPreference) {
+  if (acceptedWithoutEta) {
+    return 'Label Generated';
+  }
+  return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
+}
+return 'Kit Sent';
 }
 if (normalizedStatus === 'emailed') {
 return 'Balance Email Sent';
 }
 if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
-return 'Phone On The Way To Us';
+if (acceptedWithoutEta) {
+  return 'Label Generated';
+}
+return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
 }
 // Fallback for other statuses
 return normalizedStatus.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
