@@ -6,7 +6,21 @@ import { getFirestore, collection, query, where, getDocs } from "https://www.gst
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
-const BACKEND_BASE_URL = "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
+function resolveBackendBaseUrl() {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const { origin } = window.location;
+
+    if (origin.includes("localhost")) {
+      return "http://localhost:5001/buyback-a0f05/us-central1/api";
+    }
+
+    return `${origin}/api`;
+  }
+
+  return "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
+}
+
+const BACKEND_BASE_URL = resolveBackendBaseUrl();
 
 const PRINT_QUEUE_STATUSES = ["shipping_kit_requested", "kit_needs_printing", "needs_printing"];
 
@@ -368,14 +382,18 @@ async function authorisedFetch(path, options = {}) {
     }
   }
 
+  const isSameOriginApi =
+    typeof window !== "undefined" && BACKEND_BASE_URL.startsWith(window.location.origin);
+
   const finalOptions = {
     method: options.method || "GET",
     headers,
     body: options.body,
-    mode: "cors",
-    // Explicitly omit credentials so CORS preflight does not require
-    // Access-Control-Allow-Credentials from the Cloud Functions domain.
-    credentials: "omit",
+    mode: isSameOriginApi ? "same-origin" : "cors",
+    // Use same-origin credentials when hitting the hosting rewrite to avoid
+    // cross-site preflight requirements; otherwise omit credentials to prevent
+    // Access-Control-Allow-Credentials failures against the Cloud Functions domain.
+    credentials: isSameOriginApi ? "same-origin" : "omit",
   };
 
   try {
