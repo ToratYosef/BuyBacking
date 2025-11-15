@@ -1172,8 +1172,12 @@ function createOrdersRouter({
 
       res.json({ message: 'Label(s) generated successfully', orderId: order.id, ...updateData });
     } catch (err) {
-      console.error('Error generating label:', err.response?.data || err.message || err);
-      res.status(500).json({ error: 'Failed to generate label' });
+      const responseData = err.response?.data || err.responseData;
+      const statusCode = err.status || err.response?.status || 500;
+      console.error('Error generating label:', responseData || err.message || err);
+      res
+        .status(statusCode)
+        .json({ error: 'Failed to generate label', details: responseData || err.message });
     }
   });
 

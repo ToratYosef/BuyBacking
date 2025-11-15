@@ -772,7 +772,18 @@ async function handleBulkLabelGeneration() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText || `Label generation failed (${response.status}).`);
+        let details = '';
+        try {
+          const parsed = JSON.parse(errorText);
+          details = parsed?.details || parsed?.error || '';
+        } catch (parseError) {
+          details = errorText;
+        }
+
+        const message = details
+          ? `Label generation failed (${response.status}): ${details}`
+          : `Label generation failed (${response.status}).`;
+        throw new Error(message);
       }
 
       successCount += 1;
