@@ -4212,10 +4212,7 @@ function isStatusPastReceived(statusOrOrder = {}) {
   }
 
   if (normalized === 'emailed') {
-    if (statusOrOrder && typeof statusOrOrder === 'object') {
-      return isBalanceEmailStatus(statusOrOrder);
-    }
-    return false;
+    return true;
   }
 
   if (TRACKING_POST_RECEIVED_STATUSES.has(normalized)) {
