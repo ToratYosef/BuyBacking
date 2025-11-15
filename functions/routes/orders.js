@@ -271,6 +271,21 @@ function createOrdersRouter({
   async function collectOrderPrintParts(order) {
     const parts = [];
     const seenUrls = new Set();
+    const shippingPreference = String(
+      order.shippingPreference || order.shipping_preference || ''
+    ).toLowerCase();
+    const normalizedStatus = String(order.status || '').toLowerCase();
+    const isKitOrder =
+      shippingPreference.includes('kit') ||
+      normalizedStatus.includes('kit') ||
+      [
+        'shipping_kit_requested',
+        'kit_needs_printing',
+        'kit_sent',
+        'kit_on_the_way_to_customer',
+        'kit_delivered',
+        'kit_on_the_way_to_us',
+      ].includes(normalizedStatus);
 
     async function pushLabelPart(url, kind) {
       if (!url) {
@@ -341,6 +356,18 @@ function createOrdersRouter({
       }
     } catch (error) {
       console.error(`Failed to generate bag label PDF for order ${order.id}:`, error);
+    }
+
+    const shippingParts = parts.filter((part) =>
+      ['outbound', 'inbound', 'extra'].includes(part?.kind)
+    );
+
+    if (isKitOrder && shippingParts.length === 1) {
+      const duplicate = shippingParts[0];
+      const duplicateBuffer = normaliseBuffer(duplicate?.buffer);
+      if (duplicateBuffer?.length) {
+        parts.push({ ...duplicate, buffer: Buffer.from(duplicateBuffer) });
+      }
     }
 
     return parts;

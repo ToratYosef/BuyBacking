@@ -102,10 +102,7 @@ function isStatusPastReceived(input) {
     return false;
   }
   if (raw === 'emailed') {
-    if (input && typeof input === 'object') {
-      return hasBalanceEmailFlag(input);
-    }
-    return false;
+    return true;
   }
   if (statusMatchesHints(raw)) {
     return true;
