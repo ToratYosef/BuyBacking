@@ -373,7 +373,9 @@ async function authorisedFetch(path, options = {}) {
     headers,
     body: options.body,
     mode: "cors",
-    credentials: "include",
+    // Explicitly omit credentials so CORS preflight does not require
+    // Access-Control-Allow-Credentials from the Cloud Functions domain.
+    credentials: "omit",
   };
 
   try {
