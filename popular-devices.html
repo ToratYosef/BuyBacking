@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Popular Devices | SecondHandCell</title>
+    <link rel="icon" href="/favicon/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="/assets/js/layout.js" defer></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; color: #0f172a; }
+        .glass-panel { backdrop-filter: blur(12px); }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <main class="pt-10 pb-16">
+        <section class="max-w-6xl mx-auto px-4">
+            <div class="rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-cyan-400 text-white p-8 md:p-12 shadow-2xl relative overflow-hidden">
+                <div class="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.16),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.2),transparent_30%)]"></div>
+                <div class="relative z-10 grid md:grid-cols-2 gap-8 items-center">
+                    <div class="space-y-4">
+                        <p class="inline-flex items-center px-3 py-1 rounded-full bg-white/15 text-sm font-semibold">Most requested trade-ins</p>
+                        <h1 class="text-3xl md:text-4xl font-extrabold leading-tight">Popular devices with live pricing from Firebase</h1>
+                        <p class="text-lg text-indigo-100">Browse the phones our customers sell the most. We pull the latest device photos and up-to-date offers straight from our Firebase catalog.</p>
+                    </div>
+                    <div class="bg-white/10 rounded-2xl glass-panel shadow-xl p-6 border border-white/20 space-y-4">
+                        <div class="flex items-center gap-3">
+                            <span class="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/20"><i class="fa-solid fa-bolt text-amber-200 text-xl"></i></span>
+                            <div>
+                                <p class="text-sm text-indigo-100">Real-time pricing</p>
+                                <p class="font-semibold">Powered by Firestore</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/20"><i class="fa-solid fa-lock text-emerald-200 text-xl"></i></span>
+                            <div>
+                                <p class="text-sm text-indigo-100">Secure &amp; transparent</p>
+                                <p class="font-semibold">Clear payouts &amp; no hidden fees</p>
+                            </div>
+                        </div>
+                        <a href="/sell-device.html" class="inline-flex items-center justify-center w-full rounded-xl bg-white text-indigo-700 font-semibold py-3 shadow-lg">Start a quote</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="max-w-6xl mx-auto px-4 mt-10">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">Top requested devices</h2>
+                    <p class="text-slate-600">We preloaded the phones customers ask about most. Search to jump to any specific model.</p>
+                </div>
+                <div class="w-full md:w-80">
+                    <label class="sr-only" for="device-search">Search devices</label>
+                    <div class="relative">
+                        <input id="device-search" type="search" placeholder="Search all devices" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        <i class="fa-solid fa-magnifying-glass absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div id="popular-grid" class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"></div>
+            <div id="search-results" class="mt-8 hidden">
+                <h3 class="text-lg font-semibold text-slate-800 mb-3">Search results</h3>
+                <div id="search-grid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="module">
+        import { firebaseApp } from '/assets/js/firebase-app.js';
+        import { getFirestore, doc, getDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        const db = getFirestore(firebaseApp);
+        const popularDevices = [
+            { label: 'Apple iPhone 15 Pro Max', brand: 'iphone', slug: '15-pro-max' },
+            { label: 'Apple iPhone 15', brand: 'iphone', slug: '15' },
+            { label: 'Apple iPhone 14 Pro Max', brand: 'iphone', slug: '14-pro-max' },
+            { label: 'Apple iPhone 14', brand: 'iphone', slug: '14' },
+            { label: 'Samsung Galaxy S25 Ultra', brand: 'samsung', slug: 'galaxy-s25-ultra' },
+            { label: 'Apple iPhone 13 Pro Max', brand: 'iphone', slug: '13-pro-max' },
+            { label: 'Apple iPhone 16', brand: 'iphone', slug: '16' },
+            { label: 'Apple iPhone 12 Pro Max', brand: 'iphone', slug: '12-pro-max' },
+            { label: 'Apple iPhone 14 Pro', brand: 'iphone', slug: '14-pro' },
+            { label: 'Apple iPhone 16 Pro Max', brand: 'iphone', slug: '16-pro-max' },
+            { label: 'Apple iPhone 13', brand: 'iphone', slug: '13' },
+            { label: 'Samsung Galaxy S24 Ultra', brand: 'samsung', slug: 'galaxy-s24-ultra' },
+            { label: 'Apple iPhone 13 Pro', brand: 'iphone', slug: '13-pro' },
+            { label: 'Apple iPhone 14 Plus', brand: 'iphone', slug: '14-plus' },
+            { label: 'Apple iPhone 16 Pro', brand: 'iphone', slug: '16-pro' },
+            { label: 'Apple iPhone 16 Plus', brand: 'iphone', slug: '16-plus' },
+            { label: 'Apple iPhone 15 Pro', brand: 'iphone', slug: '15-pro' },
+            { label: 'Apple iPhone 12 Pro', brand: 'iphone', slug: '12-pro' },
+            { label: 'Samsung Galaxy S23 Ultra', brand: 'samsung', slug: 'galaxy-s23-ultra' },
+            { label: 'Apple iPhone 16e', brand: 'iphone', slug: '16-se' }
+        ];
+
+        const popularGrid = document.getElementById('popular-grid');
+        const searchGrid = document.getElementById('search-grid');
+        const searchResultsSection = document.getElementById('search-results');
+        const searchInput = document.getElementById('device-search');
+        const allDevices = [];
+
+        const currency = (value) => value ? `$${Number(value).toLocaleString()}` : 'Pricing coming soon';
+
+        const bestPrice = (prices) => {
+            if (!prices) return null;
+            let max = 0;
+            Object.values(prices).forEach((storage) => {
+                Object.values(storage || {}).forEach((carrier) => {
+                    ['flawless','good','fair','damaged'].forEach((condition) => {
+                        const val = carrier?.[condition];
+                        if (typeof val === 'number' && val > max) max = val;
+                    });
+                });
+            });
+            return max || null;
+        };
+
+        const renderCard = (device, target) => {
+            const price = bestPrice(device.prices);
+            const card = document.createElement('article');
+            card.className = 'group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg transition p-4 flex flex-col gap-3';
+            card.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="h-14 w-14 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden">
+                        <img src="${(device.imageUrl || '') + (device.imageUrl?.includes('.') ? '' : '.png')}" alt="${device.name}" class="h-full w-full object-cover" onerror="this.src='/assets/logo.png'" loading="lazy">
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-xs uppercase tracking-wide text-slate-500">${device.brand === 'samsung' ? 'Samsung' : 'Apple'}</p>
+                        <h3 class="font-semibold text-slate-900">${device.name}</h3>
+                        <p class="text-sm text-slate-600">Up to ${currency(price)}</p>
+                    </div>
+                    <span class="text-indigo-600 text-sm font-semibold group-hover:translate-x-1 transition">View pricing →</span>
+                </div>
+            `;
+            target.appendChild(card);
+        };
+
+        const fetchDevice = async ({ brand, slug, label }) => {
+            try {
+                const snap = await getDoc(doc(db, `devices/${brand}/models/${slug}`));
+                if (!snap.exists()) return null;
+                const data = snap.data();
+                return { ...data, name: data.name || label, brand, slug };
+            } catch (error) {
+                console.error('Error loading device', label, error);
+                return null;
+            }
+        };
+
+        const loadPopular = async () => {
+            popularGrid.innerHTML = '<div class="col-span-full text-center text-slate-500">Loading popular devices…</div>';
+            const results = await Promise.all(popularDevices.map(fetchDevice));
+            popularGrid.innerHTML = '';
+            results.filter(Boolean).forEach((device) => renderCard(device, popularGrid));
+        };
+
+        const loadAllDevices = async () => {
+            const brands = ['iphone','samsung','ipad','google'];
+            for (const brand of brands) {
+                try {
+                    const snapshot = await getDocs(collection(db, `devices/${brand}/models`));
+                    snapshot.forEach((docSnap) => {
+                        const data = docSnap.data();
+                        allDevices.push({ ...data, brand, slug: docSnap.id, name: data.name || docSnap.id });
+                    });
+                } catch (error) {
+                    console.warn('No catalog for brand', brand, error);
+                }
+            }
+        };
+
+        const handleSearch = (event) => {
+            const query = event.target.value.trim().toLowerCase();
+            if (!query) {
+                searchResultsSection.classList.add('hidden');
+                searchGrid.innerHTML = '';
+                return;
+            }
+            const matches = allDevices.filter((device) => device.name.toLowerCase().includes(query));
+            searchGrid.innerHTML = '';
+            matches.slice(0, 12).forEach((device) => renderCard(device, searchGrid));
+            searchResultsSection.classList.toggle('hidden', matches.length === 0);
+        };
+
+        searchInput?.addEventListener('input', handleSearch);
+        loadAllDevices();
+        loadPopular();
+    </script>
+</body>
+</html>
