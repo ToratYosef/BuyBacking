@@ -1,57 +1,19 @@
-// === FETCH_SHIM_BEGIN ===
-(() => {
-  // Cloud Functions base for API
-  const CLOUD_FN_BASE = "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
+function resolveBackendBaseUrl() {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const { origin } = window.location;
 
-  // Keep a ref to the original fetch
-  const _fetch = window.fetch.bind(window);
-
-  function needsRewrite(u) {
-    try {
-      const url = new URL(u, window.location.href);
-      // Path might be: /api/..., /admin/api/..., or api/... (resolved to /admin/api/...)
-      const path = url.pathname.replace(/^\/+/, "/"); // collapse to leading single slash
-      return path === "/api" || path.startsWith("/api/") || path.startsWith("/admin/api/");
-    } catch {
-      return false;
+    if (origin.includes('localhost')) {
+      return 'http://localhost:5001/buyback-a0f05/us-central1/api';
     }
+
+    return `${origin}/api`;
   }
 
-  function rewrite(u) {
-    const url = new URL(u, window.location.href);
-    // Strip any leading /admin in front of /api
-    let path = url.pathname.replace(/^\/+/, "/");
-    if (path.startsWith("/admin/api/")) path = path.replace("/admin/api/", "/api/");
-    if (path === "/admin/api") path = "/api";
+  return 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+}
 
-    // Build new URL against Cloud Functions base
-    const rest = path.replace(/^\/api/, "");
-    const rewritten = new URL(CLOUD_FN_BASE + rest, CLOUD_FN_BASE);
-    rewritten.search = url.search; // preserve query
-    rewritten.hash = url.hash;
-
-    return rewritten.toString();
-  }
-
-  window.fetch = (input, init) => {
-    try {
-      const u = typeof input === "string" ? input : (input && input.url) ? input.url : String(input);
-      if (needsRewrite(u)) {
-        const rewritten = rewrite(u);
-        // console.debug("[fetch shim] →", u, "⇒", rewritten);
-        if (typeof input === "string") return _fetch(rewritten, init);
-        // If Request object, clone with new URL
-        return _fetch(new Request(rewritten, input), init);
-      }
-    } catch (_) {}
-    return _fetch(input, init);
-  };
-})();
-// === FETCH_SHIM_END ===
-
-// Corrected to include the base path for Cloud Functions
-const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
-const REFRESH_TRACKING_FUNCTION_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/refreshTracking';
+const BACKEND_BASE_URL = resolveBackendBaseUrl();
+const REFRESH_TRACKING_FUNCTION_URL = `${BACKEND_BASE_URL.replace(/\/$/, '')}/refreshTracking`;
 const FEED_PRICING_URL = '/feeds/feed.xml';
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTO_REQUOTE_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
@@ -208,6 +170,11 @@ function isLabelGenerationStage(order = {}) {
   return false;
 }
 
+function collapsePhoneTransitStatus(status = '') {
+  const normalized = (status || '').toLowerCase();
+  return normalized === 'phone_on_the_way' ? 'phone_on_the_way_to_us' : normalized;
+}
+
 function resolveReminderStatusKey(order = {}) {
   const normalized = (order?.status || '').toLowerCase();
   if (normalized === 'emailed' && isLegacyEmailLabelStatus(order)) {
@@ -221,31 +188,25 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 import { createOrderInfoLabelPdf } from "/assets/js/pdf/order-labels.js";
-/* --- API BASE URL FIX: Redirect /api/* to Cloud Functions base --- */
+/* --- API BASE URL FIX: Redirect /api/* to resolved backend base --- */
 (function () {
   try {
-    const BASE =
-      (typeof window !== "undefined" && window.API_BASE) ||
-      (typeof BACKEND_BASE_URL !== "undefined" && BACKEND_BASE_URL) ||
-      "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
+    const BASE = typeof BACKEND_BASE_URL !== 'undefined' ? BACKEND_BASE_URL : '';
     const ORIG_FETCH = window.fetch.bind(window);
     window.fetch = function (input, init) {
-      const url = typeof input === "string" ? input : (input && input.url) || "";
-      if (
-        url &&
-        (url.startsWith("/api") || /:\/\/buyback-a0f05\.web\.app\/api\b/i.test(url))
-      ) {
+      const url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (url && url.startsWith('/api')) {
         const rewritten = url
           .replace(/^https?:\/\/[^/]+\/api/i, BASE)
           .replace(/^\/api\b/i, BASE);
-        if (typeof input === "string") return ORIG_FETCH(rewritten, init);
+        if (typeof input === 'string') return ORIG_FETCH(rewritten, init);
         const req = new Request(rewritten, input);
         return ORIG_FETCH(req, init);
       }
       return ORIG_FETCH(input, init);
     };
   } catch (e) {
-    console.warn("API base shim failed", e);
+    console.warn('API base shim failed', e);
   }
 })();
 /* --- END API BASE URL FIX --- */
@@ -297,6 +258,8 @@ const bulkSelectionCount = document.getElementById('bulk-selection-count');
 const refreshAllKitTrackingBtn = document.getElementById('refresh-all-kit-tracking');
 const refreshAllEmailTrackingBtn = document.getElementById('refresh-all-email-tracking');
 const bulkGenerateLabelsBtn = document.getElementById('bulk-generate-labels');
+const bulkReminderEmailsBtn = document.getElementById('bulk-reminder-emails');
+const toggleHideCanceledBtn = document.getElementById('toggle-hide-canceled');
 
 const KIT_STATUS_HINTS = new Set([
   'shipping_kit_requested',
@@ -358,6 +321,7 @@ const TRACKING_POST_RECEIVED_STATUSES = new Set([
 const selectedOrderIds = new Set();
 let lastRenderedOrderIds = [];
 let isBulkLabelGenerationInProgress = false;
+let hideCanceledOrders = false;
 
 // Insight metric elements
 const ordersTodayCount = document.getElementById('orders-today-count');
@@ -688,6 +652,10 @@ function updateBulkSelectionUI() {
     }
   }
 
+  if (bulkReminderEmailsBtn) {
+    bulkReminderEmailsBtn.disabled = selectedCount === 0;
+  }
+
   if (selectAllOrdersCheckbox) {
     if (!lastRenderedOrderIds.length) {
       selectAllOrdersCheckbox.checked = false;
@@ -701,6 +669,17 @@ function updateBulkSelectionUI() {
   }
 
   syncRowSelectionCheckboxes();
+}
+
+function updateHideCanceledToggleUI() {
+  if (!toggleHideCanceledBtn) {
+    return;
+  }
+  toggleHideCanceledBtn.classList.toggle('active', hideCanceledOrders);
+  const labelSpan = toggleHideCanceledBtn.querySelector('span');
+  if (labelSpan) {
+    labelSpan.textContent = hideCanceledOrders ? 'Show Cancelled' : 'Hide Cancelled';
+  }
 }
 
 async function handleBulkStatusUpdate() {
@@ -807,6 +786,89 @@ async function handleBulkLabelGeneration() {
   renderOrders();
 }
 
+async function handleBulkReminderEmails() {
+  const orderIds = Array.from(selectedOrderIds);
+  if (!orderIds.length) {
+    updateBulkSelectionUI();
+    return;
+  }
+
+  const thresholdInput = window.prompt(
+    'Send reminders for orders below this payout amount (leave blank to include all):',
+    ''
+  );
+
+  const thresholdProvided = thresholdInput !== null && thresholdInput.trim() !== '';
+  const parsedThreshold = Number.parseFloat(thresholdInput);
+  const useThreshold = thresholdProvided && Number.isFinite(parsedThreshold);
+
+  const expiringStatuses = new Set(EXPIRING_REMINDER_STATUSES.map(collapsePhoneTransitStatus));
+  const sendExpiringReminderEmail = httpsCallable(functions, 'sendExpiringReminderEmail');
+  const sendKitReminderEmail = httpsCallable(functions, 'sendKitReminderEmail');
+
+  let sentCount = 0;
+  const skipped = [];
+  const failures = [];
+
+  if (bulkReminderEmailsBtn) {
+    bulkReminderEmailsBtn.disabled = true;
+    bulkReminderEmailsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending…</span>';
+  }
+
+  for (const orderId of orderIds) {
+    const order = allOrders.find((entry) => entry.id === orderId);
+    if (!order) {
+      skipped.push(orderId);
+      continue;
+    }
+
+    const payout = getOrderPayout(order);
+    if (useThreshold && payout >= parsedThreshold) {
+      skipped.push(orderId);
+      continue;
+    }
+
+    const normalizedStatus = collapsePhoneTransitStatus(order.status);
+
+    try {
+      if (normalizedStatus === 'kit_delivered') {
+        await sendKitReminderEmail({ orderId });
+        sentCount += 1;
+        continue;
+      }
+
+      if (expiringStatuses.has(normalizedStatus)) {
+        await sendExpiringReminderEmail({ orderId });
+        sentCount += 1;
+        continue;
+      }
+
+      skipped.push(orderId);
+    } catch (error) {
+      console.error('Bulk reminder failed for', orderId, error);
+      failures.push(orderId);
+    }
+  }
+
+  const parts = [];
+  if (sentCount) {
+    parts.push(`✅ Sent reminders for ${sentCount} order${sentCount === 1 ? '' : 's'}`);
+  }
+  if (failures.length) {
+    parts.push(`❌ Failed: ${failures.join(', ')}`);
+  }
+  if (skipped.length) {
+    parts.push(`ℹ️ Skipped: ${skipped.join(', ')}`);
+  }
+
+  alert(parts.join('\n'));
+
+  if (bulkReminderEmailsBtn) {
+    bulkReminderEmailsBtn.disabled = selectedOrderIds.size === 0;
+    bulkReminderEmailsBtn.innerHTML = '<i class="fas fa-clock"></i><span>Send Reminders (Selected)</span>';
+  }
+}
+
 try {
   populateBulkStatusSelect();
 } catch (error) {
@@ -836,6 +898,19 @@ if (refreshAllEmailTrackingBtn) {
 
 if (bulkGenerateLabelsBtn) {
   bulkGenerateLabelsBtn.addEventListener('click', handleBulkLabelGeneration);
+}
+
+if (bulkReminderEmailsBtn) {
+  bulkReminderEmailsBtn.addEventListener('click', handleBulkReminderEmails);
+}
+
+if (toggleHideCanceledBtn) {
+  toggleHideCanceledBtn.addEventListener('click', () => {
+    hideCanceledOrders = !hideCanceledOrders;
+    updateHideCanceledToggleUI();
+    filterAndRenderOrders(currentActiveStatus, currentSearchTerm, { preservePage: true });
+  });
+  updateHideCanceledToggleUI();
 }
 
 if (selectAllOrdersCheckbox) {
@@ -3767,6 +3842,7 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function updateDashboardCounts(ordersData) {
+const phoneTransitCount = ordersData.filter((o) => collapsePhoneTransitStatus(o.status) === 'phone_on_the_way_to_us').length;
 const statusCounts = {
   'order_pending': ordersData.filter(o => o.status === 'order_pending').length,
   'kit_needs_printing': ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
@@ -3777,8 +3853,8 @@ const statusCounts = {
   'delivered_to_us': ordersData.filter(o => o.status === 'delivered_to_us').length,
   'label_generated': ordersData.filter(order => isLabelGenerationStage(order)).length,
   'emailed': ordersData.filter(order => isBalanceEmailStatus(order)).length,
-  'phone_on_the_way': ordersData.filter(o => o.status === 'phone_on_the_way').length,
-  'phone_on_the_way_to_us': ordersData.filter(o => o.status === 'phone_on_the_way_to_us').length,
+  'phone_on_the_way': phoneTransitCount,
+  'phone_on_the_way_to_us': phoneTransitCount,
   'received': ordersData.filter(o => o.status === 'received').length,
   'completed': ordersData.filter(o => o.status === 'completed').length,
   're-offered-pending': ordersData.filter(o => o.status === 're-offered-pending').length,
@@ -4872,7 +4948,7 @@ modalActivityLog.classList.remove('hidden');
 * @param {Object} order - The order object.
 */
 function formatStatus(order) {
-const status = order.status;
+const status = collapsePhoneTransitStatus(order.status);
 const preference = order.shippingPreference;
 const normalizedStatus = (status || '').toLowerCase();
 const normalizedPreference = (preference || '').toString().toLowerCase();
@@ -4919,21 +4995,15 @@ const legacyEmailStatus = normalizedStatus === 'emailed' && isLegacyEmailLabelSt
 if (normalizedStatus === 'label_generated' || legacyEmailStatus) {
 const isEmailPreference = normalizedPreference === 'email label requested';
 if (isEmailPreference) {
-  if (acceptedWithoutEta) {
-    return 'Label Generated';
-  }
-  return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
+  return 'Label Generated';
 }
 return 'Kit Sent';
 }
 if (normalizedStatus === 'emailed') {
 return 'Balance Email Sent';
 }
-if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
-if (acceptedWithoutEta) {
-  return 'Label Generated';
-}
-return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
+if (normalizedStatus === 'phone_on_the_way_to_us') {
+return 'Phone On The Way To Us';
 }
 // Fallback for other statuses
 return normalizedStatus.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -7150,6 +7220,13 @@ order.id.toLowerCase().includes(lowerCaseSearchTerm) ||
 
 if (IS_AGING_PAGE) {
 filtered = filtered.filter(isAgingCandidate);
+}
+
+if (hideCanceledOrders) {
+  filtered = filtered.filter((order) => {
+    const normalized = collapsePhoneTransitStatus(order.status);
+    return !['cancelled', 'canceled', 'order_cancelled'].includes(normalized);
+  });
 }
 
 filtered.sort((a, b) => {

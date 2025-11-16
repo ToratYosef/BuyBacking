@@ -282,6 +282,18 @@
       </p>
     </div>
 
+    <div class="field">
+      <label>Feed preview brands</label>
+      <div class="pill-row">
+        <label class="pill"><input type="checkbox" class="feedBrandCheck" value="iphone" checked> iPhone</label>
+        <label class="pill"><input type="checkbox" class="feedBrandCheck" value="samsung" checked> Samsung</label>
+        <label class="pill"><input type="checkbox" class="feedBrandCheck" value="pixel" checked> Google Pixel</label>
+      </div>
+      <p class="small">
+        Used for the feed-only preview/export buttons. "iPhone" matches device names containing "iphone" (not other Apple items).
+      </p>
+    </div>
+
     <div class="status-bar" id="fileStatusBar">
       <span><span class="highlight">Ready.</span> Upload both XML files.</span>
       <span id="fileStats"></span>
@@ -430,6 +442,11 @@
       <button class="btn-primary" id="downloadBtn" type="button" disabled>Download output.xml</button>
     </div>
 
+    <div class="btn-row" style="justify-content:flex-start;">
+      <button class="btn-secondary" id="feedPreviewBtn" type="button">Preview feed-only table</button>
+      <button class="btn-secondary" id="feedExportBtn" type="button" disabled>Export feed preview CSV</button>
+    </div>
+
     <div class="status-bar" id="statusBar">
       <span><span class="highlight">Idle.</span> Click "Preview price changes" after uploading files.</span>
       <span id="stats"></span>
@@ -464,6 +481,8 @@
   const previewContainerEl = document.getElementById('previewContainer');
   const previewBtn = document.getElementById('previewBtn');
   const downloadBtn = document.getElementById('downloadBtn');
+  const feedPreviewBtn = document.getElementById('feedPreviewBtn');
+  const feedExportBtn = document.getElementById('feedExportBtn');
 
   // Offsets builder elements
   const offsetTargetTypeEl = document.getElementById('offsetTargetType');
@@ -476,7 +495,14 @@
 
   let latestOutputXml = '';
   let latestPreviewRows = [];
+  let latestFeedPreviewRows = [];
   let latestInputDoc = null;
+
+  const FEED_BRAND_LABELS = {
+    iphone: 'iPhone',
+    samsung: 'Samsung',
+    pixel: 'Google Pixel'
+  };
 
   function setStatus(msg, isError = false) {
     const spans = statusBarEl.querySelectorAll('span');
@@ -590,6 +616,23 @@
       if (c.checked) set.add(c.value);
     });
     return set;
+  }
+
+  function getSelectedFeedBrandFilters() {
+    const checks = Array.from(document.querySelectorAll('.feedBrandCheck'));
+    return checks.filter(c => c.checked).map(c => c.value);
+  }
+
+  function deviceMatchesFeedBrandFilter(brandName, deviceName, allowedValues) {
+    if (!allowedValues || !allowedValues.size) return true;
+    const brandNorm = normaliseStr(brandName);
+    const nameNorm = normaliseStr(deviceName);
+
+    if (allowedValues.has('iphone') && nameNorm.includes('iphone')) return true;
+    if (allowedValues.has('samsung') && (brandNorm.includes('samsung') || nameNorm.includes('galaxy'))) return true;
+    if (allowedValues.has('pixel') && (brandNorm.includes('google') || nameNorm.includes('pixel'))) return true;
+
+    return false;
   }
 
   function parseRulesJson() {
@@ -738,6 +781,74 @@
     return { maxMap, combos };
   }
 
+  function buildFeedPreviewRows(feedDoc, lockedCarriersSet, brandFilters) {
+    const devices = Array.from(feedDoc.getElementsByTagName('device'));
+    const rowsMap = new Map();
+    const allowed = new Set(brandFilters);
+
+    const qualityMap = [
+      { tag: 'prices_likenew', quality: 'flawless' },
+      { tag: 'prices_good', quality: 'good' },
+      { tag: 'prices_poor', quality: 'fair' },
+      { tag: 'prices_faulty', quality: 'broken' }
+    ];
+
+    for (const dev of devices) {
+      const brandName =
+        dev.getElementsByTagName('brand_name')[0]?.textContent ||
+        dev.getElementsByTagName('brand')[0]?.textContent ||
+        '';
+      const devName = dev.getElementsByTagName('device_name')[0]?.textContent || '';
+      if (!deviceMatchesFeedBrandFilter(brandName, devName, allowed)) {
+        continue;
+      }
+      const capacity = dev.getElementsByTagName('capacity')[0]?.textContent || '';
+      const network = dev.getElementsByTagName('network')[0]?.textContent || '';
+
+      const modelKey = canonicalModelKey(brandName, devName);
+      const capKey = (capacity || '').trim();
+      const status = networkToStatus(network, lockedCarriersSet);
+
+      for (const qm of qualityMap) {
+        const nodes = dev.getElementsByTagName(qm.tag);
+        if (!nodes.length) continue;
+        const pricesNode = nodes[0];
+        const priceNodes = pricesNode.getElementsByTagName('price');
+        let maxPrice = null;
+        for (const p of Array.from(priceNodes)) {
+          const val = p.getElementsByTagName('merchant_price')[0]?.textContent || '';
+          const num = Number(val);
+          if (!Number.isNaN(num)) {
+            if (maxPrice === null || num > maxPrice) {
+              maxPrice = num;
+            }
+          }
+        }
+        if (maxPrice !== null) {
+          const key = [
+            modelKey,
+            capKey,
+            qm.quality,
+            status
+          ].join('|');
+          const existing = rowsMap.get(key);
+          if (!existing || maxPrice > existing.feedPrice) {
+            rowsMap.set(key, {
+              brand: brandName || 'Unknown',
+              modelName: devName || '',
+              storage: capKey || '',
+              status,
+              quality: qm.quality,
+              feedPrice: maxPrice
+            });
+          }
+        }
+      }
+    }
+
+    return { rows: Array.from(rowsMap.values()), combos: rowsMap.size };
+  }
+
   // Preview table with per-model grouping: unlocked (flawless→good→fair→broken), then locked
   function renderPreviewTable(rows, stats) {
     if (!rows.length) {
@@ -821,6 +932,57 @@
     });
   }
 
+  function renderFeedPreviewTable(rows, stats) {
+    if (!rows.length) {
+      previewContainerEl.innerHTML =
+        '<div style="padding:0.75rem;font-size:0.8rem;color:#9ca3af;">No feed rows matched your selected brand filters.</div>';
+      setStats(stats);
+      return;
+    }
+
+    const statusOrder = { unlocked: 0, locked: 1 };
+    const qualityOrder = { flawless: 0, good: 1, fair: 2, broken: 3 };
+
+    rows.sort((a, b) => {
+      return (
+        normaliseStr(a.brand).localeCompare(normaliseStr(b.brand)) ||
+        normaliseStr(a.modelName).localeCompare(normaliseStr(b.modelName)) ||
+        normaliseStr(a.storage).localeCompare(normaliseStr(b.storage)) ||
+        ((statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99)) ||
+        ((qualityOrder[a.quality] ?? 99) - (qualityOrder[b.quality] ?? 99))
+      );
+    });
+
+    const head = `
+      <thead>
+        <tr>
+          <th>Brand</th>
+          <th>Model</th>
+          <th>Storage</th>
+          <th>Status</th>
+          <th>Quality</th>
+          <th>Feed price</th>
+        </tr>
+      </thead>
+    `;
+
+    const body = rows.map(r => {
+      return `
+        <tr>
+          <td>${r.brand}</td>
+          <td>${r.modelName}</td>
+          <td>${r.storage}</td>
+          <td><span class="badge">${r.status}</span></td>
+          <td><span class="badge">${r.quality}</span></td>
+          <td>${r.feedPrice.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    previewContainerEl.innerHTML = `<table>${head}<tbody>${body}</tbody></table>`;
+    setStats(stats);
+  }
+
   function handleNewPriceEdit(e) {
     const idx = Number(e.target.dataset.rowIndex);
     if (Number.isNaN(idx) || !latestPreviewRows[idx]) return;
@@ -863,6 +1025,57 @@
       if (Number.isNaN(val)) return;
       row.node.textContent = val.toFixed(2);
     });
+  }
+
+  async function previewFeedOnly() {
+    setStatus('Reading feed file for preview...', false);
+    setStats('');
+    previewContainerEl.innerHTML = '';
+    latestFeedPreviewRows = [];
+    feedExportBtn.disabled = true;
+
+    const feedFile = feedFileEl.files && feedFileEl.files[0];
+    if (!feedFile) {
+      setStatus('Upload feed.xml first to preview feed pricing.', true);
+      return;
+    }
+
+    const brandFilters = getSelectedFeedBrandFilters();
+    if (!brandFilters.length) {
+      setStatus('Select at least one feed brand (iPhone / Samsung / Google Pixel).', true);
+      return;
+    }
+
+    let feedXmlText;
+    try {
+      feedXmlText = await readFileAsText(feedFile);
+    } catch (err) {
+      console.error(err);
+      setStatus('Error reading feed.xml for preview.', true);
+      return;
+    }
+
+    const parser = new DOMParser();
+    const feedDoc = parser.parseFromString(feedXmlText, 'application/xml');
+    if (feedDoc.getElementsByTagName('parsererror').length) {
+      setStatus('Error parsing feed.xml – XML is invalid.', true);
+      return;
+    }
+
+    const lockedCarrierSet = getLockedCarrierSet();
+    const { rows, combos } = buildFeedPreviewRows(feedDoc, lockedCarrierSet, brandFilters);
+    latestFeedPreviewRows = rows;
+    feedExportBtn.disabled = rows.length === 0;
+
+    const readableBrands = brandFilters.map(val => FEED_BRAND_LABELS[val] || val).join(', ');
+    const stats = `Feed-only combos: ${combos} · Brands: ${readableBrands}`;
+    renderFeedPreviewTable(rows, stats);
+
+    if (rows.length) {
+      setStatus('Feed-only preview generated. Use "Export feed preview CSV" to download.', false);
+    } else {
+      setStatus('No feed rows matched those brand filters.', false);
+    }
   }
 
   async function previewChanges() {
@@ -1054,6 +1267,37 @@
     setStatus('output.xml downloaded with your overrides.', false);
   }
 
+  function exportFeedPreview() {
+    if (!latestFeedPreviewRows.length) {
+      setStatus('Run "Preview feed-only table" first.', true);
+      return;
+    }
+
+    const header = ['Brand', 'Model', 'Storage', 'Status', 'Quality', 'FeedPrice'];
+    const rows = latestFeedPreviewRows.map(row => {
+      return [
+        row.brand,
+        row.modelName,
+        row.storage,
+        row.status,
+        row.quality,
+        row.feedPrice.toFixed(2)
+      ].map(val => '"' + String(val ?? '').replace(/"/g, '""') + '"').join(',');
+    });
+
+    const csv = [header.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'feed-preview.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus('Feed preview exported as CSV (Brand, Model, Storage, Status, Quality, FeedPrice).', false);
+  }
+
   function addOffsetRule() {
     const type = offsetTargetTypeEl.value;
     const nameRaw = offsetNameEl.value.trim();
@@ -1122,6 +1366,17 @@
   });
 
   downloadBtn.addEventListener('click', downloadOutput);
+  feedPreviewBtn.addEventListener('click', () => {
+    previewFeedOnly().catch(err => {
+      console.error(err);
+      setStatus('Unexpected error during feed preview.', true);
+    });
+  });
+  feedExportBtn.addEventListener('click', exportFeedPreview);
+  feedFileEl.addEventListener('change', () => {
+    latestFeedPreviewRows = [];
+    feedExportBtn.disabled = true;
+  });
   addOffsetRuleBtn.addEventListener('click', addOffsetRule);
 </script>
 </body>

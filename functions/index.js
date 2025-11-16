@@ -891,6 +891,17 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     return;
   }
 
+  const normalizedStatus = (order?.status || "").toLowerCase();
+  if (normalizedStatus === PHONE_TRANSIT_STATUS) {
+    console.warn(`Void notification suppressed for ${order.id}: already marked in transit.`);
+    return;
+  }
+
+  if (normalizedStatus !== "label_generated") {
+    console.warn(`Void notification suppressed for ${order.id}: status is ${normalizedStatus || "unknown"}.`);
+    return;
+  }
+
   const approvedResults = results.filter((result) => result.approved);
   if (!approvedResults.length) {
     return;
@@ -958,6 +969,11 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     subject,
     text: textBody,
     html: htmlBody,
+  });
+
+  await updateOrderBoth(order.id, {
+    status: "cancelled",
+    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
 

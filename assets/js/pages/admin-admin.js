@@ -1,5 +1,18 @@
-// Corrected to include the base path for Cloud Functions
-const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+function resolveBackendBaseUrl() {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const { origin } = window.location;
+
+    if (origin.includes('localhost')) {
+      return 'http://localhost:5001/buyback-a0f05/us-central1/api';
+    }
+
+    return `${origin}/api`;
+  }
+
+  return 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+}
+
+const BACKEND_BASE_URL = resolveBackendBaseUrl();
 const FEED_PRICING_URL = '/feeds/feed.xml';
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const LABEL_NAME_OVERRIDES = {
