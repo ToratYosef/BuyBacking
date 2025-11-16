@@ -284,7 +284,7 @@
       </p>
     </div>
 
-    <!-- NEW: DEVICES CSV UPLOAD FOR CSV → XML -->
+    <!-- DEVICES CSV UPLOAD FOR CSV → XML -->
     <div class="field">
       <label for="devicesCsvFile">Devices CSV → XML (devices_mapping.csv)</label>
       <input type="file" id="devicesCsvFile" accept=".csv">
@@ -439,9 +439,9 @@
     <div class="btn-row">
       <button class="btn-secondary" id="previewBtn" type="button">Preview price changes</button>
       <button class="btn-secondary" id="downloadCsvBtn" type="button" disabled>Download feed CSV</button>
-      <!-- NEW: devices CSV export -->
+      <!-- devices CSV export -->
       <button class="btn-secondary" id="downloadModelsCsvBtn" type="button" disabled>Download devices CSV</button>
-      <!-- NEW: CSV → XML -->
+      <!-- CSV → XML -->
       <button class="btn-secondary" id="devicesCsvToXmlBtn" type="button">CSV → devices.xml</button>
       <button class="btn-primary" id="downloadBtn" type="button" disabled>Download output.xml</button>
     </div>
@@ -468,7 +468,7 @@
 <script>
   const inputFileEl = document.getElementById('inputFile');
   const feedFileEl = document.getElementById('feedFile');
-  const devicesCsvFileEl = document.getElementById('devicesCsvFile'); // NEW
+  const devicesCsvFileEl = document.getElementById('devicesCsvFile'); // CSV → XML input
   const globalAddEl = document.getElementById('globalAdd');
   const rulesJsonEl = document.getElementById('rulesJson');
   const brandFilterEl = document.getElementById('brandFilter');
@@ -482,8 +482,8 @@
   const previewBtn = document.getElementById('previewBtn');
   const downloadBtn = document.getElementById('downloadBtn');
   const downloadCsvBtn = document.getElementById('downloadCsvBtn');
-  const downloadModelsCsvBtn = document.getElementById('downloadModelsCsvBtn'); // NEW
-  const devicesCsvToXmlBtn = document.getElementById('devicesCsvToXmlBtn'); // NEW
+  const downloadModelsCsvBtn = document.getElementById('downloadModelsCsvBtn');
+  const devicesCsvToXmlBtn = document.getElementById('devicesCsvToXmlBtn');
 
   // Offsets builder elements
   const offsetTargetTypeEl = document.getElementById('offsetTargetType');
@@ -1058,7 +1058,7 @@
               price: feedPrice
             });
 
-            // Existing logic to compute new price and preview changes
+            // Compute new price and preview changes
             const oldVal = Number(qNode.textContent.trim());
             const oldNumeric = Number.isNaN(oldVal) ? null : oldVal;
 
@@ -1122,7 +1122,7 @@
       downloadCsvBtn.disabled = true;
     }
 
-    // Enable devices CSV as soon as we have a parsed input.xml
+    // Enable devices CSV export as soon as we have a parsed input.xml
     if (models.length > 0) {
       downloadModelsCsvBtn.disabled = false;
     }
@@ -1178,7 +1178,7 @@
     setStatus('Feed CSV downloaded (feed prices for devices found in input.xml).', false);
   }
 
-  // NEW: export devices CSV from <model> structure (with Price)
+  // --- export devices CSV from <model> structure (with Price) ---
   function downloadDevicesCsv() {
     if (!latestInputDoc) {
       setStatus('No input.xml loaded yet – run preview first.', true);
@@ -1336,107 +1336,106 @@
   }
 
   function buildXmlFromDevicesRows(rows) {
-  // Group by model: same deviceName/modelId/name/brand/imageUrl/deeplink
-  const modelsMap = new Map();
+    // Group by model: same deviceName/modelId/name/brand/imageUrl/deeplink
+    const modelsMap = new Map();
 
-  for (const row of rows) {
-    const key = [
-      row.deviceName,
-      row.modelId,
-      row.name,
-      row.brand,
-      row.imageUrl,
-      row.deeplink
-    ].join('||');
+    for (const row of rows) {
+      const key = [
+        row.deviceName,
+        row.modelId,
+        row.name,
+        row.brand,
+        row.imageUrl,
+        row.deeplink
+      ].join('||');
 
-    if (!modelsMap.has(key)) {
-      modelsMap.set(key, {
-        deviceName: row.deviceName,
-        modelId: row.modelId,
-        name: row.name,
-        brand: row.brand,
-        imageUrl: row.imageUrl,
-        deeplink: row.deeplink,
-        // storage -> status -> quality -> price
-        prices: {}
-      });
-    }
-
-    const model = modelsMap.get(key);
-
-    const storage = (row.storage || '').trim();
-    if (!storage) continue;
-
-    // Normalise status: anything containing "unlock" becomes unlocked, else locked
-    let status = (row.status || '').toLowerCase();
-    status = status.includes('unlock') ? 'unlocked' : 'locked';
-
-    // Normalise quality to XML tags
-    let q = (row.quality || '').toLowerCase();
-    if (q === 'broken') q = 'damaged'; // our XML uses <damaged>
-
-    const allowedQualities = ['flawless', 'good', 'fair', 'damaged'];
-    if (!allowedQualities.includes(q)) continue;
-
-    const priceNum = Number(row.price);
-    if (Number.isNaN(priceNum)) continue;
-
-    if (!model.prices[storage]) model.prices[storage] = {};
-    if (!model.prices[storage][status]) model.prices[storage][status] = {};
-    model.prices[storage][status][q] = priceNum;
-  }
-
-  // Build XML string
-  let xml = "<?xml version='1.0' encoding='UTF-8'?>\n<models>\n";
-
-  const qualityOrder = ['flawless', 'good', 'fair', 'damaged'];
-  const statusOrder = ['locked', 'unlocked'];
-
-  for (const model of modelsMap.values()) {
-    xml += '  <model>\n';
-    xml += '    <parentDevice>' + xmlEscape(model.deviceName) + '</parentDevice>\n';
-    xml += '    <modelID>' + xmlEscape(model.modelId) + '</modelID>\n';
-
-    // prices blocks
-    const storageKeys = Object.keys(model.prices).sort();
-    for (const storage of storageKeys) {
-      xml += '    <prices>\n';
-      xml += '      <storageSize>' + xmlEscape(storage) + '</storageSize>\n';
-      xml += '      <priceValue>\n';
-
-      for (const status of statusOrder) {
-        const bucket = model.prices[storage][status];
-        if (!bucket) continue;
-
-        xml += '        <' + status + '>\n';
-        for (const q of qualityOrder) {
-          const priceNum = bucket[q];
-          if (priceNum == null) continue;
-          xml +=
-            '          <' + q + '>' +
-            priceNum.toFixed(2) +
-            '</' + q + '>\n';
-        }
-        xml += '        </' + status + '>\n';
+      if (!modelsMap.has(key)) {
+        modelsMap.set(key, {
+          deviceName: row.deviceName,
+          modelId: row.modelId,
+          name: row.name,
+          brand: row.brand,
+          imageUrl: row.imageUrl,
+          deeplink: row.deeplink,
+          // storage -> status -> quality -> price
+          prices: {}
+        });
       }
 
-      xml += '      </priceValue>\n';
-      xml += '    </prices>\n';
+      const model = modelsMap.get(key);
+
+      const storage = (row.storage || '').trim();
+      if (!storage) continue;
+
+      // Normalise status: anything containing "unlock" becomes unlocked, else locked
+      let status = (row.status || '').toLowerCase();
+      status = status.includes('unlock') ? 'unlocked' : 'locked';
+
+      // Normalise quality to XML tags
+      let q = (row.quality || '').toLowerCase();
+      if (q === 'broken') q = 'damaged'; // our XML uses <damaged>
+
+      const allowedQualities = ['flawless', 'good', 'fair', 'damaged'];
+      if (!allowedQualities.includes(q)) continue;
+
+      const priceNum = Number(row.price);
+      if (Number.isNaN(priceNum)) continue;
+
+      if (!model.prices[storage]) model.prices[storage] = {};
+      if (!model.prices[storage][status]) model.prices[storage][status] = {};
+      model.prices[storage][status][q] = priceNum;
     }
 
-    // metadata (same pattern as your example)
-    xml += '    <slug>' + xmlEscape(model.modelId) + '</slug>\n';
-    xml += '    <imageUrl>' + xmlEscape(model.imageUrl) + '</imageUrl>\n';
-    xml += '    <name>' + xmlEscape(model.name) + '</name>\n';
-    xml += '    <brand>' + xmlEscape(model.brand) + '</brand>\n';
-    xml += '    <deeplink>' + xmlEscape(model.deeplink) + '</deeplink>\n';
-    xml += '  </model>\n';
+    // Build XML string
+    let xml = "<?xml version='1.0' encoding='UTF-8'?>\n<models>\n";
+
+    const qualityOrder = ['flawless', 'good', 'fair', 'damaged'];
+    const statusOrder = ['locked', 'unlocked'];
+
+    for (const model of modelsMap.values()) {
+      xml += '  <model>\n';
+      xml += '    <parentDevice>' + xmlEscape(model.deviceName) + '</parentDevice>\n';
+      xml += '    <modelID>' + xmlEscape(model.modelId) + '</modelID>\n';
+
+      // prices blocks
+      const storageKeys = Object.keys(model.prices).sort();
+      for (const storage of storageKeys) {
+        xml += '    <prices>\n';
+        xml += '      <storageSize>' + xmlEscape(storage) + '</storageSize>\n';
+        xml += '      <priceValue>\n';
+
+        for (const status of statusOrder) {
+          const bucket = model.prices[storage][status];
+          if (!bucket) continue;
+
+          xml += '        <' + status + '>\n';
+          for (const q of qualityOrder) {
+            const priceNum = bucket[q];
+            if (priceNum == null) continue;
+            xml +=
+              '          <' + q + '>' +
+              priceNum.toFixed(2) +
+              '</' + q + '>\n';
+          }
+          xml += '        </' + status + '>\n';
+        }
+
+        xml += '      </priceValue>\n';
+        xml += '    </prices>\n';
+      }
+
+      // metadata (same pattern as your example)
+      xml += '    <slug>' + xmlEscape(model.modelId) + '</slug>\n';
+      xml += '    <imageUrl>' + xmlEscape(model.imageUrl) + '</imageUrl>\n';
+      xml += '    <name>' + xmlEscape(model.name) + '</name>\n';
+      xml += '    <brand>' + xmlEscape(model.brand) + '</brand>\n';
+      xml += '    <deeplink>' + xmlEscape(model.deeplink) + '</deeplink>\n';
+      xml += '  </model>\n';
+    }
+
+    xml += '</models>\n';
+    return xml;
   }
-
-  xml += '</models>\n';
-  return xml;
-}
-
 
   function addOffsetRule() {
     const type = offsetTargetTypeEl.value;
@@ -1497,6 +1496,54 @@
     setStatus('Offsets rule added to JSON.', false);
   }
 
+  async function handleDevicesCsvToXml() {
+    const file = devicesCsvFileEl.files && devicesCsvFileEl.files[0];
+    if (!file) {
+      setStatus('Upload a devices CSV first (devices_mapping.csv).', true);
+      return;
+    }
+
+    setStatus('Reading devices CSV…', false);
+
+    let text;
+    try {
+      text = await readFileAsText(file);
+    } catch (err) {
+      console.error(err);
+      setStatus('Error reading devices CSV file.', true);
+      return;
+    }
+
+    let rows;
+    try {
+      rows = parseDevicesCsvText(text);
+    } catch (err) {
+      console.error(err);
+      setStatus(err.message || 'Error parsing devices CSV.', true);
+      return;
+    }
+
+    if (!rows.length) {
+      setStatus('Devices CSV contains no data rows.', true);
+      return;
+    }
+
+    // Build XML from rows and trigger download
+    const xml = buildXmlFromDevicesRows(rows);
+    const blob = new Blob([xml], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'devices_from_csv.xml';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    setStatus('devices_from_csv.xml downloaded from devices CSV.', false);
+  }
+
+  // --- Event listeners ---
   previewBtn.addEventListener('click', () => {
     downloadBtn.disabled = true;
     previewChanges().catch(err => {
@@ -1514,52 +1561,6 @@
       setStatus('Unexpected error converting CSV to XML.', true);
     });
   });
-  async function handleDevicesCsvToXml() {
-  const file = devicesCsvFileEl.files && devicesCsvFileEl.files[0];
-  if (!file) {
-    setStatus('Upload a devices CSV first (devices_mapping.csv).', true);
-    return;
-  }
-
-  setStatus('Reading devices CSV…', false);
-
-  let text;
-  try {
-    text = await readFileAsText(file);
-  } catch (err) {
-    console.error(err);
-    setStatus('Error reading devices CSV file.', true);
-    return;
-  }
-
-  let rows;
-  try {
-    rows = parseDevicesCsvText(text);
-  } catch (err) {
-    console.error(err);
-    setStatus(err.message || 'Error parsing devices CSV.', true);
-    return;
-  }
-
-  if (!rows.length) {
-    setStatus('Devices CSV contains no data rows.', true);
-    return;
-  }
-
-  // Build XML from rows and trigger download
-  const xml = buildXmlFromDevicesRows(rows);
-  const blob = new Blob([xml], { type: 'application/xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'devices_from_csv.xml';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  setStatus('devices_from_csv.xml downloaded from devices CSV.', false);
-}
   addOffsetRuleBtn.addEventListener('click', addOffsetRule);
 </script>
 </body>
