@@ -221,6 +221,8 @@
       color: #9ca3af;
       font-size: 0.72rem;
       background: #020617;
+      cursor: pointer; /* indicate clickable for sorting */
+      user-select: none;
     }
     tbody tr:nth-child(even) {
       background: rgba(15, 23, 42, 0.6);
@@ -478,6 +480,26 @@
   let latestPreviewRows = [];
   let latestInputDoc = null;
 
+  // Sorting state
+  const headerTitles = [
+    'Brand', 'Model', 'Model ID', 'Storage',
+    'Status', 'Quality', 'Old', 'Feed', 'New', 'Δ'
+  ];
+  const sortKeyByIndex = {
+    0: 'brand',
+    1: 'modelName',
+    2: 'modelId',
+    3: 'storage',
+    4: 'status',
+    5: 'quality',
+    6: 'oldNumeric',
+    7: 'feedPrice',
+    8: 'newNumeric',
+    9: 'delta'
+  };
+  let currentSort = { key: null, direction: 'asc' };
+  let lastStatsText = '';
+
   function setStatus(msg, isError = false) {
     const spans = statusBarEl.querySelectorAll('span');
     if (spans[0]) {
@@ -701,41 +723,108 @@
     return { maxMap, combos };
   }
 
-  // Preview table with per-model grouping: unlocked (flawless→good→fair→broken), then locked
-  function renderPreviewTable(rows, stats) {
-    if (!rows.length) {
-      previewContainerEl.innerHTML =
-        '<div style="padding:0.75rem;font-size:0.8rem;color:#9ca3af;">No prices changed based on your current filters and rules.</div>';
-      setStats(stats);
-      return;
-    }
-
+  // Sorting helpers
+  function sortRows(rows) {
     const statusOrder = { unlocked: 0, locked: 1 };
     const qualityOrder = { flawless: 0, good: 1, fair: 2, broken: 3 };
 
+    if (!currentSort.key) {
+      // Default grouping: brand → model → storage → status → quality
+      rows.sort((a, b) => {
+        return (
+          normaliseStr(a.brand).localeCompare(normaliseStr(b.brand)) ||
+          normaliseStr(a.modelName).localeCompare(normaliseStr(b.modelName)) ||
+          normaliseStr(a.storage).localeCompare(normaliseStr(b.storage)) ||
+          ((statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99)) ||
+          ((qualityOrder[a.quality] ?? 99) - (qualityOrder[b.quality] ?? 99))
+        );
+      });
+      return;
+    }
+
+    const key = currentSort.key;
+    const dir = currentSort.direction === 'desc' ? -1 : 1;
+
     rows.sort((a, b) => {
-      return (
-        normaliseStr(a.brand).localeCompare(normaliseStr(b.brand)) ||
-        normaliseStr(a.modelName).localeCompare(normaliseStr(b.modelName)) ||
-        normaliseStr(a.storage).localeCompare(normaliseStr(b.storage)) ||
-        ((statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99)) ||
-        ((qualityOrder[a.quality] ?? 99) - (qualityOrder[b.quality] ?? 99))
-      );
+      let aVal = a[key];
+      let bVal = b[key];
+
+      // Special ordering for status/quality
+      if (key === 'status') {
+        const so = { unlocked: 0, locked: 1 };
+        aVal = so[a.status] ?? 99;
+        bVal = so[b.status] ?? 99;
+        return (aVal - bVal) * dir;
+      }
+      if (key === 'quality') {
+        const qo = { flawless: 0, good: 1, fair: 2, broken: 3 };
+        aVal = qo[a.quality] ?? 99;
+        bVal = qo[b.quality] ?? 99;
+        return (aVal - bVal) * dir;
+      }
+
+      // Numeric keys
+      if (['oldNumeric', 'feedPrice', 'newNumeric', 'delta'].includes(key)) {
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1; // nulls last
+        if (bVal == null) return -1;
+        if (aVal === bVal) return 0;
+        return aVal < bVal ? -1 * dir : 1 * dir;
+      }
+
+      // String keys
+      const aStr = normaliseStr(String(aVal ?? ''));
+      const bStr = normaliseStr(String(bVal ?? ''));
+      if (aStr === bStr) return 0;
+      return aStr < bStr ? -1 * dir : 1 * dir;
     });
+  }
+
+  function handleHeaderClick(colIndex) {
+    const key = sortKeyByIndex[colIndex];
+    if (!key) return;
+
+    if (currentSort.key === key) {
+      currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      currentSort.key = key;
+      currentSort.direction = 'asc';
+    }
+
+    renderPreviewTable(latestPreviewRows, lastStatsText);
+    const label = headerTitles[colIndex] || key;
+    setStatus('Sorted by ' + label + ' (' + currentSort.direction + ')', false);
+  }
+
+  // Preview table with per-model grouping & sortable headers
+  function renderPreviewTable(rows, stats) {
+    if (typeof stats === 'string') {
+      lastStatsText = stats;
+    }
+
+    if (!rows.length) {
+      previewContainerEl.innerHTML =
+        '<div style="padding:0.75rem;font-size:0.8rem;color:#9ca3af;">No prices changed based on your current filters and rules.</div>';
+      setStats(lastStatsText);
+      return;
+    }
+
+    // Sort rows in place according to currentSort or default
+    sortRows(rows);
+
+    const headCells = headerTitles.map((label, i) => {
+      const key = sortKeyByIndex[i];
+      let indicator = '';
+      if (currentSort.key === key) {
+        indicator = currentSort.direction === 'asc' ? ' ▲' : ' ▼';
+      }
+      return `<th data-col-index="${i}">${label}${indicator}</th>`;
+    }).join('');
 
     const head = `
       <thead>
         <tr>
-          <th>Brand</th>
-          <th>Model</th>
-          <th>Model ID</th>
-          <th>Storage</th>
-          <th>Status</th>
-          <th>Quality</th>
-          <th>Old</th>
-          <th>Feed</th>
-          <th>New</th>
-          <th>Δ</th>
+          ${headCells}
         </tr>
       </thead>
     `;
@@ -775,8 +864,18 @@
     }).join('');
 
     previewContainerEl.innerHTML = `<table>${head}<tbody>${body}</tbody></table>`;
-    setStats(stats);
+    setStats(lastStatsText);
 
+    // Wire up sorting clicks
+    const headerCells = previewContainerEl.querySelectorAll('th[data-col-index]');
+    headerCells.forEach(th => {
+      th.addEventListener('click', () => {
+        const colIndex = Number(th.dataset.colIndex);
+        handleHeaderClick(colIndex);
+      });
+    });
+
+    // Wire up editable "New" price inputs
     const inputs = previewContainerEl.querySelectorAll('.new-price-input');
     inputs.forEach(input => {
       input.addEventListener('change', handleNewPriceEdit);
@@ -822,6 +921,7 @@
     latestPreviewRows = [];
     latestInputDoc = null;
     previewContainerEl.innerHTML = '';
+    currentSort = { key: null, direction: 'asc' }; // reset sort on new preview
 
     const inputFile = inputFileEl.files && inputFileEl.files[0];
     const feedFile = feedFileEl.files && feedFileEl.files[0];
