@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Track My Order | SecondHandCell</title>
+  <style>
+    :root {
+      --blue-600: #2563eb;
+      --blue-700: #1d4ed8;
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-700: #334155;
+      --slate-900: #0f172a;
+      --green-600: #16a34a;
+      --amber-500: #f59e0b;
+      --red-600: #dc2626;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--slate-50);
+      color: var(--slate-900);
+    }
+
+    .page-shell {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    header h1 {
+      font-size: 32px;
+      margin: 0 0 8px;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--slate-700);
+      line-height: 1.6;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid var(--slate-200);
+      border-radius: 16px;
+      box-shadow: 0 12px 35px rgba(15, 23, 42, 0.08);
+      padding: 24px;
+    }
+
+    form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px 20px;
+      align-items: end;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--slate-700);
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--slate-200);
+      border-radius: 10px;
+      font-size: 16px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--blue-600);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+    }
+
+    button[type="submit"] {
+      padding: 14px 18px;
+      border: none;
+      border-radius: 12px;
+      background: var(--blue-600);
+      color: #fff;
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.2s ease, transform 0.1s ease;
+      box-shadow: 0 10px 30px rgba(37, 99, 235, 0.2);
+    }
+
+    button[type="submit"]:hover { background: var(--blue-700); }
+    button[type="submit"]:active { transform: translateY(1px); }
+    button[disabled] { opacity: 0.65; cursor: not-allowed; box-shadow: none; }
+
+    .helper-text {
+      grid-column: 1 / -1;
+      margin: 4px 0 0;
+      color: var(--slate-700);
+    }
+
+    .status-card {
+      margin-top: 24px;
+      padding: 20px;
+      border-radius: 14px;
+      border: 1px solid var(--slate-200);
+      background: var(--slate-100);
+    }
+
+    .status-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #e0e7ff;
+      color: var(--blue-700);
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .status-message { margin: 10px 0 0; color: var(--slate-700); line-height: 1.6; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .muted-label { color: var(--slate-700); margin: 0 0 6px; font-size: 14px; }
+    .value-text { margin: 0; font-weight: 700; font-size: 17px; }
+
+    .progress-list { list-style: none; padding: 0; margin: 18px 0 0; }
+    .progress-item { display: flex; gap: 12px; padding: 12px 10px; border-radius: 12px; align-items: flex-start; }
+    .progress-item + .progress-item { margin-top: 6px; }
+
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-top: 4px;
+      border: 2px solid var(--slate-200);
+      background: #fff;
+    }
+
+    .progress-item.complete .dot { background: var(--green-600); border-color: var(--green-600); }
+    .progress-item.current .dot { background: var(--amber-500); border-color: var(--amber-500); }
+    .progress-item .content { flex: 1; }
+    .progress-item h4 { margin: 0 0 4px; font-size: 15px; }
+    .progress-item p { margin: 0; color: var(--slate-700); line-height: 1.5; }
+
+    .hidden { display: none; }
+    .error { color: var(--red-600); }
+    .inline-error { margin-top: 10px; }
+
+    @media (max-width: 640px) {
+      header h1 { font-size: 26px; }
+      form { grid-template-columns: 1fr; }
+      button[type="submit"] { width: 100%; }
+    }
+  </style>
+  <script src="/assets/js/layout.js" defer></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header>
+      <h1>Track My Order</h1>
+      <p>Check the latest status on your trade-in. Enter the order number from your confirmation email and the full name you used at checkout.</p>
+    </header>
+
+    <section class="card" aria-labelledby="track-order-form-title">
+      <h2 id="track-order-form-title" class="hidden">Order lookup</h2>
+      <form id="orderLookupForm">
+        <div>
+          <label for="orderId">Order ID</label>
+          <input id="orderId" name="orderId" type="text" placeholder="e.g. SHC-01234" autocomplete="off" required>
+        </div>
+        <div>
+          <label for="customerName">Full name</label>
+          <input id="customerName" name="customerName" type="text" placeholder="Name used on the order" autocomplete="name" required>
+        </div>
+        <div>
+          <button id="submitButton" type="submit">Check status</button>
+        </div>
+        <p class="helper-text">You can prefill this page with <code>?orderId=&</code> and <code>&name=</code> in the URL.</p>
+      </form>
+      <p id="formError" class="inline-error error hidden" role="alert"></p>
+
+      <div id="statusCard" class="status-card hidden" aria-live="polite">
+        <div class="status-header">
+          <span id="statusPill" class="status-pill">Status</span>
+          <div>
+            <strong id="statusTitle">Order status</strong>
+            <p id="statusMessage" class="status-message"></p>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div>
+            <p class="muted-label">Order</p>
+            <p id="orderSummary" class="value-text">—</p>
+          </div>
+          <div>
+            <p class="muted-label">Name on file</p>
+            <p id="customerNameValue" class="value-text">—</p>
+          </div>
+          <div>
+            <p class="muted-label">Estimated payout</p>
+            <p id="payoutValue" class="value-text">—</p>
+          </div>
+          <div>
+            <p class="muted-label">Last updated</p>
+            <p id="updatedValue" class="value-text">—</p>
+          </div>
+        </div>
+
+        <ol id="progressList" class="progress-list" aria-label="Order progress"></ol>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+
+    const statusDescriptions = {
+      order_pending: 'We have your order and are preparing your shipping kit details.',
+      shipping_kit_requested: 'We are preparing your shipping kit.',
+      kit_needs_printing: 'Your kit is in the print queue and will be packed shortly.',
+      needs_printing: 'Your kit is in the print queue and will be packed shortly.',
+      label_generated: 'Your return label is ready—check your email for download links.',
+      emailed: 'Your return label is ready—check your email for download links.',
+      kit_sent: 'Your shipping kit is on the way to you.',
+      kit_delivered: 'Your kit has been delivered. Pack up your device and drop it off.',
+      kit_on_the_way_to_us: 'We see your package in transit back to us.',
+      kit_in_transit: 'We see your package in transit back to us.',
+      phone_on_the_way: 'We see your package in transit back to us.',
+      received: 'We received your device and are inspecting it.',
+      device_received: 'We received your device and are inspecting it.',
+      processing: 'Our technicians are testing your device.',
+      inspected: 'Our technicians are testing your device.',
+      're-offered-pending': 'We sent a revised offer and are waiting for your response.',
+      re_offered_pending: 'We sent a revised offer and are waiting for your response.',
+      're-offered-accepted': 'You accepted the new offer—we are finalizing your payout.',
+      re_offered_accepted: 'You accepted the new offer—we are finalizing your payout.',
+      're-offered-declined': 'You declined the new offer. Let us know if you want to continue.',
+      re_offered_declined: 'You declined the new offer. Let us know if you want to continue.',
+      requote_accepted: 'You accepted the updated quote—we are finalizing your payout.',
+      completed: 'Your order is complete and payment is being processed.',
+      cancelled: 'This order was cancelled. Reach out if you want to reopen it.',
+    };
+
+    const stageOrder = [
+      { key: 'order_pending', label: 'Order received', copy: 'We have your order and are preparing your kit.' },
+      { key: 'shipping_kit_requested', label: 'Preparing your kit', copy: 'We are packaging your shipping kit or label.' },
+      { key: 'kit_sent', label: 'Kit or label sent', copy: 'Check your email or mailbox for instructions.' },
+      { key: 'kit_on_the_way_to_us', label: 'In transit to us', copy: 'We are tracking your package back to our facility.' },
+      { key: 'received', label: 'Device received', copy: 'Our team is inspecting your device.' },
+      { key: 'processing', label: 'Inspection in progress', copy: 'We are validating the condition you reported.' },
+      { key: 'completed', label: 'Payout sent', copy: 'We are wrapping up payment for this order.' },
+    ];
+
+    const stageMap = {
+      order_pending: 'order_pending',
+      shipping_kit_requested: 'shipping_kit_requested',
+      kit_needs_printing: 'shipping_kit_requested',
+      needs_printing: 'shipping_kit_requested',
+      label_generated: 'kit_sent',
+      emailed: 'kit_sent',
+      kit_sent: 'kit_sent',
+      kit_delivered: 'kit_sent',
+      kit_on_the_way_to_us: 'kit_on_the_way_to_us',
+      kit_in_transit: 'kit_on_the_way_to_us',
+      phone_on_the_way: 'kit_on_the_way_to_us',
+      received: 'received',
+      device_received: 'received',
+      processing: 'processing',
+      inspected: 'processing',
+      're-offered-pending': 'processing',
+      re_offered_pending: 'processing',
+      're-offered-declined': 'processing',
+      re_offered_declined: 'processing',
+      're-offered-accepted': 'completed',
+      re_offered_accepted: 'completed',
+      requote_accepted: 'completed',
+      completed: 'completed',
+      cancelled: 'completed',
+    };
+
+    const orderIdInput = document.getElementById('orderId');
+    const customerNameInput = document.getElementById('customerName');
+    const form = document.getElementById('orderLookupForm');
+    const submitButton = document.getElementById('submitButton');
+    const formError = document.getElementById('formError');
+    const statusCard = document.getElementById('statusCard');
+    const statusPill = document.getElementById('statusPill');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusMessage = document.getElementById('statusMessage');
+    const orderSummary = document.getElementById('orderSummary');
+    const customerNameValue = document.getElementById('customerNameValue');
+    const payoutValue = document.getElementById('payoutValue');
+    const updatedValue = document.getElementById('updatedValue');
+    const progressList = document.getElementById('progressList');
+
+    function normalize(value) {
+      return (value || '').trim().toLowerCase();
+    }
+
+    function friendlyStatus(status) {
+      if (!status) return 'Unknown';
+      if (statusDescriptions[status]) {
+        return statusDescriptions[status].split('—')[0] || statusDescriptions[status];
+      }
+      return status
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (m) => m.toUpperCase());
+    }
+
+    function statusDetail(status) {
+      return statusDescriptions[status] || 'We are working on your order. Reach out if you need an update.';
+    }
+
+    function formatCurrency(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return '—';
+      return numeric.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    }
+
+    function toMillis(value) {
+      if (!value) return null;
+      if (typeof value === 'number') return value;
+      if (typeof value.toMillis === 'function') return value.toMillis();
+      if (typeof value === 'object') {
+        const seconds = value._seconds ?? value.seconds ?? null;
+        if (typeof seconds === 'number') {
+          const nanos = value._nanoseconds ?? value.nanoseconds ?? 0;
+          return seconds * 1000 + Math.floor(nanos / 1e6);
+        }
+      }
+      return null;
+    }
+
+    function resolveUpdatedAt(order = {}) {
+      const candidates = [order.updatedAt, order.updated_at, order.statusUpdatedAt, order.status_updated_at, order.createdAt, order.created_at];
+      for (const candidate of candidates) {
+        const millis = toMillis(candidate);
+        if (millis) return new Date(millis);
+      }
+      return null;
+    }
+
+    function renderProgress(statusKey) {
+      const normalized = normalize(statusKey);
+      const stageKey = stageMap[normalized] || 'order_pending';
+      const currentIndex = stageOrder.findIndex((stage) => stage.key === stageKey);
+      progressList.innerHTML = '';
+      stageOrder.forEach((stage, index) => {
+        const li = document.createElement('li');
+        li.className = 'progress-item';
+        if (index < currentIndex) li.classList.add('complete');
+        if (index === currentIndex) li.classList.add('current');
+
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+
+        const content = document.createElement('div');
+        content.className = 'content';
+
+        const title = document.createElement('h4');
+        title.textContent = stage.label;
+
+        const copy = document.createElement('p');
+        copy.textContent = stage.copy;
+
+        content.appendChild(title);
+        content.appendChild(copy);
+        li.appendChild(dot);
+        li.appendChild(content);
+        progressList.appendChild(li);
+      });
+    }
+
+    async function fetchOrder(orderId) {
+      const url = `${BACKEND_BASE_URL}/orders/find?identifier=${encodeURIComponent(orderId)}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        const message = detail.error || 'Unable to find that order.';
+        throw new Error(message);
+      }
+      return response.json();
+    }
+
+    function displayOrder(order, enteredName) {
+      const orderName = normalize(order?.shippingInfo?.fullName || order?.shippingInfo?.name || '');
+      const inputName = normalize(enteredName);
+
+      if (orderName && inputName && orderName !== inputName) {
+        throw new Error('The name you entered does not match the name on the order.');
+      }
+
+      const statusKey = normalize(order.status) || 'order_pending';
+      statusPill.textContent = friendlyStatus(statusKey);
+      statusTitle.textContent = `Status: ${friendlyStatus(statusKey)}`;
+      statusMessage.textContent = statusDetail(statusKey);
+
+      const deviceText = order.device || order.deviceName || 'Device order';
+      orderSummary.textContent = `${order.id || order.orderId || 'Order'} • ${deviceText}`;
+
+      customerNameValue.textContent = order?.shippingInfo?.fullName || order?.shippingInfo?.name || '—';
+      payoutValue.textContent = formatCurrency(order.totalPayout ?? order.estimatedQuote ?? order.originalQuote);
+
+      const updated = resolveUpdatedAt(order);
+      updatedValue.textContent = updated ? updated.toLocaleString() : '—';
+
+      renderProgress(statusKey);
+      statusCard.classList.remove('hidden');
+    }
+
+    function setLoading(isLoading) {
+      submitButton.disabled = isLoading;
+      submitButton.textContent = isLoading ? 'Checking…' : 'Check status';
+    }
+
+    function showError(message) {
+      formError.textContent = message;
+      formError.classList.remove('hidden');
+      statusCard.classList.add('hidden');
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      formError.classList.add('hidden');
+
+      const orderId = orderIdInput.value.trim();
+      const name = customerNameInput.value.trim();
+
+      if (!orderId || !name) {
+        showError('Please enter both your order ID and the full name used on the order.');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const order = await fetchOrder(orderId);
+        displayOrder(order, name);
+      } catch (error) {
+        showError(error.message || 'Unable to find your order. Please double-check the details.');
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    function applyPrefillFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const idFromUrl = params.get('orderId') || params.get('id');
+      const nameFromUrl = params.get('name') || params.get('customerName');
+
+      if (idFromUrl) {
+        orderIdInput.value = idFromUrl;
+      }
+      if (nameFromUrl) {
+        customerNameInput.value = nameFromUrl;
+      }
+
+      if (idFromUrl && nameFromUrl) {
+        form.dispatchEvent(new Event('submit'));
+      }
+    }
+
+    applyPrefillFromUrl();
+  </script>
+</body>
+</html>
