@@ -1301,7 +1301,7 @@ function createOrdersRouter({
     }
   });
 
-  router.post('/repair-label-generated', async (req, res) => {
+  async function repairLabelGeneratedOrders(req, res) {
     try {
       const snapshot = await ordersCollection.where('status', '==', 'label_generated').get();
       const timestamp = admin.firestore.FieldValue.serverTimestamp();
@@ -1319,10 +1319,12 @@ function createOrdersRouter({
             return;
           }
 
+          const targetStatus = isKitDelivery ? 'kit_needs_printing' : 'needs_printing';
+
           try {
             const needsPrintingAt = data.needsPrintingAt || timestamp;
             await updateOrderBoth(doc.id, {
-              status: 'needs_printing',
+              status: targetStatus,
               needsPrintingAt,
               lastStatusUpdateAt: timestamp,
             });
@@ -1338,7 +1340,10 @@ function createOrdersRouter({
       console.error('Failed to repair label-generated orders:', error);
       res.status(500).json({ error: 'Unable to repair label-generated orders' });
     }
-  });
+  }
+
+  router.post('/repair-label-generated', repairLabelGeneratedOrders);
+  router.post('/orders/repair-label-generated', repairLabelGeneratedOrders);
 
   return router;
 }

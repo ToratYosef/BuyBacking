@@ -684,7 +684,7 @@ async function repairStuckLabelGeneratedOrders() {
   queueStatusEl.textContent = "Scanning label generated orders for unprinted kits…";
 
   try {
-    const response = await authorisedFetch("/orders/repair-label-generated", {
+    const response = await authorisedFetch("/repair-label-generated", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
