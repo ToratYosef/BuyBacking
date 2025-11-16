@@ -6,21 +6,25 @@ import { getFirestore, collection, query, where, getDocs } from "https://www.gst
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
-function resolveBackendBaseUrl() {
+function resolveBackendBaseUrls() {
+  const urls = new Set();
+
   if (typeof window !== "undefined" && window.location?.origin) {
     const { origin } = window.location;
 
     if (origin.includes("localhost")) {
-      return "http://localhost:5001/buyback-a0f05/us-central1/api";
+      urls.add("http://localhost:5001/buyback-a0f05/us-central1/api");
+    } else {
+      urls.add(`${origin}/api`);
     }
-
-    return `${origin}/api`;
   }
 
-  return "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
+  urls.add("https://us-central1-buyback-a0f05.cloudfunctions.net/api");
+
+  return Array.from(urls);
 }
 
-const BACKEND_BASE_URL = resolveBackendBaseUrl();
+const BACKEND_BASE_URLS = resolveBackendBaseUrls();
 
 const PRINT_QUEUE_STATUSES = ["shipping_kit_requested", "kit_needs_printing", "needs_printing"];
 
@@ -382,26 +386,50 @@ async function authorisedFetch(path, options = {}) {
     }
   }
 
-  const isSameOriginApi =
-    typeof window !== "undefined" && BACKEND_BASE_URL.startsWith(window.location.origin);
+  const RETRIABLE_STATUS_CODES = new Set([404, 405]);
+  let lastResponse = null;
+  let lastError = null;
 
-  const finalOptions = {
-    method: options.method || "GET",
-    headers,
-    body: options.body,
-    mode: isSameOriginApi ? "same-origin" : "cors",
-    // Use same-origin credentials when hitting the hosting rewrite to avoid
-    // cross-site preflight requirements; otherwise omit credentials to prevent
-    // Access-Control-Allow-Credentials failures against the Cloud Functions domain.
-    credentials: isSameOriginApi ? "same-origin" : "omit",
-  };
+  for (let index = 0; index < BACKEND_BASE_URLS.length; index += 1) {
+    const baseUrl = BACKEND_BASE_URLS[index];
+    const isSameOriginApi =
+      typeof window !== "undefined" && baseUrl.startsWith(window.location.origin);
 
-  try {
-    return await fetch(`${BACKEND_BASE_URL}${path}`, finalOptions);
-  } catch (error) {
-    console.error("Network request failed:", { path, error });
-    throw error;
+    const finalOptions = {
+      method: options.method || "GET",
+      headers,
+      body: options.body,
+      mode: isSameOriginApi ? "same-origin" : "cors",
+      // Use same-origin credentials when hitting the hosting rewrite to avoid
+      // cross-site preflight requirements; otherwise omit credentials to prevent
+      // Access-Control-Allow-Credentials failures against the Cloud Functions domain.
+      credentials: isSameOriginApi ? "same-origin" : "omit",
+    };
+
+    try {
+      const response = await fetch(`${baseUrl}${path}`, finalOptions);
+      const hasFallback = index < BACKEND_BASE_URLS.length - 1;
+
+      if (hasFallback && RETRIABLE_STATUS_CODES.has(response.status)) {
+        console.warn(
+          `Backend ${baseUrl}${path} returned ${response.status}; retrying next candidate.`
+        );
+        lastResponse = response;
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      console.error("Network request failed:", { baseUrl, path, error });
+    }
   }
+
+  if (lastResponse) {
+    return lastResponse;
+  }
+
+  throw lastError || new Error("All backend fetch attempts failed.");
 }
 
 async function fetchPrintBundleFromEndpoint(path, options = {}) {
