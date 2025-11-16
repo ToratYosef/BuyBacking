@@ -37,6 +37,7 @@ const queueStatusEl = document.getElementById("queue-status");
 const tableBody = document.getElementById("print-queue-table");
 const emptyStateEl = document.getElementById("empty-state");
 const printAllBtn = document.getElementById("print-all-btn");
+const resetLabelGeneratedBtn = document.getElementById("reset-label-generated-btn");
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
 const logoutBtn = document.getElementById("logout-btn");
 const displayUserIdEl = document.getElementById("display-user-id");
@@ -46,6 +47,7 @@ const printFrame = document.getElementById("print-preview-frame");
 let queueOrders = [];
 let isLoadingQueue = false;
 let isPrinting = false;
+let isRepairing = false;
 const selectedOrderIds = new Set();
 
 const STATUS_LABELS = {
@@ -296,6 +298,7 @@ function renderTable() {
 function setQueueLoading(state) {
   isLoadingQueue = state;
   updatePrintButtonState();
+  updateRepairButtonState();
   if (!state) {
     updateSelectionUi();
   }
@@ -306,6 +309,15 @@ function updatePrintButtonState() {
   const disabled = isLoadingQueue || isPrinting || !selectedOrderIds.size;
   printAllBtn.disabled = disabled;
   printAllBtn.innerHTML = isPrinting ? PRINT_BUTTON_BUSY : buildPrintButtonIdleLabel();
+}
+
+function updateRepairButtonState() {
+  if (!resetLabelGeneratedBtn) return;
+  const disabled = isLoadingQueue || isPrinting || isRepairing;
+  resetLabelGeneratedBtn.disabled = disabled;
+  resetLabelGeneratedBtn.innerHTML = isRepairing
+    ? `${ICON_SPINNER} Resetting`
+    : `${ICON_PRINTER} Fix Unprinted Labels`;
 }
 
 async function fetchQueueOrders() {
@@ -662,6 +674,46 @@ async function handleBatchPrint() {
   }
 }
 
+async function repairStuckLabelGeneratedOrders() {
+  if (isRepairing) {
+    return;
+  }
+
+  console.info("Repairing label_generated kit orders...");
+  isRepairing = true;
+  updateRepairButtonState();
+  queueStatusEl.textContent = "Scanning label generated orders for unprinted kits…";
+
+  try {
+    const response = await authorisedFetch("/repair-label-generated", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Repair request failed (${response.status}): ${detail || "no response body"}`);
+    }
+
+    const payload = await response.json();
+    const processed = payload?.processedCount ?? 0;
+    const updated = payload?.updatedCount ?? 0;
+
+    queueStatusEl.textContent = `Reviewed ${processed} label-generated order${processed === 1 ? "" : "s"} and reset ${updated} to Needs Printing.`;
+    console.info("Repair complete", { processed, updated });
+    await loadQueue();
+  } catch (error) {
+    console.error("Failed to repair label-generated orders:", error);
+    const detail = error?.message || "Unknown error";
+    queueStatusEl.textContent = `Unable to reset label-generated orders: ${detail}`;
+  } finally {
+    isRepairing = false;
+    updateRepairButtonState();
+  }
+}
+
 function attachEventListeners() {
   if (logoutBtn) {
     logoutBtn.addEventListener("click", async () => {
@@ -672,6 +724,11 @@ function attachEventListeners() {
   if (printAllBtn) {
     printAllBtn.addEventListener("click", handleBatchPrint);
     updatePrintButtonState();
+  }
+
+  if (resetLabelGeneratedBtn) {
+    resetLabelGeneratedBtn.addEventListener("click", repairStuckLabelGeneratedOrders);
+    updateRepairButtonState();
   }
 
   if (tableBody) {
