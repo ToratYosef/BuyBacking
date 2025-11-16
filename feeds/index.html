@@ -284,6 +284,15 @@
       </p>
     </div>
 
+    <!-- NEW: DEVICES CSV UPLOAD FOR CSV → XML -->
+    <div class="field">
+      <label for="devicesCsvFile">Devices CSV → XML (devices_mapping.csv)</label>
+      <input type="file" id="devicesCsvFile" accept=".csv">
+      <p class="small">
+        Upload the CSV exported by "Download devices CSV". We will convert it back into XML &lt;model&gt; blocks.
+      </p>
+    </div>
+
     <div class="status-bar" id="fileStatusBar">
       <span><span class="highlight">Ready.</span> Upload both XML files.</span>
       <span id="fileStats"></span>
@@ -429,6 +438,11 @@
 
     <div class="btn-row">
       <button class="btn-secondary" id="previewBtn" type="button">Preview price changes</button>
+      <button class="btn-secondary" id="downloadCsvBtn" type="button" disabled>Download feed CSV</button>
+      <!-- NEW: devices CSV export -->
+      <button class="btn-secondary" id="downloadModelsCsvBtn" type="button" disabled>Download devices CSV</button>
+      <!-- NEW: CSV → XML -->
+      <button class="btn-secondary" id="devicesCsvToXmlBtn" type="button">CSV → devices.xml</button>
       <button class="btn-primary" id="downloadBtn" type="button" disabled>Download output.xml</button>
     </div>
 
@@ -454,6 +468,7 @@
 <script>
   const inputFileEl = document.getElementById('inputFile');
   const feedFileEl = document.getElementById('feedFile');
+  const devicesCsvFileEl = document.getElementById('devicesCsvFile'); // NEW
   const globalAddEl = document.getElementById('globalAdd');
   const rulesJsonEl = document.getElementById('rulesJson');
   const brandFilterEl = document.getElementById('brandFilter');
@@ -466,6 +481,9 @@
   const previewContainerEl = document.getElementById('previewContainer');
   const previewBtn = document.getElementById('previewBtn');
   const downloadBtn = document.getElementById('downloadBtn');
+  const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+  const downloadModelsCsvBtn = document.getElementById('downloadModelsCsvBtn'); // NEW
+  const devicesCsvToXmlBtn = document.getElementById('devicesCsvToXmlBtn'); // NEW
 
   // Offsets builder elements
   const offsetTargetTypeEl = document.getElementById('offsetTargetType');
@@ -479,6 +497,7 @@
   let latestOutputXml = '';
   let latestPreviewRows = [];
   let latestInputDoc = null;
+  let latestCsvRows = [];
 
   // Sorting state for Step 3 preview table
   const headerTitles = [
@@ -911,14 +930,25 @@
     setStatus('New price overridden for this row (will be used in output.xml).', false);
   }
 
+  function csvEscape(value) {
+    const str = String(value ?? '');
+    if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  }
+
   async function previewChanges() {
     setStatus('Reading files...', false);
     setStats('');
     latestOutputXml = '';
     latestPreviewRows = [];
     latestInputDoc = null;
+    latestCsvRows = [];
     previewContainerEl.innerHTML = '';
     currentSort = { key: null, direction: 'asc' }; // reset sort on new preview
+    downloadCsvBtn.disabled = true;
+    downloadModelsCsvBtn.disabled = true; // reset
 
     const inputFile = inputFileEl.files && inputFileEl.files[0];
     const feedFile = feedFileEl.files && feedFileEl.files[0];
@@ -968,6 +998,7 @@
     let modelsTouched = 0;
     let pricesChanged = 0;
     const previewRows = [];
+    const csvRows = [];
 
     for (const model of models) {
       const parentDevice = model.getElementsByTagName('parentDevice')[0]?.textContent || '';
@@ -1017,6 +1048,17 @@
             const feedPrice = maxMap.get(feedKey);
             if (feedPrice == null) continue;
 
+            // CSV row (feed prices for devices in input)
+            const qualityLabel = quality === 'broken' ? 'damaged' : quality;
+            csvRows.push({
+              modelName,
+              storage: storageSize,
+              status,
+              qualityLabel,
+              price: feedPrice
+            });
+
+            // Existing logic to compute new price and preview changes
             const oldVal = Number(qNode.textContent.trim());
             const oldNumeric = Number.isNaN(oldVal) ? null : oldVal;
 
@@ -1061,6 +1103,7 @@
     const serializer = new XMLSerializer();
     latestOutputXml = serializer.serializeToString(inputDoc);
     latestPreviewRows = previewRows;
+    latestCsvRows = csvRows;
 
     const stats = `Feed combos (highest per combo): ${combos} · Models updated: ${modelsTouched} · Prices changed: ${pricesChanged}`;
     renderPreviewTable(previewRows, stats);
@@ -1071,6 +1114,17 @@
     } else {
       setStatus('No changes applied with current filters/rules.', false);
       downloadBtn.disabled = false; // still allow identical copy
+    }
+
+    if (latestCsvRows.length > 0) {
+      downloadCsvBtn.disabled = false;
+    } else {
+      downloadCsvBtn.disabled = true;
+    }
+
+    // Enable devices CSV as soon as we have a parsed input.xml
+    if (models.length > 0) {
+      downloadModelsCsvBtn.disabled = false;
     }
   }
 
@@ -1093,6 +1147,296 @@
     URL.revokeObjectURL(url);
     setStatus('output.xml downloaded with your overrides.', false);
   }
+
+  function downloadFeedCsv() {
+    if (!latestCsvRows.length) {
+      setStatus('No feed prices to export – run preview first.', true);
+      return;
+    }
+
+    let csv = 'Model,Storage,Status,Quality,Price\n';
+    for (const row of latestCsvRows) {
+      const fields = [
+        row.modelName,
+        row.storage,
+        row.status,
+        row.qualityLabel,
+        row.price.toFixed(2)
+      ];
+      csv += fields.map(csvEscape).join(',') + '\n';
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'feed_prices.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus('Feed CSV downloaded (feed prices for devices found in input.xml).', false);
+  }
+
+  // NEW: export devices CSV from <model> structure (with Price)
+  function downloadDevicesCsv() {
+    if (!latestInputDoc) {
+      setStatus('No input.xml loaded yet – run preview first.', true);
+      return;
+    }
+
+    const models = Array.from(latestInputDoc.getElementsByTagName('model'));
+    if (!models.length) {
+      setStatus('No <model> nodes found in input.xml.', true);
+      return;
+    }
+
+    // Header with Price included
+    let csv = 'Device name,Model Id,Storage,Status,Quality,Price,imageUrl,Name,Brand,Deeplink\n';
+
+    for (const model of models) {
+      const parentDevice = model.getElementsByTagName('parentDevice')[0]?.textContent || '';
+      const modelId = model.getElementsByTagName('modelID')[0]?.textContent || '';
+      const imageUrl = model.getElementsByTagName('imageUrl')[0]?.textContent || '';
+      const name = model.getElementsByTagName('name')[0]?.textContent || '';
+      const brand = model.getElementsByTagName('brand')[0]?.textContent ||
+                    model.getElementsByTagName('parentDevice')[0]?.textContent ||
+                    '';
+      const deeplink = model.getElementsByTagName('deeplink')[0]?.textContent || '';
+
+      const pricesNodes = Array.from(model.getElementsByTagName('prices'));
+      for (const pNode of pricesNodes) {
+        const storageNode = pNode.getElementsByTagName('storageSize')[0];
+        const priceValueNode = pNode.getElementsByTagName('priceValue')[0];
+        if (!storageNode || !priceValueNode) continue;
+
+        const storage = (storageNode.textContent || '').trim();
+        const statuses = ['locked', 'unlocked'];
+
+        for (const status of statuses) {
+          const statusNode = priceValueNode.getElementsByTagName(status)[0];
+          if (!statusNode) continue;
+
+          // Support both <damaged> and <broken>, convert broken -> damaged label
+          const qualityTags = ['flawless', 'good', 'fair', 'damaged', 'broken'];
+          for (const qTag of qualityTags) {
+            const qNode = statusNode.getElementsByTagName(qTag)[0];
+            if (!qNode) continue;
+
+            const qualityLabel = qTag === 'broken' ? 'damaged' : qTag;
+            const price = (qNode.textContent || '').trim();
+
+            const fields = [
+              parentDevice,   // Device name
+              modelId,        // Model Id
+              storage,        // Storage
+              status,         // Status
+              qualityLabel,   // Quality
+              price,          // Price
+              imageUrl,       // imageUrl
+              name,           // Name
+              brand,          // Brand
+              deeplink        // Deeplink
+            ];
+            csv += fields.map(csvEscape).join(',') + '\n';
+          }
+        }
+      }
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'devices_mapping.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus('Devices CSV downloaded (flattened model / storage / status / quality / price).', false);
+  }
+
+  // --- CSV → XML from devices_mapping.csv ---
+
+  function cleanCsvCell(raw) {
+    let s = (raw || '').trim();
+    if (s.startsWith('"') && s.endsWith('"')) {
+      s = s.slice(1, -1).replace(/""/g, '"');
+    }
+    return s;
+  }
+
+  function parseDevicesCsvText(text) {
+    const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+    if (!lines.length) {
+      throw new Error('CSV is empty.');
+    }
+
+    const headerCells = lines[0].split(',').map(cleanCsvCell);
+    const indexByKey = {};
+    headerCells.forEach((h, i) => {
+      const key = h.toLowerCase().replace(/\s+/g, '');
+      indexByKey[key] = i;
+    });
+
+    const requiredKeys = [
+      'devicename',
+      'modelid',
+      'storage',
+      'status',
+      'quality',
+      'price',
+      'imageurl',
+      'name',
+      'brand',
+      'deeplink'
+    ];
+    for (const k of requiredKeys) {
+      if (!(k in indexByKey)) {
+        throw new Error('Missing required CSV column: ' + k);
+      }
+    }
+
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const parts = line.split(',').map(cleanCsvCell);
+      if (parts.length < headerCells.length) continue;
+
+      function get(key) {
+        const idx = indexByKey[key];
+        return cleanCsvCell(parts[idx] ?? '');
+      }
+
+      rows.push({
+        deviceName: get('devicename'),
+        modelId: get('modelid'),
+        storage: get('storage'),
+        status: get('status'),
+        quality: get('quality'),
+        price: get('price'),
+        imageUrl: get('imageurl'),
+        name: get('name'),
+        brand: get('brand'),
+        deeplink: get('deeplink')
+      });
+    }
+
+    return rows;
+  }
+
+  function xmlEscape(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  }
+
+  function buildXmlFromDevicesRows(rows) {
+  // Group by model: same deviceName/modelId/name/brand/imageUrl/deeplink
+  const modelsMap = new Map();
+
+  for (const row of rows) {
+    const key = [
+      row.deviceName,
+      row.modelId,
+      row.name,
+      row.brand,
+      row.imageUrl,
+      row.deeplink
+    ].join('||');
+
+    if (!modelsMap.has(key)) {
+      modelsMap.set(key, {
+        deviceName: row.deviceName,
+        modelId: row.modelId,
+        name: row.name,
+        brand: row.brand,
+        imageUrl: row.imageUrl,
+        deeplink: row.deeplink,
+        // storage -> status -> quality -> price
+        prices: {}
+      });
+    }
+
+    const model = modelsMap.get(key);
+
+    const storage = (row.storage || '').trim();
+    if (!storage) continue;
+
+    // Normalise status: anything containing "unlock" becomes unlocked, else locked
+    let status = (row.status || '').toLowerCase();
+    status = status.includes('unlock') ? 'unlocked' : 'locked';
+
+    // Normalise quality to XML tags
+    let q = (row.quality || '').toLowerCase();
+    if (q === 'broken') q = 'damaged'; // our XML uses <damaged>
+
+    const allowedQualities = ['flawless', 'good', 'fair', 'damaged'];
+    if (!allowedQualities.includes(q)) continue;
+
+    const priceNum = Number(row.price);
+    if (Number.isNaN(priceNum)) continue;
+
+    if (!model.prices[storage]) model.prices[storage] = {};
+    if (!model.prices[storage][status]) model.prices[storage][status] = {};
+    model.prices[storage][status][q] = priceNum;
+  }
+
+  // Build XML string
+  let xml = "<?xml version='1.0' encoding='UTF-8'?>\n<models>\n";
+
+  const qualityOrder = ['flawless', 'good', 'fair', 'damaged'];
+  const statusOrder = ['locked', 'unlocked'];
+
+  for (const model of modelsMap.values()) {
+    xml += '  <model>\n';
+    xml += '    <parentDevice>' + xmlEscape(model.deviceName) + '</parentDevice>\n';
+    xml += '    <modelID>' + xmlEscape(model.modelId) + '</modelID>\n';
+
+    // prices blocks
+    const storageKeys = Object.keys(model.prices).sort();
+    for (const storage of storageKeys) {
+      xml += '    <prices>\n';
+      xml += '      <storageSize>' + xmlEscape(storage) + '</storageSize>\n';
+      xml += '      <priceValue>\n';
+
+      for (const status of statusOrder) {
+        const bucket = model.prices[storage][status];
+        if (!bucket) continue;
+
+        xml += '        <' + status + '>\n';
+        for (const q of qualityOrder) {
+          const priceNum = bucket[q];
+          if (priceNum == null) continue;
+          xml +=
+            '          <' + q + '>' +
+            priceNum.toFixed(2) +
+            '</' + q + '>\n';
+        }
+        xml += '        </' + status + '>\n';
+      }
+
+      xml += '      </priceValue>\n';
+      xml += '    </prices>\n';
+    }
+
+    // metadata (same pattern as your example)
+    xml += '    <slug>' + xmlEscape(model.modelId) + '</slug>\n';
+    xml += '    <imageUrl>' + xmlEscape(model.imageUrl) + '</imageUrl>\n';
+    xml += '    <name>' + xmlEscape(model.name) + '</name>\n';
+    xml += '    <brand>' + xmlEscape(model.brand) + '</brand>\n';
+    xml += '    <deeplink>' + xmlEscape(model.deeplink) + '</deeplink>\n';
+    xml += '  </model>\n';
+  }
+
+  xml += '</models>\n';
+  return xml;
+}
+
 
   function addOffsetRule() {
     const type = offsetTargetTypeEl.value;
@@ -1162,6 +1506,60 @@
   });
 
   downloadBtn.addEventListener('click', downloadOutput);
+  downloadCsvBtn.addEventListener('click', downloadFeedCsv);
+  downloadModelsCsvBtn.addEventListener('click', downloadDevicesCsv);
+  devicesCsvToXmlBtn.addEventListener('click', () => {
+    handleDevicesCsvToXml().catch(err => {
+      console.error(err);
+      setStatus('Unexpected error converting CSV to XML.', true);
+    });
+  });
+  async function handleDevicesCsvToXml() {
+  const file = devicesCsvFileEl.files && devicesCsvFileEl.files[0];
+  if (!file) {
+    setStatus('Upload a devices CSV first (devices_mapping.csv).', true);
+    return;
+  }
+
+  setStatus('Reading devices CSV…', false);
+
+  let text;
+  try {
+    text = await readFileAsText(file);
+  } catch (err) {
+    console.error(err);
+    setStatus('Error reading devices CSV file.', true);
+    return;
+  }
+
+  let rows;
+  try {
+    rows = parseDevicesCsvText(text);
+  } catch (err) {
+    console.error(err);
+    setStatus(err.message || 'Error parsing devices CSV.', true);
+    return;
+  }
+
+  if (!rows.length) {
+    setStatus('Devices CSV contains no data rows.', true);
+    return;
+  }
+
+  // Build XML from rows and trigger download
+  const xml = buildXmlFromDevicesRows(rows);
+  const blob = new Blob([xml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'devices_from_csv.xml';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  setStatus('devices_from_csv.xml downloaded from devices CSV.', false);
+}
   addOffsetRuleBtn.addEventListener('click', addOffsetRule);
 </script>
 </body>
