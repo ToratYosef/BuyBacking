@@ -170,6 +170,11 @@ function isLabelGenerationStage(order = {}) {
   return false;
 }
 
+function collapsePhoneTransitStatus(status = '') {
+  const normalized = (status || '').toLowerCase();
+  return normalized === 'phone_on_the_way' ? 'phone_on_the_way_to_us' : normalized;
+}
+
 function resolveReminderStatusKey(order = {}) {
   const normalized = (order?.status || '').toLowerCase();
   if (normalized === 'emailed' && isLegacyEmailLabelStatus(order)) {
@@ -253,6 +258,8 @@ const bulkSelectionCount = document.getElementById('bulk-selection-count');
 const refreshAllKitTrackingBtn = document.getElementById('refresh-all-kit-tracking');
 const refreshAllEmailTrackingBtn = document.getElementById('refresh-all-email-tracking');
 const bulkGenerateLabelsBtn = document.getElementById('bulk-generate-labels');
+const bulkReminderEmailsBtn = document.getElementById('bulk-reminder-emails');
+const toggleHideCanceledBtn = document.getElementById('toggle-hide-canceled');
 
 const KIT_STATUS_HINTS = new Set([
   'shipping_kit_requested',
@@ -314,6 +321,7 @@ const TRACKING_POST_RECEIVED_STATUSES = new Set([
 const selectedOrderIds = new Set();
 let lastRenderedOrderIds = [];
 let isBulkLabelGenerationInProgress = false;
+let hideCanceledOrders = false;
 
 // Insight metric elements
 const ordersTodayCount = document.getElementById('orders-today-count');
@@ -644,6 +652,10 @@ function updateBulkSelectionUI() {
     }
   }
 
+  if (bulkReminderEmailsBtn) {
+    bulkReminderEmailsBtn.disabled = selectedCount === 0;
+  }
+
   if (selectAllOrdersCheckbox) {
     if (!lastRenderedOrderIds.length) {
       selectAllOrdersCheckbox.checked = false;
@@ -657,6 +669,17 @@ function updateBulkSelectionUI() {
   }
 
   syncRowSelectionCheckboxes();
+}
+
+function updateHideCanceledToggleUI() {
+  if (!toggleHideCanceledBtn) {
+    return;
+  }
+  toggleHideCanceledBtn.classList.toggle('active', hideCanceledOrders);
+  const labelSpan = toggleHideCanceledBtn.querySelector('span');
+  if (labelSpan) {
+    labelSpan.textContent = hideCanceledOrders ? 'Show Cancelled' : 'Hide Cancelled';
+  }
 }
 
 async function handleBulkStatusUpdate() {
@@ -763,6 +786,89 @@ async function handleBulkLabelGeneration() {
   renderOrders();
 }
 
+async function handleBulkReminderEmails() {
+  const orderIds = Array.from(selectedOrderIds);
+  if (!orderIds.length) {
+    updateBulkSelectionUI();
+    return;
+  }
+
+  const thresholdInput = window.prompt(
+    'Send reminders for orders below this payout amount (leave blank to include all):',
+    ''
+  );
+
+  const thresholdProvided = thresholdInput !== null && thresholdInput.trim() !== '';
+  const parsedThreshold = Number.parseFloat(thresholdInput);
+  const useThreshold = thresholdProvided && Number.isFinite(parsedThreshold);
+
+  const expiringStatuses = new Set(EXPIRING_REMINDER_STATUSES.map(collapsePhoneTransitStatus));
+  const sendExpiringReminderEmail = httpsCallable(functions, 'sendExpiringReminderEmail');
+  const sendKitReminderEmail = httpsCallable(functions, 'sendKitReminderEmail');
+
+  let sentCount = 0;
+  const skipped = [];
+  const failures = [];
+
+  if (bulkReminderEmailsBtn) {
+    bulkReminderEmailsBtn.disabled = true;
+    bulkReminderEmailsBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending…</span>';
+  }
+
+  for (const orderId of orderIds) {
+    const order = allOrders.find((entry) => entry.id === orderId);
+    if (!order) {
+      skipped.push(orderId);
+      continue;
+    }
+
+    const payout = getOrderPayout(order);
+    if (useThreshold && payout >= parsedThreshold) {
+      skipped.push(orderId);
+      continue;
+    }
+
+    const normalizedStatus = collapsePhoneTransitStatus(order.status);
+
+    try {
+      if (normalizedStatus === 'kit_delivered') {
+        await sendKitReminderEmail({ orderId });
+        sentCount += 1;
+        continue;
+      }
+
+      if (expiringStatuses.has(normalizedStatus)) {
+        await sendExpiringReminderEmail({ orderId });
+        sentCount += 1;
+        continue;
+      }
+
+      skipped.push(orderId);
+    } catch (error) {
+      console.error('Bulk reminder failed for', orderId, error);
+      failures.push(orderId);
+    }
+  }
+
+  const parts = [];
+  if (sentCount) {
+    parts.push(`✅ Sent reminders for ${sentCount} order${sentCount === 1 ? '' : 's'}`);
+  }
+  if (failures.length) {
+    parts.push(`❌ Failed: ${failures.join(', ')}`);
+  }
+  if (skipped.length) {
+    parts.push(`ℹ️ Skipped: ${skipped.join(', ')}`);
+  }
+
+  alert(parts.join('\n'));
+
+  if (bulkReminderEmailsBtn) {
+    bulkReminderEmailsBtn.disabled = selectedOrderIds.size === 0;
+    bulkReminderEmailsBtn.innerHTML = '<i class="fas fa-clock"></i><span>Send Reminders (Selected)</span>';
+  }
+}
+
 try {
   populateBulkStatusSelect();
 } catch (error) {
@@ -792,6 +898,19 @@ if (refreshAllEmailTrackingBtn) {
 
 if (bulkGenerateLabelsBtn) {
   bulkGenerateLabelsBtn.addEventListener('click', handleBulkLabelGeneration);
+}
+
+if (bulkReminderEmailsBtn) {
+  bulkReminderEmailsBtn.addEventListener('click', handleBulkReminderEmails);
+}
+
+if (toggleHideCanceledBtn) {
+  toggleHideCanceledBtn.addEventListener('click', () => {
+    hideCanceledOrders = !hideCanceledOrders;
+    updateHideCanceledToggleUI();
+    filterAndRenderOrders(currentActiveStatus, currentSearchTerm, { preservePage: true });
+  });
+  updateHideCanceledToggleUI();
 }
 
 if (selectAllOrdersCheckbox) {
@@ -3723,6 +3842,7 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function updateDashboardCounts(ordersData) {
+const phoneTransitCount = ordersData.filter((o) => collapsePhoneTransitStatus(o.status) === 'phone_on_the_way_to_us').length;
 const statusCounts = {
   'order_pending': ordersData.filter(o => o.status === 'order_pending').length,
   'kit_needs_printing': ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
@@ -3733,8 +3853,8 @@ const statusCounts = {
   'delivered_to_us': ordersData.filter(o => o.status === 'delivered_to_us').length,
   'label_generated': ordersData.filter(order => isLabelGenerationStage(order)).length,
   'emailed': ordersData.filter(order => isBalanceEmailStatus(order)).length,
-  'phone_on_the_way': ordersData.filter(o => o.status === 'phone_on_the_way').length,
-  'phone_on_the_way_to_us': ordersData.filter(o => o.status === 'phone_on_the_way_to_us').length,
+  'phone_on_the_way': phoneTransitCount,
+  'phone_on_the_way_to_us': phoneTransitCount,
   'received': ordersData.filter(o => o.status === 'received').length,
   'completed': ordersData.filter(o => o.status === 'completed').length,
   're-offered-pending': ordersData.filter(o => o.status === 're-offered-pending').length,
@@ -4828,7 +4948,7 @@ modalActivityLog.classList.remove('hidden');
 * @param {Object} order - The order object.
 */
 function formatStatus(order) {
-const status = order.status;
+const status = collapsePhoneTransitStatus(order.status);
 const preference = order.shippingPreference;
 const normalizedStatus = (status || '').toLowerCase();
 const normalizedPreference = (preference || '').toString().toLowerCase();
@@ -4875,21 +4995,15 @@ const legacyEmailStatus = normalizedStatus === 'emailed' && isLegacyEmailLabelSt
 if (normalizedStatus === 'label_generated' || legacyEmailStatus) {
 const isEmailPreference = normalizedPreference === 'email label requested';
 if (isEmailPreference) {
-  if (acceptedWithoutEta) {
-    return 'Label Generated';
-  }
-  return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
+  return 'Label Generated';
 }
 return 'Kit Sent';
 }
 if (normalizedStatus === 'emailed') {
 return 'Balance Email Sent';
 }
-if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
-if (acceptedWithoutEta) {
-  return 'Label Generated';
-}
-return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
+if (normalizedStatus === 'phone_on_the_way_to_us') {
+return 'Phone On The Way To Us';
 }
 // Fallback for other statuses
 return normalizedStatus.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -7106,6 +7220,13 @@ order.id.toLowerCase().includes(lowerCaseSearchTerm) ||
 
 if (IS_AGING_PAGE) {
 filtered = filtered.filter(isAgingCandidate);
+}
+
+if (hideCanceledOrders) {
+  filtered = filtered.filter((order) => {
+    const normalized = collapsePhoneTransitStatus(order.status);
+    return !['cancelled', 'canceled', 'order_cancelled'].includes(normalized);
+  });
 }
 
 filtered.sort((a, b) => {
