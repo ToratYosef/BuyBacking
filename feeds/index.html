@@ -221,7 +221,7 @@
       color: #9ca3af;
       font-size: 0.72rem;
       background: #020617;
-      cursor: pointer; /* indicate clickable for sorting */
+      cursor: pointer;      /* clickable for sorting */
       user-select: none;
     }
     tbody tr:nth-child(even) {
@@ -480,7 +480,7 @@
   let latestPreviewRows = [];
   let latestInputDoc = null;
 
-  // Sorting state
+  // Sorting state for Step 3 preview table
   const headerTitles = [
     'Brand', 'Model', 'Model ID', 'Storage',
     'Status', 'Quality', 'Old', 'Feed', 'New', 'Δ'
@@ -530,7 +530,7 @@
     return (str || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
-  // Canonical model key so feed + input names line up (iPhone, Samsung, etc.)
+  // Canonical model key so feed + input names line up
   function canonicalModelKey(brand, name) {
     let s = ((brand || '') + ' ' + (name || '')).trim().toLowerCase();
     s = s.replace(/\s+/g, ' ');
@@ -554,7 +554,6 @@
     s = s.replace(/\bplus\b/g, '+');
     s = s.replace(/ \+/g, '+').replace(/\+ /g, '+');
 
-    // normalize leftover spacing
     s = s.replace(/\s+/g, ' ').trim();
     return s;
   }
@@ -615,7 +614,7 @@
     return extra;
   }
 
-  // Map SellCell network strings → locked/unlocked bucket
+  // network -> locked/unlocked
   function networkToStatus(network, lockedCarriersSet) {
     const n = normaliseStr(network);
 
@@ -631,7 +630,6 @@
     if (lockedCarriersSet.has('sprint') && n.includes('sprint')) return 'locked';
     if (lockedCarriersSet.has('other') && (n === 'other' || n.includes('other'))) return 'locked';
 
-    // fallback: unknown networks count as locked
     return 'locked';
   }
 
@@ -729,7 +727,6 @@
     const qualityOrder = { flawless: 0, good: 1, fair: 2, broken: 3 };
 
     if (!currentSort.key) {
-      // Default grouping: brand → model → storage → status → quality
       rows.sort((a, b) => {
         return (
           normaliseStr(a.brand).localeCompare(normaliseStr(b.brand)) ||
@@ -766,7 +763,7 @@
       // Numeric keys
       if (['oldNumeric', 'feedPrice', 'newNumeric', 'delta'].includes(key)) {
         if (aVal == null && bVal == null) return 0;
-        if (aVal == null) return 1; // nulls last
+        if (aVal == null) return 1;
         if (bVal == null) return -1;
         if (aVal === bVal) return 0;
         return aVal < bVal ? -1 * dir : 1 * dir;
@@ -796,7 +793,7 @@
     setStatus('Sorted by ' + label + ' (' + currentSort.direction + ')', false);
   }
 
-  // Preview table with per-model grouping & sortable headers
+  // Render preview table (sortable)
   function renderPreviewTable(rows, stats) {
     if (typeof stats === 'string') {
       lastStatsText = stats;
@@ -809,7 +806,7 @@
       return;
     }
 
-    // Sort rows in place according to currentSort or default
+    // Sort rows according to current sort or default grouping
     sortRows(rows);
 
     const headCells = headerTitles.map((label, i) => {
@@ -1063,7 +1060,7 @@
     latestInputDoc = inputDoc;
     const serializer = new XMLSerializer();
     latestOutputXml = serializer.serializeToString(inputDoc);
-    latestPreviewRows = previewRows; // IMPORTANT: same array that gets sorted in renderPreviewTable
+    latestPreviewRows = previewRows;
 
     const stats = `Feed combos (highest per combo): ${combos} · Models updated: ${modelsTouched} · Prices changed: ${pricesChanged}`;
     renderPreviewTable(previewRows, stats);
