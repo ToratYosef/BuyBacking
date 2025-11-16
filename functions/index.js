@@ -2074,9 +2074,10 @@ async function addAdminFirestoreNotification(
 
 async function createShipEngineLabel(fromAddress, toAddress, labelReference, packageData) {
   const isSandbox = false;
+  const serviceCode = packageData?.service_code || "usps_ground_advantage";
   const payload = {
     shipment: {
-      service_code: packageData.service_code,
+      service_code: serviceCode,
       ship_to: toAddress,
       ship_from: fromAddress,
       packages: [
@@ -2088,6 +2089,9 @@ async function createShipEngineLabel(fromAddress, toAddress, labelReference, pac
             width: packageData.dimensions.width,
             length: packageData.dimensions.length,
           },
+          // USPS requires hazmat metadata for lithium batteries and related materials.
+          hazmat: true,
+          hazmat_type: "surface",
           label_messages: {
             reference1: labelReference,
           },
@@ -3451,7 +3455,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
 
     // Package data for the return label (phone inside kit)
     const returnPackageData = {
-      service_code: "usps_first_class_mail",
+      service_code: "usps_ground_advantage",
       dimensions: { unit: "inch", height: 2, width: 4, length: 6 },
       weight: { ounces: 8, unit: "ounce" }, // Phone weighs 8oz
     };
