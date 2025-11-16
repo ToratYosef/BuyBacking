@@ -172,6 +172,21 @@
     </footer>
   `;
 
+  const removeLegacySections = () => {
+    const candidates = [
+      ...document.querySelectorAll('body > header'),
+      ...document.querySelectorAll('body > footer'),
+      ...document.querySelectorAll('header.site-header'),
+      ...document.querySelectorAll('footer.site-footer'),
+    ];
+
+    candidates.forEach((el) => {
+      if (!el.classList.contains('shc-global-header') && !el.classList.contains('shc-global-footer')) {
+        el.remove();
+      }
+    });
+  };
+
   const appendIfMissing = (selector, html, position = 'afterbegin') => {
     if (!document.querySelector(selector)) {
       const wrapper = document.createElement('div');
@@ -187,10 +202,12 @@
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+      removeLegacySections();
       appendIfMissing('.shc-global-header', headerHtml, 'afterbegin');
       appendIfMissing('.shc-global-footer', footerHtml, 'beforeend');
     });
   } else {
+    removeLegacySections();
     appendIfMissing('.shc-global-header', headerHtml, 'afterbegin');
     appendIfMissing('.shc-global-footer', footerHtml, 'beforeend');
   }
