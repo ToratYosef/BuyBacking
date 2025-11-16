@@ -679,6 +679,7 @@ async function repairStuckLabelGeneratedOrders() {
     return;
   }
 
+  console.info("Repairing label_generated kit orders...");
   isRepairing = true;
   updateRepairButtonState();
   queueStatusEl.textContent = "Scanning label generated orders for unprinted kits…";
@@ -693,7 +694,7 @@ async function repairStuckLabelGeneratedOrders() {
 
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Repair request failed (${response.status}): ${detail}`);
+      throw new Error(`Repair request failed (${response.status}): ${detail || "no response body"}`);
     }
 
     const payload = await response.json();
@@ -701,10 +702,12 @@ async function repairStuckLabelGeneratedOrders() {
     const updated = payload?.updatedCount ?? 0;
 
     queueStatusEl.textContent = `Reviewed ${processed} label-generated order${processed === 1 ? "" : "s"} and reset ${updated} to Needs Printing.`;
+    console.info("Repair complete", { processed, updated });
     await loadQueue();
   } catch (error) {
     console.error("Failed to repair label-generated orders:", error);
-    queueStatusEl.textContent = "Unable to reset label-generated orders. Please try again.";
+    const detail = error?.message || "Unknown error";
+    queueStatusEl.textContent = `Unable to reset label-generated orders: ${detail}`;
   } finally {
     isRepairing = false;
     updateRepairButtonState();
