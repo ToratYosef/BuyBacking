@@ -1,8 +1,8 @@
 import xml.etree.ElementTree as ET
 import csv
 
-INPUT_XML = "output.xml"      # change to your actual filename
-OUTPUT_CSV = "prices_coinvgferthyedjki.csv"
+INPUT_XML = "now.xml"      # change to your actual filename
+OUTPUT_CSV = "d.csv"
 
 # Order we want
 STATUS_ORDER = ["locked", "unlocked"]
