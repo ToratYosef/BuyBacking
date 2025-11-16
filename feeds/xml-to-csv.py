@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 import csv
 
-INPUT_XML = "55.xml"      # change to your actual filename
+INPUT_XML = "output.xml"      # change to your actual filename
 OUTPUT_CSV = "prices_coinvgferthyedjki.csv"
 
 # Order we want
