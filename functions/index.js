@@ -891,6 +891,17 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     return;
   }
 
+  const normalizedStatus = (order?.status || "").toLowerCase();
+  if (normalizedStatus === PHONE_TRANSIT_STATUS) {
+    console.warn(`Void notification suppressed for ${order.id}: already marked in transit.`);
+    return;
+  }
+
+  if (normalizedStatus !== "label_generated") {
+    console.warn(`Void notification suppressed for ${order.id}: status is ${normalizedStatus || "unknown"}.`);
+    return;
+  }
+
   const approvedResults = results.filter((result) => result.approved);
   if (!approvedResults.length) {
     return;
@@ -958,6 +969,11 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     subject,
     text: textBody,
     html: htmlBody,
+  });
+
+  await updateOrderBoth(order.id, {
+    status: "cancelled",
+    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
 
@@ -2104,13 +2120,33 @@ async function createShipEngineLabel(fromAddress, toAddress, labelReference, pac
     );
   }
 
-  const response = await axios.post("https://api.shipengine.com/v1/labels", payload, {
-    headers: {
-      "API-Key": shipEngineApiKey,
-      "Content-Type": "application/json",
-    },
-  });
-  return response.data;
+  try {
+    const response = await axios.post("https://api.shipengine.com/v1/labels", payload, {
+      headers: {
+        "API-Key": shipEngineApiKey,
+        "Content-Type": "application/json",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    const status = error?.response?.status;
+    const detail = error?.response?.data || error?.message || error;
+    console.error(
+      "ShipEngine label generation failed",
+      typeof detail === "string" ? detail : JSON.stringify(detail)
+    );
+
+    const messagePrefix =
+      typeof detail === "object" && detail?.errors?.length
+        ? detail.errors.map((entry) => entry.message).join("; ")
+        : detail;
+
+    const errorMessage = messagePrefix || "ShipEngine label generation failed";
+    const wrappedError = new Error(errorMessage);
+    if (status) wrappedError.status = status;
+    wrappedError.responseData = detail;
+    throw wrappedError;
+  }
 }
 
 function formatStatusForEmail(status) {

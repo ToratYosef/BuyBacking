@@ -6,7 +6,25 @@ import { getFirestore, collection, query, where, getDocs } from "https://www.gst
 const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
-const BACKEND_BASE_URL = "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
+function resolveBackendBaseUrls() {
+  const urls = new Set();
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    const { origin } = window.location;
+
+    if (origin.includes("localhost")) {
+      urls.add("http://localhost:5001/buyback-a0f05/us-central1/api");
+    } else {
+      urls.add(`${origin}/api`);
+    }
+  }
+
+  urls.add("https://us-central1-buyback-a0f05.cloudfunctions.net/api");
+
+  return Array.from(urls);
+}
+
+const BACKEND_BASE_URLS = resolveBackendBaseUrls();
 
 const PRINT_QUEUE_STATUSES = ["shipping_kit_requested", "kit_needs_printing", "needs_printing"];
 
@@ -368,20 +386,50 @@ async function authorisedFetch(path, options = {}) {
     }
   }
 
-  const finalOptions = {
-    method: options.method || "GET",
-    headers,
-    body: options.body,
-    mode: "cors",
-    credentials: "include",
-  };
+  const RETRIABLE_STATUS_CODES = new Set([404, 405]);
+  let lastResponse = null;
+  let lastError = null;
 
-  try {
-    return await fetch(`${BACKEND_BASE_URL}${path}`, finalOptions);
-  } catch (error) {
-    console.error("Network request failed:", { path, error });
-    throw error;
+  for (let index = 0; index < BACKEND_BASE_URLS.length; index += 1) {
+    const baseUrl = BACKEND_BASE_URLS[index];
+    const isSameOriginApi =
+      typeof window !== "undefined" && baseUrl.startsWith(window.location.origin);
+
+    const finalOptions = {
+      method: options.method || "GET",
+      headers,
+      body: options.body,
+      mode: isSameOriginApi ? "same-origin" : "cors",
+      // Use same-origin credentials when hitting the hosting rewrite to avoid
+      // cross-site preflight requirements; otherwise omit credentials to prevent
+      // Access-Control-Allow-Credentials failures against the Cloud Functions domain.
+      credentials: isSameOriginApi ? "same-origin" : "omit",
+    };
+
+    try {
+      const response = await fetch(`${baseUrl}${path}`, finalOptions);
+      const hasFallback = index < BACKEND_BASE_URLS.length - 1;
+
+      if (hasFallback && RETRIABLE_STATUS_CODES.has(response.status)) {
+        console.warn(
+          `Backend ${baseUrl}${path} returned ${response.status}; retrying next candidate.`
+        );
+        lastResponse = response;
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      console.error("Network request failed:", { baseUrl, path, error });
+    }
   }
+
+  if (lastResponse) {
+    return lastResponse;
+  }
+
+  throw lastError || new Error("All backend fetch attempts failed.");
 }
 
 async function fetchPrintBundleFromEndpoint(path, options = {}) {
@@ -523,6 +571,63 @@ function openPrintPreview(bytes) {
   };
 }
 
+function openPdfInTabAndPrint(bytes, { orderId } = {}) {
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const tab = window.open("", "_blank");
+
+  if (!tab) {
+    URL.revokeObjectURL(url);
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+
+    const closeAndResolve = () => {
+      try {
+        tab.close();
+      } catch (_) {}
+      cleanup();
+    };
+
+    tab.document.write(
+      `<!DOCTYPE html><html><head><title>Order ${orderId || ""} Label</title></head><body style="margin:0;padding:0;">
+        <embed src="${url}" type="application/pdf" style="width:100%;height:100vh;" />
+      </body></html>`
+    );
+    tab.document.close();
+
+    const triggerPrint = () => {
+      try {
+        tab.focus();
+        tab.print();
+      } catch (error) {
+        console.warn("Unable to trigger print dialog automatically:", error);
+        closeAndResolve();
+      }
+    };
+
+    const handleAfterPrint = () => closeAndResolve();
+
+    try {
+      tab.onafterprint = handleAfterPrint;
+      tab.addEventListener("afterprint", handleAfterPrint);
+    } catch (_) {}
+
+    if (tab.document.readyState === "complete") {
+      triggerPrint();
+    } else {
+      tab.onload = triggerPrint;
+    }
+
+    setTimeout(handleAfterPrint, 120000);
+  });
+}
+
 async function handleBatchPrint() {
   if (isPrinting) {
     return;
@@ -535,7 +640,7 @@ async function handleBatchPrint() {
 
   isPrinting = true;
   updatePrintButtonState();
-  queueStatusEl.textContent = "Preparing merged PDF bundle…";
+  queueStatusEl.textContent = "Preparing PDFs and opening print dialogs…";
 
   try {
     const orderIds = Array.from(selectedOrderIds).filter(Boolean);
@@ -544,35 +649,33 @@ async function handleBatchPrint() {
       return;
     }
 
-    const { bytes, printedIds, updatedIds, bulkFolder, bulkJobId } = await requestPrintBundle(orderIds);
+    const printed = new Set();
+    const updated = new Set();
 
-    if (!printedIds.length) {
-      console.warn("Print bundle did not report any printed orders.");
+    for (let index = 0; index < orderIds.length; index += 1) {
+      const orderId = orderIds[index];
+      const positionLabel = `${index + 1} of ${orderIds.length}`;
+      queueStatusEl.textContent = `Generating PDF for order ${orderId} (${positionLabel})…`;
+
+      const { bytes, printedIds, updatedIds } = await requestPrintBundle([orderId]);
+
+      printedIds.forEach((id) => printed.add(id));
+      updatedIds.forEach((id) => updated.add(id));
+
+      const missingKitSent = printedIds.filter((id) => !updatedIds.includes(id));
+      if (missingKitSent.length) {
+        const fallbackUpdates = await markOrdersKitSent(missingKitSent);
+        fallbackUpdates.forEach((id) => updated.add(id));
+      }
+
+      await openPdfInTabAndPrint(bytes, { orderId });
+      queueStatusEl.textContent = `Opened print dialog for order ${orderId}. Proceeding to next…`;
     }
 
-    openPrintPreview(bytes);
-
-    const missingKitSent = printedIds.filter((id) => !updatedIds.includes(id));
-    let fallbackUpdates = [];
-
-    if (missingKitSent.length) {
-      console.warn(
-        "Some orders were not marked as kit sent by the bundle endpoint. Attempting fallback updates:",
-        missingKitSent
-      );
-      fallbackUpdates = await markOrdersKitSent(missingKitSent);
-    }
-
-    const totalUpdated = new Set([...updatedIds, ...fallbackUpdates]);
-
-    const printedTotal = printedIds.length || orderIds.length;
-    const folderDetail = bulkFolder
-      ? ` Saved PDF copies to ${bulkFolder}${bulkJobId ? ` (job ${bulkJobId})` : ""}.`
-      : "";
-
-    queueStatusEl.textContent = `Merged ${printedTotal} order${printedTotal === 1 ? "" : "s"} into a single PDF. Marked ${
-      totalUpdated.size
-    } as Kit Sent.${folderDetail}`;
+    const printedTotal = printed.size || orderIds.length;
+    queueStatusEl.textContent = `Prepared ${printedTotal} PDF${printedTotal === 1 ? '' : 's'} and opened print dialogs. Marked ${
+      updated.size
+    } as Kit Sent.`;
 
     selectedOrderIds.clear();
     updateSelectionUi();
@@ -580,7 +683,7 @@ async function handleBatchPrint() {
   } catch (error) {
     console.error("Failed to prepare print bundle:", error);
     const detail = error?.detail ? ` Details: ${error.detail}` : "";
-    queueStatusEl.textContent = `Failed to merge labels. Please try again.${detail}`;
+    queueStatusEl.textContent = `Failed to open print jobs. Please try again.${detail}`;
   } finally {
     isPrinting = false;
     updatePrintButtonState();
