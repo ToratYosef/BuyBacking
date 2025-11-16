@@ -1301,6 +1301,45 @@ function createOrdersRouter({
     }
   });
 
+  router.post('/repair-label-generated', async (req, res) => {
+    try {
+      const snapshot = await ordersCollection.where('status', '==', 'label_generated').get();
+      const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+      let updatedCount = 0;
+
+      await Promise.all(
+        snapshot.docs.map(async (doc) => {
+          const data = doc.data() || {};
+          const deliveryMethod = (data.labelDeliveryMethod || data.shippingPreference || '').toString().toLowerCase();
+          const isKitDelivery = deliveryMethod.includes('kit');
+          const alreadySent = Boolean(data.kitSentAt);
+
+          if (!isKitDelivery || alreadySent) {
+            return;
+          }
+
+          try {
+            const needsPrintingAt = data.needsPrintingAt || timestamp;
+            await updateOrderBoth(doc.id, {
+              status: 'needs_printing',
+              needsPrintingAt,
+              lastStatusUpdateAt: timestamp,
+            });
+            updatedCount += 1;
+          } catch (updateError) {
+            console.error(`Failed to reset label_generated order ${doc.id}:`, updateError);
+          }
+        })
+      );
+
+      res.json({ processedCount: snapshot.size, updatedCount });
+    } catch (error) {
+      console.error('Failed to repair label-generated orders:', error);
+      res.status(500).json({ error: 'Unable to repair label-generated orders' });
+    }
+  });
+
   return router;
 }
 
