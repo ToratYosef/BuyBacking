@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>XML Price Updater – File Upload, Preview & Offsets Builder</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    header {
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #1f2937;
+      background: radial-gradient(circle at top left, #1d4ed8, #020617);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.6rem;
+    }
+    header p {
+      margin: 0.35rem 0 0;
+      font-size: 0.9rem;
+      color: #9ca3af;
+    }
+    main {
+      padding: 1.5rem;
+      max-width: 1700px; /* wider so preview table fits more columns */
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); /* right card wider */
+      gap: 1.5rem;
+    }
+    @media (max-width: 1000px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 1rem;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      padding: 1rem 1.25rem;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      backdrop-filter: blur(12px);
+    }
+    .card h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1.15rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card h2 span {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #60a5fa;
+    }
+    .card p.description {
+      margin: 0 0 0.75rem;
+      font-size: 0.85rem;
+      color: #9ca3af;
+    }
+    .field {
+      margin-bottom: 0.75rem;
+    }
+    label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+    input[type="file"],
+    input[type="number"],
+    input[type="text"],
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 0.5rem;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      padding: 0.5rem 0.6rem;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 0.8rem;
+    }
+    input::file-selector-button {
+      border: none;
+      padding: 0.35rem 0.75rem;
+      margin-right: 0.6rem;
+      border-radius: 999px;
+      background: #111827;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    input::placeholder {
+      color: #6b7280;
+    }
+    textarea {
+      width: 100%;
+      min-height: 130px;
+      box-sizing: border-box;
+      border-radius: 0.5rem;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      padding: 0.5rem 0.6rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.8rem;
+      resize: vertical;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.75rem;
+    }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid #374151;
+      font-size: 0.75rem;
+      background: #020617;
+    }
+    .pill input {
+      margin: 0;
+    }
+    .small {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: flex-end;
+      margin-top: 0.5rem;
+    }
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #22c55e);
+      color: white;
+      box-shadow: 0 10px 25px rgba(34, 197, 94, 0.35);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: #9ca3af;
+      border: 1px solid #4b5563;
+    }
+    .btn-primary[disabled],
+    .btn-secondary[disabled] {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+    }
+    .status-bar {
+      margin-top: 0.75rem;
+      font-size: 0.75rem;
+      color: #9ca3af;
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .status-bar span.highlight {
+      color: #22c55e;
+    }
+    .status-bar span.error {
+      color: #f97373;
+    }
+    #previewContainer {
+      margin-top: 0.75rem;
+      max-height: 520px;
+      overflow: auto;
+      border-radius: 0.75rem;
+      border: 1px solid #1f2937;
+      background: #020617;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.76rem; /* slightly smaller so more fits per row */
+    }
+    thead {
+      position: sticky;
+      top: 0;
+      background: #020617;
+      z-index: 1;
+    }
+    th, td {
+      padding: 0.25rem 0.4rem; /* tighter padding */
+      border-bottom: 1px solid #111827;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      font-weight: 600;
+      color: #9ca3af;
+      font-size: 0.72rem;
+      background: #020617;
+      cursor: pointer;      /* clickable for sorting */
+      user-select: none;
+    }
+    tbody tr:nth-child(even) {
+      background: rgba(15, 23, 42, 0.6);
+    }
+    .delta-pos {
+      color: #22c55e;
+    }
+    .delta-neg {
+      color: #f97373;
+    }
+    .badge {
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid #1f2937;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9ca3af;
+      background: rgba(15,23,42,0.9);
+    }
+    h3 {
+      margin: 0 0 0.35rem;
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Feed → XML Price Updater</h1>
+  <p>
+    Upload <code>input.xml</code> and <code>feed.xml</code>. We take the
+    <strong>highest feed price only</strong> per combo, apply your rules,
+    show a preview (with editable prices), and let you download <code>output.xml</code>.
+    <strong>Network "Other" is treated as locked.</strong>
+  </p>
+</header>
+
+<main>
+  <!-- LEFT: FILE UPLOADS + OFFSETS BUILDER -->
+  <section class="card">
+    <h2><span>Step 1</span>Upload XML &amp; Build Offsets JSON</h2>
+    <p class="description">
+      Upload both XML files. Below that, you can generate
+      <strong>Brand / Model per-quality offsets JSON</strong> without typing JSON by hand.
+    </p>
+
+    <div class="field">
+      <label for="inputFile">Your current prices (input.xml)</label>
+      <input type="file" id="inputFile" accept=".xml">
+      <p class="small">This is your master price matrix. We keep the exact structure and only update numbers.</p>
+    </div>
+
+    <div class="field">
+      <label for="feedFile">Feed prices (feed.xml)</label>
+      <input type="file" id="feedFile" accept=".xml">
+      <p class="small">
+        Competitor feed. We only care about the <strong>highest</strong> price per model / GB / quality / locked-status combo.
+        Verizon, AT&amp;T, T-Mobile, Sprint, and Other are all treated as <strong>locked</strong>.
+      </p>
+    </div>
+
+    <div class="status-bar" id="fileStatusBar">
+      <span><span class="highlight">Ready.</span> Upload both XML files.</span>
+      <span id="fileStats"></span>
+    </div>
+
+    <!-- Offsets JSON Builder -->
+    <div class="field" style="margin-top:1rem;">
+      <h3><span style="color:#60a5fa; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em;">Offsets</span> Brand / Model rule generator</h3>
+      <p class="small">
+        Build the JSON for <strong>"Brand / Model per-quality offsets (JSON, optional)"</strong> without touching JSON.
+        When you click "Add to offsets JSON", it will merge into the textarea on the right.
+      </p>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="offsetTargetType">Target type</label>
+          <select id="offsetTargetType">
+            <option value="brand">Brand (e.g. "iphone")</option>
+            <option value="model">Model (e.g. "iphone 13 pro max")</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="offsetName">Name</label>
+          <input type="text" id="offsetName" placeholder="iphone or iphone 13 pro max">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="offsetFlawless">Flawless +$</label>
+          <input type="number" id="offsetFlawless" step="0.01" placeholder="e.g. 10">
+        </div>
+        <div class="field">
+          <label for="offsetGood">Good +$</label>
+          <input type="number" id="offsetGood" step="0.01" placeholder="e.g. 5">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label for="offsetFair">Fair +$</label>
+          <input type="number" id="offsetFair" step="0.01" placeholder="e.g. 3">
+        </div>
+        <div class="field">
+          <label for="offsetBroken">Broken +$</label>
+          <input type="number" id="offsetBroken" step="0.01" placeholder="e.g. 1">
+        </div>
+      </div>
+
+      <div class="btn-row" style="justify-content:flex-start;">
+        <button class="btn-secondary" id="addOffsetRuleBtn" type="button">Add to offsets JSON</button>
+      </div>
+
+      <p class="small">
+        Example result it will build:
+        <code>{"brands":{"iphone":{"flawless":10,"good":5}}}</code> or
+        <code>{"models":{"iphone 13 pro max":{"flawless":20}}}</code>, combined in one object.
+      </p>
+    </div>
+  </section>
+
+  <!-- RIGHT: CONFIG + CONTROLS -->
+  <section class="card">
+    <h2><span>Step 2</span>Rules &amp; Download</h2>
+    <p class="description">
+      We group Verizon / AT&amp;T / T-Mobile / Sprint / Other as locked. Highest locked price + your offsets becomes your locked price.
+      Unlocked prices still come from unlocked data in the feed.
+    </p>
+
+    <div class="field grid-2">
+      <div>
+        <label for="globalAdd">Global +$ amount</label>
+        <input type="number" id="globalAdd" value="5" step="0.01">
+        <p class="small">Applied to every updated price, unless overridden by brand/model rules.</p>
+      </div>
+      <div>
+        <label>Qualities to update</label>
+        <div class="pill-row">
+          <label class="pill"><input type="checkbox" class="qualityCheck" value="flawless" checked> flawless</label>
+          <label class="pill"><input type="checkbox" class="qualityCheck" value="good" checked> good</label>
+          <label class="pill"><input type="checkbox" class="qualityCheck" value="fair" checked> fair</label>
+          <label class="pill"><input type="checkbox" class="qualityCheck" value="broken" checked> broken</label>
+        </div>
+        <p class="small">Uncheck if you want to leave specific qualities unchanged.</p>
+      </div>
+    </div>
+
+    <div class="field grid-2">
+      <div>
+        <label>Locked carrier group (feed → locked)</label>
+        <div class="pill-row">
+          <label class="pill"><input type="checkbox" class="carrierCheck" value="verizon" checked> Verizon</label>
+          <label class="pill"><input type="checkbox" class="carrierCheck" value="att" checked> AT&amp;T</label>
+          <label class="pill"><input type="checkbox" class="carrierCheck" value="tmobile" checked> T-Mobile</label>
+          <label class="pill"><input type="checkbox" class="carrierCheck" value="sprint" checked> Sprint</label>
+          <label class="pill"><input type="checkbox" class="carrierCheck" value="other" checked> Other</label>
+        </div>
+        <p class="small">
+          These networks are merged to a single "locked" bucket. We take only the highest price for each combo.
+        </p>
+      </div>
+      <div>
+        <label>Safety</label>
+        <div class="pill-row">
+          <label class="pill">
+            <input type="checkbox" id="onlyIncrease" checked>
+            Only increase if new &gt; current
+          </label>
+        </div>
+        <p class="small">If checked, we never lower your prices – only raise them.</p>
+      </div>
+    </div>
+
+    <div class="field grid-2">
+      <div>
+        <label for="brandFilter">Only update brands (optional)</label>
+        <input type="text" id="brandFilter" placeholder="iphone,samsung">
+        <p class="small">Comma-separated; matched loosely (case-insensitive) against &lt;brand&gt; or &lt;parentDevice&gt; in input.xml.</p>
+      </div>
+      <div>
+        <label for="modelFilter">Only update models (optional)</label>
+        <input type="text" id="modelFilter" placeholder="13,14 pro max">
+        <p class="small">Comma-separated; matched loosely against &lt;name&gt;, e.g. "IPHONE 13 PRO MAX".</p>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="rulesJson">Brand / Model per-quality offsets (JSON, optional)</label>
+      <textarea id="rulesJson" placeholder='{
+  "brands": {
+    "iphone": { "flawless": 10, "good": 5 }
+  },
+  "models": {
+    "iphone 13 pro max": { "flawless": 20 }
+  }
+}'></textarea>
+      <p class="small">
+        Schema: <code>brands[brandName][quality]</code> and <code>models[modelName][quality]</code> are extra <strong>+$</strong> on top of the global amount.
+        All keys matched in lowercase at runtime. Qualities: <code>flawless</code>, <code>good</code>, <code>fair</code>, <code>broken</code>.
+        Use the generator on the left to populate this.
+      </p>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-secondary" id="previewBtn" type="button">Preview price changes</button>
+      <button class="btn-primary" id="downloadBtn" type="button" disabled>Download output.xml</button>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+      <span><span class="highlight">Idle.</span> Click "Preview price changes" after uploading files.</span>
+      <span id="stats"></span>
+    </div>
+  </section>
+
+  <!-- BIG PREVIEW AREA -->
+  <section class="card" style="grid-column: 1 / -1;">
+    <h2><span>Step 3</span>Preview Updated Prices</h2>
+    <p class="description">
+      After running <strong>"Preview price changes"</strong>, all updated prices will appear here. You can edit
+      the <strong>New</strong> column inline before downloading <code>output.xml</code>.
+    </p>
+    <div id="previewContainer">
+      <!-- Preview table injected here -->
+    </div>
+  </section>
+</main>
+
+<script>
+  const inputFileEl = document.getElementById('inputFile');
+  const feedFileEl = document.getElementById('feedFile');
+  const globalAddEl = document.getElementById('globalAdd');
+  const rulesJsonEl = document.getElementById('rulesJson');
+  const brandFilterEl = document.getElementById('brandFilter');
+  const modelFilterEl = document.getElementById('modelFilter');
+  const onlyIncreaseEl = document.getElementById('onlyIncrease');
+  const statusBarEl = document.getElementById('statusBar');
+  const statsEl = document.getElementById('stats');
+  const fileStatusBarEl = document.getElementById('fileStatusBar');
+  const fileStatsEl = document.getElementById('fileStats');
+  const previewContainerEl = document.getElementById('previewContainer');
+  const previewBtn = document.getElementById('previewBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  // Offsets builder elements
+  const offsetTargetTypeEl = document.getElementById('offsetTargetType');
+  const offsetNameEl = document.getElementById('offsetName');
+  const offsetFlawlessEl = document.getElementById('offsetFlawless');
+  const offsetGoodEl = document.getElementById('offsetGood');
+  const offsetFairEl = document.getElementById('offsetFair');
+  const offsetBrokenEl = document.getElementById('offsetBroken');
+  const addOffsetRuleBtn = document.getElementById('addOffsetRuleBtn');
+
+  let latestOutputXml = '';
+  let latestPreviewRows = [];
+  let latestInputDoc = null;
+  let latestCsvRows = [];
+
+  // Sorting state for Step 3 preview table
+  const headerTitles = [
+    'Brand', 'Model', 'Model ID', 'Storage',
+    'Status', 'Quality', 'Old', 'Feed', 'New', 'Δ'
+  ];
+  const sortKeyByIndex = {
+    0: 'brand',
+    1: 'modelName',
+    2: 'modelId',
+    3: 'storage',
+    4: 'status',
+    5: 'quality',
+    6: 'oldNumeric',
+    7: 'feedPrice',
+    8: 'newNumeric',
+    9: 'delta'
+  };
+  let currentSort = { key: null, direction: 'asc' };
+  let lastStatsText = '';
+
+  function setStatus(msg, isError = false) {
+    const spans = statusBarEl.querySelectorAll('span');
+    if (spans[0]) {
+      spans[0].innerHTML = isError
+        ? '<span class="error">' + msg + '</span>'
+        : '<span class="highlight">' + msg + '</span>';
+    }
+  }
+
+  function setStats(msg) {
+    statsEl.textContent = msg || '';
+  }
+
+  function setFileStatus(msg, isError = false) {
+    const spans = fileStatusBarEl.querySelectorAll('span');
+    if (spans[0]) {
+      spans[0].innerHTML = isError
+        ? '<span class="error">' + msg + '</span>'
+        : '<span class="highlight">' + msg + '</span>';
+    }
+  }
+
+  function setFileStats(msg) {
+    fileStatsEl.textContent = msg || '';
+  }
+
+  function normaliseStr(str) {
+    return (str || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  // Canonical model key so feed + input names line up
+  function canonicalModelKey(brand, name) {
+    let s = ((brand || '') + ' ' + (name || '')).trim().toLowerCase();
+    s = s.replace(/\s+/g, ' ');
+
+    const stripTokens = [
+      'apple', 'iphone',
+      'samsung', 'galaxy', 'phone', 'smartphone',
+      'google', 'pixel',
+      'motorola', 'moto',
+      'oneplus',
+      '5g', '4g', 'lte', 'uw', 'uwb',
+      'unlocked', 'locked'
+    ];
+
+    stripTokens.forEach(t => {
+      const re = new RegExp('\\b' + t + '\\b', 'g');
+      s = s.replace(re, ' ');
+    });
+
+    // "plus" -> "+"
+    s = s.replace(/\bplus\b/g, '+');
+    s = s.replace(/ \+/g, '+').replace(/\+ /g, '+');
+
+    s = s.replace(/\s+/g, ' ').trim();
+    return s;
+  }
+
+  function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = () => reject(reader.error || new Error('File read error'));
+      reader.readAsText(file);
+    });
+  }
+
+  function getSelectedQualities() {
+    const checks = Array.from(document.querySelectorAll('.qualityCheck'));
+    return checks.filter(c => c.checked).map(c => c.value);
+  }
+
+  function getLockedCarrierSet() {
+    const checks = Array.from(document.querySelectorAll('.carrierCheck'));
+    const set = new Set();
+    checks.forEach(c => {
+      if (c.checked) set.add(c.value);
+    });
+    return set;
+  }
+
+  function parseRulesJson() {
+    const raw = rulesJsonEl.value.trim();
+    if (!raw) return { brands: {}, models: {} };
+    try {
+      const obj = JSON.parse(raw);
+      const brands = obj.brands && typeof obj.brands === 'object' ? obj.brands : {};
+      const models = obj.models && typeof obj.models === 'object' ? obj.models : {};
+      return { brands, models };
+    } catch (e) {
+      setStatus('Error parsing offsets JSON – ignoring brand/model offsets.', true);
+      console.error(e);
+      return { brands: {}, models: {} };
+    }
+  }
+
+  function getExtraAdjustment(brandNorm, modelNorm, quality, rules) {
+    let extra = 0;
+    const q = normaliseStr(quality);
+    for (const key of Object.keys(rules.brands)) {
+      if (normaliseStr(key) === brandNorm) {
+        const v = rules.brands[key][q];
+        if (typeof v === 'number') extra += v;
+      }
+    }
+    for (const key of Object.keys(rules.models)) {
+      if (normaliseStr(key) === modelNorm) {
+        const v = rules.models[key][q];
+        if (typeof v === 'number') extra += v;
+      }
+    }
+    return extra;
+  }
+
+  // network -> locked/unlocked
+  function networkToStatus(network, lockedCarriersSet) {
+    const n = normaliseStr(network);
+
+    if (!n) return 'locked';
+
+    if (n === 'unlocked' || n.includes('unlocked')) {
+      return 'unlocked';
+    }
+
+    if (lockedCarriersSet.has('verizon') && n.includes('verizon')) return 'locked';
+    if ((lockedCarriersSet.has('att') || lockedCarriersSet.has('at&t')) && (n.includes('at&t') || n.includes('att'))) return 'locked';
+    if (lockedCarriersSet.has('tmobile') && (n.includes('t-mobile') || n.includes('tmobile'))) return 'locked';
+    if (lockedCarriersSet.has('sprint') && n.includes('sprint')) return 'locked';
+    if (lockedCarriersSet.has('other') && (n === 'other' || n.includes('other'))) return 'locked';
+
+    return 'locked';
+  }
+
+  function shouldUpdateThisQuality(quality, selectedQualities) {
+    return selectedQualities.includes(quality);
+  }
+
+  function passesBrandModelFilters(brandText, modelName) {
+    const brandFilter = brandFilterEl.value.trim();
+    const modelFilter = modelFilterEl.value.trim();
+    const brandNorm = normaliseStr(brandText);
+    const nameNorm = normaliseStr(modelName);
+    if (!brandFilter && !modelFilter) return true;
+
+    if (brandFilter) {
+      const parts = brandFilter.split(',').map(s => normaliseStr(s)).filter(Boolean);
+      if (parts.length && !parts.some(p => brandNorm.includes(p))) {
+        return false;
+      }
+    }
+
+    if (modelFilter) {
+      const parts = modelFilter.split(',').map(s => normaliseStr(s)).filter(Boolean);
+      if (parts.length && !parts.some(p => nameNorm.includes(p))) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // Build feed max map: highest price per (modelKey, capacity, quality, status)
+  function buildFeedMaxMap(feedDoc, lockedCarriersSet) {
+    const devices = Array.from(feedDoc.getElementsByTagName('device'));
+    const maxMap = new Map();
+    let combos = 0;
+
+    const qualityMap = [
+      { tag: 'prices_likenew', quality: 'flawless' },
+      { tag: 'prices_good', quality: 'good' },
+      { tag: 'prices_poor', quality: 'fair' },
+      { tag: 'prices_faulty', quality: 'broken' }
+    ];
+
+    for (const dev of devices) {
+      const brandName =
+        dev.getElementsByTagName('brand_name')[0]?.textContent ||
+        dev.getElementsByTagName('brand')[0]?.textContent ||
+        '';
+      const devName = dev.getElementsByTagName('device_name')[0]?.textContent || '';
+      const capacity = dev.getElementsByTagName('capacity')[0]?.textContent || '';
+      const network = dev.getElementsByTagName('network')[0]?.textContent || '';
+
+      const modelKey = canonicalModelKey(brandName, devName);
+      const capKey = (capacity || '').trim();
+      const status = networkToStatus(network, lockedCarriersSet);
+
+      for (const qm of qualityMap) {
+        const nodes = dev.getElementsByTagName(qm.tag);
+        if (!nodes.length) continue;
+        const pricesNode = nodes[0];
+        thead
+        const priceNodes = pricesNode.getElementsByTagName('price');
+        let maxPrice = null;
+        for (const p of Array.from(priceNodes)) {
+          const val = p.getElementsByTagName('merchant_price')[0]?.textContent || '';
+          const num = Number(val);
+          if (!Number.isNaN(num)) {
+            if (maxPrice === null || num > maxPrice) {
+              maxPrice = num;
+            }
+          }
+        }
+        if (maxPrice !== null) {
+          const key = [
+            modelKey,
+            capKey,
+            qm.quality,
+            status
+          ].join('|');
+          const current = maxMap.get(key);
+          if (current == null || maxPrice > current) {
+            maxMap.set(key, maxPrice);
+            combos++;
+          }
+        }
+      }
+    }
+
+    return { maxMap, combos };
+  }
+
+  // Sorting helpers
+  function sortRows(rows) {
+    const statusOrder = { unlocked: 0, locked: 1 };
+    const qualityOrder = { flawless: 0, good: 1, fair: 2, broken: 3 };
+
+    if (!currentSort.key) {
+      rows.sort((a, b) => {
+        return (
+          normaliseStr(a.brand).localeCompare(normaliseStr(b.brand)) ||
+          normaliseStr(a.modelName).localeCompare(normaliseStr(b.modelName)) ||
+          normaliseStr(a.storage).localeCompare(normaliseStr(b.storage)) ||
+          ((statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99)) ||
+          ((qualityOrder[a.quality] ?? 99) - (qualityOrder[b.quality] ?? 99))
+        );
+      });
+      return;
+    }
+
+    const key = currentSort.key;
+    const dir = currentSort.direction === 'desc' ? -1 : 1;
+
+    rows.sort((a, b) => {
+      let aVal = a[key];
+      let bVal = b[key];
+
+      // Special ordering for status/quality
+      if (key === 'status') {
+        const so = { unlocked: 0, locked: 1 };
+        aVal = so[a.status] ?? 99;
+        bVal = so[b.status] ?? 99;
+        return (aVal - bVal) * dir;
+      }
+      if (key === 'quality') {
+        const qo = { flawless: 0, good: 1, fair: 2, broken: 3 };
+        aVal = qo[a.quality] ?? 99;
+        bVal = qo[b.quality] ?? 99;
+        return (aVal - bVal) * dir;
+      }
+
+      // Numeric keys
+      if (['oldNumeric', 'feedPrice', 'newNumeric', 'delta'].includes(key)) {
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+        if (aVal === bVal) return 0;
+        return aVal < bVal ? -1 * dir : 1 * dir;
+      }
+
+      // String keys
+      const aStr = normaliseStr(String(aVal ?? ''));
+      const bStr = normaliseStr(String(bVal ?? ''));
+      if (aStr === bStr) return 0;
+      return aStr < bStr ? -1 * dir : 1 * dir;
+    });
+  }
+
+  function handleHeaderClick(colIndex) {
+    const key = sortKeyByIndex[colIndex];
+    if (!key) return;
+
+    if (currentSort.key === key) {
+      currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      currentSort.key = key;
+      currentSort.direction = 'asc';
+    }
+
+    renderPreviewTable(latestPreviewRows, lastStatsText);
+    const label = headerTitles[colIndex] || key;
+    setStatus('Sorted by ' + label + ' (' + currentSort.direction + ')', false);
+  }
+
+  // Render preview table (sortable)
+  function renderPreviewTable(rows, stats) {
+    if (typeof stats === 'string') {
+      lastStatsText = stats;
+    }
+
+    if (!rows.length) {
+      previewContainerEl.innerHTML =
+        '<div style="padding:0.75rem;font-size:0.8rem;color:#9ca3af;">No prices changed based on your current filters and rules.</div>';
+      setStats(lastStatsText);
+      return;
+    }
+
+    // Sort rows according to current sort or default grouping
+    sortRows(rows);
+
+    const headCells = headerTitles.map((label, i) => {
+      const key = sortKeyByIndex[i];
+      let indicator = '';
+      if (currentSort.key === key) {
+        indicator = currentSort.direction === 'asc' ? ' ▲' : ' ▼';
+      }
+      return `<th data-col-index="${i}">${label}${indicator}</th>`;
+    }).join('');
+
+    const head = `
+      <thead>
+        <tr>
+          ${headCells}
+        </tr>
+      </thead>
+    `;
+
+    const body = rows.map((r, idx) => {
+      const deltaClass = r.delta > 0 ? 'delta-pos' : (r.delta < 0 ? 'delta-neg' : '');
+      const deltaSign = r.delta > 0 ? '+' : '';
+      const oldStr = r.oldNumeric == null ? '' : r.oldNumeric.toFixed(2);
+      const newStr = r.newNumeric.toFixed(2);
+      const feedStr = r.feedPrice.toFixed(2);
+
+      return `
+        <tr>
+          <td>${r.brand}</td>
+          <td>${r.modelName}</td>
+          <td>${r.modelId || ''}</td>
+          <td>${r.storage}</td>
+          <td><span class="badge">${r.status}</span></td>
+          <td><span class="badge">${r.quality}</span></td>
+          <td>${oldStr}</td>
+          <td>${feedStr}</td>
+          <td>
+            <input
+              type="number"
+              class="new-price-input"
+              data-row-index="${idx}"
+              step="0.01"
+              value="${newStr}"
+              style="width:90px; box-sizing:border-box;"
+            >
+          </td>
+          <td class="delta-cell ${deltaClass}" data-delta-index="${idx}">
+            ${deltaSign}${r.delta.toFixed(2)}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    previewContainerEl.innerHTML = `<table>${head}<tbody>${body}</tbody></table>`;
+    setStats(lastStatsText);
+
+    // Wire up sorting clicks
+    const headerCells = previewContainerEl.querySelectorAll('th[data-col-index]');
+    headerCells.forEach(th => {
+      th.addEventListener('click', () => {
+        const colIndex = Number(th.dataset.colIndex);
+        handleHeaderClick(colIndex);
+      });
+    });
+
+    // Wire up editable "New" price inputs
+    const inputs = previewContainerEl.querySelectorAll('.new-price-input');
+    inputs.forEach(input => {
+      input.addEventListener('change', handleNewPriceEdit);
+    });
+  }
+
+  function handleNewPriceEdit(e) {
+    const idx = Number(e.target.dataset.rowIndex);
+    if (Number.isNaN(idx) || !latestPreviewRows[idx]) return;
+    const row = latestPreviewRows[idx];
+    const val = Number(e.target.value);
+    if (Number.isNaN(val)) {
+      setStatus('Invalid number entered for new price.', true);
+      return;
+    }
+
+    row.newNumeric = val;
+
+    if (row.node) {
+      row.node.textContent = val.toFixed(2);
+    }
+
+    const oldNum = row.oldNumeric;
+    const delta = oldNum == null ? val : (val - oldNum);
+    row.delta = delta;
+
+    const deltaCell = previewContainerEl.querySelector(`.delta-cell[data-delta-index="${idx}"]`);
+    if (deltaCell) {
+      deltaCell.classList.remove('delta-pos', 'delta-neg');
+      if (delta > 0) deltaCell.classList.add('delta-pos');
+      else if (delta < 0) deltaCell.classList.add('delta-neg');
+      const sign = delta > 0 ? '+' : '';
+      deltaCell.textContent = sign + delta.toFixed(2);
+    }
+
+    setStatus('New price overridden for this row (will be used in output.xml).', false);
+  }
+
+  function csvEscape(value) {
+    const str = String(value ?? '');
+    if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  }
+
+  async function previewChanges() {
+    setStatus('Reading files...', false);
+    setStats('');
+    latestOutputXml = '';
+    latestPreviewRows = [];
+    latestInputDoc = null;
+    latestCsvRows = [];
+    previewContainerEl.innerHTML = '';
+    currentSort = { key: null, direction: 'asc' }; // reset sort on new preview
+    downloadCsvBtn.disabled = true;
+    downloadModelsCsvBtn.disabled = true; // reset
+
+    const inputFile = inputFileEl.files && inputFileEl.files[0];
+    const feedFile = feedFileEl.files && feedFileEl.files[0];
+
+    if (!inputFile || !feedFile) {
+      setFileStatus('Upload both input.xml and feed.xml first.', true);
+      setStatus('Upload both input.xml and feed.xml first.', true);
+      return;
+    }
+
+    setFileStatus('Files loaded: ' + inputFile.name + ' & ' + feedFile.name + '.', false);
+
+    let inputXmlText, feedXmlText;
+    try {
+      [inputXmlText, feedXmlText] = await Promise.all([
+        readFileAsText(inputFile),
+        readFileAsText(feedFile)
+      ]);
+    } catch (err) {
+      console.error(err);
+      setStatus('Error reading one of the XML files.', true);
+      return;
+    }
+
+    const parser = new DOMParser();
+    const inputDoc = parser.parseFromString(inputXmlText, 'application/xml');
+    const feedDoc = parser.parseFromString(feedXmlText, 'application/xml');
+
+    if (inputDoc.getElementsByTagName('parsererror').length) {
+      setStatus('Error parsing input.xml – XML is invalid.', true);
+      return;
+    }
+    if (feedDoc.getElementsByTagName('parsererror').length) {
+      setStatus('Error parsing feed.xml – XML is invalid.', true);
+      return;
+    }
+
+    const lockedCarrierSet = getLockedCarrierSet();
+    const onlyIncrease = !!onlyIncreaseEl.checked;
+    const selectedQualities = getSelectedQualities();
+    const rules = parseRulesJson();
+    const globalAdd = Number(globalAddEl.value) || 0;
+
+    const { maxMap, combos } = buildFeedMaxMap(feedDoc, lockedCarrierSet);
+
+    const models = Array.from(inputDoc.getElementsByTagName('model'));
+    let modelsTouched = 0;
+    let pricesChanged = 0;
+    const previewRows = [];
+    const csvRows = [];
+
+    for (const model of models) {
+      const parentDevice = model.getElementsByTagName('parentDevice')[0]?.textContent || '';
+      const nameNode = model.getElementsByTagName('name')[0];
+      const brandNode = model.getElementsByTagName('brand')[0] || model.getElementsByTagName('parentDevice')[0];
+      const modelIdNode = model.getElementsByTagName('modelID')[0];
+      const modelName = nameNode?.textContent || '';
+      const brandText = brandNode?.textContent || parentDevice;
+      const modelId = modelIdNode?.textContent || '';
+
+      const modelKeyCanonical = canonicalModelKey(brandText, modelName);
+      const brandNorm = normaliseStr(brandText);
+      const modelNorm = normaliseStr(modelName);
+
+      if (!passesBrandModelFilters(brandText, modelName)) {
+        continue;
+      }
+
+      let modelChanged = false;
+
+      const pricesNodes = Array.from(model.getElementsByTagName('prices'));
+      for (const pNode of pricesNodes) {
+        const storageNode = pNode.getElementsByTagName('storageSize')[0];
+        const priceValueNode = pNode.getElementsByTagName('priceValue')[0];
+        if (!storageNode || !priceValueNode) continue;
+
+        const storageSize = (storageNode.textContent || '').trim();
+        const statuses = ['locked', 'unlocked'];
+
+        for (const status of statuses) {
+          const statusNode = priceValueNode.getElementsByTagName(status)[0];
+          if (!statusNode) continue;
+
+          const qualities = ['flawless', 'good', 'fair', 'broken'];
+          for (const quality of qualities) {
+            if (!shouldUpdateThisQuality(quality, selectedQualities)) continue;
+            const qNode = statusNode.getElementsByTagName(quality)[0];
+            if (!qNode) continue;
+
+            const feedKey = [
+              modelKeyCanonical,
+              storageSize,
+              quality,
+              status
+            ].join('|');
+
+            const feedPrice = maxMap.get(feedKey);
+            if (feedPrice == null) continue;
+
+            const oldVal = Number(qNode.textContent.trim());
+            const oldNumeric = Number.isNaN(oldVal) ? null : oldVal;
+
+            const extra = getExtraAdjustment(brandNorm, modelNorm, quality, rules);
+            const base = feedPrice;
+            const newVal = base + globalAdd + extra;
+            const newValRounded = Math.round(newVal * 100) / 100;
+
+            if (onlyIncrease && oldNumeric !== null && newValRounded <= oldNumeric) {
+              continue;
+            }
+
+            if (oldNumeric === null || newValRounded !== oldNumeric) {
+              qNode.textContent = newValRounded.toFixed(2);
+              pricesChanged++;
+              modelChanged = true;
+
+              const delta = oldNumeric === null ? newValRounded : (newValRounded - oldNumeric);
+
+              previewRows.push({
+                brand: brandText,
+                modelName,
+                modelId,
+                storage: storageSize,
+                status,
+                quality,
+                feedPrice: feedPrice,
+                oldNumeric,
+                newNumeric: newValRounded,
+                delta,
+                node: qNode
+              });
+            }
+          }
+        }
+      }
+
+      if (modelChanged) modelsTouched++;
+    }
+
+    latestInputDoc = inputDoc;
+    const serializer = new XMLSerializer();
+    latestOutputXml = serializer.serializeToString(inputDoc);
+    latestPreviewRows = previewRows;
+    latestCsvRows = csvRows;
+
+    const stats = `Feed combos (highest per combo): ${combos} · Models updated: ${modelsTouched} · Prices changed: ${pricesChanged}`;
+    renderPreviewTable(previewRows, stats);
+
+    if (pricesChanged > 0) {
+      setStatus('Preview generated. You can edit New prices inline, then download output.xml.', false);
+      downloadBtn.disabled = false;
+    } else {
+      setStatus('No changes applied with current filters/rules.', false);
+      downloadBtn.disabled = false; // still allow identical copy
+    }
+
+    if (latestCsvRows.length > 0) {
+      downloadCsvBtn.disabled = false;
+    } else {
+      downloadCsvBtn.disabled = true;
+    }
+
+    // Enable devices CSV as soon as we have a parsed input.xml
+    if (models.length > 0) {
+      downloadModelsCsvBtn.disabled = false;
+    }
+  }
+
+  function downloadOutput() {
+    if (!latestInputDoc) {
+      setStatus('No output.xml generated yet – run preview first.', true);
+      return;
+    }
+    const serializer = new XMLSerializer();
+    const xmlString = serializer.serializeToString(latestInputDoc);
+
+    const blob = new Blob([xmlString], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'output.xml';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setStatus('output.xml downloaded with your overrides.', false);
+  }
+
+  function addOffsetRule() {
+    const type = offsetTargetTypeEl.value;
+    const nameRaw = offsetNameEl.value.trim();
+    if (!nameRaw) {
+      setStatus('Enter a brand/model name for the offsets builder.', true);
+      return;
+    }
+
+    const vals = {
+      flawless: offsetFlawlessEl.value.trim(),
+      good: offsetGoodEl.value.trim(),
+      fair: offsetFairEl.value.trim(),
+      broken: offsetBrokenEl.value.trim()
+    };
+
+    const qualOffsets = {};
+    for (const [q, v] of Object.entries(vals)) {
+      if (v === '') continue;
+      const num = Number(v);
+      if (!Number.isNaN(num)) {
+        qualOffsets[q] = num;
+      }
+    }
+
+    if (Object.keys(qualOffsets).length === 0) {
+      setStatus('Enter at least one +$ value (flawless/good/fair/broken).', true);
+      return;
+    }
+
+    let obj;
+    const raw = rulesJsonEl.value.trim();
+    if (!raw) {
+      obj = { brands: {}, models: {} };
+    } else {
+      try {
+        obj = JSON.parse(raw);
+        if (typeof obj !== 'object' || obj === null) obj = {};
+      } catch {
+        obj = {};
+      }
+      if (!obj.brands || typeof obj.brands !== 'object') obj.brands = {};
+      if (!obj.models || typeof obj.models !== 'object') obj.models = {};
+    }
+
+    const keyGroup = type === 'brand' ? 'brands' : 'models';
+    if (!obj[keyGroup][nameRaw]) obj[keyGroup][nameRaw] = {};
+    Object.assign(obj[keyGroup][nameRaw], qualOffsets);
+
+    rulesJsonEl.value = JSON.stringify(obj, null, 2);
+
+    offsetNameEl.value = '';
+    offsetFlawlessEl.value = '';
+    offsetGoodEl.value = '';
+    offsetFairEl.value = '';
+    offsetBrokenEl.value = '';
+
+    setStatus('Offsets rule added to JSON.', false);
+  }
+
+  previewBtn.addEventListener('click', () => {
+    downloadBtn.disabled = true;
+    previewChanges().catch(err => {
+      console.error(err);
+      setStatus('Unexpected error during preview.', true);
+    });
+  });
+
+  downloadBtn.addEventListener('click', downloadOutput);
+  addOffsetRuleBtn.addEventListener('click', addOffsetRule);
+</script>
+</body>
+</html>
