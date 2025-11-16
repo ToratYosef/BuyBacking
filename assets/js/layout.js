@@ -65,6 +65,19 @@
         font-weight: 700;
         box-shadow: 0 10px 20px -12px rgba(124,58,237,0.6);
       }
+      .shc-menu-toggle {
+        display: none;
+        background: #ede9fe;
+        color: #4c1d95;
+        border: 1px solid #c4b5fd;
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-weight: 700;
+        gap: 8px;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
       .shc-global-footer {
         background: #0b1224;
         color: #e2e8f0;
@@ -89,9 +102,22 @@
       .shc-footer-col a { color: #e2e8f0; text-decoration: none; font-weight: 600; }
       .shc-footer-col a:hover { color: #a5b4fc; }
       .shc-footer-bottom { max-width: 1200px; margin: 28px auto 0; padding-top: 18px; border-top: 1px solid #1f2937; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center; color: #94a3b8; font-size: 14px; }
-      @media (max-width: 768px) {
-        .shc-header-inner { flex-direction: column; align-items: flex-start; }
-        .shc-nav { width: 100%; justify-content: space-between; }
+      @media (max-width: 900px) {
+        .shc-header-inner { flex-wrap: wrap; gap: 12px; }
+        .shc-menu-toggle { display: inline-flex; }
+        .shc-nav {
+          width: 100%;
+          display: none;
+          flex-direction: column;
+          align-items: flex-start;
+          padding: 6px 0 4px;
+          background: rgba(255,255,255,0.9);
+          border-radius: 10px;
+          border: 1px solid #e2e8f0;
+        }
+        .shc-nav.is-open { display: flex; }
+        .shc-nav a { width: 100%; }
+        .shc-cta { width: 100%; justify-content: center; }
       }
     `;
     document.head.appendChild(style);
@@ -107,6 +133,14 @@
             <small style="display:block;color:#6366f1;font-weight:700;">Sell • Upgrade • Protect</small>
           </div>
         </a>
+        <button class="shc-menu-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false">
+          <span>Menu</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
         <nav class="shc-nav" aria-label="Primary">
           <a href="/sell-device.html">Sell Device</a>
           <a href="/popular-devices.html">Popular Devices</a>
@@ -205,10 +239,26 @@
       removeLegacySections();
       appendIfMissing('.shc-global-header', headerHtml, 'afterbegin');
       appendIfMissing('.shc-global-footer', footerHtml, 'beforeend');
+      const nav = document.querySelector('.shc-nav');
+      const toggle = document.querySelector('.shc-menu-toggle');
+      if (nav && toggle) {
+        toggle.addEventListener('click', () => {
+          const isOpen = nav.classList.toggle('is-open');
+          toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+      }
     });
   } else {
     removeLegacySections();
     appendIfMissing('.shc-global-header', headerHtml, 'afterbegin');
     appendIfMissing('.shc-global-footer', footerHtml, 'beforeend');
+    const nav = document.querySelector('.shc-nav');
+    const toggle = document.querySelector('.shc-menu-toggle');
+    if (nav && toggle) {
+      toggle.addEventListener('click', () => {
+        const isOpen = nav.classList.toggle('is-open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+    }
   }
 })();

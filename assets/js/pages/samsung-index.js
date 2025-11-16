@@ -42,10 +42,10 @@ const modals = document.querySelectorAll('.modal');
 const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
 const closeModal = (modal) => modal.classList.remove('is-visible');
 
-document.getElementById('loginNavBtn').addEventListener('click', (e) => { e.preventDefault(); openModal('loginModal'); showTab('login'); });
-document.getElementById('aboutUsLink').addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
-document.getElementById('privacyPolicyLink').addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
-document.getElementById('termsAndConditionsLinkFooter').addEventListener('click', (e) => { e.preventDefault(); openModal('termsAndConditionsModal'); });
+document.getElementById('loginNavBtn')?.addEventListener('click', (e) => { e.preventDefault(); openModal('loginModal'); showTab('login'); });
+document.getElementById('aboutUsLink')?.addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
+document.getElementById('privacyPolicyLink')?.addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
+document.getElementById('termsAndConditionsLinkFooter')?.addEventListener('click', (e) => { e.preventDefault(); openModal('termsAndConditionsModal'); });
 
 modals.forEach(modal => {
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
@@ -59,21 +59,22 @@ const signupForm = document.getElementById('signupForm');
 const authMessage = document.getElementById('authMessage');
 
 const showTab = (tabName) => {
-authMessage.classList.add('hidden');
-[loginForm, signupForm].forEach(form => form.classList.add('hidden'));
-[loginTabBtn, signupTabBtn].forEach(btn => btn.classList.remove('border-blue-600', 'text-blue-600'));
+  if (!authMessage || !loginForm || !signupForm || !loginTabBtn || !signupTabBtn) return;
+  authMessage.classList.add('hidden');
+  [loginForm, signupForm].forEach(form => form.classList.add('hidden'));
+  [loginTabBtn, signupTabBtn].forEach(btn => btn.classList.remove('border-blue-600', 'text-blue-600'));
 
-if (tabName === 'login') {
-loginForm.classList.remove('hidden');
-loginTabBtn.classList.add('border-blue-600', 'text-blue-600');
-} else {
-signupForm.classList.remove('hidden');
-signupTabBtn.classList.add('border-blue-600', 'text-blue-600');
-}
+  if (tabName === 'login') {
+    loginForm.classList.remove('hidden');
+    loginTabBtn.classList.add('border-blue-600', 'text-blue-600');
+  } else {
+    signupForm.classList.remove('hidden');
+    signupTabBtn.classList.add('border-blue-600', 'text-blue-600');
+  }
 };
 
-loginTabBtn.addEventListener('click', () => showTab('login'));
-signupTabBtn.addEventListener('click', () => showTab('signup'));
+loginTabBtn?.addEventListener('click', () => showTab('login'));
+signupTabBtn?.addEventListener('click', () => showTab('signup'));
 
 const authStatusContainer = document.getElementById('authStatusContainer');
 const loginNavBtn = document.getElementById('loginNavBtn');
@@ -108,11 +109,11 @@ closeModal(document.getElementById('loginModal'));
 showAuthMessage(error.message);
 }
 };
-googleLoginBtn.addEventListener('click', signInWithGoogle);
-googleSignupBtn.addEventListener('click', signInWithGoogle);
+googleLoginBtn?.addEventListener('click', signInWithGoogle);
+googleSignupBtn?.addEventListener('click', signInWithGoogle);
 
 // Email/Password Login
-loginForm.addEventListener('submit', async (e) => {
+loginForm?.addEventListener('submit', async (e) => {
 e.preventDefault();
 try {
 await signInWithEmailAndPassword(auth, loginEmailInput.value, loginPasswordInput.value);
@@ -123,7 +124,7 @@ showAuthMessage(error.message);
 });
 
 // Email/Password Signup
-signupForm.addEventListener('submit', async (e) => {
+signupForm?.addEventListener('submit', async (e) => {
 e.preventDefault();
 if (signupPasswordInput.value.length < 6) {
 showAuthMessage('Password must be at least 6 characters long.');
@@ -141,32 +142,32 @@ showAuthMessage(error.message);
 // Auth State Change Listener
 onAuthStateChanged(auth, user => {
 if (user) {
-loginNavBtn.classList.add('hidden');
-userMonogram.classList.remove('hidden');
-const initials = (user.displayName || user.email).split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-userMonogram.textContent = initials;
+  loginNavBtn?.classList.add('hidden');
+  userMonogram?.classList.remove('hidden');
+  const initials = (user.displayName || user.email).split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  if (userMonogram) userMonogram.textContent = initials;
 } else {
-loginNavBtn.classList.remove('hidden');
-userMonogram.classList.add('hidden');
-authDropdown.classList.add('hidden');
+  loginNavBtn?.classList.remove('hidden');
+  userMonogram?.classList.add('hidden');
+  authDropdown?.classList.add('hidden');
 }
 });
 
 // Monogram Dropdown Toggle
-userMonogram.addEventListener('click', (e) => {
+userMonogram?.addEventListener('click', (e) => {
 e.stopPropagation();
-authDropdown.classList.toggle('hidden');
+authDropdown?.classList.toggle('hidden');
 });
 
 // Close dropdown if clicking outside
 document.addEventListener('click', () => {
-if (!authDropdown.classList.contains('hidden')) {
-authDropdown.classList.add('hidden');
+if (!authDropdown?.classList.contains('hidden')) {
+  authDropdown?.classList.add('hidden');
 }
 });
 
 // Logout
-logoutBtn.addEventListener('click', () => {
+logoutBtn?.addEventListener('click', () => {
 signOut(auth);
 });
 
