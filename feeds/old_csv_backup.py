@@ -2,8 +2,8 @@ import xml.etree.ElementTree as ET
 import csv
 
 TEMPLATE_XML = "feed.xml"                    # your existing XML with full structure
-CSV_INPUT    = "d2.csv"  # the CSV you pasted
-OUTPUT_XML   = "price.xml"            # new XML with updated prices
+CSV_INPUT    = "qw.csv"  # the CSV you pasted
+OUTPUT_XML   = "prices.xml"            # new XML with updated prices
 
 # Map CSV qualities -> XML tags
 # CSV has: flawless, good, fair, damaged
@@ -12,7 +12,7 @@ QUALITY_MAP = {
     "flawless": "flawless",
     "good": "good",
     "fair": "fair",
-    "damaged": "broken",
+    "damaged": "damaged",
 }
 
 STATUS_ALLOWED = {"locked", "unlocked"}

@@ -6,7 +6,7 @@ OUTPUT_CSV = "ds.csv"
 
 # Order we want
 STATUS_ORDER = ["locked", "unlocked"]
-QUALITY_ORDER = ["flawless", "good", "fair", "broken"]  # "broken" -> "damaged" label in CSV
+QUALITY_ORDER = ["flawless", "good", "fair", "damaged"]  # "broken" -> "damaged" label in CSV
 
 tree = ET.parse(INPUT_XML)
 root = tree.getroot()
