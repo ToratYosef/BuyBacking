@@ -4943,12 +4943,9 @@ return 'Kit Sent';
 if (normalizedStatus === 'emailed') {
 return 'Balance Email Sent';
 }
-if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
-if (acceptedWithoutEta) {
-  return 'Label Generated';
-}
-return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
-}
+  if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
+    return 'Phone On The Way To Us';
+  }
 // Fallback for other statuses
 return normalizedStatus.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
