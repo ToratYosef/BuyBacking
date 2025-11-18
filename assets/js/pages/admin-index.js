@@ -4933,10 +4933,7 @@ return isInTransit || hasEta ? 'Pending Return To Us' : 'Kit Delivered';
 if (normalizedStatus === 'label_generated' || legacyEmailStatus) {
 const isEmailPreference = normalizedPreference === 'email label requested';
 if (isEmailPreference) {
-  if (acceptedWithoutEta) {
-    return 'Label Generated';
-  }
-  return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
+  return 'Label Generated';
 }
 return 'Kit Sent';
 }
