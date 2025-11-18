@@ -47,6 +47,15 @@ function isLabelGenerationStage(order = {}) {
   return false;
 }
 
+const RECEIVED_STATUS_KEYS = new Set(['received', 'device_received', 'received_device', 'imei_checked']);
+
+function isReceivedStatusValue(status) {
+  if (!status) {
+    return false;
+  }
+  return RECEIVED_STATUS_KEYS.has(status.toString().trim().toLowerCase());
+}
+
 let db;
 let auth;
 let currentUserId = 'anonymous_user';
@@ -756,7 +765,7 @@ function updateDashboardCounts(ordersData) {
 orderPendingCount.textContent = ordersData.filter(o => o.status === 'order_pending').length;
 shippingKitRequestedCount.textContent = ordersData.filter(o => o.status === 'shipping_kit_requested').length;
 labelGeneratedCount.textContent = ordersData.filter(order => isLabelGenerationStage(order)).length;
-receivedCount.textContent = ordersData.filter(o => o.status === 'received').length;
+receivedCount.textContent = ordersData.filter(o => isReceivedStatusValue(o.status)).length;
 completedCount.textContent = ordersData.filter(o => o.status === 'completed').length;
 reofferedPendingCount.textContent = ordersData.filter(o => o.status === 're-offered-pending').length;
 reofferedAcceptedCount.textContent = ordersData.filter(o => o.status === 're-offered-accepted' || o.status === 'requote_accepted').length;
@@ -929,6 +938,9 @@ case 'kit_on_the_way_to_us':
 return 'Kit On The Way To Us';
 case 'delivered_to_us':
 return 'Delivered To Us';
+case 'received':
+case 'imei_checked':
+return 'Device Received';
 }
 
 const legacyEmailStatus = normalizedStatus === 'emailed' && isLegacyEmailLabelStatus(order);
@@ -958,7 +970,9 @@ case 'order_pending': return 'bg-blue-100 text-blue-800 status-bubble';
 case 'shipping_kit_requested': return 'bg-indigo-100 text-indigo-800 status-bubble';
 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'emailed': return 'bg-yellow-100 text-yellow-800 status-bubble';
-case 'received': return 'bg-green-100 text-green-800 status-bubble';
+case 'received':
+case 'imei_checked':
+return 'bg-green-100 text-green-800 status-bubble';
 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
@@ -1203,6 +1217,7 @@ appendLabelStageActions();
 }
 break;
 case 'received':
+case 'imei_checked':
 appendPostReceivedActions();
 break;
 case 're-offered-pending':
@@ -1770,13 +1785,15 @@ function filterAndRenderOrders(status, searchTerm) {
 let filtered = allOrders;
 
 if (status !== 'all') {
-if (status === 'label_generated') {
-filtered = filtered.filter(order => isLabelGenerationStage(order));
-} else if (status === 'emailed') {
-filtered = filtered.filter(order => isBalanceEmailStatus(order));
-} else {
-filtered = filtered.filter(order => order.status === status);
-}
+  if (status === 'label_generated') {
+  filtered = filtered.filter(order => isLabelGenerationStage(order));
+  } else if (status === 'emailed') {
+  filtered = filtered.filter(order => isBalanceEmailStatus(order));
+  } else if (status === 'received') {
+  filtered = filtered.filter(order => isReceivedStatusValue(order.status));
+  } else {
+  filtered = filtered.filter(order => order.status === status);
+  }
 }
 
 if (searchTerm) {

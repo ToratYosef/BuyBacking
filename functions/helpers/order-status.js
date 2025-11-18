@@ -2,6 +2,8 @@ const POST_RECEIVED_STATUS_HINTS = new Set([
   'received',
   'device_received',
   'received_device',
+  'imei_checked',
+  'imei checked',
   'completed',
   'complete',
   're-offered-pending',
