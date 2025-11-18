@@ -5,7 +5,13 @@ const { updateOrderBoth } = require('../db/db');
 const { sendEmail } = require('../services/notifications');
 const { BLACKLISTED_EMAIL_HTML } = require('../helpers/templates');
 const functions = require('firebase-functions');
-const { checkEsn, checkCarrierLock, isAppleDeviceHint } = require('../services/phonecheck');
+const {
+    checkEsn,
+    checkCarrierLock,
+    checkSamsungCarrierInfo,
+    isAppleDeviceHint,
+    isSamsungDeviceHint,
+} = require('../services/phonecheck');
 
 // NEW ENDPOINT for IMEI/ESN Check
 router.post('/check-esn', async (req, res) => {
@@ -63,13 +69,55 @@ router.post('/check-esn', async (req, res) => {
             }
         }
 
+        let samsungCarrierInfoResult = null;
+        const samsungHintValues = [
+            brand,
+            deviceType,
+            esnResult?.normalized?.brand,
+            esnResult?.normalized?.model,
+            esnResult?.normalized?.deviceName,
+        ];
+
+        if (isSamsungDeviceHint(...samsungHintValues)) {
+            try {
+                samsungCarrierInfoResult = await checkSamsungCarrierInfo({
+                    identifier: trimmedImei,
+                });
+            } catch (samsungError) {
+                console.error(`Samsung carrier info lookup failed for order ${orderId}:`, samsungError);
+            }
+        }
+
         const normalized = {
             ...(carrierLockResult?.normalized || {}),
             ...esnResult.normalized,
-            raw: carrierLockResult
-                ? { esn: esnResult.raw, carrierLock: carrierLockResult.raw }
-                : esnResult.raw,
         };
+
+        if (samsungCarrierInfoResult?.normalized) {
+            normalized.samsungCarrierInfo = samsungCarrierInfoResult.normalized;
+
+            if (!normalized.model && samsungCarrierInfoResult.normalized.modelDescription) {
+                normalized.model = samsungCarrierInfoResult.normalized.modelDescription;
+            }
+            if (!normalized.modelNumber && samsungCarrierInfoResult.normalized.modelNumber) {
+                normalized.modelNumber = samsungCarrierInfoResult.normalized.modelNumber;
+            }
+            if (!normalized.carrier && samsungCarrierInfoResult.normalized.carrier) {
+                normalized.carrier = samsungCarrierInfoResult.normalized.carrier;
+            }
+            if (!normalized.warrantyStatus && samsungCarrierInfoResult.normalized.warranty) {
+                normalized.warrantyStatus = samsungCarrierInfoResult.normalized.warranty;
+            }
+        }
+
+        const rawResponses = { esn: esnResult.raw };
+        if (carrierLockResult) {
+            rawResponses.carrierLock = carrierLockResult.raw;
+        }
+        if (samsungCarrierInfoResult) {
+            rawResponses.samsungCarrier = samsungCarrierInfoResult.raw;
+        }
+        normalized.raw = rawResponses;
 
         const updateData = {
             imei: String(imei).trim(),

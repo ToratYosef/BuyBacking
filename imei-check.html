@@ -157,8 +157,10 @@
       const data = snapshot.data();
       renderResult(data.imeiCheckResult || null);
 
+      const statusValue = (data.status || '').toString().trim().toLowerCase();
+      const isReceivedStatus = statusValue === 'received' || statusValue === 'imei_checked';
       const shouldShowForm =
-        data.status === 'received' &&
+        isReceivedStatus &&
         (!data.imei || data.imeiChecked === false);
 
       if (shouldShowForm) {
@@ -170,7 +172,7 @@
         }
       } else {
         imeiForm.classList.add('hidden');
-        if (data.status !== 'received') {
+        if (!isReceivedStatus) {
           instructionsEl.textContent = 'Device is not in a receivable state for IMEI checks.';
           instructionsEl.classList.add('status-message');
         } else {
