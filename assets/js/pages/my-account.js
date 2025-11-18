@@ -125,19 +125,21 @@ messageDiv.textContent = '';
 }
 
 function getStatusBadgeClass(status) {
-switch (status.toLowerCase()) {
-case 'completed': return 'status-completed';
-case 're-offered-accepted': return 'status-re-offered-accepted';
-case 're-offered-auto-accepted': return 'status-re-offered-auto-accepted';
-case 're-offered-pending': return 'status-re-offered-pending';
-case 're-offered-declined': return 'status-re-offered-declined';
-case 'order_pending': return 'status-order_pending';
-case 'shipping_kit_requested': return 'status-shipping_kit_requested';
-case 'label_generated': return 'status-label_generated';
-case 'received': return 'status-received';
-case 'return-label-generated': return 'status-return-label-generated';
-default: return 'bg-gray-200 text-gray-800';
-}
+  switch (status.toLowerCase()) {
+  case 'completed': return 'status-completed';
+  case 're-offered-accepted': return 'status-re-offered-accepted';
+  case 're-offered-auto-accepted': return 'status-re-offered-auto-accepted';
+  case 're-offered-pending': return 'status-re-offered-pending';
+  case 're-offered-declined': return 'status-re-offered-declined';
+  case 'order_pending': return 'status-order_pending';
+  case 'shipping_kit_requested': return 'status-shipping_kit_requested';
+  case 'label_generated': return 'status-label_generated';
+  case 'received':
+  case 'imei_checked':
+    return 'status-received';
+  case 'return-label-generated': return 'status-return-label-generated';
+  default: return 'bg-gray-200 text-gray-800';
+  }
 }
 
 function formatStatus(status) {
@@ -168,10 +170,13 @@ return 'Delivered To Us';
 if (status === 'emailed') {
 return 'Balance Email Sent';
 }
-if (status === 'phone_on_the_way' || status === 'phone_on_the_way_to_us') {
-return 'Phone On The Way To Us';
-}
-return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  if (status === 'phone_on_the_way' || status === 'phone_on_the_way_to_us') {
+    return 'Phone On The Way To Us';
+  }
+  if (status === 'imei_checked') {
+    return 'Device Received';
+  }
+  return status.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
 function formatDate(timestamp) {
@@ -196,6 +201,7 @@ const STATUS_FLOW = [
 'phone_on_the_way_to_us',
 'delivered_to_us',
 'received',
+'imei_checked',
 'emailed',
 're-offered-pending',
 're-offered-accepted',

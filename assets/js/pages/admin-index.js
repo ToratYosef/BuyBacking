@@ -122,6 +122,8 @@ const STATUS_LABEL_OVERRIDES = Object.freeze({
   emailed: 'Balance Email Sent',
 });
 
+const RECEIVED_STATUS_KEYS = new Set(['received', 'device_received', 'received_device', 'imei_checked']);
+
 const STATUS_BUTTON_BASE_CLASSES = 'inline-flex items-center gap-2 font-semibold text-xs px-3 py-1 rounded-full border border-transparent shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-400';
 
 const TRUSTPILOT_REVIEW_LINK = "https://www.trustpilot.com/evaluate/secondhandcell.com";
@@ -314,11 +316,13 @@ const EMAIL_STATUS_HINTS = new Set([
   'phone_on_the_way_to_us',
   'delivered_to_us',
   'received',
+  'imei_checked',
   'completed',
 ]);
 
 const TRACKING_POST_RECEIVED_STATUSES = new Set([
   'received',
+  'imei_checked',
   'device_received',
   'received_device',
   'completed',
@@ -987,13 +991,20 @@ const IMEI_RESULT_FIELDS = [
   { key: 'lockedCarrier', label: 'Locked Carrier' }
 ];
 
-const ORDER_RECEIVED_STATUSES = new Set(['received']);
+const ORDER_RECEIVED_STATUSES = RECEIVED_STATUS_KEYS;
 
 function normalizeStatusValueLocal(value) {
   if (typeof value !== 'string') {
     return '';
   }
   return value.trim().toLowerCase();
+}
+
+function isReceivedStatusValue(value) {
+  if (!value) {
+    return false;
+  }
+  return ORDER_RECEIVED_STATUSES.has(normalizeStatusValueLocal(value));
 }
 
 function extractOrderImeiData(order) {
@@ -1259,7 +1270,7 @@ function handleImeiSnapshot(snapshot) {
   currentDeviceDocHasSnapshot = snapshotExists;
   const data = snapshotExists ? snapshot.data() || {} : null;
   const deviceStatusValue = normalizeStatusValueLocal(data?.status);
-  const allowByDevice = deviceStatusValue === 'received';
+  const allowByDevice = isReceivedStatusValue(deviceStatusValue);
   const allowEntry = allowByDevice || allowOrderEntry;
   const imeiChecked = Boolean(data?.imeiChecked || orderImeiMeta.imeiChecked);
   const savedImei = (() => {
@@ -3779,7 +3790,7 @@ const statusCounts = {
   'emailed': ordersData.filter(order => isBalanceEmailStatus(order)).length,
   'phone_on_the_way': ordersData.filter(o => o.status === 'phone_on_the_way').length,
   'phone_on_the_way_to_us': ordersData.filter(o => o.status === 'phone_on_the_way_to_us').length,
-  'received': ordersData.filter(o => o.status === 'received').length,
+  'received': ordersData.filter(o => isReceivedStatusValue(o.status)).length,
   'completed': ordersData.filter(o => o.status === 'completed').length,
   're-offered-pending': ordersData.filter(o => o.status === 're-offered-pending').length,
   're-offered-accepted': ordersData.filter(o => o.status === 're-offered-accepted').length,
@@ -3892,9 +3903,9 @@ totalPayout += finalPayout;
 }
 
 // Devices Received
-if (order.status === 'received') {
-receivedDevicesCountVal++;
-}
+  if (isReceivedStatusValue(order.status)) {
+    receivedDevicesCountVal++;
+  }
 });
 
 // Conversion Rate calculation
@@ -4912,10 +4923,13 @@ return 'Kit Delivered';
 if (normalizedStatus === 'kit_on_the_way_to_us') {
 return isInTransit || hasEta ? 'Pending Return To Us' : 'Kit Delivered';
 }
-if (normalizedStatus === 'delivered_to_us') {
-return 'Delivered To Us';
-}
-const legacyEmailStatus = normalizedStatus === 'emailed' && isLegacyEmailLabelStatus(order);
+  if (normalizedStatus === 'delivered_to_us') {
+    return 'Delivered To Us';
+  }
+  if (isReceivedStatusValue(normalizedStatus)) {
+    return 'Device Received';
+  }
+  const legacyEmailStatus = normalizedStatus === 'emailed' && isLegacyEmailLabelStatus(order);
 if (normalizedStatus === 'label_generated' || legacyEmailStatus) {
 const isEmailPreference = normalizedPreference === 'email label requested';
 if (isEmailPreference) {
@@ -4929,12 +4943,9 @@ return 'Kit Sent';
 if (normalizedStatus === 'emailed') {
 return 'Balance Email Sent';
 }
-if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
-if (acceptedWithoutEta) {
-  return 'Label Generated';
-}
-return isInTransit || hasEta ? 'Phone On The Way To Us' : 'Label Generated';
-}
+  if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
+    return 'Phone On The Way To Us';
+  }
 // Fallback for other statuses
 return normalizedStatus.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
@@ -5199,7 +5210,9 @@ case 'emailed': return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'phone_on_the_way':
 case 'phone_on_the_way_to_us':
   return 'bg-sky-100 text-sky-800 status-bubble';
-case 'received': return 'bg-green-100 text-green-800 status-bubble';
+  case 'received':
+  case 'imei_checked':
+    return 'bg-green-100 text-green-800 status-bubble';
 case 'completed': return 'bg-purple-100 text-purple-800 status-bubble';
 case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
@@ -5941,6 +5954,7 @@ switch (currentStatus) {
     modalActionButtons.appendChild(createButton('Mark as Received', () => handleAction(order.id, 'markReceived')));
     break;
   case 'received':
+  case 'imei_checked':
     appendPostReceivedActions();
     break;
 case 're-offered-pending':
@@ -7132,6 +7146,8 @@ if (status !== 'all') {
   filtered = filtered.filter(order => isLabelGenerationStage(order));
   } else if (status === 'emailed') {
   filtered = filtered.filter(order => isBalanceEmailStatus(order));
+  } else if (status === 'received') {
+  filtered = filtered.filter(order => isReceivedStatusValue(order.status));
   } else {
   filtered = filtered.filter(order => order.status === status);
   }

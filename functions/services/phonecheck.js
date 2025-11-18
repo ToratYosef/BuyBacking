@@ -1,7 +1,9 @@
 const axios = require('axios');
 
 const DEFAULT_PHONECHECK_BASE_URL = 'https://clientapiv2.phonecheck.com';
+const DEFAULT_PHONECHECK_SAMSUNG_BASE_URL = 'https://api.phonecheck.com';
 const APPLE_HINT_REGEX = /(apple|iphone|ipad|ipod|ios|watch)/i;
+const SAMSUNG_HINT_REGEX = /(samsung|galaxy)/i;
 const COLOR_PHRASES = [
   'natural titanium',
   'blue titanium',
@@ -144,6 +146,10 @@ function isAppleDeviceHint(...values) {
   return values.some((value) => typeof value === 'string' && APPLE_HINT_REGEX.test(value));
 }
 
+function isSamsungDeviceHint(...values) {
+  return values.some((value) => typeof value === 'string' && SAMSUNG_HINT_REGEX.test(value));
+}
+
 function getPhonecheckConfig() {
   const apiKey = process.env.IMEI_API;
   const username = process.env.IMEI_USERNAME;
@@ -159,6 +165,22 @@ function getPhonecheckConfig() {
   }
 
   return { apiKey, username, baseUrl };
+}
+
+function getSamsungPhonecheckConfig() {
+  const token =
+    process.env.PHONECHECK_SAMSUNG_TOKEN ||
+    process.env.PHONECHECK_MASTER_TOKEN ||
+    process.env.PHONECHECK_TOKEN;
+  const baseUrl = process.env.PHONECHECK_SAMSUNG_BASE_URL || DEFAULT_PHONECHECK_SAMSUNG_BASE_URL;
+
+  if (!token) {
+    const error = new Error('Missing required Phonecheck Samsung token environment variable.');
+    error.code = 'phonecheck/missing-config';
+    throw error;
+  }
+
+  return { token, baseUrl };
 }
 
 function normalizePhonecheckBoolean(value) {
@@ -417,6 +439,105 @@ function normalizePhonecheckResponse(raw = {}) {
   return normalized;
 }
 
+function normalizeSamsungCarrierInfo(raw = {}) {
+  const data = raw && typeof raw === 'object' && raw.data && typeof raw.data === 'object' ? raw.data : raw;
+
+  const normalized = {};
+
+  const fullName = pickFirstString(
+    data?.fullName,
+    data?.FullName,
+    data?.modelDescription,
+    data?.ModelDescription,
+    data?.description,
+    data?.Description,
+  );
+  if (fullName) {
+    normalized.fullName = fullName;
+  }
+
+  const imei = pickFirstString(data?.imei, data?.IMEI);
+  if (imei) {
+    normalized.imei = imei;
+  }
+
+  const serialNumber = pickFirstString(data?.serialNumber, data?.SerialNumber, data?.serial, data?.Serial);
+  if (serialNumber) {
+    normalized.serialNumber = serialNumber;
+  }
+
+  const modelNumber = pickFirstString(
+    data?.modelNumber,
+    data?.ModelNumber,
+    data?.modelCode,
+    data?.ModelCode,
+    data?.SKU,
+  );
+  if (modelNumber) {
+    normalized.modelNumber = modelNumber;
+  }
+
+  const modelDescription = pickFirstString(
+    data?.modelDescription,
+    data?.ModelDescription,
+    data?.description,
+    data?.Description,
+  );
+  if (modelDescription) {
+    normalized.modelDescription = modelDescription;
+  }
+
+  const warranty = pickFirstString(data?.warranty, data?.Warranty, data?.warrantyStatus, data?.WarrantyStatus);
+  if (warranty) {
+    normalized.warranty = warranty;
+  }
+
+  const productionDate = pickFirstString(data?.productionDate, data?.ProductionDate);
+  if (productionDate) {
+    normalized.productionDate = productionDate;
+  }
+
+  const warrantyUntil = pickFirstString(data?.warrantyUntil, data?.WarrantyUntil);
+  if (warrantyUntil) {
+    normalized.warrantyUntil = warrantyUntil;
+  }
+
+  const manufacturer = pickFirstString(data?.manufacturer, data?.Manufacturer);
+  if (manufacturer) {
+    normalized.manufacturer = manufacturer;
+  }
+
+  const carrier = pickFirstString(data?.carrier, data?.Carrier);
+  if (carrier) {
+    normalized.carrier = carrier;
+  }
+
+  const soldBy = pickFirstString(data?.soldBy, data?.SoldBy);
+  if (soldBy) {
+    normalized.soldBy = soldBy;
+  }
+
+  const purchaseDate = pickFirstString(data?.purchaseDate, data?.PurchaseDate);
+  if (purchaseDate) {
+    normalized.purchaseDate = purchaseDate;
+  }
+
+  const country = pickFirstString(data?.country, data?.Country);
+  if (country) {
+    normalized.country = country;
+  }
+
+  if (typeof raw.fromCache === 'boolean') {
+    normalized.fromCache = raw.fromCache;
+  }
+
+  if (Array.isArray(raw.serviceProviders) && raw.serviceProviders.length > 0) {
+    normalized.serviceProviders = raw.serviceProviders.map((provider) => ({ ...provider }));
+  }
+
+  return normalized;
+}
+
 function normalizeCarrierForPhonecheck(carrier) {
   if (typeof carrier !== 'string') {
     return null;
@@ -608,11 +729,68 @@ async function checkCarrierLock({
   };
 }
 
+async function checkSamsungCarrierInfo({
+  identifier,
+  axiosInstance = axios,
+} = {}) {
+  const trimmedIdentifier = typeof identifier === 'string' ? identifier.trim() : null;
+  if (!trimmedIdentifier) {
+    const error = new Error('An IMEI or serial number is required for the Samsung carrier lookup.');
+    error.code = 'phonecheck/invalid-imei';
+    throw error;
+  }
+
+  const { token, baseUrl } = getSamsungPhonecheckConfig();
+  const url = new URL(`/v2/imei/samsung/${encodeURIComponent(trimmedIdentifier)}`, baseUrl).toString();
+
+  const response = await axiosInstance({
+    method: 'get',
+    url,
+    headers: {
+      token_master: token,
+    },
+    timeout: 20000,
+    validateStatus: () => true,
+  });
+
+  const { status, data } = response;
+
+  if (status >= 400) {
+    let message = 'Phonecheck Samsung carrier info request failed.';
+    if (data) {
+      if (typeof data === 'string') {
+        message = data;
+      } else if (typeof data === 'object' && data !== null) {
+        message = data.message || data.msg || data.error || message;
+      }
+    }
+    const error = new Error(message || 'Phonecheck Samsung carrier info request failed.');
+    error.code = 'phonecheck/http-error';
+    error.status = status;
+    error.responseData = data;
+    throw error;
+  }
+
+  if (!data || typeof data !== 'object') {
+    const error = new Error('Phonecheck returned an unexpected Samsung carrier response.');
+    error.code = 'phonecheck/invalid-response';
+    error.responseData = data;
+    throw error;
+  }
+
+  return {
+    raw: data,
+    normalized: normalizeSamsungCarrierInfo(data),
+  };
+}
+
 module.exports = {
   checkEsn,
   checkCarrierLock,
+  checkSamsungCarrierInfo,
   normalizePhonecheckResponse,
   normalizeCarrierForPhonecheck,
   normalizeDeviceType,
   isAppleDeviceHint,
+  isSamsungDeviceHint,
 };
