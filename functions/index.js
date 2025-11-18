@@ -6,7 +6,13 @@ const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { randomUUID } = require("crypto");
 const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = require('./helpers/pdf');
-const { checkEsn, checkCarrierLock, isAppleDeviceHint } = require('./services/phonecheck');
+const {
+  checkEsn,
+  checkCarrierLock,
+  checkSamsungCarrierInfo,
+  isAppleDeviceHint,
+  isSamsungDeviceHint,
+} = require('./services/phonecheck');
 const {
   DEFAULT_CARRIER_CODE,
   buildKitTrackingUpdate,
@@ -470,13 +476,63 @@ app.post("/checkImei", async (req, res) => {
     }
   }
 
+  let samsungCarrierInfoResult = null;
+  const samsungHintValues = [
+    brand,
+    deviceType,
+    orderData?.brand,
+    orderData?.manufacturer,
+    orderData?.device?.brand,
+    orderData?.device?.model,
+    deviceData?.brand,
+    deviceData?.manufacturer,
+    deviceData?.device?.brand,
+    deviceData?.device?.model,
+    esnResult?.normalized?.brand,
+    esnResult?.normalized?.model,
+    esnResult?.normalized?.deviceName,
+  ];
+
+  if (isSamsungDeviceHint(...samsungHintValues)) {
+    try {
+      samsungCarrierInfoResult = await checkSamsungCarrierInfo({
+        identifier: imei,
+      });
+    } catch (samsungError) {
+      console.error('Phonecheck Samsung carrier info request failed:', samsungError);
+    }
+  }
+
   const normalized = {
     ...(carrierLockResult?.normalized || {}),
     ...esnResult.normalized,
-    raw: carrierLockResult
-      ? { esn: esnResult.raw, carrierLock: carrierLockResult.raw }
-      : esnResult.raw,
   };
+
+  if (samsungCarrierInfoResult?.normalized) {
+    normalized.samsungCarrierInfo = samsungCarrierInfoResult.normalized;
+
+    if (!normalized.model && samsungCarrierInfoResult.normalized.modelDescription) {
+      normalized.model = samsungCarrierInfoResult.normalized.modelDescription;
+    }
+    if (!normalized.modelNumber && samsungCarrierInfoResult.normalized.modelNumber) {
+      normalized.modelNumber = samsungCarrierInfoResult.normalized.modelNumber;
+    }
+    if (!normalized.carrier && samsungCarrierInfoResult.normalized.carrier) {
+      normalized.carrier = samsungCarrierInfoResult.normalized.carrier;
+    }
+    if (!normalized.warrantyStatus && samsungCarrierInfoResult.normalized.warranty) {
+      normalized.warrantyStatus = samsungCarrierInfoResult.normalized.warranty;
+    }
+  }
+
+  const rawResponses = { esn: esnResult.raw };
+  if (carrierLockResult) {
+    rawResponses.carrierLock = carrierLockResult.raw;
+  }
+  if (samsungCarrierInfoResult) {
+    rawResponses.samsungCarrier = samsungCarrierInfoResult.raw;
+  }
+  normalized.raw = rawResponses;
 
   const updatePayload = {
     imei,
