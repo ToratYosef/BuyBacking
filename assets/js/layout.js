@@ -86,7 +86,7 @@
         border-bottom: 1px solid #fde68a;
         background: radial-gradient(circle at top left,#fef9c3,#fef3c7);
         color: #92400e;
-        padding: 16px 20px 20px;
+        padding: 10px 16px 12px;
         box-shadow: inset 0 1px 0 rgba(253,230,138,0.8);
       }
       .shc-ship48-banner.is-visible { display: block; }
@@ -95,7 +95,7 @@
         margin: 0 auto;
         display: flex;
         flex-direction: column;
-        gap: 14px;
+        gap: 10px;
       }
       .shc-ship48-ticker {
         width: 100%;
@@ -103,19 +103,19 @@
         border: 1px dashed rgba(234,88,12,0.45);
         overflow: hidden;
         background: rgba(255,255,255,0.85);
-        padding: 4px 0;
+        padding: 2px 0;
       }
       .shc-ship48-ticker-track {
         display: inline-flex;
-        gap: 24px;
+        gap: 16px;
         width: max-content;
         white-space: nowrap;
         animation: shcShipMarquee 16s linear infinite;
       }
       .shc-ship48-ticker-track span {
-        font-weight: 800;
-        letter-spacing: 0.35em;
-        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        font-size: 0.7rem;
         color: #92400e;
       }
       .shc-ship48-text {
@@ -126,35 +126,35 @@
         gap: 6px;
       }
       .shc-ship48-eyebrow {
-        font-size: 0.75rem;
-        letter-spacing: 0.3em;
+        font-size: 0.65rem;
+        letter-spacing: 0.32em;
         font-weight: 700;
         color: #b45309;
       }
       .shc-ship48-headline {
-        font-size: clamp(1.35rem,4vw,2.35rem);
+        font-size: clamp(1.1rem,3.2vw,1.8rem);
         font-weight: 800;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.06em;
         color: #78350f;
       }
       .shc-ship48-subtext {
         margin: 0;
-        font-size: 1rem;
+        font-size: 0.92rem;
         font-weight: 600;
         color: #92400e;
       }
       .shc-ship48-meta {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
-        font-size: 0.85rem;
+        gap: 8px;
+        font-size: 0.78rem;
         font-weight: 600;
         color: #92400e;
       }
       .shc-ship48-actions {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
+        gap: 10px;
       }
       .shc-ship48-cta {
         border-radius: 999px;
@@ -162,13 +162,14 @@
         background: linear-gradient(115deg,#f97316,#ea580c);
         color: #fff;
         font-weight: 800;
-        letter-spacing: 0.06em;
+        letter-spacing: 0.05em;
         text-transform: uppercase;
-        padding: 12px 28px;
+        padding: 10px 22px;
         cursor: pointer;
         box-shadow: 0 25px 40px -30px rgba(185,28,28,0.6);
         transition: transform .2s ease, box-shadow .2s ease;
         width: 100%;
+        font-size: 0.85rem;
       }
       .shc-ship48-cta:hover {
         transform: translateY(-2px);
@@ -205,10 +206,13 @@
       }
       @media (min-width: 768px) {
         .shc-ship48-inner { flex-direction: row; align-items: center; justify-content: space-between; }
-        .shc-ship48-cta { width: auto; min-width: 230px; }
+        .shc-ship48-cta { width: auto; min-width: 190px; }
       }
       @media (max-width: 640px) {
         .shc-ship48-inner { align-items: stretch; }
+        .shc-ship48-banner { padding: 8px 12px; }
+        .shc-ship48-headline { font-size: 1rem; }
+        .shc-ship48-subtext { font-size: 0.85rem; }
       }
       .shc-global-footer {
         background: #0b1224;
