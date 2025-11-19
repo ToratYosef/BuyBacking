@@ -280,6 +280,7 @@ const paginationInfo = document.getElementById('pagination-info');
 const searchInput = document.getElementById('search-orders');
 const mobileSearchInput = document.getElementById('mobile-search-orders');
 const statusFilterButtons = document.querySelectorAll('#status-filter-bar .filter-chip');
+const promoFilterSelect = document.getElementById('promo-code-filter');
 const liveOrdersCount = document.getElementById('live-orders-count');
 const averagePayoutAmount = document.getElementById('average-payout-amount');
 const mobileLiveOrdersCount = document.getElementById('mobile-live-orders-count');
@@ -320,6 +321,13 @@ const EMAIL_STATUS_HINTS = new Set([
   'completed',
 ]);
 
+const PROMO_FILTER_VALUES = Object.freeze({
+  ALL: 'all',
+  WITH: 'with',
+  NONE: 'none',
+});
+const PROMO_FILTER_PREFIX = 'code:';
+
 const TRACKING_POST_RECEIVED_STATUSES = new Set([
   'received',
   'imei_checked',
@@ -358,6 +366,70 @@ const TRACKING_POST_RECEIVED_STATUSES = new Set([
   'cancelled',
   'canceled',
 ]);
+
+function extractOrderPromoCode(order = {}) {
+  const rawCode =
+    order?.promoCode ?? order?.promo_code ?? order?.promo ?? order?.promo_code_used;
+  if (!rawCode) {
+    return '';
+  }
+  return String(rawCode).trim().toUpperCase();
+}
+
+function matchesPromoFilter(order) {
+  if (!promoFilterSelect) {
+    return true;
+  }
+  const normalizedCode = extractOrderPromoCode(order);
+  if (currentPromoFilter === PROMO_FILTER_VALUES.ALL) {
+    return true;
+  }
+  if (currentPromoFilter === PROMO_FILTER_VALUES.WITH) {
+    return Boolean(normalizedCode);
+  }
+  if (currentPromoFilter === PROMO_FILTER_VALUES.NONE) {
+    return !normalizedCode;
+  }
+  if (currentPromoFilter.startsWith(PROMO_FILTER_PREFIX)) {
+    const targetCode = currentPromoFilter.slice(PROMO_FILTER_PREFIX.length);
+    return normalizedCode === targetCode;
+  }
+  return true;
+}
+
+function refreshPromoFilterOptions() {
+  if (!promoFilterSelect) {
+    return;
+  }
+
+  const uniqueCodes = Array.from(
+    new Set(allOrders.map(extractOrderPromoCode).filter(Boolean))
+  ).sort();
+
+  const options = [
+    { value: PROMO_FILTER_VALUES.ALL, label: 'All orders' },
+    { value: PROMO_FILTER_VALUES.WITH, label: 'Promo used' },
+    { value: PROMO_FILTER_VALUES.NONE, label: 'No promo' },
+    ...uniqueCodes.map((code) => ({
+      value: `${PROMO_FILTER_PREFIX}${code}`,
+      label: `${code} only`,
+    })),
+  ];
+
+  const previousValue =
+    promoFilterSelect.value || currentPromoFilter || PROMO_FILTER_VALUES.ALL;
+
+  promoFilterSelect.innerHTML = options
+    .map((option) => `<option value="${option.value}">${option.label}</option>`)
+    .join('');
+
+  const nextValue = options.some((option) => option.value === previousValue)
+    ? previousValue
+    : PROMO_FILTER_VALUES.ALL;
+
+  promoFilterSelect.value = nextValue;
+  currentPromoFilter = nextValue;
+}
 
 const selectedOrderIds = new Set();
 let lastRenderedOrderIds = [];
@@ -573,6 +645,7 @@ let currentPage = 1;
 let lastKnownTotalPages = 1;
 const ORDERS_PER_PAGE = 10;
 let currentActiveStatus = 'all';
+let currentPromoFilter = PROMO_FILTER_VALUES.ALL;
 let currentOrderDetails = null;
 let feedPricingDataCache = null;
 let feedPricingDataPromise = null;
@@ -4676,6 +4749,13 @@ const lastUpdatedDate = formatDateTime(lastUpdatedRaw);
 const reofferTimer = formatAutoAcceptTimer(order);
 const statusText = formatStatus(order);
 const labelStatus = formatLabelStatus(order);
+const promoCode = extractOrderPromoCode(order);
+const promoBonusValue = Number(order.promoBonusAmount ?? order.promo_bonus ?? 0);
+const promoBadgeHtml = promoCode
+  ? `<div class="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">Promo ${escapeHtml(promoCode)}${
+      promoBonusValue > 0 ? ` (+$${promoBonusValue.toFixed(2)})` : ''
+    }</div>`
+  : '';
 
 const trackingNumber = order.trackingNumber;
 const trackingCellContent = trackingNumber
@@ -4695,7 +4775,7 @@ row.innerHTML = `
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}${promoBadgeHtml}</td>
 <td class="px-3 py-4 whitespace-normal text-sm">
   <span class="${getStatusClass(order.status)}">
     <span class="status-bubble-text">${statusText}</span>
@@ -6879,6 +6959,13 @@ filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
 
 updateStatusFilterHighlight(currentActiveStatus);
 
+if (promoFilterSelect) {
+  promoFilterSelect.addEventListener('change', (event) => {
+    currentPromoFilter = event.target.value || PROMO_FILTER_VALUES.ALL;
+    filterAndRenderOrders(currentActiveStatus, currentSearchTerm, { preservePage: true });
+  });
+}
+
 if (modalStatus) {
   modalStatus.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -7102,17 +7189,19 @@ onSnapshot(ordersCollectionRef, (snapshot) => {
 allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
 // Client-side sort: newest first
-allOrders.sort((a, b) => {
-const dateA = extractTimestampMillis(a.createdAt) || 0;
-const dateB = extractTimestampMillis(b.createdAt) || 0;
-return dateB - dateA;
-});
+      allOrders.sort((a, b) => {
+        const dateA = extractTimestampMillis(a.createdAt) || 0;
+        const dateB = extractTimestampMillis(b.createdAt) || 0;
+        return dateB - dateA;
+      });
 
-const validIds = new Set(allOrders.map(order => order.id));
-Array.from(selectedOrderIds).forEach((id) => {
-if (!validIds.has(id)) {
-selectedOrderIds.delete(id);
-}
+      refreshPromoFilterOptions();
+
+      const validIds = new Set(allOrders.map(order => order.id));
+      Array.from(selectedOrderIds).forEach((id) => {
+        if (!validIds.has(id)) {
+          selectedOrderIds.delete(id);
+        }
 });
 
 updateDashboardCounts(allOrders);
@@ -7149,6 +7238,8 @@ if (status !== 'all') {
   filtered = filtered.filter(order => order.status === status);
   }
 }
+
+filtered = filtered.filter(matchesPromoFilter);
 
 if (currentSearchTerm) {
 const lowerCaseSearchTerm = currentSearchTerm.toLowerCase();

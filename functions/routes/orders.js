@@ -51,6 +51,214 @@ function createOrdersRouter({
   const PRINT_BUNDLE_ALLOWED_HEADERS = 'Authorization, Content-Type, X-Requested-With';
   const firestore = admin.firestore();
   const FieldValue = admin.firestore.FieldValue;
+  const Timestamp = admin.firestore.Timestamp;
+  const promoCodesCollection = firestore.collection('promo_codes');
+
+  const SWIFT_BUYBACK_ADDRESS = {
+    name: 'SHC Returns',
+    company_name: 'SecondHandCell',
+    phone: '3475591707',
+    address_line1: '1602 MCDONALD AVE STE REAR ENTRANCE',
+    city_locality: 'Brooklyn',
+    state_province: 'NY',
+    postal_code: '11230-6336',
+    country_code: 'US',
+  };
+
+  const EMAIL_LABEL_PACKAGE_DATA = {
+    service_code: 'usps_first_class_mail',
+    dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
+    weight: { ounces: 8, unit: 'ounce' },
+  };
+
+  function normalizePromoCode(value) {
+    if (!value) return '';
+    return String(value).trim().toUpperCase();
+  }
+
+  function buildHttpError(message, status = 400) {
+    const error = new Error(message);
+    error.status = status;
+    return error;
+  }
+
+  async function reservePromoCodeUsage({
+    code,
+    orderId,
+    shippingPreference,
+    shippingInfo,
+  }) {
+    const normalizedCode = normalizePromoCode(code);
+    if (!normalizedCode) {
+      return null;
+    }
+
+    const promoRef = promoCodesCollection.doc(normalizedCode);
+    return firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(promoRef);
+      if (!snapshot.exists) {
+        throw buildHttpError('Invalid promo code.', 400);
+      }
+
+      const data = snapshot.data() || {};
+      const usesLeftRaw = Number(data.uses_left ?? data.usesLeft ?? 0);
+      const usesLeft = Number.isFinite(usesLeftRaw) ? usesLeftRaw : 0;
+      if (usesLeft <= 0) {
+        throw buildHttpError('Promo code has been fully redeemed.', 400);
+      }
+
+      const requiresEmailLabel = Boolean(
+        data.requires_email_label ?? data.requiresEmailLabel ?? false
+      );
+      const preferenceValue = (shippingPreference || '').toLowerCase();
+      if (
+        requiresEmailLabel &&
+        preferenceValue !== 'email label requested'
+      ) {
+        throw buildHttpError(
+          'This promo code is only valid with the email label option.',
+          400
+        );
+      }
+
+      const bonusAmountRaw = Number(data.bonus_amount ?? data.bonusAmount ?? 0);
+      const bonusAmount =
+        Number.isFinite(bonusAmountRaw) && bonusAmountRaw > 0
+          ? bonusAmountRaw
+          : 10;
+
+      const maxUsesRaw = Number(data.max_uses ?? data.maxUses ?? 0);
+      const maxUses = Number.isFinite(maxUsesRaw) && maxUsesRaw > 0
+        ? maxUsesRaw
+        : usesLeft;
+
+      transaction.update(promoRef, {
+        uses_left: usesLeft - 1,
+        last_redeemed_at: FieldValue.serverTimestamp(),
+      });
+
+      const redemptionRef = promoRef.collection('redemptions').doc(orderId);
+      transaction.set(redemptionRef, {
+        orderId,
+        customerName: shippingInfo?.fullName || null,
+        customerEmail: shippingInfo?.email || null,
+        bonusAmount,
+        shippingPreference: shippingPreference || null,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      return {
+        code: normalizedCode,
+        amount: bonusAmount,
+        usesLeft: usesLeft - 1,
+        maxUses,
+        requiresEmailLabel,
+      };
+    });
+  }
+
+  async function autoGenerateEmailLabel(orderId, orderData) {
+    const shippingInfo = orderData?.shippingInfo;
+    if (!shippingInfo) {
+      throw buildHttpError(
+        'Shipping information is required to generate a label.',
+        400
+      );
+    }
+
+    const buyerAddress = {
+      name: shippingInfo.fullName,
+      phone: '3475591707',
+      address_line1: shippingInfo.streetAddress,
+      city_locality: shippingInfo.city,
+      state_province: shippingInfo.state,
+      postal_code: shippingInfo.zipCode,
+      country_code: 'US',
+    };
+
+    const labelReference = `${orderId}-INBOUND-DEVICE`;
+    const labelData = await createShipEngineLabel(
+      buyerAddress,
+      SWIFT_BUYBACK_ADDRESS,
+      labelReference,
+      EMAIL_LABEL_PACKAGE_DATA
+    );
+
+    const labelDownloadLink = labelData.label_download?.pdf;
+    if (!labelDownloadLink) {
+      throw buildHttpError('Label PDF link not available from ShipEngine.', 502);
+    }
+
+    const nowTimestamp = Timestamp.now();
+    const labelId =
+      labelData.label_id ||
+      labelData.labelId ||
+      labelData.shipengine_label_id ||
+      null;
+    const labelRecord = {
+      id: labelId,
+      trackingNumber: labelData.tracking_number || null,
+      downloadUrl: labelDownloadLink,
+      carrierCode:
+        labelData.shipment?.carrier_id || labelData.carrier_code || null,
+      serviceCode:
+        labelData.shipment?.service_code ||
+        EMAIL_LABEL_PACKAGE_DATA.service_code ||
+        null,
+      generatedAt: nowTimestamp,
+      createdAt: nowTimestamp,
+      status: 'active',
+      voidStatus: 'active',
+      message: null,
+      displayName: 'Email Shipping Label',
+      labelReference,
+    };
+
+    const labelRecords = { email: labelRecord };
+    const labelIds = buildLabelIdList(labelRecords);
+    const hasActive = Object.values(labelRecords).some((entry) =>
+      entry && entry.id ? !isLabelPendingVoid(entry) : false
+    );
+
+    const labelTimestamp = FieldValue.serverTimestamp();
+
+    const customerEmailSubject = `Your SecondHandCell Shipping Label for Order #${orderId}`;
+    const customerEmailHtml = SHIPPING_LABEL_EMAIL_HTML
+      .replace(/\*\*CUSTOMER_NAME\*\*/g, shippingInfo.fullName)
+      .replace(/\*\*ORDER_ID\*\*/g, orderId)
+      .replace(/\*\*TRACKING_NUMBER\*\*/g, labelData.tracking_number || 'N/A')
+      .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
+
+    const customerMailOptions = {
+      from: process.env.EMAIL_USER,
+      to: shippingInfo.email,
+      subject: customerEmailSubject,
+      html: customerEmailHtml,
+    };
+
+    return {
+      labelDownloadLink,
+      trackingNumber: labelData.tracking_number || null,
+      customerMailOptions,
+      orderUpdates: {
+        status: 'label_generated',
+        labelGeneratedAt: labelTimestamp,
+        lastStatusUpdateAt: labelTimestamp,
+        uspsLabelUrl: labelDownloadLink,
+        trackingNumber: labelData.tracking_number || null,
+        shipEngineLabels: labelRecords,
+        shipEngineLabelIds: labelIds,
+        shipEngineLabelsLastUpdatedAt: nowTimestamp,
+        hasShipEngineLabel: labelIds.length > 0,
+        hasActiveShipEngineLabel: hasActive,
+        shipEngineLabelId: labelId || labelIds[0] || null,
+        labelDeliveryMethod: 'email',
+        labelGeneratedSource: 'auto_submit',
+        labelVoidStatus: 'active',
+        labelVoidMessage: null,
+      },
+    };
+  }
   let storageBucket = null;
 
   try {
@@ -793,7 +1001,11 @@ function createOrdersRouter({
   router.post('/submit-order', async (req, res) => {
     try {
       const orderData = req.body;
-      if (!orderData?.shippingInfo || (typeof orderData.estimatedQuote === 'undefined' && typeof orderData.totalPayout === 'undefined')) {
+      if (
+        !orderData?.shippingInfo ||
+        (typeof orderData.estimatedQuote === 'undefined' &&
+          typeof orderData.totalPayout === 'undefined')
+      ) {
         return res.status(400).json({ error: 'Invalid order data' });
       }
 
@@ -812,8 +1024,51 @@ function createOrdersRouter({
         normalizedOriginal ?? normalizedEstimated ?? normalizedTotal ?? payoutToPersist;
 
       orderData.originalQuote = originalToPersist;
-      orderData.totalPayout = payoutToPersist;
-      orderData.estimatedQuote = payoutToPersist;
+
+      const orderId = await generateNextOrderNumber();
+      const normalizedPromoCode = normalizePromoCode(
+        orderData.promoCode || orderData.promo_code || ''
+      );
+      let appliedPromo = null;
+
+      if (normalizedPromoCode) {
+        try {
+          appliedPromo = await reservePromoCodeUsage({
+            code: normalizedPromoCode,
+            orderId,
+            shippingPreference: orderData.shippingPreference,
+            shippingInfo: orderData.shippingInfo,
+          });
+        } catch (promoError) {
+          console.error(
+            `Promo code validation failed for order ${orderId}:`,
+            promoError
+          );
+          throw promoError;
+        }
+      }
+
+      const promoBonusAmount = appliedPromo?.amount || 0;
+      const finalPayout = payoutToPersist;
+      orderData.totalPayout = finalPayout;
+      orderData.estimatedQuote =
+        Number.isFinite(normalizedEstimated) && normalizedEstimated !== null
+          ? normalizedEstimated
+          : finalPayout;
+
+      if (appliedPromo) {
+        orderData.promoCode = appliedPromo.code;
+        orderData.promoBonusAmount = promoBonusAmount;
+        orderData.promoRequiresEmailLabel = appliedPromo.requiresEmailLabel;
+        orderData.promoMaxUsesSnapshot = appliedPromo.maxUses ?? null;
+        orderData.promoUsesRemainingSnapshot =
+          typeof appliedPromo.usesLeft === 'number'
+            ? appliedPromo.usesLeft
+            : null;
+      } else {
+        delete orderData.promoCode;
+        delete orderData.promoBonusAmount;
+      }
 
       if (typeof orderData.shippingKitFee !== 'undefined') {
         const normalizedFee = normalizeAmount(orderData.shippingKitFee);
@@ -829,17 +1084,41 @@ function createOrdersRouter({
         );
       }
 
-      const orderId = await generateNextOrderNumber();
-
       let shippingInstructions = '';
-      let newOrderStatus = 'order_pending';
+      let newOrderStatus =
+        orderData.shippingPreference === 'Shipping Kit Requested'
+          ? 'shipping_kit_requested'
+          : 'order_pending';
+      let autoLabelResult = null;
+
+      if (orderData.shippingPreference === 'Email Label Requested') {
+        try {
+          autoLabelResult = await autoGenerateEmailLabel(orderId, orderData);
+          newOrderStatus = 'label_generated';
+        } catch (labelError) {
+          console.error(
+            `Auto label generation failed for order ${orderId}:`,
+            labelError
+          );
+        }
+      }
+
+      const promoIsShip48 = appliedPromo?.code === 'SHIP48';
 
       if (orderData.shippingPreference === 'Shipping Kit Requested') {
         shippingInstructions = `
         <p style="margin-top: 24px;">Please note: You requested a shipping kit, which will be sent to you shortly. When it arrives, you'll find a return label inside to send us your device.</p>
         <p>If you have any questions, please reply to this email.</p>
       `;
-        newOrderStatus = 'shipping_kit_requested';
+      } else if (autoLabelResult) {
+        const promoLine = promoIsShip48
+          ? '<p>Drop your package off within 48 hours to keep your $10 Ship48 bonus.</p>'
+          : '<p>Ship within 48 hours and use promo code SHIP48 to add an extra $10 to your payout.</p>';
+        shippingInstructions = `
+        <p style="margin-top: 24px;">Your prepaid USPS label is ready! Download it from the confirmation page or the email we just sent you.</p>
+        ${promoLine}
+        <p>If you have any questions, please reply to this email.</p>
+      `;
       } else {
         shippingInstructions = `
         <p style="margin-top: 24px;">We will send your shipping label shortly.</p>
@@ -905,20 +1184,88 @@ function createOrdersRouter({
         );
       });
 
+      if (autoLabelResult?.customerMailOptions) {
+        notificationPromises.push(
+          transporter.sendMail(autoLabelResult.customerMailOptions)
+        );
+      }
+
       await Promise.all(notificationPromises);
 
       const toSave = {
         ...orderData,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        status: newOrderStatus,
+        status: autoLabelResult?.orderUpdates?.status || newOrderStatus,
         id: orderId,
       };
+
+      if (autoLabelResult?.orderUpdates) {
+        Object.assign(toSave, autoLabelResult.orderUpdates);
+      }
       await writeOrderBoth(orderId, toSave);
 
-      res.status(201).json({ message: 'Order submitted', orderId: orderId });
+      const responsePayload = {
+        message: 'Order submitted',
+        orderId,
+      };
+
+      if (autoLabelResult) {
+        responsePayload.autoLabelDownloadUrl =
+          autoLabelResult.labelDownloadLink;
+        responsePayload.autoLabelTrackingNumber =
+          autoLabelResult.trackingNumber;
+        responsePayload.autoLabelStatus = 'generated';
+      } else if (orderData.shippingPreference === 'Email Label Requested') {
+        responsePayload.autoLabelStatus = 'pending';
+      }
+
+      if (appliedPromo) {
+        responsePayload.promo = appliedPromo;
+      }
+
+      res.status(201).json(responsePayload);
     } catch (err) {
       console.error('Error submitting order:', err);
-      res.status(500).json({ error: 'Failed to submit order' });
+      const statusCode = err.status || 500;
+      res.status(statusCode).json({ error: err.message || 'Failed to submit order' });
+    }
+  });
+
+  router.get('/promo-codes/:code', async (req, res) => {
+    try {
+      const normalizedCode = normalizePromoCode(req.params.code);
+      if (!normalizedCode) {
+        return res.status(400).json({ error: 'Promo code is required.' });
+      }
+
+      const doc = await promoCodesCollection.doc(normalizedCode).get();
+      if (!doc.exists) {
+        return res.status(404).json({ error: 'Promo code not found.' });
+      }
+
+      const data = doc.data() || {};
+      const usesLeftRaw = Number(data.uses_left ?? data.usesLeft ?? 0);
+      const usesLeft = Number.isFinite(usesLeftRaw) ? usesLeftRaw : 0;
+      const maxUsesRaw = Number(data.max_uses ?? data.maxUses ?? 0);
+      const maxUses = Number.isFinite(maxUsesRaw) && maxUsesRaw > 0 ? maxUsesRaw : usesLeft;
+      const bonusAmountRaw = Number(data.bonus_amount ?? data.bonusAmount ?? 0);
+      const bonusAmount =
+        Number.isFinite(bonusAmountRaw) && bonusAmountRaw > 0 ? bonusAmountRaw : 10;
+      const requiresEmailLabel = Boolean(
+        data.requires_email_label ?? data.requiresEmailLabel ?? false
+      );
+
+      res.json({
+        code: normalizedCode,
+        usesLeft,
+        maxUses,
+        bonusAmount,
+        requiresEmailLabel,
+        description: data.description || data.details || '',
+      });
+    } catch (error) {
+      console.error('Failed to fetch promo code info:', error);
+      res.status(500).json({ error: 'Failed to fetch promo code info' });
     }
   });
 
