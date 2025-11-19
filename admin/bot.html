@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SellCell + Amazon Repricer</title>
+  <title>SecondHandCell Repricer – SellCell + Amazon</title>
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
@@ -52,7 +52,7 @@
       border: 1px solid #334155;
       padding: 0.75rem;
       color: #e5e7eb;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       font-size: 0.85rem;
       resize: vertical;
     }
@@ -83,6 +83,7 @@
     }
     input[type="file"] {
       font-size: 0.8rem;
+      color: #e5e7eb;
     }
     table {
       width: 100%;
@@ -137,19 +138,25 @@
 <body>
   <header>
     <h1>SecondHandCell Repricer – SellCell + Amazon</h1>
-    <p>Upload CSV → fetch competitor top price from feed.xml → apply Amazon & fee logic → output new buy prices (>= 15% profit).</p>
+    <p>Upload CSV → get competitor top price from feed.xml → apply Amazon & fee logic → output new prices (with new profit & new %).</p>
   </header>
 
   <main>
     <section class="card">
-      <h2>Step 1 – Input CSV</h2>
+      <h2>Step 1 – Input CSV & XML</h2>
       <p style="font-size:0.8rem;color:#9ca3af;margin-bottom:0.5rem;">
-        Expected columns: <code>name,storage,lock_status,condition,price</code>. The <code>price</code> column will be replaced with new buy prices.
+        Expected columns: <code>name,storage,lock_status,condition,price,amz</code>.
+        <code>price</code> will be replaced with the new buy price.
+        <code>amz</code> is the Amazon price (can include <code>$</code>).
       </p>
-      <textarea id="csvInput" placeholder="name,storage,lock_status,condition,price&#10;IPHONE 12 PRO,128GB,locked,flawless,0"></textarea>
+      <textarea id="csvInput" placeholder="name,storage,lock_status,condition,price,amz&#10;IPHONE 12 PRO,128GB,locked,flawless,$205.00,$270.00"></textarea>
       <div class="controls">
         <input type="file" id="fileInput" accept=".csv" />
-        <button id="processBtn">Process</button>
+        <input type="file" id="xmlFileInput" accept=".xml" />
+      </div>
+      <div class="controls">
+        <button id="processFetchBtn">Use CSV + Fetch XML</button>
+        <button id="processXmlBtn">Use CSV + XML</button>
         <button id="downloadBtn" disabled>Download CSV</button>
       </div>
       <div class="status" id="status"></div>
@@ -171,6 +178,8 @@
               <th>Profit $</th>
               <th>Profit %</th>
               <th>New price</th>
+              <th>New profit</th>
+              <th>New pr</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -181,11 +190,14 @@
   </main>
 
   <script>
-    const FUNCTION_URL = "YOUR_FUNCTION_URL_HERE"; // e.g. https://us-central1-YOUR-PROJECT.cloudfunctions.net/repriceFeed
+    const FUNCTION_URL = "https://us-central1-buyback-a0f05.cloudfunctions.net/repriceFeed";
+    const FEED_URL = "https://secondhandcell.com/sellcell/feed.xml";
 
     const csvInput = document.getElementById("csvInput");
     const fileInput = document.getElementById("fileInput");
-    const processBtn = document.getElementById("processBtn");
+    const xmlFileInput = document.getElementById("xmlFileInput");
+    const processFetchBtn = document.getElementById("processFetchBtn");
+    const processXmlBtn = document.getElementById("processXmlBtn");
     const downloadBtn = document.getElementById("downloadBtn");
     const statusEl = document.getElementById("status");
     const tbody = document.querySelector("#resultsTable tbody");
@@ -202,25 +214,30 @@
       reader.readAsText(file);
     });
 
-    processBtn.addEventListener("click", async () => {
+    async function processCsvWithXml(getXmlFn) {
       const csv = csvInput.value.trim();
       if (!csv) {
         alert("Please paste or upload CSV first.");
         return;
       }
-      processBtn.disabled = true;
+
+      processFetchBtn.disabled = true;
+      processXmlBtn.disabled = true;
       downloadBtn.disabled = true;
       statusEl.textContent = "Processing...";
       tbody.innerHTML = "";
       lastResultRows = [];
 
       try {
+        const xml = await getXmlFn();
+
+        const body = { csv };
+        if (xml) body.xml = xml;
+
         const res = await fetch(FUNCTION_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ csv })
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
         });
 
         if (!res.ok) {
@@ -237,8 +254,33 @@
         console.error(err);
         statusEl.textContent = "Error: " + (err.message || err);
       } finally {
-        processBtn.disabled = false;
+        processFetchBtn.disabled = false;
+        processXmlBtn.disabled = false;
       }
+    }
+
+    processFetchBtn.addEventListener("click", async () => {
+      await processCsvWithXml(async () => {
+        const res = await fetch(FEED_URL);
+        if (!res.ok) throw new Error("Failed to fetch feed.xml: " + res.status);
+        return await res.text();
+      });
+    });
+
+    processXmlBtn.addEventListener("click", async () => {
+      await processCsvWithXml(() => {
+        return new Promise((resolve, reject) => {
+          const file = xmlFileInput.files && xmlFileInput.files[0];
+          if (!file) {
+            reject(new Error("Please choose an XML file first."));
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = (ev) => resolve(ev.target.result);
+          reader.onerror = (err) => reject(err);
+          reader.readAsText(file);
+        });
+      });
     });
 
     function renderTable(rows) {
@@ -247,13 +289,14 @@
         const tr = document.createElement("tr");
 
         const profitPct = typeof r.profit_pct === "number" ? r.profit_pct : null;
-        const pctDisplay = profitPct !== null
-          ? (profitPct * 100).toFixed(2) + "%"
-          : "";
+        const pctDisplay = profitPct !== null ? (profitPct * 100).toFixed(2) + "%" : "";
+
+        const newProfitPct = typeof r.new_profit_pct === "number" ? r.new_profit_pct : null;
+        const newPctDisplay = newProfitPct !== null ? (newProfitPct * 100).toFixed(2) + "%" : "";
 
         const statusCell = document.createElement("td");
-        if (profitPct !== null) {
-          if (profitPct >= 0.15) {
+        if (newProfitPct !== null) {
+          if (newProfitPct >= 0.15) {
             statusCell.innerHTML = '<span class="badge-ok">OK ≥ 15%</span>';
           } else {
             statusCell.innerHTML = '<span class="badge-low">&lt; 15%</span>';
@@ -272,7 +315,9 @@
           r.total_walkaway != null ? r.total_walkaway.toFixed(2) : "",
           r.profit != null ? r.profit.toFixed(2) : "",
           pctDisplay,
-          r.new_price != null ? r.new_price.toFixed(2) : ""
+          r.new_price != null ? r.new_price.toFixed(2) : "",
+          r.new_profit != null ? r.new_profit.toFixed(2) : "",
+          newPctDisplay,
         ];
 
         for (const val of cells) {
@@ -285,25 +330,29 @@
       }
     }
 
-    // Simple CSV builder that keeps same columns/order as input but with price=new_price
     downloadBtn.addEventListener("click", () => {
       if (!lastResultRows.length) return;
 
-      // Infer columns from first input row:
-      // name,storage,lock_status,condition,price
-      const columns = ["name", "storage", "lock_status", "condition", "price"];
-
+      const columns = ["name", "storage", "lock_status", "condition", "price", "amz", "new_profit", "new_pr"];
       const lines = [];
       lines.push(columns.join(","));
 
       for (const r of lastResultRows) {
         const newPrice = r.new_price != null ? r.new_price.toFixed(2) : (r.price ?? "");
+        const newProfit = r.new_profit != null ? r.new_profit.toFixed(2) : "";
+        const newPr = (typeof r.new_profit_pct === "number")
+          ? (r.new_profit_pct * 100).toFixed(2) + "%"
+          : "";
+
         const rowVals = [
           r.name ?? "",
           r.storage ?? "",
           r.lock_status ?? "",
           r.condition ?? "",
-          newPrice
+          newPrice,
+          r.amz ?? "",
+          newProfit,
+          newPr,
         ];
         lines.push(rowVals.map(escapeCsvVal).join(","));
       }
