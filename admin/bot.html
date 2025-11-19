@@ -132,6 +132,18 @@
       font-size: 0.8rem;
       margin-top: 0.4rem;
       color: #9ca3af;
+      white-space: pre-wrap;
+    }
+    .debug {
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+      background: #020617;
+      border-radius: 0.5rem;
+      border: 1px solid #334155;
+      padding: 0.5rem;
+      max-height: 180px;
+      overflow: auto;
+      color: #9ca3af;
     }
   </style>
 </head>
@@ -160,6 +172,7 @@
         <button id="downloadBtn" disabled>Download CSV</button>
       </div>
       <div class="status" id="status"></div>
+      <div class="debug" id="debug"></div>
     </section>
 
     <section class="card">
@@ -190,6 +203,7 @@
   </main>
 
   <script>
+    // 🔗 SET THIS TO YOUR FUNCTION:
     const FUNCTION_URL = "https://us-central1-buyback-a0f05.cloudfunctions.net/repriceFeed";
     const FEED_URL = "https://secondhandcell.com/sellcell/feed.xml";
 
@@ -200,10 +214,38 @@
     const processXmlBtn = document.getElementById("processXmlBtn");
     const downloadBtn = document.getElementById("downloadBtn");
     const statusEl = document.getElementById("status");
+    const debugEl = document.getElementById("debug");
     const tbody = document.querySelector("#resultsTable tbody");
 
     let lastResultRows = [];
 
+    // ----- GLOBAL ERROR HANDLING -----
+    window.addEventListener("error", (event) => {
+      const msg = `JS error: ${event.message}`;
+      statusEl.textContent = msg;
+      console.error("[window.onerror]", event.error || event);
+    });
+
+    window.addEventListener("unhandledrejection", (event) => {
+      const msg = `Unhandled promise rejection: ${event.reason && event.reason.message ? event.reason.message : event.reason}`;
+      statusEl.textContent = msg;
+      console.error("[unhandledrejection]", event.reason);
+    });
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function setDebug(obj, note) {
+      if (!obj) {
+        debugEl.textContent = "";
+        return;
+      }
+      const label = note ? `${note}\n` : "";
+      debugEl.textContent = label + JSON.stringify(obj, null, 2);
+    }
+
+    // ----- CSV FILE LOADER -----
     fileInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -211,9 +253,14 @@
       reader.onload = (ev) => {
         csvInput.value = ev.target.result;
       };
+      reader.onerror = (err) => {
+        setStatus("Error reading CSV file: " + err.message);
+        console.error("CSV file read error", err);
+      };
       reader.readAsText(file);
     });
 
+    // ----- MAIN PROCESSOR -----
     async function processCsvWithXml(getXmlFn) {
       const csv = csvInput.value.trim();
       if (!csv) {
@@ -224,15 +271,20 @@
       processFetchBtn.disabled = true;
       processXmlBtn.disabled = true;
       downloadBtn.disabled = true;
-      statusEl.textContent = "Processing...";
+      setStatus("Processing...");
+      setDebug(null);
       tbody.innerHTML = "";
       lastResultRows = [];
 
       try {
-        const xml = await getXmlFn();
+        const xml = await getXmlFn().catch((err) => {
+          throw new Error("XML load error: " + err.message);
+        });
 
         const body = { csv };
         if (xml) body.xml = xml;
+
+        console.log("[repricer] Request body:", body);
 
         const res = await fetch(FUNCTION_URL, {
           method: "POST",
@@ -240,25 +292,40 @@
           body: JSON.stringify(body),
         });
 
+        const rawText = await res.text();
+        console.log("[repricer] Raw response:", rawText);
+
         if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || "HTTP error " + res.status);
+          throw new Error(`HTTP ${res.status}: ${rawText}`);
         }
 
-        const data = await res.json();
-        lastResultRows = data.rows || [];
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (e) {
+          throw new Error("Failed to parse JSON from function: " + e.message);
+        }
+
+        if (!data || !Array.isArray(data.rows)) {
+          throw new Error("Function returned no 'rows' array.");
+        }
+
+        lastResultRows = data.rows;
+        setDebug(lastResultRows[0], "First row from function:");
         renderTable(lastResultRows);
         downloadBtn.disabled = false;
-        statusEl.textContent = `Processed ${lastResultRows.length} rows.`;
+        setStatus(`Processed ${lastResultRows.length} rows.`);
       } catch (err) {
-        console.error(err);
-        statusEl.textContent = "Error: " + (err.message || err);
+        console.error("Processing error", err);
+        setStatus("Error: " + (err.message || err));
+        setDebug(null);
       } finally {
         processFetchBtn.disabled = false;
         processXmlBtn.disabled = false;
       }
     }
 
+    // Use CSV + Fetch XML from your domain
     processFetchBtn.addEventListener("click", async () => {
       await processCsvWithXml(async () => {
         const res = await fetch(FEED_URL);
@@ -267,6 +334,7 @@
       });
     });
 
+    // Use CSV + manually uploaded XML file
     processXmlBtn.addEventListener("click", async () => {
       await processCsvWithXml(() => {
         return new Promise((resolve, reject) => {
@@ -283,53 +351,68 @@
       });
     });
 
+    // ----- SAFE NUMBER HELPERS -----
+    function safeToFixed(val) {
+      const n = Number(val);
+      if (!Number.isFinite(n)) return "";
+      return n.toFixed(2);
+    }
+
+    // ----- TABLE RENDERING -----
     function renderTable(rows) {
       tbody.innerHTML = "";
-      for (const r of rows) {
-        const tr = document.createElement("tr");
+      try {
+        rows.forEach((r, idx) => {
+          const tr = document.createElement("tr");
 
-        const profitPct = typeof r.profit_pct === "number" ? r.profit_pct : null;
-        const pctDisplay = profitPct !== null ? (profitPct * 100).toFixed(2) + "%" : "";
+          const profitPct = typeof r.profit_pct === "number" ? r.profit_pct : Number(r.profit_pct);
+          const pctDisplay = Number.isFinite(profitPct) ? (profitPct * 100).toFixed(2) + "%" : "";
 
-        const newProfitPct = typeof r.new_profit_pct === "number" ? r.new_profit_pct : null;
-        const newPctDisplay = newProfitPct !== null ? (newProfitPct * 100).toFixed(2) + "%" : "";
+          const newProfitPct = typeof r.new_profit_pct === "number" ? r.new_profit_pct : Number(r.new_profit_pct);
+          const newPctDisplay = Number.isFinite(newProfitPct) ? (newProfitPct * 100).toFixed(2) + "%" : "";
 
-        const statusCell = document.createElement("td");
-        if (newProfitPct !== null) {
-          if (newProfitPct >= 0.15) {
-            statusCell.innerHTML = '<span class="badge-ok">OK ≥ 15%</span>';
+          const statusCell = document.createElement("td");
+          if (Number.isFinite(newProfitPct)) {
+            if (newProfitPct >= 0.15) {
+              statusCell.innerHTML = '<span class="badge-ok">OK ≥ 15%</span>';
+            } else {
+              statusCell.innerHTML = '<span class="badge-low">&lt; 15%</span>';
+            }
           } else {
-            statusCell.innerHTML = '<span class="badge-low">&lt; 15%</span>';
+            statusCell.textContent = "";
           }
-        } else {
-          statusCell.textContent = "";
-        }
 
-        const cells = [
-          r.name,
-          r.storage,
-          r.lock_status,
-          r.condition,
-          r.original_feed_price != null ? r.original_feed_price.toFixed(2) : "",
-          r.amazon_price != null ? r.amazon_price.toFixed(2) : "",
-          r.total_walkaway != null ? r.total_walkaway.toFixed(2) : "",
-          r.profit != null ? r.profit.toFixed(2) : "",
-          pctDisplay,
-          r.new_price != null ? r.new_price.toFixed(2) : "",
-          r.new_profit != null ? r.new_profit.toFixed(2) : "",
-          newPctDisplay,
-        ];
+          const cells = [
+            r.name,
+            r.storage,
+            r.lock_status,
+            r.condition,
+            r.original_feed_price != null ? safeToFixed(r.original_feed_price) : "",
+            r.amazon_price != null ? safeToFixed(r.amazon_price) : "",
+            r.total_walkaway != null ? safeToFixed(r.total_walkaway) : "",
+            r.profit != null ? safeToFixed(r.profit) : "",
+            pctDisplay,
+            r.new_price != null ? safeToFixed(r.new_price) : "",
+            r.new_profit != null ? safeToFixed(r.new_profit) : "",
+            newPctDisplay,
+          ];
 
-        for (const val of cells) {
-          const td = document.createElement("td");
-          td.textContent = val;
-          tr.appendChild(td);
-        }
-        tr.appendChild(statusCell);
-        tbody.appendChild(tr);
+          cells.forEach((val) => {
+            const td = document.createElement("td");
+            td.textContent = val ?? "";
+            tr.appendChild(td);
+          });
+
+          tr.appendChild(statusCell);
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        console.error("Render error", e);
+        setStatus("Render error: " + e.message);
       }
     }
 
+    // ----- CSV DOWNLOAD -----
     downloadBtn.addEventListener("click", () => {
       if (!lastResultRows.length) return;
 
@@ -338,10 +421,10 @@
       lines.push(columns.join(","));
 
       for (const r of lastResultRows) {
-        const newPrice = r.new_price != null ? r.new_price.toFixed(2) : (r.price ?? "");
-        const newProfit = r.new_profit != null ? r.new_profit.toFixed(2) : "";
-        const newPr = (typeof r.new_profit_pct === "number")
-          ? (r.new_profit_pct * 100).toFixed(2) + "%"
+        const newPrice = r.new_price != null ? safeToFixed(r.new_price) : (r.price ?? "");
+        const newProfit = r.new_profit != null ? safeToFixed(r.new_profit) : "";
+        const newPr = (typeof r.new_profit_pct === "number" || !Number.isNaN(Number(r.new_profit_pct)))
+          ? (Number(r.new_profit_pct) * 100).toFixed(2) + "%"
           : "";
 
         const rowVals = [
@@ -378,3 +461,4 @@
   </script>
 </body>
 </html>
+
