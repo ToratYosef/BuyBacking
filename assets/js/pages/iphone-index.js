@@ -52,6 +52,10 @@ modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(moda
 modal.querySelector('.close-modal-btn')?.addEventListener('click', () => closeModal(modal));
 });
 
+window.addEventListener('shc:ship48-start-order', () => {
+    openModal('quoteModal');
+});
+
 const loginTabBtn = document.getElementById('loginTabBtn');
 const signupTabBtn = document.getElementById('signupTabBtn');
 const loginForm = document.getElementById('loginForm');
