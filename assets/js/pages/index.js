@@ -231,28 +231,25 @@ showAuthMessage('Password reset email sent! Check your inbox.', 'success');
 });
 
 let currentActiveUserId = null;
-const headerContainer = document.querySelector('header .container');
+const headerContainer = document.querySelector('[data-site-header] .site-header__inner');
 const logoTextContainer = document.querySelector('.logo-text-container-center');
 
 const updateMobileHeaderLayout = (isLoggedIn) => {
+if (!headerContainer || !logoTextContainer) return;
 if (window.innerWidth <= 767) {
 if (isLoggedIn) {
 headerContainer.classList.remove('justify-center');
 headerContainer.classList.add('justify-between');
-logoTextContainer.classList.remove('hidden');
-logoTextContainer.classList.add('flex');
 } else {
 headerContainer.classList.remove('justify-between');
 headerContainer.classList.add('justify-center');
-logoTextContainer.classList.remove('hidden');
-logoTextContainer.classList.add('flex');
 }
 } else {
 headerContainer.classList.remove('justify-between', 'justify-center');
 headerContainer.classList.add('flex', 'justify-between');
+}
 logoTextContainer.classList.remove('hidden');
 logoTextContainer.classList.add('flex');
-}
 };
 
 onAuthStateChanged(auth, (user) => {
@@ -291,7 +288,9 @@ updateMobileHeaderLayout(isLoggedIn);
 });
 
 window.addEventListener('resize', () => {
-updateMobileHeaderLayout(!!auth.currentUser);
+const activeUser = auth.currentUser;
+const isLoggedIn = !!activeUser && !activeUser.isAnonymous;
+updateMobileHeaderLayout(isLoggedIn);
 });
 
 userMonogram.addEventListener('click', (e) => { e.stopPropagation(); authDropdown.classList.toggle('hidden'); });
