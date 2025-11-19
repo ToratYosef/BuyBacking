@@ -785,12 +785,31 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                         <span id="breakdownShippingLabel">Shipping Option</span>
                                         <span id="breakdownShippingAmount" class="font-medium text-slate-500">Select an option</span>
                                     </div>
+                                    <div id="promoBreakdownRow" class="flex items-center justify-between text-emerald-600 font-semibold hidden">
+                                        <span id="promoBreakdownLabel">Promo Bonus</span>
+                                        <span id="promoBreakdownAmount">+$0.00</span>
+                                    </div>
                                     <hr class="border-slate-200">
                                     <div class="flex items-center justify-between font-semibold text-indigo-700">
                                         <span>Total Payout</span>
                                         <span id="breakdownFinalPayout">$0.00</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div id="promoCodeSection" class="mt-6 p-4 bg-white rounded-lg shadow-sm sm:p-3">
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                                    <div class="flex-1">
+                                        <label for="promoCodeInput" class="block text-sm font-semibold text-slate-700">Promo Code</label>
+                                        <p class="text-xs text-slate-500 mt-1">Use code <span class="font-semibold text-indigo-600">SHIP48</span> to add $10 when you ship within 48 hours.</p>
+                                    </div>
+                                    <div class="flex gap-2 w-full sm:w-auto">
+                                        <input type="text" id="promoCodeInput" class="flex-1 border border-slate-300 rounded-md shadow-sm p-2 text-sm uppercase tracking-widest" placeholder="Enter code">
+                                        <button type="button" id="applyPromoBtn" class="px-4 py-2 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">Apply</button>
+                                        <button type="button" id="clearPromoBtn" class="px-4 py-2 text-sm font-semibold rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 hidden">Clear</button>
+                                    </div>
+                                </div>
+                                <p id="promoStatusMessage" class="mt-3 text-sm text-slate-500"></p>
                             </div>
 
                             <div class="mt-6 p-4 rounded-lg bg-white shadow-sm sm:p-3">
@@ -1960,6 +1979,185 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             });
 
             const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+            const PROMO_STORAGE_KEY = 'shcSelectedPromoCode';
+            const PROMO_API_ENDPOINT = `${BACKEND_URL}/promo-codes`;
+            const promoCodeInput = document.getElementById('promoCodeInput');
+            const applyPromoBtn = document.getElementById('applyPromoBtn');
+            const clearPromoBtn = document.getElementById('clearPromoBtn');
+            const promoStatusMessage = document.getElementById('promoStatusMessage');
+            const promoBreakdownRow = document.getElementById('promoBreakdownRow');
+            const promoBreakdownAmount = document.getElementById('promoBreakdownAmount');
+            const promoBreakdownLabel = document.getElementById('promoBreakdownLabel');
+            let appliedPromo = null;
+            let promoLookupInFlight = false;
+
+            function safeStorageSet(key, value) {
+                try {
+                    if (value === null || typeof value === 'undefined') {
+                        localStorage.removeItem(key);
+                    } else {
+                        localStorage.setItem(key, value);
+                    }
+                } catch (error) {
+                    console.warn('Unable to access localStorage:', error);
+                }
+            }
+
+            function safeStorageGet(key) {
+                try {
+                    return localStorage.getItem(key);
+                } catch (error) {
+                    console.warn('Unable to read localStorage:', error);
+                    return null;
+                }
+            }
+
+            function setPromoStatus(type, message) {
+                if (!promoStatusMessage) return;
+                promoStatusMessage.textContent = message || '';
+                promoStatusMessage.classList.remove('text-emerald-600', 'text-rose-600', 'text-slate-500');
+                if (!message) {
+                    promoStatusMessage.classList.add('text-slate-500');
+                    return;
+                }
+                if (type === 'success') {
+                    promoStatusMessage.classList.add('text-emerald-600');
+                } else if (type === 'error') {
+                    promoStatusMessage.classList.add('text-rose-600');
+                } else {
+                    promoStatusMessage.classList.add('text-slate-500');
+                }
+            }
+
+            function announceActivePromoStatus() {
+                if (!appliedPromo) return;
+                const amountText = Number(appliedPromo.amount || 0).toFixed(2);
+                let usesLine = '';
+                if (typeof appliedPromo.usesLeft === 'number' && typeof appliedPromo.maxUses === 'number') {
+                    usesLine = ` (${Math.max(appliedPromo.usesLeft, 0)} of ${appliedPromo.maxUses} uses remaining)`;
+                }
+                setPromoStatus('success', `${appliedPromo.code || 'PROMO'} applied! +$${amountText} bonus${usesLine}`.trim());
+            }
+
+            function isPromoEligibleForSelection(shippingPreferenceValue) {
+                if (!appliedPromo) return true;
+                if (!appliedPromo.requiresEmailLabel) return true;
+                const normalized = (shippingPreferenceValue || '').toLowerCase();
+                return normalized === 'email_label';
+            }
+
+            function getActivePromoAmount(shippingPreferenceValue) {
+                if (!appliedPromo) return 0;
+                if (!isPromoEligibleForSelection(shippingPreferenceValue)) return 0;
+                return Number(appliedPromo.amount) || 0;
+            }
+
+            async function fetchPromoDetailsByCode(code) {
+                const response = await fetch(`${PROMO_API_ENDPOINT}/${encodeURIComponent(code)}`);
+                if (!response.ok) {
+                    let errorMessage = 'Unable to validate promo code.';
+                    try {
+                        const payload = await response.json();
+                        errorMessage = payload.error || errorMessage;
+                    } catch (parseError) {
+                        // ignore
+                    }
+                    throw new Error(errorMessage);
+                }
+                return response.json();
+            }
+
+            async function applyPromoCodeFromInput(options = {}) {
+                if (!promoCodeInput || !applyPromoBtn) return;
+                const providedCode = options.code || promoCodeInput.value;
+                const normalizedCode = (providedCode || '').trim().toUpperCase();
+                if (!normalizedCode) {
+                    setPromoStatus('error', 'Enter a promo code to apply it.');
+                    return;
+                }
+                if (promoLookupInFlight) return;
+                promoLookupInFlight = true;
+                applyPromoBtn.disabled = true;
+                setPromoStatus('info', 'Validating promo code...');
+                try {
+                    const promoData = await fetchPromoDetailsByCode(normalizedCode);
+                    appliedPromo = {
+                        code: promoData.code || normalizedCode,
+                        amount: Number(promoData.bonusAmount) || 0,
+                        usesLeft: typeof promoData.usesLeft === 'number' ? promoData.usesLeft : null,
+                        maxUses: typeof promoData.maxUses === 'number' ? promoData.maxUses : null,
+                        requiresEmailLabel: Boolean(promoData.requiresEmailLabel),
+                    };
+                    safeStorageSet(PROMO_STORAGE_KEY, appliedPromo.code);
+                    if (clearPromoBtn) {
+                        clearPromoBtn.classList.remove('hidden');
+                    }
+                    if (!options.silent) {
+                        announceActivePromoStatus();
+                    }
+                    updateOverview();
+                } catch (error) {
+                    appliedPromo = null;
+                    safeStorageSet(PROMO_STORAGE_KEY, null);
+                    if (clearPromoBtn) {
+                        clearPromoBtn.classList.add('hidden');
+                    }
+                    setPromoStatus('error', error.message || 'Unable to apply promo code.');
+                } finally {
+                    promoLookupInFlight = false;
+                    applyPromoBtn.disabled = false;
+                }
+            }
+
+            function clearPromoCode() {
+                appliedPromo = null;
+                if (promoCodeInput) {
+                    promoCodeInput.value = '';
+                }
+                if (clearPromoBtn) {
+                    clearPromoBtn.classList.add('hidden');
+                }
+                safeStorageSet(PROMO_STORAGE_KEY, null);
+                setPromoStatus('info', 'Promo code removed. Enter SHIP48 to add $10 to your payout.');
+                updateOverview();
+            }
+
+            function hydratePromoFromStorage() {
+                const storedCode = safeStorageGet(PROMO_STORAGE_KEY);
+                if (storedCode && promoCodeInput) {
+                    promoCodeInput.value = storedCode;
+                    applyPromoCodeFromInput({ code: storedCode, silent: true });
+                } else if (promoStatusMessage) {
+                    setPromoStatus('info', 'Enter SHIP48 above to add $10 to your payout.');
+                }
+            }
+
+            if (applyPromoBtn) {
+                applyPromoBtn.addEventListener('click', () => applyPromoCodeFromInput());
+            }
+
+            if (clearPromoBtn) {
+                clearPromoBtn.addEventListener('click', clearPromoCode);
+            }
+
+            if (promoCodeInput) {
+                promoCodeInput.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        applyPromoCodeFromInput();
+                    }
+                });
+            }
+
+            window.addEventListener('shc:promo-code-selected', (event) => {
+                if (!promoCodeInput) return;
+                const selectedCode = (event.detail?.code || '').toUpperCase();
+                if (!selectedCode) return;
+                promoCodeInput.value = selectedCode;
+                applyPromoCodeFromInput({ code: selectedCode });
+            });
+
+            hydratePromoFromStorage();
 
             function showAuthMessage(msg, type) {
                 authMessage.textContent = msg;
@@ -3217,7 +3415,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                 const baseQuote = Number(finalQuote) || 0;
                 const shippingKitFee = selectedShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
-                const totalPayout = Math.max(baseQuote - shippingKitFee, 0);
+                const promoEligible = isPromoEligibleForSelection(selectedShippingPreference);
+                const promoAmount = promoEligible ? getActivePromoAmount(selectedShippingPreference) : 0;
+                const totalBeforePromo = Math.max(baseQuote - shippingKitFee, 0);
+                const totalPayout = totalBeforePromo + promoAmount;
 
                 const fullName = fullNameInput?.value || '';
                 const phone = phoneInput?.value || '';
@@ -3256,6 +3457,26 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         breakdownShippingLabel.textContent = 'Shipping Option';
                         breakdownShippingAmount.textContent = 'Select an option';
                         breakdownShippingAmount.classList.add('text-slate-500');
+                    }
+                }
+
+                if (promoBreakdownRow && promoBreakdownAmount) {
+                    if (promoAmount > 0) {
+                        promoBreakdownRow.classList.remove('hidden');
+                        if (promoBreakdownLabel) {
+                            promoBreakdownLabel.textContent = appliedPromo?.code ? `${appliedPromo.code} Bonus` : 'Promo Bonus';
+                        }
+                        promoBreakdownAmount.textContent = `+$${promoAmount.toFixed(2)}`;
+                    } else {
+                        promoBreakdownRow.classList.add('hidden');
+                    }
+                }
+
+                if (appliedPromo) {
+                    if (!promoEligible) {
+                        setPromoStatus('error', 'Select the Email Label option to keep your Ship48 bonus.');
+                    } else if (!promoLookupInFlight) {
+                        announceActivePromoStatus();
                     }
                 }
 
@@ -3332,9 +3553,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 
                 const rawShippingPreference = document.querySelector('input[name="shipping_preference"]:checked').value;
                 const shippingKitFee = rawShippingPreference === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
-                const totalPayout = Math.max(finalQuote - shippingKitFee, 0);
+                const promoEligibleForSubmission = isPromoEligibleForSelection(rawShippingPreference);
+                if (appliedPromo && !promoEligibleForSubmission) {
+                    showPaymentMessage('Ship48 can only be used with the Email Label option. Please switch your shipping preference or clear the promo code.', 'error');
+                    submitOrderBtn.disabled = false;
+                    submitOrderBtn.textContent = 'Submit Order';
+                    submitOrderBtn.classList.remove('btn-disabled');
+                    submitOrderBtn.classList.add('btn-primary-indigo');
+                    return;
+                }
+                const promoAmountForSubmission = promoEligibleForSubmission ? (Number(appliedPromo?.amount) || 0) : 0;
+                const totalPayout = Math.max(finalQuote - shippingKitFee, 0) + promoAmountForSubmission;
 
-                const orderData = {
+                    const orderData = {
                     device: device.name,
                     brand: deviceInfo.brand, // FIXED: Use parsed brand from deviceInfo
                     modelSlug: deviceInfo.slug,
@@ -3347,8 +3578,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     estimatedQuote: totalPayout,
                     originalQuote: finalQuote,
                     shippingKitFee,
-                    totalPayout,
-                    shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+                        totalPayout,
+                        shippingPreference: rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
                     paymentMethod: selectedPayment.value,
                     paymentDetails: {},
                     shippingInfo: {
@@ -3369,7 +3600,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     termsAccepted: document.getElementById('termsAccepted').checked,
                     userId: currentUserId,
                     createdAt: serverTimestamp()
-                };
+                    };
+
+                if (promoEligibleForSubmission && appliedPromo) {
+                    orderData.promoCode = appliedPromo.code;
+                    orderData.promoBonusAmount = Number(appliedPromo.amount) || 0;
+                }
                 
                 // Add payment details to the order data
                 if (selectedPayment.value === 'venmo') {
@@ -3412,6 +3648,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     // Get order ID from response and estimated price from deviceInfo or orderData
                     const orderId = result.orderId || result.id || Date.now().toString();
                     const totalPrice = Number(orderData.totalPayout ?? orderData.estimatedQuote ?? finalQuote ?? deviceInfo.estimatedPrice ?? 0);
+                    const autoLabelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
+                    const autoLabelTracking = result.autoLabelTrackingNumber || result.trackingNumber || '';
+                    const promoFromServer = result.promo;
 
                     try {
                         const normalizedTotal = Number(totalPrice) || 0;
@@ -3429,8 +3668,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                             originalQuote: normalizedOriginal,
                             shippingPreference: rawShippingPreference,
                             shippingKitFee: normalizedShippingFee,
-                            paymentMethod: orderData.paymentMethod
+                            paymentMethod: orderData.paymentMethod,
+                            labelUrl: autoLabelUrl,
+                            trackingNumber: autoLabelTracking
                         };
+                        if (promoFromServer && promoFromServer.code) {
+                            summaryPayload.promoCode = promoFromServer.code;
+                            summaryPayload.promoBonusAmount = Number(promoFromServer.amount) || 0;
+                        } else if (promoEligibleForSubmission && appliedPromo) {
+                            summaryPayload.promoCode = appliedPromo.code;
+                            summaryPayload.promoBonusAmount = Number(appliedPromo.amount) || 0;
+                        }
                         sessionStorage.setItem('shcOrderSummary', JSON.stringify(summaryPayload));
                     } catch (storageError) {
                         console.warn('Unable to persist order summary to session storage:', storageError);
@@ -3450,6 +3698,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         carrier: orderData.carrier,
                         paymentMethod: orderData.paymentMethod || ''
                     });
+                    if (autoLabelUrl) {
+                        queryParams.set('labelUrl', autoLabelUrl);
+                    }
+                    if (autoLabelTracking) {
+                        queryParams.set('trackingNumber', autoLabelTracking);
+                    }
+                    if (promoFromServer && promoFromServer.code) {
+                        queryParams.set('promoCode', promoFromServer.code);
+                        queryParams.set('promoBonusAmount', promoFromServer.amount);
+                    } else if (promoEligibleForSubmission && appliedPromo) {
+                        queryParams.set('promoCode', appliedPromo.code);
+                        queryParams.set('promoBonusAmount', appliedPromo.amount);
+                    }
 
                     setTimeout(() => {
                         window.location.href = `https://secondhandcell.com/order-submitted.html?${queryParams.toString()}`;

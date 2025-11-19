@@ -78,6 +78,106 @@
         justify-content: center;
         cursor: pointer;
       }
+      .shc-ship48-banner {
+        display: none;
+        position: relative;
+        z-index: 95;
+        border-top: 1px solid #fde68a;
+        border-bottom: 1px solid #fde68a;
+        background: linear-gradient(90deg,#fefce8,#fef3c7,#fffbeb);
+        color: #78350f;
+        padding: 12px 20px;
+        box-shadow: inset 0 1px 0 rgba(253,230,138,0.8);
+      }
+      .shc-ship48-banner.is-visible { display: block; }
+      .shc-ship48-inner {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 18px;
+      }
+      .shc-ship48-text { flex: 1; min-width: 240px; }
+      .shc-ship48-text strong {
+        font-size: 1rem;
+        letter-spacing: -0.01em;
+        color: #92400e;
+      }
+      .shc-ship48-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 6px;
+        font-size: 0.85rem;
+        color: #92400e;
+        font-weight: 600;
+      }
+      .shc-ship48-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .shc-ship48-apply,
+      .shc-ship48-cta {
+        border-radius: 999px;
+        font-weight: 700;
+        padding: 10px 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        transition: all .2s ease;
+        border: none;
+        cursor: pointer;
+      }
+      .shc-ship48-apply {
+        background: linear-gradient(120deg,#ea580c,#f97316);
+        color: #fff;
+        box-shadow: 0 10px 20px -15px rgba(249,115,22,.8);
+      }
+      .shc-ship48-apply:hover { background: linear-gradient(120deg,#c2410c,#ea580c); }
+      .shc-ship48-apply:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+      .shc-ship48-cta {
+        border: 1px dashed rgba(194,65,12,0.6);
+        color: #9a3412;
+        background: rgba(255,255,255,0.8);
+      }
+      .shc-ship48-cta:hover {
+        background: rgba(255,255,255,1);
+        border-color: rgba(194,65,12,0.9);
+      }
+      .shc-ship48-dismiss {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+        border: none;
+        background: transparent;
+        color: #b45309;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 6px;
+        border-radius: 50%;
+      }
+      .shc-ship48-dismiss:hover { background: rgba(250,204,21,0.25); }
+      .shc-ship48-status {
+        font-size: 0.85rem;
+        margin-top: 6px;
+        color: #92400e;
+        font-weight: 600;
+      }
+      .shc-ship48-status.success { color: #166534; }
+      .shc-ship48-status.error { color: #b91c1c; }
+      @media (max-width: 640px) {
+        .shc-ship48-inner { flex-direction: column; align-items: flex-start; }
+        .shc-ship48-actions { width: 100%; justify-content: flex-start; }
+        .shc-ship48-apply, .shc-ship48-cta { width: 100%; }
+      }
       .shc-global-footer {
         background: #0b1224;
         color: #e2e8f0;
@@ -234,21 +334,175 @@
     }
   };
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-      removeLegacySections();
-      appendIfMissing('.shc-global-header', headerHtml, 'afterbegin');
-      appendIfMissing('.shc-global-footer', footerHtml, 'beforeend');
-      const nav = document.querySelector('.shc-nav');
-      const toggle = document.querySelector('.shc-menu-toggle');
-      if (nav && toggle) {
-        toggle.addEventListener('click', () => {
-          const isOpen = nav.classList.toggle('is-open');
-          toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        });
+  const safeStorage = {
+    get(key) {
+      try {
+        return window.localStorage ? window.localStorage.getItem(key) : null;
+      } catch (error) {
+        console.warn('Storage read blocked:', error?.message || error);
+        return null;
       }
+    },
+    set(key, value) {
+      try {
+        if (!window.localStorage) return;
+        if (value === null || typeof value === 'undefined') {
+          window.localStorage.removeItem(key);
+        } else {
+          window.localStorage.setItem(key, value);
+        }
+      } catch (error) {
+        console.warn('Storage write blocked:', error?.message || error);
+      }
+    },
+  };
+
+  const PROMO_CODE = 'SHIP48';
+  const PROMO_STORAGE_KEY = 'shcSelectedPromoCode';
+  const PROMO_DISMISS_KEY = 'shcShip48BannerDismissed';
+  const PROMO_API_BASE =
+    (typeof window !== 'undefined' && window.SHC_API_BASE_URL) ||
+    'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+  let layoutBootstrapped = false;
+
+  function createShip48Banner() {
+    const banner = document.createElement('section');
+    banner.id = 'shc-ship48-banner';
+    banner.className = 'shc-ship48-banner';
+    banner.innerHTML = `
+      <div class="shc-ship48-inner">
+        <div class="shc-ship48-text">
+          <strong>Ship within 48 hours to add $10 to your payout.</strong>
+          <p>Choose the Email Label option, use code <span style="font-weight:800;letter-spacing:0.1em;">${PROMO_CODE}</span>, and we'll stack an extra $10 on your order.</p>
+          <div class="shc-ship48-meta">
+            <span data-ship48-counter>Limited to the first 100 Ship48 bonuses.</span>
+          </div>
+          <p class="shc-ship48-status" data-ship48-status></p>
+        </div>
+        <div class="shc-ship48-actions">
+          <button type="button" class="shc-ship48-apply" data-ship48-apply>Apply SHIP48</button>
+          <a class="shc-ship48-cta" href="/sell/index.html">Start my order</a>
+        </div>
+      </div>
+      <button type="button" class="shc-ship48-dismiss" aria-label="Dismiss Ship48 promo" data-ship48-dismiss>&times;</button>
+    `;
+    return banner;
+  }
+
+  function updateShip48Status(statusEl, type, message) {
+    if (!statusEl) return;
+    statusEl.textContent = message || '';
+    statusEl.classList.remove('success', 'error');
+    if (type === 'success') {
+      statusEl.classList.add('success');
+    } else if (type === 'error') {
+      statusEl.classList.add('error');
+    }
+  }
+
+  function hydrateShip48Counts(banner) {
+    if (!banner) return;
+    const counterEl = banner.querySelector('[data-ship48-counter]');
+    const statusEl = banner.querySelector('[data-ship48-status]');
+    const applyBtn = banner.querySelector('[data-ship48-apply]');
+
+    fetch(`${PROMO_API_BASE.replace(/\/$/, '')}/promo-codes/${PROMO_CODE}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Failed to load promo stats');
+        }
+        return response.json();
+      })
+      .then((data) => {
+        const usesLeftRaw = Number(data.usesLeft ?? data.uses_left ?? 0);
+        const maxUsesRaw = Number(data.maxUses ?? data.max_uses ?? 0);
+        const bonusRaw = Number(data.bonusAmount ?? data.bonus_amount ?? 10);
+        const usesLeft = Number.isFinite(usesLeftRaw) ? usesLeftRaw : null;
+        const maxUses = Number.isFinite(maxUsesRaw) && maxUsesRaw > 0 ? maxUsesRaw : 100;
+        const bonusText = Number.isFinite(bonusRaw) && bonusRaw > 0 ? bonusRaw : 10;
+
+        if (counterEl) {
+          if (usesLeft === null) {
+            counterEl.textContent = `Limited to the first ${maxUses} Ship48 bonuses.`;
+          } else if (usesLeft > 0) {
+            counterEl.textContent = `${usesLeft} of ${maxUses} Ship48 bonuses remain (+$${bonusText}).`;
+          } else {
+            counterEl.textContent = 'All Ship48 bonuses have been claimed for now.';
+          }
+        }
+
+        if (usesLeft !== null && usesLeft <= 0 && applyBtn) {
+          applyBtn.disabled = true;
+          applyBtn.textContent = 'All bonuses claimed';
+        }
+      })
+      .catch((error) => {
+        console.warn('Ship48 promo lookup failed:', error);
+        if (counterEl && !counterEl.textContent) {
+          counterEl.textContent = 'Limited Ship48 bonuses available. Act fast!';
+        }
+        updateShip48Status(
+          statusEl,
+          'error',
+          'Promo code SHIP48 adds $10 when you select Email Label (subject to availability).'
+        );
+      });
+  }
+
+  function initShip48Banner() {
+    if (safeStorage.get(PROMO_DISMISS_KEY) === '1') {
+      return;
+    }
+    if (document.getElementById('shc-ship48-banner')) {
+      return;
+    }
+
+    const banner = createShip48Banner();
+    const header = document.querySelector('.shc-global-header');
+
+    if (header && header.parentNode) {
+      header.insertAdjacentElement('afterend', banner);
+    } else {
+      document.body.insertBefore(banner, document.body.firstChild);
+    }
+
+    const applyBtn = banner.querySelector('[data-ship48-apply]');
+    const dismissBtn = banner.querySelector('[data-ship48-dismiss]');
+    const statusEl = banner.querySelector('[data-ship48-status]');
+
+    if (applyBtn) {
+      applyBtn.addEventListener('click', () => {
+        safeStorage.set(PROMO_STORAGE_KEY, PROMO_CODE);
+        window.dispatchEvent(
+          new CustomEvent('shc:promo-code-selected', {
+            detail: { code: PROMO_CODE },
+          })
+        );
+        updateShip48Status(
+          statusEl,
+          'success',
+          `${PROMO_CODE} saved! Finish checkout with Email Label to get +$10.`
+        );
+      });
+    }
+
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        banner.classList.remove('is-visible');
+        banner.remove();
+        safeStorage.set(PROMO_DISMISS_KEY, '1');
+      });
+    }
+
+    requestAnimationFrame(() => {
+      banner.classList.add('is-visible');
+      hydrateShip48Counts(banner);
     });
-  } else {
+  }
+
+  function bootstrapSharedLayout() {
+    if (layoutBootstrapped) return;
+    layoutBootstrapped = true;
     removeLegacySections();
     appendIfMissing('.shc-global-header', headerHtml, 'afterbegin');
     appendIfMissing('.shc-global-footer', footerHtml, 'beforeend');
@@ -260,5 +514,12 @@
         toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
       });
     }
+    initShip48Banner();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapSharedLayout, { once: true });
+  } else {
+    bootstrapSharedLayout();
   }
 })();

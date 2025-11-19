@@ -98,6 +98,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         <dt class="font-semibold text-slate-600">Payment Method</dt>
                         <dd id="summaryPaymentMethod" class="mt-1 text-slate-900">Not specified</dd>
                     </div>
+                    <div id="summaryPromoRow" class="hidden">
+                        <dt class="font-semibold text-slate-600">Promo Bonus</dt>
+                        <dd id="summaryPromoValue" class="mt-1 text-emerald-600 font-semibold">+$0.00</dd>
+                    </div>
                 </dl>
             </div>
 
@@ -131,6 +135,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     </li>
                 </ol>
             </div>
+            <div id="promoConfirmationCard" class="hidden mb-8 p-5 rounded-2xl border border-amber-200 bg-amber-50 text-left">
+                <p class="text-lg font-semibold text-amber-800 mb-1">Ship48 bonus activated</p>
+                <p class="text-sm text-amber-700">Ship your device within 48 hours to keep the extra $10 that was added to your payout.</p>
+            </div>
+            <div id="emailLabelCard" class="hidden mb-8 p-6 rounded-2xl border border-emerald-200 bg-emerald-50 text-left">
+                <h3 class="text-xl font-bold text-emerald-900 mb-2">Download your prepaid USPS label</h3>
+                <p class="text-sm text-emerald-800 mb-4" id="labelStatusMessage">We also emailed a copy of your label for safekeeping.</p>
+                <div class="flex flex-col gap-3 sm:flex-row">
+                    <a id="labelDownloadLink" href="#" target="_blank" rel="noopener" class="inline-flex items-center justify-center px-5 py-3 rounded-xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition-colors">Download Label (PDF)</a>
+                    <button id="copyLabelLinkButton" type="button" class="inline-flex items-center justify-center px-5 py-3 rounded-xl border border-emerald-400 text-emerald-800 font-semibold hover:bg-emerald-100 transition-colors">Copy Link</button>
+                </div>
+                <p class="text-sm text-emerald-700 mt-3" id="labelTrackingDisplay"></p>
+            </div>
 
             <div class="flex flex-col sm:flex-row justify-center items-center gap-4">
                 <a href="https://secondhandcell.com/index.html" class="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-full text-indigo-700 bg-indigo-100 hover:bg-indigo-200 transition duration-300">
@@ -149,6 +166,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // This script now only handles content loading once the page is confirmed accessible.
 
             const shippingInstruction = document.getElementById('shippingInstruction');
+            const summaryPromoRow = document.getElementById('summaryPromoRow');
+            const summaryPromoValue = document.getElementById('summaryPromoValue');
+            const promoConfirmationCard = document.getElementById('promoConfirmationCard');
+            const emailLabelCard = document.getElementById('emailLabelCard');
+            const labelStatusMessage = document.getElementById('labelStatusMessage');
+            const labelDownloadLink = document.getElementById('labelDownloadLink');
+            const labelTrackingDisplay = document.getElementById('labelTrackingDisplay');
+            const copyLabelLinkButton = document.getElementById('copyLabelLinkButton');
             const urlParams = new URLSearchParams(window.location.search);
 
             let sessionSummary = null;
@@ -210,6 +235,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             const name = coalesceValue('name').trim();
             const orderId = coalesceValue('orderId').trim();
+            const labelDownloadUrl = coalesceValue('labelUrl').trim();
+            const labelTrackingNumber = coalesceValue('trackingNumber').trim();
+            const promoCodeUsed = coalesceValue('promoCode').trim().toUpperCase();
+            const promoBonusNumber = coalesceNumber('promoBonusAmount', 'promo_bonus');
 
             const shippingParam = urlParams.get('shipping');
             const shippingPreferenceSource = coalesceValue('shippingPreference');
@@ -261,6 +290,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             summaryPriceEl.textContent = formattedPrice;
             summaryPaymentMethodEl.textContent = paymentSummary;
 
+            if (Number.isFinite(promoBonusNumber) && promoBonusNumber > 0 && summaryPromoRow && summaryPromoValue) {
+                summaryPromoRow.classList.remove('hidden');
+                const promoSuffix = promoCodeUsed ? ` (${promoCodeUsed})` : '';
+                summaryPromoValue.textContent = `+$${promoBonusNumber.toFixed(2)}${promoSuffix}`;
+                if (promoConfirmationCard) {
+                    promoConfirmationCard.classList.remove('hidden');
+                }
+            }
+
             if (normalizedShippingPreference === 'ship_kit') {
                 shippingInstruction.innerHTML = `
                     <strong>Shipping Kit Instructions:</strong>
@@ -268,6 +306,65 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         We've shipped a prepaid, insured shipping kit to your address. Please use the provided materials to carefully package your device and drop it off at any USPS location.
                     </span>
                 `;
+            } else {
+                const promoReminder = promoBonusNumber ? ' Ship within 48 hours to keep your $10 Ship48 bonus.' : '';
+                if (labelDownloadUrl) {
+                    shippingInstruction.innerHTML = `
+                        <strong>Email Label Instructions:</strong>
+                        <span class="block mt-2">
+                            Your prepaid USPS label is ready below and has been sent to your inbox.${promoReminder}
+                        </span>
+                    `;
+                } else {
+                    shippingInstruction.innerHTML = `
+                        <strong>Email Label Instructions:</strong>
+                        <span class="block mt-2">
+                            We're generating your prepaid USPS label now and will email it shortly.${promoReminder}
+                        </span>
+                    `;
+                }
+            }
+
+            if (normalizedShippingPreference === 'email_label' && labelDownloadUrl && emailLabelCard && labelDownloadLink) {
+                emailLabelCard.classList.remove('hidden');
+                labelDownloadLink.href = labelDownloadUrl;
+                if (labelStatusMessage) {
+                    labelStatusMessage.textContent = promoBonusNumber
+                        ? 'Download your label and ship within 48 hours to keep your $10 bonus.'
+                        : 'Download your label and ship within 48 hours to lock in your payout.';
+                }
+                if (labelTrackingNumber && labelTrackingDisplay) {
+                    const trackingHref = `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${encodeURIComponent(labelTrackingNumber)}`;
+                    labelTrackingDisplay.innerHTML = `Tracking number: <a href="${trackingHref}" target="_blank" rel="noopener" class="text-emerald-800 underline">${labelTrackingNumber}</a>`;
+                } else if (labelTrackingDisplay) {
+                    labelTrackingDisplay.textContent = '';
+                }
+                if (copyLabelLinkButton) {
+                    copyLabelLinkButton.addEventListener('click', async () => {
+                        try {
+                            await navigator.clipboard.writeText(labelDownloadUrl);
+                            if (labelStatusMessage) {
+                                labelStatusMessage.textContent = 'Label link copied!';
+                            }
+                        } catch (error) {
+                            const tempInput = document.createElement('input');
+                            tempInput.value = labelDownloadUrl;
+                            document.body.appendChild(tempInput);
+                            tempInput.select();
+                            try {
+                                document.execCommand('copy');
+                                if (labelStatusMessage) {
+                                    labelStatusMessage.textContent = 'Label link copied!';
+                                }
+                            } catch (fallbackError) {
+                                if (labelStatusMessage) {
+                                    labelStatusMessage.textContent = 'Copy failed—please copy the link from the button.';
+                                }
+                            }
+                            tempInput.remove();
+                        }
+                    });
+                }
             }
 
             const transactionId = orderId;
