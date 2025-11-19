@@ -84,9 +84,9 @@
         z-index: 95;
         border-top: 1px solid #fde68a;
         border-bottom: 1px solid #fde68a;
-        background: linear-gradient(90deg,#fefce8,#fef3c7,#fffbeb);
-        color: #78350f;
-        padding: 12px 20px;
+        background: radial-gradient(circle at top left,#fef9c3,#fef3c7);
+        color: #92400e;
+        padding: 16px 20px 20px;
         box-shadow: inset 0 1px 0 rgba(253,230,138,0.8);
       }
       .shc-ship48-banner.is-visible { display: block; }
@@ -94,63 +94,90 @@
         max-width: 1200px;
         margin: 0 auto;
         display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 18px;
+        flex-direction: column;
+        gap: 14px;
       }
-      .shc-ship48-text { flex: 1; min-width: 240px; }
-      .shc-ship48-text strong {
+      .shc-ship48-ticker {
+        width: 100%;
+        border-radius: 999px;
+        border: 1px dashed rgba(234,88,12,0.45);
+        overflow: hidden;
+        background: rgba(255,255,255,0.85);
+        padding: 4px 0;
+      }
+      .shc-ship48-ticker-track {
+        display: inline-flex;
+        gap: 24px;
+        width: max-content;
+        white-space: nowrap;
+        animation: shcShipMarquee 16s linear infinite;
+      }
+      .shc-ship48-ticker-track span {
+        font-weight: 800;
+        letter-spacing: 0.35em;
+        font-size: 0.78rem;
+        color: #92400e;
+      }
+      .shc-ship48-text {
+        flex: 1;
+        min-width: 240px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .shc-ship48-eyebrow {
+        font-size: 0.75rem;
+        letter-spacing: 0.3em;
+        font-weight: 700;
+        color: #b45309;
+      }
+      .shc-ship48-headline {
+        font-size: clamp(1.35rem,4vw,2.35rem);
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #78350f;
+      }
+      .shc-ship48-subtext {
+        margin: 0;
         font-size: 1rem;
-        letter-spacing: -0.01em;
+        font-weight: 600;
         color: #92400e;
       }
       .shc-ship48-meta {
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
-        margin-top: 6px;
         font-size: 0.85rem;
-        color: #92400e;
         font-weight: 600;
+        color: #92400e;
       }
       .shc-ship48-actions {
         display: flex;
-        gap: 12px;
         flex-wrap: wrap;
-        align-items: center;
+        gap: 12px;
       }
-      .shc-ship48-apply,
       .shc-ship48-cta {
         border-radius: 999px;
-        font-weight: 700;
-        padding: 10px 18px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-        transition: all .2s ease;
         border: none;
-        cursor: pointer;
-      }
-      .shc-ship48-apply {
-        background: linear-gradient(120deg,#ea580c,#f97316);
+        background: linear-gradient(115deg,#f97316,#ea580c);
         color: #fff;
-        box-shadow: 0 10px 20px -15px rgba(249,115,22,.8);
-      }
-      .shc-ship48-apply:hover { background: linear-gradient(120deg,#c2410c,#ea580c); }
-      .shc-ship48-apply:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
-        box-shadow: none;
-      }
-      .shc-ship48-cta {
-        border: 1px dashed rgba(194,65,12,0.6);
-        color: #9a3412;
-        background: rgba(255,255,255,0.8);
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 12px 28px;
+        cursor: pointer;
+        box-shadow: 0 25px 40px -30px rgba(185,28,28,0.6);
+        transition: transform .2s ease, box-shadow .2s ease;
+        width: 100%;
       }
       .shc-ship48-cta:hover {
-        background: rgba(255,255,255,1);
-        border-color: rgba(194,65,12,0.9);
+        transform: translateY(-2px);
+        box-shadow: 0 25px 40px -24px rgba(185,28,28,0.55);
+      }
+      .shc-ship48-cta:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        box-shadow: none;
       }
       .shc-ship48-dismiss {
         position: absolute;
@@ -167,16 +194,21 @@
       .shc-ship48-dismiss:hover { background: rgba(250,204,21,0.25); }
       .shc-ship48-status {
         font-size: 0.85rem;
-        margin-top: 6px;
         color: #92400e;
         font-weight: 600;
       }
       .shc-ship48-status.success { color: #166534; }
       .shc-ship48-status.error { color: #b91c1c; }
+      @keyframes shcShipMarquee {
+        0% { transform: translate3d(0,0,0); }
+        100% { transform: translate3d(-50%,0,0); }
+      }
+      @media (min-width: 768px) {
+        .shc-ship48-inner { flex-direction: row; align-items: center; justify-content: space-between; }
+        .shc-ship48-cta { width: auto; min-width: 230px; }
+      }
       @media (max-width: 640px) {
-        .shc-ship48-inner { flex-direction: column; align-items: flex-start; }
-        .shc-ship48-actions { width: 100%; justify-content: flex-start; }
-        .shc-ship48-apply, .shc-ship48-cta { width: 100%; }
+        .shc-ship48-inner { align-items: stretch; }
       }
       .shc-global-footer {
         background: #0b1224;
@@ -360,6 +392,7 @@
   const PROMO_CODE = 'SHIP48';
   const PROMO_STORAGE_KEY = 'shcSelectedPromoCode';
   const PROMO_DISMISS_KEY = 'shcShip48BannerDismissed';
+  const SHIP48_START_KEY = 'shcShip48StartFlow';
   const PROMO_API_BASE =
     (typeof window !== 'undefined' && window.SHC_API_BASE_URL) ||
     'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
@@ -371,17 +404,24 @@
     banner.className = 'shc-ship48-banner';
     banner.innerHTML = `
       <div class="shc-ship48-inner">
-        <div class="shc-ship48-text">
-          <strong>Ship within 48 hours to add $10 to your payout.</strong>
-          <p>Choose the Email Label option, use code <span style="font-weight:800;letter-spacing:0.1em;">${PROMO_CODE}</span>, and we'll stack an extra $10 on your order.</p>
-          <div class="shc-ship48-meta">
-            <span data-ship48-counter>Limited to the first 100 Ship48 bonuses.</span>
+        <div class="shc-ship48-ticker" aria-hidden="true">
+          <div class="shc-ship48-ticker-track">
+            <span>USE CODE ${PROMO_CODE}</span>
+            <span>PROMO CODE ${PROMO_CODE}</span>
+            <span>SHIP IN 48 HOURS FOR +$10</span>
           </div>
-          <p class="shc-ship48-status" data-ship48-status></p>
+        </div>
+        <div class="shc-ship48-text">
+          <span class="shc-ship48-eyebrow">USE CODE</span>
+          <strong class="shc-ship48-headline">PROMO CODE ${PROMO_CODE}</strong>
+          <p class="shc-ship48-subtext">Ship within 48 hours using Email Label to earn an instant +$10 bonus.</p>
+          <div class="shc-ship48-meta">
+            <span data-ship48-counter>Limited Ship48 bonuses remain.</span>
+            <span class="shc-ship48-status" data-ship48-status></span>
+          </div>
         </div>
         <div class="shc-ship48-actions">
-          <button type="button" class="shc-ship48-apply" data-ship48-apply>Apply SHIP48</button>
-          <a class="shc-ship48-cta" href="/sell/index.html">Start my order</a>
+          <button type="button" class="shc-ship48-cta" data-ship48-cta>Start my quote now</button>
         </div>
       </div>
       <button type="button" class="shc-ship48-dismiss" aria-label="Dismiss Ship48 promo" data-ship48-dismiss>&times;</button>
@@ -404,7 +444,7 @@
     if (!banner) return;
     const counterEl = banner.querySelector('[data-ship48-counter]');
     const statusEl = banner.querySelector('[data-ship48-status]');
-    const applyBtn = banner.querySelector('[data-ship48-apply]');
+    const ctaBtn = banner.querySelector('[data-ship48-cta]');
 
     fetch(`${PROMO_API_BASE.replace(/\/$/, '')}/promo-codes/${PROMO_CODE}`)
       .then((response) => {
@@ -431,9 +471,9 @@
           }
         }
 
-        if (usesLeft !== null && usesLeft <= 0 && applyBtn) {
-          applyBtn.disabled = true;
-          applyBtn.textContent = 'All bonuses claimed';
+        if (usesLeft !== null && usesLeft <= 0 && ctaBtn) {
+          ctaBtn.disabled = true;
+          ctaBtn.textContent = 'All bonuses claimed';
         }
       })
       .catch((error) => {
@@ -447,6 +487,28 @@
           'Promo code SHIP48 adds $10 when you select Email Label (subject to availability).'
         );
       });
+  }
+
+  function startShip48FlowFromLayout(statusEl) {
+    safeStorage.set(PROMO_STORAGE_KEY, PROMO_CODE);
+    window.dispatchEvent(
+      new CustomEvent('shc:promo-code-selected', {
+        detail: { code: PROMO_CODE },
+      })
+    );
+    const modal = document.getElementById('quoteModal') || document.getElementById('pricingModal');
+    if (modal) {
+      window.dispatchEvent(
+        new CustomEvent('shc:ship48-start-order', { detail: { source: 'shared-layout' } })
+      );
+      safeStorage.set(SHIP48_START_KEY, null);
+      updateShip48Status(statusEl, 'success', `${PROMO_CODE} locked in — launching the quote wizard…`);
+      return;
+    }
+    safeStorage.set(SHIP48_START_KEY, '1');
+    const targetUrl = new URL('/sell-device.html', window.location.origin);
+    targetUrl.searchParams.set('ship48Start', '1');
+    window.location.href = targetUrl.toString();
   }
 
   function initShip48Banner() {
@@ -466,23 +528,14 @@
       document.body.insertBefore(banner, document.body.firstChild);
     }
 
-    const applyBtn = banner.querySelector('[data-ship48-apply]');
+    const ctaBtn = banner.querySelector('[data-ship48-cta]');
     const dismissBtn = banner.querySelector('[data-ship48-dismiss]');
     const statusEl = banner.querySelector('[data-ship48-status]');
 
-    if (applyBtn) {
-      applyBtn.addEventListener('click', () => {
-        safeStorage.set(PROMO_STORAGE_KEY, PROMO_CODE);
-        window.dispatchEvent(
-          new CustomEvent('shc:promo-code-selected', {
-            detail: { code: PROMO_CODE },
-          })
-        );
-        updateShip48Status(
-          statusEl,
-          'success',
-          `${PROMO_CODE} saved! Finish checkout with Email Label to get +$10.`
-        );
+    if (ctaBtn) {
+      ctaBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        startShip48FlowFromLayout(statusEl);
       });
     }
 
