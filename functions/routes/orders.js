@@ -1049,9 +1049,12 @@ function createOrdersRouter({
       }
 
       const promoBonusAmount = appliedPromo?.amount || 0;
-      const payoutWithPromo = payoutToPersist + promoBonusAmount;
-      orderData.totalPayout = payoutWithPromo;
-      orderData.estimatedQuote = payoutWithPromo;
+      const finalPayout = payoutToPersist;
+      orderData.totalPayout = finalPayout;
+      orderData.estimatedQuote =
+        Number.isFinite(normalizedEstimated) && normalizedEstimated !== null
+          ? normalizedEstimated
+          : finalPayout;
 
       if (appliedPromo) {
         orderData.promoCode = appliedPromo.code;
