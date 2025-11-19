@@ -193,6 +193,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // NOTE: The Access Control Check was moved to the <head> for immediate execution.
             // This script now only handles content loading once the page is confirmed accessible.
 
+            const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+
             const shippingInstruction = document.getElementById('shippingInstruction');
             const summaryPromoRow = document.getElementById('summaryPromoRow');
             const summaryPromoValue = document.getElementById('summaryPromoValue');
@@ -364,13 +366,19 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
             }
 
-            if (normalizedShippingPreference === 'email_label' && labelDownloadUrl && emailLabelCard && labelDownloadLink) {
+            const labelBundleUrl = orderId
+                ? `${BACKEND_BASE_URL}/print-bundle/${encodeURIComponent(orderId)}`
+                : '';
+            const hasLabelDownload = Boolean(labelDownloadUrl);
+            const labelDownloadTarget = hasLabelDownload ? labelBundleUrl || labelDownloadUrl : '';
+
+            if (normalizedShippingPreference === 'email_label' && hasLabelDownload && labelDownloadTarget && emailLabelCard && labelDownloadLink) {
                 emailLabelCard.classList.remove('hidden');
-                labelDownloadLink.href = labelDownloadUrl;
+                labelDownloadLink.href = labelDownloadTarget;
                 if (labelStatusMessage) {
                     labelStatusMessage.textContent = promoBonusNumber
-                        ? 'Download your label and ship within 48 hours to keep your $10 bonus.'
-                        : 'Download your label and ship within 48 hours to lock in your payout.';
+                        ? 'Download your label and packing slip, then ship within 48 hours to keep your $10 bonus.'
+                        : 'Download your label and packing slip, then ship within 48 hours to lock in your payout.';
                 }
                 if (labelTrackingNumber && labelTrackingDisplay) {
                     const trackingHref = `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${encodeURIComponent(labelTrackingNumber)}`;
@@ -381,13 +389,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 if (copyLabelLinkButton) {
                     copyLabelLinkButton.addEventListener('click', async () => {
                         try {
-                            await navigator.clipboard.writeText(labelDownloadUrl);
+                            await navigator.clipboard.writeText(labelDownloadTarget);
                             if (labelStatusMessage) {
                                 labelStatusMessage.textContent = 'Label link copied!';
                             }
                         } catch (error) {
                             const tempInput = document.createElement('input');
-                            tempInput.value = labelDownloadUrl;
+                            tempInput.value = labelDownloadTarget;
                             document.body.appendChild(tempInput);
                             tempInput.select();
                             try {
