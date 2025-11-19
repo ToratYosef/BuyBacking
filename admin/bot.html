@@ -1,164 +1,276 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>SellCell + Amazon Repricer</title>
+  <meta charset="UTF-8" />
+  <title>SecondHandCell Repricer – SellCell + Amazon (Local XML)</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
     body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       margin: 0;
       padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       background: #020617;
       color: #e5e7eb;
     }
     header {
-      padding: 1rem 2rem;
+      padding: 1.2rem 2rem;
       border-bottom: 1px solid #1f2937;
       background: radial-gradient(circle at top left, #1d4ed8, #020617);
     }
     header h1 {
       margin: 0;
-      font-size: 1.6rem;
+      font-size: 1.8rem;
     }
     header p {
-      margin: 0.35rem 0 0;
+      margin: 0.4rem 0 0;
       font-size: 0.9rem;
       color: #9ca3af;
     }
     main {
       padding: 1.5rem;
-      max-width: 1400px;
+      max-width: 1700px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: 1.2fr 2fr;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr);
       gap: 1.5rem;
     }
     .card {
-      background: rgba(15, 23, 42, 0.9);
+      background: rgba(15, 23, 42, 0.95);
       border-radius: 0.75rem;
       border: 1px solid #1f2937;
-      padding: 1rem 1.25rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
     }
     .card h2 {
-      margin: 0 0 0.75rem;
-      font-size: 1.05rem;
+      margin: 0;
+      font-size: 1.1rem;
+      color: #e5e7eb;
+    }
+    .muted {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      line-height: 1.4;
     }
     textarea {
       width: 100%;
-      min-height: 220px;
-      background: #020617;
+      min-height: 260px;
+      resize: vertical;
       border-radius: 0.5rem;
-      border: 1px solid #334155;
-      padding: 0.75rem;
+      border: 1px solid #1f2937;
+      background: #020617;
       color: #e5e7eb;
+      padding: 0.75rem;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 0.85rem;
-      resize: vertical;
+      white-space: pre;
     }
     textarea:focus {
-      outline: none;
-      border-color: #60a5fa;
-      box-shadow: 0 0 0 1px #1d4ed8;
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
     }
-    .controls {
+    .file-row {
       display: flex;
-      gap: 0.5rem;
-      margin-top: 0.75rem;
-      flex-wrap: wrap;
       align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.25rem;
     }
-    button {
-      border-radius: 999px;
-      border: 1px solid #1d4ed8;
-      background: linear-gradient(to right, #1d4ed8, #2563eb);
-      color: white;
+    .file-label {
       font-size: 0.85rem;
-      padding: 0.4rem 0.9rem;
-      cursor: pointer;
-    }
-    button:disabled {
-      opacity: 0.6;
-      cursor: default;
+      color: #e5e7eb;
+      min-width: 70px;
     }
     input[type="file"] {
       font-size: 0.8rem;
+      color: #e5e7eb;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+      align-items: center;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.55rem 1.4rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      color: #f9fafb;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.1s ease;
+    }
+    button.secondary {
+      background: transparent;
+      border: 1px solid #1f2937;
+      box-shadow: none;
+      color: #e5e7eb;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+      transform: none;
+    }
+    button:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(37, 99, 235, 0.5);
+    }
+    button .pill {
+      background: rgba(15, 23, 42, 0.9);
+      padding: 0.05rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: #cbd5f5;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.78rem;
+      font-size: 0.84rem;
+    }
+    thead {
+      position: sticky;
+      top: 0;
+      background: #020617;
+      z-index: 1;
     }
     th, td {
-      border-bottom: 1px solid #1f2937;
-      padding: 0.35rem 0.45rem;
+      padding: 0.35rem 0.5rem;
       text-align: left;
       white-space: nowrap;
     }
     th {
-      background: rgba(15, 23, 42, 0.9);
-      position: sticky;
-      top: 0;
-      z-index: 1;
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid #111827;
+      color: #9ca3af;
+      background: radial-gradient(circle at top left, #111827, #020617);
     }
-    tbody tr:nth-child(odd) {
+    tbody tr:nth-child(even) td {
+      background: rgba(15, 23, 42, 0.85);
+    }
+    tbody tr:nth-child(odd) td {
       background: rgba(15, 23, 42, 0.6);
     }
-    tbody tr:nth-child(even) {
-      background: rgba(15, 23, 42, 0.3);
+    tbody tr:hover td {
+      background: rgba(37, 99, 235, 0.15);
     }
-    .table-wrapper {
-      max-height: 500px;
+    .number {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .status-ok {
+      color: #22c55e;
+    }
+    .status-warn {
+      color: #f97316;
+    }
+    .status-err {
+      color: #f97373;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.05rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      border: 1px solid rgba(156, 163, 175, 0.4);
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+    }
+    .scroll-table {
+      border-radius: 0.5rem;
       overflow: auto;
-      border-radius: 0.75rem;
+      max-height: 620px;
       border: 1px solid #1f2937;
     }
-    .badge-ok {
-      background: rgba(34, 197, 94, 0.2);
-      color: #bbf7d0;
-      padding: 0.15rem 0.45rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-    }
-    .badge-low {
-      background: rgba(239, 68, 68, 0.2);
-      color: #fecaca;
-      padding: 0.15rem 0.45rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-    }
-    .status {
+    #statusText {
       font-size: 0.8rem;
-      margin-top: 0.4rem;
+      color: #9ca3af;
+      margin-top: 0.25rem;
+    }
+    #errorBox {
+      margin-top: 0.5rem;
+      font-size: 0.82rem;
+      color: #fecaca;
+      background: rgba(127, 29, 29, 0.4);
+      border-radius: 0.4rem;
+      border: 1px solid rgba(248, 113, 113, 0.5);
+      padding: 0.4rem 0.55rem;
+      display: none;
+      white-space: pre-wrap;
+    }
+    .pill-small {
+      font-size: 0.75rem;
       color: #9ca3af;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>SecondHandCell Repricer – SellCell + Amazon</h1>
-    <p>Upload CSV → fetch competitor top price from feed.xml → apply Amazon & fee logic → output new buy prices (>= 15% profit).</p>
+    <h1>SecondHandCell Repricer – SellCell + Amazon (Local XML)</h1>
+    <p>Upload CSV ➜ upload SellCell feed XML ➜ get competitor top price per model ➜ apply Amazon & fee math ➜ output new buy prices (with new profit $ & new %).</p>
   </header>
 
   <main>
+    <!-- LEFT: INPUT -->
     <section class="card">
-      <h2>Step 1 – Input CSV</h2>
-      <p style="font-size:0.8rem;color:#9ca3af;margin-bottom:0.5rem;">
-        Expected columns: <code>name,storage,lock_status,condition,price</code>. The <code>price</code> column will be replaced with new buy prices.
-      </p>
-      <textarea id="csvInput" placeholder="name,storage,lock_status,condition,price&#10;IPHONE 12 PRO,128GB,locked,flawless,0"></textarea>
-      <div class="controls">
-        <input type="file" id="fileInput" accept=".csv" />
-        <button id="processBtn">Process</button>
-        <button id="downloadBtn" disabled>Download CSV</button>
+      <h2>Step 1 – Input CSV & XML</h2>
+      <div class="muted">
+        <strong>Expected CSV columns</strong> (header row, comma-separated):<br>
+        <code>name,storage,lock_status,condition,price,amz</code><br>
+        <span class="pill-small">price = current buy price (can include $), amz = Amazon price (can include $ and commas)</span>
       </div>
-      <div class="status" id="status"></div>
+
+      <textarea id="csvInput" placeholder="Paste your CSV here (including header)..."></textarea>
+
+      <div class="file-row">
+        <span class="file-label">CSV file</span>
+        <input type="file" id="csvFile" accept=".csv,text/csv" />
+      </div>
+
+      <div class="file-row">
+        <span class="file-label">XML file</span>
+        <input type="file" id="xmlFile" accept=".xml,text/xml" />
+      </div>
+
+      <div class="btn-row">
+        <button id="btnProcessLocal">
+          Use CSV + XML
+          <span class="pill">local only</span>
+        </button>
+        <button id="btnDownload" class="secondary" disabled>
+          Download CSV
+        </button>
+      </div>
+
+      <div id="statusText">Ready.</div>
+      <div id="errorBox"></div>
+      <div class="muted" style="margin-top:0.5rem;">
+        Processed rows: <span id="processedCount">0</span>
+      </div>
     </section>
 
+    <!-- RIGHT: OUTPUT -->
     <section class="card">
       <h2>Step 2 – Preview Results</h2>
-      <div class="table-wrapper">
-        <table id="resultsTable">
+      <div class="muted">
+        After processing, new buy prices will appear below. You can verify the Feed & Amazon columns and spot-check one device to confirm logic.
+      </div>
+      <div class="scroll-table">
+        <table id="resultTable">
           <thead>
             <tr>
               <th>name</th>
@@ -171,161 +283,533 @@
               <th>Profit $</th>
               <th>Profit %</th>
               <th>New price</th>
+              <th>New profit</th>
+              <th>New pr</th>
               <th>Status</th>
             </tr>
           </thead>
-          <tbody></tbody>
+          <tbody id="resultBody">
+          </tbody>
         </table>
       </div>
     </section>
   </main>
 
   <script>
-    const FUNCTION_URL = "YOUR_FUNCTION_URL_HERE"; // e.g. https://us-central1-YOUR-PROJECT.cloudfunctions.net/repriceFeed
+    // ---------- Helpers ----------
+    function showError(msg, err) {
+      console.error("[repricer] ERROR:", msg, err || "");
+      const box = document.getElementById("errorBox");
+      box.style.display = "block";
+      box.textContent = msg + (err && err.message ? "\n" + err.message : "");
+      document.getElementById("statusText").textContent = "Error – see details below.";
+    }
 
-    const csvInput = document.getElementById("csvInput");
-    const fileInput = document.getElementById("fileInput");
-    const processBtn = document.getElementById("processBtn");
-    const downloadBtn = document.getElementById("downloadBtn");
-    const statusEl = document.getElementById("status");
-    const tbody = document.querySelector("#resultsTable tbody");
+    function clearError() {
+      const box = document.getElementById("errorBox");
+      box.style.display = "none";
+      box.textContent = "";
+    }
 
-    let lastResultRows = [];
+    function setStatus(msg) {
+      console.log("[repricer]", msg);
+      document.getElementById("statusText").textContent = msg;
+    }
 
-    fileInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        csvInput.value = ev.target.result;
-      };
-      reader.readAsText(file);
-    });
+    function normalizeName(name) {
+      return String(name || "").trim().toUpperCase();
+    }
 
-    processBtn.addEventListener("click", async () => {
-      const csv = csvInput.value.trim();
-      if (!csv) {
-        alert("Please paste or upload CSV first.");
-        return;
-      }
-      processBtn.disabled = true;
-      downloadBtn.disabled = true;
-      statusEl.textContent = "Processing...";
-      tbody.innerHTML = "";
-      lastResultRows = [];
+    function parseMoney(value) {
+      if (value == null) return null;
+      const cleaned = String(value).replace(/[^0-9.\-]/g, "");
+      if (!cleaned) return null;
+      const num = parseFloat(cleaned);
+      return Number.isFinite(num) ? num : null;
+    }
 
-      try {
-        const res = await fetch(FUNCTION_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ csv })
-        });
+    // Simple CSV parser that handles quotes and commas in quotes.
+    function parseCsv(text) {
+      if (!text) return [];
+      const rows = [];
+      let cur = "";
+      let row = [];
+      let inQuotes = false;
 
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(text || "HTTP error " + res.status);
-        }
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
 
-        const data = await res.json();
-        lastResultRows = data.rows || [];
-        renderTable(lastResultRows);
-        downloadBtn.disabled = false;
-        statusEl.textContent = `Processed ${lastResultRows.length} rows.`;
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = "Error: " + (err.message || err);
-      } finally {
-        processBtn.disabled = false;
-      }
-    });
-
-    function renderTable(rows) {
-      tbody.innerHTML = "";
-      for (const r of rows) {
-        const tr = document.createElement("tr");
-
-        const profitPct = typeof r.profit_pct === "number" ? r.profit_pct : null;
-        const pctDisplay = profitPct !== null
-          ? (profitPct * 100).toFixed(2) + "%"
-          : "";
-
-        const statusCell = document.createElement("td");
-        if (profitPct !== null) {
-          if (profitPct >= 0.15) {
-            statusCell.innerHTML = '<span class="badge-ok">OK ≥ 15%</span>';
+        if (ch === '"' ) {
+          if (inQuotes && next === '"') {
+            // Escaped quote
+            cur += '"';
+            i++;
           } else {
-            statusCell.innerHTML = '<span class="badge-low">&lt; 15%</span>';
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          row.push(cur);
+          cur = "";
+        } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+          if (cur.length || row.length) {
+            row.push(cur);
+            rows.push(row);
+            row = [];
+            cur = "";
+          }
+          // swallow \r\n pair
+          if (ch === '\r' && next === '\n') {
+            i++;
           }
         } else {
-          statusCell.textContent = "";
+          cur += ch;
         }
+      }
+      if (cur.length || row.length) {
+        row.push(cur);
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function csvToRecords(text) {
+      const rows = parseCsv(text.trim());
+      if (!rows.length) return [];
+      const header = rows[0].map(h => String(h || "").trim());
+      const records = [];
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || r.length === 0 || (r.length === 1 && !r[0].trim())) continue;
+        const obj = {};
+        for (let j = 0; j < header.length; j++) {
+          obj[header[j]] = r[j] != null ? r[j] : "";
+        }
+        records.push(obj);
+      }
+      return records;
+    }
+
+    // Build feed index from uploaded XML text.
+    // key: "DEVICE_NAME|CAPACITY" (uppercased)
+    // value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
+    function buildFeedIndexFromXml(xmlText) {
+      setStatus("Parsing XML feed...");
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+      const parseErr = xmlDoc.querySelector("parsererror");
+      if (parseErr) {
+        throw new Error("XML parse error: " + parseErr.textContent.trim());
+      }
+
+      const CONDITION_XML_MAP = {
+        flawless: "prices_likenew",
+        good: "prices_good",
+        fair: "prices_poor",
+        damaged: "prices_faulty",
+      };
+
+      const devices = xmlDoc.getElementsByTagName("device");
+      const index = {};
+      let deviceCount = 0;
+
+      for (let i = 0; i < devices.length; i++) {
+        const d = devices[i];
+        const nameEl = d.getElementsByTagName("device_name")[0];
+        const capEl = d.getElementsByTagName("capacity")[0];
+        const deviceName = normalizeName(nameEl ? nameEl.textContent : "");
+        const capacity = String(capEl ? capEl.textContent : "").trim();
+        if (!deviceName || !capacity) continue;
+        const keyBase = deviceName + "|" + capacity;
+
+        deviceCount++;
+
+        for (const condKey of Object.keys(CONDITION_XML_MAP)) {
+          const sectionTag = CONDITION_XML_MAP[condKey];
+          const section = d.getElementsByTagName(sectionTag)[0];
+          if (!section) continue;
+          const prices = Array.from(section.getElementsByTagName("price"));
+          if (!prices.length) continue;
+
+          const competitorPrices = prices
+            .map(p => {
+              const mEl = p.getElementsByTagName("merchant_name")[0];
+              const priceEl = p.getElementsByTagName("merchant_price")[0];
+              const merchant = String(mEl ? mEl.textContent : "").trim().toLowerCase();
+              if (merchant === "secondhandcell") return null; // exclude SHC
+              const v = parseMoney(priceEl ? priceEl.textContent : "");
+              return Number.isFinite(v) ? v : null;
+            })
+            .filter(v => v != null);
+
+          if (!competitorPrices.length) continue;
+          const top = Math.max.apply(null, competitorPrices);
+
+          if (!index[keyBase]) index[keyBase] = {};
+          if (!index[keyBase][condKey] || top > index[keyBase][condKey]) {
+            index[keyBase][condKey] = top;
+          }
+        }
+      }
+
+      console.log("[repricer] Built feed index", { deviceCount, keyCount: Object.keys(index).length });
+      setStatus(`XML parsed – indexed ${Object.keys(index).length} model/storage combos.`);
+      return index;
+    }
+
+    // Pricing math for one row.
+    function repriceRowFromFeed(row, feedIndex) {
+      const result = { ...row };
+
+      const name = row.name;
+      const storage = row.storage;
+      const lockStatus = row.lock_status;
+      const conditionRaw = row.condition;
+      const condition = String(conditionRaw || "").toLowerCase();
+
+      const key = normalizeName(name) + "|" + String(storage || "").trim();
+      const feedEntry = feedIndex[key];
+
+      let status = "";
+      let statusClass = "status-ok";
+
+      let feedPrice = null;
+      const condKey = condition; // flawless/good/fair/damaged
+      if (feedEntry && Object.prototype.hasOwnProperty.call(feedEntry, condKey)) {
+        feedPrice = feedEntry[condKey];
+      }
+
+      if (!feedPrice) {
+        status = "No competitor feed price found";
+        statusClass = "status-warn";
+      }
+
+      result.original_feed_price = feedPrice != null ? feedPrice : null;
+
+      const amazonPrice = parseMoney(row.amz);
+      if (!amazonPrice) {
+        result.amazon_price = null;
+        result.after_amazon = null;
+        result.sellcell_fee = null;
+        result.shipping_fee = 15;
+        result.condition_fee = null;
+        result.total_walkaway = null;
+        result.profit = null;
+        result.profit_pct = null;
+        result.new_price = null;
+        result.new_profit = null;
+        result.new_profit_pct = null;
+
+        if (status) {
+          status += " & no valid Amazon price";
+        } else {
+          status = "No valid Amazon price";
+        }
+        statusClass = "status-warn";
+
+        result._status = status;
+        result._statusClass = statusClass;
+        return result;
+      }
+
+      result.amazon_price = amazonPrice;
+
+      if (!feedPrice) {
+        // we still show Amazon price but can't compute profit vs feed
+        result.after_amazon = null;
+        result.sellcell_fee = null;
+        result.shipping_fee = 15;
+        result.condition_fee = null;
+        result.total_walkaway = null;
+        result.profit = null;
+        result.profit_pct = null;
+        result.new_price = null;
+        result.new_profit = null;
+        result.new_profit_pct = null;
+
+        if (!status) status = "No competitor feed price found";
+        statusClass = "status-warn";
+        result._status = status;
+        result._statusClass = statusClass;
+        return result;
+      }
+
+      // ---- Pricing math ----
+      const after_amazon = amazonPrice * 0.92 - 10;
+      const sellcell_fee = Math.min(after_amazon * 0.08, 30);
+      const after_sellcell = after_amazon - sellcell_fee;
+      const shipping_fee = 15;
+
+      let condition_fee = 0;
+      if (condition === "flawless" || condition === "good") {
+        condition_fee = 10;
+      } else if (condition === "fair") {
+        condition_fee = 30;
+      } else if (condition === "damaged") {
+        condition_fee = 50;
+      }
+
+      const total_walkaway = after_sellcell - shipping_fee - condition_fee;
+      const original_price = feedPrice;
+      const profit = total_walkaway - original_price;
+      const profit_pct = original_price ? profit / original_price : null;
+
+      let new_price;
+      if (profit_pct != null && profit_pct >= 0.15) {
+        new_price = original_price + 1;
+      } else {
+        new_price = total_walkaway / 1.15;
+      }
+      new_price = Math.round(new_price * 100) / 100;
+
+      const new_profit = total_walkaway - new_price;
+      const new_profit_pct = new_price ? new_profit / new_price : null;
+
+      result.after_amazon = after_amazon;
+      result.sellcell_fee = sellcell_fee;
+      result.shipping_fee = shipping_fee;
+      result.condition_fee = condition_fee;
+      result.total_walkaway = total_walkaway;
+      result.profit = profit;
+      result.profit_pct = profit_pct;
+      result.new_price = new_price;
+      result.new_profit = new_profit;
+      result.new_profit_pct = new_profit_pct;
+
+      if (profit_pct != null && profit_pct >= 0.15) {
+        status = "Already ≥ 15% profit – bumped $1";
+        statusClass = "status-ok";
+      } else {
+        status = "Repriced to hit 15% profit";
+        statusClass = "status-ok";
+      }
+
+      result._status = status;
+      result._statusClass = statusClass;
+      return result;
+    }
+
+    // Render table rows
+    function renderResults(rows) {
+      const tbody = document.getElementById("resultBody");
+      tbody.innerHTML = "";
+
+      function fmtMoney(v) {
+        if (v == null || !Number.isFinite(v)) return "";
+        return "$" + v.toFixed(2);
+      }
+      function fmtPct(v) {
+        if (v == null || !Number.isFinite(v)) return "";
+        return (v * 100).toFixed(2) + "%";
+      }
+
+      rows.forEach(r => {
+        const tr = document.createElement("tr");
 
         const cells = [
           r.name,
           r.storage,
           r.lock_status,
           r.condition,
+          fmtMoney(r.original_feed_price),
+          fmtMoney(r.amazon_price),
+          fmtMoney(r.total_walkaway),
+          fmtMoney(r.profit),
+          fmtPct(r.profit_pct),
+          fmtMoney(r.new_price),
+          fmtMoney(r.new_profit),
+          fmtPct(r.new_profit_pct),
+        ];
+
+        const alignRightIdx = [4,5,6,7,8,9,10,11];
+
+        cells.forEach((val, idx) => {
+          const td = document.createElement("td");
+          td.textContent = val != null ? val : "";
+          if (alignRightIdx.includes(idx)) {
+            td.classList.add("number");
+          }
+          tr.appendChild(td);
+        });
+
+        const statusTd = document.createElement("td");
+        const span = document.createElement("span");
+        span.textContent = r._status || "";
+        span.className = r._statusClass || "";
+        statusTd.appendChild(span);
+        tr.appendChild(statusTd);
+
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("processedCount").textContent = rows.length.toString();
+    }
+
+    // Build downloadable CSV from result rows
+    function buildOutputCsv(rows) {
+      const header = [
+        "name",
+        "storage",
+        "lock_status",
+        "condition",
+        "price",
+        "amz",
+        "original_feed_price",
+        "amazon_price",
+        "after_amazon",
+        "sellcell_fee",
+        "shipping_fee",
+        "condition_fee",
+        "total_walkaway",
+        "profit",
+        "profit_pct",
+        "new_price",
+        "new_profit",
+        "new_profit_pct",
+        "status",
+      ];
+
+      function escapeCsv(value) {
+        if (value == null) return "";
+        const s = String(value);
+        if (/[",\n\r]/.test(s)) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      }
+
+      const lines = [header.join(",")];
+      for (const r of rows) {
+        const row = [
+          r.name,
+          r.storage,
+          r.lock_status,
+          r.condition,
+          r.price,
+          r.amz,
           r.original_feed_price != null ? r.original_feed_price.toFixed(2) : "",
           r.amazon_price != null ? r.amazon_price.toFixed(2) : "",
+          r.after_amazon != null ? r.after_amazon.toFixed(2) : "",
+          r.sellcell_fee != null ? r.sellcell_fee.toFixed(2) : "",
+          r.shipping_fee != null ? r.shipping_fee.toFixed(2) : "",
+          r.condition_fee != null ? r.condition_fee.toFixed(2) : "",
           r.total_walkaway != null ? r.total_walkaway.toFixed(2) : "",
           r.profit != null ? r.profit.toFixed(2) : "",
-          pctDisplay,
-          r.new_price != null ? r.new_price.toFixed(2) : ""
+          r.profit_pct != null ? (r.profit_pct * 100).toFixed(2) + "%" : "",
+          r.new_price != null ? r.new_price.toFixed(2) : "",
+          r.new_profit != null ? r.new_profit.toFixed(2) : "",
+          r.new_profit_pct != null ? (r.new_profit_pct * 100).toFixed(2) + "%" : "",
+          r._status || "",
         ];
-
-        for (const val of cells) {
-          const td = document.createElement("td");
-          td.textContent = val;
-          tr.appendChild(td);
-        }
-        tr.appendChild(statusCell);
-        tbody.appendChild(tr);
+        lines.push(row.map(escapeCsv).join(","));
       }
+      return lines.join("\n");
     }
 
-    // Simple CSV builder that keeps same columns/order as input but with price=new_price
-    downloadBtn.addEventListener("click", () => {
-      if (!lastResultRows.length) return;
+    // ---------- Wire up UI ----------
 
-      // Infer columns from first input row:
-      // name,storage,lock_status,condition,price
-      const columns = ["name", "storage", "lock_status", "condition", "price"];
+    const csvFileInput = document.getElementById("csvFile");
+    const xmlFileInput = document.getElementById("xmlFile");
+    const csvTextArea = document.getElementById("csvInput");
+    const btnProcessLocal = document.getElementById("btnProcessLocal");
+    const btnDownload = document.getElementById("btnDownload");
 
-      const lines = [];
-      lines.push(columns.join(","));
+    let lastResultRows = [];
 
-      for (const r of lastResultRows) {
-        const newPrice = r.new_price != null ? r.new_price.toFixed(2) : (r.price ?? "");
-        const rowVals = [
-          r.name ?? "",
-          r.storage ?? "",
-          r.lock_status ?? "",
-          r.condition ?? "",
-          newPrice
-        ];
-        lines.push(rowVals.map(escapeCsvVal).join(","));
-      }
-
-      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "repriced.csv";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+    csvFileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        csvTextArea.value = String(ev.target.result || "");
+        setStatus("Loaded CSV file: " + file.name);
+      };
+      reader.onerror = () => {
+        showError("Failed to read CSV file.");
+      };
+      reader.readAsText(file);
     });
 
-    function escapeCsvVal(val) {
-      const s = String(val);
-      if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-        return '"' + s.replace(/"/g, '""') + '"';
+    btnProcessLocal.addEventListener("click", async () => {
+      clearError();
+      btnProcessLocal.disabled = true;
+      btnDownload.disabled = true;
+      setStatus("Starting local processing...");
+      lastResultRows = [];
+      renderResults([]);
+
+      try {
+        const csvText = csvTextArea.value.trim();
+        if (!csvText) {
+          throw new Error("You must paste CSV or choose a CSV file first.");
+        }
+
+        const xmlFile = xmlFileInput.files && xmlFileInput.files[0];
+        if (!xmlFile) {
+          throw new Error("You must choose an XML file (SellCell feed export).");
+        }
+
+        setStatus("Reading XML file: " + xmlFile.name);
+        const xmlText = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = (ev) => resolve(String(ev.target.result || ""));
+          r.onerror = () => reject(new Error("Failed to read XML file."));
+          r.readAsText(xmlFile);
+        });
+
+        const feedIndex = buildFeedIndexFromXml(xmlText);
+
+        setStatus("Parsing CSV...");
+        const rawRecords = csvToRecords(csvText);
+        if (!rawRecords.length) {
+          throw new Error("No data rows found in CSV. Make sure the header row includes: name,storage,lock_status,condition,price,amz");
+        }
+        console.log("[repricer] Parsed CSV rows:", rawRecords.length);
+
+        // Validate required columns
+        const requiredCols = ["name", "storage", "lock_status", "condition", "price", "amz"];
+        for (const col of requiredCols) {
+          if (!(col in rawRecords[0])) {
+            throw new Error("CSV is missing required column: " + col);
+          }
+        }
+
+        setStatus("Applying repricer logic to " + rawRecords.length + " rows...");
+
+        const resultRows = rawRecords.map(r => repriceRowFromFeed(r, feedIndex));
+        lastResultRows = resultRows;
+
+        renderResults(resultRows);
+        btnDownload.disabled = false;
+        setStatus("Done – processed " + resultRows.length + " rows.");
+      } catch (err) {
+        showError("Processing failed.", err);
+      } finally {
+        btnProcessLocal.disabled = false;
       }
-      return s;
-    }
+    });
+
+    btnDownload.addEventListener("click", () => {
+      try {
+        if (!lastResultRows.length) {
+          showError("Nothing to download – process CSV & XML first.");
+          return;
+        }
+        const csvOut = buildOutputCsv(lastResultRows);
+        const blob = new Blob([csvOut], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "repricer-output.csv";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setStatus("Downloaded repricer-output.csv");
+      } catch (err) {
+        showError("Failed to build output CSV.", err);
+      }
+    });
   </script>
 </body>
 </html>
