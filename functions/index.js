@@ -73,18 +73,30 @@ const FEED_CACHE_MS = 5 * 60 * 1000; // 5 minutes
 
 // key: `${DEVICE_NAME}|${CAPACITY}`
 // value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
-async function buildFeedIndex() {
+// key: `${DEVICE_NAME}|${CAPACITY}`
+// value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
+async function buildFeedIndex(xmlOverride) {
   const now = Date.now();
-  if (cachedFeedIndex && now - cachedFeedIndexTime < FEED_CACHE_MS) {
+
+  // If no override XML and cache is still fresh, reuse it
+  if (!xmlOverride && cachedFeedIndex && now - cachedFeedIndexTime < FEED_CACHE_MS) {
     return cachedFeedIndex;
   }
 
-  const feedUrl = "https://secondhandcell.com/sellcell/feed.xml";
-  const response = await fetch(feedUrl);
-  if (!response.ok) {
-    throw new Error("Failed to fetch feed.xml: " + response.status);
+  let xmlText;
+
+  if (xmlOverride && typeof xmlOverride === "string" && xmlOverride.trim()) {
+    // Use XML passed from the client
+    xmlText = xmlOverride;
+  } else {
+    // Fetch feed.xml on the backend
+    const feedUrl = "https://secondhandcell.com/sellcell/feed.xml";
+    const response = await fetch(feedUrl);
+    if (!response.ok) {
+      throw new Error("Failed to fetch feed.xml: " + response.status);
+    }
+    xmlText = await response.text();
   }
-  const xmlText = await response.text();
 
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -143,8 +155,11 @@ async function buildFeedIndex() {
     });
   });
 
-  cachedFeedIndex = index;
-  cachedFeedIndexTime = now;
+  // Only cache when we fetched ourselves
+  if (!xmlOverride) {
+    cachedFeedIndex = index;
+    cachedFeedIndexTime = now;
+  }
 
   return index;
 }
@@ -186,6 +201,8 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
     }
 
     const csvInput = req.body && req.body.csv;
+    const xmlInput = req.body && req.body.xml; // optional XML string from frontend
+
     if (!csvInput || typeof csvInput !== "string") {
       res.status(400).send("Missing 'csv' field in JSON body");
       return;
@@ -198,8 +215,10 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
       trim: true,
     });
 
-    // Build SellCell feed index (competitor top prices)
-    const feedIndex = await buildFeedIndex();
+    // Build SellCell feed index (competitor top prices) using either:
+    // - xmlInput from the client, OR
+    // - backend fetch of feed.xml if xmlInput is not provided
+    const feedIndex = await buildFeedIndex(xmlInput);
 
     const resultRows = [];
 
@@ -232,6 +251,8 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
           profit: null,
           profit_pct: null,
           new_price: null,
+          new_profit: null,
+          new_profit_pct: null,
         });
         continue;
       }
@@ -253,6 +274,8 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
           profit: null,
           profit_pct: null,
           new_price: null,
+          new_profit: null,
+          new_profit_pct: null,
         });
         continue;
       }
@@ -300,6 +323,10 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
       // Round to 2 decimals
       new_price = Math.round(new_price * 100) / 100;
 
+      // NEW: Profit based on the new price
+      const new_profit = total_walkaway - new_price;
+      const new_profit_pct = new_profit / new_price;
+
       resultRows.push({
         ...row,
         original_feed_price: feedPriceNum,
@@ -312,6 +339,8 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
         profit,
         profit_pct,
         new_price,
+        new_profit,
+        new_profit_pct,
       });
     }
 
