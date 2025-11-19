@@ -53,7 +53,7 @@ const FAKE_ORDER_TZ_OFFSET_MINUTES = Number(process.env.FAKE_ORDER_TZ_OFFSET_MIN
 const { XMLParser } = require("fast-xml-parser");
 const { parse: parseCsv } = require("csv-parse/sync");
 
-// ---- Config / helpers ----
+// ---------------- REPRICER HELPERS ----------------
 
 const CONDITION_XML_MAP = {
   flawless: "prices_likenew",
@@ -66,19 +66,25 @@ function normalizeName(name) {
   return String(name || "").trim().toUpperCase();
 }
 
-// Cached feed index so we don't refetch XML on every row
+// Clean currency-like values: "$270.00", "270,00", "  270 " -> 270
+function toNumber(val) {
+  if (val === undefined || val === null) return null;
+  const cleaned = String(val).replace(/[^0-9.\-]/g, ""); // remove $, commas, etc.
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isNaN(n) ? null : n;
+}
+
+// Cached feed index so we don't refetch XML on every run
 let cachedFeedIndex = null;
 let cachedFeedIndexTime = 0;
 const FEED_CACHE_MS = 5 * 60 * 1000; // 5 minutes
 
-// key: `${DEVICE_NAME}|${CAPACITY}`
-// value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
-// key: `${DEVICE_NAME}|${CAPACITY}`
-// value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
+// Build index from XML (optionally using XML provided by client)
 async function buildFeedIndex(xmlOverride) {
   const now = Date.now();
 
-  // If no override XML and cache is still fresh, reuse it
+  // If no override and cache is fresh, reuse
   if (!xmlOverride && cachedFeedIndex && now - cachedFeedIndexTime < FEED_CACHE_MS) {
     return cachedFeedIndex;
   }
@@ -86,10 +92,10 @@ async function buildFeedIndex(xmlOverride) {
   let xmlText;
 
   if (xmlOverride && typeof xmlOverride === "string" && xmlOverride.trim()) {
-    // Use XML passed from the client
+    // Use client-provided XML
     xmlText = xmlOverride;
   } else {
-    // Fetch feed.xml on the backend
+    // Fetch feed.xml on backend
     const feedUrl = "https://secondhandcell.com/sellcell/feed.xml";
     const response = await fetch(feedUrl);
     if (!response.ok) {
@@ -104,7 +110,6 @@ async function buildFeedIndex(xmlOverride) {
   });
   const parsed = parser.parse(xmlText);
 
-  // Try different root shapes safely
   let devices = [];
   if (Array.isArray(parsed.device)) {
     devices = parsed.device;
@@ -120,6 +125,8 @@ async function buildFeedIndex(xmlOverride) {
 
   const index = {};
 
+  // key: `${DEVICE_NAME}|${CAPACITY}`
+  // value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
   devices.forEach((d) => {
     const deviceName = normalizeName(d.device_name);
     const capacity = String(d.capacity || "").trim();
@@ -132,10 +139,7 @@ async function buildFeedIndex(xmlOverride) {
 
       let prices = section.price;
       if (!prices) return;
-
-      if (!Array.isArray(prices)) {
-        prices = [prices];
-      }
+      if (!Array.isArray(prices)) prices = [prices];
 
       const competitorPrices = prices
         .filter((p) => {
@@ -143,8 +147,8 @@ async function buildFeedIndex(xmlOverride) {
           // exclude secondhandcell
           return merchant !== "secondhandcell";
         })
-        .map((p) => Number(p.merchant_price))
-        .filter((n) => !Number.isNaN(n));
+        .map((p) => toNumber(p.merchant_price))
+        .filter((n) => n !== null);
 
       if (!competitorPrices.length) return;
 
@@ -155,7 +159,6 @@ async function buildFeedIndex(xmlOverride) {
     });
   });
 
-  // Only cache when we fetched ourselves
   if (!xmlOverride) {
     cachedFeedIndex = index;
     cachedFeedIndexTime = now;
@@ -164,28 +167,18 @@ async function buildFeedIndex(xmlOverride) {
   return index;
 }
 
-// ---- Amazon price helper ----
-// Uses "amz" column from CSV if present; otherwise falls back to scraper stub.
+// Uses "amz" column from CSV, cleaning "$270.00" etc.
 async function getAmazonPrice(row) {
-  // If CSV has an "amz" column and it's a number, use it
-  if (row.amz !== undefined && row.amz !== null && String(row.amz).trim() !== "") {
-    const n = Number(row.amz);
-    if (!Number.isNaN(n) && n > 0) {
-      return n;
-    }
-  }
-
-  // Otherwise, you can implement scraper logic here, or return null / dummy
-  // For now, return null so we don't fake anything if amz is empty.
-  // If you want a test value, change this to a number like 270.
-  return null;
+  const n = toNumber(row.amz);
+  if (n && n > 0) return n;
+  return null; // no scraper yet
 }
 
-// ---- Main reprice function ----
+// ---------------- REPRICER FUNCTION ----------------
 
 exports.repriceFeed = functions.https.onRequest(async (req, res) => {
   try {
-    // CORS (simple)
+    // CORS (simple & permissive for this tool)
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
     res.set("Access-Control-Allow-Headers", "Content-Type");
@@ -201,23 +194,21 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
     }
 
     const csvInput = req.body && req.body.csv;
-    const xmlInput = req.body && req.body.xml; // optional XML string from frontend
+    const xmlInput = req.body && req.body.xml; // optional: raw XML string from frontend
 
     if (!csvInput || typeof csvInput !== "string") {
       res.status(400).send("Missing 'csv' field in JSON body");
       return;
     }
 
-    // Parse CSV input (expects header row with name,storage,lock_status,condition,price[,amz])
+    // Parse CSV (expects header: name,storage,lock_status,condition,price,amz)
     const records = parseCsv(csvInput, {
       columns: true,
       skip_empty_lines: true,
       trim: true,
     });
 
-    // Build SellCell feed index (competitor top prices) using either:
-    // - xmlInput from the client, OR
-    // - backend fetch of feed.xml if xmlInput is not provided
+    // Build SellCell feed index
     const feedIndex = await buildFeedIndex(xmlInput);
 
     const resultRows = [];
@@ -237,7 +228,7 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
         feed_price = feedEntry[condition];
       }
 
-      // If we don't find a competitor price, just return row with nulls
+      // No competitor price → return mostly empty
       if (!feed_price) {
         resultRows.push({
           ...row,
@@ -257,10 +248,10 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
         continue;
       }
 
-      // Get Amazon price (from CSV "amz" if provided)
+      // Amazon price from CSV
       const amazon_price = await getAmazonPrice(row);
 
-      // If no Amazon price, skip detailed math but still show feed price
+      // No Amazon price → only feed shown
       if (!amazon_price || Number.isNaN(Number(amazon_price))) {
         resultRows.push({
           ...row,
@@ -280,19 +271,18 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
         continue;
       }
 
-      // ---- Pricing math ----
+      // ----- PRICING MATH -----
 
-      const feedPriceNum = Number(feed_price);
-      const amazonPriceNum = Number(amazon_price);
+      const feedPriceNum = toNumber(feed_price);
+      const amazonPriceNum = toNumber(amazon_price);
 
-      // after Amazon (amazon_price*0.92-10)
+      // after Amazon (amazon_price*0.92 - 10)
       const after_amazon = amazonPriceNum * 0.92 - 10;
 
       // SellCell fee: 8% capped at $30
       const sellcell_fee = Math.min(after_amazon * 0.08, 30);
 
       const after_sellcell = after_amazon - sellcell_fee;
-
       const shipping_fee = 15;
 
       let condition_fee = 0;
@@ -312,18 +302,16 @@ exports.repriceFeed = functions.https.onRequest(async (req, res) => {
 
       let new_price;
       if (profit_pct >= 0.15) {
-        // Already at or above 15%, bump buy price $1
+        // Already ≥ 15%, bump buy price by $1
         new_price = original_price + 1;
       } else {
-        // Solve for exactly 15%:
-        // total_walkaway = 1.15 * buy_price => buy_price = total_walkaway / 1.15
+        // Force exactly 15% profit:
+        // total_walkaway = 1.15 * buy_price → buy_price = total_walkaway / 1.15
         new_price = total_walkaway / 1.15;
       }
 
-      // Round to 2 decimals
       new_price = Math.round(new_price * 100) / 100;
 
-      // NEW: Profit based on the new price
       const new_profit = total_walkaway - new_price;
       const new_profit_pct = new_profit / new_price;
 
