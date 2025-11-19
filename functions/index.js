@@ -48,6 +48,279 @@ const devicesCollection = db.collection("devices");
 const FAKE_ORDER_TARGET_PER_DAY = Number(process.env.FAKE_ORDER_TARGET_PER_DAY || 20);
 const FAKE_ORDER_MAX_PER_RUN = Number(process.env.FAKE_ORDER_MAX_PER_RUN || 3);
 const FAKE_ORDER_TZ_OFFSET_MINUTES = Number(process.env.FAKE_ORDER_TZ_OFFSET_MINUTES ?? -300);
+// ---- ONLY ONCE AT TOP OF FILE (if not already required) ----
+// const functions = require("firebase-functions");
+const { XMLParser } = require("fast-xml-parser");
+const { parse: parseCsv } = require("csv-parse/sync");
+
+// ---- Config / helpers ----
+
+const CONDITION_XML_MAP = {
+  flawless: "prices_likenew",
+  good: "prices_good",
+  fair: "prices_poor",
+  damaged: "prices_faulty",
+};
+
+function normalizeName(name) {
+  return String(name || "").trim().toUpperCase();
+}
+
+// Cached feed index so we don't refetch XML on every row
+let cachedFeedIndex = null;
+let cachedFeedIndexTime = 0;
+const FEED_CACHE_MS = 5 * 60 * 1000; // 5 minutes
+
+// key: `${DEVICE_NAME}|${CAPACITY}`
+// value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
+async function buildFeedIndex() {
+  const now = Date.now();
+  if (cachedFeedIndex && now - cachedFeedIndexTime < FEED_CACHE_MS) {
+    return cachedFeedIndex;
+  }
+
+  const feedUrl = "https://secondhandcell.com/sellcell/feed.xml";
+  const response = await fetch(feedUrl);
+  if (!response.ok) {
+    throw new Error("Failed to fetch feed.xml: " + response.status);
+  }
+  const xmlText = await response.text();
+
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    parseTagValue: true,
+  });
+  const parsed = parser.parse(xmlText);
+
+  // Try different root shapes safely
+  let devices = [];
+  if (Array.isArray(parsed.device)) {
+    devices = parsed.device;
+  } else if (parsed.device) {
+    devices = [parsed.device];
+  } else if (parsed.feed && parsed.feed.device) {
+    if (Array.isArray(parsed.feed.device)) {
+      devices = parsed.feed.device;
+    } else {
+      devices = [parsed.feed.device];
+    }
+  }
+
+  const index = {};
+
+  devices.forEach((d) => {
+    const deviceName = normalizeName(d.device_name);
+    const capacity = String(d.capacity || "").trim();
+    const keyBase = `${deviceName}|${capacity}`;
+
+    Object.keys(CONDITION_XML_MAP).forEach((condKey) => {
+      const xmlSectionName = CONDITION_XML_MAP[condKey];
+      const section = d[xmlSectionName];
+      if (!section) return;
+
+      let prices = section.price;
+      if (!prices) return;
+
+      if (!Array.isArray(prices)) {
+        prices = [prices];
+      }
+
+      const competitorPrices = prices
+        .filter((p) => {
+          const merchant = String(p.merchant_name || "").trim().toLowerCase();
+          // exclude secondhandcell
+          return merchant !== "secondhandcell";
+        })
+        .map((p) => Number(p.merchant_price))
+        .filter((n) => !Number.isNaN(n));
+
+      if (!competitorPrices.length) return;
+
+      const top = Math.max(...competitorPrices);
+
+      if (!index[keyBase]) index[keyBase] = {};
+      index[keyBase][condKey] = top;
+    });
+  });
+
+  cachedFeedIndex = index;
+  cachedFeedIndexTime = now;
+
+  return index;
+}
+
+// ---- Amazon price helper ----
+// Uses "amz" column from CSV if present; otherwise falls back to scraper stub.
+async function getAmazonPrice(row) {
+  // If CSV has an "amz" column and it's a number, use it
+  if (row.amz !== undefined && row.amz !== null && String(row.amz).trim() !== "") {
+    const n = Number(row.amz);
+    if (!Number.isNaN(n) && n > 0) {
+      return n;
+    }
+  }
+
+  // Otherwise, you can implement scraper logic here, or return null / dummy
+  // For now, return null so we don't fake anything if amz is empty.
+  // If you want a test value, change this to a number like 270.
+  return null;
+}
+
+// ---- Main reprice function ----
+
+exports.repriceFeed = functions.https.onRequest(async (req, res) => {
+  try {
+    // CORS (simple)
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      res.status(405).send("Only POST allowed");
+      return;
+    }
+
+    const csvInput = req.body && req.body.csv;
+    if (!csvInput || typeof csvInput !== "string") {
+      res.status(400).send("Missing 'csv' field in JSON body");
+      return;
+    }
+
+    // Parse CSV input (expects header row with name,storage,lock_status,condition,price[,amz])
+    const records = parseCsv(csvInput, {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    });
+
+    // Build SellCell feed index (competitor top prices)
+    const feedIndex = await buildFeedIndex();
+
+    const resultRows = [];
+
+    for (const row of records) {
+      const name = row.name;
+      const storage = row.storage;
+      const lock_status = row.lock_status;
+      const conditionRaw = row.condition;
+      const condition = String(conditionRaw || "").toLowerCase();
+
+      const key = `${normalizeName(name)}|${storage}`;
+      const feedEntry = feedIndex[key];
+
+      let feed_price = null;
+      if (feedEntry && Object.prototype.hasOwnProperty.call(feedEntry, condition)) {
+        feed_price = feedEntry[condition];
+      }
+
+      // If we don't find a competitor price, just return row with nulls
+      if (!feed_price) {
+        resultRows.push({
+          ...row,
+          original_feed_price: null,
+          amazon_price: null,
+          after_amazon: null,
+          sellcell_fee: null,
+          shipping_fee: 15,
+          condition_fee: null,
+          total_walkaway: null,
+          profit: null,
+          profit_pct: null,
+          new_price: null,
+        });
+        continue;
+      }
+
+      // Get Amazon price (from CSV "amz" if provided)
+      const amazon_price = await getAmazonPrice(row);
+
+      // If no Amazon price, skip detailed math but still show feed price
+      if (!amazon_price || Number.isNaN(Number(amazon_price))) {
+        resultRows.push({
+          ...row,
+          original_feed_price: feed_price,
+          amazon_price: null,
+          after_amazon: null,
+          sellcell_fee: null,
+          shipping_fee: 15,
+          condition_fee: null,
+          total_walkaway: null,
+          profit: null,
+          profit_pct: null,
+          new_price: null,
+        });
+        continue;
+      }
+
+      // ---- Pricing math ----
+
+      const feedPriceNum = Number(feed_price);
+      const amazonPriceNum = Number(amazon_price);
+
+      // after Amazon (amazon_price*0.92-10)
+      const after_amazon = amazonPriceNum * 0.92 - 10;
+
+      // SellCell fee: 8% capped at $30
+      const sellcell_fee = Math.min(after_amazon * 0.08, 30);
+
+      const after_sellcell = after_amazon - sellcell_fee;
+
+      const shipping_fee = 15;
+
+      let condition_fee = 0;
+      if (condition === "flawless" || condition === "good") {
+        condition_fee = 10;
+      } else if (condition === "fair") {
+        condition_fee = 30;
+      } else if (condition === "damaged") {
+        condition_fee = 50;
+      }
+
+      const total_walkaway = after_sellcell - shipping_fee - condition_fee;
+
+      const original_price = feedPriceNum;
+      const profit = total_walkaway - original_price;
+      const profit_pct = profit / original_price;
+
+      let new_price;
+      if (profit_pct >= 0.15) {
+        // Already at or above 15%, bump buy price $1
+        new_price = original_price + 1;
+      } else {
+        // Solve for exactly 15%:
+        // total_walkaway = 1.15 * buy_price => buy_price = total_walkaway / 1.15
+        new_price = total_walkaway / 1.15;
+      }
+
+      // Round to 2 decimals
+      new_price = Math.round(new_price * 100) / 100;
+
+      resultRows.push({
+        ...row,
+        original_feed_price: feedPriceNum,
+        amazon_price: amazonPriceNum,
+        after_amazon,
+        sellcell_fee,
+        shipping_fee,
+        condition_fee,
+        total_walkaway,
+        profit,
+        profit_pct,
+        new_price,
+      });
+    }
+
+    res.json({ rows: resultRows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err && err.message ? err.message : "Server error");
+  }
+});
 
 function isValidImei(imei) {
   if (typeof imei !== "string" || !/^\d{15}$/.test(imei)) {
