@@ -1627,13 +1627,9 @@ function createOrdersRouter({
       );
 
       const bagLabelData = await generateBagLabelPdf(order);
-      const packingSlipData = await generateCustomLabelPdf(order);
 
       const pdfParts = [
         ...downloadedLabels.filter(Boolean),
-        Buffer.isBuffer(packingSlipData)
-          ? packingSlipData
-          : Buffer.from(packingSlipData),
         Buffer.isBuffer(bagLabelData) ? bagLabelData : Buffer.from(bagLabelData),
       ].filter(Boolean);
 
