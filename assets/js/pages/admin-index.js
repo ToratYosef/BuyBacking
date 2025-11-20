@@ -7217,40 +7217,47 @@ ordersTableBody.innerHTML = `<tr><td colspan="9" class="text-center text-red-500
 }
 
 function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options = {}) {
-currentSearchTerm = typeof searchTerm === 'string' ? searchTerm : '';
-syncSearchInputs(currentSearchTerm);
+  currentSearchTerm = typeof searchTerm === 'string' ? searchTerm : '';
+  syncSearchInputs(currentSearchTerm);
 
-const preservePage = options.preservePage === true;
-const previousPage = currentPage;
+  const hasSearchTerm = currentSearchTerm.trim().length > 0;
 
-let filtered = allOrders;
+  const preservePage = options.preservePage === true;
+  const previousPage = currentPage;
 
-if (status !== 'all') {
-  if (status === 'kit_needs_printing') {
-  filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
-  } else if (status === 'label_generated') {
-  filtered = filtered.filter(order => isLabelGenerationStage(order));
-  } else if (status === 'emailed') {
-  filtered = filtered.filter(order => isBalanceEmailStatus(order));
-  } else if (status === 'received') {
-  filtered = filtered.filter(order => isReceivedStatusValue(order.status));
-  } else {
-  filtered = filtered.filter(order => order.status === status);
+  let filtered = allOrders;
+
+  if (!hasSearchTerm && status !== 'all') {
+    if (status === 'kit_needs_printing') {
+      filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
+    } else if (status === 'label_generated') {
+      filtered = filtered.filter(order => isLabelGenerationStage(order));
+    } else if (status === 'emailed') {
+      filtered = filtered.filter(order => isBalanceEmailStatus(order));
+    } else if (status === 'received') {
+      filtered = filtered.filter(order => isReceivedStatusValue(order.status));
+    } else {
+      filtered = filtered.filter(order => order.status === status);
+    }
   }
-}
 
-filtered = filtered.filter(matchesPromoFilter);
+  filtered = filtered.filter(matchesPromoFilter);
 
-if (currentSearchTerm) {
-const lowerCaseSearchTerm = currentSearchTerm.toLowerCase();
-filtered = filtered.filter(order =>
-order.id.toLowerCase().includes(lowerCaseSearchTerm) ||
-(order.shippingInfo && order.shippingInfo.fullName.toLowerCase().includes(lowerCaseSearchTerm)) ||
-(order.device && order.device.toLowerCase().includes(lowerCaseSearchTerm)) ||
-(order.storage && order.storage.toLowerCase().includes(lowerCaseSearchTerm)) ||
-(order.trackingNumber && order.trackingNumber.toLowerCase().includes(lowerCaseSearchTerm))
-);
-}
+  if (hasSearchTerm) {
+    const lowerCaseSearchTerm = currentSearchTerm.trim().toLowerCase();
+    filtered = filtered.filter(order => {
+      const shippingName = (order.shippingInfo?.fullName || '').toLowerCase();
+      const deviceName = (order.device || '').toLowerCase();
+      const storageName = (order.storage || '').toLowerCase();
+      const trackingNumber = (order.trackingNumber || '').toLowerCase();
+      const orderId = (order.id || '').toLowerCase();
+      return orderId.includes(lowerCaseSearchTerm) ||
+        shippingName.includes(lowerCaseSearchTerm) ||
+        deviceName.includes(lowerCaseSearchTerm) ||
+        storageName.includes(lowerCaseSearchTerm) ||
+        trackingNumber.includes(lowerCaseSearchTerm);
+    });
+  }
 
 if (IS_AGING_PAGE) {
 filtered = filtered.filter(isAgingCandidate);
