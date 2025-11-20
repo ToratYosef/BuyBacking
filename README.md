@@ -167,6 +167,17 @@ firebase deploy --only functions
 - The admin console (`/admin`) can be deployed as a separate service (Heroku, Cloud Run, etc.) because it is a standalone Express application. Ensure the same environment variables and service account file are present in the deployment environment.【F:admin/index.js†L1-L114】
 - Keep ShipEngine, Stripe, and email secrets in a secure secret manager or CI environment variables. Avoid committing `.env` files.
 
+## Promo codes (including email-label-only offers)
+
+Promo codes live in the Firestore collection `promo_codes`, with each document ID set to the uppercase code (for example, `SHIP48`). Populate the document with:
+
+- `uses_left` (number) – how many times the code can be redeemed.
+- `bonus_amount` (number) – optional; defaults to `$10` if omitted.
+- `max_uses` (number) – optional override for reporting; defaults to `uses_left` when absent.
+- `requires_email_label` (boolean) – set to `true` when the code should only work with the email label shipping preference. The API enforces this and will return “This promo code is only valid with the email label option.” if someone tries to use the code while requesting a mailed kit.
+
+You can add/edit these documents in the Firebase console under **Firestore Database → promo_codes → Add document**, ensuring the document ID matches the promo code string. The Cloud Functions API handles usage reservation, decrements `uses_left` on redemption, and records a `redemptions` subcollection entry for auditing.【F:functions/routes/orders.js†L74-L150】
+
 ## Troubleshooting
 
 - **CORS or auth errors in admin pages:** confirm `window.BACKEND_BASE_URL` points at the correct API origin and that the Firebase emulator/production function includes your origin in the allowed list.【F:functions/index.js†L26-L53】【F:assets/js/pages/admin-print-queue.js†L9-L59】
