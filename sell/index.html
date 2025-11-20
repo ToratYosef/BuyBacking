@@ -935,9 +935,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <div class="bg-red-100 text-red-800 p-3 rounded-lg mb-4 text-sm font-medium">
                 Important: Devices cannot be lost, reported stolen, have an outstanding balance, or a blacklisted IMEI.
             </div>
-            <h2 class="text-3xl font-extrabold text-indigo-800 mb-4 sm:text-2xl">Your Instant Quote!</h2>
-            <p class="text-5xl font-extrabold text-indigo-600 mb-4 sm:text-4xl" id="finalQuoteAmountPopup">$0</p>
-            <p class="text-md text-slate-600 mb-6 sm:text-sm">This is an estimate. Final offer subject to certified inspection.</p>
+            <div id="quoteModalOfferContent">
+                <h2 class="text-3xl font-extrabold text-indigo-800 mb-4 sm:text-2xl">Your Instant Quote!</h2>
+                <p class="text-5xl font-extrabold text-indigo-600 mb-4 sm:text-4xl" id="finalQuoteAmountPopup">$0</p>
+                <p class="text-md text-slate-600 mb-6 sm:text-sm">This is an estimate. Final offer subject to certified inspection.</p>
+            </div>
+            <div id="quoteModalNoOfferContent" class="hidden">
+                <h2 class="text-3xl font-extrabold text-indigo-800 mb-4 sm:text-2xl">No Offer Available</h2>
+                <p class="text-lg font-semibold text-slate-700 mb-2 sm:text-base">Sorry, we do not have an offer for this device.</p>
+                <p class="text-md text-slate-600 mb-6 sm:text-sm">Please choose other options.</p>
+            </div>
             <button id="quoteModalContinueBtn" class="btn-secondary-green w-full max-w-xs mx-auto">
                 Continue
             </button>
@@ -1761,6 +1768,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const finalQuoteAmountMainDisplay = document.getElementById('mainQuoteDisplay');
             const finalQuoteAmountMainText = document.getElementById('finalQuoteAmountMain');
             const finalQuoteAmountPopup = document.getElementById('finalQuoteAmountPopup');
+            const quoteModalOfferContent = document.getElementById('quoteModalOfferContent');
+            const quoteModalNoOfferContent = document.getElementById('quoteModalNoOfferContent');
             const shippingOptions = document.getElementById('shippingOptions');
             const overviewShippingPreference = document.getElementById('overviewShippingPreference');
             const overviewCarrier = document.getElementById('overviewCarrier');
@@ -2279,6 +2288,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 
             function showQuotePopup() {
+                const hasOffer = finalQuote > 0;
+                if (quoteModalOfferContent && quoteModalNoOfferContent && quoteModalContinueBtn) {
+                    quoteModalOfferContent.classList.toggle('hidden', !hasOffer);
+                    quoteModalNoOfferContent.classList.toggle('hidden', hasOffer);
+                    quoteModalContinueBtn.textContent = hasOffer ? 'Continue' : 'Choose Other Options';
+                }
                 quoteModal.classList.add('is-visible');
             }
 
@@ -2346,6 +2361,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             quoteModalContinueBtn.addEventListener('click', () => {
                 hideQuotePopup();
+                if (finalQuote <= 0) {
+                    showQuoteMessage('Sorry, we do not have an offer for this device. Please choose other options.', 'error');
+                    return;
+                }
                 finalQuoteAmountMainDisplay.classList.remove('hidden');
                 if (isUserLoggedIn || isGuestCheckout) {
                     nextSteps.classList.remove('hidden');
