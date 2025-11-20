@@ -813,6 +813,10 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         </button>
                     </div>
                 </div>
+                <div id="modal-no-offer" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-xl p-6 mb-6">
+                    <p class="text-lg font-semibold mb-2">Sorry, we do not have an offer for this device.</p>
+                    <p class="text-sm">Please choose other options.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -1036,6 +1040,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             const modalPriceEstimate = document.getElementById('modal-price-estimate');
             const modalEstimatedPrice = document.getElementById('modal-estimated-price');
+            const modalNoOffer = document.getElementById('modal-no-offer');
             const brandSelect = document.getElementById('modal-brand-select');
             const deviceSelect = document.getElementById('modal-device-select');
             const storageSelect = document.getElementById('modal-storage-select');
@@ -1141,6 +1146,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                     modalEstimatedPrice.textContent = '0';
                     modalPriceEstimate.classList.add('hidden');
+                    if (modalNoOffer) modalNoOffer.classList.add('hidden');
 
                     conditionButtons.forEach(btn => {
                         btn.classList.remove('border-indigo-500', 'bg-indigo-50', 'ring-2', 'ring-indigo-200');
@@ -1237,6 +1243,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                     if (!ready) {
                         modalPriceEstimate.classList.add('hidden');
+                        if (modalNoOffer) modalNoOffer.classList.add('hidden');
                         this.setContinueState(false);
                         return;
                     }
@@ -1278,12 +1285,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     }
 
                     const price = this.deviceData.prices?.[storageKey]?.[carrierKey]?.[conditionKey];
-                    if (price) {
+                    const hasOffer = typeof price === 'number' && !Number.isNaN(price) && price > 0;
+
+                    if (hasOffer) {
                         modalEstimatedPrice.textContent = price;
                         modalPriceEstimate.classList.remove('hidden');
+                        if (modalNoOffer) modalNoOffer.classList.add('hidden');
                         this.setContinueState(true);
                     } else {
                         modalPriceEstimate.classList.add('hidden');
+                        if (modalNoOffer) modalNoOffer.classList.remove('hidden');
                         this.setContinueState(false);
                     }
                 }
