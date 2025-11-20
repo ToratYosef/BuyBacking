@@ -165,7 +165,10 @@ const bindAuthUi = () => {
   const provider = new GoogleAuthProvider();
 
   const updateUiForUser = (user) => {
-    if (loginNavBtn) loginNavBtn.classList.toggle("hidden", !!user);
+    if (loginNavBtn) {
+      loginNavBtn.textContent = user ? "My Account" : "Login/Sign Up";
+      loginNavBtn.classList.toggle("hidden", !!user);
+    }
     if (userMonogram) {
       userMonogram.textContent = getInitial(user);
       userMonogram.classList.toggle("hidden", !user);
