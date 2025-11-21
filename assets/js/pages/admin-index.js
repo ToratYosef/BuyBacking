@@ -302,6 +302,7 @@ const bulkSelectionCount = document.getElementById('bulk-selection-count');
 const refreshAllKitTrackingBtn = document.getElementById('refresh-all-kit-tracking');
 const refreshAllEmailTrackingBtn = document.getElementById('refresh-all-email-tracking');
 const bulkGenerateLabelsBtn = document.getElementById('bulk-generate-labels');
+const separateKitOrdersBtn = document.getElementById('separate-kit-orders');
 
 const KIT_STATUS_HINTS = new Set([
   'shipping_kit_requested',
@@ -887,6 +888,64 @@ async function handleBulkLabelGeneration() {
   renderOrders();
 }
 
+async function handleSeparateKitOrders() {
+  const sourceOrders = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
+
+  if (!Array.isArray(sourceOrders) || !sourceOrders.length) {
+    alert('No orders are loaded yet.');
+    return;
+  }
+
+  const eligibleOrders = sourceOrders.filter((order) => shouldAutoMarkKitSent(order) && order.id);
+
+  if (!eligibleOrders.length) {
+    alert('No kit orders with two labels were found before the received stage.');
+    return;
+  }
+
+  const confirmMessage = `Mark ${eligibleOrders.length} kit order${eligibleOrders.length === 1 ? '' : 's'} as Kit Sent?`;
+  if (!confirm(confirmMessage)) {
+    return;
+  }
+
+  let successCount = 0;
+  const failed = [];
+
+  if (separateKitOrdersBtn) {
+    separateKitOrdersBtn.disabled = true;
+    separateKitOrdersBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Separating Kit Orders…</span>';
+  }
+
+  for (const order of eligibleOrders) {
+    try {
+      await updateOrderStatusInline(order.id, 'kit_sent', { notifyCustomer: false });
+
+      const localOrder = allOrders.find((existing) => existing.id === order.id);
+      if (localOrder) {
+        localOrder.status = 'kit_sent';
+      }
+
+      successCount += 1;
+    } catch (error) {
+      console.error(`Failed to mark order ${order.id} as kit sent:`, error);
+      failed.push(order.id);
+    }
+  }
+
+  if (separateKitOrdersBtn) {
+    separateKitOrdersBtn.disabled = false;
+    separateKitOrdersBtn.innerHTML = '<i class="fas fa-people-arrows"></i><span>Separate Kit Orders</span>';
+  }
+
+  const summaryMessage = failed.length
+    ? `Updated ${successCount} kit order${successCount === 1 ? '' : 's'}. Failed: ${failed.join(', ')}.`
+    : `Updated ${successCount} kit order${successCount === 1 ? '' : 's'}.`;
+
+  alert(summaryMessage);
+
+  filterAndRenderOrders(currentActiveStatus, currentSearchTerm, { preservePage: true });
+}
+
 try {
   populateBulkStatusSelect();
 } catch (error) {
@@ -906,6 +965,10 @@ if (refreshAllKitTrackingBtn) {
   refreshAllKitTrackingBtn.addEventListener('click', () => {
     refreshTrackingForOrders('kit', refreshAllKitTrackingBtn);
   });
+}
+
+if (separateKitOrdersBtn) {
+  separateKitOrdersBtn.addEventListener('click', handleSeparateKitOrders);
 }
 
 if (refreshAllEmailTrackingBtn) {
@@ -4427,6 +4490,84 @@ function isBulkEmailLabelRefreshCandidate(order = {}) {
 
 function hasTrackingValue(value) {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function collectKitLabelIdentifiers(order = {}) {
+  if (!order || typeof order !== 'object') {
+    return [];
+  }
+
+  const identifiers = [];
+
+  ['outboundLabelUrl', 'inboundLabelUrl'].forEach((key) => {
+    const value = order[key];
+    if (typeof value === 'string' && value.trim()) {
+      identifiers.push(value.trim());
+    }
+  });
+
+  const labels = order.shipEngineLabels && typeof order.shipEngineLabels === 'object'
+    ? order.shipEngineLabels
+    : null;
+
+  if (labels) {
+    Object.entries(labels).forEach(([key, info]) => {
+      if (!key || !info || typeof info !== 'object') {
+        return;
+      }
+
+      const normalizedKey = key.toString().toLowerCase();
+      if (!normalizedKey.includes('kit') && !normalizedKey.includes('outbound') && !normalizedKey.includes('inbound')) {
+        return;
+      }
+
+      const identifier = [
+        info.downloadUrl,
+        info.labelUrl,
+        info.url,
+        info.label_url,
+        info.trackingNumber,
+        info.tracking_number,
+        info.id,
+        info.labelId,
+        info.shipEngineLabelId,
+      ].find((value) => typeof value === 'string' && value.trim().length);
+
+      if (identifier) {
+        identifiers.push(identifier.trim());
+      }
+    });
+  }
+
+  return Array.from(new Set(identifiers.filter(Boolean)));
+}
+
+function shouldAutoMarkKitSent(order = {}) {
+  if (!order || typeof order !== 'object') {
+    return false;
+  }
+
+  if (isStatusPastReceived(order)) {
+    return false;
+  }
+
+  if (!matchesKitTrackingHints(order)) {
+    return false;
+  }
+
+  const normalizedStatus = normalizeStatus(order);
+  const lockedStatuses = new Set([
+    'kit_sent',
+    'kit_on_the_way_to_customer',
+    'kit_delivered',
+    'kit_on_the_way_to_us',
+  ]);
+
+  if (lockedStatuses.has(normalizedStatus)) {
+    return false;
+  }
+
+  return collectKitLabelIdentifiers(order).length >= 2;
 }
 
 function labelsContainTrackingNumber(labels) {
