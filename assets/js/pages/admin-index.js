@@ -77,10 +77,11 @@ const STATUS_CHART_CONFIG = [
   { key: 'phone_on_the_way_to_us', label: 'Phone On The Way To Us', color: '#0284c7' },
   { key: 'received', label: 'Received', color: '#0ea5e9' },
 { key: 'completed', label: 'Completed', color: '#22c55e' },
-{ key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
-{ key: 're-offered-accepted', label: 'Reoffer Accepted', color: '#14b8a6' },
-{ key: 're-offered-declined', label: 'Reoffer Declined', color: '#ef4444' },
-{ key: 'return-label-generated', label: 'Return Label', color: '#64748b' },
+  { key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
+  { key: 're-offered-accepted', label: 'Reoffer Accepted', color: '#14b8a6' },
+  { key: 're-offered-declined', label: 'Reoffer Declined', color: '#ef4444' },
+  { key: 'return-label-generated', label: 'Return Label', color: '#64748b' },
+  { key: 'cancelled', label: 'Canceled', color: '#94a3b8' },
 ];
 
 const STATUS_DROPDOWN_OPTIONS = [
@@ -120,6 +121,7 @@ const STATUS_LABEL_OVERRIDES = Object.freeze({
   're-offered-auto-accepted': 'Reoffer Auto Accepted',
   'return-label-generated': 'Return Label Generated',
   emailed: 'Balance Email Sent',
+  cancelled: 'Canceled',
 });
 
 const RECEIVED_STATUS_KEYS = new Set(['received', 'device_received', 'received_device', 'imei_checked']);
@@ -459,6 +461,7 @@ const reofferedPendingCount = document.getElementById('re-offered-pending-count'
 const reofferedAcceptedCount = document.getElementById('re-offered-accepted-count');
 const reofferedDeclinedCount = document.getElementById('re-offered-declined-count');
 const returnLabelGeneratedCount = document.getElementById('return-label-generated-count');
+const cancelledCount = document.getElementById('cancelled-count');
 const statusCountAll = document.getElementById('status-count-all');
 
 // Analytics elements
@@ -3869,6 +3872,7 @@ const statusCounts = {
   're-offered-accepted': ordersData.filter(o => o.status === 're-offered-accepted').length,
   're-offered-declined': ordersData.filter(o => o.status === 're-offered-declined').length,
   'return-label-generated': ordersData.filter(o => o.status === 'return-label-generated').length,
+  'cancelled': ordersData.filter(o => o.status === 'cancelled').length,
 };
 
 if (orderPendingCount) {
@@ -3921,6 +3925,9 @@ reofferedDeclinedCount.textContent = statusCounts['re-offered-declined'];
 }
 if (returnLabelGeneratedCount) {
 returnLabelGeneratedCount.textContent = statusCounts['return-label-generated'];
+}
+if (cancelledCount) {
+  cancelledCount.textContent = statusCounts['cancelled'];
 }
 if (statusCountAll) {
 statusCountAll.textContent = ordersData.length;

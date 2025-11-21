@@ -393,72 +393,57 @@ async function buildKitTrackingUpdate(
     const shippingPreference = String(order?.shippingPreference || '').toLowerCase();
     const isShippingKit = shippingPreference === 'shipping kit requested';
 
-    const transitStatuses = new Set([
-        KIT_TRANSIT_STATUS,
-        'kit_on_the_way_to_us',
-        'phone_on_the_way',
-        PHONE_TRANSIT_STATUS,
-    ]);
+    const hasMovement = inTransit || acceptedWithoutEta;
+    const inboundBaseStatus = resolveInboundTransitResetStatus(order);
 
-    const shouldResetInboundTransitStatus =
-        useInbound &&
-        transitStatuses.has(normalizedStatus) &&
-        !delivered &&
-        (!inTransit || !estimatedDelivery);
-
-    const shouldResetOutboundTransitStatus =
-        !useInbound && acceptedWithoutEta && transitStatuses.has(normalizedStatus);
-
-    let inboundTransitResetApplied = false;
-
-    if (shouldResetInboundTransitStatus) {
-        updatePayload.status = resolveInboundTransitResetStatus(order);
-        if (typeof serverTimestamp === 'function') {
-            updatePayload.lastStatusUpdateAt = serverTimestamp();
-        }
-        inboundTransitResetApplied = true;
-    } else if (shouldResetOutboundTransitStatus) {
-        updatePayload.status = 'label_generated';
-        if (typeof serverTimestamp === 'function') {
-            updatePayload.lastStatusUpdateAt = serverTimestamp();
-        }
-    } else if (!useInbound && delivered) {
-        updatePayload.status = 'kit_delivered';
-        if (typeof serverTimestamp === 'function') {
-            updatePayload.kitDeliveredAt = serverTimestamp();
-            updatePayload.lastStatusUpdateAt = serverTimestamp();
-        }
-    } else if (!useInbound && inTransit) {
-        if (!['kit_delivered', KIT_TRANSIT_STATUS].includes(normalizedStatus)) {
+    if (!useInbound) {
+        if (delivered) {
+            updatePayload.status = 'kit_delivered';
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.kitDeliveredAt = serverTimestamp();
+                updatePayload.lastStatusUpdateAt = serverTimestamp();
+            }
+        } else if (hasMovement) {
             updatePayload.status = KIT_TRANSIT_STATUS;
             if (typeof serverTimestamp === 'function') {
                 updatePayload.lastStatusUpdateAt = serverTimestamp();
             }
-        }
-        if (!order?.kitSentAt && typeof serverTimestamp === 'function') {
-            updatePayload.kitSentAt = serverTimestamp();
-        }
-    }
-
-    if (!inboundTransitResetApplied && useInbound && delivered) {
-        updatePayload.status = 'delivered_to_us';
-        if (typeof serverTimestamp === 'function') {
-            updatePayload.lastStatusUpdateAt = serverTimestamp();
-        }
-
-        if (isShippingKit) {
-            if (typeof serverTimestamp === 'function') {
-                updatePayload.kitDeliveredToUsAt = serverTimestamp();
+            if (!order?.kitSentAt && typeof serverTimestamp === 'function') {
+                updatePayload.kitSentAt = serverTimestamp();
             }
-        } else {
+        } else if (normalizedStatus !== 'kit_sent') {
+            updatePayload.status = 'kit_sent';
             if (typeof serverTimestamp === 'function') {
-                updatePayload.receivedAt = serverTimestamp();
+                updatePayload.lastStatusUpdateAt = serverTimestamp();
             }
-            updatePayload.autoReceived = true;
+            if (!order?.kitSentAt && typeof serverTimestamp === 'function') {
+                updatePayload.kitSentAt = serverTimestamp();
+            }
         }
-    } else if (!inboundTransitResetApplied && useInbound && inTransit) {
-        if (!['delivered_to_us', 'received', PHONE_TRANSIT_STATUS].includes(normalizedStatus)) {
+    } else {
+        if (delivered) {
+            updatePayload.status = 'delivered_to_us';
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.lastStatusUpdateAt = serverTimestamp();
+            }
+
+            if (isShippingKit) {
+                if (typeof serverTimestamp === 'function') {
+                    updatePayload.kitDeliveredToUsAt = serverTimestamp();
+                }
+            } else {
+                if (typeof serverTimestamp === 'function') {
+                    updatePayload.receivedAt = serverTimestamp();
+                }
+                updatePayload.autoReceived = true;
+            }
+        } else if (hasMovement) {
             updatePayload.status = PHONE_TRANSIT_STATUS;
+            if (typeof serverTimestamp === 'function') {
+                updatePayload.lastStatusUpdateAt = serverTimestamp();
+            }
+        } else if (inboundBaseStatus && inboundBaseStatus !== normalizedStatus) {
+            updatePayload.status = inboundBaseStatus;
             if (typeof serverTimestamp === 'function') {
                 updatePayload.lastStatusUpdateAt = serverTimestamp();
             }
