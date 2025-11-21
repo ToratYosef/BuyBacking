@@ -15,9 +15,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const AUTO_VOID_DELAY_MS =
-  27 * 24 * 60 * 60 * 1000 + // 27 days
-  12 * 60 * 60 * 1000; // 12 hours
+const AUTO_VOID_DELAY_MS = 25 * 24 * 60 * 60 * 1000; // 25 days
 const AUTO_VOID_INTERVAL_MS = (() => {
   if (process.env.AUTO_VOID_INTERVAL_MS === undefined) {
     return 60 * 60 * 1000;

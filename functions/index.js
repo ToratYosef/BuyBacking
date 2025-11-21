@@ -1096,7 +1096,7 @@ SecondHandCell Team`);
 }
 
 const SHIPENGINE_API_BASE_URL = "https://api.shipengine.com/v1";
-const AUTO_VOID_DELAY_MS = 15 * 24 * 60 * 60 * 1000; // 15 days
+const AUTO_VOID_DELAY_MS = 25 * 24 * 60 * 60 * 1000; // 25 days
 const AUTO_VOID_QUERY_LIMIT = 50;
 const AUTO_VOID_RETRY_DELAY_MS = 12 * 60 * 60 * 1000; // 12 hours between automatic retry attempts
 
@@ -1521,7 +1521,7 @@ async function cancelOrderAndNotify(order, options = {}) {
   if (notifyCustomer && updatedOrder?.shippingInfo?.email) {
     const customerName = updatedOrder.shippingInfo.fullName || "there";
     const introMessage = auto
-      ? "has been cancelled because we didn’t receive your device within 15 days."
+      ? "has been cancelled because we didn’t receive your device within 25 days."
       : "has been cancelled as requested.";
     const followUp = auto
       ? "If you still plan to send it in, reply to this email and we’ll issue a fresh shipping label right away."
@@ -2217,6 +2217,11 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadat
       trackingMetadata?.estimatedDeliveryDate ||
       trackingMetadata?.estimated_delivery
   );
+  const baseStatus = kitOrder
+    ? resolveInboundTransitResetStatus(order)
+    : emailLabelOrder
+      ? 'label_generated'
+      : currentStatus;
 
   if (upper === 'DELIVERED' || upper === 'DELIVERED_TO_AGENT') {
     if (currentStatus === 'delivered_to_us') {
@@ -2237,25 +2242,24 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadat
     return { nextStatus: 'delivered_to_us', delivered: true };
   }
 
-  const transitStatuses = new Set([
+  const movementStatuses = new Set([
     'OUT_FOR_DELIVERY',
     'IN_TRANSIT',
     'ACCEPTED',
     'SHIPMENT_ACCEPTED',
-    'LABEL_CREATED',
-    'UNKNOWN',
-    'NOT_YET_IN_SYSTEM',
   ]);
-  const etaRequiredStatuses = new Set(['ACCEPTED', 'SHIPMENT_ACCEPTED']);
 
-  if (transitStatuses.has(upper) && (kitOrder || emailLabelOrder)) {
-    if (etaRequiredStatuses.has(upper) && !hasEstimatedDelivery) {
-      return null;
-    }
-    if (currentStatus === PHONE_TRANSIT_STATUS || currentStatus === 'phone_on_the_way') {
-      return null;
-    }
+  if (movementStatuses.has(upper) && (kitOrder || emailLabelOrder)) {
     return { nextStatus: PHONE_TRANSIT_STATUS, delivered: false };
+  }
+
+  const noMovementStatuses = new Set(['LABEL_CREATED', 'UNKNOWN', 'NOT_YET_IN_SYSTEM']);
+  if (noMovementStatuses.has(upper) && baseStatus && baseStatus !== currentStatus) {
+    return { nextStatus: baseStatus, delivered: false };
+  }
+
+  if (baseStatus && baseStatus !== currentStatus) {
+    return { nextStatus: baseStatus, delivered: false };
   }
 
   return null;
@@ -3597,7 +3601,7 @@ async function maybeAutoCancelAgingOrder(order, options = {}) {
 
   const htmlBody = `
     <p>Hi ${escapeHtml(customerName)},</p>
-    <p>We voided the shipping label for order <strong>#${escapeHtml(cancelledOrder.id)}</strong> because we haven\'t received your device in 15 days. We do this to keep orders moving for everyone.</p>
+    <p>We voided the shipping label for order <strong>#${escapeHtml(cancelledOrder.id)}</strong> because we haven\'t received your device in 25 days. We do this to keep orders moving for everyone.</p>
     <p>${escapeHtml(continuation)}</p>
     <p>If you decided not to send your device, just reply and let us know so we can close things out. If you change your mind later, respond and we\'ll send another prepaid label.</p>
     <p>— The SecondHandCell Team</p>
@@ -3607,12 +3611,12 @@ async function maybeAutoCancelAgingOrder(order, options = {}) {
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
-      subject: `Order #${cancelledOrder.id} was voided after 15 days`,
+      subject: `Order #${cancelledOrder.id} was voided after 25 days`,
       html: htmlBody,
       bcc: ['sales@secondhandcell.com'],
     });
 
-    await recordCustomerEmail(cancelledOrder.id, 'Order auto-voided after 15 days without inbound shipment.', {
+    await recordCustomerEmail(cancelledOrder.id, 'Order auto-voided after 25 days without inbound shipment.', {
       auto: true,
       reason: 'return_window_expired',
     }, {
