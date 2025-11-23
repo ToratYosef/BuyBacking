@@ -688,6 +688,14 @@ loading: false,
 };
 let analyticsTimeseriesChart = null;
 
+function getBaseOrdersForStatus(status) {
+  if (status === 'cancelled') {
+    return allOrders.filter(order => order.status === 'cancelled');
+  }
+
+  return allOrders.filter(order => order.status !== 'cancelled');
+}
+
 function syncSearchInputs(term = '') {
 if (searchInput && searchInput.value !== term) {
 searchInput.value = term;
@@ -3917,26 +3925,29 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function updateDashboardCounts(ordersData) {
-const statusCounts = {
-  'order_pending': ordersData.filter(o => o.status === 'order_pending').length,
-  'kit_needs_printing': ordersData.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
-  'kit_sent': ordersData.filter(o => o.status === 'kit_sent').length,
-  'kit_on_the_way_to_customer': ordersData.filter(o => o.status === 'kit_on_the_way_to_customer' || o.status === 'kit_in_transit').length,
-  'kit_delivered': ordersData.filter(o => o.status === 'kit_delivered').length,
-  'kit_on_the_way_to_us': ordersData.filter(o => o.status === 'kit_on_the_way_to_us').length,
-  'delivered_to_us': ordersData.filter(o => o.status === 'delivered_to_us').length,
-  'label_generated': ordersData.filter(order => isLabelGenerationStage(order)).length,
-  'emailed': ordersData.filter(order => isBalanceEmailStatus(order)).length,
-  'phone_on_the_way': ordersData.filter(o => o.status === 'phone_on_the_way').length,
-  'phone_on_the_way_to_us': ordersData.filter(o => o.status === 'phone_on_the_way_to_us').length,
-  'received': ordersData.filter(o => isReceivedStatusValue(o.status)).length,
-  'completed': ordersData.filter(o => o.status === 'completed').length,
-  're-offered-pending': ordersData.filter(o => o.status === 're-offered-pending').length,
-  're-offered-accepted': ordersData.filter(o => o.status === 're-offered-accepted').length,
-  're-offered-declined': ordersData.filter(o => o.status === 're-offered-declined').length,
-  'return-label-generated': ordersData.filter(o => o.status === 'return-label-generated').length,
-  'cancelled': ordersData.filter(o => o.status === 'cancelled').length,
-};
+  const cancelledOrders = ordersData.filter(o => o.status === 'cancelled');
+  const visibleOrders = ordersData.filter(o => o.status !== 'cancelled');
+
+  const statusCounts = {
+    'order_pending': visibleOrders.filter(o => o.status === 'order_pending').length,
+    'kit_needs_printing': visibleOrders.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
+    'kit_sent': visibleOrders.filter(o => o.status === 'kit_sent').length,
+    'kit_on_the_way_to_customer': visibleOrders.filter(o => o.status === 'kit_on_the_way_to_customer' || o.status === 'kit_in_transit').length,
+    'kit_delivered': visibleOrders.filter(o => o.status === 'kit_delivered').length,
+    'kit_on_the_way_to_us': visibleOrders.filter(o => o.status === 'kit_on_the_way_to_us').length,
+    'delivered_to_us': visibleOrders.filter(o => o.status === 'delivered_to_us').length,
+    'label_generated': visibleOrders.filter(order => isLabelGenerationStage(order)).length,
+    'emailed': visibleOrders.filter(order => isBalanceEmailStatus(order)).length,
+    'phone_on_the_way': visibleOrders.filter(o => o.status === 'phone_on_the_way').length,
+    'phone_on_the_way_to_us': visibleOrders.filter(o => o.status === 'phone_on_the_way_to_us').length,
+    'received': visibleOrders.filter(o => isReceivedStatusValue(o.status)).length,
+    'completed': visibleOrders.filter(o => o.status === 'completed').length,
+    're-offered-pending': visibleOrders.filter(o => o.status === 're-offered-pending').length,
+    're-offered-accepted': visibleOrders.filter(o => o.status === 're-offered-accepted').length,
+    're-offered-declined': visibleOrders.filter(o => o.status === 're-offered-declined').length,
+    'return-label-generated': visibleOrders.filter(o => o.status === 'return-label-generated').length,
+    'cancelled': cancelledOrders.length,
+  };
 
 if (orderPendingCount) {
 orderPendingCount.textContent = statusCounts['order_pending'];
@@ -3992,23 +4003,23 @@ returnLabelGeneratedCount.textContent = statusCounts['return-label-generated'];
 if (cancelledCount) {
   cancelledCount.textContent = statusCounts['cancelled'];
 }
-if (statusCountAll) {
-statusCountAll.textContent = ordersData.length;
-}
+  if (statusCountAll) {
+    statusCountAll.textContent = visibleOrders.length;
+  }
 
-updateGlassMetrics(ordersData);
+  updateGlassMetrics(visibleOrders);
 
-const liveOrders = ordersData.filter(o => !['completed', 'return-label-generated'].includes(o.status)).length;
-if (liveOrdersCount) {
-liveOrdersCount.textContent = liveOrders;
-}
-if (mobileLiveOrdersCount) {
-mobileLiveOrdersCount.textContent = liveOrders;
-}
+  const liveOrders = visibleOrders.filter(o => !['completed', 'return-label-generated'].includes(o.status)).length;
+  if (liveOrdersCount) {
+  liveOrdersCount.textContent = liveOrders;
+  }
+  if (mobileLiveOrdersCount) {
+  mobileLiveOrdersCount.textContent = liveOrders;
+  }
 
-updateNotificationBadge(ordersData);
-updateAnalytics(ordersData, statusCounts);
-updateOperationsHighlights(ordersData);
+  updateNotificationBadge(visibleOrders);
+  updateAnalytics(visibleOrders, statusCounts);
+  updateOperationsHighlights(visibleOrders);
 }
 
 /**
@@ -7373,7 +7384,7 @@ function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options =
   const preservePage = options.preservePage === true;
   const previousPage = currentPage;
 
-  let filtered = allOrders;
+  let filtered = getBaseOrdersForStatus(status);
 
   if (!hasSearchTerm && status !== 'all') {
     if (status === 'kit_needs_printing') {
