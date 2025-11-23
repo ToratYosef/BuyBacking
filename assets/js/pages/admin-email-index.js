@@ -2,135 +2,241 @@ import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-// IMPORTANT: In a real-world scenario, you would not expose API keys directly in client-side code.
-// These keys should be stored securely on a server.
-
-// Initialize Firebase
+// Firebase init
 const app = firebaseApp;
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// UI Elements
-const htmlInput = document.getElementById('htmlInput');
-const previewBtn = document.getElementById('previewBtn');
-const previewFrame = document.getElementById('previewFrame');
-const toInput = document.getElementById('toInput');
-const bccInput = document.getElementById('bccInput');
-const subjectInput = document.getElementById('subjectInput');
-const pullEmailsBtn = document.getElementById('pullEmailsBtn');
-const emailsDisplay = document.getElementById('emailsDisplay');
-const copyEmailsBtn = document.getElementById('copyEmailsBtn');
-const sendBtn = document.getElementById('sendBtn');
-const statusMessage = document.getElementById('statusMessage');
+// UI elements
+const htmlInput = document.getElementById("htmlInput");
+const previewBtn = document.getElementById("previewBtn");
+const previewFrame = document.getElementById("previewFrame");
+const toInput = document.getElementById("toInput");
+const bccInput = document.getElementById("bccInput");
+const subjectInput = document.getElementById("subjectInput");
 
-// Authentication and Firestore setup
+const pullEmailsBtn = document.getElementById("pullEmailsBtn");
+const emailsDisplay = document.getElementById("emailsDisplay");
+const copyEmailsBtn = document.getElementById("copyEmailsBtn");
+
+const makeBatchesBtn = document.getElementById("makeBatchesBtn");
+const batchInfo = document.getElementById("batchInfo");
+const currentBatchEmails = document.getElementById("currentBatchEmails");
+const prevBatchBtn = document.getElementById("prevBatchBtn");
+const nextBatchBtn = document.getElementById("nextBatchBtn");
+const sendBatchBtn = document.getElementById("sendBatchBtn");
+
+const statusMessage = document.getElementById("statusMessage");
+
+// State for batching
+let allBccEmails = [];
+let batches = [];
+let currentBatchIndex = 0;
+
+// Firebase auth
 async function setupFirebase() {
-try {
-// Sign in anonymously to read public data
-await signInAnonymously(auth);
-console.log("Signed in anonymously to Firebase.");
-} catch (error) {
-console.error("Error signing in to Firebase:", error);
-statusMessage.textContent = "Error signing in to Firebase. Check console for details.";
-statusMessage.style.color = 'red';
+  try {
+    await signInAnonymously(auth);
+    console.log("Signed in anonymously to Firebase.");
+  } catch (error) {
+    console.error("Error signing in to Firebase:", error);
+    statusMessage.textContent = "Error signing in to Firebase. Check console.";
+    statusMessage.style.color = "red";
+  }
 }
-}
-
 setupFirebase();
 
-// Pull all emails from the 'signed_up_emails' collection
-pullEmailsBtn.addEventListener('click', async () => {
-statusMessage.textContent = 'Pulling emails...';
-statusMessage.style.color = 'gray';
-try {
-const emailsRef = collection(db, "signed_up_emails");
-const querySnapshot = await getDocs(emailsRef);
-const emails = [];
-querySnapshot.forEach((doc) => {
-const emailData = doc.data();
-if (emailData.email) {
-emails.push(emailData.email);
+// Helpers
+function parseEmailList(raw) {
+  if (!raw) return [];
+  return Array.from(
+    new Set(
+      raw
+        .split(/[,\n;]/)
+        .map((e) => e.trim())
+        .filter((e) => e)
+    )
+  );
 }
-});
-const emailList = emails.join(', ');
-emailsDisplay.textContent = emailList || 'No emails found.';
-statusMessage.textContent = `Found ${emails.length} emails.`;
-statusMessage.style.color = 'green';
-} catch (error) {
-console.error("Error pulling emails:", error);
-statusMessage.textContent = "Error pulling emails. Check console for details.";
-statusMessage.style.color = 'red';
+
+function chunkArray(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
 }
-});
 
-// Copy emails to clipboard
-copyEmailsBtn.addEventListener('click', () => {
-const emails = emailsDisplay.textContent;
-if (emails && emails !== 'No emails found.') {
-// Use a temporary element to copy the text
-const tempTextarea = document.createElement('textarea');
-tempTextarea.value = emails;
-document.body.appendChild(tempTextarea);
-tempTextarea.select();
-document.execCommand('copy');
-document.body.removeChild(tempTextarea);
+function renderBatch() {
+  if (!batches.length) {
+    batchInfo.textContent = "No batches created.";
+    currentBatchEmails.textContent = "";
+    prevBatchBtn.disabled = true;
+    nextBatchBtn.disabled = true;
+    sendBatchBtn.disabled = true;
+    return;
+  }
 
-statusMessage.textContent = 'Emails copied to clipboard!';
-statusMessage.style.color = 'green';
-} else {
-statusMessage.textContent = 'No emails to copy.';
-statusMessage.style.color = 'red';
+  const batch = batches[currentBatchIndex];
+  batchInfo.textContent = `Batch ${currentBatchIndex + 1} of ${
+    batches.length
+  } – ${batch.length} recipients`;
+
+  currentBatchEmails.textContent = batch.join(", ");
+  // Also show the current batch in the BCC input so you can see / edit if needed
+  bccInput.value = batch.join(", ");
+
+  prevBatchBtn.disabled = currentBatchIndex === 0;
+  nextBatchBtn.disabled = currentBatchIndex === batches.length - 1;
+  sendBatchBtn.disabled = batch.length === 0;
 }
-});
 
-// Preview email in the iframe
-previewBtn.addEventListener('click', () => {
-const htmlContent = htmlInput.value;
-const iframeDoc = previewFrame.contentWindow.document;
-iframeDoc.open();
-iframeDoc.write(htmlContent);
-iframeDoc.close();
-});
+// Pull emails from Firestore
+pullEmailsBtn.addEventListener("click", async () => {
+  statusMessage.textContent = "Pulling emails...";
+  statusMessage.style.color = "gray";
 
-// Send the email
-sendBtn.addEventListener('click', async () => {
-statusMessage.textContent = 'Sending email...';
-statusMessage.style.color = 'gray';
+  try {
+    const emailsRef = collection(db, "signed_up_emails");
+    const snapshot = await getDocs(emailsRef);
 
-const htmlContent = htmlInput.value;
-const toAddress = toInput.value;
-const bccAddresses = bccInput.value.split(',').map(e => e.trim()).filter(e => e);
-const subject = subjectInput.value;
+    const emails = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.email) emails.push(String(data.email).trim());
+    });
 
-// This is the URL to your deployed Firebase Function
-const functionsUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/send-email';
+    const list = emails.join(", ");
+    emailsDisplay.textContent = list || "No emails found.";
+    bccInput.value = list;
 
-try {
-const response = await fetch(functionsUrl, {
-method: 'POST',
-headers: {
-'Content-Type': 'application/json'
-},
-body: JSON.stringify({
-to: toAddress,
-bcc: bccAddresses,
-subject: subject,
-html: htmlContent
-})
+    statusMessage.textContent = `Found ${emails.length} emails. Paste/edit and then click "Create 99-recipient Batches".`;
+    statusMessage.style.color = "green";
+  } catch (err) {
+    console.error("Error pulling emails:", err);
+    statusMessage.textContent = "Error pulling emails. Check console.";
+    statusMessage.style.color = "red";
+  }
 });
 
-if (response.ok) {
-statusMessage.textContent = 'Email sent successfully!';
-statusMessage.style.color = 'green';
-} else {
-const errorText = await response.text();
-console.error("Failed to send email:", errorText);
-statusMessage.textContent = `Failed to send email. Error: ${errorText}`;
-statusMessage.style.color = 'red';
-}
-} catch (error) {
-console.error("Network or server error:", error);
-statusMessage.textContent = "A network error occurred. Check your server connection.";
-statusMessage.style.color = 'red';
-}
+// Copy displayed emails
+copyEmailsBtn.addEventListener("click", () => {
+  const text = emailsDisplay.textContent;
+  if (!text || text === "No emails found.") {
+    statusMessage.textContent = "No emails to copy.";
+    statusMessage.style.color = "red";
+    return;
+  }
+
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+
+  statusMessage.textContent = "Emails copied to clipboard.";
+  statusMessage.style.color = "green";
+});
+
+// Preview HTML in iframe
+previewBtn.addEventListener("click", () => {
+  const htmlContent = htmlInput.value || "";
+  const iframeDoc = previewFrame.contentWindow.document;
+  iframeDoc.open();
+  iframeDoc.write(htmlContent);
+  iframeDoc.close();
+});
+
+// Create batches of 99
+makeBatchesBtn.addEventListener("click", () => {
+  statusMessage.textContent = "";
+  allBccEmails = parseEmailList(bccInput.value);
+
+  if (!allBccEmails.length) {
+    statusMessage.textContent = "No emails found in BCC field.";
+    statusMessage.style.color = "red";
+    return;
+  }
+
+  batches = chunkArray(allBccEmails, 99); // max 99 per batch
+  currentBatchIndex = 0;
+  renderBatch();
+
+  statusMessage.textContent = `Created ${batches.length} batches of up to 99 emails. Use Prev/Next and "Send Current Batch".`;
+  statusMessage.style.color = "green";
+});
+
+// Navigate batches
+prevBatchBtn.addEventListener("click", () => {
+  if (currentBatchIndex > 0) {
+    currentBatchIndex--;
+    renderBatch();
+  }
+});
+
+nextBatchBtn.addEventListener("click", () => {
+  if (currentBatchIndex < batches.length - 1) {
+    currentBatchIndex++;
+    renderBatch();
+  }
+});
+
+// Send current batch only
+sendBatchBtn.addEventListener("click", async () => {
+  statusMessage.textContent = "Sending current batch...";
+  statusMessage.style.color = "gray";
+
+  const htmlContent = htmlInput.value;
+  const toAddress = toInput.value.trim();
+  const subject = subjectInput.value.trim();
+
+  if (!toAddress || !subject || !htmlContent) {
+    statusMessage.textContent = "To, Subject, and HTML content are required.";
+    statusMessage.style.color = "red";
+    return;
+  }
+
+  if (!batches.length) {
+    statusMessage.textContent = "No batches created. Click 'Create 99-recipient Batches' first.";
+    statusMessage.style.color = "red";
+    return;
+  }
+
+  const batch = batches[currentBatchIndex];
+  if (!batch.length) {
+    statusMessage.textContent = "This batch is empty.";
+    statusMessage.style.color = "red";
+    return;
+  }
+
+  const functionsUrl =
+    "https://us-central1-buyback-a0f05.cloudfunctions.net/api/send-email";
+
+  try {
+    const response = await fetch(functionsUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: toAddress,
+        bcc: batch,
+        subject,
+        html: htmlContent,
+      }),
+    });
+
+    if (response.ok) {
+      statusMessage.textContent = `Batch ${currentBatchIndex + 1} sent (${batch.length} recipients).`;
+      statusMessage.style.color = "green";
+    } else {
+      const txt = await response.text();
+      console.error("Failed to send batch:", txt);
+      statusMessage.textContent = `Failed to send batch. Error: ${txt}`;
+      statusMessage.style.color = "red";
+    }
+  } catch (err) {
+    console.error("Network/server error:", err);
+    statusMessage.textContent = "Network error sending batch. Check console.";
+    statusMessage.style.color = "red";
+  }
 });
