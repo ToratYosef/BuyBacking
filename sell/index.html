@@ -408,6 +408,22 @@
             padding-right: 0.5rem; /* Space for the scrollbar */
         }
 
+        .payment-panel {
+            max-width: 48rem;
+        }
+
+        .payment-panel:focus {
+            outline: 3px solid #c7d2fe;
+            outline-offset: 4px;
+        }
+
+        @media (max-width: 640px) {
+            .payment-panel {
+                padding: 1.25rem;
+                border-radius: 1.25rem;
+            }
+        }
+
         .btn-google-style {
             display: flex; align-items: center; justify-content: center;
             width: 100%; background-color: white; color: #475569;
@@ -813,15 +829,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                             </div>
 
                             <div id="promoCodeSection" class="mt-6 p-4 bg-white rounded-lg shadow-sm sm:p-3">
-                                <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                                <div class="flex flex-col gap-4 sm:flex-row sm:items-end">
                                     <div class="flex-1">
                                         <label for="promoCodeInput" class="block text-sm font-semibold text-slate-700">Promo Code</label>
                                         <p class="text-xs text-slate-500 mt-1">Have a promo code? Enter it here to apply your bonus.</p>
                                     </div>
-                                    <div class="flex gap-2 w-full sm:w-auto">
-                                        <input type="text" id="promoCodeInput" class="flex-1 border border-slate-300 rounded-md shadow-sm p-2 text-sm uppercase tracking-widest" placeholder="Enter code">
-                                        <button type="button" id="applyPromoBtn" class="px-4 py-2 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700">Apply</button>
-                                        <button type="button" id="clearPromoBtn" class="px-4 py-2 text-sm font-semibold rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 hidden">Clear</button>
+                                    <div class="flex flex-col gap-2 w-full sm:flex-row sm:w-auto sm:items-center">
+                                        <input type="text" id="promoCodeInput" class="w-full border border-slate-300 rounded-md shadow-sm p-2 text-sm uppercase tracking-widest" placeholder="Enter code">
+                                        <div class="flex flex-col sm:flex-row gap-2 sm:items-center w-full sm:w-auto">
+                                            <button type="button" id="applyPromoBtn" class="px-4 py-2 text-sm font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 w-full sm:w-auto">Apply</button>
+                                            <button type="button" id="clearPromoBtn" class="px-4 py-2 text-sm font-semibold rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 hidden w-full sm:w-auto">Clear</button>
+                                        </div>
                                     </div>
                                 </div>
                                 <p id="promoStatusMessage" class="mt-3 text-sm text-slate-500"></p>
@@ -845,91 +863,92 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         </div>
     </main>
     
-    <div id="paymentModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-lg p-6 relative modal-content text-left">
-            <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
-            <h2 class="text-2xl font-bold text-slate-800 mb-6 sm:text-xl">6. How would you like to get paid? </h2>
-            
-            <div class="mb-8 grid grid-cols-3 gap-4" id="paymentOptions">
-                <div class="payment-option">
-                    <input type="radio" id="venmo" name="payment_method" value="venmo">
-                    <label for="venmo" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 512 512" class="h-10 w-10 mb-2 mx-auto sm:h-8 sm:w-8" aria-label="Venmo" role="img">
-                            <rect width="512" height="512" rx="15%" fill="#3396cd"/>
-                            <path d="m381.4 105.3c11 18.1 15.9 36.7 15.9 60.3 0 75.1-64.1 172.7-116.2 241.2h-118.8l-47.6-285 104.1-9.9 25.3 202.8c23.5-38.4 52.6-98.7 52.6-139.7 0-22.5-3.9-37.8-9.9-50.4z" fill="#fff"/>
-                        </svg>
-                        <span class="font-semibold block sm:text-sm">Venmo</span>
-                    </label>
-                </div>
-                <div class="payment-option">
-                    <input type="radio" id="zelle" name="payment_method" value="zelle">
-                    <label for="zelle" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48" class="h-10 w-10 mb-2 mx-auto sm:h-8 sm:w-8">
-                            <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22 C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5 C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5 C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5 h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5 h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298 C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
-                        </svg>
-                        <span class="font-semibold block sm:text-sm">Zelle</span>
-                    </label>
-                </div>
-                <div class="payment-option">
-                    <input type="radio" id="paypal" name="payment_method" value="paypal">
-                    <label for="paypal" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
-                        <i class="fa-brands fa-paypal text-4xl text-blue-600 mb-2 sm:text-2xl"></i>
-                        <span class="font-semibold block sm:text-sm">PayPal</span>
-                    </label>
-                </div>
+        <section id="paymentModal" tabindex="-1" class="payment-panel hidden bg-white rounded-2xl shadow-xl w-full max-w-3xl p-6 relative border border-slate-200 mx-auto px-4 sm:px-6 mt-6 mb-10">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Step 6</p>
+                <h2 class="text-2xl font-bold text-slate-800">How would you like to get paid?</h2>
+                <p class="text-sm text-slate-600 mt-1">Pick a payout method to wrap up your order.</p>
             </div>
-
-            <div id="venmoFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
-                <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Venmo Details</h3>
-                <div class="space-y-4">
-                    <div>
-                        <label for="venmoUsername" class="block text-sm font-medium text-slate-700">Venmo Username</label>
-                        <input type="text" id="venmoUsername" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    </div>
-                    <div>
-                        <label for="venmoUsernameConfirm" class="block text-sm font-medium text-slate-700">Verify Venmo Username</label>
-                        <input type="text" id="venmoUsernameConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    </div>
-                </div>
-            </div>
-
-            <div id="zelleFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
-                <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Zelle Details</h3>
-                <div class="space-y-4">
-                    <div>
-                        <label for="zelleIdentifier" class="block text-sm font-medium text-slate-700">Zelle Email or Phone Number</label>
-                        <input type="text" id="zelleIdentifier" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    </div>
-                    <div>
-                        <label for="zelleIdentifierConfirm" class="block text-sm font-medium text-slate-700">Verify Zelle Email or Phone Number</label>
-                        <input type="text" id="zelleIdentifierConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    </div>
-                </div>
-            </div>
-
-            <div id="paypalFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
-                <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">PayPal Details</h3>
-                <div class="space-y-4">
-                    <div>
-                        <label for="paypalEmail" class="block text-sm font-medium text-slate-700">PayPal Email Address</label>
-                        <input type="email" id="paypalEmail" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    </div>
-                    <div>
-                        <label for="paypalEmailConfirm" class="block text-sm font-medium text-slate-700">Verify PayPal Email Address</label>
-                        <input type="email" id="paypalEmailConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                    </div>
-                </div>
-            </div>
-            
-            <button id="submitOrderBtn" class="btn-primary-indigo w-full mt-6 btn-disabled">
-                Submit Order
-            </button>
-            <div id="paymentMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div>
+            <button type="button" id="closePaymentPanel" class="text-sm font-semibold text-slate-500 hover:text-slate-700">Edit details</button>
         </div>
-    </div>
 
+        <div class="my-6 grid grid-cols-1 sm:grid-cols-3 gap-3" id="paymentOptions">
+            <div class="payment-option">
+                <input type="radio" id="venmo" name="payment_method" value="venmo">
+                <label for="venmo" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48" class="h-12 w-12 mb-2 mx-auto sm:h-10 sm:w-10">
+                        <path fill="#4c6fff" d="M35.74,6H12.26C9.908,6,8,7.908,8,10.26v27.48C8,40.092,9.908,42,12.26,42h23.48C38.092,42,40,40.092,40,37.74V10.26C40,7.908,38.092,6,35.74,6z"></path><path d="M28.922,15.882l-1.747,0.493c-0.18,0.053-0.267,0.15-0.271,0.3c-0.01,0.142,0.01,0.292,0.057,0.449l1.314,4.389l-1.813,5.449l-2.286-7.592c-0.168-0.564-0.408-1.069-0.72-1.514c-0.295-0.461-0.67-0.84-1.125-1.136c-0.436-0.278-0.963-0.417-1.58-0.417c-0.313,0-0.633,0.044-0.96,0.132c-0.328,0.071-0.655,0.175-0.982,0.311l-1.67,0.633c-0.066,0.035-0.132,0.109-0.195,0.223c-0.055,0.105-0.083,0.223-0.083,0.354c0,0.102,0.042,0.258,0.125,0.469l0.011,0.023l2.807,8.23l-1.897,5.748l-2.214,0.563c-0.086,0.016-0.156,0.081-0.207,0.194c-0.043,0.117-0.048,0.22-0.017,0.309l0.483,1.638c0.024,0.083,0.088,0.17,0.191,0.261c0.105,0.088,0.207,0.133,0.308,0.133h3.157c0.196-0.002,0.349-0.119,0.457-0.353l1.82-4.06c0.216-0.5,0.423-0.963,0.622-1.391c0.201-0.42,0.367-0.825,0.5-1.214c0.143-0.374,0.255-0.699,0.337-0.977l2.283,7.822C24.782,32.345,25.104,33,26.08,33c0.328,0,0.662-0.05,1.001-0.149l2.547-0.743c0.211-0.064,0.352-0.152,0.421-0.263c0.07-0.111,0.084-0.217,0.042-0.317l-0.553-1.879c-0.054-0.168-0.143-0.251-0.269-0.251c-0.029,0-0.088,0.01-0.176,0.029l-1.813,0.423l-1.826-6.04l1.865-5.987c0.073-0.214,0.122-0.452,0.145-0.717c0.022-0.266-0.001-0.498-0.07-0.698l-0.661-2.105c-0.092-0.273-0.262-0.409-0.511-0.409C29.057,15.856,28.997,15.865,28.922,15.882z" opacity=".05"></path><path d="M28.136,16.037l-1.747,0.493c-0.122,0.036-0.182,0.109-0.187,0.227c-0.006,0.118,0.01,0.238,0.053,0.371l1.314,4.389l-1.98,5.962l-2.43-8.072c-0.199-0.672-0.477-1.267-0.834-1.785c-0.348-0.527-0.792-0.958-1.333-1.292c-0.441-0.281-0.987-0.422-1.636-0.422c-0.355,0-0.72,0.054-1.095,0.161c-0.385,0.074-0.769,0.188-1.153,0.342l-1.67,0.633c-0.023,0.014-0.045,0.041-0.067,0.082c-0.03,0.062-0.044,0.132-0.044,0.208c0,0.047,0.026,0.156,0.076,0.326l0.008,0.025l2.807,8.23l-2.113,6.403l-2.459,0.626c-0.037,0.01-0.065,0.033-0.083,0.072c-0.026,0.061-0.03,0.114-0.014,0.169l0.483,1.639c0.01,0.033,0.04,0.073,0.091,0.118c0.053,0.044,0.095,0.061,0.126,0.061h3.157c0.108-0.002,0.184-0.055,0.223-0.144l1.82-4.06c0.213-0.491,0.418-0.951,0.614-1.377c0.203-0.424,0.376-0.83,0.519-1.218c0.16-0.409,0.283-0.763,0.368-1.06l2.283,7.822C24.002,32.625,24.234,33,25.08,33c0.246,0,0.504-0.039,0.775-0.117l2.547-0.743c0.129-0.04,0.215-0.092,0.257-0.16c0.031-0.05,0.038-0.099,0.017-0.149l-0.553-1.879c-0.009-0.028-0.019-0.041-0.03-0.051c-0.01,0.002-0.022,0.004-0.038,0.008l-1.995,0.465l-1.95-6.45l1.988-6.379c0.084-0.245,0.137-0.513,0.158-0.808c0.021-0.297-0.004-0.557-0.074-0.78l-0.66-2.104c-0.02-0.06-0.048-0.091-0.085-0.109C28.214,16.023,28.18,16.026,28.136,16.037z" opacity=".07"></path><path fill="#fff" d="M28.831,14.876l-1.305,0.369c-0.594,0.169-1.231,0.05-1.732-0.321c-0.502-0.37-0.807-0.936-0.84-1.55c-0.025-0.471,0.115-0.801,0.424-1.222l0.416-0.568c0.199-0.271,0.004-0.583-0.294-0.583H23.91c-0.102,0-0.204,0.046-0.259,0.121l-4.259,5.87c-0.247,0.34-0.078,0.816,0.34,0.921l1.701,0.423l2.265,7.517c-0.179,0.558-0.409,1.164-0.689,1.816c-0.239,0.556-0.504,1.183-0.734,1.701l-1.768,3.925c-0.064,0.14-0.213,0.23-0.366,0.23h-2.582c-0.164,0-0.292,0.166-0.244,0.322l0.421,1.39c0.031,0.101,0.094,0.181,0.168,0.225c0.03,0.018,0.061,0.029,0.09,0.035h2.506c0.238,0,0.456-0.142,0.553-0.36l2.213-5.01c0.392-0.886,0.845-1.946,1.203-2.872c0.305-0.857,0.644-1.813,0.917-2.673l3.416-11.078C29.074,15.008,28.958,14.84,28.831,14.876z"></path>
+                    <span class="font-semibold block sm:text-sm">Venmo</span>
+                </label>
+            </div>
+            <div class="payment-option">
+                <input type="radio" id="zelle" name="payment_method" value="zelle">
+                <label for="zelle" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 48 48" class="h-12 w-12 mb-2 mx-auto sm:h-10 sm:w-10">
+                        <path fill="#a0f" d="M35,42H13c-3.866,0-7-3.134-7-7V13c0-3.866,3.134-7,7-7h22c3.866,0,7,3.134,7,7v22C42,38.866,38.866,42,35,42z"></path><path fill="#fff" d="M17.5,18.5h14c0.552,0,1-0.448,1-1V15c0-0.552-0.448-1-1-1h-14c-0.552,0-1,0.448-1,1v2.5C16.5,18.052,16.948,18.5,17.5,18.5z"></path><path fill="#fff" d="M17,34.5h14.5c0.552,0,1-0.448,1-1V31c0-0.552-0.448-1-1-1H17c-0.552,0-1,0.448-1,1v2.5C16,34.052,16.448,34.5,17,34.5z"></path><path fill="#fff" d="M22.25,11v6c0,0.276,0.5,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5h-3.5C22.474,10.5,22.25,10.724,22.25,11z"></path><path fill="#fff" d="M22.25,32v6c0,0.276,0.224,0.5,0.5,0.5h3.5c0.276,0,0.5-0.224,0.5-0.5v-6c0-0.276-0.224-0.5-0.5-0.5h-3.5C22.474,31.5,22.25,31.724,22.25,32z"></path><path fill="#fff" d="M16.578,30.938H22l10.294-12.839c0.178-0.222,0.019-0.552-0.266-0.552H26.5L16.275,30.298C16.065,30.553,16.247,30.938,16.578,30.938z"></path>
+                    </svg>
+                    <span class="font-semibold block sm:text-sm">Zelle</span>
+                </label>
+            </div>
+            <div class="payment-option">
+                <input type="radio" id="paypal" name="payment_method" value="paypal">
+                <label for="paypal" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                    <i class="fa-brands fa-paypal text-4xl text-blue-600 mb-2 sm:text-2xl"></i>
+                    <span class="font-semibold block sm:text-sm">PayPal</span>
+                </label>
+            </div>
+        </div>
 
-    <div id="quoteModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div id="venmoFields" class="mb-6 p-5 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
+            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Venmo Details</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="venmoUsername" class="block text-sm font-medium text-slate-700">Venmo Username</label>
+                    <input type="text" id="venmoUsername" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="venmoUsernameConfirm" class="block text-sm font-medium text-slate-700">Verify Venmo Username</label>
+                    <input type="text" id="venmoUsernameConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+            </div>
+        </div>
+
+        <div id="zelleFields" class="mb-6 p-5 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
+            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Zelle Details</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="zelleIdentifier" class="block text-sm font-medium text-slate-700">Zelle Email or Phone Number</label>
+                    <input type="text" id="zelleIdentifier" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="zelleIdentifierConfirm" class="block text-sm font-medium text-slate-700">Verify Zelle Email or Phone Number</label>
+                    <input type="text" id="zelleIdentifierConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+            </div>
+        </div>
+
+        <div id="paypalFields" class="mb-6 p-5 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
+            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">PayPal Details</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="paypalEmail" class="block text-sm font-medium text-slate-700">PayPal Email Address</label>
+                    <input type="email" id="paypalEmail" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="paypalEmailConfirm" class="block text-sm font-medium text-slate-700">Verify PayPal Email Address</label>
+                    <input type="email" id="paypalEmailConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+            </div>
+        </div>
+
+        <button id="submitOrderBtn" class="btn-primary-indigo w-full mt-4 btn-disabled">
+            Submit Order
+        </button>
+        <div id="paymentMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full"></div>
+    </section>
+
+<div id="quoteModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4" style="background-color: rgba(0, 0, 0, 0.6);">
         <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content text-center">
             <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
             <div class="bg-red-100 text-red-800 p-3 rounded-lg mb-4 text-sm font-medium">
@@ -974,8 +993,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     </div>
 
 
-    <div id="loginModal" class="modal fixed inset-0 z-50 flex justify-center items-start sm:items-center p-4 sm:p-6 overflow-y-auto" style="background-color: rgba(0, 0, 0, 0.6);">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 relative modal-content my-8 sm:my-0 max-h-[calc(100vh-4rem)] overflow-y-auto">
+    <div id="loginModal" class="modal fixed inset-0 z-50 flex justify-center items-start sm:items-center p-4 sm:p-6" style="background-color: rgba(0, 0, 0, 0.6);">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 pb-4 relative modal-content my-8 sm:my-0 max-h-[calc(100vh-3rem)] overflow-y-auto flex flex-col gap-4">
             <button class="close-modal-btn absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors duration-200"><i class="fa-solid fa-xmark text-xl"></i></button>
             <h2 class="text-2xl font-bold text-slate-800 mb-6 text-center">Your SecondHandCell Account</h2>
             <div class="flex border-b border-slate-200 mb-6">
@@ -1853,6 +1872,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const paypalFields = document.getElementById('paypalFields');
             const submitOrderBtn = document.getElementById('submitOrderBtn');
             const paymentMessage = document.getElementById('paymentMessage');
+            const closePaymentPanelBtn = document.getElementById('closePaymentPanel');
 
             let isUserLoggedIn = false;
             let isGuestCheckout = false;
@@ -1900,6 +1920,26 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 });
                 modal.querySelector('.close-modal-btn')?.addEventListener('click', () => closeModal(modal));
             });
+
+            const showPaymentPanel = () => {
+                if (!paymentModal) return;
+                paymentModal.classList.remove('hidden');
+                paymentModal.focus({ preventScroll: true });
+                paymentModal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            };
+
+            const hidePaymentPanel = () => {
+                if (!paymentModal) return;
+                paymentModal.classList.add('hidden');
+            };
+
+            if (closePaymentPanelBtn) {
+                closePaymentPanelBtn.addEventListener('click', () => {
+                    hidePaymentPanel();
+                    sendPhoneBtn?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    sendPhoneBtn?.focus({ preventScroll: true });
+                });
+            }
 
             if(aboutUsLink) aboutUsLink.addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
             if(privacyPolicyLink) privacyPolicyLink.addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
@@ -2845,8 +2885,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     return;
                 }
                 
-                // All fields are valid, open the payment modal
-                openModal('paymentModal');
+                // All fields are valid, reveal the payment step inline
+                showPaymentPanel();
             });
 
 
