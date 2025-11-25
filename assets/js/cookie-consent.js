@@ -64,14 +64,15 @@
     style.textContent = `
       .cookie-consent-banner {
         position: fixed;
-        inset: auto 1.5rem 1.5rem 1.5rem;
+        inset: auto 1.25rem 1.25rem 1.25rem;
         z-index: 9999;
         background: #0f172a;
         color: #f8fafc;
-        padding: 1.5rem;
+        padding: 1.4rem;
         border-radius: 1rem;
         box-shadow: 0 20px 45px rgba(15, 23, 42, 0.35);
         max-width: 640px;
+        width: min(calc(100% - 2.5rem), 640px);
         margin: 0 auto;
         left: 50%;
         transform: translateX(-50%);
@@ -138,8 +139,10 @@
 
       @media (max-width: 640px) {
         .cookie-consent-banner {
-          inset: auto 1rem 1rem 1rem;
-          padding: 1.25rem;
+          inset: auto 0.75rem 0.75rem 0.75rem;
+          padding: 1.05rem;
+          width: calc(100% - 1.5rem);
+          border-radius: 0.9rem;
         }
 
         .cookie-consent__actions {
