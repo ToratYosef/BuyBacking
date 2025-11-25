@@ -83,7 +83,7 @@
     .file-label {
       font-size: 0.85rem;
       color: #e5e7eb;
-      min-width: 70px;
+      min-width: 90px;
     }
     input[type="file"] {
       font-size: 0.8rem;
@@ -216,12 +216,18 @@
       font-size: 0.75rem;
       color: #9ca3af;
     }
+
+    @media (max-width: 1200px) {
+      main {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>SecondHandCell Repricer – SellCell + Amazon (Local XML)</h1>
-    <p>Upload CSV ➜ upload SellCell feed XML ➜ get competitor top price per model ➜ apply Amazon & fee math ➜ output new buy prices (with new profit $ & new %).</p>
+    <p>Upload CSV ➜ upload SellCell feed XML ➜ (optional) upload Template XML ➜ get repriced values ➜ output CSV or updated device-prices XML.</p>
   </header>
 
   <main>
@@ -242,8 +248,13 @@
       </div>
 
       <div class="file-row">
-        <span class="file-label">XML file</span>
+        <span class="file-label">SellCell XML</span>
         <input type="file" id="xmlFile" accept=".xml,text/xml" />
+      </div>
+
+      <div class="file-row">
+        <span class="file-label">Template XML</span>
+        <input type="file" id="templateXmlFile" accept=".xml,text/xml" />
       </div>
 
       <div class="btn-row">
@@ -253,6 +264,9 @@
         </button>
         <button id="btnDownload" class="secondary" disabled>
           Download CSV
+        </button>
+        <button id="btnDownloadXml" class="secondary" disabled>
+          Download XML
         </button>
       </div>
 
@@ -267,7 +281,7 @@
     <section class="card">
       <h2>Step 2 – Preview Results</h2>
       <div class="muted">
-        After processing, new buy prices will appear below. You can verify the Feed & Amazon columns and spot-check one device to confirm logic.
+        After processing, new buy prices will appear below. You can verify the Feed &amp; Amazon columns and spot-check one device to confirm logic.
       </div>
       <div class="scroll-table">
         <table id="resultTable">
@@ -328,7 +342,7 @@
       return Number.isFinite(num) ? num : null;
     }
 
-    // Simple CSV parser that handles quotes and commas in quotes.
+    // CSV parser that handles quotes and commas in quotes.
     function parseCsv(text) {
       if (!text) return [];
       const rows = [];
@@ -340,7 +354,7 @@
         const ch = text[i];
         const next = text[i + 1];
 
-        if (ch === '"' ) {
+        if (ch === '"') {
           if (inQuotes && next === '"') {
             // Escaped quote
             cur += '"';
@@ -390,8 +404,8 @@
       return records;
     }
 
-    // Build feed index from uploaded XML text.
-    // key: "DEVICE_NAME|CAPACITY" (uppercased)
+    // Build feed index from uploaded SellCell XML text.
+    // key: "DEVICE_NAME|CAPACITY" (uppercased capacity)
     // value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
     function buildFeedIndexFromXml(xmlText) {
       setStatus("Parsing XML feed...");
@@ -418,7 +432,9 @@
         const nameEl = d.getElementsByTagName("device_name")[0];
         const capEl = d.getElementsByTagName("capacity")[0];
         const deviceName = normalizeName(nameEl ? nameEl.textContent : "");
-        const capacity = String(capEl ? capEl.textContent : "").trim();
+        const capacity = String(capEl ? capEl.textContent : "")
+          .trim()
+          .toUpperCase();
         if (!deviceName || !capacity) continue;
         const keyBase = deviceName + "|" + capacity;
 
@@ -453,7 +469,7 @@
       }
 
       console.log("[repricer] Built feed index", { deviceCount, keyCount: Object.keys(index).length });
-      setStatus(`XML parsed – indexed ${Object.keys(index).length} model/storage combos.`);
+      setStatus("XML parsed – indexed " + Object.keys(index).length + " model/storage combos.");
       return index;
     }
 
@@ -462,12 +478,12 @@
       const result = { ...row };
 
       const name = row.name;
-      const storage = row.storage;
+      const storage = String(row.storage || "").trim().toUpperCase();
       const lockStatus = row.lock_status;
       const conditionRaw = row.condition;
       const condition = String(conditionRaw || "").toLowerCase();
 
-      const key = normalizeName(name) + "|" + String(storage || "").trim();
+      const key = normalizeName(name) + "|" + storage;
       const feedEntry = feedIndex[key];
 
       let status = "";
@@ -706,15 +722,96 @@
       return lines.join("\n");
     }
 
+    // Build updated device-prices XML from template (A: only matching condition)
+    function buildUpdatedXmlFromTemplate(templateXmlText, rows) {
+      setStatus("Building updated XML from template...");
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(templateXmlText, "application/xml");
+      const parseErr = doc.querySelector("parsererror");
+      if (parseErr) {
+        throw new Error("Template XML parse error: " + parseErr.textContent.trim());
+      }
+
+      // Build lookup: NAME|STORAGE|LOCK_STATUS|COND_TAG -> new_price
+      const priceMap = new Map();
+
+      rows.forEach(r => {
+        const nameNorm = normalizeName(r.name);
+        const storage = String(r.storage || "").trim().toUpperCase();
+        const lock = String(r.lock_status || "").trim().toLowerCase(); // locked/unlocked
+        const condRaw = String(r.condition || "").toLowerCase();
+
+        // map damaged -> broken, others 1:1
+        let condTag;
+        if (condRaw === "damaged") condTag = "broken";
+        else if (condRaw === "flawless" || condRaw === "good" || condRaw === "fair") condTag = condRaw;
+        else return; // unknown condition, skip
+
+        const newPrice = r.new_price;
+        if (newPrice == null || !Number.isFinite(newPrice)) return;
+
+        const key = nameNorm + "|" + storage + "|" + lock + "|" + condTag;
+        priceMap.set(key, newPrice);
+      });
+
+      const models = doc.getElementsByTagName("model");
+      for (let i = 0; i < models.length; i++) {
+        const model = models[i];
+        const nameEl = model.getElementsByTagName("name")[0];
+        if (!nameEl) continue;
+        const nameNorm = normalizeName(nameEl.textContent);
+
+        const pricesBlocks = model.getElementsByTagName("prices");
+        for (let j = 0; j < pricesBlocks.length; j++) {
+          const pricesBlock = pricesBlocks[j];
+          const storageEl = pricesBlock.getElementsByTagName("storageSize")[0];
+          if (!storageEl) continue;
+          const storageVal = String(storageEl.textContent || "").trim().toUpperCase();
+
+          const priceValueEl = pricesBlock.getElementsByTagName("priceValue")[0];
+          if (!priceValueEl) continue;
+
+          ["locked", "unlocked"].forEach(lockState => {
+            const lockEl = priceValueEl.getElementsByTagName(lockState)[0];
+            if (!lockEl) return;
+
+            ["flawless", "good", "fair", "broken"].forEach(condTag => {
+              const condEl = lockEl.getElementsByTagName(condTag)[0];
+              if (!condEl) return;
+
+              const key = nameNorm + "|" + storageVal + "|" + lockState + "|" + condTag;
+              if (priceMap.has(key)) {
+                const val = priceMap.get(key);
+                condEl.textContent = String(val);
+              }
+            });
+          });
+        }
+      }
+
+      const serializer = new XMLSerializer();
+      let xmlOut = serializer.serializeToString(doc);
+
+      // Ensure XML declaration at top
+      if (!/^<\?xml/i.test(xmlOut.trim())) {
+        xmlOut = '<?xml version="1.0" encoding="UTF-8"?>\n' + xmlOut;
+      }
+
+      return xmlOut;
+    }
+
     // ---------- Wire up UI ----------
 
     const csvFileInput = document.getElementById("csvFile");
     const xmlFileInput = document.getElementById("xmlFile");
+    const templateXmlFileInput = document.getElementById("templateXmlFile");
     const csvTextArea = document.getElementById("csvInput");
     const btnProcessLocal = document.getElementById("btnProcessLocal");
     const btnDownload = document.getElementById("btnDownload");
+    const btnDownloadXml = document.getElementById("btnDownloadXml");
 
     let lastResultRows = [];
+    let templateXmlText = "";
 
     csvFileInput.addEventListener("change", (e) => {
       const file = e.target.files && e.target.files[0];
@@ -730,10 +827,28 @@
       reader.readAsText(file);
     });
 
+    templateXmlFileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        templateXmlText = String(ev.target.result || "");
+        setStatus("Loaded template XML: " + file.name);
+        if (lastResultRows.length) {
+          btnDownloadXml.disabled = false;
+        }
+      };
+      reader.onerror = () => {
+        showError("Failed to read template XML file.");
+      };
+      reader.readAsText(file);
+    });
+
     btnProcessLocal.addEventListener("click", async () => {
       clearError();
       btnProcessLocal.disabled = true;
       btnDownload.disabled = true;
+      btnDownloadXml.disabled = true;
       setStatus("Starting local processing...");
       lastResultRows = [];
       renderResults([]);
@@ -746,14 +861,14 @@
 
         const xmlFile = xmlFileInput.files && xmlFileInput.files[0];
         if (!xmlFile) {
-          throw new Error("You must choose an XML file (SellCell feed export).");
+          throw new Error("You must choose a SellCell XML file (feed export).");
         }
 
-        setStatus("Reading XML file: " + xmlFile.name);
+        setStatus("Reading SellCell XML file: " + xmlFile.name);
         const xmlText = await new Promise((resolve, reject) => {
           const r = new FileReader();
           r.onload = (ev) => resolve(String(ev.target.result || ""));
-          r.onerror = () => reject(new Error("Failed to read XML file."));
+          r.onerror = () => reject(new Error("Failed to read SellCell XML file."));
           r.readAsText(xmlFile);
         });
 
@@ -781,6 +896,9 @@
 
         renderResults(resultRows);
         btnDownload.disabled = false;
+        if (templateXmlText) {
+          btnDownloadXml.disabled = false;
+        }
         setStatus("Done – processed " + resultRows.length + " rows.");
       } catch (err) {
         showError("Processing failed.", err);
@@ -810,7 +928,36 @@
         showError("Failed to build output CSV.", err);
       }
     });
+
+    btnDownloadXml.addEventListener("click", () => {
+      try {
+        if (!lastResultRows.length) {
+          showError("Nothing to export – process CSV & XML first.");
+          return;
+        }
+        if (!templateXmlText) {
+          showError("You must upload a Template XML file (your device-prices XML) before exporting XML.");
+          return;
+        }
+
+        const xmlOut = buildUpdatedXmlFromTemplate(templateXmlText, lastResultRows);
+        const blob = new Blob([xmlOut], { type: "application/xml;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "device-prices-updated.xml";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setStatus("Downloaded device-prices-updated.xml");
+      } catch (err) {
+        showError("Failed to build updated XML.", err);
+      }
+    });
   </script>
+
+  <!-- keep if you use global-auth in your project, or remove this line if not needed -->
   <script type="module" src="/assets/js/global-auth.js" defer></script>
 </body>
 </html>
