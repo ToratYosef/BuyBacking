@@ -405,7 +405,7 @@
     }
 
     // Build feed index from uploaded SellCell XML text.
-    // key: "DEVICE_NAME|CAPACITY" (uppercased capacity)
+    // key: "DEVICE_NAME|CAPACITY|NETWORK_TAG" (NETWORK_TAG is 'UNLOCKED' or 'VERIZON')
     // value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
     function buildFeedIndexFromXml(xmlText) {
       setStatus("Parsing XML feed...");
@@ -431,12 +431,25 @@
         const d = devices[i];
         const nameEl = d.getElementsByTagName("device_name")[0];
         const capEl = d.getElementsByTagName("capacity")[0];
+        const netEl = d.getElementsByTagName("network")[0]; // Get Network
+
         const deviceName = normalizeName(nameEl ? nameEl.textContent : "");
         const capacity = String(capEl ? capEl.textContent : "")
           .trim()
           .toUpperCase();
+        const network = String(netEl ? netEl.textContent : "") // Get Network content
+          .trim()
+          .toUpperCase();
+
         if (!deviceName || !capacity) continue;
-        const keyBase = deviceName + "|" + capacity;
+
+        // Determine the key suffix based on the network tag in the XML
+        let keySuffix = 'UNLOCKED'; // Default for all non-Verizon
+        if (network === 'VERIZON') {
+            keySuffix = 'VERIZON'; // Use VERIZON key for Verizon-specific prices
+        }
+
+        const key = deviceName + "|" + capacity + "|" + keySuffix; // MODIFIED: Includes suffix
 
         deviceCount++;
 
@@ -461,15 +474,17 @@
           if (!competitorPrices.length) continue;
           const top = Math.max.apply(null, competitorPrices);
 
-          if (!index[keyBase]) index[keyBase] = {};
-          if (!index[keyBase][condKey] || top > index[keyBase][condKey]) {
-            index[keyBase][condKey] = top;
+          if (!index[key]) index[key] = {};
+
+          // Store the highest price found for this specific device|capacity|network|condition combo
+          if (!index[key][condKey] || top > index[key][condKey]) {
+            index[key][condKey] = top;
           }
         }
       }
 
       console.log("[repricer] Built feed index", { deviceCount, keyCount: Object.keys(index).length });
-      setStatus("XML parsed – indexed " + Object.keys(index).length + " model/storage combos.");
+      setStatus("XML parsed – indexed " + Object.keys(index).length + " model/storage/network combos.");
       return index;
     }
 
@@ -479,11 +494,17 @@
 
       const name = row.name;
       const storage = String(row.storage || "").trim().toUpperCase();
-      const lockStatus = row.lock_status;
+      const lockStatus = String(row.lock_status || "").trim().toLowerCase(); // Normalize lockStatus
       const conditionRaw = row.condition;
       const condition = String(conditionRaw || "").toLowerCase();
 
-      const key = normalizeName(name) + "|" + storage;
+      // Determine the correct network price to look up based on CSV lock_status
+      let networkSuffix = 'UNLOCKED'; // Default to UNLOCKED prices
+      if (lockStatus === 'locked') {
+          networkSuffix = 'VERIZON'; // If CSV says 'locked', use VERIZON prices from the feed
+      }
+
+      const key = normalizeName(name) + "|" + storage + "|" + networkSuffix; // MODIFIED KEY
       const feedEntry = feedIndex[key];
 
       let status = "";
@@ -496,7 +517,7 @@
       }
 
       if (!feedPrice) {
-        status = "No competitor feed price found";
+        status = `No competitor feed price found for ${networkSuffix.toLowerCase()}`;
         statusClass = "status-warn";
       }
 
@@ -543,7 +564,7 @@
         result.new_profit = null;
         result.new_profit_pct = null;
 
-        if (!status) status = "No competitor feed price found";
+        if (!status) status = `No competitor feed price found for ${networkSuffix.toLowerCase()}`;
         statusClass = "status-warn";
         result._status = status;
         result._statusClass = statusClass;
@@ -750,6 +771,9 @@
         const newPrice = r.new_price;
         if (newPrice == null || !Number.isFinite(newPrice)) return;
 
+        // NOTE: The template XML uses 'locked' and 'unlocked' tags directly, so we don't need the VERIZON/UNLOCKED suffix here.
+        // We rely on the fact that if a device in the CSV was priced using VERIZON feed data, its new_price is what we want to set
+        // for the corresponding 'locked' price in the template XML (assuming 'locked' in the CSV maps to 'locked' in the template).
         const key = nameNorm + "|" + storage + "|" + lock + "|" + condTag;
         priceMap.set(key, newPrice);
       });
