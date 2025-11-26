@@ -81,6 +81,7 @@ const deviceTableContainer = document.getElementById('deviceTableContainer');
 const deviceTableBody = document.getElementById('deviceTableBody');
 const searchInput = document.getElementById('searchInput');
 const brandFilter = document.getElementById('brandFilter');
+const removeLegacyLockedBtn = document.getElementById('removeLegacyLockedBtn');
 const statusMessage = document.getElementById('statusMessage');
 const importModal = document.getElementById('importModal');
 const importBtn = document.getElementById('importBtn');
@@ -167,6 +168,29 @@ return connectivityMetadata[normalized]?.badgeClass || 'bg-slate-50 text-slate-7
 const normalizeConnectivityKey = (value) => {
 const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 return connectivityAliasMap[normalized] || normalized;
+};
+
+const buildCleanPricingWithoutLegacyLocked = (prices = {}) => {
+const cleanedPrices = {};
+let removedCount = 0;
+
+Object.entries(prices || {}).forEach(([storage, connectivityMap]) => {
+const retainedConnectivity = {};
+
+Object.entries(connectivityMap || {}).forEach(([connectivityKey, conditionPrices]) => {
+if (normalizeConnectivityKey(connectivityKey) === 'locked') {
+removedCount += 1;
+return;
+}
+retainedConnectivity[connectivityKey] = conditionPrices;
+});
+
+if (Object.keys(retainedConnectivity).length) {
+cleanedPrices[storage] = retainedConnectivity;
+}
+});
+
+return { cleanedPrices, removedCount };
 };
 
 const collectAllPrices = (device = {}) => {
@@ -1005,6 +1029,7 @@ renderMobileCards(filteredDevices);
 
 searchInput.addEventListener('input', applyFilters);
 brandFilter.addEventListener('change', applyFilters);
+removeLegacyLockedBtn?.addEventListener('click', removeLegacyLockedPricing);
 
 // --- UPDATE PRICE LOGIC ---
 window.handlePriceUpdate = async (element) => {
@@ -1087,6 +1112,48 @@ fetchDevices();
 } catch (error) {
 console.error('Failed to delete pricing row:', error);
 showStatus('Failed to delete pricing entry. Check console for details.', 'error');
+}
+}
+
+async function removeLegacyLockedPricing() {
+if (!allDevices.length) {
+showStatus('Device data is still loading. Please try again in a moment.', 'info');
+return;
+}
+
+const updates = [];
+let totalRemoved = 0;
+
+allDevices.forEach((device) => {
+const { cleanedPrices, removedCount } = buildCleanPricingWithoutLegacyLocked(device.prices || {});
+if (removedCount > 0) {
+totalRemoved += removedCount;
+updates.push({ device, cleanedPrices });
+}
+});
+
+if (!updates.length) {
+showStatus('No Carrier Locked (Legacy) pricing found to remove.', 'info');
+return;
+}
+
+const confirmationMessage = `Remove ${totalRemoved} Carrier Locked (Legacy) entr${totalRemoved === 1 ? 'y' : 'ies'} across ${updates.length} device${updates.length === 1 ? '' : 's'}? This cannot be undone.`;
+if (!confirm(confirmationMessage)) {
+return;
+}
+
+try {
+await Promise.all(updates.map(({ device, cleanedPrices }) => {
+const docRef = doc(db, device.documentPath, device.docId);
+const payload = Object.keys(cleanedPrices).length ? { prices: cleanedPrices } : { prices: deleteField() };
+return updateDoc(docRef, payload);
+}));
+
+showStatus(`Removed ${totalRemoved} Carrier Locked (Legacy) entr${totalRemoved === 1 ? 'y' : 'ies'}.`, 'success');
+fetchDevices();
+} catch (error) {
+console.error('Failed to remove legacy locked pricing:', error);
+showStatus('Failed to remove legacy locked pricing. Check console for details.', 'error');
 }
 }
 
