@@ -584,7 +584,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     
                     <div class="mb-8 hidden" id="carrierSection">
                         <label class="block text-xl font-bold text-slate-800 mb-4 sm:text-lg">2. Select Your Carrier</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4" id="carrierOptions">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4" id="carrierOptions">
                             <div class="carrier-option">
                                 <input type="radio" id="att" name="carrier" value="att">
                                 <label for="att" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
@@ -611,13 +611,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                                 <label for="unlocked" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
                                     <i class="fa-solid fa-lock-open text-3xl text-teal-600 mb-2 sm:text-2xl"></i>
                                     <span class="block text-slate-700 font-medium sm:text-sm">Unlocked</span>
-                                </label>
-                            </div>
-                            <div class="carrier-option">
-                                <input type="radio" id="other-carrier" name="carrier" value="other">
-                                <label for="other-carrier" class="bg-slate-50 p-4 rounded-xl text-center hover:bg-slate-200 transition duration-200 sm:p-3">
-                                    <i class="fa-solid fa-globe text-3xl text-yellow-600 mb-2 sm:text-2xl"></i>
-                                    <span class="block text-slate-700 font-medium sm:text-sm">Other</span>
                                 </label>
                             </div>
                         </div>
@@ -1611,8 +1604,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         unlocked: 'unlocked',
                         verizon: 'verizon',
                         att: 'att',
-                        tmobile: 'tmobile',
-                        other: 'other-carrier'
+                        tmobile: 'tmobile'
                     };
 
                     const carrierParam = typeof deviceInfo.carrier === 'string' ? deviceInfo.carrier.toLowerCase() : '';
@@ -2698,8 +2690,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 att: 'AT&T',
                 verizon: 'Verizon',
                 tmobile: 'T-Mobile',
-                unlocked: 'Unlocked',
-                other: 'Other Locked Carrier'
+                unlocked: 'Unlocked'
             };
 
             const carrierAliasMap = {
@@ -2724,25 +2715,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 return carrierAliasMap[normalized] || normalized;
             }
 
-            function resolveCarrierPricing(storagePricing = {}, selectedCarrier = '') {
-                const normalizedPricing = Object.entries(storagePricing || {}).reduce((acc, [key, value]) => {
-                    acc[normalizeCarrierKey(key)] = value || {};
-                    return acc;
-                }, {});
+                if (['att', 'tmobile', 'verizon'].includes(normalizedCarrier) && storagePricing.locked) {
+                    return storagePricing.locked;
+                }
 
-                const lookupOrder = [
-                    normalizeCarrierKey(selectedCarrier),
-                    'unlocked',
-                    'att',
-                    'verizon',
-                    'tmobile',
-                    'other',
-                    'locked'
-                ].filter(Boolean);
-
-                for (const key of lookupOrder) {
-                    if (normalizedPricing[key]) {
-                        return normalizedPricing[key];
+                const fallbackOrder = ['unlocked', 'att', 'verizon', 'tmobile', 'locked'];
+                for (const key of fallbackOrder) {
+                    if (storagePricing[key]) {
+                        return storagePricing[key];
                     }
                 }
 
