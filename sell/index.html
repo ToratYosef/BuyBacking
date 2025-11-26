@@ -2715,10 +2715,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 return carrierAliasMap[normalized] || normalized;
             }
 
+            // Resolve the pricing object for the selected carrier with sensible fallbacks
+            function resolveCarrierPricing(storagePricing = {}, carrierValue = '') {
+                const normalizedCarrier = normalizeCarrierKey(carrierValue);
+
+                // Direct match first
+                if (normalizedCarrier && storagePricing[normalizedCarrier]) {
+                    return storagePricing[normalizedCarrier];
+                }
+
+                // If a specific carrier was selected but only "locked" pricing exists, use it
                 if (['att', 'tmobile', 'verizon'].includes(normalizedCarrier) && storagePricing.locked) {
                     return storagePricing.locked;
                 }
 
+                // Fallback order preference
                 const fallbackOrder = ['unlocked', 'att', 'verizon', 'tmobile', 'locked'];
                 for (const key of fallbackOrder) {
                     if (storagePricing[key]) {
@@ -2726,8 +2737,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     }
                 }
 
-                const firstAvailableKey = Object.keys(normalizedPricing)[0];
-                return firstAvailableKey ? normalizedPricing[firstAvailableKey] : null;
+                // Final fallback: first available pricing object, or null
+                const firstAvailableKey = Object.keys(storagePricing)[0];
+                return firstAvailableKey ? storagePricing[firstAvailableKey] : null;
             }
 
             function formatCarrierLabel(value) {
