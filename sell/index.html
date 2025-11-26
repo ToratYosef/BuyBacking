@@ -2693,12 +2693,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 unlocked: 'Unlocked'
             };
 
-            function resolveCarrierPricing(storagePricing = {}, selectedCarrier = '') {
-                const normalizedCarrier = (selectedCarrier || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const carrierAliasMap = {
+                att: 'att',
+                atandt: 'att',
+                at_t: 'att',
+                verizon: 'verizon',
+                vzw: 'verizon',
+                vz: 'verizon',
+                tmobile: 'tmobile',
+                t_mobile: 'tmobile',
+                magenta: 'tmobile',
+                unlocked: 'unlocked',
+                simfree: 'unlocked',
+                other: 'other',
+                carrierlocked: 'locked',
+                locked: 'locked'
+            };
 
-                if (normalizedCarrier && storagePricing[normalizedCarrier]) {
-                    return storagePricing[normalizedCarrier];
-                }
+            function normalizeCarrierKey(value = '') {
+                const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return carrierAliasMap[normalized] || normalized;
+            }
 
                 if (['att', 'tmobile', 'verizon'].includes(normalizedCarrier) && storagePricing.locked) {
                     return storagePricing.locked;
@@ -2711,8 +2726,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     }
                 }
 
-                const firstAvailableKey = Object.keys(storagePricing)[0];
-                return firstAvailableKey ? storagePricing[firstAvailableKey] : null;
+                const firstAvailableKey = Object.keys(normalizedPricing)[0];
+                return firstAvailableKey ? normalizedPricing[firstAvailableKey] : null;
             }
 
             function formatCarrierLabel(value) {
@@ -2775,10 +2790,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 
                 if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes') {
                     // Fully functional, no cracks
-                    finalPrice = basePrices[q4Cosmetic];
+                    const cosmeticKey = q4Cosmetic === 'damaged' ? 'broken' : q4Cosmetic;
+                    finalPrice = basePrices[cosmeticKey];
                 } else if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'no') {
                     // Fully functional, but has cracks
-                    finalPrice = basePrices.damaged;
+                    finalPrice = basePrices.broken;
                 } else if (q1PowerOn === 'yes' && q2Functional === 'no') {
                     // Powers on, but not functional
                     finalPrice = basePrices.broken;

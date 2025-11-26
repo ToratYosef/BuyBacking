@@ -15,6 +15,54 @@ const app = firebaseApp;
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+const carrierAliasMap = {
+  att: 'att',
+  atandt: 'att',
+  at_t: 'att',
+  verizon: 'verizon',
+  vzw: 'verizon',
+  vz: 'verizon',
+  tmobile: 'tmobile',
+  t_mobile: 'tmobile',
+  magenta: 'tmobile',
+  unlocked: 'unlocked',
+  simfree: 'unlocked',
+  other: 'other',
+  carrierlocked: 'locked',
+  locked: 'locked',
+};
+
+const normalizeCarrierKey = (value = '') => {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return carrierAliasMap[normalized] || normalized;
+};
+
+const resolveCarrierPricing = (storagePricing = {}, selectedCarrier = '') => {
+  const normalizedPricing = Object.entries(storagePricing || {}).reduce((acc, [key, value]) => {
+    acc[normalizeCarrierKey(key)] = value || {};
+    return acc;
+  }, {});
+
+  const lookupOrder = [
+    normalizeCarrierKey(selectedCarrier),
+    'unlocked',
+    'att',
+    'verizon',
+    'tmobile',
+    'other',
+    'locked',
+  ].filter(Boolean);
+
+  for (const key of lookupOrder) {
+    if (normalizedPricing[key]) {
+      return normalizedPricing[key];
+    }
+  }
+
+  const fallbackKey = Object.keys(normalizedPricing)[0];
+  return fallbackKey ? normalizedPricing[fallbackKey] : null;
+};
+
 // This function would typically rely on the global initialAuthToken for immediate sign-in.
 // Since we removed it, we'll ensure unauthenticated users are treated as guests/anonymous.
 const getOrCreateGuestId = () => {
@@ -1145,8 +1193,8 @@ this.calculatePrice();
 calculatePrice() {
 if (!this.deviceData || !this.deviceData.prices) return;
 
-const carrierKey = this.carrier === 'unlocked' ? 'unlocked' : 'locked';
 const storageKey = this.storage;
+const basePrices = resolveCarrierPricing(this.deviceData.prices?.[storageKey] || {}, this.carrier);
 
         let conditionKey = 'good';
         if (this.conditions.power === 'no') {
@@ -1165,14 +1213,14 @@ const storageKey = this.storage;
                     conditionKey = 'fair';
                     break;
                 case 'damaged':
-                    conditionKey = 'damaged';
+                    conditionKey = 'broken';
                     break;
                 default:
                     conditionKey = 'good';
             }
         }
 
-const price = this.deviceData.prices?.[storageKey]?.[carrierKey]?.[conditionKey];
+const price = basePrices?.[conditionKey];
 if (price) {
 document.getElementById('modal-estimated-price').textContent = price;
 document.getElementById('modal-price-estimate').classList.remove('hidden');
