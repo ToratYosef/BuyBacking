@@ -2596,11 +2596,29 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 finalQuoteAmountMainDisplay.classList.add('hidden');
                 nextSteps.classList.add('hidden');
             }
-            
+
+            function isQuestionnaireComplete() {
+                const selectedStorage = document.getElementById('storage').value;
+                const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
+                const q1PowerOn = document.querySelector('input[name="q1_power_on"]:checked')?.value;
+                const q2Functional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value;
+                const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
+                const q4Cosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
+
+                if (!selectedStorage || !selectedCarrier || !q1PowerOn) return false;
+
+                if (q1PowerOn === 'no') return true;
+                if (!q2Functional) return false;
+                if (q2Functional === 'no') return true;
+                if (!q3NoCracks) return false;
+                if (q3NoCracks === 'no') return true;
+                return Boolean(q4Cosmetic);
+            }
+
             document.getElementById('storage').addEventListener('change', function() {
                 if (this.value) {
                     carrierSection.classList.remove('hidden');
-                    getQuoteBtn.classList.add('hidden');
+                    getQuoteBtn.classList.toggle('hidden', !isQuestionnaireComplete());
 
                     clearQuoteMessage();
                     this.classList.remove('highlight-missing');
@@ -2613,7 +2631,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             document.querySelectorAll('input[name="carrier"]').forEach(radio => {
                 radio.addEventListener('change', () => {
                     powerOnSection.classList.remove('hidden');
-                    getQuoteBtn.classList.add('hidden');
+                    getQuoteBtn.classList.toggle('hidden', !isQuestionnaireComplete());
 
                     clearQuoteMessage();
                     saveFormState();
