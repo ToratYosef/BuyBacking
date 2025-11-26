@@ -2702,26 +2702,52 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 other: 'Other Locked Carrier'
             };
 
+            const carrierAliasMap = {
+                att: 'att',
+                atandt: 'att',
+                at_t: 'att',
+                verizon: 'verizon',
+                vzw: 'verizon',
+                vz: 'verizon',
+                tmobile: 'tmobile',
+                t_mobile: 'tmobile',
+                magenta: 'tmobile',
+                unlocked: 'unlocked',
+                simfree: 'unlocked',
+                other: 'other',
+                carrierlocked: 'locked',
+                locked: 'locked'
+            };
+
+            function normalizeCarrierKey(value = '') {
+                const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return carrierAliasMap[normalized] || normalized;
+            }
+
             function resolveCarrierPricing(storagePricing = {}, selectedCarrier = '') {
-                const normalizedCarrier = (selectedCarrier || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                const normalizedPricing = Object.entries(storagePricing || {}).reduce((acc, [key, value]) => {
+                    acc[normalizeCarrierKey(key)] = value || {};
+                    return acc;
+                }, {});
 
-                if (normalizedCarrier && storagePricing[normalizedCarrier]) {
-                    return storagePricing[normalizedCarrier];
-                }
+                const lookupOrder = [
+                    normalizeCarrierKey(selectedCarrier),
+                    'unlocked',
+                    'att',
+                    'verizon',
+                    'tmobile',
+                    'other',
+                    'locked'
+                ].filter(Boolean);
 
-                if (['att', 'tmobile', 'verizon', 'other'].includes(normalizedCarrier) && storagePricing.locked) {
-                    return storagePricing.locked;
-                }
-
-                const fallbackOrder = ['unlocked', 'att', 'verizon', 'tmobile', 'other', 'locked'];
-                for (const key of fallbackOrder) {
-                    if (storagePricing[key]) {
-                        return storagePricing[key];
+                for (const key of lookupOrder) {
+                    if (normalizedPricing[key]) {
+                        return normalizedPricing[key];
                     }
                 }
 
-                const firstAvailableKey = Object.keys(storagePricing)[0];
-                return firstAvailableKey ? storagePricing[firstAvailableKey] : null;
+                const firstAvailableKey = Object.keys(normalizedPricing)[0];
+                return firstAvailableKey ? normalizedPricing[firstAvailableKey] : null;
             }
 
             function formatCarrierLabel(value) {
@@ -2784,10 +2810,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 
                 if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes') {
                     // Fully functional, no cracks
-                    finalPrice = basePrices[q4Cosmetic];
+                    const cosmeticKey = q4Cosmetic === 'damaged' ? 'broken' : q4Cosmetic;
+                    finalPrice = basePrices[cosmeticKey];
                 } else if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'no') {
                     // Fully functional, but has cracks
-                    finalPrice = basePrices.damaged;
+                    finalPrice = basePrices.broken;
                 } else if (q1PowerOn === 'yes' && q2Functional === 'no') {
                     // Powers on, but not functional
                     finalPrice = basePrices.broken;
