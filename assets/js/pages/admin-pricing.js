@@ -12,7 +12,7 @@ const db = getFirestore(app);
 let allDevices = [];
 let filteredDevices = [];
 const supportedBrands = ['iphone', 'samsung', 'google_pixel', 'ipad', 'macbook', 'other'];
-const conditions = ['flawless', 'good', 'fair', 'damaged', 'broken', 'noPower'];
+const conditions = ['flawless', 'good', 'fair', 'broken', 'noPower'];
 const exportConditions = ['flawless', 'good', 'fair', 'broken'];
 const primaryCarriers = ['att', 'verizon', 'tmobile', 'unlocked'];
 const connectivityMetadata = {
@@ -60,9 +60,9 @@ const conditionLabels = {
 flawless: 'Flawless',
 good: 'Good',
 fair: 'Fair',
-damaged: 'Damaged',
 broken: 'Broken',
-noPower: 'No Power'
+noPower: 'No Power',
+damaged: 'Damaged'
 };
 const usdFormatter = new Intl.NumberFormat('en-US', {
 style: 'currency',
@@ -168,6 +168,33 @@ return connectivityMetadata[normalized]?.badgeClass || 'bg-slate-50 text-slate-7
 const normalizeConnectivityKey = (value) => {
 const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 return connectivityAliasMap[normalized] || normalized;
+};
+
+const normalizeConditionPrices = (conditionPrices = {}) => {
+const normalized = { ...conditionPrices };
+if (Object.prototype.hasOwnProperty.call(normalized, 'damaged')) {
+if (normalized.broken === undefined || normalized.broken === null || normalized.broken === '') {
+normalized.broken = normalized.damaged;
+}
+delete normalized.damaged;
+}
+return normalized;
+};
+
+const normalizeConnectivityPrices = (connectivityMap = {}) => {
+const normalized = {};
+Object.entries(connectivityMap || {}).forEach(([connectivityKey, conditionMap]) => {
+normalized[connectivityKey] = normalizeConditionPrices(conditionMap || {});
+});
+return normalized;
+};
+
+const normalizeDevicePrices = (prices = {}) => {
+const normalized = {};
+Object.entries(prices || {}).forEach(([storageKey, connectivityMap]) => {
+normalized[storageKey] = normalizeConnectivityPrices(connectivityMap || {});
+});
+return normalized;
 };
 
 const buildCleanPricingWithoutLegacyLocked = (prices = {}) => {
@@ -277,9 +304,10 @@ noPricing.className = 'text-sm text-slate-500';
 noPricing.textContent = 'No connectivity pricing yet.';
 connectivityContainer.appendChild(noPricing);
 } else {
-Object.entries(connectivityMap).forEach(([connectivity, priceSet]) => {
-const card = document.createElement('div');
-card.className = 'rounded-xl border border-slate-200 bg-slate-100/60 p-3';
+        Object.entries(connectivityMap).forEach(([connectivity, priceSet]) => {
+            const normalizedPriceSet = normalizeConditionPrices(priceSet);
+            const card = document.createElement('div');
+            card.className = 'rounded-xl border border-slate-200 bg-slate-100/60 p-3';
 
 const cardHeader = document.createElement('div');
 cardHeader.className = 'flex items-center justify-between';
@@ -307,12 +335,12 @@ card.appendChild(cardHeader);
 const fieldsGrid = document.createElement('div');
 fieldsGrid.className = 'mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3';
 
-let hasPricingField = false;
-conditions.forEach((condition) => {
-if (!priceSet || priceSet[condition] === undefined) {
-return;
-}
-hasPricingField = true;
+            let hasPricingField = false;
+            conditions.forEach((condition) => {
+                if (!normalizedPriceSet || normalizedPriceSet[condition] === undefined) {
+                    return;
+                }
+                hasPricingField = true;
 const field = document.createElement('label');
 field.className = 'flex flex-col rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600';
 
@@ -330,7 +358,7 @@ inputWrapper.appendChild(dollar);
 
 const input = document.createElement('input');
 input.type = 'number';
-input.value = priceSet[condition] ?? 0;
+                input.value = normalizedPriceSet[condition] ?? 0;
 input.className = 'w-full rounded-md border border-slate-200 px-2 py-1 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100';
 input.dataset.docId = device.docId;
 input.dataset.docPath = device.documentPath;
@@ -930,10 +958,18 @@ try {
 for (const brand of supportedBrands) {
 const collectionPath = `devices/${brand}/models`;
 const querySnapshot = await getDocs(collection(db, collectionPath));
-querySnapshot.forEach((doc) => {
-const data = doc.data();
-allDevices.push({ ...data, brand: brand, docId: doc.id, documentPath: collectionPath });
-});
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            const normalizedPrices = normalizeDevicePrices(data?.prices);
+            const normalizedDevice = {
+                ...data,
+                prices: normalizedPrices,
+                brand: brand,
+                docId: doc.id,
+                documentPath: collectionPath
+            };
+            allDevices.push(normalizedDevice);
+        });
 }
 } catch (error) {
 console.error("Error fetching devices from Firestore:", error);
@@ -956,11 +992,11 @@ return;
 devices.forEach(device => {
 const deviceData = device.prices;
 for (const storage in deviceData) {
-const storageData = deviceData[storage];
-const storageCount = Object.keys(deviceData).length;
-const connectivityTotal = Object.keys(storageData).length;
-for (const connectivity in storageData) {
-const prices = storageData[connectivity];
+            const storageData = deviceData[storage];
+            const storageCount = Object.keys(deviceData).length;
+            const connectivityTotal = Object.keys(storageData).length;
+            for (const connectivity in storageData) {
+                const prices = normalizeConditionPrices(storageData[connectivity]);
 const connectivityLabel = formatConnectivityLabel(connectivity);
 const connectivityBadgeClass = getConnectivityBadgeClass(connectivity);
 const row = `
@@ -1200,11 +1236,11 @@ return String(condition)
 }
 
 function createStorageRow(initial = {}) {
-const row = document.createElement('div');
-row.className = 'storage-row';
-const storageValue = initial.storage || '';
-const connectivityValue = initial.connectivity || 'att';
-const priceMap = initial.prices || {};
+    const row = document.createElement('div');
+    row.className = 'storage-row';
+    const storageValue = initial.storage || '';
+    const connectivityValue = initial.connectivity || 'att';
+    const priceMap = normalizeConditionPrices(initial.prices || {});
 row.innerHTML = `
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 <div>
@@ -1450,7 +1486,7 @@ const conditionMap = {
 'Flawless': 'flawless',
 'Good': 'good',
 'Fair': 'fair',
-'Damaged': 'damaged',
+'Damaged': 'broken',
 'Broken': 'broken',
 'No Power': 'noPower'
 };
