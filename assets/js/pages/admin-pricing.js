@@ -14,6 +14,48 @@ let filteredDevices = [];
 const supportedBrands = ['iphone', 'samsung', 'google_pixel', 'ipad', 'macbook', 'other'];
 const conditions = ['flawless', 'good', 'fair', 'damaged', 'broken', 'noPower'];
 const exportConditions = ['flawless', 'good', 'fair', 'broken'];
+const primaryCarriers = ['att', 'verizon', 'tmobile', 'unlocked'];
+const connectivityMetadata = {
+att: {
+label: 'AT&T',
+badgeClass: 'bg-blue-50 text-blue-700 border-blue-200'
+},
+verizon: {
+label: 'Verizon',
+badgeClass: 'bg-red-50 text-red-700 border-red-200'
+},
+tmobile: {
+label: 'T-Mobile',
+badgeClass: 'bg-pink-50 text-pink-700 border-pink-200'
+},
+unlocked: {
+label: 'Unlocked',
+badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+},
+other: {
+label: 'Other Locked Carrier',
+badgeClass: 'bg-amber-50 text-amber-700 border-amber-200'
+},
+locked: {
+label: 'Carrier Locked (Legacy)',
+badgeClass: 'bg-slate-100 text-slate-700 border-slate-200'
+}
+};
+const connectivityAliasMap = {
+att: 'att',
+atandt: 'att',
+at_t: 'att',
+tmobile: 'tmobile',
+t_mobile: 'tmobile',
+verizon: 'verizon',
+vzw: 'verizon',
+unlocked: 'unlocked',
+simfree: 'unlocked',
+other: 'other',
+locked: 'locked',
+carrierlocked: 'locked'
+};
+const connectivityExportOrder = [...primaryCarriers, 'other', 'locked'];
 const conditionLabels = {
 flawless: 'Flawless',
 good: 'Good',
@@ -108,12 +150,23 @@ const formatConnectivityLabel = (value) => {
 if (!value) {
 return '';
 }
-const normalized = String(value).toLowerCase();
-if (normalized === 'unlocked') return 'Unlocked';
-if (normalized === 'locked') return 'Carrier Locked';
+const normalized = normalizeConnectivityKey(value);
+if (connectivityMetadata[normalized]) {
+return connectivityMetadata[normalized].label;
+}
 return normalized
 .replace(/_/g, ' ')
 .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const getConnectivityBadgeClass = (value) => {
+const normalized = normalizeConnectivityKey(value);
+return connectivityMetadata[normalized]?.badgeClass || 'bg-slate-50 text-slate-700 border-slate-200';
+};
+
+const normalizeConnectivityKey = (value) => {
+const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+return connectivityAliasMap[normalized] || normalized;
 };
 
 const collectAllPrices = (device = {}) => {
@@ -499,7 +552,14 @@ const connectivityBands = prices[storageSize] || {};
 const priceValueNode = xmlDocument.createElement('priceValue');
 let hasConnectivity = false;
 
-Object.keys(connectivityBands).sort().forEach((connectivity) => {
+const connectivityKeys = [
+...connectivityExportOrder.filter((key) => connectivityBands[key]),
+...Object.keys(connectivityBands)
+.filter((key) => !connectivityExportOrder.includes(key))
+.sort()
+];
+
+connectivityKeys.forEach((connectivity) => {
 const conditionMap = connectivityBands[connectivity] || {};
 const connectivityNode = xmlDocument.createElement(connectivity);
 let hasCondition = false;
@@ -624,7 +684,7 @@ return;
 const connectivityMap = {};
 
 Array.from(priceValueNode.children).forEach((connectivityNode) => {
-const connectivityKey = connectivityNode.tagName.toLowerCase();
+const connectivityKey = normalizeConnectivityKey(connectivityNode.tagName);
 const conditionEntries = {};
 
 Array.from(connectivityNode.children).forEach((conditionNode) => {
@@ -636,7 +696,14 @@ conditionEntries[conditionKey] = numericValue;
 });
 
 if (Object.keys(conditionEntries).length > 0) {
-connectivityMap[connectivityKey] = conditionEntries;
+const connectivityTargets = connectivityKey === 'locked'
+? ['locked', 'att', 'verizon', 'tmobile']
+: [connectivityKey];
+
+connectivityTargets.forEach((targetKey) => {
+const current = connectivityMap[targetKey] || {};
+connectivityMap[targetKey] = { ...current, ...conditionEntries };
+});
 }
 });
 
@@ -870,6 +937,8 @@ const storageCount = Object.keys(deviceData).length;
 const connectivityTotal = Object.keys(storageData).length;
 for (const connectivity in storageData) {
 const prices = storageData[connectivity];
+const connectivityLabel = formatConnectivityLabel(connectivity);
+const connectivityBadgeClass = getConnectivityBadgeClass(connectivity);
 const row = `
 <tr class="hover:bg-gray-50">
 <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900 flex items-center">
@@ -879,7 +948,11 @@ ${device.brand.includes('ipad') || device.brand.includes('macbook') ?
 ${device.name}
 </td>
 <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-500">${storage}</td>
-<td class="py-3 px-4 whitespace-nowrap text-sm font-semibold ${connectivity === 'unlocked' ? 'text-green-600' : 'text-red-600'}">${connectivity}</td>
+<td class="py-3 px-4 whitespace-nowrap text-sm font-semibold">
+<span class="inline-flex items-center gap-2 px-3 py-1 rounded-full border ${connectivityBadgeClass}">
+${connectivityLabel}
+</span>
+</td>
 ${conditions.map(condition => `
 <td class="py-3 px-4 whitespace-nowrap text-sm text-gray-900">
 <div class="flex items-center">
@@ -1041,7 +1114,7 @@ function resetAddDeviceForm() {
 addDeviceForm.reset();
 slugManuallyEdited = false;
 storageRows.innerHTML = '';
-storageRows.appendChild(createStorageRow({ connectivity: 'unlocked' }));
+storageRows.appendChild(createStorageRow({ connectivity: 'att' }));
 }
 
 function formatBrandLabel(brand) {
@@ -1063,7 +1136,7 @@ function createStorageRow(initial = {}) {
 const row = document.createElement('div');
 row.className = 'storage-row';
 const storageValue = initial.storage || '';
-const connectivityValue = initial.connectivity || 'unlocked';
+const connectivityValue = initial.connectivity || 'att';
 const priceMap = initial.prices || {};
 row.innerHTML = `
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1073,7 +1146,7 @@ row.innerHTML = `
 </div>
 <div>
 <label class="block text-sm font-medium text-slate-600 mb-1">Connectivity</label>
-<input type="text" class="connectivity-input w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., unlocked" value="${connectivityValue}" required>
+<input type="text" class="connectivity-input w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="att, verizon, tmobile, unlocked" value="${connectivityValue}" required>
 </div>
 </div>
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
@@ -1117,7 +1190,7 @@ if (!storageInput || !connectivityInput) {
 return;
 }
 const storageValue = storageInput.value.trim();
-const connectivityValue = connectivityInput.value.trim().toLowerCase();
+const connectivityValue = normalizeConnectivityKey(connectivityInput.value.trim());
 if (!storageValue || !connectivityValue) {
 return;
 }
@@ -1323,7 +1396,7 @@ json.forEach((row, index) => {
 const brand = row['Brand']?.toLowerCase() === 'iphones' ? 'iphone' : row['Brand']?.toLowerCase();
 const slug = row['Slug'];
 const storage = row['Storage'];
-const connectivity = row['Lock Status']?.toLowerCase().replace(' ', ''); // Remove space
+const connectivity = normalizeConnectivityKey(row['Lock Status']);
 
 if (!brand || !slug || !storage || !connectivity) {
 console.error(`Skipping row ${index + 2} due to missing primary identifiers (Brand, Slug, Storage, or Lock Status):`, row);

@@ -2679,7 +2679,42 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     saveFormState();
                 });
             });
-            
+
+            const carrierLabelMap = {
+                att: 'AT&T',
+                verizon: 'Verizon',
+                tmobile: 'T-Mobile',
+                unlocked: 'Unlocked',
+                other: 'Other Locked Carrier'
+            };
+
+            function resolveCarrierPricing(storagePricing = {}, selectedCarrier = '') {
+                const normalizedCarrier = (selectedCarrier || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+                if (normalizedCarrier && storagePricing[normalizedCarrier]) {
+                    return storagePricing[normalizedCarrier];
+                }
+
+                if (['att', 'tmobile', 'verizon', 'other'].includes(normalizedCarrier) && storagePricing.locked) {
+                    return storagePricing.locked;
+                }
+
+                const fallbackOrder = ['unlocked', 'att', 'verizon', 'tmobile', 'other', 'locked'];
+                for (const key of fallbackOrder) {
+                    if (storagePricing[key]) {
+                        return storagePricing[key];
+                    }
+                }
+
+                const firstAvailableKey = Object.keys(storagePricing)[0];
+                return firstAvailableKey ? storagePricing[firstAvailableKey] : null;
+            }
+
+            function formatCarrierLabel(value) {
+                const normalized = (value || '').toLowerCase();
+                return carrierLabelMap[normalized] || 'Not Selected';
+            }
+
             function calculateQuoteAndDisplay() {
                 clearQuoteMessage();
                 clearHighlights();
@@ -2723,14 +2758,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     return;
                 }
 
-                // Determine the correct pricing key based on the selected carrier
-                let selectedCarrierPricingKey = selectedCarrier;
-                if (['att', 'tmobile', 'verizon', 'other'].includes(selectedCarrier)) {
-                    selectedCarrierPricingKey = 'locked';
-                }
-
                 // Get the base prices for the selected storage and carrier from the fetched device data.
-                const basePrices = device.prices[selectedStorage]?.[selectedCarrierPricingKey];
+                const basePrices = resolveCarrierPricing(device.prices[selectedStorage] || {}, selectedCarrier);
                 
                 if (!basePrices) {
                     showQuoteMessage('Pricing data for this combination is not available.', 'error');
@@ -3524,14 +3553,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                 let displayCarrierText = 'Not Selected';
                 if (selectedCarrier) {
-                    switch(selectedCarrier) {
-                        case 'unlocked': displayCarrierText = 'Unlocked'; break;
-                        case 'att': displayCarrierText = 'AT&T'; break;
-                        case 'tmobile': displayCarrierText = 'T-Mobile'; break;
-                        case 'verizon': displayCarrierText = 'Verizon'; break;
-                        case 'other': displayCarrierText = 'Other Locked Carrier'; break;
-                        default: displayCarrierText = 'Not Selected';
-                    }
+                    displayCarrierText = formatCarrierLabel(selectedCarrier);
                 }
 
                 const baseQuote = Number(finalQuote) || 0;
