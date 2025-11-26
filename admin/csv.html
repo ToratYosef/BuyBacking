@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CSV Carrier Duplicator – locked → att / verizon / tmobile</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 1.6rem;
+    }
+    .card {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1.25rem 1.5rem;
+      border-radius: 0.75rem;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid #1f2937;
+      box-shadow: 0 20px 35px rgba(0,0,0,0.5);
+    }
+    .muted {
+      font-size: 0.85rem;
+      color: #9ca3af;
+      line-height: 1.4;
+    }
+    textarea {
+      width: 100%;
+      min-height: 260px;
+      resize: vertical;
+      border-radius: 0.5rem;
+      border: 1px solid #1f2937;
+      background: #020617;
+      color: #e5e7eb;
+      padding: 0.75rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.85rem;
+      white-space: pre;
+      margin-top: 0.5rem;
+    }
+    textarea:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
+    }
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+    .file-label {
+      font-size: 0.85rem;
+      color: #e5e7eb;
+      min-width: 90px;
+    }
+    input[type="file"] {
+      font-size: 0.8rem;
+      color: #e5e7eb;
+    }
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+      align-items: center;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.55rem 1.4rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      color: #f9fafb;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.1s ease;
+    }
+    button.secondary {
+      background: transparent;
+      border: 1px solid #1f2937;
+      box-shadow: none;
+      color: #e5e7eb;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+      box-shadow: none;
+      transform: none;
+    }
+    button:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(37, 99, 235, 0.5);
+    }
+    #statusText {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-top: 0.5rem;
+    }
+    #errorBox {
+      margin-top: 0.5rem;
+      font-size: 0.82rem;
+      color: #fecaca;
+      background: rgba(127, 29, 29, 0.4);
+      border-radius: 0.4rem;
+      border: 1px solid rgba(248, 113, 113, 0.5);
+      padding: 0.4rem 0.55rem;
+      display: none;
+      white-space: pre-wrap;
+    }
+    .pill-small {
+      font-size: 0.75rem;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>CSV Carrier Duplicator</h1>
+    <div class="muted">
+      Takes your pricing CSV (like <code>Devices Final.csv</code>) and:
+      <ul style="margin:0.4rem 0 0.4rem 1.1rem;">
+        <li>For every row where <code>lock_status = locked</code>, creates 3 rows: <code>att</code>, <code>verizon</code>, <code>tmobile</code> with the same price.</li>
+        <li>Rows with <code>lock_status = unlocked</code> (or anything else) are kept as-is.</li>
+      </ul>
+      <span class="pill-small">
+        Expected columns: <code>name,storage,lock_status,condition,price,amz</code>
+      </span>
+    </div>
+
+    <div class="file-row">
+      <span class="file-label">CSV file</span>
+      <input type="file" id="csvFile" accept=".csv,text/csv" />
+    </div>
+
+    <div class="muted" style="margin-top:0.75rem;">
+      Or paste CSV manually:
+    </div>
+    <textarea id="csvInput" placeholder="Paste your CSV (including header) or use the file chooser above..."></textarea>
+
+    <div class="btn-row">
+      <button id="btnConvert">Convert CSV</button>
+      <button id="btnDownload" class="secondary" disabled>Download New CSV</button>
+    </div>
+
+    <div id="statusText">Ready.</div>
+    <div id="errorBox"></div>
+
+    <div class="muted" style="margin-top:0.8rem;">
+      <strong>Output CSV</strong> (after duplication) – you can copy or download:
+    </div>
+    <textarea id="csvOutput" placeholder="Output CSV will appear here..." readonly></textarea>
+  </div>
+
+  <script>
+    const csvFileInput = document.getElementById("csvFile");
+    const csvInput = document.getElementById("csvInput");
+    const csvOutput = document.getElementById("csvOutput");
+    const btnConvert = document.getElementById("btnConvert");
+    const btnDownload = document.getElementById("btnDownload");
+    const statusText = document.getElementById("statusText");
+    const errorBox = document.getElementById("errorBox");
+
+    function setStatus(msg) {
+      statusText.textContent = msg;
+      console.log("[csv-duplicator]", msg);
+    }
+
+    function showError(msg, err) {
+      console.error("[csv-duplicator] ERROR:", msg, err || "");
+      errorBox.style.display = "block";
+      errorBox.textContent = msg + (err && err.message ? "\n" + err.message : "");
+      setStatus("Error – see details below.");
+    }
+
+    function clearError() {
+      errorBox.style.display = "none";
+      errorBox.textContent = "";
+    }
+
+    // Simple CSV parser that handles quotes and commas inside quotes.
+    function parseCsv(text) {
+      if (!text) return [];
+      const rows = [];
+      let cur = "";
+      let row = [];
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
+
+        if (ch === '"') {
+          if (inQuotes && next === '"') {
+            cur += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          row.push(cur);
+          cur = "";
+        } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+          if (cur.length || row.length) {
+            row.push(cur);
+            rows.push(row);
+            row = [];
+            cur = "";
+          }
+          if (ch === '\r' && next === '\n') i++;
+        } else {
+          cur += ch;
+        }
+      }
+      if (cur.length || row.length) {
+        row.push(cur);
+        rows.push(row);
+      }
+      return rows;
+    }
+
+    function escapeCsvField(value) {
+      if (value == null) value = "";
+      const s = String(value);
+      if (/[",\n\r]/.test(s)) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }
+
+    function rowsToCsv(rows) {
+      return rows
+        .map(r => r.map(escapeCsvField).join(","))
+        .join("\n");
+    }
+
+    function transformCsv(text) {
+      const rows = parseCsv(text.trim());
+      if (!rows.length) throw new Error("No rows found in CSV.");
+
+      const header = rows[0];
+      const lockIdx = header.indexOf("lock_status");
+
+      if (lockIdx === -1) {
+        throw new Error('CSV is missing required column "lock_status".');
+      }
+
+      const outRows = [];
+      outRows.push(header);
+
+      const carriers = ["att", "verizon", "tmobile"];
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0 || (row.length === 1 && !row[0].trim())) continue;
+
+        const lockValRaw = row[lockIdx] || "";
+        const lockNorm = String(lockValRaw).trim().toLowerCase();
+
+        if (lockNorm === "locked") {
+          carriers.forEach(c => {
+            const newRow = row.slice();
+            newRow[lockIdx] = c;
+            outRows.push(newRow);
+          });
+        } else {
+          // unlocked or anything else – keep as-is
+          outRows.push(row);
+        }
+      }
+
+      return rowsToCsv(outRows);
+    }
+
+    csvFileInput.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        csvInput.value = String(ev.target.result || "");
+        setStatus("Loaded CSV file: " + file.name);
+      };
+      reader.onerror = () => {
+        showError("Failed to read CSV file.");
+      };
+      reader.readAsText(file);
+    });
+
+    btnConvert.addEventListener("click", () => {
+      clearError();
+      btnDownload.disabled = true;
+      csvOutput.value = "";
+      try {
+        const inputText = csvInput.value.trim();
+        if (!inputText) {
+          throw new Error("Paste CSV into the box or choose a CSV file first.");
+        }
+        setStatus("Transforming CSV (duplicating locked rows to carriers)...");
+        const outputText = transformCsv(inputText);
+        csvOutput.value = outputText;
+        btnDownload.disabled = false;
+        setStatus("Done – CSV transformed.");
+      } catch (err) {
+        showError("Conversion failed.", err);
+      }
+    });
+
+    btnDownload.addEventListener("click", () => {
+      try {
+        const text = csvOutput.value;
+        if (!text.trim()) {
+          showError("Nothing to download – convert CSV first.");
+          return;
+        }
+        const blob = new Blob([text], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+
+        const originalName = csvFileInput.files[0] ? csvFileInput.files[0].name : "devices-final.csv";
+        const dotIndex = originalName.lastIndexOf(".");
+        const baseName = dotIndex > 0 ? originalName.slice(0, dotIndex) : originalName;
+        a.download = baseName + "-carriers.csv";
+
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setStatus("Downloaded " + a.download);
+      } catch (err) {
+        showError("Failed to build download.", err);
+      }
+    });
+  </script>
+</body>
+</html>

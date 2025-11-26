@@ -227,7 +227,7 @@
 <body>
   <header>
     <h1>SecondHandCell Repricer – SellCell + Amazon (Local XML)</h1>
-    <p>Upload CSV ➜ upload SellCell feed XML ➜ (optional) upload Template XML ➜ get repriced values ➜ output CSV or updated device-prices XML.</p>
+    <p>Upload CSV ➜ upload SellCell feed XML ➜ (optional) upload Template XML ➜ get repriced values ➜ output CSV or updated device-prices XML (AT&amp;T / Verizon / T-Mobile / Unlocked).</p>
   </header>
 
   <main>
@@ -237,7 +237,10 @@
       <div class="muted">
         <strong>Expected CSV columns</strong> (header row, comma-separated):<br>
         <code>name,storage,lock_status,condition,price,amz</code><br>
-        <span class="pill-small">price = current buy price (can include $), amz = Amazon price (can include $ and commas)</span>
+        <span class="pill-small">
+          lock_status can be: att, verizon, tmobile, unlocked (or legacy locked/unlocked);
+          price = current buy price; amz = Amazon price.
+        </span>
       </div>
 
       <textarea id="csvInput" placeholder="Paste your CSV here (including header)..."></textarea>
@@ -281,7 +284,7 @@
     <section class="card">
       <h2>Step 2 – Preview Results</h2>
       <div class="muted">
-        After processing, new buy prices will appear below. You can verify the Feed &amp; Amazon columns and spot-check one device to confirm logic.
+        After processing, new buy prices will appear below. Each row uses the correct carrier (AT&amp;T / Verizon / T-Mobile / Unlocked) from the feed.
       </div>
       <div class="scroll-table">
         <table id="resultTable">
@@ -343,34 +346,48 @@
       "GALAXY Z FOLD 6": "GALAXY Z FOLD6",
     };
 
-    /**
-     * Normalize a model name from your CSV or XML to the name used for feed matching.
-     * - uppercases
-     * - trims multiple spaces
-     * - applies alias map (MODEL_ALIASES)
-     */
     function normalizeModelNameForFeed(rawName) {
       if (!rawName) return "";
-
-      // Uppercase + trim extra spaces
       let upper = rawName
         .toString()
         .toUpperCase()
         .replace(/\s+/g, " ")
         .trim();
-
-      // Apply alias if we have one
       if (MODEL_ALIASES[upper]) {
         return MODEL_ALIASES[upper];
       }
-
-      // Otherwise just use the cleaned name
       return upper;
     }
 
     // Backwards-compatible wrapper (used elsewhere in this file)
     function normalizeName(name) {
       return normalizeModelNameForFeed(name);
+    }
+
+    // ===================== CARRIER NORMALIZATION =====================
+
+    // Normalize CSV lock_status into carrier tag names used in XML: att, verizon, tmobile, unlocked
+    function normalizeCarrierLock(lockStatusRaw) {
+      if (!lockStatusRaw) return null;
+      const s = String(lockStatusRaw).trim().toLowerCase();
+      if (s === "att" || s === "at&t") return "att";
+      if (s === "verizon") return "verizon";
+      if (s === "unlocked") return "unlocked";
+      if (s === "tmobile" || s === "t-mobile" || s === "t mobile") return "tmobile";
+      // Legacy "locked" → treat as Verizon (most common locked carrier in your earlier logic)
+      if (s === "locked") return "verizon";
+      return null;
+    }
+
+    // Normalize feed <network> to carrier bucket
+    function normalizeCarrierFromNetwork(networkRaw) {
+      if (!networkRaw) return null;
+      const s = String(networkRaw).trim().toLowerCase();
+      if (s.includes("at&t") || s === "att") return "att";
+      if (s === "verizon") return "verizon";
+      if (s === "unlocked" || s === "sim-free" || s === "sim free") return "unlocked";
+      if (s.includes("t-mobile") || s === "tmobile" || s === "t mobile") return "tmobile";
+      return null; // other networks still contribute to "any"
     }
 
     // ---------- Helpers ----------
@@ -415,7 +432,6 @@
 
         if (ch === '"') {
           if (inQuotes && next === '"') {
-            // Escaped quote
             cur += '"';
             i++;
           } else {
@@ -431,7 +447,6 @@
             row = [];
             cur = "";
           }
-          // swallow \r\n pair
           if (ch === '\r' && next === '\n') {
             i++;
           }
@@ -463,13 +478,16 @@
       return records;
     }
 
-    // Build feed index from uploaded SellCell XML text.
-    // key: "DEVICE_NAME|CAPACITY" (uppercased capacity)
+    // ===================== FEED INDEX (NOW CARRIER-SPECIFIC) =====================
+
+    // key: "DEVICE_NAME|CAPACITY"
     // value:
     //   {
-    //     locked:   { flawless, good, fair, damaged }   // built from Verizon network
-    //     unlocked: { flawless, good, fair, damaged }   // built from Unlocked network
-    //     any:      { flawless, good, fair, damaged }   // max across all networks (fallback)
+    //     att:      { flawless, good, fair, damaged }
+    //     verizon:  { flawless, good, fair, damaged }
+    //     tmobile:  { flawless, good, fair, damaged }
+    //     unlocked: { flawless, good, fair, damaged }
+    //     any:      { flawless, good, fair, damaged }   // max across all networks
     //   }
     function buildFeedIndexFromXml(xmlText) {
       setStatus("Parsing XML feed...");
@@ -497,25 +515,20 @@
         const capEl = d.getElementsByTagName("capacity")[0];
         const netEl = d.getElementsByTagName("network")[0];
 
-        // Use the alias-aware normalizer for feed device names
         const deviceName = normalizeModelNameForFeed(nameEl ? nameEl.textContent : "");
         const capacity = String(capEl ? capEl.textContent : "").trim().toUpperCase();
-        const networkRaw = String(netEl ? netEl.textContent : "").trim().toLowerCase();
+        const networkRaw = netEl ? netEl.textContent : "";
+        const carrierBucket = normalizeCarrierFromNetwork(networkRaw); // att / verizon / tmobile / unlocked / null
 
         if (!deviceName || !capacity) continue;
 
         const keyBase = deviceName + "|" + capacity;
 
-        // Map XML network → lock bucket
-        // "verizon" → locked, "unlocked" → unlocked, everything still counted in "any"
-        let lockBucket;
-        if (networkRaw === "verizon") lockBucket = "locked";
-        else if (networkRaw === "unlocked") lockBucket = "unlocked";
-        else lockBucket = "other";
-
         if (!index[keyBase]) {
           index[keyBase] = {
-            locked: {},
+            att: {},
+            verizon: {},
+            tmobile: {},
             unlocked: {},
             any: {},
           };
@@ -544,9 +557,9 @@
           if (!competitorPrices.length) continue;
           const top = Math.max.apply(null, competitorPrices);
 
-          // Fill per-lock bucket where appropriate
-          if (lockBucket === "locked" || lockBucket === "unlocked") {
-            const bucket = index[keyBase][lockBucket];
+          // Fill per-carrier bucket where appropriate
+          if (carrierBucket && index[keyBase][carrierBucket]) {
+            const bucket = index[keyBase][carrierBucket];
             if (!bucket[condKey] || top > bucket[condKey]) {
               bucket[condKey] = top;
             }
@@ -565,17 +578,17 @@
       return index;
     }
 
-    // Pricing math for one row.
+    // ===================== REPRICER LOGIC =====================
+
     function repriceRowFromFeed(row, feedIndex) {
       const result = { ...row };
 
       const name = row.name;
       const storage = String(row.storage || "").trim().toUpperCase();
-      const lockStatus = row.lock_status;
       const conditionRaw = row.condition;
       const condition = String(conditionRaw || "").toLowerCase();
+      const carrierLock = normalizeCarrierLock(row.lock_status); // att/verizon/tmobile/unlocked or null
 
-      // Use the same alias-aware normalizer on CSV names
       const key = normalizeModelNameForFeed(name) + "|" + storage;
       const feedEntry = feedIndex[key];
 
@@ -584,18 +597,13 @@
 
       let feedPrice = null;
       const condKey = condition; // flawless/good/fair/damaged
-      const lockNorm = String(lockStatus || "").trim().toLowerCase();
 
       if (feedEntry) {
-        // Choose the right bucket:
-        // locked  → Verizon bucket (if present)
-        // unlocked → Unlocked bucket (if present)
-        // otherwise fall back to "any"
         let bucket = null;
 
-        if (lockNorm === "locked" && feedEntry.locked && feedEntry.locked[condKey] != null) {
-          bucket = feedEntry.locked;
-        } else if (lockNorm === "unlocked" && feedEntry.unlocked && feedEntry.unlocked[condKey] != null) {
+        if (carrierLock && feedEntry[carrierLock] && feedEntry[carrierLock][condKey] != null) {
+          bucket = feedEntry[carrierLock];
+        } else if (feedEntry.unlocked && feedEntry.unlocked[condKey] != null && carrierLock === "unlocked") {
           bucket = feedEntry.unlocked;
         } else if (feedEntry.any && feedEntry.any[condKey] != null) {
           bucket = feedEntry.any;
@@ -607,7 +615,7 @@
       }
 
       if (!feedPrice) {
-        status = "No competitor feed price found";
+        status = "No competitor feed price found for this carrier";
         statusClass = "status-warn";
       }
 
@@ -642,7 +650,6 @@
       result.amazon_price = amazonPrice;
 
       if (!feedPrice) {
-        // we still show Amazon price but can't compute profit vs feed
         result.after_amazon = null;
         result.sellcell_fee = null;
         result.shipping_fee = 15;
@@ -654,7 +661,7 @@
         result.new_profit = null;
         result.new_profit_pct = null;
 
-        if (!status) status = "No competitor feed price found";
+        if (!status) status = "No competitor feed price found for this carrier";
         statusClass = "status-warn";
         result._status = status;
         result._statusClass = statusClass;
@@ -716,7 +723,8 @@
       return result;
     }
 
-    // Render table rows
+    // ===================== RENDER + CSV EXPORT =====================
+
     function renderResults(rows) {
       const tbody = document.getElementById("resultBody");
       tbody.innerHTML = "";
@@ -772,7 +780,6 @@
       document.getElementById("processedCount").textContent = rows.length.toString();
     }
 
-    // Build downloadable CSV from result rows
     function buildOutputCsv(rows) {
       const header = [
         "name",
@@ -833,7 +840,9 @@
       return lines.join("\n");
     }
 
-    // Build updated device-prices XML from template (A: only matching condition)
+    // ===================== XML EXPORT (NEW CARRIER FORMAT) =====================
+
+    // Template XML is expected to have <priceValue> with <att>, <verizon>, <tmobile>, <unlocked> tags.
     function buildUpdatedXmlFromTemplate(templateXmlText, rows) {
       setStatus("Building updated XML from template...");
       const parser = new DOMParser();
@@ -843,25 +852,25 @@
         throw new Error("Template XML parse error: " + parseErr.textContent.trim());
       }
 
-      // Build lookup: NAME|STORAGE|LOCK_STATUS|COND_TAG -> new_price
+      // Build lookup: NAME|STORAGE|CARRIER_TAG|COND_TAG -> new_price
       const priceMap = new Map();
 
       rows.forEach(r => {
         const nameNorm = normalizeModelNameForFeed(r.name);
         const storage = String(r.storage || "").trim().toUpperCase();
-        const lock = String(r.lock_status || "").trim().toLowerCase(); // locked/unlocked
-        const condRaw = String(r.condition || "").toLowerCase();
+        const lockCarrier = normalizeCarrierLock(r.lock_status); // att/verizon/tmobile/unlocked
+        if (!lockCarrier) return;
 
-        // map damaged -> broken, others 1:1
+        const condRaw = String(r.condition || "").toLowerCase();
         let condTag;
         if (condRaw === "damaged") condTag = "broken";
         else if (condRaw === "flawless" || condRaw === "good" || condRaw === "fair") condTag = condRaw;
-        else return; // unknown condition, skip
+        else return;
 
         const newPrice = r.new_price;
         if (newPrice == null || !Number.isFinite(newPrice)) return;
 
-        const key = nameNorm + "|" + storage + "|" + lock + "|" + condTag;
+        const key = nameNorm + "|" + storage + "|" + lockCarrier + "|" + condTag;
         priceMap.set(key, newPrice);
       });
 
@@ -882,15 +891,15 @@
           const priceValueEl = pricesBlock.getElementsByTagName("priceValue")[0];
           if (!priceValueEl) continue;
 
-          ["locked", "unlocked"].forEach(lockState => {
-            const lockEl = priceValueEl.getElementsByTagName(lockState)[0];
-            if (!lockEl) return;
+          ["att", "verizon", "tmobile", "unlocked"].forEach(carrierTag => {
+            const carrierEl = priceValueEl.getElementsByTagName(carrierTag)[0];
+            if (!carrierEl) return;
 
             ["flawless", "good", "fair", "broken"].forEach(condTag => {
-              const condEl = lockEl.getElementsByTagName(condTag)[0];
+              const condEl = carrierEl.getElementsByTagName(condTag)[0];
               if (!condEl) return;
 
-              const key = nameNorm + "|" + storageVal + "|" + lockState + "|" + condTag;
+              const key = nameNorm + "|" + storageVal + "|" + carrierTag + "|" + condTag;
               if (priceMap.has(key)) {
                 const val = priceMap.get(key);
                 condEl.textContent = String(val);
@@ -903,7 +912,6 @@
       const serializer = new XMLSerializer();
       let xmlOut = serializer.serializeToString(doc);
 
-      // Ensure XML declaration at top
       if (!/^<\?xml/i.test(xmlOut.trim())) {
         xmlOut = '<?xml version="1.0" encoding="UTF-8"?>\n' + xmlOut;
       }
@@ -911,7 +919,7 @@
       return xmlOut;
     }
 
-    // ---------- Wire up UI ----------
+    // ===================== UI WIRING =====================
 
     const csvFileInput = document.getElementById("csvFile");
     const xmlFileInput = document.getElementById("xmlFile");
@@ -992,7 +1000,6 @@
         }
         console.log("[repricer] Parsed CSV rows:", rawRecords.length);
 
-        // Validate required columns
         const requiredCols = ["name", "storage", "lock_status", "condition", "price", "amz"];
         for (const col of requiredCols) {
           if (!(col in rawRecords[0])) {
