@@ -2679,7 +2679,68 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     saveFormState();
                 });
             });
-            
+
+            const carrierLabelMap = {
+                att: 'AT&T',
+                verizon: 'Verizon',
+                tmobile: 'T-Mobile',
+                unlocked: 'Unlocked',
+                other: 'Other Locked Carrier'
+            };
+
+            const carrierAliasMap = {
+                att: 'att',
+                atandt: 'att',
+                at_t: 'att',
+                verizon: 'verizon',
+                vzw: 'verizon',
+                vz: 'verizon',
+                tmobile: 'tmobile',
+                t_mobile: 'tmobile',
+                magenta: 'tmobile',
+                unlocked: 'unlocked',
+                simfree: 'unlocked',
+                other: 'other',
+                carrierlocked: 'locked',
+                locked: 'locked'
+            };
+
+            function normalizeCarrierKey(value = '') {
+                const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+                return carrierAliasMap[normalized] || normalized;
+            }
+
+            function resolveCarrierPricing(storagePricing = {}, selectedCarrier = '') {
+                const normalizedPricing = Object.entries(storagePricing || {}).reduce((acc, [key, value]) => {
+                    acc[normalizeCarrierKey(key)] = value || {};
+                    return acc;
+                }, {});
+
+                const lookupOrder = [
+                    normalizeCarrierKey(selectedCarrier),
+                    'unlocked',
+                    'att',
+                    'verizon',
+                    'tmobile',
+                    'other',
+                    'locked'
+                ].filter(Boolean);
+
+                for (const key of lookupOrder) {
+                    if (normalizedPricing[key]) {
+                        return normalizedPricing[key];
+                    }
+                }
+
+                const firstAvailableKey = Object.keys(normalizedPricing)[0];
+                return firstAvailableKey ? normalizedPricing[firstAvailableKey] : null;
+            }
+
+            function formatCarrierLabel(value) {
+                const normalized = (value || '').toLowerCase();
+                return carrierLabelMap[normalized] || 'Not Selected';
+            }
+
             function calculateQuoteAndDisplay() {
                 clearQuoteMessage();
                 clearHighlights();
@@ -2723,14 +2784,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     return;
                 }
 
-                // Determine the correct pricing key based on the selected carrier
-                let selectedCarrierPricingKey = selectedCarrier;
-                if (['att', 'tmobile', 'verizon', 'other'].includes(selectedCarrier)) {
-                    selectedCarrierPricingKey = 'locked';
-                }
-
                 // Get the base prices for the selected storage and carrier from the fetched device data.
-                const basePrices = device.prices[selectedStorage]?.[selectedCarrierPricingKey];
+                const basePrices = resolveCarrierPricing(device.prices[selectedStorage] || {}, selectedCarrier);
                 
                 if (!basePrices) {
                     showQuoteMessage('Pricing data for this combination is not available.', 'error');
@@ -2741,10 +2796,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 
                 if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes') {
                     // Fully functional, no cracks
-                    finalPrice = basePrices[q4Cosmetic];
+                    const cosmeticKey = q4Cosmetic === 'damaged' ? 'broken' : q4Cosmetic;
+                    finalPrice = basePrices[cosmeticKey];
                 } else if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'no') {
                     // Fully functional, but has cracks
-                    finalPrice = basePrices.damaged;
+                    finalPrice = basePrices.broken;
                 } else if (q1PowerOn === 'yes' && q2Functional === 'no') {
                     // Powers on, but not functional
                     finalPrice = basePrices.broken;
@@ -3524,14 +3580,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
                 let displayCarrierText = 'Not Selected';
                 if (selectedCarrier) {
-                    switch(selectedCarrier) {
-                        case 'unlocked': displayCarrierText = 'Unlocked'; break;
-                        case 'att': displayCarrierText = 'AT&T'; break;
-                        case 'tmobile': displayCarrierText = 'T-Mobile'; break;
-                        case 'verizon': displayCarrierText = 'Verizon'; break;
-                        case 'other': displayCarrierText = 'Other Locked Carrier'; break;
-                        default: displayCarrierText = 'Not Selected';
-                    }
+                    displayCarrierText = formatCarrierLabel(selectedCarrier);
                 }
 
                 const baseQuote = Number(finalQuote) || 0;

@@ -149,6 +149,55 @@ function applyShippingInfo(info, { overwriteExisting = false } = {}) {
 const devicePreviewImg = document.getElementById('device-preview-img');
 const deviceImagePreviewDiv = document.getElementById('device-image-preview');
 
+const connectivityAliasMap = {
+    att: 'att',
+    atandt: 'att',
+    at_t: 'att',
+    attlocked: 'att',
+    verizon: 'verizon',
+    vzw: 'verizon',
+    vz: 'verizon',
+    tmobile: 'tmobile',
+    t_mobile: 'tmobile',
+    magenta: 'tmobile',
+    unlocked: 'unlocked',
+    simfree: 'unlocked',
+    other: 'other',
+    carrierlocked: 'locked',
+    locked: 'locked'
+};
+
+const normalizeConnectivityKey = (value) => {
+    const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    return connectivityAliasMap[normalized] || normalized;
+};
+
+const resolveCarrierPricing = (storagePricing = {}, selectedCarrier = '') => {
+    const normalizedPricing = Object.entries(storagePricing || {}).reduce((acc, [key, value]) => {
+        acc[normalizeConnectivityKey(key)] = value || {};
+        return acc;
+    }, {});
+
+    const preferredOrder = [
+        normalizeConnectivityKey(selectedCarrier),
+        'unlocked',
+        'att',
+        'verizon',
+        'tmobile',
+        'other',
+        'locked'
+    ].filter(Boolean);
+
+    for (const key of preferredOrder) {
+        if (normalizedPricing[key]) {
+            return normalizedPricing[key];
+        }
+    }
+
+    const fallbackKey = Object.keys(normalizedPricing)[0];
+    return fallbackKey ? normalizedPricing[fallbackKey] : null;
+};
+
 // --- Utility Functions ---
 
 /** Formats the phone number as the user types: (###) ###-####. */
@@ -607,14 +656,7 @@ q4Cosmetic = 'damaged';
 break;
 }
 
-let selectedCarrierPricingKey = carrier;
-if (['att', 'tmobile', 'verizon', 'other'].includes(carrier)) {
-selectedCarrierPricingKey = 'locked';
-} else if (carrier === 'unlocked') {
-selectedCarrierPricingKey = 'unlocked';
-}
-
-const basePrices = deviceData.prices[storage]?.[selectedCarrierPricingKey];
+const basePrices = resolveCarrierPricing(deviceData.prices[storage] || {}, carrier);
 
 if (!basePrices) {
 showMessage(`Pricing data for ${storage} and ${carrier} is missing in Firebase.`, 'Data Error');
@@ -628,11 +670,12 @@ let iconClass = 'fa-check-circle text-green-400';
 if (q1PowerOn === 'yes') {
 if (q2Functional === 'yes') {
 if (q3NoCracks === 'yes') {
-calculatedPrice = basePrices[q4Cosmetic] || 0;
+const cosmeticKey = q4Cosmetic === 'damaged' ? 'broken' : q4Cosmetic;
+calculatedPrice = basePrices[cosmeticKey] || 0;
 conditionDescription = `Cosmetic: ${q4Cosmetic.charAt(0).toUpperCase() + q4Cosmetic.slice(1)}`;
 iconClass = (q4Cosmetic === 'flawless') ? 'fa-star text-yellow-400' : 'fa-check-circle text-green-400';
 } else {
-calculatedPrice = basePrices.damaged || 0;
+calculatedPrice = basePrices.broken || 0;
 conditionDescription = 'Physical: Damaged (Screen OK, cracks allowed)';
 iconClass = 'fa-exclamation-triangle text-red-400';
 }

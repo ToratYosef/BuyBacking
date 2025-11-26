@@ -184,20 +184,15 @@ const querySnapshot = await getDocs(ipadCollection);
 querySnapshot.forEach((doc) => {
 const data = doc.data();
 let maxPrice = 0;
-if (data.prices) {
-Object.values(data.prices).forEach(storageOption => {
-if (storageOption.unlocked) {
-Object.values(storageOption.unlocked).forEach(price => {
-if (typeof price === 'number') maxPrice = Math.max(maxPrice, price);
-});
-}
-if (storageOption.locked) {
-Object.values(storageOption.locked).forEach(price => {
-if (typeof price === 'number') maxPrice = Math.max(maxPrice, price);
-});
-}
-});
-}
+    if (data.prices) {
+      Object.values(data.prices).forEach((storageOption = {}) => {
+        Object.values(storageOption || {}).forEach((carrierPrices = {}) => {
+          Object.values(carrierPrices || {}).forEach((price) => {
+            if (typeof price === 'number') maxPrice = Math.max(maxPrice, price);
+          });
+        });
+      });
+    }
 allPhones.push({
 ...data,
 highestPrice: maxPrice
