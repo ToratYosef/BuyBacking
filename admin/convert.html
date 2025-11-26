@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>XML Carrier Duplicator (Locked → AT&T / Verizon / T-Mobile)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 1.5rem;
+    }
+    .card {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 1.25rem 1.5rem;
+      border-radius: 0.75rem;
+      background: #020617;
+      border: 1px solid #1f2937;
+      box-shadow: 0 20px 35px rgba(0,0,0,0.4);
+    }
+    label {
+      font-size: 0.9rem;
+      color: #9ca3af;
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    input[type="file"] {
+      margin-bottom: 0.75rem;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 0.45rem 1rem;
+      margin-right: 0.5rem;
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    textarea {
+      width: 100%;
+      min-height: 320px;
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      border: 1px solid #1f2937;
+      background: #020617;
+      color: #e5e7eb;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.85rem;
+      resize: vertical;
+      white-space: pre;
+    }
+    .hint {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-top: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>XML Carrier Duplicator</h1>
+    <p style="font-size:0.9rem;color:#9ca3af;">
+      Upload your pricing XML. For every <code>&lt;priceValue&gt;</code>, this will:
+      <br>- Copy <code>&lt;locked&gt;</code> prices
+      <br>- Create <code>&lt;att&gt;</code>, <code>&lt;verizon&gt;</code>, <code>&lt;tmobile&gt;</code> with the same values
+      <br>- Keep <code>&lt;unlocked&gt;</code> as-is
+      <br>- Remove <code>&lt;locked&gt;</code>
+    </p>
+
+    <label for="fileInput">1. Upload XML file</label>
+    <input type="file" id="fileInput" accept=".xml" />
+    <button id="convertBtn">Convert XML</button>
+    <button id="downloadBtn" disabled>Download Result XML</button>
+    <div class="hint">
+      You can also paste / edit the output below and copy it back into your project.
+    </div>
+
+    <label for="output">2. Resulting XML</label>
+    <textarea id="output" placeholder="Converted XML will appear here..."></textarea>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const convertBtn = document.getElementById("convertBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const output = document.getElementById("output");
+
+    function transformXML(xmlText) {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+
+      // Check for parse errors
+      const parserError = xmlDoc.getElementsByTagName("parsererror")[0];
+      if (parserError) {
+        throw new Error("XML parse error – please check that the file is valid XML.");
+      }
+
+      const priceValues = xmlDoc.getElementsByTagName("priceValue");
+
+      for (let i = 0; i < priceValues.length; i++) {
+        const pv = priceValues[i];
+
+        const locked = pv.getElementsByTagName("locked")[0];
+        if (!locked) continue; // nothing to do if there's no locked node
+
+        // Grab unlocked (if present) so we can insert carrier nodes before it
+        const unlocked = pv.getElementsByTagName("unlocked")[0] || null;
+
+        // Copy the element children of <locked> (flawless/good/fair/broken/etc.)
+        const conditions = Array.from(locked.children);
+
+        const carriers = ["att", "verizon", "tmobile"];
+
+        carriers.forEach(carrierName => {
+          const carrierEl = xmlDoc.createElement(carrierName);
+
+          conditions.forEach(cond => {
+            const newCond = xmlDoc.createElement(cond.tagName);
+            newCond.textContent = cond.textContent;
+            carrierEl.appendChild(newCond);
+          });
+
+          if (unlocked) {
+            // Insert carriers before <unlocked>, to get: <att>, <verizon>, <tmobile>, <unlocked>
+            pv.insertBefore(carrierEl, unlocked);
+          } else {
+            // If no <unlocked>, just append
+            pv.appendChild(carrierEl);
+          }
+        });
+
+        // Remove the original <locked> node now that we've cloned its data
+        pv.removeChild(locked);
+      }
+
+      const serializer = new XMLSerializer();
+      // Serialize with XML declaration
+      let result = serializer.serializeToString(xmlDoc);
+      if (!result.startsWith("<?xml")) {
+        result = '<?xml version="1.0" encoding="UTF-8"?>\n' + result;
+      }
+      return result;
+    }
+
+    convertBtn.addEventListener("click", () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        alert("Please choose an XML file first.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const inputXML = reader.result;
+          const converted = transformXML(inputXML);
+          output.value = converted;
+          downloadBtn.disabled = false;
+        } catch (err) {
+          console.error(err);
+          alert("Error converting XML: " + err.message);
+        }
+      };
+      reader.onerror = () => {
+        alert("Failed to read file.");
+      };
+      reader.readAsText(file);
+    });
+
+    downloadBtn.addEventListener("click", () => {
+      const text = output.value;
+      if (!text.trim()) {
+        alert("Nothing to download – convert a file first.");
+        return;
+      }
+
+      const blob = new Blob([text], { type: "application/xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+
+      // Try to base the filename on the original file
+      const originalName = fileInput.files[0] ? fileInput.files[0].name : "converted.xml";
+      const dotIndex = originalName.lastIndexOf(".");
+      const baseName = dotIndex > 0 ? originalName.slice(0, dotIndex) : originalName;
+      a.download = baseName + "-carriers.xml";
+
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
