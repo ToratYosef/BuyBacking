@@ -310,6 +310,69 @@
   </main>
 
   <script>
+    // ===================== NAME NORMALIZATION + ALIASES =====================
+
+    // Map internal names -> SellCell's device_name
+    // Keys and values are stored UPPERCASE for easy matching.
+    const MODEL_ALIASES = {
+      // ---- iPhone 16e → iPhone SE 3rd Gen (2022) ----
+      "IPHONE 16 SE": "IPHONE SE 3RD GEN (2022)",
+      "IPHONE 16E": "IPHONE SE 3RD GEN (2022)",
+      "IPHONE SE 3": "IPHONE SE 3RD GEN (2022)",
+      "IPHONE SE 2022": "IPHONE SE 3RD GEN (2022)",
+      "IPHONE SE 3RD GEN": "IPHONE SE 3RD GEN (2022)",
+
+      // ---- Galaxy S “Plus” models ----
+      "GALAXY S21+": "GALAXY S21 PLUS",
+      "GALAXY S22+": "GALAXY S22 PLUS",
+      "GALAXY S23+": "GALAXY S23 PLUS",
+      "GALAXY S24+": "GALAXY S24 PLUS",
+      "GALAXY S25+": "GALAXY S25 PLUS",
+
+      // ---- Galaxy S FE weird spacing ----
+      "GALAXY S23FE": "GALAXY S23 FE",
+
+      // ---- Galaxy Z Flip series (space vs no space) ----
+      "GALAXY Z FLIP 4": "GALAXY Z FLIP4",
+      "GALAXY Z FLIP 5": "GALAXY Z FLIP5",
+      "GALAXY Z FLIP 6": "GALAXY Z FLIP6",
+
+      // ---- Galaxy Z Fold series (space vs no space) ----
+      "GALAXY Z FOLD 4": "GALAXY Z FOLD4",
+      "GALAXY Z FOLD 5": "GALAXY Z FOLD5",
+      "GALAXY Z FOLD 6": "GALAXY Z FOLD6",
+    };
+
+    /**
+     * Normalize a model name from your CSV or XML to the name used for feed matching.
+     * - uppercases
+     * - trims multiple spaces
+     * - applies alias map (MODEL_ALIASES)
+     */
+    function normalizeModelNameForFeed(rawName) {
+      if (!rawName) return "";
+
+      // Uppercase + trim extra spaces
+      let upper = rawName
+        .toString()
+        .toUpperCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+      // Apply alias if we have one
+      if (MODEL_ALIASES[upper]) {
+        return MODEL_ALIASES[upper];
+      }
+
+      // Otherwise just use the cleaned name
+      return upper;
+    }
+
+    // Backwards-compatible wrapper (used elsewhere in this file)
+    function normalizeName(name) {
+      return normalizeModelNameForFeed(name);
+    }
+
     // ---------- Helpers ----------
     function showError(msg, err) {
       console.error("[repricer] ERROR:", msg, err || "");
@@ -328,10 +391,6 @@
     function setStatus(msg) {
       console.log("[repricer]", msg);
       document.getElementById("statusText").textContent = msg;
-    }
-
-    function normalizeName(name) {
-      return String(name || "").trim().toUpperCase();
     }
 
     function parseMoney(value) {
@@ -405,8 +464,13 @@
     }
 
     // Build feed index from uploaded SellCell XML text.
-    // key: "DEVICE_NAME|CAPACITY|NETWORK_TAG" (NETWORK_TAG is 'UNLOCKED' or 'VERIZON')
-    // value: { flawless: topPrice, good: topPrice, fair: topPrice, damaged: topPrice }
+    // key: "DEVICE_NAME|CAPACITY" (uppercased capacity)
+    // value:
+    //   {
+    //     locked:   { flawless, good, fair, damaged }   // built from Verizon network
+    //     unlocked: { flawless, good, fair, damaged }   // built from Unlocked network
+    //     any:      { flawless, good, fair, damaged }   // max across all networks (fallback)
+    //   }
     function buildFeedIndexFromXml(xmlText) {
       setStatus("Parsing XML feed...");
       const parser = new DOMParser();
@@ -431,25 +495,31 @@
         const d = devices[i];
         const nameEl = d.getElementsByTagName("device_name")[0];
         const capEl = d.getElementsByTagName("capacity")[0];
-        const netEl = d.getElementsByTagName("network")[0]; // Get Network
+        const netEl = d.getElementsByTagName("network")[0];
 
-        const deviceName = normalizeName(nameEl ? nameEl.textContent : "");
-        const capacity = String(capEl ? capEl.textContent : "")
-          .trim()
-          .toUpperCase();
-        const network = String(netEl ? netEl.textContent : "") // Get Network content
-          .trim()
-          .toUpperCase();
+        // Use the alias-aware normalizer for feed device names
+        const deviceName = normalizeModelNameForFeed(nameEl ? nameEl.textContent : "");
+        const capacity = String(capEl ? capEl.textContent : "").trim().toUpperCase();
+        const networkRaw = String(netEl ? netEl.textContent : "").trim().toLowerCase();
 
         if (!deviceName || !capacity) continue;
 
-        // Determine the key suffix based on the network tag in the XML
-        let keySuffix = 'UNLOCKED'; // Default for all non-Verizon
-        if (network === 'VERIZON') {
-            keySuffix = 'VERIZON'; // Use VERIZON key for Verizon-specific prices
-        }
+        const keyBase = deviceName + "|" + capacity;
 
-        const key = deviceName + "|" + capacity + "|" + keySuffix; // MODIFIED: Includes suffix
+        // Map XML network → lock bucket
+        // "verizon" → locked, "unlocked" → unlocked, everything still counted in "any"
+        let lockBucket;
+        if (networkRaw === "verizon") lockBucket = "locked";
+        else if (networkRaw === "unlocked") lockBucket = "unlocked";
+        else lockBucket = "other";
+
+        if (!index[keyBase]) {
+          index[keyBase] = {
+            locked: {},
+            unlocked: {},
+            any: {},
+          };
+        }
 
         deviceCount++;
 
@@ -474,17 +544,24 @@
           if (!competitorPrices.length) continue;
           const top = Math.max.apply(null, competitorPrices);
 
-          if (!index[key]) index[key] = {};
+          // Fill per-lock bucket where appropriate
+          if (lockBucket === "locked" || lockBucket === "unlocked") {
+            const bucket = index[keyBase][lockBucket];
+            if (!bucket[condKey] || top > bucket[condKey]) {
+              bucket[condKey] = top;
+            }
+          }
 
-          // Store the highest price found for this specific device|capacity|network|condition combo
-          if (!index[key][condKey] || top > index[key][condKey]) {
-            index[key][condKey] = top;
+          // Always fill "any" as max across all networks (fallback)
+          const anyBucket = index[keyBase].any;
+          if (!anyBucket[condKey] || top > anyBucket[condKey]) {
+            anyBucket[condKey] = top;
           }
         }
       }
 
       console.log("[repricer] Built feed index", { deviceCount, keyCount: Object.keys(index).length });
-      setStatus("XML parsed – indexed " + Object.keys(index).length + " model/storage/network combos.");
+      setStatus("XML parsed – indexed " + Object.keys(index).length + " model/storage combos.");
       return index;
     }
 
@@ -494,17 +571,12 @@
 
       const name = row.name;
       const storage = String(row.storage || "").trim().toUpperCase();
-      const lockStatus = String(row.lock_status || "").trim().toLowerCase(); // Normalize lockStatus
+      const lockStatus = row.lock_status;
       const conditionRaw = row.condition;
       const condition = String(conditionRaw || "").toLowerCase();
 
-      // Determine the correct network price to look up based on CSV lock_status
-      let networkSuffix = 'UNLOCKED'; // Default to UNLOCKED prices
-      if (lockStatus === 'locked') {
-          networkSuffix = 'VERIZON'; // If CSV says 'locked', use VERIZON prices from the feed
-      }
-
-      const key = normalizeName(name) + "|" + storage + "|" + networkSuffix; // MODIFIED KEY
+      // Use the same alias-aware normalizer on CSV names
+      const key = normalizeModelNameForFeed(name) + "|" + storage;
       const feedEntry = feedIndex[key];
 
       let status = "";
@@ -512,12 +584,30 @@
 
       let feedPrice = null;
       const condKey = condition; // flawless/good/fair/damaged
-      if (feedEntry && Object.prototype.hasOwnProperty.call(feedEntry, condKey)) {
-        feedPrice = feedEntry[condKey];
+      const lockNorm = String(lockStatus || "").trim().toLowerCase();
+
+      if (feedEntry) {
+        // Choose the right bucket:
+        // locked  → Verizon bucket (if present)
+        // unlocked → Unlocked bucket (if present)
+        // otherwise fall back to "any"
+        let bucket = null;
+
+        if (lockNorm === "locked" && feedEntry.locked && feedEntry.locked[condKey] != null) {
+          bucket = feedEntry.locked;
+        } else if (lockNorm === "unlocked" && feedEntry.unlocked && feedEntry.unlocked[condKey] != null) {
+          bucket = feedEntry.unlocked;
+        } else if (feedEntry.any && feedEntry.any[condKey] != null) {
+          bucket = feedEntry.any;
+        }
+
+        if (bucket && bucket[condKey] != null) {
+          feedPrice = bucket[condKey];
+        }
       }
 
       if (!feedPrice) {
-        status = `No competitor feed price found for ${networkSuffix.toLowerCase()}`;
+        status = "No competitor feed price found";
         statusClass = "status-warn";
       }
 
@@ -564,7 +654,7 @@
         result.new_profit = null;
         result.new_profit_pct = null;
 
-        if (!status) status = `No competitor feed price found for ${networkSuffix.toLowerCase()}`;
+        if (!status) status = "No competitor feed price found";
         statusClass = "status-warn";
         result._status = status;
         result._statusClass = statusClass;
@@ -757,7 +847,7 @@
       const priceMap = new Map();
 
       rows.forEach(r => {
-        const nameNorm = normalizeName(r.name);
+        const nameNorm = normalizeModelNameForFeed(r.name);
         const storage = String(r.storage || "").trim().toUpperCase();
         const lock = String(r.lock_status || "").trim().toLowerCase(); // locked/unlocked
         const condRaw = String(r.condition || "").toLowerCase();
@@ -771,9 +861,6 @@
         const newPrice = r.new_price;
         if (newPrice == null || !Number.isFinite(newPrice)) return;
 
-        // NOTE: The template XML uses 'locked' and 'unlocked' tags directly, so we don't need the VERIZON/UNLOCKED suffix here.
-        // We rely on the fact that if a device in the CSV was priced using VERIZON feed data, its new_price is what we want to set
-        // for the corresponding 'locked' price in the template XML (assuming 'locked' in the CSV maps to 'locked' in the template).
         const key = nameNorm + "|" + storage + "|" + lock + "|" + condTag;
         priceMap.set(key, newPrice);
       });
@@ -783,7 +870,7 @@
         const model = models[i];
         const nameEl = model.getElementsByTagName("name")[0];
         if (!nameEl) continue;
-        const nameNorm = normalizeName(nameEl.textContent);
+        const nameNorm = normalizeModelNameForFeed(nameEl.textContent);
 
         const pricesBlocks = model.getElementsByTagName("prices");
         for (let j = 0; j < pricesBlocks.length; j++) {
