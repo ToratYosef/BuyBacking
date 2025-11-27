@@ -4799,6 +4799,10 @@ async function runAutomaticLabelReminderSweep() {
 
   for (const doc of snapshot.docs) {
     const order = { id: doc.id, ...doc.data() };
+
+    if (isBalanceEmailStatus(order)) {
+      continue;
+    }
     const labelStart =
       getTimestampMillis(order.labelGeneratedAt) ||
       getTimestampMillis(order.lastStatusUpdateAt) ||
