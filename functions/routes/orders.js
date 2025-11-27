@@ -1107,22 +1107,45 @@ function createOrdersRouter({
 
       if (orderData.shippingPreference === 'Shipping Kit Requested') {
         shippingInstructions = `
-        <p style="margin-top: 24px;">Please note: You requested a shipping kit, which will be sent to you shortly. When it arrives, you'll find a return label inside to send us your device.</p>
-        <p>If you have any questions, please reply to this email.</p>
+        <div style="margin-top: 24px;">
+          <h2 style="font-size:18px; color:#0f172a; margin:0 0 10px;">Shipping kit instructions</h2>
+          <p style="margin:0 0 12px; color:#475569;">We're sending a padded mailer with an adhesive strip, device sleeve, and prepaid USPS label. We'll email tracking as soon as it ships.</p>
+          <ol style="margin:0 0 12px 18px; padding-left:18px; color:#475569;">
+            <li style="margin-bottom:8px;">When it arrives, place your device in the protective sleeve and add the included padding.</li>
+            <li style="margin-bottom:8px;">Include the device ID sticker from the kit (or a note with your order number) inside the mailer.</li>
+            <li style="margin-bottom:8px;">Seal the mailer firmly, attach the prepaid label, and drop it at any USPS location.</li>
+          </ol>
+          <p style="margin:0; color:#475569;">Keep your USPS receipt for tracking. Questions? Just reply to this email.</p>
+        </div>
       `;
       } else if (autoLabelResult) {
         const promoLine = promoIsShip48
-          ? '<p>Drop your package off within 48 hours to keep your $10 Ship48 bonus.</p>'
-          : '<p>Ship within 48 hours and use promo code SHIP48 to add an extra $10 to your payout.</p>';
+          ? ' Ship within 48 hours to keep your $10 Ship48 bonus.'
+          : ' Ship within 48 hours and use promo code SHIP48 to add an extra $10 to your payout.';
         shippingInstructions = `
-        <p style="margin-top: 24px;">Your prepaid USPS label is ready! Download it from the confirmation page or the email we just sent you.</p>
-        ${promoLine}
-        <p>If you have any questions, please reply to this email.</p>
+        <div style="margin-top: 24px;">
+          <h2 style="font-size:18px; color:#0f172a; margin:0 0 10px;">Email label instructions</h2>
+          <p style="margin:0 0 12px; color:#475569;">Your prepaid USPS label is ready! Download it from the confirmation page or the button below.${promoLine}</p>
+          <ol style="margin:0 0 12px 18px; padding-left:18px; color:#475569;">
+            <li style="margin-bottom:8px;">Print the label and grab a sturdy box with bubble wrap or a soft cloth.</li>
+            <li style="margin-bottom:8px;">Power off the device, remove SIM/eSIM, sign out of accounts, and add a note with your order number.</li>
+            <li style="margin-bottom:8px;">Seal every edge with tape, place the label flat on the box, and drop it off at USPS. Keep the receipt for your records.</li>
+          </ol>
+          <p style="margin:0; color:#475569;">Need help? Reply to this email and we'll guide you.</p>
+        </div>
       `;
       } else {
         shippingInstructions = `
-        <p style="margin-top: 24px;">We will send your shipping label shortly.</p>
-        <p>If you have any questions, please reply to this email.</p>
+        <div style="margin-top: 24px;">
+          <h2 style="font-size:18px; color:#0f172a; margin:0 0 10px;">Email label instructions</h2>
+          <p style="margin:0 0 12px; color:#475569;">We're generating your prepaid USPS label now and will email it shortly. You can start prepping your device in the meantime.</p>
+          <ol style="margin:0 0 12px 18px; padding-left:18px; color:#475569;">
+            <li style="margin-bottom:8px;">Back up data, remove SIM/eSIM, and sign out of Apple/Google/Samsung accounts.</li>
+            <li style="margin-bottom:8px;">Factory reset the device, then wrap it in padding and place it in a sturdy box.</li>
+            <li style="margin-bottom:8px;">Once your label arrives, print it, seal the box, attach the label, and drop it at USPS with a receipt.</li>
+          </ol>
+          <p style="margin:0; color:#475569;">Questions? Reply to this email.</p>
+        </div>
       `;
       }
 

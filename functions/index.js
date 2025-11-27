@@ -944,6 +944,11 @@ const AUTO_CANCEL_MONITORED_STATUSES = [
 
 const AUTO_CANCELLATION_ENABLED = false;
 
+const LABEL_REMINDER_STATUSES = new Set(["label_generated", "emailed"]);
+const LABEL_REMINDER_FIRST_DELAY_MS = 5 * 24 * 60 * 60 * 1000;
+const LABEL_REMINDER_SECOND_DELAY_MS = 10 * 24 * 60 * 60 * 1000;
+const LABEL_REMINDER_MIN_GAP_MS = 24 * 60 * 60 * 1000;
+
 const RETURN_REMINDER_DELAY_MS = 13 * 24 * 60 * 60 * 1000;
 const RETURN_AUTO_VOID_DELAY_MS = 15 * 24 * 60 * 60 * 1000;
 const INBOUND_TRACKABLE_STATUSES = new Set([
@@ -2122,6 +2127,335 @@ function buildEmailLayout({
   `;
 }
 
+function buildLabelReminderEmail(orderId, order = {}) {
+  const customerName = order.shippingInfo?.fullName || "there";
+  const trackingNumber = getInboundTrackingNumber(order);
+  const deviceName = order.device || "your device";
+  const displayOrderId = orderId || order.id || "your order";
+
+  const trackingSection = trackingNumber
+    ? `
+      <div class="tracking-box">
+        <div class="tracking-label">Your Tracking Number</div>
+        <div class="tracking-number">${trackingNumber}</div>
+      </div>
+      <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${trackingNumber}" class="cta-button">
+        📍 Track Your Shipment
+      </a>
+    `
+    : "";
+
+  const subject = "⏰ Friendly Reminder: We're Waiting for Your Device! 📱";
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>⏰ Reminder: We're Waiting for Your Device!</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f9fafb;
+      margin: 0;
+      padding: 0;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+
+    .email-container {
+      max-width: 600px;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ea580c 100%);
+      padding: 48px 32px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      animation: pulse 3s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.1); }
+    }
+
+    .emoji-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      display: block;
+      animation: bounce 2s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: relative;
+      z-index: 1;
+    }
+
+    .header p {
+      font-size: 16px;
+      color: rgba(255,255,255,0.95);
+      margin: 12px 0 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .content {
+      padding: 40px 32px;
+      color: #374151;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .greeting {
+      font-size: 18px;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 24px;
+    }
+
+    .message-box {
+      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+      border-left: 4px solid #f59e0b;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
+    }
+
+    .message-box p {
+      margin: 0 0 12px;
+      color: #92400e;
+      font-weight: 600;
+      font-size: 17px;
+    }
+
+    .message-box p:last-child {
+      margin-bottom: 0;
+    }
+
+    .tracking-box {
+      background: #f3f4f6;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 24px 0;
+      text-align: center;
+    }
+
+    .tracking-label {
+      font-size: 13px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .tracking-number {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1f2937;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+    }
+
+    .cta-button {
+      display: inline-block;
+      background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+      color: #ffffff;
+      padding: 16px 32px;
+      text-decoration: none;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 16px;
+      margin: 24px auto;
+      display: block;
+      text-align: center;
+      max-width: 280px;
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .cta-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 32px rgba(245, 158, 11, 0.4);
+    }
+
+    .urgency-text {
+      background: #fef2f2;
+      border: 2px solid #fecaca;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 24px 0;
+      text-align: center;
+    }
+
+    .urgency-text p {
+      margin: 0;
+      color: #991b1b;
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .urgency-text .icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .footer {
+      background: #f9fafb;
+      padding: 32px;
+      text-align: center;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .footer p {
+      margin: 8px 0;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: #f59e0b;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%);
+      margin: 32px 0;
+    }
+
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        margin: 20px auto;
+        border-radius: 0;
+      }
+
+      .header {
+        padding: 32px 24px;
+      }
+
+      .header h1 {
+        font-size: 24px;
+      }
+
+      .content {
+        padding: 32px 24px;
+      }
+
+      .emoji-icon {
+        font-size: 48px;
+      }
+
+      .tracking-number {
+        font-size: 18px;
+      }
+
+      .cta-button {
+        padding: 14px 24px;
+        font-size: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <span class="emoji-icon">⏰</span>
+      <h1>Friendly Reminder!</h1>
+      <p>We're excited to complete your device trade-in</p>
+    </div>
+
+    <div class="content">
+      <p class="greeting">Hi ${customerName},</p>
+
+      <p>We wanted to send you a quick reminder about your device trade-in for order <strong>#${displayOrderId}</strong>!</p>
+
+      <div class="message-box">
+        <p>📦 Your shipping label is ready and waiting!</p>
+        <p>We're excited to receive your <strong>${deviceName}</strong> and complete your trade-in.</p>
+      </div>
+
+      ${trackingSection}
+
+      <div class="steps-list">
+        <h3>📝 Quick Checklist Before Shipping:</h3>
+        <ol>
+          <li><strong>Back up your data</strong> - Save all photos, contacts, and files</li>
+          <li><strong>Factory reset your device</strong> - Remove all personal information</li>
+          <li><strong>Sign out of all accounts</strong> (iCloud, Google, etc.)</li>
+          <li><strong>Remove your SIM card</strong></li>
+          <li><strong>Pack securely</strong> and attach your shipping label</li>
+        </ol>
+      </div>
+
+      <div class="urgency-text">
+        <span class="icon">⚡</span>
+        <p>The sooner you ship, the sooner you get paid!</p>
+        <p>We typically process devices within 24-48 hours of receipt.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <p style="text-align: center; color: #6b7280; font-size: 15px;">
+        Have questions? Just reply to this email - we're here to help! 💬
+      </p>
+    </div>
+
+    <div class="footer">
+      <p><strong>SecondHandCell</strong></p>
+      <p>Making device trade-ins simple and rewarding</p>
+      <p style="margin-top: 16px;">
+        <a href="https://secondhandcell.com">Visit our website</a> •
+        <a href="mailto:support@secondhandcell.com">Contact Support</a>
+      </p>
+      <p style="margin-top: 16px; font-size: 12px;">
+        This is an automated reminder for your trade-in order #${displayOrderId}
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  return { subject, html };
+}
+
 
 // NEW HELPER: Sanitizes data to ensure all values are strings for FCM payload compliance.
 function stringifyData(obj = {}) {
@@ -2354,6 +2688,55 @@ async function sendPushNotification(tokens, title, body, data = {}) {
   } catch (error) {
     console.error("Error sending FCM push notification:", error);
   }
+}
+
+async function sendLabelReminderEmail(order, { tier = 1 } = {}) {
+  if (!order || !order.id) {
+    return false;
+  }
+
+  const email = order.shippingInfo?.email;
+  if (!email) {
+    return false;
+  }
+
+  const { subject, html } = buildLabelReminderEmail(order.id, order);
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to: email,
+    subject,
+    html,
+    bcc: ["sales@secondhandcell.com"],
+  });
+
+  const additionalUpdates = {
+    lastReminderSentAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (tier === 1 && !order.labelReminderFirstSentAt) {
+    additionalUpdates.labelReminderFirstSentAt =
+      admin.firestore.FieldValue.serverTimestamp();
+  } else if (tier === 2 && !order.labelReminderSecondSentAt) {
+    additionalUpdates.labelReminderSecondSentAt =
+      admin.firestore.FieldValue.serverTimestamp();
+  }
+
+  await recordCustomerEmail(
+    order.id,
+    `Automated label reminder (day ${tier === 2 ? "10+" : "5+"}) sent to customer.`,
+    {
+      status: order.status,
+      auto: true,
+      reminderTier: tier,
+    },
+    {
+      logType: "reminder",
+      additionalUpdates,
+    }
+  );
+
+  return true;
 }
 
 // Re-using and slightly updating the old sendAdminPushNotification to fetch ALL admin tokens.
@@ -4406,6 +4789,66 @@ exports.createUserRecord = functions.auth.user().onCreate(async (user) => {
   }
 });
 
+async function runAutomaticLabelReminderSweep() {
+  const snapshot = await ordersCollection
+    .where("status", "in", Array.from(LABEL_REMINDER_STATUSES))
+    .get();
+
+  const now = Date.now();
+  let sentCount = 0;
+
+  for (const doc of snapshot.docs) {
+    const order = { id: doc.id, ...doc.data() };
+    const labelStart =
+      getTimestampMillis(order.labelGeneratedAt) ||
+      getTimestampMillis(order.lastStatusUpdateAt) ||
+      getTimestampMillis(order.createdAt);
+
+    if (!labelStart) {
+      continue;
+    }
+
+    const ageMs = now - labelStart;
+    const lastEmailAt = getLastCustomerEmailMillis(order);
+    if (lastEmailAt && now - lastEmailAt < LABEL_REMINDER_MIN_GAP_MS) {
+      continue;
+    }
+
+    let targetTier = null;
+    if (ageMs >= LABEL_REMINDER_SECOND_DELAY_MS && !order.labelReminderSecondSentAt) {
+      targetTier = order.labelReminderFirstSentAt ? 2 : 1;
+    } else if (ageMs >= LABEL_REMINDER_FIRST_DELAY_MS && !order.labelReminderFirstSentAt) {
+      targetTier = 1;
+    }
+
+    if (!targetTier) {
+      continue;
+    }
+
+    try {
+      const sent = await sendLabelReminderEmail(order, { tier: targetTier });
+      if (sent) {
+        sentCount += 1;
+      }
+    } catch (error) {
+      console.error(`Failed to send label reminder for order ${order.id}:`, error);
+    }
+  }
+
+  console.log(`Automatic label reminder sweep sent ${sentCount} reminders.`);
+}
+
+exports.autoSendLabelReminderEmails = functions.pubsub
+  .schedule("every 24 hours")
+  .onRun(async () => {
+    try {
+      await runAutomaticLabelReminderSweep();
+    } catch (error) {
+      console.error("Automatic label reminder sweep failed:", error);
+    }
+    return null;
+  });
+
 // Send Reminder Email for label_generated orders
 exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
   try {
@@ -4449,333 +4892,20 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError('failed-precondition', 'Can only send reminders for orders with generated labels');
     }
 
-    // Create super cool email template
-    const emailHtml = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>⏰ Reminder: We're Waiting for Your Device!</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background-color: #f9fafb;
-      margin: 0;
-      padding: 0;
-      -webkit-text-size-adjust: 100%;
-      -ms-text-size-adjust: 100%;
-    }
-    
-    .email-container {
-      max-width: 600px;
-      margin: 40px auto;
-      background-color: #ffffff;
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
-    }
-    
-    .header {
-      background: linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ea580c 100%);
-      padding: 48px 32px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-    
-    .header::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      right: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-      animation: pulse 3s ease-in-out infinite;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 0.5; transform: scale(1); }
-      50% { opacity: 0.8; transform: scale(1.1); }
-    }
-    
-    .emoji-icon {
-      font-size: 64px;
-      margin-bottom: 16px;
-      display: block;
-      animation: bounce 2s ease-in-out infinite;
-    }
-    
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
-    }
-    
-    .header h1 {
-      font-size: 32px;
-      font-weight: 700;
-      color: #ffffff;
-      margin: 0;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      position: relative;
-      z-index: 1;
-    }
-    
-    .header p {
-      font-size: 16px;
-      color: rgba(255,255,255,0.95);
-      margin: 12px 0 0;
-      position: relative;
-      z-index: 1;
-    }
-    
-    .content {
-      padding: 40px 32px;
-      color: #374151;
-      font-size: 16px;
-      line-height: 1.6;
-    }
-    
-    .greeting {
-      font-size: 18px;
-      font-weight: 600;
-      color: #111827;
-      margin-bottom: 24px;
-    }
-    
-    .message-box {
-      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-      border-left: 4px solid #f59e0b;
-      border-radius: 12px;
-      padding: 24px;
-      margin: 24px 0;
-      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
-    }
-    
-    .message-box p {
-      margin: 0 0 12px;
-      color: #92400e;
-      font-weight: 600;
-      font-size: 17px;
-    }
-    
-    .message-box p:last-child {
-      margin-bottom: 0;
-    }
-    
-    .tracking-box {
-      background: #f3f4f6;
-      border-radius: 12px;
-      padding: 20px;
-      margin: 24px 0;
-      text-align: center;
-    }
-    
-    .tracking-label {
-      font-size: 13px;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-    
-    .tracking-number {
-      font-size: 24px;
-      font-weight: 700;
-      color: #1f2937;
-      font-family: 'Courier New', monospace;
-      letter-spacing: 1px;
-    }
-    
-    .cta-button {
-      display: inline-block;
-      background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
-      color: #ffffff;
-      padding: 16px 32px;
-      text-decoration: none;
-      border-radius: 12px;
-      font-weight: 700;
-      font-size: 16px;
-      margin: 24px auto;
-      display: block;
-      text-align: center;
-      max-width: 280px;
-      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
-      transition: all 0.3s ease;
-    }
-    
-    .cta-button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 32px rgba(245, 158, 11, 0.4);
-    }
-    
-    .urgency-text {
-      background: #fef2f2;
-      border: 2px solid #fecaca;
-      border-radius: 12px;
-      padding: 20px;
-      margin: 24px 0;
-      text-align: center;
-    }
-    
-    .urgency-text p {
-      margin: 0;
-      color: #991b1b;
-      font-weight: 600;
-      font-size: 15px;
-    }
-    
-    .urgency-text .icon {
-      font-size: 24px;
-      margin-bottom: 8px;
-      display: block;
-    }
-    
-    .footer {
-      background: #f9fafb;
-      padding: 32px;
-      text-align: center;
-      border-top: 1px solid #e5e7eb;
-    }
-    
-    .footer p {
-      margin: 8px 0;
-      color: #6b7280;
-      font-size: 14px;
-    }
-    
-    .footer a {
-      color: #f59e0b;
-      text-decoration: none;
-      font-weight: 600;
-    }
-    
-    .footer a:hover {
-      text-decoration: underline;
-    }
-    
-    .divider {
-      height: 1px;
-      background: linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%);
-      margin: 32px 0;
-    }
-    
-    @media only screen and (max-width: 600px) {
-      .email-container {
-        margin: 20px auto;
-        border-radius: 0;
-      }
-      
-      .header {
-        padding: 32px 24px;
-      }
-      
-      .header h1 {
-        font-size: 24px;
-      }
-      
-      .content {
-        padding: 32px 24px;
-      }
-      
-      .emoji-icon {
-        font-size: 48px;
-      }
-      
-      .tracking-number {
-        font-size: 18px;
-      }
-      
-      .cta-button {
-        padding: 14px 24px;
-        font-size: 15px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="email-container">
-    <div class="header">
-      <span class="emoji-icon">⏰</span>
-      <h1>Friendly Reminder!</h1>
-      <p>We're excited to complete your device trade-in</p>
-    </div>
-    
-    <div class="content">
-      <p class="greeting">Hi ${order.shippingInfo?.fullName || 'there'},</p>
-      
-      <p>We wanted to send you a quick reminder about your device trade-in for order <strong>#${orderId}</strong>!</p>
-      
-      <div class="message-box">
-        <p>📦 Your shipping label is ready and waiting!</p>
-        <p>We're excited to receive your <strong>${order.device}</strong> and complete your trade-in.</p>
-      </div>
-      
-      ${order.trackingNumber || order.inboundTrackingNumber ? `
-      <div class="tracking-box">
-        <div class="tracking-label">Your Tracking Number</div>
-        <div class="tracking-number">${order.trackingNumber || order.inboundTrackingNumber}</div>
-      </div>
-      ` : ''}
-      
-      <div class="steps-list">
-        <h3>📝 Quick Checklist Before Shipping:</h3>
-        <ol>
-          <li><strong>Back up your data</strong> - Save all photos, contacts, and files</li>
-          <li><strong>Factory reset your device</strong> - Remove all personal information</li>
-          <li><strong>Sign out of all accounts</strong> (iCloud, Google, etc.)</li>
-          <li><strong>Remove your SIM card</strong></li>
-          <li><strong>Pack securely</strong> and attach your shipping label</li>
-        </ol>
-      </div>
-      
-      ${order.trackingNumber || order.inboundTrackingNumber ? `
-      <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${order.trackingNumber || order.inboundTrackingNumber}" class="cta-button">
-        📍 Track Your Shipment
-      </a>
-      ` : ''}
-      
-      <div class="urgency-text">
-        <span class="icon">⚡</span>
-        <p>The sooner you ship, the sooner you get paid!</p>
-        <p>We typically process devices within 24-48 hours of receipt.</p>
-      </div>
-      
-      <div class="divider"></div>
-      
-      <p style="text-align: center; color: #6b7280; font-size: 15px;">
-        Have questions? Just reply to this email - we're here to help! 💬
-      </p>
-    </div>
-    
-    <div class="footer">
-      <p><strong>SecondHandCell</strong></p>
-      <p>Making device trade-ins simple and rewarding</p>
-      <p style="margin-top: 16px;">
-        <a href="https://secondhandcell.com">Visit our website</a> • 
-        <a href="mailto:support@secondhandcell.com">Contact Support</a>
-      </p>
-      <p style="margin-top: 16px; font-size: 12px;">
-        This is an automated reminder for your trade-in order #${orderId}
-      </p>
-    </div>
-  </div>
-</body>
-</html>
-    `.trim();
+    const { subject, html } = buildLabelReminderEmail(
+      sanitizedOrderId,
+      { ...order, id: sanitizedOrderId }
+    );
 
     // 7. Send the email
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: order.shippingInfo?.email,
-      subject: '⏰ Friendly Reminder: We\'re Waiting for Your Device! 📱',
-      html: emailHtml,
+      subject,
+      html,
       bcc: ["sales@secondhandcell.com"]
     });
+
 
     await recordCustomerEmail(
       sanitizedOrderId,
