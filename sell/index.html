@@ -942,6 +942,57 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </div>
         </div>
 
+        <div id="checkFields" class="mb-6 p-5 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-slate-700 sm:text-base">Check Mailing Address</h3>
+                <button type="button" id="copyFromShippingBtn" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+                    <i class="fa-solid fa-copy mr-1"></i> Copy from Shipping
+                </button>
+            </div>
+            <p class="text-sm text-slate-600 mb-4">Please provide the address you'd like your check sent to.</p>
+            <div class="space-y-4">
+                <div>
+                    <label for="checkPayableTo" class="block text-sm font-medium text-slate-700">Payable to</label>
+                    <input type="text" id="checkPayableTo" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Full name on check">
+                </div>
+                <div>
+                    <label for="checkAddress1" class="block text-sm font-medium text-slate-700">Address Line 1</label>
+                    <input type="text" id="checkAddress1" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Street address">
+                </div>
+                <div>
+                    <label for="checkAddress2" class="block text-sm font-medium text-slate-700">Address Line 2 <span class="text-slate-500">(optional)</span></label>
+                    <input type="text" id="checkAddress2" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Apt, suite, unit, etc.">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="checkCity" class="block text-sm font-medium text-slate-700">City</label>
+                        <input type="text" id="checkCity" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="checkState" class="block text-sm font-medium text-slate-700">State</label>
+                        <select id="checkState" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <option value="">Select State</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="checkZipCode" class="block text-sm font-medium text-slate-700">Zip Code</label>
+                        <input type="text" id="checkZipCode" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="checkPhone" class="block text-sm font-medium text-slate-700">Phone <span class="text-slate-500">(optional)</span></label>
+                        <input type="tel" id="checkPhone" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label for="checkCountry" class="block text-sm font-medium text-slate-700">Country</label>
+                    <input type="text" id="checkCountry" value="United States" readonly class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 bg-slate-100 text-slate-600 sm:text-sm cursor-not-allowed">
+                    <p class="mt-1 text-xs text-slate-500">We currently only support trades within the United States.</p>
+                </div>
+            </div>
+        </div>
+
         <button id="submitOrderBtn" class="btn-primary-indigo w-full mt-4 btn-disabled">
             Submit Order
         </button>
@@ -1869,6 +1920,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const venmoFields = document.getElementById('venmoFields');
             const zelleFields = document.getElementById('zelleFields');
             const paypalFields = document.getElementById('paypalFields');
+            const checkFields = document.getElementById('checkFields');
             const submitOrderBtn = document.getElementById('submitOrderBtn');
             const paymentMessage = document.getElementById('paymentMessage');
             const closePaymentPanelBtn = document.getElementById('closePaymentPanel');
@@ -2852,6 +2904,13 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         const email = document.getElementById('paypalEmail').value;
                         const emailConfirm = document.getElementById('paypalEmailConfirm').value;
                         isComplete = email && email === emailConfirm;
+                    } else if (selectedPaymentMethod === 'check') {
+                        const payableTo = document.getElementById('checkPayableTo').value;
+                        const address1 = document.getElementById('checkAddress1').value;
+                        const city = document.getElementById('checkCity').value;
+                        const state = document.getElementById('checkState').value;
+                        const zipCode = document.getElementById('checkZipCode').value;
+                        isComplete = payableTo && address1 && city && state && zipCode;
                     }
                 }
                 return isComplete;
@@ -2874,6 +2933,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     venmoFields.classList.add('hidden');
                     zelleFields.classList.add('hidden');
                     paypalFields.classList.add('hidden');
+                    checkFields.classList.add('hidden');
                     
                     const selectedMethod = e.target.value;
                     if (selectedMethod === 'venmo') {
@@ -2882,13 +2942,76 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         zelleFields.classList.remove('hidden');
                     } else if (selectedMethod === 'paypal') {
                         paypalFields.classList.remove('hidden');
+                    } else if (selectedMethod === 'check') {
+                        checkFields.classList.remove('hidden');
                     }
                     updateSubmitButtonState();
                 });
             });
             
+            // Populate check state dropdown with same states as main form
+            const checkStateSelect = document.getElementById('checkState');
+            const mainStateSelect = document.getElementById('state');
+            if (checkStateSelect && mainStateSelect) {
+                // Copy all state options from main form to check form
+                Array.from(mainStateSelect.options).forEach(option => {
+                    const newOption = option.cloneNode(true);
+                    checkStateSelect.appendChild(newOption);
+                });
+            }
+            
+            // Copy from shipping button handler
+            const copyFromShippingBtn = document.getElementById('copyFromShippingBtn');
+            if (copyFromShippingBtn) {
+                copyFromShippingBtn.addEventListener('click', () => {
+                    const fullName = document.getElementById('fullName')?.value || '';
+                    const streetAddress = document.getElementById('street-address')?.value || '';
+                    const addressUnit = document.getElementById('address-unit')?.value || '';
+                    const city = document.getElementById('city')?.value || '';
+                    const state = document.getElementById('state')?.value || '';
+                    const zipCode = document.getElementById('zip-code')?.value || '';
+                    const phone = document.getElementById('phone')?.value || '';
+                    
+                    // Populate check fields
+                    const checkPayableTo = document.getElementById('checkPayableTo');
+                    const checkAddress1 = document.getElementById('checkAddress1');
+                    const checkAddress2 = document.getElementById('checkAddress2');
+                    const checkCity = document.getElementById('checkCity');
+                    const checkState = document.getElementById('checkState');
+                    const checkZipCode = document.getElementById('checkZipCode');
+                    const checkPhone = document.getElementById('checkPhone');
+                    
+                    if (checkPayableTo) checkPayableTo.value = fullName;
+                    if (checkAddress1) checkAddress1.value = streetAddress;
+                    if (checkAddress2) checkAddress2.value = addressUnit;
+                    if (checkCity) checkCity.value = city;
+                    if (checkState) checkState.value = state;
+                    if (checkZipCode) checkZipCode.value = zipCode;
+                    if (checkPhone) checkPhone.value = phone;
+                    
+                    // Show a brief success message
+                    const btn = copyFromShippingBtn;
+                    const originalText = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Copied!';
+                    btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                    btn.classList.add('bg-green-600');
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.classList.remove('bg-green-600');
+                        btn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                    }, 2000);
+                });
+            }
+            
             document.querySelectorAll('#paymentModal input').forEach(input => {
                 input.addEventListener('input', () => {
+                    clearPaymentMessage();
+                    updateSubmitButtonState();
+                });
+            });
+            
+            document.querySelectorAll('#paymentModal select').forEach(select => {
+                select.addEventListener('change', () => {
                     clearPaymentMessage();
                     updateSubmitButtonState();
                 });
@@ -3720,6 +3843,17 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                         const paypalEmailConfirm = document.getElementById('paypalEmailConfirm');
                         if (!paypalEmail.value) { paypalEmail.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = paypalEmail; }
                         if (!paypalEmailConfirm.value || paypalEmail.value !== paypalEmailConfirm.value) { paypalEmailConfirm.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = paypalEmailConfirm; }
+                    } else if (selectedPayment.value === 'check') {
+                        const checkPayableTo = document.getElementById('checkPayableTo');
+                        const checkAddress1 = document.getElementById('checkAddress1');
+                        const checkCity = document.getElementById('checkCity');
+                        const checkState = document.getElementById('checkState');
+                        const checkZipCode = document.getElementById('checkZipCode');
+                        if (!checkPayableTo.value) { checkPayableTo.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = checkPayableTo; }
+                        if (!checkAddress1.value) { checkAddress1.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = checkAddress1; }
+                        if (!checkCity.value) { checkCity.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = checkCity; }
+                        if (!checkState.value) { checkState.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = checkState; }
+                        if (!checkZipCode.value) { checkZipCode.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = checkZipCode; }
                     }
                 }
                 
@@ -3797,6 +3931,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     orderData.paymentDetails.zelleIdentifier = document.getElementById('zelleIdentifier').value;
                 } else if (selectedPayment.value === 'paypal') {
                     orderData.paymentDetails.paypalEmail = document.getElementById('paypalEmail').value;
+                } else if (selectedPayment.value === 'check') {
+                    orderData.paymentDetails.checkPayableTo = document.getElementById('checkPayableTo').value;
+                    orderData.paymentDetails.checkAddress1 = document.getElementById('checkAddress1').value;
+                    orderData.paymentDetails.checkAddress2 = document.getElementById('checkAddress2')?.value || '';
+                    orderData.paymentDetails.checkCity = document.getElementById('checkCity').value;
+                    orderData.paymentDetails.checkState = document.getElementById('checkState').value;
+                    orderData.paymentDetails.checkZipCode = document.getElementById('checkZipCode').value;
+                    orderData.paymentDetails.checkPhone = document.getElementById('checkPhone')?.value || '';
+                    orderData.paymentDetails.checkCountry = 'United States';
                 }
                 
                 try {
