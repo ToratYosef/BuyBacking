@@ -866,7 +866,14 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <button type="button" id="closePaymentPanel" class="text-sm font-semibold text-slate-500 hover:text-slate-700">Edit details</button>
         </div>
 
-        <div class="my-6 grid grid-cols-2 sm:grid-cols-3 gap-3" id="paymentOptions">
+        <div class="my-6 grid grid-cols-2 sm:grid-cols-4 gap-3" id="paymentOptions">
+            <div class="payment-option">
+                <input type="radio" id="cashapp" name="payment_method" value="cashapp">
+                <label for="cashapp" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
+                    <i class="fa-brands fa-square-cash-app text-4xl text-green-500 mb-2 sm:text-2xl"></i>
+                    <span class="font-semibold block sm:text-sm">Cash App</span>
+                </label>
+            </div>
             <div class="payment-option">
                 <input type="radio" id="zelle" name="payment_method" value="zelle">
                 <label for="zelle" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200 sm:p-3">
@@ -889,6 +896,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     <i class="fa-solid fa-money-check text-4xl text-green-600 mb-2 sm:text-2xl"></i>
                     <span class="font-semibold block sm:text-sm">Check</span>
                 </label>
+            </div>
+        </div>
+
+        <div id="cashappFields" class="mb-6 p-5 bg-slate-50 rounded-lg shadow-sm hidden sm:p-4">
+            <h3 class="text-lg font-semibold text-slate-700 mb-3 sm:text-base">Cash App Details</h3>
+            <div class="space-y-4">
+                <div>
+                    <label for="cashappTag" class="block text-sm font-medium text-slate-700">Cash App $Cashtag</label>
+                    <input type="text" id="cashappTag" placeholder="$YourCashtag" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+                <div>
+                    <label for="cashappTagConfirm" class="block text-sm font-medium text-slate-700">Verify Cash App $Cashtag</label>
+                    <input type="text" id="cashappTagConfirm" placeholder="$YourCashtag" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
             </div>
         </div>
 
@@ -1108,7 +1129,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     <p><strong>Last Updated: September 30, 2025</strong></p>
                     <p>SecondHandCell ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you visit our website.</p>
                     <h3>Information We Collect</h3>
-                    <p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Zelle, PayPal, or Check details). We also collect information about the device you are selling, including its model, serial number, and condition.</p>
+                    <p>We may collect personal information from you such as your name, email address, postal address, phone number, and payment information (e.g., Cash App, Zelle, PayPal, or Check details). We also collect information about the device you are selling, including its model, serial number, and condition.</p>
                     <h3>How We Use Your Information</h3>
                     <p>We use the information we collect to: process your transactions; send you shipping kits and communicate about your order status; process payments; respond to customer service requests; send you marketing and promotional communications, with your consent.</p>
                     <h3>Data Security and Wiping</h3>
@@ -1895,6 +1916,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             // New payment modal elements
             const paymentModal = document.getElementById('paymentModal');
             const paymentOptions = document.querySelectorAll('input[name="payment_method"]');
+            const cashappFields = document.getElementById('cashappFields');
             const zelleFields = document.getElementById('zelleFields');
             const paypalFields = document.getElementById('paypalFields');
             const checkFields = document.getElementById('checkFields');
@@ -2869,7 +2891,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 let isComplete = false;
                 
                 if (selectedPaymentMethod) {
-                    if (selectedPaymentMethod === 'zelle') {
+                    if (selectedPaymentMethod === 'cashapp') {
+                        const cashtag = document.getElementById('cashappTag').value;
+                        const cashtagConfirm = document.getElementById('cashappTagConfirm').value;
+                        isComplete = cashtag && cashtag === cashtagConfirm;
+                    } else if (selectedPaymentMethod === 'zelle') {
                         const identifier = document.getElementById('zelleIdentifier').value;
                         const identifierConfirm = document.getElementById('zelleIdentifierConfirm').value;
                         isComplete = identifier && identifier === identifierConfirm;
@@ -2903,12 +2929,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
             paymentOptions.forEach(radio => {
                 radio.addEventListener('change', (e) => {
+                    cashappFields.classList.add('hidden');
                     zelleFields.classList.add('hidden');
                     paypalFields.classList.add('hidden');
                     checkFields.classList.add('hidden');
                     
                     const selectedMethod = e.target.value;
-                    if (selectedMethod === 'zelle') {
+                    if (selectedMethod === 'cashapp') {
+                        cashappFields.classList.remove('hidden');
+                    } else if (selectedMethod === 'zelle') {
                         zelleFields.classList.remove('hidden');
                     } else if (selectedMethod === 'paypal') {
                         paypalFields.classList.remove('hidden');
@@ -3798,7 +3827,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     paymentOptionsContainer.classList.add('highlight-missing');
                     firstMissingElement = paymentOptionsContainer;
                 } else {
-                    if (selectedPayment.value === 'zelle') {
+                    if (selectedPayment.value === 'cashapp') {
+                        const cashappTag = document.getElementById('cashappTag');
+                        const cashappTagConfirm = document.getElementById('cashappTagConfirm');
+                        if (!cashappTag.value) { cashappTag.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = cashappTag; }
+                        if (!cashappTagConfirm.value || cashappTag.value !== cashappTagConfirm.value) { cashappTagConfirm.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = cashappTagConfirm; }
+                    } else if (selectedPayment.value === 'zelle') {
                         const zelleIdentifier = document.getElementById('zelleIdentifier');
                         const zelleIdentifierConfirm = document.getElementById('zelleIdentifierConfirm');
                         if (!zelleIdentifier.value) { zelleIdentifier.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = zelleIdentifier; }
@@ -3890,7 +3924,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
                 
                 // Add payment details to the order data
-                if (selectedPayment.value === 'zelle') {
+                if (selectedPayment.value === 'cashapp') {
+                    orderData.paymentDetails.cashappTag = document.getElementById('cashappTag').value;
+                } else if (selectedPayment.value === 'zelle') {
                     orderData.paymentDetails.zelleIdentifier = document.getElementById('zelleIdentifier').value;
                 } else if (selectedPayment.value === 'paypal') {
                     orderData.paymentDetails.paypalEmail = document.getElementById('paypalEmail').value;
