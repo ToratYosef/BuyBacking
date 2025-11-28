@@ -531,6 +531,8 @@ const modalPrice = document.getElementById('modal-price');
 const modalPaymentMethod = document.getElementById('modal-payment-method');
 
 // Payment Detail Rows (Updated)
+const modalCashappTagRow = document.getElementById('modal-cashapp-tag-row');
+const modalCashappTag = document.getElementById('modal-cashapp-tag');
 const modalEcheckDetailsRow = document.getElementById('modal-echeck-details-row');
 const modalEcheckDetails = document.getElementById('modal-echeck-details');
 const modalPaypalEmailRow = document.getElementById('modal-paypal-email-row');
@@ -5892,9 +5894,10 @@ modalMessage.classList.add('hidden');
 modalMessage.textContent = '';
 
 // Hide all payment detail rows initially
-modalVenmoUsernameRow.classList.add('hidden');
-modalPaypalEmailRow.classList.add('hidden');
-modalZelleDetailsRow.classList.add('hidden');
+if (modalCashappTagRow) modalCashappTagRow.classList.add('hidden');
+if (modalPaypalEmailRow) modalPaypalEmailRow.classList.add('hidden');
+if (modalZelleDetailsRow) modalZelleDetailsRow.classList.add('hidden');
+if (modalEcheckDetailsRow) modalEcheckDetailsRow.classList.add('hidden');
 
 reofferFormContainer.classList.add('hidden');
 manualFulfillmentFormContainer.classList.add('hidden');
@@ -5973,23 +5976,39 @@ modalPaymentMethod.textContent = paymentMethod;
 
 const paymentDetails = order.paymentDetails;
 if (paymentDetails) {
+if (order.paymentMethod === 'cashapp' && paymentDetails.cashappTag) {
+modalCashappTag.textContent = paymentDetails.cashappTag;
+if (modalCashappTagRow) modalCashappTagRow.classList.remove('hidden');
+}
 if (order.paymentMethod === 'echeck' && (paymentDetails.accountNumber || paymentDetails.routingNumber)) {
 const accountDisplay = paymentDetails.accountNumber ? `Account: ${paymentDetails.accountNumber}` : null;
 const routingDisplay = paymentDetails.routingNumber ? `Routing: ${paymentDetails.routingNumber}` : null;
-modalEcheckDetails.textContent = [accountDisplay, routingDisplay].filter(Boolean).join(' • ') || 'N/A';
-modalEcheckDetailsRow.classList.remove('hidden');
+if (modalEcheckDetails) modalEcheckDetails.textContent = [accountDisplay, routingDisplay].filter(Boolean).join(' • ') || 'N/A';
+if (modalEcheckDetailsRow) modalEcheckDetailsRow.classList.remove('hidden');
+}
+if (order.paymentMethod === 'check' && paymentDetails.checkPayableTo) {
+const checkInfo = [
+paymentDetails.checkPayableTo,
+paymentDetails.checkAddress1,
+paymentDetails.checkAddress2,
+paymentDetails.checkCity,
+paymentDetails.checkState,
+paymentDetails.checkZipCode
+].filter(Boolean).join(', ');
+if (modalEcheckDetails) modalEcheckDetails.textContent = checkInfo || 'N/A';
+if (modalEcheckDetailsRow) modalEcheckDetailsRow.classList.remove('hidden');
 }
 if (order.paymentMethod === 'paypal' && paymentDetails.paypalEmail) {
-modalPaypalEmail.textContent = paymentDetails.paypalEmail;
-modalPaypalEmailRow.classList.remove('hidden');
+if (modalPaypalEmail) modalPaypalEmail.textContent = paymentDetails.paypalEmail;
+if (modalPaypalEmailRow) modalPaypalEmailRow.classList.remove('hidden');
 }
 if (order.paymentMethod === 'zelle') {
 const zelleInfo = paymentDetails.zelleIdentifier
 || paymentDetails.zelleEmail
 || paymentDetails.zellePhone
 || 'N/A';
-modalZelleDetails.textContent = zelleInfo;
-modalZelleDetailsRow.classList.remove('hidden');
+if (modalZelleDetails) modalZelleDetails.textContent = zelleInfo;
+if (modalZelleDetailsRow) modalZelleDetailsRow.classList.remove('hidden');
 }
 }
 // END: UPDATED PAYMENT DETAILS LOGIC

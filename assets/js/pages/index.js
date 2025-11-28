@@ -847,6 +847,7 @@ await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false 
 });
 
 const chatOrderBtn = document.getElementById('chat-order-btn');
+if (chatOrderBtn) {
 chatOrderBtn.addEventListener('click', async () => {
 if (currentChatId) {
 await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
@@ -854,6 +855,7 @@ await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true }
 displayOrderSelectionUI();
 }
 });
+}
 
 const chatHeaderButtons = document.querySelectorAll('.chat-header-button');
 
