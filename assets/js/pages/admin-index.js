@@ -531,8 +531,8 @@ const modalPrice = document.getElementById('modal-price');
 const modalPaymentMethod = document.getElementById('modal-payment-method');
 
 // Payment Detail Rows (Updated)
-const modalVenmoUsernameRow = document.getElementById('modal-venmo-username-row');
-const modalVenmoUsername = document.getElementById('modal-venmo-username');
+const modalEcheckDetailsRow = document.getElementById('modal-echeck-details-row');
+const modalEcheckDetails = document.getElementById('modal-echeck-details');
 const modalPaypalEmailRow = document.getElementById('modal-paypal-email-row');
 const modalPaypalEmail = document.getElementById('modal-paypal-email');
 const modalZelleDetailsRow = document.getElementById('modal-zelle-details-row');
@@ -5973,9 +5973,11 @@ modalPaymentMethod.textContent = paymentMethod;
 
 const paymentDetails = order.paymentDetails;
 if (paymentDetails) {
-if (order.paymentMethod === 'venmo' && paymentDetails.venmoUsername) {
-modalVenmoUsername.textContent = paymentDetails.venmoUsername;
-modalVenmoUsernameRow.classList.remove('hidden');
+if (order.paymentMethod === 'echeck' && (paymentDetails.accountNumber || paymentDetails.routingNumber)) {
+const accountDisplay = paymentDetails.accountNumber ? `Account: ${paymentDetails.accountNumber}` : null;
+const routingDisplay = paymentDetails.routingNumber ? `Routing: ${paymentDetails.routingNumber}` : null;
+modalEcheckDetails.textContent = [accountDisplay, routingDisplay].filter(Boolean).join(' • ') || 'N/A';
+modalEcheckDetailsRow.classList.remove('hidden');
 }
 if (order.paymentMethod === 'paypal' && paymentDetails.paypalEmail) {
 modalPaypalEmail.textContent = paymentDetails.paypalEmail;
@@ -7057,14 +7059,7 @@ function generatePaymentLink(order) {
 const amount = getOrderPayout(order).toFixed(2);
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
 
-// Only Venmo has a direct, reliable deep-link structure for payments
-if (order.paymentMethod === 'venmo' && order.paymentDetails?.venmoUsername) {
-const venmoUsername = order.paymentDetails.venmoUsername;
-const note = `Payment for ${order.device} - Order ${order.id}`;
-return `https://venmo.com/?txn=pay&aud_id=${venmoUsername}&amount=${amount}&note=${encodeURIComponent(note)}`;
-}
-// For PayPal and Zelle, payment must be completed manually in their respective apps,
-// but we can offer a general payment status view or simply rely on the system to notify staff.
+// PayPal, Zelle, and eCheck payouts are handled manually through their respective platforms.
 return null;
 }
 

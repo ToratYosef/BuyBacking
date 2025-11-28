@@ -925,13 +925,18 @@ let isComplete = false;
 
 if (!selectedMethod) return false;
 
-// Logic to determine if fields are filled and match
-const fields = document.querySelectorAll(`#${selectedMethod}Fields input`);
-isComplete = Array.from(fields).every(input => input.value && input.value.trim() !== '');
+if (selectedMethod === 'echeck') {
+  const accountNumber = document.getElementById('echeckAccountNumber')?.value;
+  const accountNumberConfirm = document.getElementById('echeckAccountNumberConfirm')?.value;
+  const routingNumber = document.getElementById('echeckRoutingNumber')?.value;
+  isComplete = Boolean(accountNumber && routingNumber && accountNumber === accountNumberConfirm);
+} else {
+  const fields = document.querySelectorAll(`#${selectedMethod}Fields input`);
+  isComplete = Array.from(fields).every(input => input.value && input.value.trim() !== '');
 
-// Check for matching values
-if (isComplete && fields.length === 2 && fields[0].value !== fields[1].value) {
-isComplete = false;
+  if (isComplete && fields.length === 2 && fields[0].value !== fields[1].value) {
+  isComplete = false;
+  }
 }
 
 return isComplete;
@@ -942,7 +947,7 @@ const submitBtn = document.getElementById('submitFinalOrderBtn');
 const selectedMethod = document.querySelector('input[name="payment_method"]:checked');
 
 // Hide all detail sections first
-document.getElementById('venmoFields').classList.add('hidden');
+document.getElementById('echeckFields').classList.add('hidden');
 document.getElementById('zelleFields').classList.add('hidden');
 document.getElementById('paypalFields').classList.add('hidden');
 
@@ -1043,8 +1048,9 @@ termsAccepted: document.getElementById('termsAccepted').checked,
 userId: auth.currentUser?.uid || currentUserId,
 };
 
-if (selectedPayment.value === 'venmo') {
-orderData.paymentDetails.venmoUsername = document.getElementById('venmoUsername').value;
+if (selectedPayment.value === 'echeck') {
+orderData.paymentDetails.accountNumber = document.getElementById('echeckAccountNumber').value;
+orderData.paymentDetails.routingNumber = document.getElementById('echeckRoutingNumber').value;
 } else if (selectedPayment.value === 'zelle') {
 orderData.paymentDetails.zelleIdentifier = document.getElementById('zelleIdentifier').value;
 } else if (selectedPayment.value === 'paypal') {

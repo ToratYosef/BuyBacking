@@ -93,8 +93,8 @@ const modalStorage = document.getElementById('modal-storage');
 const modalCarrier = document.getElementById('modal-carrier');
 const modalPrice = document.getElementById('modal-price');
 const modalPaymentMethod = document.getElementById('modal-payment-method');
-const modalVenmoUsernameRow = document.getElementById('modal-venmo-username-row');
-const modalVenmoUsername = document.getElementById('modal-venmo-username');
+const modalEcheckDetailsRow = document.getElementById('modal-echeck-details-row');
+const modalEcheckDetails = document.getElementById('modal-echeck-details');
 const modalShippingAddress = document.getElementById('modal-shipping-address');
 const modalConditionPowerOn = document.getElementById('modal-condition-power-on');
 const modalConditionFunctional = document.getElementById('modal-condition-functional');
@@ -1039,9 +1039,11 @@ modalPrice.textContent = order.estimatedQuote ? order.estimatedQuote.toFixed(2) 
 modalOrderAge.textContent = formatOrderAge(order.createdAt);
 
 modalPaymentMethod.textContent = order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A';
-if (order.paymentMethod === 'venmo' && order.paymentDetails && order.paymentDetails.venmoUsername) {
-modalVenmoUsername.textContent = order.paymentDetails.venmoUsername;
-modalVenmoUsernameRow.classList.remove('hidden');
+if (order.paymentMethod === 'echeck' && order.paymentDetails && (order.paymentDetails.accountNumber || order.paymentDetails.routingNumber)) {
+const accountDisplay = order.paymentDetails.accountNumber ? `Account: ${order.paymentDetails.accountNumber}` : null;
+const routingDisplay = order.paymentDetails.routingNumber ? `Routing: ${order.paymentDetails.routingNumber}` : null;
+modalEcheckDetails.textContent = [accountDisplay, routingDisplay].filter(Boolean).join(' • ') || 'N/A';
+modalEcheckDetailsRow.classList.remove('hidden');
 }
 
 const shippingInfo = order.shippingInfo;
@@ -1674,12 +1676,7 @@ const amount = order.reOffer?.newPrice
 ? order.reOffer.newPrice.toFixed(2)
 : (order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00');
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'Customer';
-const venmoUsername = order.paymentDetails?.venmoUsername;
 
-if (order.paymentMethod === 'venmo' && venmoUsername) {
-const note = `Payment for ${order.device} - Order ${order.id}`;
-return `https://venmo.com/?txn=pay&aud_id=${venmoUsername}&amount=${amount}&note=${encodeURIComponent(note)}`;
-}
 return null;
 }
 

@@ -48,8 +48,8 @@ const modalStorage = document.getElementById('modalStorage');
 const modalCarrier = document.getElementById('modalCarrier');
 const modalPrice = document.getElementById('modalPrice');
 const modalPaymentMethod = document.getElementById('modalPaymentMethod');
-const modalVenmoUsernameRow = document.getElementById('modalVenmoUsernameRow');
-const modalVenmoUsername = document.getElementById('modalVenmoUsername');
+const modalEcheckDetailsRow = document.getElementById('modalEcheckDetailsRow');
+const modalEcheckDetails = document.getElementById('modalEcheckDetails');
 const modalShippingAddress = document.getElementById('modalShippingAddress');
 const modalConditionPowerOn = document.getElementById('modalConditionPowerOn');
 const modalConditionFunctional = document.getElementById('modalConditionFunctional');
@@ -576,7 +576,7 @@ modalActionButtons.innerHTML = '';
 modalLoadingMessage.classList.add('hidden');
 modalMessage.classList.add('hidden');
 modalMessage.textContent = '';
-modalVenmoUsernameRow.classList.add('hidden');
+modalEcheckDetailsRow.classList.add('hidden');
 reOfferDetails.classList.add('hidden');
 labelInfoSection.classList.add('hidden');
 outboundLabelRow.classList.add('hidden');
@@ -612,9 +612,11 @@ modalStorage.textContent = order.storage || 'N/A';
 modalCarrier.textContent = order.carrier || 'N/A';
 modalPrice.textContent = order.estimatedQuote ? order.estimatedQuote.toFixed(2) : '0.00';
 modalPaymentMethod.textContent = order.paymentMethod ? formatCondition(order.paymentMethod) : 'N/A';
-if (order.paymentMethod === 'venmo' && order.paymentDetails?.venmoUsername) {
-modalVenmoUsername.textContent = order.paymentDetails.venmoUsername;
-modalVenmoUsernameRow.classList.remove('hidden');
+if (order.paymentMethod === 'echeck' && (order.paymentDetails?.accountNumber || order.paymentDetails?.routingNumber)) {
+const accountDisplay = order.paymentDetails.accountNumber ? `Account: ${order.paymentDetails.accountNumber}` : null;
+const routingDisplay = order.paymentDetails.routingNumber ? `Routing: ${order.paymentDetails.routingNumber}` : null;
+modalEcheckDetails.textContent = [accountDisplay, routingDisplay].filter(Boolean).join(' • ') || 'N/A';
+modalEcheckDetailsRow.classList.remove('hidden');
 }
 modalShippingAddress.textContent = order.shippingInfo ? `${order.shippingInfo.streetAddress}, ${order.shippingInfo.city}, ${order.shippingInfo.state}, ${order.shippingInfo.zipCode}` : 'N/A';
 modalConditionPowerOn.textContent = order.condition_power_on ? formatCondition(order.condition_power_on) : 'N/A';

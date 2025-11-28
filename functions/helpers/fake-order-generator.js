@@ -18,7 +18,13 @@ const DEVICE_TEMPLATES = [
 const PAYMENT_METHODS = [
   { key: 'paypal', buildDetails: (profile) => ({ paypalEmail: profile.email }) },
   { key: 'zelle', buildDetails: (profile) => ({ zelleEmail: profile.email }) },
-  { key: 'venmo', buildDetails: (profile) => ({ venmoUsername: `@${profile.fullName.toLowerCase().replace(/[^a-z0-9]/g, '')}` }) },
+  {
+    key: 'echeck',
+    buildDetails: (profile) => ({
+      accountNumber: `10${Math.abs(profile.fullName.length * 9173).toString().padStart(6, '0')}`,
+      routingNumber: '021000021',
+    }),
+  },
   { key: 'check', buildDetails: () => ({}) }
 ];
 
