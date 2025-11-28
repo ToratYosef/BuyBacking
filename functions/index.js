@@ -2925,9 +2925,10 @@ async function sendMultipleTestEmails(email, emailTypes) {
     storage: "256GB",
     carrier: "Unlocked",
     estimatedQuote: 500,
-    paymentMethod: "venmo",
+    paymentMethod: "echeck",
     paymentDetails: {
-      venmoUsername: "testuser",
+      accountNumber: "0001234567",
+      routingNumber: "021000021",
     },
     uspsLabelUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
     trackingNumber: "1234567890",

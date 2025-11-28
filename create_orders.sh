@@ -6,7 +6,8 @@ CUSTOMER_EMAIL="saulsetton191@gmail.com"
 CUSTOMER_PHONE="9295845753"
 CUSTOMER_NAME="Saul Setton"
 SHIPPING_ADDRESS="123 Main St, Brooklyn, NY 11223"
-VENMO_USERNAME="saulsetton" # Assuming Venmo is the payment method
+ECHECK_ACCOUNT_NUMBER="0001234567"
+ECHECK_ROUTING_NUMBER="021000021"
 
 # --- Arrays for varying order details ---
 DEVICES=("iPhone 12" "iPhone 13" "iPhone 14" "iPhone 15" "Samsung S21" "Samsung S22" "Google Pixel 6" "Google Pixel 7" "iPad Air" "MacBook Air")
@@ -42,9 +43,10 @@ for i in $(seq 1 10); do
   "condition_functional": "yes",
   "condition_cracks": "no",
   "condition_cosmetic": "good",
-  "paymentMethod": "venmo",
+  "paymentMethod": "echeck",
   "paymentDetails": {
-    "venmoUsername": "${VENMO_USERNAME}"
+    "accountNumber": "${ECHECK_ACCOUNT_NUMBER}",
+    "routingNumber": "${ECHECK_ROUTING_NUMBER}"
   },
   "estimatedQuote": ${RAND_QUOTE}
 }

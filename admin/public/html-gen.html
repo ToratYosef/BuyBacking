@@ -484,13 +484,15 @@
                         <h2 class="text-2xl font-bold text-slate-800 mb-6">4. How would you like to get paid?</h2>
                         <div class="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4" id="paymentOptions">
                             <div class="payment-option">
-                                <input type="radio" id="venmo" name="payment_method" value="venmo">
-                                <label for="venmo" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200">
-                                    <svg xmlns="http://www.w3.org/2000/svg" x="0px" y="0px" width="48" height="48" viewBox="0 0 512 512" class="h-10 w-10 mb-2 mx-auto" aria-label="Venmo" role="img">
-                                        <rect width="512" height="512" rx="15%" fill="#3396cd"/>
-                                        <path d="m381.4 105.3c11 18.1 15.9 36.7 15.9 60.3 0 75.1-64.1 172.7-116.2 241.2h-118.8l-47.6-285 104.1-9.9 25.3 202.8c23.5-38.4 52.6-98.7 52.6-139.7 0-22.5-3.9-37.8-9.9-50.4z" fill="#fff"/>
+                                <input type="radio" id="echeck" name="payment_method" value="echeck">
+                                <label for="echeck" class="p-4 bg-slate-50 rounded-xl text-center hover:bg-slate-200 transition-colors duration-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" class="h-10 w-10 mb-2 mx-auto" aria-label="eCheck" role="img">
+                                        <path fill="#4c6fff" d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/>
+                                        <path fill="#fff" d="M6 9h12v2H6zm0 4h8v2H6z"/>
+                                        <circle cx="7" cy="9" r="1" fill="#fff"/>
+                                        <circle cx="7" cy="13" r="1" fill="#fff"/>
                                     </svg>
-                                    <span class="font-semibold block">Venmo</span>
+                                    <span class="font-semibold block">eCheck</span>
                                 </label>
                             </div>
                             <div class="payment-option">
@@ -511,16 +513,20 @@
                             </div>
                         </div>
 
-                        <div id="venmoFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden">
-                            <h3 class="text-lg font-semibold text-slate-700 mb-3">Venmo Details</h3>
+                        <div id="echeckFields" class="mb-8 p-6 bg-slate-50 rounded-lg shadow-sm hidden">
+                            <h3 class="text-lg font-semibold text-slate-700 mb-3">eCheck Details</h3>
                             <div class="space-y-4">
                                 <div>
-                                    <label for="venmoUsername" class="block text-sm font-medium text-slate-700">Venmo Username</label>
-                                    <input type="text" id="venmoUsername" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <label for="echeckAccountNumber" class="block text-sm font-medium text-slate-700">Bank Account Number</label>
+                                    <input type="text" id="echeckAccountNumber" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label for="venmoUsernameConfirm" class="block text-sm font-medium text-slate-700">Verify Venmo Username</label>
-                                    <input type="text" id="venmoUsernameConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                    <label for="echeckAccountNumberConfirm" class="block text-sm font-medium text-slate-700">Confirm Bank Account Number</label>
+                                    <input type="text" id="echeckAccountNumberConfirm" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label for="echeckRoutingNumber" class="block text-sm font-medium text-slate-700">Routing Number</label>
+                                    <input type="text" id="echeckRoutingNumber" class="mt-1 block w-full border border-slate-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                         </div>
@@ -731,7 +737,7 @@
             const finalQuoteAmountMainText = document.getElementById('finalQuoteAmountMain');
             const finalQuoteAmountPopup = document.getElementById('finalQuoteAmountPopup');
             const paymentAndShipping = document.getElementById('paymentAndShipping');
-            const venmoFields = document.getElementById('venmoFields');
+            const echeckFields = document.getElementById('echeckFields');
             const zelleFields = document.getElementById('zelleFields');
             const paypalFields = document.getElementById('paypalFields');
             const shippingOptions = document.getElementById('shippingOptions');
@@ -1189,15 +1195,15 @@
 
             document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
                 radio.addEventListener('change', (e) => {
-                    venmoFields.classList.add('hidden');
+                    echeckFields.classList.add('hidden');
                     zelleFields.classList.add('hidden');
                     paypalFields.classList.add('hidden');
 
                     document.querySelectorAll('.payment-option label').forEach(label => label.classList.remove('highlight-missing'));
 
                     const selectedMethod = e.target.value;
-                    if (selectedMethod === 'venmo') {
-                        venmoFields.classList.remove('hidden');
+                    if (selectedMethod === 'echeck') {
+                        echeckFields.classList.remove('hidden');
                     } else if (selectedMethod === 'zelle') {
                         zelleFields.classList.remove('hidden');
                     } else if (selectedMethod === 'paypal') {
@@ -1266,11 +1272,13 @@
                         if (!firstMissingElement) firstMissingElement = paymentOptionsContainer;
                     }
                 } else {
-                    if (selectedPayment.value === 'venmo') {
-                        const venmoUsername = document.getElementById('venmoUsername');
-                        const venmoUsernameConfirm = document.getElementById('venmoUsernameConfirm');
-                        if (!venmoUsername.value) { venmoUsername.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = venmoUsername; }
-                        if (!venmoUsernameConfirm.value || venmoUsername.value !== venmoUsernameConfirm.value) { venmoUsernameConfirm.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = venmoUsernameConfirm; }
+                    if (selectedPayment.value === 'echeck') {
+                        const echeckAccountNumber = document.getElementById('echeckAccountNumber');
+                        const echeckAccountNumberConfirm = document.getElementById('echeckAccountNumberConfirm');
+                        const echeckRoutingNumber = document.getElementById('echeckRoutingNumber');
+                        if (!echeckAccountNumber.value) { echeckAccountNumber.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = echeckAccountNumber; }
+                        if (!echeckAccountNumberConfirm.value || echeckAccountNumber.value !== echeckAccountNumberConfirm.value) { echeckAccountNumberConfirm.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = echeckAccountNumberConfirm; }
+                        if (!echeckRoutingNumber.value) { echeckRoutingNumber.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = echeckRoutingNumber; }
                     } else if (selectedPayment.value === 'zelle') {
                         const zelleIdentifier = document.getElementById('zelleIdentifier');
                         if (!zelleIdentifier.value) { zelleIdentifier.classList.add('highlight-missing'); if (!firstMissingElement) firstMissingElement = zelleIdentifier; }
@@ -1335,8 +1343,9 @@
                     createdAt: serverTimestamp()
                 };
 
-                if (selectedPayment.value === 'venmo') {
-                    orderData.paymentDetails.venmoUsername = document.getElementById('venmoUsername').value;
+                if (selectedPayment.value === 'echeck') {
+                    orderData.paymentDetails.accountNumber = document.getElementById('echeckAccountNumber').value;
+                    orderData.paymentDetails.routingNumber = document.getElementById('echeckRoutingNumber').value;
                 } else if (selectedPayment.value === 'zelle') {
                     orderData.paymentDetails.zelleIdentifier = document.getElementById('zelleIdentifier').value;
                 } else if (selectedPayment.value === 'paypal') {
