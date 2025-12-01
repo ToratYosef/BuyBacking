@@ -1961,8 +1961,21 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             }
             
             // Basic modal controls for the new modals
-            const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
-            const closeModal = (modal) => modal?.classList.remove('is-visible');
+            const openModal = (modalId) => {
+                const modal = document.getElementById(modalId);
+                if (!modal) return;
+
+                // Some modals (like the auth modal) may have their display set to "none" by external scripts.
+                // Ensure they become visible when we add the `is-visible` class.
+                modal.style.display = 'flex';
+                modal.classList.add('is-visible');
+            };
+
+            const closeModal = (modal) => {
+                if (!modal) return;
+                modal.classList.remove('is-visible');
+                modal.style.display = 'none';
+            };
             
             document.querySelectorAll('.modal').forEach(modal => {
                 modal.addEventListener('click', (e) => {
