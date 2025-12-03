@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,6 +6,7 @@
     <title>SecondHandCell.com Email Sender</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* --- Custom CSS for Styling --- */
         body {
             font-family: 'Inter', sans-serif;
             background-color: #f3f4f6;
@@ -60,12 +60,39 @@
             overflow-x: auto;
             white-space: nowrap;
         }
+        /* Your original header styles (simplified for a single file example) */
+        .site-header {
+            background-color: #1e293b;
+            color: white;
+            padding: 1rem 0;
+        }
+        .site-header__inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        .logo-wordmark {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .logo-wordmark__primary { color: #ffffff; }
+        .logo-wordmark__accent { color: #f59e0b; }
+        .logo-tagline { font-size: 0.875rem; color: #9ca3af; }
+        .logo-image { height: 64px; }
+        .site-header__login {
+            color: #f59e0b;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border: 1px solid #f59e0b;
+            border-radius: 0.375rem;
+        }
     </style>
 
-    <link rel="stylesheet" href="/assets/css/site-chrome.css">
-</head>
+    </head>
 <body>
-<!-- Site Header -->
 <header class="site-header" data-site-header>
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
@@ -117,7 +144,6 @@
 <div class="container space-y-8">
     <h1 class="text-3xl font-bold text-center text-gray-800">Email Marketing Tool</h1>
     
-    <!-- HTML Email Input -->
     <div class="space-y-4">
         <h2 class="text-xl font-semibold text-gray-700 section-title">HTML Email Content</h2>
         <textarea id="htmlInput"
@@ -125,8 +151,9 @@
                   placeholder="Paste your HTML email code here..."></textarea>
         <button id="previewBtn" class="w-full btn-primary font-bold">Preview Email</button>
     </div>
+    
+    <hr>
 
-    <!-- Email Preview -->
     <div class="space-y-4">
         <h2 class="text-xl font-semibold text-gray-700 section-title">Email Preview</h2>
         <iframe id="previewFrame"
@@ -134,7 +161,8 @@
                 style="border: 1px solid #d1d5db;"></iframe>
     </div>
 
-    <!-- Recipient and Send Section -->
+    <hr>
+
     <div class="space-y-4">
         <h2 class="text-xl font-semibold text-gray-700 section-title">Recipients & Sending</h2>
 
@@ -157,23 +185,21 @@
         </div>
 
         <p class="text-xs text-gray-500">
-            Paste your full list once. This tool will split it into batches of up to <strong>99</strong> recipients.
+            Paste your full list into the **BCC** field. Use **"Pull All Emails"** to process the list for batching.
         </p>
 
-        <!-- Pull Emails + Display -->
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
             <button id="pullEmailsBtn" class="btn-secondary font-bold w-full sm:w-auto">
                 Pull All Emails
             </button>
             <div class="flex-grow">
-                <div id="emailsDisplay" class="copy-box text-sm text-gray-700 font-mono overflow-auto"></div>
+                <div id="emailsDisplay" class="copy-box text-sm text-gray-700 font-mono overflow-auto">No emails pulled.</div>
             </div>
             <button id="copyEmailsBtn" class="btn-secondary font-bold w-full sm:w-auto">
                 Copy Emails
             </button>
         </div>
 
-        <!-- Batching Controls -->
         <div class="space-y-2 border rounded-lg p-3 bg-gray-50">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <button id="makeBatchesBtn" class="btn-secondary font-bold w-full sm:w-auto">
@@ -199,12 +225,270 @@
             </div>
         </div>
 
-        <div id="statusMessage" class="mt-4 text-center font-medium"></div>
+        <div id="statusMessage" class="mt-4 text-center font-medium text-blue-600"></div>
     </div>
 </div>
 
-<!-- Page script -->
-<script type="module" src="/assets/js/pages/admin-email-index.js"></script>
-<script type="module" src="/assets/js/global-auth.js" defer></script>
+<script>
+// --- START OF JAVASCRIPT LOGIC ---
+
+// --- DOM Element Selection ---
+const htmlInput = document.getElementById('htmlInput');
+const previewFrame = document.getElementById('previewFrame');
+const previewBtn = document.getElementById('previewBtn');
+
+const toInput = document.getElementById('toInput');
+const bccInput = document.getElementById('bccInput');
+const subjectInput = document.getElementById('subjectInput');
+
+const pullEmailsBtn = document.getElementById('pullEmailsBtn');
+const emailsDisplay = document.getElementById('emailsDisplay');
+const copyEmailsBtn = document.getElementById('copyEmailsBtn');
+
+const makeBatchesBtn = document.getElementById('makeBatchesBtn');
+const batchInfo = document.getElementById('batchInfo');
+const currentBatchEmails = document.getElementById('currentBatchEmails');
+const prevBatchBtn = document.getElementById('prevBatchBtn');
+const nextBatchBtn = document.getElementById('nextBatchBtn');
+const sendBatchBtn = document.getElementById('sendBatchBtn');
+const statusMessage = document.getElementById('statusMessage');
+
+// --- State Variables ---
+const BATCH_SIZE = 99;
+let allBccEmails = [];
+let emailBatches = [];
+let currentBatchIndex = 0;
+
+// --- Utility Functions ---
+
+/**
+ * Parses and cleans a string of emails into an array.
+ * Handles commas, spaces, and newlines as separators.
+ * @param {string} emailString - The raw string from the textarea.
+ * @returns {string[]} - Array of cleaned email addresses.
+ */
+function parseEmails(emailString) {
+    if (!emailString) return [];
+    // Replace newlines with commas, then split by comma/space, filter empty strings, and trim.
+    return emailString.replace(/\n/g, ',')
+                      .split(/[\s,]+/)
+                      .map(email => email.trim())
+                      .filter(email => email && email.includes('@')); // Basic email validation
+}
+
+/**
+ * Splits the array of emails into batches of BATCH_SIZE.
+ */
+function createBatches() {
+    // Ensure the list is pulled first if user presses this without 'Pull All Emails'
+    if (allBccEmails.length === 0) {
+        const bccString = bccInput.value;
+        allBccEmails = parseEmails(bccString);
+    }
+
+    if (allBccEmails.length === 0) {
+        emailBatches = [];
+        return;
+    }
+    
+    emailBatches = [];
+    for (let i = 0; i < allBccEmails.length; i += BATCH_SIZE) {
+        emailBatches.push(allBccEmails.slice(i, i + BATCH_SIZE));
+    }
+    currentBatchIndex = 0;
+    updateBatchDisplay();
+}
+
+/**
+ * Updates the display elements for the current batch.
+ */
+function updateBatchDisplay() {
+    const totalBatches = emailBatches.length;
+
+    if (totalBatches === 0) {
+        batchInfo.textContent = 'No batches created.';
+        currentBatchEmails.textContent = 'Paste emails into the BCC field and click "Pull All Emails" to begin batching.';
+        prevBatchBtn.disabled = true;
+        nextBatchBtn.disabled = true;
+        sendBatchBtn.disabled = true;
+        return;
+    }
+
+    const currentBatch = emailBatches[currentBatchIndex];
+    batchInfo.textContent = `Batch ${currentBatchIndex + 1} of ${totalBatches} (${currentBatch.length} recipients)`;
+    currentBatchEmails.textContent = currentBatch.join(', ');
+
+    // Navigation and Send button state
+    prevBatchBtn.disabled = currentBatchIndex === 0;
+    nextBatchBtn.disabled = currentBatchIndex >= totalBatches - 1;
+    sendBatchBtn.disabled = false;
+}
+
+/**
+ * Placeholder function for sending the email via an API.
+ * !!! IMPORTANT: YOU MUST REPLACE THIS WITH YOUR ACTUAL SERVER-SIDE API CALL !!!
+ * @param {string} to - The main 'To' recipient.
+ * @param {string} subject - The email subject.
+ * @param {string} htmlContent - The full HTML body.
+ * @param {string[]} bccRecipients - Array of BCC emails for this batch.
+ */
+async function sendEmailApi(to, subject, htmlContent, bccRecipients) {
+    // --- START OF PLACEHOLDER API CALL ---
+    console.log(`Simulating API call: Sending email from ${to} with subject "${subject}" to ${bccRecipients.length} BCC recipients.`);
+    
+    // Replace this setTimeout with your actual fetch call to a server endpoint
+    return new Promise(resolve => {
+        setTimeout(() => {
+            // Check for basic content before resolving success
+            if (!htmlContent.trim()) {
+                resolve({ success: false, message: 'Simulated API error: HTML Content is empty.' });
+            } else {
+                resolve({ success: true, message: `Successfully simulated sending batch ${currentBatchIndex + 1}.` });
+            }
+        }, 1500); // Simulate API delay
+    });
+    // --- END OF PLACEHOLDER API CALL ---
+}
+
+// --- Event Handlers ---
+
+// 1. Preview Button Handler
+previewBtn.addEventListener('click', () => {
+    const html = htmlInput.value;
+    const doc = previewFrame.contentWindow.document;
+    doc.open();
+    // Wrap HTML in a simple document structure for reliable preview
+    doc.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body { font-family: sans-serif; margin: 10px; }
+            </style>
+        </head>
+        <body>
+            ${html}
+        </body>
+        </html>
+    `);
+    doc.close();
+});
+
+// 2. Pull All Emails Button Handler (Now focused on BCC)
+pullEmailsBtn.addEventListener('click', () => {
+    const bccString = bccInput.value;
+    allBccEmails = parseEmails(bccString);
+    emailsDisplay.textContent = allBccEmails.join(', ');
+    
+    // Auto-create batches after pulling
+    createBatches();
+
+    statusMessage.textContent = `Found ${allBccEmails.length} valid BCC emails. Batches created.`;
+});
+
+// 3. Copy Emails Button Handler
+copyEmailsBtn.addEventListener('click', () => {
+    if (emailsDisplay.textContent && emailsDisplay.textContent !== 'No emails pulled.') {
+        navigator.clipboard.writeText(emailsDisplay.textContent)
+            .then(() => {
+                statusMessage.textContent = 'Emails copied to clipboard!';
+                setTimeout(() => statusMessage.textContent = '', 3000);
+            })
+            .catch(err => {
+                statusMessage.textContent = 'Failed to copy emails.';
+                console.error('Copy error:', err);
+            });
+    } else {
+        statusMessage.textContent = 'No emails to copy!';
+    }
+});
+
+// 4. Create Batches Button Handler (Allows re-batching)
+makeBatchesBtn.addEventListener('click', () => {
+    createBatches(); // Uses internal logic to re-parse if needed
+    if (emailBatches.length > 0) {
+        statusMessage.textContent = `${emailBatches.length} batches created with a maximum of ${BATCH_SIZE} recipients each.`;
+    } else {
+        statusMessage.textContent = 'No valid BCC emails found to create batches.';
+    }
+});
+
+// 5. Navigation Handlers
+prevBatchBtn.addEventListener('click', () => {
+    if (currentBatchIndex > 0) {
+        currentBatchIndex--;
+        updateBatchDisplay();
+    }
+});
+
+nextBatchBtn.addEventListener('click', () => {
+    if (currentBatchIndex < emailBatches.length - 1) {
+        currentBatchIndex++;
+        updateBatchDisplay();
+    }
+});
+
+// 6. Send Current Batch Button Handler
+sendBatchBtn.addEventListener('click', async () => {
+    const to = toInput.value;
+    const subject = subjectInput.value;
+    const htmlContent = htmlInput.value;
+    
+    if (emailBatches.length === 0) {
+        statusMessage.textContent = 'Error: No batches created. Please pull emails first.';
+        return;
+    }
+    
+    const bccRecipients = emailBatches[currentBatchIndex];
+
+    if (!to || !subject || !htmlContent) {
+        statusMessage.textContent = 'Error: Please fill in To, Subject, and HTML content.';
+        return;
+    }
+
+    if (bccRecipients.length === 0) {
+        statusMessage.textContent = 'Error: Current batch has no recipients.';
+        return;
+    }
+
+    sendBatchBtn.disabled = true;
+    statusMessage.textContent = `Sending Batch ${currentBatchIndex + 1} of ${emailBatches.length}...`;
+
+    try {
+        // Send the batch
+        const response = await sendEmailApi(to, subject, htmlContent, bccRecipients);
+        
+        // Update UI
+        if (response.success) {
+            statusMessage.textContent = `✅ Success: Batch ${currentBatchIndex + 1} sent to ${bccRecipients.length} recipients!`;
+            
+            // Move to the next batch automatically
+            if (currentBatchIndex < emailBatches.length - 1) {
+                setTimeout(() => {
+                    currentBatchIndex++;
+                    updateBatchDisplay();
+                    statusMessage.textContent += ' Preparing next batch...';
+                }, 1500); // Small delay to show success message
+            } else {
+                // All batches sent
+                statusMessage.textContent += ' All batches have been sent.';
+            }
+        } else {
+            throw new Error(response.message || 'API error.');
+        }
+
+    } catch (error) {
+        statusMessage.textContent = `❌ Error sending batch ${currentBatchIndex + 1}: ${error.message}`;
+        console.error('Sending error:', error);
+    } finally {
+        sendBatchBtn.disabled = false;
+    }
+});
+
+// 7. Initialize Display on load
+document.addEventListener('DOMContentLoaded', () => {
+    updateBatchDisplay();
+});
+</script>
 </body>
 </html>
