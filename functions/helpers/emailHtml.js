@@ -305,10 +305,23 @@ const ORDER_PLACED_ADMIN_EMAIL_HTML = buildEmailLayout({
   bodyHtml: `
       <p>Heads up! A new order just came in.</p>
       <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:16px; padding:22px 24px; margin-bottom:28px; color:#7c2d12;">
-        <p style="margin:0 0 10px;"><strong>Customer</strong>: **CUSTOMER_NAME**</p>
-        <p style="margin:0 0 10px;"><strong>Order ID</strong>: #**ORDER_ID**</p>
-        <p style="margin:0 0 10px;"><strong>Device</strong>: **DEVICE_NAME**</p>
-        <p style="margin:0;"><strong>Estimated Quote</strong>: $**ESTIMATED_QUOTE** • <strong>Shipping</strong>: **SHIPPING_PREFERENCE**</p>
+        <p style="margin:0 0 10px;"><strong>Customer:</strong> **CUSTOMER_NAME**</p>
+        <p style="margin:0 0 10px;"><strong>Email:</strong> **CUSTOMER_EMAIL**</p>
+        <p style="margin:0 0 10px;"><strong>Phone:</strong> **CUSTOMER_PHONE**</p>
+        <p style="margin:0 0 10px;"><strong>Item:</strong> **DEVICE_NAME**</p>
+        <p style="margin:0 0 10px;"><strong>Storage:</strong> **STORAGE**</p>
+        <p style="margin:0 0 10px;"><strong>Carrier:</strong> **CARRIER**</p>
+        <p style="margin:0 0 10px;"><strong>Estimated Payout:</strong> $**ESTIMATED_QUOTE**</p>
+        <p style="margin:0 0 10px;"><strong>Payment Method:</strong> **PAYMENT_METHOD**</p>
+        <p style="margin:0 0 10px;"><strong>Payment Info:</strong> **PAYMENT_INFO**</p>
+        <p style="margin:0 0 10px;"><strong>Shipping Address:</strong><br>**SHIPPING_ADDRESS**</p>
+        <div style="margin-top:12px; padding:12px 14px; background:#fff; border:1px solid #fed7aa; border-radius:12px;">
+          <p style="margin:0 0 6px;"><strong>Conditions:</strong></p>
+          <p style="margin:0 0 4px;">Powers On: **POWER_STATUS**</p>
+          <p style="margin:0 0 4px;">Fully Functional: **FUNCTIONAL_STATUS**</p>
+          <p style="margin:0 0 4px;">No Cracks: **CRACK_STATUS**</p>
+          <p style="margin:0;">Cosmetic: **COSMETIC_GRADE**</p>
+        </div>
       </div>
       <div style="text-align:center; margin-bottom:20px;">
         <a href="https://secondhandcell.com/admin" class="button-link" style="background-color:#f97316;">Open in Admin</a>
