@@ -89,6 +89,15 @@
       font-size: 0.8rem;
       color: #e5e7eb;
     }
+    input[type="number"] { /* Style for the new number input */
+      width: 100px; 
+      padding: 0.35rem 0.5rem; 
+      border-radius: 0.3rem; 
+      border: 1px solid #1f2937; 
+      background: #020617; 
+      color: #e5e7eb; 
+      font-size: 0.9rem;
+    }
     .btn-row {
       display: flex;
       flex-wrap: wrap;
@@ -231,7 +240,6 @@
   </header>
 
   <main>
-    <!-- LEFT: INPUT -->
     <section class="card">
       <h2>Step 1 – Input CSV & XML</h2>
       <div class="muted">
@@ -259,7 +267,11 @@
         <span class="file-label">Template XML</span>
         <input type="file" id="templateXmlFile" accept=".xml,text/xml" />
       </div>
-
+      
+      <div class="file-row" style="margin-top: 0.75rem;">
+        <span class="file-label">Price Increase ($)</span>
+        <input type="number" id="priceIncreaseAmount" value="1.00" min="0" step="0.01" />
+      </div>
       <div class="btn-row">
         <button id="btnProcessLocal">
           Use CSV + XML
@@ -280,7 +292,6 @@
       </div>
     </section>
 
-    <!-- RIGHT: OUTPUT -->
     <section class="card">
       <h2>Step 2 – Preview Results</h2>
       <div class="muted">
@@ -580,7 +591,8 @@
 
     // ===================== REPRICER LOGIC =====================
 
-    function repriceRowFromFeed(row, feedIndex) {
+    // MODIFIED: Added priceIncrease parameter
+    function repriceRowFromFeed(row, feedIndex, priceIncrease) {
       const result = { ...row };
 
       const name = row.name;
@@ -690,7 +702,8 @@
 
       let new_price;
       if (profit_pct != null && profit_pct >= 0.15) {
-        new_price = original_price + 1;
+        // CHANGED: Use the custom priceIncrease amount instead of hardcoded 1
+        new_price = original_price + priceIncrease; 
       } else {
         new_price = total_walkaway / 1.15;
       }
@@ -711,7 +724,8 @@
       result.new_profit_pct = new_profit_pct;
 
       if (profit_pct != null && profit_pct >= 0.15) {
-        status = "Already ≥ 15% profit – bumped $1";
+        // CHANGED: Use priceIncrease amount in status message
+        status = `Already ≥ 15% profit – bumped $${priceIncrease.toFixed(2)}`; 
         statusClass = "status-ok";
       } else {
         status = "Repriced to hit 15% profit";
@@ -884,11 +898,11 @@
         const pricesBlocks = model.getElementsByTagName("prices");
         for (let j = 0; j < pricesBlocks.length; j++) {
           const pricesBlock = pricesBlocks[j];
-          const storageEl = pricesBlock.getElementsByTagName("storageSize")[0];
+          const storageEl = pricesBlocks[j].getElementsByTagName("storageSize")[0];
           if (!storageEl) continue;
           const storageVal = String(storageEl.textContent || "").trim().toUpperCase();
 
-          const priceValueEl = pricesBlock.getElementsByTagName("priceValue")[0];
+          const priceValueEl = pricesBlocks[j].getElementsByTagName("priceValue")[0];
           if (!priceValueEl) continue;
 
           ["att", "verizon", "tmobile", "unlocked"].forEach(carrierTag => {
@@ -926,6 +940,7 @@
     const templateXmlFileInput = document.getElementById("templateXmlFile");
     const csvTextArea = document.getElementById("csvInput");
     const btnProcessLocal = document.getElementById("btnProcessLocal");
+    const priceIncreaseInput = document.getElementById("priceIncreaseAmount"); // NEW INPUT REFERENCE
     const btnDownload = document.getElementById("btnDownload");
     const btnDownloadXml = document.getElementById("btnDownloadXml");
 
@@ -1006,10 +1021,15 @@
             throw new Error("CSV is missing required column: " + col);
           }
         }
+        
+        // NEW: Get the price increase amount from the new input field
+        const priceIncreaseRaw = priceIncreaseInput.value;
+        const priceIncreaseAmount = parseMoney(priceIncreaseRaw) || 1.00; // Use 1.00 as a safe default if input is invalid or empty
 
         setStatus("Applying repricer logic to " + rawRecords.length + " rows...");
 
-        const resultRows = rawRecords.map(r => repriceRowFromFeed(r, feedIndex));
+        // UPDATED: Pass priceIncreaseAmount to repriceRowFromFeed
+        const resultRows = rawRecords.map(r => repriceRowFromFeed(r, feedIndex, priceIncreaseAmount));
         lastResultRows = resultRows;
 
         renderResults(resultRows);
@@ -1075,7 +1095,6 @@
     });
   </script>
 
-  <!-- keep if you use global-auth in your project, or remove this line if not needed -->
   <script type="module" src="/assets/js/global-auth.js" defer></script>
 </body>
 </html>
