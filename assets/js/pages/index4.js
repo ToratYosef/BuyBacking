@@ -504,6 +504,10 @@ const closeOrderSelectionBtn = document.getElementById('close-order-selection-bt
 const sendMessageBtn = document.getElementById('send-message-btn');
 const globalTooltip = document.getElementById('globalTooltip');
 
+if (!chatWindow) {
+console.debug('Chat widget disabled on this page.');
+} else {
+
 let currentChatId = localStorage.getItem('chatSessionId');
 let unsubscribeFromMessages = null;
 let unsubscribeFromChatSession = null;
@@ -1011,6 +1015,8 @@ button.addEventListener('mouseenter', () => {
 clearTimeout(tooltipTimeout);
 });
 });
+
+}
 
 // NEW: Intersection Observer for scroll-triggered animations
 const observerOptions = {
