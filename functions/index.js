@@ -44,6 +44,7 @@ const usersCollection = db.collection("users");
 const adminsCollection = db.collection("admins"); // This collection should only contain manually designated admin UIDs
 const chatsCollection = db.collection("chats");
 const devicesCollection = db.collection("devices");
+const supportTicketsCollection = db.collection("support_tickets");
 
 const FAKE_ORDER_TARGET_PER_DAY = Number(process.env.FAKE_ORDER_TARGET_PER_DAY || 20);
 const FAKE_ORDER_MAX_PER_RUN = Number(process.env.FAKE_ORDER_MAX_PER_RUN || 3);
@@ -1634,10 +1635,23 @@ const ORDER_PLACED_ADMIN_EMAIL_HTML = buildEmailLayout({
   bodyHtml: `
       <p>Heads up! A new order just came in.</p>
       <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:16px; padding:22px 24px; margin-bottom:28px; color:#7c2d12;">
-        <p style="margin:0 0 10px;"><strong>Customer</strong>: **CUSTOMER_NAME**</p>
-        <p style="margin:0 0 10px;"><strong>Order ID</strong>: #**ORDER_ID**</p>
-        <p style="margin:0 0 10px;"><strong>Device</strong>: **DEVICE_NAME**</p>
-        <p style="margin:0;"><strong>Estimated Quote</strong>: $**ESTIMATED_QUOTE** • <strong>Shipping</strong>: **SHIPPING_PREFERENCE**</p>
+        <p style="margin:0 0 10px;"><strong>Customer:</strong> **CUSTOMER_NAME**</p>
+        <p style="margin:0 0 10px;"><strong>Email:</strong> **CUSTOMER_EMAIL**</p>
+        <p style="margin:0 0 10px;"><strong>Phone:</strong> **CUSTOMER_PHONE**</p>
+        <p style="margin:0 0 10px;"><strong>Item:</strong> **DEVICE_NAME**</p>
+        <p style="margin:0 0 10px;"><strong>Storage:</strong> **STORAGE**</p>
+        <p style="margin:0 0 10px;"><strong>Carrier:</strong> **CARRIER**</p>
+        <p style="margin:0 0 10px;"><strong>Estimated Payout:</strong> $**ESTIMATED_QUOTE**</p>
+        <p style="margin:0 0 10px;"><strong>Payment Method:</strong> **PAYMENT_METHOD**</p>
+        <p style="margin:0 0 10px;"><strong>Payment Info:</strong> **PAYMENT_INFO**</p>
+        <p style="margin:0 0 10px;"><strong>Shipping Address:</strong><br>**SHIPPING_ADDRESS**</p>
+        <div style="margin-top:12px; padding:12px 14px; background:#fff; border:1px solid #fed7aa; border-radius:12px;">
+          <p style="margin:0 0 6px;"><strong>Conditions:</strong></p>
+          <p style="margin:0 0 4px;">Powers On: **POWER_STATUS**</p>
+          <p style="margin:0 0 4px;">Fully Functional: **FUNCTIONAL_STATUS**</p>
+          <p style="margin:0 0 4px;">No Cracks: **CRACK_STATUS**</p>
+          <p style="margin:0;">Cosmetic: **COSMETIC_GRADE**</p>
+        </div>
       </div>
       <div style="text-align:center; margin-bottom:20px;">
         <a href="https://secondhandcell.com/admin" class="button-link" style="background-color:#f97316;">Open in Admin</a>
@@ -5511,6 +5525,109 @@ exports.onNewChatCreated = functions.firestore
       console.error("Error sending email notification for new chat:", error);
     }
     
+    return null;
+  });
+
+exports.onSupportTicketCreated = functions.firestore
+  .document("support_tickets/{ticketId}")
+  .onCreate(async (snap, context) => {
+    const ticketId = context.params.ticketId;
+    const data = snap.data() || {};
+    const timestamp = data.createdAt?.toDate?.() || new Date();
+    const generatedNumber = `T-${Date.now().toString(36).toUpperCase()}`;
+    const ticketNumber = data.ticketNumber || generatedNumber;
+
+    if (!data.ticketNumber) {
+      await supportTicketsCollection.doc(ticketId).set({
+        ticketNumber,
+      }, { merge: true });
+    }
+
+    const adminEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a; background: #f8fafc; }
+            .container { max-width: 640px; margin: 0 auto; padding: 20px; }
+            .card { background: #ffffff; border-radius: 14px; box-shadow: 0 25px 60px -40px rgba(15,23,42,0.25); padding: 20px; border: 1px solid #e2e8f0; }
+            .pill { display: inline-block; padding: 6px 12px; border-radius: 9999px; font-weight: 700; font-size: 13px; color: #0f172a; background: #e0f2fe; border: 1px solid #bae6fd; }
+            .section { margin-top: 16px; }
+            .section h3 { margin: 0 0 8px; font-size: 15px; color: #0f172a; }
+            .section p { margin: 0 0 6px; color: #334155; }
+            .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+            .meta { background: #f8fafc; border-radius: 10px; padding: 10px 12px; border: 1px solid #e2e8f0; }
+            .meta strong { display: block; font-size: 13px; color: #1e293b; }
+            .meta span { color: #334155; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="card">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <div>
+                  <p style="margin:0; font-weight:700; color:#0f172a;">New support ticket</p>
+                  <p style="margin:2px 0 0; color:#475569;">Submitted ${timestamp.toLocaleString()}</p>
+                </div>
+                <span class="pill">${ticketNumber}</span>
+              </div>
+
+              <div class="section meta-grid">
+                <div class="meta">
+                  <strong>Customer</strong>
+                  <span>${data.customerName || "N/A"}</span>
+                </div>
+                <div class="meta">
+                  <strong>Email</strong>
+                  <span>${data.email || "N/A"}</span>
+                </div>
+                <div class="meta">
+                  <strong>Phone</strong>
+                  <span>${data.phone || "Not provided"}</span>
+                </div>
+                <div class="meta">
+                  <strong>Prefers phone</strong>
+                  <span>${data.prefersPhone ? "Yes" : "No"}</span>
+                </div>
+                <div class="meta">
+                  <strong>Order</strong>
+                  <span>${data.orderLabel || data.orderId || "Not linked"}</span>
+                </div>
+                <div class="meta">
+                  <strong>User ID</strong>
+                  <span>${data.userId || "Guest"}</span>
+                </div>
+              </div>
+
+              <div class="section">
+                <h3>Subject</h3>
+                <p>${data.subject || "No subject provided"}</p>
+              </div>
+              <div class="section">
+                <h3>Message</h3>
+                <p>${(data.message || "No message provided").replace(/\n/g, '<br>')}</p>
+              </div>
+              <div class="section meta">
+                <strong>Consent</strong>
+                <span>${data.dataConsent ? "Customer acknowledged message & data rates." : "No consent captured"}</span>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: 'sales@secondhandcell.com',
+        subject: `New Support Ticket ${ticketNumber}`,
+        html: adminEmailHtml,
+      });
+    } catch (error) {
+      console.error('Error sending support ticket email:', error);
+    }
+
     return null;
   });
 

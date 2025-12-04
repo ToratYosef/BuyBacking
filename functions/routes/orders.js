@@ -1149,18 +1149,49 @@ function createOrdersRouter({
       `;
       }
 
+      const shippingInfo = orderData.shippingInfo || {};
+      const conditions = orderData.conditions || {};
+      const paymentDetails = orderData.paymentDetails || orderData.paymentInfo || {};
+
+      const shippingAddress = [
+        shippingInfo.streetAddress,
+        [shippingInfo.city, shippingInfo.state].filter(Boolean).join(', '),
+        shippingInfo.zipCode,
+        shippingInfo.country,
+      ]
+        .filter((part) => part && String(part).trim())
+        .join('<br>') || 'Not provided';
+
+      const paymentInfo = paymentDetails.summary
+        || paymentDetails.value
+        || paymentDetails.details
+        || paymentDetails.paypalEmail
+        || paymentDetails.zelleEmail
+        || paymentDetails.account
+        || 'Not provided';
+
       const customerEmailHtml = ORDER_RECEIVED_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, shippingInfo.fullName || 'Valued customer')
         .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*DEVICE_NAME\*\*/g, `${orderData.device} ${orderData.storage}`)
+        .replace(/\*\*DEVICE_NAME\*\*/g, `${orderData.device || 'Device'} ${orderData.storage || ''}`.trim())
         .replace(/\*\*SHIPPING_INSTRUCTION\*\*/g, shippingInstructions);
 
       const adminEmailHtml = ORDER_PLACED_ADMIN_EMAIL_HTML
-        .replace(/\*\*CUSTOMER_NAME\*\*/g, orderData.shippingInfo.fullName)
+        .replace(/\*\*CUSTOMER_NAME\*\*/g, shippingInfo.fullName || 'Unknown customer')
+        .replace(/\*\*CUSTOMER_EMAIL\*\*/g, shippingInfo.email || 'Not provided')
+        .replace(/\*\*CUSTOMER_PHONE\*\*/g, shippingInfo.phone || shippingInfo.phoneNumber || 'Not provided')
         .replace(/\*\*ORDER_ID\*\*/g, orderId)
-        .replace(/\*\*DEVICE_NAME\*\*/g, `${orderData.device} ${orderData.storage}`)
-        .replace(/\*\*ESTIMATED_QUOTE\*\*/g, orderData.estimatedQuote.toFixed(2))
-        .replace(/\*\*SHIPPING_PREFERENCE\*\*/g, orderData.shippingPreference);
+        .replace(/\*\*DEVICE_NAME\*\*/g, orderData.device || 'Unknown device')
+        .replace(/\*\*STORAGE\*\*/g, orderData.storage || 'N/A')
+        .replace(/\*\*CARRIER\*\*/g, orderData.carrier || 'Not provided')
+        .replace(/\*\*ESTIMATED_QUOTE\*\*/g, (orderData.estimatedQuote || 0).toFixed(2))
+        .replace(/\*\*PAYMENT_METHOD\*\*/g, orderData.paymentMethod || 'Not provided')
+        .replace(/\*\*PAYMENT_INFO\*\*/g, paymentInfo)
+        .replace(/\*\*SHIPPING_ADDRESS\*\*/g, shippingAddress)
+        .replace(/\*\*POWER_STATUS\*\*/g, conditions.powersOn ?? 'N/A')
+        .replace(/\*\*FUNCTIONAL_STATUS\*\*/g, conditions.fullyFunctional ?? 'N/A')
+        .replace(/\*\*CRACK_STATUS\*\*/g, conditions.noCracks ?? 'N/A')
+        .replace(/\*\*COSMETIC_GRADE\*\*/g, conditions.cosmetic || conditions.cosmeticCondition || 'N/A');
 
       const customerMailOptions = {
         from: process.env.EMAIL_USER,
