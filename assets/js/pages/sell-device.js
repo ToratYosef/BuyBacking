@@ -774,6 +774,10 @@ const closeOrderSelectionBtn = document.getElementById('close-order-selection-bt
 const sendMessageBtn = document.getElementById('send-message-btn');
 const globalTooltip = document.getElementById('globalTooltip');
 
+if (!chatWindow) {
+console.debug('Chat widget disabled on this page.');
+} else {
+
 const CHAT_STORAGE_KEY = 'chatSessionState';
 
 const storeChatSession = (chatId) => {
@@ -1209,10 +1213,12 @@ globalTooltip.style.transform = `translateX(-50%)`;
 }
 });
 button.addEventListener('mouseout', () => {
-tooltipTimeout = setTimeout(() => {
-globalTooltip.style.visibility = 'hidden';
-globalTooltip.style.opacity = '0';
-}, 100);
-});
-});
+ tooltipTimeout = setTimeout(() => {
+ globalTooltip.style.visibility = 'hidden';
+ globalTooltip.style.opacity = '0';
+ }, 100);
+ });
+ });
+ });
+}
 });

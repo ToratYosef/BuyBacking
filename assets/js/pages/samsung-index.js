@@ -431,6 +431,10 @@ const closeOrderSelectionBtn = document.getElementById('close-order-selection-bt
 const sendMessageBtn = document.getElementById('send-message-btn');
 const globalTooltip = document.getElementById('globalTooltip');
 
+if (!chatWindow) {
+console.debug('Chat widget disabled on this page.');
+} else {
+
 let currentChatId = null;
 let unsubscribeFromMessages = null;
 let unsubscribeFromChatSession = null;
@@ -927,4 +931,6 @@ button.addEventListener('mouseenter', () => {
 clearTimeout(tooltipTimeout);
 });
 });
+});
+}
 });
