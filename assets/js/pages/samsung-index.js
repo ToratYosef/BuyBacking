@@ -1,8 +1,10 @@
-import { app, db } from "../firebase-config.js";
+import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+const app = firebaseApp;
 const auth = getAuth(app);
+const db = getFirestore(app);
 
 document.addEventListener('DOMContentLoaded', function() {
 
@@ -14,7 +16,7 @@ imgElement.classList.remove('hidden');
 return;
 }
 
-const extensions = ['.webp', '.avif', '.png', '.webp', '.webp'];
+const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
 let current = 0;
 
 function tryLoad() {
@@ -929,4 +931,5 @@ button.addEventListener('mouseenter', () => {
 clearTimeout(tooltipTimeout);
 });
 });
-}});
+}
+});
