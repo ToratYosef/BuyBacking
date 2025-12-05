@@ -403,10 +403,10 @@ window.location.href = `https://secondhandcell.com/sell?device=samsung-galaxy-${
 });
 
 document.getElementById('chooseDifferentDeviceBtn').addEventListener('click', () => {
-    closeModal(quoteModal);
-    // Clear any cached data to ensure fresh selection
-    continueWithDeviceBtn.dataset.phoneData = '';
-});// --- ADVANCED LIVE CHAT LOGIC ---
+closeModal(quoteModal);
+});
+
+// --- ADVANCED LIVE CHAT LOGIC ---
 const chatWindow = document.getElementById('chat-window');
 const chatOpenBtn = document.getElementById('chat-open-btn');
 const chatCloseBtn = document.getElementById('chat-close-btn');
@@ -929,6 +929,7 @@ globalTooltip.style.opacity = '0';
 
 button.addEventListener('mouseenter', () => {
 clearTimeout(tooltipTimeout);
+});
 });
 });
 }
