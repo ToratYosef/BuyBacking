@@ -144,7 +144,7 @@ router.post('/check-esn', async (req, res) => {
                 .replace(/\*\*STATUS_REASON\*\*/g, statusReason);
 
             const mailOptions = {
-                from: `SecondHandCell <${functions.config().email.user}>`,
+                from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
                 to: customerEmail,
                 subject: `Important Notice Regarding Your Device for Order #${orderId}`,
                 html: blacklistEmailHtml,

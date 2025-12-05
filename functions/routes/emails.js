@@ -28,7 +28,7 @@ module.exports = function createEmailsRouter({
       }
 
       const mailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
         to,
         subject,
         html,

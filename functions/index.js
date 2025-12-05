@@ -1302,13 +1302,25 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
     `,
   });
 
+  // Send to admin
   await transporter.sendMail({
-    from: `SecondHandCell <${process.env.EMAIL_USER}>`,
+    from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
     to: recipient,
     subject,
     text: textBody,
     html: htmlBody,
   });
+
+  // Send to customer
+  if (order.shippingInfo && order.shippingInfo.email) {
+    await transporter.sendMail({
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
+      to: order.shippingInfo.email,
+      subject,
+      text: textBody,
+      html: htmlBody,
+    });
+  }
 }
 
 async function handleLabelVoid(order, selections, options = {}) {
@@ -1542,7 +1554,7 @@ async function cancelOrderAndNotify(order, options = {}) {
 
     try {
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
         to: updatedOrder.shippingInfo.email,
         subject: `Order #${updatedOrder.id} has been cancelled`,
         html: htmlBody,
@@ -2716,7 +2728,7 @@ async function sendLabelReminderEmail(order, { tier = 1 } = {}) {
   const { subject, html } = buildLabelReminderEmail(order.id, order);
 
   await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+    from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
     to: email,
     subject,
     html,
@@ -3107,7 +3119,7 @@ async function sendMultipleTestEmails(email, emailTypes) {
     }
 
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: email,
       subject: subject,
       html: htmlBody,
@@ -3296,7 +3308,7 @@ app.put("/orders/:id/status", async (req, res) => {
             .replace(/\*\*ORDER_ID\*\*/g, order.id);
 
           customerNotificationPromise = transporter.sendMail({
-            from: process.env.EMAIL_USER,
+            from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Device Has Arrived",
             html: customerEmailHtml,
@@ -3318,7 +3330,7 @@ app.put("/orders/:id/status", async (req, res) => {
           });
 
           customerNotificationPromise = transporter.sendMail({
-            from: process.env.EMAIL_USER,
+            from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Order is Complete",
             html: customerEmailHtml,
@@ -3378,7 +3390,7 @@ app.post('/orders/:id/send-review-request', async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: customerEmail,
       subject: 'Quick review? Share your SecondHandCell experience',
       html: reviewEmailHtml,
@@ -3798,7 +3810,7 @@ async function sendDeviceReceivedNotification(order, options = {}) {
 
   try {
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'Your SecondHandCell Device Has Arrived',
       html: htmlBody,
@@ -3871,7 +3883,7 @@ async function maybeSendReturnReminder(order) {
 
   try {
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: email,
       subject: `Reminder: 2 days left to send your device for order #${order.id}`,
       html: htmlBody,
@@ -4000,7 +4012,7 @@ async function maybeAutoCancelAgingOrder(order, options = {}) {
 
   try {
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: email,
       subject: `Order #${cancelledOrder.id} was voided after 25 days`,
       html: htmlBody,
@@ -4132,11 +4144,10 @@ app.post("/orders/:id/re-offer", async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: order.shippingInfo.email,
       subject: `Re-offer for Order #${order.id}`,
-      html: customerEmailHtml,
-      bcc: ["sales@secondhandcell.com"]
+      html: customerEmailHtml
     });
 
     await recordCustomerEmail(
@@ -4217,7 +4228,7 @@ app.post("/orders/:id/return-label", async (req, res) => {
     });
 
     const customerMailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: order.shippingInfo.email,
       subject: "Your SecondHandCell Return Label",
       html: `
@@ -4353,7 +4364,7 @@ app.post("/orders/:id/auto-requote", async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: customerEmail,
       subject: `Order #${order.id} finalized at adjusted payout`,
       html: emailHtml,
@@ -4463,11 +4474,10 @@ app.post("/accept-offer-action", async (req, res) => {
     `;
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: orderData.shippingInfo.email,
       subject: `Offer Accepted for Order #${orderData.id}`,
-      html: customerHtmlBody,
-      bcc: ["sales@secondhandcell.com"]
+      html: customerHtmlBody
     });
 
     await recordCustomerEmail(
@@ -4512,11 +4522,10 @@ app.post("/return-phone-action", async (req, res) => {
     `;
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: orderData.shippingInfo.email,
       subject: `Return Requested for Order #${orderData.id}`,
-      html: customerHtmlBody,
-      bcc: ["sales@secondhandcell.com"]
+      html: customerHtmlBody
     });
 
     await recordCustomerEmail(
@@ -4702,7 +4711,7 @@ exports.autoAcceptOffers = functions.pubsub
       `;
 
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
         to: orderData.shippingInfo.email,
         subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
         html: customerHtmlBody,
@@ -4903,7 +4912,7 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
 
     // 7. Send the email
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: order.shippingInfo?.email,
       subject,
       html,
@@ -5116,7 +5125,7 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
 </html>`;
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: customerEmail,
       subject: '⏳ Your SecondHandCell Quote Is Almost Expired',
       html: emailHtml,
@@ -5282,7 +5291,7 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
 </html>`;
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: customerEmail,
       subject: '📦 Friendly reminder: Ship your SecondHandCell kit',
       html: emailHtml,
@@ -5499,7 +5508,7 @@ exports.onNewChatCreated = functions.firestore
     
     try {
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
         to: 'sales@secondhandcell.com',
         subject: `New Chat Started - ${userIdentifier}`,
         html: adminEmailHtml,
@@ -5605,7 +5614,7 @@ exports.onSupportTicketCreated = functions.firestore
 
     try {
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
         to: 'sales@secondhandcell.com',
         subject: `New Support Ticket ${ticketNumber}`,
         html: adminEmailHtml,

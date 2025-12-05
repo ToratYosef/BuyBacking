@@ -126,7 +126,7 @@ router.post("/generate-label/:id", async (req, res) => {
                 .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, outboundLabelUrl); // Use outbound URL for customer email
                 
             customerMailOptions = {
-                from: "SecondHandCell <" + functions.config().email.user + ">",
+                from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
                 to: order.shippingInfo.email,
                 subject: customerEmailSubject,
                 html: customerEmailHtml,
@@ -199,7 +199,7 @@ router.post("/generate-label/:id", async (req, res) => {
                 .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, uspsLabelUrl);
 
             customerMailOptions = {
-                from: "SecondHandCell <" + functions.config().email.user + ">",
+                from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
                 to: order.shippingInfo.email,
                 subject: customerEmailSubject,
                 html: customerEmailHtml,
@@ -284,7 +284,7 @@ router.post("/orders/:id/return-label", async (req, res) => {
         });
 
         const customerMailOptions = {
-            from: "SecondHandCell <" + functions.config().email.user + ">",
+            from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Return Label",
             html: `

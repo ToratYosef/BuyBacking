@@ -231,7 +231,7 @@ function createOrdersRouter({
       .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
 
     const customerMailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
       to: shippingInfo.email,
       subject: customerEmailSubject,
       html: customerEmailHtml,
@@ -1236,14 +1236,14 @@ function createOrdersRouter({
         .replace(/\*\*COSMETIC_GRADE\*\*/g, cosmeticGrade);
 
       const customerMailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
         to: orderData.shippingInfo.email,
         subject: `Your SecondHandCell Order #${orderId} Has Been Received!`,
         html: customerEmailHtml,
       };
 
       const adminMailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
         to: 'sales@secondhandcell.com',
         subject: `${orderData.shippingInfo.fullName} - placed an order for a ${orderData.device}`,
         html: adminEmailHtml,
@@ -1514,7 +1514,7 @@ function createOrdersRouter({
           );
 
         customerMailOptions = {
-          from: process.env.EMAIL_USER,
+          from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
           to: order.shippingInfo.email,
           subject: customerEmailSubject,
           html: customerEmailHtml,
@@ -1579,7 +1579,7 @@ function createOrdersRouter({
           .replace(/\*\*LABEL_DOWNLOAD_LINK\*\*/g, labelDownloadLink);
 
         customerMailOptions = {
-          from: process.env.EMAIL_USER,
+          from: `${process.env.EMAIL_NAME} <${process.env.EMAIL_USER}>`,
           to: order.shippingInfo.email,
           subject: customerEmailSubject,
           html: customerEmailHtml,
