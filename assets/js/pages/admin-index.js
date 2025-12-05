@@ -49,6 +49,25 @@
 })();
 // === FETCH_SHIM_END ===
 
+// Auto-open order modal if ?order=SHC-xxxxx is present in URL
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const orderId = params.get('order');
+  if (orderId && /^SHC-\d+$/i.test(orderId)) {
+    // Wait for modal and DOM to be ready, then open
+    if (typeof openOrderDetailsModal === 'function') {
+      openOrderDetailsModal(orderId);
+    } else {
+      // Fallback: try again after short delay
+      setTimeout(() => {
+        if (typeof openOrderDetailsModal === 'function') {
+          openOrderDetailsModal(orderId);
+        }
+      }, 500);
+    }
+  }
+});
+
 // Corrected to include the base path for Cloud Functions
 const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 const REFRESH_TRACKING_FUNCTION_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/refreshTracking';
