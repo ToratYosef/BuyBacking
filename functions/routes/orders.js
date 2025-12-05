@@ -1816,6 +1816,121 @@ function createOrdersRouter({
   router.post('/repair-label-generated', repairLabelGeneratedOrders);
   router.post('/orders/repair-label-generated', repairLabelGeneratedOrders);
 
+  // Helper function for logging shipping address
+  function formatShippingAddressForLog(shippingInfo = {}) {
+    if (!shippingInfo || typeof shippingInfo !== 'object') {
+      return 'N/A';
+    }
+
+    const parts = [];
+    if (shippingInfo.streetAddress) {
+      parts.push(shippingInfo.streetAddress);
+    }
+
+    const cityState = [shippingInfo.city, shippingInfo.state]
+      .filter((value) => value && String(value).trim().length)
+      .join(', ');
+
+    if (cityState) {
+      const withZip = shippingInfo.zipCode
+        ? `${cityState} ${shippingInfo.zipCode}`
+        : cityState;
+      parts.push(withZip);
+    } else if (shippingInfo.zipCode) {
+      parts.push(shippingInfo.zipCode);
+    }
+
+    return parts.length ? parts.join(', ') : 'N/A';
+  }
+
+  router.put('/orders/:id/shipping-info', async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const incoming = req.body && typeof req.body === 'object' ? req.body : {};
+
+      if (!orderId) {
+        return res.status(400).json({ error: 'Order ID is required.' });
+      }
+
+      const orderRef = ordersCollection.doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (!orderSnap.exists) {
+        return res.status(404).json({ error: 'Order not found.' });
+      }
+
+      const existingOrder = orderSnap.data() || {};
+      const fieldLabels = {
+        fullName: 'Full name',
+        email: 'Email',
+        phone: 'Phone',
+        streetAddress: 'Street address',
+        city: 'City',
+        state: 'State',
+        zipCode: 'ZIP / Postal code',
+      };
+
+      const updatePayload = {};
+      const providedFields = Object.keys(fieldLabels).filter((field) =>
+        Object.prototype.hasOwnProperty.call(incoming, field)
+      );
+
+      if (!providedFields.length) {
+        return res.status(400).json({ error: 'No shipping fields were provided.' });
+      }
+
+      for (const field of providedFields) {
+        const label = fieldLabels[field];
+        let value = incoming[field];
+        if (typeof value === 'string') {
+          value = value.trim();
+        }
+
+        if (!value) {
+          return res.status(400).json({ error: `${label} is required.` });
+        }
+
+        if (field === 'state') {
+          value = String(value).toUpperCase();
+          if (value.length !== 2) {
+            return res
+              .status(400)
+              .json({ error: 'State must use the 2-letter abbreviation.' });
+          }
+        }
+
+        updatePayload[`shippingInfo.${field}`] = value;
+      }
+
+      const mergedShippingInfo = {
+        ...(existingOrder.shippingInfo || {}),
+        ...providedFields.reduce((acc, field) => {
+          acc[field] = updatePayload[`shippingInfo.${field}`];
+          return acc;
+        }, {}),
+      };
+
+      const logEntries = [
+        {
+          type: 'update',
+          message: `Updated shipping address: ${formatShippingAddressForLog(mergedShippingInfo)}`,
+        },
+      ];
+
+      const { order } = await updateOrderBoth(orderId, updatePayload, {
+        autoLogStatus: false,
+        logEntries,
+      });
+
+      res.json({
+        message: 'Shipping address updated.',
+        shippingInfo: order.shippingInfo || {},
+      });
+    } catch (error) {
+      console.error('Error updating shipping info:', error);
+      res.status(500).json({ error: 'Failed to update shipping address.' });
+    }
+  });
+
   return router;
 }
 
