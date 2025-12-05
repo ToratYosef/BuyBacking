@@ -18,7 +18,7 @@
     })(window,document,'script','dataLayer','GTM-W3BM2JC8');</script>
     
     <!-- End Google Tag Manager -->
-    <script defer src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
@@ -28,7 +28,7 @@
     </script>
 
     <script type="module">
-        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import {
             getAuth,
             signInWithPopup,
@@ -64,58 +64,33 @@
             measurementId: "G-6WWQN44JHT"
         };
 
-        let firebaseInitPromise;
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        function ensureFirebaseInitialized() {
-            if (!firebaseInitPromise) {
-                firebaseInitPromise = Promise.resolve().then(() => {
-                    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-                    const auth = getAuth(app);
-                    const db = getFirestore(app);
-
-                    window.firebaseAuth = auth;
-                    window.GoogleAuthProvider = GoogleAuthProvider;
-                    window.signInWithPopup = signInWithPopup;
-                    window.signInWithEmailAndPassword = signInWithEmailAndPassword;
-                    window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
-                    window.signOut = signOut;
-                    window.onAuthStateChanged = onAuthStateChanged;
-                    window.updateProfile = updateProfile;
-                    window.sendPasswordResetEmail = sendPasswordResetEmail;
-                    window.firebaseDb = db;
-                    window.firebaseServerTimestamp = serverTimestamp;
-                    window.firebase = window.firebase || {};
-                    window.firebase.firestore = {
-                        doc,
-                        getDoc,
-                        collection,
-                        getDocs,
-                        setDoc,
-                        query,
-                        orderBy,
-                        limit
-                    };
-
-                    if (!window.__deferredTasksAttached) {
-                        window.__deferredTasksAttached = true;
-                        window.addEventListener('load', () => {
-                            const deferredTasks = window.deferredTasks || [];
-                            deferredTasks.forEach((task) => {
-                                if (typeof task === 'function') {
-                                    task();
-                                }
-                            });
-                        });
-                    }
-
-                    return { app, auth, db };
-                });
+        window.firebaseAuth = auth;
+        window.GoogleAuthProvider = GoogleAuthProvider;
+        window.signInWithPopup = signInWithPopup;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signOut = signOut;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.updateProfile = updateProfile;
+        window.sendPasswordResetEmail = sendPasswordResetEmail;
+        window.firebaseDb = db;
+        window.firebaseServerTimestamp = serverTimestamp;
+        window.firebase = {
+            firestore: {
+                doc,
+                getDoc,
+                collection,
+                getDocs,
+                setDoc,
+                query,
+                orderBy,
+                limit
             }
-
-            return firebaseInitPromise;
-        }
-
-        document.addEventListener('DOMContentLoaded', ensureFirebaseInitialized);
+        };
     </script>
     <style>
         body {
@@ -1506,8 +1481,6 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         let deviceInfo = null; // Declare globally to hold parsed info
 
         document.addEventListener('DOMContentLoaded', async function() {
-            await ensureFirebaseInitialized();
-
             // --- UPDATED: Populate the state select on load ---
             populateStateSelect();
             
@@ -1630,7 +1603,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 // However, since the function uses new Image() and load/error, we keep it this way
                 imgElement.dataset.baseSrc = baseSrc; 
                 
-                const extensions = ['.webp', '.avif', '.png', '.webp', '.webp'];
+                const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
                 let current = 0;
                 function tryLoad() {
                     if (current >= extensions.length) {
