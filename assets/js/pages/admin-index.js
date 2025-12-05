@@ -1105,6 +1105,7 @@ if (orderDetailsModal) {
 if (shippingAddressDeleteBtn) {
   shippingAddressDeleteBtn.addEventListener('click', async () => {
     if (!currentOrderDetails || !currentOrderDetails.id) {
+      alert('No order loaded');
       return;
     }
     
@@ -1113,13 +1114,24 @@ if (shippingAddressDeleteBtn) {
     }
 
     try {
+      console.log('Deleting shipping address for order:', currentOrderDetails.id);
       const response = await fetch(`${BACKEND_BASE_URL}/orders/${currentOrderDetails.id}/shipping-info`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
 
+      console.log('Delete response status:', response.status);
+      
+      let responseData = null;
+      try {
+        responseData = await response.json();
+        console.log('Delete response data:', responseData);
+      } catch (e) {
+        console.log('No JSON response');
+      }
+
       if (!response.ok) {
-        throw new Error('Failed to delete shipping address');
+        throw new Error(responseData?.error || 'Failed to delete shipping address');
       }
 
       currentOrderDetails.shippingInfo = null;
@@ -1128,6 +1140,7 @@ if (shippingAddressDeleteBtn) {
       // Show success message
       alert('Shipping address deleted successfully');
     } catch (error) {
+      console.error('Delete error:', error);
       alert('Failed to delete shipping address: ' + error.message);
     }
   });
@@ -6301,12 +6314,16 @@ function renderActionButtons(order) {
 
   switch (currentStatus) {
     case 'order_pending':
-    case 'shipping_kit_requested':
     case 'kit_needs_printing':
     case 'needs_printing':
       if (!hasGeneratedLabels) {
         modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
       }
+      modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
+      break;
+    case 'shipping_kit_requested':
+      // ALWAYS show Generate USPS Label button for shipping_kit_requested status
+      modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
       modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
       break;
     case 'kit_on_the_way_to_us':

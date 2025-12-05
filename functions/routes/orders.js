@@ -1,4 +1,5 @@
 const express = require('express');
+// Updated: Added DELETE endpoint for shipping address
 
 function createOrdersRouter({
   axios,
@@ -1153,6 +1154,44 @@ function createOrdersRouter({
       const conditions = orderData.conditions || {};
       const paymentDetails = orderData.paymentDetails || orderData.paymentInfo || {};
 
+      // Format condition values properly
+      const formatCondition = (value) => {
+        if (!value || value === 'N/A') return 'N/A';
+        if (value === 'yes' || value === 'Yes' || value === true) return 'Yes';
+        if (value === 'no' || value === 'No' || value === false) return 'No';
+        // Handle cosmetic grades
+        if (typeof value === 'string') return value;
+        return 'N/A';
+      };
+
+      const powerStatus = formatCondition(
+        orderData.condition_power_on || 
+        conditions.power || 
+        conditions.powersOn || 
+        conditions.powerOn
+      );
+      
+      const functionalStatus = formatCondition(
+        orderData.condition_functional || 
+        conditions.functionality || 
+        conditions.fullyFunctional || 
+        conditions.functional
+      );
+      
+      const crackStatus = formatCondition(
+        orderData.condition_cracks || 
+        conditions.quality || 
+        conditions.noCracks || 
+        conditions.cracks
+      );
+      
+      const cosmeticGrade = formatCondition(
+        orderData.condition_cosmetic || 
+        conditions.cosmetic || 
+        conditions.cosmeticCondition || 
+        conditions.grade
+      );
+
       const shippingAddress = [
         shippingInfo.streetAddress,
         [shippingInfo.city, shippingInfo.state].filter(Boolean).join(', '),
@@ -1188,10 +1227,10 @@ function createOrdersRouter({
         .replace(/\*\*PAYMENT_METHOD\*\*/g, orderData.paymentMethod || 'Not provided')
         .replace(/\*\*PAYMENT_INFO\*\*/g, paymentInfo)
         .replace(/\*\*SHIPPING_ADDRESS\*\*/g, shippingAddress)
-        .replace(/\*\*POWER_STATUS\*\*/g, conditions.powersOn ?? 'N/A')
-        .replace(/\*\*FUNCTIONAL_STATUS\*\*/g, conditions.fullyFunctional ?? 'N/A')
-        .replace(/\*\*CRACK_STATUS\*\*/g, conditions.noCracks ?? 'N/A')
-        .replace(/\*\*COSMETIC_GRADE\*\*/g, conditions.cosmetic || conditions.cosmeticCondition || 'N/A');
+        .replace(/\*\*POWER_STATUS\*\*/g, powerStatus)
+        .replace(/\*\*FUNCTIONAL_STATUS\*\*/g, functionalStatus)
+        .replace(/\*\*CRACK_STATUS\*\*/g, crackStatus)
+        .replace(/\*\*COSMETIC_GRADE\*\*/g, cosmeticGrade);
 
       const customerMailOptions = {
         from: process.env.EMAIL_USER,
