@@ -51,8 +51,8 @@ if (!window[INIT_FLAG]) {
     .shc-auth-subtitle { margin: 6px 0 0; color: #475569; font-weight: 500; }
     .shc-auth-form { display: none; }
     .shc-auth-form.is-visible { display: block; }
-    .shc-monogram { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg,#5b21b6,#2563eb); color: #fff; font-weight: 800; cursor: pointer; box-shadow: 0 14px 30px -18px rgba(37,99,235,0.9); }
-    .shc-auth-dropdown { position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 30px 80px -48px rgba(15,23,42,0.55); padding: 10px; min-width: 180px; display: none; z-index: 1200; }
+    .shc-monogram { cursor: pointer !important; user-select: none; -webkit-user-select: none; pointer-events: auto !important; }
+    .shc-auth-dropdown { position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 30px 80px -48px rgba(15,23,42,0.55); padding: 10px; min-width: 180px; display: none; z-index: 10000; }
     .shc-auth-dropdown.is-visible { display: block; }
     .shc-auth-dropdown a, .shc-auth-dropdown button { width: 100%; display: block; text-align: left; padding: 10px 12px; border-radius: 10px; color: #0f172a; font-weight: 600; border: none; background: transparent; cursor: pointer; }
     .shc-auth-dropdown a:hover, .shc-auth-dropdown button:hover { background: #f1f5f9; }
@@ -199,13 +199,21 @@ if (!window[INIT_FLAG]) {
       // Ensure dropdown starts hidden
       authDropdown.classList.remove("is-visible");
       
-      userMonogram.addEventListener("click", (e) => {
+      // Use both click and mousedown for better reliability
+      const toggleDropdown = (e) => {
+        e.preventDefault();
         e.stopPropagation();
         const isCurrentlyVisible = authDropdown.classList.contains("is-visible");
         authDropdown.classList.toggle("is-visible", !isCurrentlyVisible);
-      });
+      };
+      
+      userMonogram.addEventListener("click", toggleDropdown, true);
+      userMonogram.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+      }, true);
+      
       document.addEventListener("click", (e) => {
-        if (!authDropdown.contains(e.target) && e.target !== userMonogram) {
+        if (!authDropdown.contains(e.target) && !userMonogram.contains(e.target)) {
           authDropdown.classList.remove("is-visible");
         }
       });
