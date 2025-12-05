@@ -968,6 +968,20 @@ function createOrdersRouter({
     }
   });
 
+  router.get('/orders/:id', async (req, res) => {
+    try {
+      const docRef = ordersCollection.doc(req.params.id);
+      const doc = await docRef.get();
+      if (!doc.exists) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+      res.json({ id: doc.id, ...doc.data() });
+    } catch (err) {
+      console.error('Error fetching single order:', err);
+      res.status(500).json({ error: 'Failed to fetch order' });
+    }
+  });
+
   router.get('/orders/by-user/:userId', async (req, res) => {
     try {
       const { userId } = req.params;
