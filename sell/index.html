@@ -28,7 +28,7 @@
     </script>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import {
             getAuth,
             signInWithPopup,
@@ -64,44 +64,58 @@
             measurementId: "G-6WWQN44JHT"
         };
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            const db = getFirestore(app);
+        let firebaseInitPromise;
 
-            window.firebaseAuth = auth;
-            window.GoogleAuthProvider = GoogleAuthProvider;
-            window.signInWithPopup = signInWithPopup;
-            window.signInWithEmailAndPassword = signInWithEmailAndPassword;
-            window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
-            window.signOut = signOut;
-            window.onAuthStateChanged = onAuthStateChanged;
-            window.updateProfile = updateProfile;
-            window.sendPasswordResetEmail = sendPasswordResetEmail;
-            window.firebaseDb = db;
-            window.firebaseServerTimestamp = serverTimestamp;
-            window.firebase = {
-                firestore: {
-                    doc,
-                    getDoc,
-                    collection,
-                    getDocs,
-                    setDoc,
-                    query,
-                    orderBy,
-                    limit
-                }
-            };
+        function ensureFirebaseInitialized() {
+            if (!firebaseInitPromise) {
+                firebaseInitPromise = Promise.resolve().then(() => {
+                    const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+                    const auth = getAuth(app);
+                    const db = getFirestore(app);
 
-            window.addEventListener('load', () => {
-                const deferredTasks = window.deferredTasks || [];
-                deferredTasks.forEach((task) => {
-                    if (typeof task === 'function') {
-                        task();
+                    window.firebaseAuth = auth;
+                    window.GoogleAuthProvider = GoogleAuthProvider;
+                    window.signInWithPopup = signInWithPopup;
+                    window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+                    window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+                    window.signOut = signOut;
+                    window.onAuthStateChanged = onAuthStateChanged;
+                    window.updateProfile = updateProfile;
+                    window.sendPasswordResetEmail = sendPasswordResetEmail;
+                    window.firebaseDb = db;
+                    window.firebaseServerTimestamp = serverTimestamp;
+                    window.firebase = window.firebase || {};
+                    window.firebase.firestore = {
+                        doc,
+                        getDoc,
+                        collection,
+                        getDocs,
+                        setDoc,
+                        query,
+                        orderBy,
+                        limit
+                    };
+
+                    if (!window.__deferredTasksAttached) {
+                        window.__deferredTasksAttached = true;
+                        window.addEventListener('load', () => {
+                            const deferredTasks = window.deferredTasks || [];
+                            deferredTasks.forEach((task) => {
+                                if (typeof task === 'function') {
+                                    task();
+                                }
+                            });
+                        });
                     }
+
+                    return { app, auth, db };
                 });
-            });
-        });
+            }
+
+            return firebaseInitPromise;
+        }
+
+        document.addEventListener('DOMContentLoaded', ensureFirebaseInitialized);
     </script>
     <style>
         body {
@@ -1492,6 +1506,8 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         let deviceInfo = null; // Declare globally to hold parsed info
 
         document.addEventListener('DOMContentLoaded', async function() {
+            await ensureFirebaseInitialized();
+
             // --- UPDATED: Populate the state select on load ---
             populateStateSelect();
             
