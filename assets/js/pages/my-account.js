@@ -1,12 +1,10 @@
-import { firebaseApp } from "/assets/js/firebase-app.js";
+import { app, db } from "../firebase-config.js";
 import { getAuth, signOut, onAuthStateChanged, updateProfile, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, where, addDoc, serverTimestamp, updateDoc, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { doc, setDoc, getDoc, collection, query, onSnapshot, where, addDoc, serverTimestamp, updateDoc, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize Firebase
-  const app = firebaseApp;
   const auth = getAuth(app);
-  const db = getFirestore(app);
 
   // Backend URL for Cloud Functions
   const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';

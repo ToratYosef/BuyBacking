@@ -1,14 +1,9 @@
-import { firebaseApp } from "/assets/js/firebase-app.js";
+import { app, db } from "../firebase-config.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 setLogLevel('debug');
-
-// Initialize Firebase
-const app = firebaseApp;
-const auth = getAuth(app);
-const db = getFirestore(app);
 
 // --- Firebase Click Tracker Function ---
 const trackButtonClick = async (buttonName) => {
@@ -56,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadImageWithFallback(imgElement) {
         const baseSrc = imgElement.dataset.baseSrc;
         if (!baseSrc) return;
-        const extensions = ['.webp', '.svg', '.avif', '.png', '.jpeg', '.jpg'];
+        const extensions = ['.webp', '.svg', '.avif', '.png', '.webp', '.webp'];
         let current = 0;
         function tryLoad() {
             if (current >= extensions.length) {
@@ -695,7 +690,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const displayPriceValue = getDisplayPrice(order);
             const formattedPrice = displayPriceValue.toFixed(2);
             orderCard.innerHTML = `
-                <img src="${order.imageUrl || 'https://placehold.co/48x48/e0e7ff/4338ca?text= '}" alt="${order.deviceName}" onerror="this.onerror=null;this.src='https://placehold.co/48x48/e0e7ff/4338ca?text= ';">
+                <img src="${order.imageUrl || 'https://placehold.co/48x48/e0e7ff/4338ca?text= '}" alt="${order.deviceName}" onerror="this.onerror=null;this.src='https://placehold.co/48x48/e0e7ff/4338ca?text= '}">
                 <div class="order-card-details">
                     <strong>ID: ${order.orderId} - ${order.deviceName}</strong>
                     <span>${order.storage} | $${formattedPrice}</span>
@@ -788,49 +783,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 role: 'iPhone 15 Pro Max Seller',
                 rating: 5,
                 review: 'SecondHandCell handled my iPhone trade-in in days. The shipping kit arrived quickly, inspection was honest, and the payout hit my account the same afternoon.',
-                avatar: '/assets/faces/3.jpg'
+                avatar: '/assets/faces/3.webp'
             },
             {
                 name: 'Sarah Johnson',
                 role: 'Galaxy S23 Ultra Seller',
                 rating: 4.5,
                 review: 'The $10 shipping kit deduction was worth it—everything I needed was in the box. Their portal kept me updated until the payout cleared the next morning.',
-                avatar: '/assets/faces/5.jpg'
+                avatar: '/assets/faces/5.webp'
             },
             {
                 name: 'David Martinez',
                 role: 'Software Engineer • Seattle, WA',
                 rating: 5,
                 review: 'I compared half a dozen services and this one actually paid what they quoted. The dashboard makes tracking each step effortless.',
-                avatar: '/assets/faces/6.jpg'
+                avatar: '/assets/faces/6.webp'
             },
             {
                 name: 'Emily Thompson',
                 role: 'Teacher • Chicago, IL',
                 rating: 4.5,
                 review: 'As a teacher with zero free time, I loved how transparent the process was. I chose an email label, shipped the same day, and had my Zelle transfer within 24 hours.',
-                avatar: '/assets/faces/7.jpg'
+                avatar: '/assets/faces/7.webp'
             },
             {
                 name: 'Jessica Rivera',
                 role: 'Nurse • Tampa, FL',
                 rating: 5,
                 review: 'Customer support answered my questions in minutes and the payout matched what I was promised. It felt like working with a friend instead of a company.',
-                avatar: '/assets/faces/8.jpg'
+                avatar: '/assets/faces/8.webp'
             },
             {
                 name: 'Amanda Chen',
                 role: 'Entrepreneur • Austin, TX',
                 rating: 4.8,
                 review: 'I recycle phones from my business upgrades. Every order with SecondHandCell has been smooth, and they always explain any adjustments before finalizing the quote.',
-                avatar: '/assets/faces/9.jpg'
+                avatar: '/assets/faces/9.webp'
             },
             {
                 name: 'James Wilson',
                 role: 'IT Consultant • Denver, CO',
                 rating: 5,
                 review: 'Best phone buyback experience I\'ve had. Fast payment, transparent pricing, and excellent customer service. Highly recommend!',
-                avatar: '/assets/faces/10.jpg'
+                avatar: '/assets/faces/10.webp'
             }
         ];
 

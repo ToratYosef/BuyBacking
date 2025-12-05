@@ -16,11 +16,11 @@ function ensureDirSync(dir) {
   }
 }
 
-// Download a single image and save as N.jpg
+// Download a single image and save as N.webp
 function downloadImage(index) {
   return new Promise((resolve, reject) => {
     const url = "https://thispersondoesnotexist.com/";
-    const filePath = path.join(OUTPUT_DIR, `${index}.jpg`);
+    const filePath = path.join(OUTPUT_DIR, `${index}.webp`);
     const file = fs.createWriteStream(filePath);
 
     https

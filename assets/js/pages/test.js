@@ -68,7 +68,7 @@ try { await signInAnonymously(auth); } catch (e) { console.error("Anonymous sign
 function loadImageWithFallback(imgElement) {
 const baseSrc = imgElement.dataset.baseSrc;
 if (!baseSrc) return;
-const extensions = ['.webp','.svg', '.avif', '.png', '.jpeg', '.jpg', '.svg'];
+const extensions = ['.webp','.svg', '.avif', '.png', '.webp', '.webp', '.svg'];
 let current = 0;
 function tryLoad() {
 if (current >= extensions.length) {

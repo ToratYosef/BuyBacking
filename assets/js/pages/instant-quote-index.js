@@ -461,7 +461,7 @@ return;
 }
 
 const baseSrc = imageUrl.substring(0, imageUrl.lastIndexOf('.'));
-const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+const extensions = ['.webp', '.avif', '.png', '.webp', '.webp'];
 let current = 0;
 
 function tryLoad() {
