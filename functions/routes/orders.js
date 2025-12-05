@@ -930,20 +930,6 @@ function createOrdersRouter({
 
   router.options('/merge-print/:orderIds', handlePrintBundlePreflight);
 
-  router.get('/orders/:id', async (req, res) => {
-    try {
-      const docRef = ordersCollection.doc(req.params.id);
-      const doc = await docRef.get();
-      if (!doc.exists) {
-        return res.status(404).json({ error: 'Order not found' });
-      }
-      res.json({ id: doc.id, ...doc.data() });
-    } catch (err) {
-      console.error('Error fetching single order:', err);
-      res.status(500).json({ error: 'Failed to fetch order' });
-    }
-  });
-
   router.get('/orders/find', async (req, res) => {
     try {
       const { identifier } = req.query;
@@ -953,12 +939,15 @@ function createOrdersRouter({
           .json({ error: 'Identifier query parameter is required.' });
       }
 
+      // Normalize identifier: trim whitespace and convert to uppercase
+      const normalizedIdentifier = String(identifier).trim().toUpperCase();
+
       let orderDoc;
-      if (identifier.match(/^SHC-\d{5}$/)) {
-        orderDoc = await ordersCollection.doc(identifier).get();
-      } else if (identifier.length === 26 && identifier.match(/^\d+$/)) {
+      if (normalizedIdentifier.match(/^SHC-\d{5}$/)) {
+        orderDoc = await ordersCollection.doc(normalizedIdentifier).get();
+      } else if (normalizedIdentifier.length === 26 && normalizedIdentifier.match(/^\d+$/)) {
         const snapshot = await ordersCollection
-          .where('externalId', '==', identifier)
+          .where('externalId', '==', normalizedIdentifier)
           .limit(1)
           .get();
         if (!snapshot.empty) {
