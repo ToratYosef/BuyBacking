@@ -1260,9 +1260,7 @@ async function sendVoidNotificationEmail(order, results, options = {}) {
   const subject = `Shipping label voided for order ${order.id}`;
   const lines = approvedResults.map((result) => {
     const labelName = formatLabelDisplayNameFromKey(result.key);
-    return `• ${labelName} (ID: ${result.labelId})${
-      result.message ? ` – ${result.message}` : ""
-    }`;
+    return `• ${labelName} (ID: ${result.labelId})`;
   });
 
   const introText =
@@ -1548,7 +1546,6 @@ async function cancelOrderAndNotify(order, options = {}) {
         to: updatedOrder.shippingInfo.email,
         subject: `Order #${updatedOrder.id} has been cancelled`,
         html: htmlBody,
-        bcc: [process.env.SALES_EMAIL || "sales@secondhandcell.com"],
       });
 
       await recordCustomerEmail(
@@ -2655,12 +2652,14 @@ async function sendPushNotification(tokens, title, body, data = {}) {
     const tokenList = Array.isArray(tokens) ? tokens : [tokens];
     if (!tokenList.length) return;
 
+    // Send data-only message (no notification field) to prevent duplicate notifications
+    // The service worker will handle displaying the notification with proper icon
     const message = {
-      notification: {
-        title: title,
-        body: body,
-      },
-      data: stringifyData(data), // <-- CRITICAL FIX: Sanitize data payload
+      data: stringifyData({ 
+        ...data, 
+        title: title, 
+        body: body 
+      }), // Include title and body in data payload
       tokens: tokenList,
     };
 
@@ -2721,7 +2720,6 @@ async function sendLabelReminderEmail(order, { tier = 1 } = {}) {
     to: email,
     subject,
     html,
-    bcc: ["sales@secondhandcell.com"],
   });
 
   const additionalUpdates = {
@@ -3302,7 +3300,6 @@ app.put("/orders/:id/status", async (req, res) => {
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Device Has Arrived",
             html: customerEmailHtml,
-            bcc: ["sales@secondhandcell.com"]
           });
           emailLogMessage = "Received confirmation email sent to customer.";
           emailMetadata.trackingNumber = order.trackingNumber || order.inboundTrackingNumber || null;
@@ -3325,7 +3322,6 @@ app.put("/orders/:id/status", async (req, res) => {
             to: order.shippingInfo.email,
             subject: "Your SecondHandCell Order is Complete",
             html: customerEmailHtml,
-            bcc: ["sales@secondhandcell.com"]
           });
           emailLogMessage = "Order completion email sent to customer.";
           emailMetadata.payoutAmount = formatCurrencyValue(payoutAmount);
@@ -3386,7 +3382,6 @@ app.post('/orders/:id/send-review-request', async (req, res) => {
       to: customerEmail,
       subject: 'Quick review? Share your SecondHandCell experience',
       html: reviewEmailHtml,
-      bcc: ['sales@secondhandcell.com']
     });
 
     await recordCustomerEmail(
@@ -3807,7 +3802,6 @@ async function sendDeviceReceivedNotification(order, options = {}) {
       to: email,
       subject: 'Your SecondHandCell Device Has Arrived',
       html: htmlBody,
-      bcc: ['sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(order.id, 'Received confirmation email sent to customer.', {
@@ -3881,7 +3875,6 @@ async function maybeSendReturnReminder(order) {
       to: email,
       subject: `Reminder: 2 days left to send your device for order #${order.id}`,
       html: htmlBody,
-      bcc: ['sales@secondhandcell.com'],
     });
 
     const recordResult = await recordCustomerEmail(order.id, '13-day return reminder email sent to customer.', {
@@ -4011,7 +4004,6 @@ async function maybeAutoCancelAgingOrder(order, options = {}) {
       to: email,
       subject: `Order #${cancelledOrder.id} was voided after 25 days`,
       html: htmlBody,
-      bcc: ['sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(cancelledOrder.id, 'Order auto-voided after 25 days without inbound shipment.', {
@@ -4236,7 +4228,6 @@ app.post("/orders/:id/return-label", async (req, res) => {
         <p>Thank you,</p>
         <p>The SecondHandCell Team</p>
       `,
-      bcc: ["sales@secondhandcell.com"]
     };
 
     await transporter.sendMail(customerMailOptions);
@@ -4366,7 +4357,6 @@ app.post("/orders/:id/auto-requote", async (req, res) => {
       to: customerEmail,
       subject: `Order #${order.id} finalized at adjusted payout`,
       html: emailHtml,
-      bcc: [process.env.SALES_EMAIL || 'sales@secondhandcell.com'],
     });
 
     await recordCustomerEmail(
@@ -4716,7 +4706,6 @@ exports.autoAcceptOffers = functions.pubsub
         to: orderData.shippingInfo.email,
         subject: `Revised Offer Auto-Accepted for Order #${orderData.id}`,
         html: customerHtmlBody,
-        bcc: ["sales@secondhandcell.com"]
       });
 
       await updateOrderBoth(doc.id, {
@@ -4918,7 +4907,6 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
       to: order.shippingInfo?.email,
       subject,
       html,
-      bcc: ["sales@secondhandcell.com"]
     });
 
 
@@ -5132,7 +5120,6 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
       to: customerEmail,
       subject: '⏳ Your SecondHandCell Quote Is Almost Expired',
       html: emailHtml,
-      bcc: ["sales@secondhandcell.com"],
     });
 
     await recordCustomerEmail(
@@ -5299,7 +5286,6 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
       to: customerEmail,
       subject: '📦 Friendly reminder: Ship your SecondHandCell kit',
       html: emailHtml,
-      bcc: ["sales@secondhandcell.com"],
     });
 
     await recordCustomerEmail(

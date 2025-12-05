@@ -32,10 +32,12 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload) {
     console.log('[firebase-messaging-sw.js] Received background message ', payload);
 
-    // Customize the notification here
-    const notificationTitle = payload.notification.title;
+    // Handle both notification and data-only messages
+    const notificationTitle = payload.notification?.title || payload.data?.title || 'SecondHandCell';
+    const notificationBody = payload.notification?.body || payload.data?.body || 'You have a new notification';
+    
     const notificationOptions = {
-        body: payload.notification.body,
+        body: notificationBody,
         icon: 'https://secondhandcell.com/assets/logo.png', // Updated icon path
         data: payload.data // Pass along custom data for click handling
     };

@@ -98,6 +98,23 @@
       color: #e5e7eb; 
       font-size: 0.9rem;
     }
+    input[type="number"]:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
+    }
+    .new-variant-row {
+      background: rgba(59, 130, 246, 0.2) !important;
+      border-left: 3px solid #3b82f6;
+    }
+    .badge-new {
+      display: inline-block;
+      padding: 0.05rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      background: #3b82f6;
+      color: #fff;
+      margin-left: 0.5rem;
+    }
     .btn-row {
       display: flex;
       flex-wrap: wrap;
@@ -283,6 +300,15 @@
         <button id="btnDownloadXml" class="secondary" disabled>
           Download XML
         </button>
+        <button id="btnExportMatchingCsv" class="secondary" disabled>
+          Export to CSV (Original Format)
+        </button>
+        <button id="btnShowNewOnly" class="secondary" disabled>
+          Show New Variants Only
+        </button>
+        <button id="btnShowAll" class="secondary" disabled style="display:none;">
+          Show All
+        </button>
       </div>
 
       <div id="statusText">Ready.</div>
@@ -314,6 +340,7 @@
               <th>New profit</th>
               <th>New pr</th>
               <th>Status</th>
+              <th>AMZ Price Input</th>
             </tr>
           </thead>
           <tbody id="resultBody">
@@ -542,6 +569,8 @@
             tmobile: {},
             unlocked: {},
             any: {},
+            _modelName: deviceName,
+            _storage: capacity,
           };
         }
 
@@ -587,6 +616,80 @@
       console.log("[repricer] Built feed index", { deviceCount, keyCount: Object.keys(index).length });
       setStatus("XML parsed – indexed " + Object.keys(index).length + " model/storage combos.");
       return index;
+    }
+
+    // NEW: Detect missing storage variants and create placeholder rows
+    function detectAndAddMissingVariants(csvRecords, feedIndex) {
+      // Build a set of existing model+storage combinations from CSV
+      const existingCombos = new Set();
+      const modelStoragesInCsv = {};
+      
+      csvRecords.forEach(r => {
+        const modelName = normalizeModelNameForFeed(r.name);
+        const storage = String(r.storage || "").trim().toUpperCase();
+        const key = modelName + "|" + storage;
+        existingCombos.add(key);
+        
+        if (!modelStoragesInCsv[modelName]) {
+          modelStoragesInCsv[modelName] = new Set();
+        }
+        modelStoragesInCsv[modelName].add(storage);
+      });
+      
+      // Find all storage variants in feed for each model
+      const feedModelStorages = {};
+      Object.keys(feedIndex).forEach(key => {
+        const entry = feedIndex[key];
+        const modelName = entry._modelName;
+        const storage = entry._storage;
+        
+        if (!feedModelStorages[modelName]) {
+          feedModelStorages[modelName] = new Set();
+        }
+        feedModelStorages[modelName].add(storage);
+      });
+      
+      // Detect missing variants
+      const newVariants = [];
+      const carriers = ["att", "verizon", "tmobile", "unlocked"];
+      const conditions = ["flawless", "good", "fair", "damaged"];
+      
+      Object.keys(modelStoragesInCsv).forEach(modelName => {
+        const csvStorages = modelStoragesInCsv[modelName];
+        const feedStorages = feedModelStorages[modelName];
+        
+        if (feedStorages) {
+          feedStorages.forEach(feedStorage => {
+            if (!csvStorages.has(feedStorage)) {
+              // This storage exists in feed but not in CSV - it's a new variant!
+              // Create placeholder rows for all carriers and conditions
+              carriers.forEach(carrier => {
+                conditions.forEach(condition => {
+                  // Find a sample row from CSV for this model to copy basic structure
+                  const sampleRow = csvRecords.find(r => 
+                    normalizeModelNameForFeed(r.name) === modelName
+                  );
+                  
+                  if (sampleRow) {
+                    newVariants.push({
+                      name: sampleRow.name, // Keep original casing from CSV
+                      storage: feedStorage,
+                      lock_status: carrier,
+                      condition: condition,
+                      price: "",
+                      amz: "", // Will be filled by user
+                      _isNewVariant: true,
+                    });
+                  }
+                });
+              });
+            }
+          });
+        }
+      });
+      
+      console.log(`[repricer] Found ${newVariants.length} new storage variants`);
+      return newVariants;
     }
 
     // ===================== REPRICER LOGIC =====================
@@ -739,6 +842,9 @@
 
     // ===================== RENDER + CSV EXPORT =====================
 
+    let allResultRows = []; // Store all rows
+    let showingNewOnly = false; // Track filter state
+
     function renderResults(rows) {
       const tbody = document.getElementById("resultBody");
       tbody.innerHTML = "";
@@ -752,8 +858,11 @@
         return (v * 100).toFixed(2) + "%";
       }
 
-      rows.forEach(r => {
+      rows.forEach((r, idx) => {
         const tr = document.createElement("tr");
+        if (r._isNewVariant) {
+          tr.style.background = "rgba(59, 130, 246, 0.2)"; // Highlight new variants
+        }
 
         const cells = [
           r.name,
@@ -788,10 +897,58 @@
         statusTd.appendChild(span);
         tr.appendChild(statusTd);
 
+        // Add AMZ price input column for new variants
+        const amzInputTd = document.createElement("td");
+        if (r._isNewVariant) {
+          const input = document.createElement("input");
+          input.type = "number";
+          input.step = "0.01";
+          input.min = "0";
+          input.placeholder = "Enter AMZ price";
+          input.style.width = "120px";
+          input.style.padding = "0.35rem 0.5rem";
+          input.style.borderRadius = "0.3rem";
+          input.style.border = "1px solid #1f2937";
+          input.style.background = "#020617";
+          input.style.color = "#e5e7eb";
+          input.style.fontSize = "0.9rem";
+          
+          input.addEventListener("change", (e) => {
+            const newAmzPrice = parseFloat(e.target.value);
+            if (newAmzPrice && newAmzPrice > 0) {
+              // Update the row data with new AMZ price
+              allResultRows[r._originalIndex].amz = newAmzPrice;
+              
+              // Get price increase amount
+              const priceIncreaseAmount = parseMoney(document.getElementById("priceIncreaseAmount").value) || 1.00;
+              
+              // Recalculate this row
+              const feedIndex = window._currentFeedIndex || {};
+              const updatedRow = repriceRowFromFeed(allResultRows[r._originalIndex], feedIndex, priceIncreaseAmount);
+              updatedRow._isNewVariant = true;
+              updatedRow._originalIndex = r._originalIndex;
+              allResultRows[r._originalIndex] = updatedRow;
+              
+              // Re-render
+              if (showingNewOnly) {
+                const newVariants = allResultRows.filter(row => row._isNewVariant);
+                renderResults(newVariants);
+              } else {
+                renderResults(allResultRows);
+              }
+            }
+          });
+          
+          amzInputTd.appendChild(input);
+        } else {
+          amzInputTd.textContent = "-";
+        }
+        tr.appendChild(amzInputTd);
+
         tbody.appendChild(tr);
       });
 
-      document.getElementById("processedCount").textContent = rows.length.toString();
+      document.getElementById("processedCount").textContent = allResultRows.length.toString();
     }
 
     function buildOutputCsv(rows) {
@@ -848,6 +1005,39 @@
           r.new_profit != null ? r.new_profit.toFixed(2) : "",
           r.new_profit_pct != null ? (r.new_profit_pct * 100).toFixed(2) + "%" : "",
           r._status || "",
+        ];
+        lines.push(row.map(escapeCsv).join(","));
+      }
+      return lines.join("\n");
+    }
+
+    // NEW: Build CSV in the exact format of the provided CSV (name,storage,lock_status,condition,price,amz)
+    function buildMatchingFormatCsv(rows) {
+      const header = ["name", "storage", "lock_status", "condition", "price", "amz"];
+
+      function escapeCsv(value) {
+        if (value == null) return "";
+        const s = String(value);
+        if (/[",\n\r]/.test(s)) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      }
+
+      function fmtMoney(v) {
+        if (v == null || !Number.isFinite(v)) return "";
+        return "$" + v.toFixed(2);
+      }
+
+      const lines = [header.join(",")];
+      for (const r of rows) {
+        const row = [
+          r.name,
+          r.storage,
+          r.lock_status,
+          r.condition,
+          fmtMoney(r.new_price), // Use new calculated price
+          fmtMoney(r.amazon_price || parseMoney(r.amz)), // Use amazon_price if available, otherwise original amz
         ];
         lines.push(row.map(escapeCsv).join(","));
       }
@@ -943,6 +1133,9 @@
     const priceIncreaseInput = document.getElementById("priceIncreaseAmount"); // NEW INPUT REFERENCE
     const btnDownload = document.getElementById("btnDownload");
     const btnDownloadXml = document.getElementById("btnDownloadXml");
+    const btnExportMatchingCsv = document.getElementById("btnExportMatchingCsv");
+    const btnShowNewOnly = document.getElementById("btnShowNewOnly");
+    const btnShowAll = document.getElementById("btnShowAll");
 
     let lastResultRows = [];
     let templateXmlText = "";
@@ -983,8 +1176,13 @@
       btnProcessLocal.disabled = true;
       btnDownload.disabled = true;
       btnDownloadXml.disabled = true;
+      btnExportMatchingCsv.disabled = true;
+      btnShowNewOnly.disabled = true;
+      btnShowAll.style.display = "none";
+      showingNewOnly = false;
       setStatus("Starting local processing...");
       lastResultRows = [];
+      allResultRows = [];
       renderResults([]);
 
       try {
@@ -1007,6 +1205,7 @@
         });
 
         const feedIndex = buildFeedIndexFromXml(xmlText);
+        window._currentFeedIndex = feedIndex; // Store for later use in AMZ price updates
 
         setStatus("Parsing CSV...");
         const rawRecords = csvToRecords(csvText);
@@ -1022,22 +1221,41 @@
           }
         }
         
+        // NEW: Detect and add missing storage variants
+        setStatus("Detecting new storage variants...");
+        const newVariants = detectAndAddMissingVariants(rawRecords, feedIndex);
+        console.log("[repricer] New variants detected:", newVariants.length);
+        
+        // Combine existing records with new variants
+        const allRecords = [...rawRecords, ...newVariants];
+        
         // NEW: Get the price increase amount from the new input field
         const priceIncreaseRaw = priceIncreaseInput.value;
         const priceIncreaseAmount = parseMoney(priceIncreaseRaw) || 1.00; // Use 1.00 as a safe default if input is invalid or empty
 
-        setStatus("Applying repricer logic to " + rawRecords.length + " rows...");
+        setStatus("Applying repricer logic to " + allRecords.length + " rows (including " + newVariants.length + " new variants)...");
 
-        // UPDATED: Pass priceIncreaseAmount to repriceRowFromFeed
-        const resultRows = rawRecords.map(r => repriceRowFromFeed(r, feedIndex, priceIncreaseAmount));
+        // UPDATED: Pass priceIncreaseAmount to repriceRowFromFeed and track original index
+        const resultRows = allRecords.map((r, idx) => {
+          const result = repriceRowFromFeed(r, feedIndex, priceIncreaseAmount);
+          result._isNewVariant = r._isNewVariant || false;
+          result._originalIndex = idx;
+          return result;
+        });
+        
         lastResultRows = resultRows;
+        allResultRows = resultRows;
 
         renderResults(resultRows);
         btnDownload.disabled = false;
+        btnExportMatchingCsv.disabled = false;
+        if (newVariants.length > 0) {
+          btnShowNewOnly.disabled = false;
+        }
         if (templateXmlText) {
           btnDownloadXml.disabled = false;
         }
-        setStatus("Done – processed " + resultRows.length + " rows.");
+        setStatus("Done – processed " + resultRows.length + " rows (" + newVariants.length + " new variants found).");
       } catch (err) {
         showError("Processing failed.", err);
       } finally {
@@ -1065,6 +1283,46 @@
       } catch (err) {
         showError("Failed to build output CSV.", err);
       }
+    });
+
+    btnExportMatchingCsv.addEventListener("click", () => {
+      try {
+        if (!allResultRows.length) {
+          showError("Nothing to export – process CSV & XML first.");
+          return;
+        }
+        const csvOut = buildMatchingFormatCsv(allResultRows);
+        const blob = new Blob([csvOut], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const timestamp = new Date().toISOString().split('T')[0];
+        a.download = `Devices Final-carriers-${timestamp}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setStatus("Downloaded CSV in original format with new variants included");
+      } catch (err) {
+        showError("Failed to build matching format CSV.", err);
+      }
+    });
+
+    btnShowNewOnly.addEventListener("click", () => {
+      const newVariants = allResultRows.filter(row => row._isNewVariant);
+      renderResults(newVariants);
+      showingNewOnly = true;
+      btnShowNewOnly.style.display = "none";
+      btnShowAll.style.display = "inline-flex";
+      setStatus(`Showing ${newVariants.length} new variants only`);
+    });
+
+    btnShowAll.addEventListener("click", () => {
+      renderResults(allResultRows);
+      showingNewOnly = false;
+      btnShowAll.style.display = "none";
+      btnShowNewOnly.style.display = "inline-flex";
+      setStatus(`Showing all ${allResultRows.length} rows`);
     });
 
     btnDownloadXml.addEventListener("click", () => {

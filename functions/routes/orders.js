@@ -1620,6 +1620,76 @@ function createOrdersRouter({
     }
   });
 
+  router.post('/orders/:id/clear-data', async (req, res) => {
+    try {
+      const orderId = req.params.id;
+      const selections = Array.isArray(req.body?.selections) ? req.body.selections : [];
+      
+      if (!selections.length) {
+        return res.status(400).json({ error: 'No data selections provided.' });
+      }
+
+      const doc = await ordersCollection.doc(orderId).get();
+      if (!doc.exists) {
+        return res.status(404).json({ error: 'Order not found' });
+      }
+
+      const updatePayload = {};
+      const clearedItems = [];
+
+      for (const selection of selections) {
+        if (selection === 'shipLabel:primary') {
+          updatePayload.labelUrl = FieldValue.delete();
+          updatePayload.trackingNumber = FieldValue.delete();
+          updatePayload.shipEngineLabelId = FieldValue.delete();
+          clearedItems.push('Primary shipping label');
+        } else if (selection === 'shipLabel:outboundkit') {
+          updatePayload.outboundLabelUrl = FieldValue.delete();
+          updatePayload.outboundTrackingNumber = FieldValue.delete();
+          clearedItems.push('Outbound kit label');
+        } else if (selection === 'shipLabel:inbounddevice') {
+          updatePayload.inboundLabelUrl = FieldValue.delete();
+          updatePayload.inboundTrackingNumber = FieldValue.delete();
+          clearedItems.push('Inbound device label');
+        } else if (selection === 'tracking:primary') {
+          updatePayload.trackingNumber = FieldValue.delete();
+          clearedItems.push('Primary tracking number');
+        } else if (selection === 'tracking:outbound') {
+          updatePayload.outboundTrackingNumber = FieldValue.delete();
+          clearedItems.push('Outbound tracking number');
+        } else if (selection === 'tracking:inbound') {
+          updatePayload.inboundTrackingNumber = FieldValue.delete();
+          clearedItems.push('Inbound tracking number');
+        } else if (selection === 'returnLabel') {
+          updatePayload.returnLabelUrl = FieldValue.delete();
+          updatePayload.returnTrackingNumber = FieldValue.delete();
+          clearedItems.push('Return label');
+        } else if (selection.startsWith('shipLabel:')) {
+          const labelKey = selection.replace('shipLabel:', '');
+          updatePayload[`shipEngineLabels.${labelKey}`] = FieldValue.delete();
+          clearedItems.push(`Label: ${labelKey}`);
+        }
+      }
+
+      if (Object.keys(updatePayload).length === 0) {
+        return res.status(400).json({ error: 'No valid selections to clear.' });
+      }
+
+      await updateOrderBoth(orderId, updatePayload);
+
+      res.json({
+        success: true,
+        message: `Cleared: ${clearedItems.join(', ')}`,
+        clearedItems,
+      });
+    } catch (error) {
+      console.error('Error clearing order data:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to clear selected data.',
+      });
+    }
+  });
+
   router.get('/packing-slip/:id', async (req, res) => {
     try {
       const doc = await ordersCollection.doc(req.params.id).get();

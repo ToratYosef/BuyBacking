@@ -762,9 +762,12 @@ console.error('An error occurred while setting up notifications:', error);
 // Listener for foreground FCM messages (to display as in-app toast)
 onMessage(messaging, (payload) => {
 const notification = inAppNotification;
-// Use default title/body if not provided by the payload
-document.getElementById('in-app-notification-title').textContent = payload.notification?.title || "New Notification";
-document.getElementById('in-app-notification-body').textContent = payload.notification?.body || "Check your dashboard.";
+// Handle both notification and data-only messages
+const title = payload.notification?.title || payload.data?.title || "New Notification";
+const body = payload.notification?.body || payload.data?.body || "Check your dashboard.";
+
+document.getElementById('in-app-notification-title').textContent = title;
+document.getElementById('in-app-notification-body').textContent = body;
 
 notification.classList.remove('hidden', 'translate-x-full');
 
