@@ -402,10 +402,10 @@ window.location.href = `https://secondhandcell.com/sell?device=iphone-${slug}`;
 });
 
 document.getElementById('chooseDifferentDeviceBtn').addEventListener('click', () => {
-closeModal(quoteModal);
-});
-
-// --- ADVANCED LIVE CHAT LOGIC ---
+    closeModal(quoteModal);
+    // Clear any cached data to ensure fresh selection
+    continueWithDeviceBtn.dataset.phoneData = '';
+});// --- ADVANCED LIVE CHAT LOGIC ---
 const chatWindow = document.getElementById('chat-window');
 const chatOpenBtn = document.getElementById('chat-open-btn');
 const chatCloseBtn = document.getElementById('chat-close-btn');
