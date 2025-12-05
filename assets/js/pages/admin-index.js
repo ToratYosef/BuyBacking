@@ -542,15 +542,17 @@ const modalZelleDetails = document.getElementById('modal-zelle-details');
 
 const modalShippingAddress = document.getElementById('modal-shipping-address');
 const shippingAddressDisplayRow = document.getElementById('shipping-address-display-row');
-const shippingAddressEditTrigger = document.getElementById('shipping-address-edit-trigger');
+const shippingAddressAddRow = document.getElementById('shipping-address-add-row');
+const shippingAddressDeleteBtn = document.getElementById('shipping-address-delete-btn');
+const shippingAddressAddBtn = document.getElementById('shipping-address-add-btn');
 const shippingAddressEditContainer = document.getElementById('shipping-address-edit-container');
 const shippingAddressInput = document.getElementById('shipping-address-text');
-const shippingAddressApplyButton = document.getElementById('shipping-address-apply');
+const shippingAddressSaveBtn = document.getElementById('shipping-address-save-btn');
 const shippingAddressCancelButton = document.getElementById('shipping-address-cancel');
 const shippingAddressFeedback = document.getElementById('shipping-address-edit-feedback');
-const shippingAddressApplyButtonDefaultText = shippingAddressApplyButton
-  ? shippingAddressApplyButton.textContent
-  : 'Apply';
+const shippingAddressSaveBtnDefaultText = shippingAddressSaveBtn
+  ? shippingAddressSaveBtn.textContent
+  : 'Save';
 const modalConditionPowerOn = document.getElementById('modal-condition-power-on');
 const modalConditionFunctional = document.getElementById('modal-condition-functional');
 const modalConditionCracks = document.getElementById('modal-condition-cracks');
@@ -1100,18 +1102,43 @@ if (orderDetailsModal) {
   });
 }
 
-if (shippingAddressEditTrigger) {
-  shippingAddressEditTrigger.addEventListener('click', () => {
+if (shippingAddressDeleteBtn) {
+  shippingAddressDeleteBtn.addEventListener('click', async () => {
+    if (!currentOrderDetails || !currentOrderDetails.id) {
+      return;
+    }
+    
+    if (!confirm('Are you sure you want to delete this shipping address?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/orders/${currentOrderDetails.id}/shipping-info`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete shipping address');
+      }
+
+      currentOrderDetails.shippingInfo = null;
+      updateShippingAddressUI(null);
+      
+      // Show success message
+      alert('Shipping address deleted successfully');
+    } catch (error) {
+      alert('Failed to delete shipping address: ' + error.message);
+    }
+  });
+}
+
+if (shippingAddressAddBtn) {
+  shippingAddressAddBtn.addEventListener('click', () => {
     if (!currentOrderDetails) {
       return;
     }
-
-    if (isShippingAddressEditorVisible()) {
-      toggleShippingAddressEditor(false);
-      return;
-    }
-
-    populateShippingAddressEditor(currentOrderDetails.shippingInfo || {});
+    shippingAddressInput.value = '';
     clearShippingAddressFeedback();
     toggleShippingAddressEditor(true);
     setTimeout(() => {
@@ -1122,13 +1149,13 @@ if (shippingAddressEditTrigger) {
 
 if (shippingAddressCancelButton) {
   shippingAddressCancelButton.addEventListener('click', () => {
-    resetShippingAddressEditor({ restoreFromOrder: true });
+    toggleShippingAddressEditor(false);
   });
 }
 
-if (shippingAddressApplyButton) {
-  shippingAddressApplyButton.addEventListener('click', () => {
-    handleShippingAddressApply();
+if (shippingAddressSaveBtn) {
+  shippingAddressSaveBtn.addEventListener('click', () => {
+    handleShippingAddressSave();
   });
 }
 
@@ -5695,25 +5722,34 @@ function toggleShippingAddressEditor(forceState) {
   if (shippingAddressDisplayRow) {
     shippingAddressDisplayRow.classList.toggle('hidden', shouldShow);
   }
+  if (shippingAddressAddRow) {
+    shippingAddressAddRow.classList.toggle('hidden', shouldShow);
+  }
   if (!shouldShow) {
     clearShippingAddressFeedback();
   }
 }
 
-function populateShippingAddressEditor(shippingInfo = {}) {
-  if (shippingAddressInput) {
-    shippingAddressInput.value = formatShippingAddressForEditor(shippingInfo);
+function updateShippingAddressUI(shippingInfo) {
+  const hasAddress = shippingInfo && (shippingInfo.streetAddress || shippingInfo.city);
+  
+  if (shippingAddressDisplayRow) {
+    shippingAddressDisplayRow.classList.toggle('hidden', !hasAddress);
+  }
+  
+  if (shippingAddressAddRow) {
+    shippingAddressAddRow.classList.toggle('hidden', hasAddress);
+  }
+  
+  if (hasAddress && modalShippingAddress) {
+    modalShippingAddress.textContent = formatShippingAddress(shippingInfo);
   }
 }
 
 function resetShippingAddressEditor({ restoreFromOrder = false } = {}) {
   toggleShippingAddressEditor(false);
   if (shippingAddressInput) {
-    if (restoreFromOrder && currentOrderDetails?.shippingInfo) {
-      shippingAddressInput.value = formatShippingAddressForEditor(currentOrderDetails.shippingInfo);
-    } else {
-      shippingAddressInput.value = '';
-    }
+    shippingAddressInput.value = '';
   }
 }
 
@@ -5738,20 +5774,17 @@ function setShippingAddressFeedback(message, tone = 'info') {
 }
 
 function setShippingAddressSavingState(isSaving) {
-  if (!shippingAddressApplyButton) {
+  if (!shippingAddressSaveBtn) {
     return;
   }
-  shippingAddressApplyButton.disabled = !!isSaving;
-  shippingAddressApplyButton.textContent = isSaving
-    ? 'Applying…'
-    : shippingAddressApplyButtonDefaultText;
+  shippingAddressSaveBtn.disabled = !!isSaving;
+  shippingAddressSaveBtn.textContent = isSaving
+    ? 'Saving...'
+    : shippingAddressSaveBtnDefaultText;
 }
 
 function updateShippingAddressDisplay(shippingInfo) {
-  if (!modalShippingAddress) {
-    return;
-  }
-  modalShippingAddress.textContent = formatShippingAddress(shippingInfo);
+  updateShippingAddressUI(shippingInfo);
 }
 
 function formatShippingAddressForEditor(shippingInfo = {}) {
@@ -5763,6 +5796,12 @@ function formatShippingAddressForEditor(shippingInfo = {}) {
   const cityPart = shippingInfo.city?.trim();
   const statePart = shippingInfo.state ? shippingInfo.state.toString().toUpperCase().trim() : '';
   const zipPart = shippingInfo.zipCode ? String(shippingInfo.zipCode).trim() : '';
+
+  // If streetAddress already contains city/state/zip (multi-line format stored as single line),
+  // just return it as-is without re-appending city/state/zip
+  if (streetLine && cityPart && streetLine.includes(cityPart)) {
+    return streetLine;
+  }
 
   const segments = [];
   if (streetLine) {
@@ -5820,15 +5859,16 @@ function parseShippingAddressEditorValue(rawValue = '') {
   return { streetAddress, city, state, zipCode };
 }
 
-async function handleShippingAddressApply() {
+async function handleShippingAddressSave() {
   if (!currentOrderDetails || !currentOrderDetails.id) {
-    setShippingAddressFeedback('Load an order before editing the address.', 'error');
+    setShippingAddressFeedback('Load an order before adding an address.', 'error');
     return;
   }
 
+  const originalInputValue = shippingAddressInput?.value || '';
   let payload;
   try {
-    payload = parseShippingAddressEditorValue(shippingAddressInput?.value || '');
+    payload = parseShippingAddressEditorValue(originalInputValue);
   } catch (parseError) {
     setShippingAddressFeedback(parseError.message || 'Please check the address format.', 'error');
     return;
@@ -5851,30 +5891,24 @@ async function handleShippingAddressApply() {
     }
 
     if (!response.ok) {
-      const message = responseData?.error || 'Failed to update the shipping address.';
+      const message = responseData?.error || 'Failed to save the shipping address.';
       throw new Error(message);
     }
 
-    const updatedShippingInfo = responseData?.shippingInfo
-      ? responseData.shippingInfo
-      : { ...currentOrderDetails.shippingInfo, ...payload };
+    const updatedShippingInfo = responseData?.shippingInfo || payload;
 
     if (currentOrderDetails) {
-      currentOrderDetails.shippingInfo = {
-        ...currentOrderDetails.shippingInfo,
-        ...updatedShippingInfo,
-      };
+      currentOrderDetails.shippingInfo = updatedShippingInfo;
     }
 
     updateShippingAddressDisplay(currentOrderDetails.shippingInfo);
-    setShippingAddressFeedback('Shipping address updated.', 'success');
-    populateShippingAddressEditor(currentOrderDetails.shippingInfo || {});
+    setShippingAddressFeedback('Shipping address saved successfully.', 'success');
 
     setTimeout(() => {
       toggleShippingAddressEditor(false);
     }, 800);
   } catch (error) {
-    setShippingAddressFeedback(error.message || 'Failed to update the shipping address.', 'error');
+    setShippingAddressFeedback(error.message || 'Failed to save the shipping address.', 'error');
   } finally {
     setShippingAddressSavingState(false);
   }
@@ -6014,11 +6048,7 @@ if (modalZelleDetailsRow) modalZelleDetailsRow.classList.remove('hidden');
 // END: UPDATED PAYMENT DETAILS LOGIC
 
 const shippingInfo = order.shippingInfo;
-if (shippingInfo) {
-updateShippingAddressDisplay(shippingInfo);
-} else if (modalShippingAddress) {
-modalShippingAddress.textContent = 'N/A';
-}
+updateShippingAddressUI(shippingInfo);
 
 if (modalLastReminderDate) {
 const lastEmailTimestamp = getLastCustomerEmailTimestamp(order);

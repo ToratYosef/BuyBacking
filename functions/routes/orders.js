@@ -1931,6 +1931,42 @@ function createOrdersRouter({
     }
   });
 
+  router.delete('/orders/:id/shipping-info', async (req, res) => {
+    try {
+      const orderId = req.params.id;
+
+      if (!orderId) {
+        return res.status(400).json({ error: 'Order ID is required.' });
+      }
+
+      const orderRef = ordersCollection.doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (!orderSnap.exists) {
+        return res.status(404).json({ error: 'Order not found.' });
+      }
+
+      const logEntries = [
+        {
+          type: 'update',
+          message: 'Deleted shipping address',
+        },
+      ];
+
+      const { order } = await updateOrderBoth(orderId, { shippingInfo: null }, {
+        autoLogStatus: false,
+        logEntries,
+      });
+
+      res.json({
+        message: 'Shipping address deleted.',
+        shippingInfo: null,
+      });
+    } catch (error) {
+      console.error('Error deleting shipping info:', error);
+      res.status(500).json({ error: 'Failed to delete shipping address.' });
+    }
+  });
+
   return router;
 }
 
