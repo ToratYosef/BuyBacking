@@ -575,8 +575,9 @@
                 <a href="#" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
                 <div id="userMonogram" class="user-monogram hidden"></div>
                 <div id="authDropdown" class="auth-dropdown hidden">
-                    <a href="/my-account.html" class="auth-dropdown__link">My Account</a>
-                    <button id="logoutBtn" type="button" class="auth-dropdown__button btn-red-logout">Logout</button>
+                    <a href="/my-account.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">My Account</a>
+                    <a href="/track-order.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Track an Order</a>
+                    <button id="logoutBtn" class="btn-red-logout">Logout</button>
                 </div>
             </div>
         </nav>
@@ -1055,10 +1056,7 @@
         const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
         const closeModal = (modal) => modal.classList.remove('is-visible');
 
-        document.getElementById('loginNavBtn').addEventListener('click', (e) => {
-            e.preventDefault();
-            openModal('loginModal');
-        });
+        // Login button is handled by global-auth.js
 
         document.getElementById('aboutUsLink').addEventListener('click', (e) => {
             e.preventDefault();
@@ -1243,157 +1241,7 @@
             }
         });
 
-        // --- AUTH LOGIC ---
-        const loginTabBtn = document.getElementById('loginTabBtn');
-        const signupTabBtn = document.getElementById('signupTabBtn');
-        const loginForm = document.getElementById('loginForm');
-        const signupForm = document.getElementById('signupForm');
-        const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-        const authModalTitle = document.getElementById('authModalTitle');
-        const authMessage = document.getElementById('authMessage');
-
-        const showAuthMessage = (message, type) => {
-            authMessage.textContent = message;
-            authMessage.className = 'p-3 rounded-lg text-sm mb-4';
-            authMessage.classList.remove('bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700');
-            if (type === 'error') authMessage.classList.add('bg-red-100', 'text-red-700');
-            else if (type === 'success') authMessage.classList.add('bg-green-100', 'text-green-700');
-            else authMessage.classList.add('bg-blue-100', 'text-blue-700');
-            authMessage.classList.remove('hidden');
-        };
-
-        const showTab = (tab) => {
-            loginTabBtn.classList.remove('border-indigo-600', 'text-slate-800');
-            signupTabBtn.classList.remove('border-indigo-600', 'text-slate-800');
-            loginTabBtn.classList.add('border-transparent', 'text-slate-500');
-            signupTabBtn.classList.add('border-transparent', 'text-slate-500');
-
-            loginForm.classList.add('hidden');
-            signupForm.classList.add('hidden');
-            forgotPasswordForm.classList.add('hidden');
-            authMessage.classList.add('hidden');
-
-            if (tab === 'login') {
-                loginTabBtn.classList.add('border-indigo-600', 'text-slate-800');
-                loginForm.classList.remove('hidden');
-                authModalTitle.textContent = 'Login to Your Account';
-            } else if (tab === 'signup') {
-                signupTabBtn.classList.add('border-indigo-600', 'text-slate-800');
-                signupForm.classList.remove('hidden');
-                authModalTitle.textContent = 'Create an Account';
-            } else if (tab === 'forgotPassword') {
-                forgotPasswordForm.classList.remove('hidden');
-                authModalTitle.textContent = 'Reset Password';
-            }
-        };
-
-        loginTabBtn.addEventListener('click', () => showTab('login'));
-        signupTabBtn.addEventListener('click', () => showTab('signup'));
-        document.getElementById('switchToLogin').addEventListener('click', (e) => {
-            e.preventDefault();
-            showTab('login');
-        });
-        document.getElementById('forgotPasswordLink').addEventListener('click', (e) => {
-            e.preventDefault();
-            showTab('forgotPassword');
-        });
-        document.getElementById('returnToLogin').addEventListener('click', (e) => {
-            e.preventDefault();
-            showTab('login');
-        });
-
-        const googleProvider = new GoogleAuthProvider();
-        const signInWithGoogle = async () => {
-            try {
-                showAuthMessage('Redirecting to Google...', 'info');
-                await signInWithPopup(auth, googleProvider);
-            } catch (error) {
-                showAuthMessage(`Google sign-in failed: ${error.message}`, 'error');
-            }
-        };
-
-        document.getElementById('googleLoginBtn').addEventListener('click', signInWithGoogle);
-        document.getElementById('googleSignupBtn').addEventListener('click', signInWithGoogle);
-
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-            try {
-                showAuthMessage('Logging in...', 'info');
-                await signInWithEmailAndPassword(auth, email, password);
-            } catch (error) {
-                showAuthMessage(`Login failed: ${error.message}`, 'error');
-            }
-        });
-
-        signupForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('signupName').value;
-            const email = document.getElementById('signupEmail').value;
-            const password = document.getElementById('signupPassword').value;
-
-            if (password.length < 6) {
-                showAuthMessage('Password must be at least 6 characters.', 'error');
-                return;
-            }
-
-            try {
-                showAuthMessage('Creating account...', 'info');
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                await updateProfile(userCredential.user, { displayName: name });
-            } catch (error) {
-                showAuthMessage(`Sign up failed: ${error.message}`, 'error');
-            }
-        });
-
-        forgotPasswordForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('forgotEmail').value;
-            try {
-                showAuthMessage('Sending reset email...', 'info');
-                await sendPasswordResetEmail(auth, email);
-                showAuthMessage('Password reset email sent! Check your inbox.', 'success');
-            } catch (error) {
-                showAuthMessage(`Failed to send email: ${error.message}`, 'error');
-            }
-        });
-
-        let currentActiveUserId = null;
-        const headerContainer = document.querySelector('header .container');
-        const loginNavBtn = document.getElementById('loginNavBtn');
-        const userMonogram = document.getElementById('userMonogram');
-        const authDropdown = document.getElementById('authDropdown');
-        const authStatusContainer = document.getElementById('authStatusContainer');
-        const logoutBtn = document.getElementById('logoutBtn');
-
-        const updateAuthUI = (user) => {
-            if (user && !user.isAnonymous) {
-                loginNavBtn.classList.add('hidden');
-                userMonogram.classList.remove('hidden');
-                
-                const initials = (user.displayName || user.email || 'U')[0].toUpperCase();
-                userMonogram.textContent = initials;
-                
-                headerContainer?.classList.remove('justify-between');
-                headerContainer?.classList.add('justify-end');
-                
-                closeModal(document.getElementById('loginModal'));
-            } else {
-                loginNavBtn.classList.remove('hidden');
-                userMonogram.classList.add('hidden');
-                authDropdown.classList.add('hidden');
-                
-                headerContainer?.classList.add('justify-between');
-                headerContainer?.classList.remove('justify-end');
-            }
-        };
-
-        logoutBtn.addEventListener('click', () => {
-            clearStoredChatSession();
-            currentChatId = null;
-            signOut(auth);
-        });
+        // Auth is now handled by global-auth.js
 
         // --- CHAT WIDGET LOGIC ---
         const chatWindow = document.getElementById('chat-window');
@@ -1773,7 +1621,9 @@
             }
         });
         sendMessageBtn.addEventListener('click', () => sendMessage(chatInput.value));
-        guestLoginBtn.addEventListener('click', () => openModal('loginModal'));
+        if (guestLoginBtn) {
+            guestLoginBtn.addEventListener('click', () => openModal('loginModal'));
+        }
 
         // --- SURVEY LOGIC ---
         let surveyData = {
@@ -2011,10 +1861,9 @@
             orderSelectionContainer.classList.add('hidden');
         });
 
-        // Fire initial UI update on load
+        // Re-check chat session status on auth change
         onAuthStateChanged(auth, async (user) => {
-            updateAuthUI(user);
-            currentActiveUserId = user?.uid;
+            // Auth UI is handled by global-auth.js
             
             // Re-check chat session status
             if (user && !user.isAnonymous) {
