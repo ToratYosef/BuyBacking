@@ -20,10 +20,10 @@ getDoc,
 updateDoc,
 setDoc
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { app, db } from "../firebase-config.js";
 
-const app = firebaseApp;
 const auth = getAuth(app);
-const db = getFirestore(app);
+const firestore = db;
 
 window.firebaseAuth = auth;
 window.GoogleAuthProvider = GoogleAuthProvider;
@@ -34,7 +34,7 @@ window.signOut = signOut;
 window.onAuthStateChanged = onAuthStateChanged;
 window.updateProfile = updateProfile;
 window.sendPasswordResetEmail = sendPasswordResetEmail;
-window.firebaseDb = db;
+window.firebaseDb = firestore;
 window.firebaseServerTimestamp = serverTimestamp;
 window.firebase = {
 firestore: {

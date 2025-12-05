@@ -16,7 +16,7 @@ imgElement.classList.remove('hidden');
 return;
 }
 
-const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+const extensions = ['.webp', '.avif', '.png', '.webp', '.webp'];
 let current = 0;
 
 function tryLoad() {

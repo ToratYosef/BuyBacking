@@ -1,10 +1,8 @@
-import { firebaseApp } from "/assets/js/firebase-app.js";
+import { app, db } from "../firebase-config.js";
 import { gatherOrderLabelUrls, serialiseQueueOrder } from "/assets/js/pdf/order-labels.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
+const auth = getAuth(app);
 
 function resolveBackendBaseUrl() {
   if (typeof window !== "undefined" && window.location?.origin) {

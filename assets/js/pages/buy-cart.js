@@ -1,14 +1,14 @@
-import { firebaseApp } from "/assets/js/firebase-app.js";
+import { app, db } from "../firebase-config.js";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, setLogLevel, collection, addDoc, runTransaction, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { doc, setDoc, onSnapshot, setLogLevel, collection, addDoc, runTransaction, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- Configuration and Constants ---
 // NOTE: These are duplicated here for a self-contained page
 
 // This is necessary for `doc(db, ...)` construction
-const currentAppId = firebaseApp?.options?.projectId || 'buyback-a0f05';
+const currentAppId = app?.options?.projectId || 'buyback-a0f05';
 
-let db, auth;
+let auth;
 let userId = null;
 let cart = []; // Global state for cart items
 
@@ -31,8 +31,6 @@ const authRequiredNotice = document.getElementById("authRequiredNotice");
 
 // --- Firebase Initialization ---
 try {
-const app = firebaseApp;
-db = getFirestore(app);
 auth = getAuth(app);
 setLogLevel('Debug');
 } catch (e) {

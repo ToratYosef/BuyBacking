@@ -149,7 +149,7 @@ signOut(auth);
 function loadImageWithFallback(imgElement) {
 const baseSrc = imgElement.dataset.baseSrc;
 if (!baseSrc) return;
-const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+const extensions = ['.webp', '.avif', '.png', '.webp', '.webp'];
 let current = 0;
 function tryLoad() {
 if (current >= extensions.length) {
