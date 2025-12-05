@@ -829,6 +829,5 @@ globalTooltip.style.opacity = '0';
 }, 100);
 });
 });
-});
 }
 });
