@@ -144,142 +144,144 @@
       setDoc
     } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
-    const db = getFirestore(firebaseApp);
+    document.addEventListener('DOMContentLoaded', () => {
+      const db = getFirestore(firebaseApp);
 
-    const imeiForm = document.getElementById('imei-form');
-    const imeiInput = document.getElementById('imei-input');
-    const instructionsEl = document.getElementById('instructions');
-    const button = document.getElementById('check-button');
-    const resultEl = document.getElementById('result');
+      const imeiForm = document.getElementById('imei-form');
+      const imeiInput = document.getElementById('imei-input');
+      const instructionsEl = document.getElementById('instructions');
+      const button = document.getElementById('check-button');
+      const resultEl = document.getElementById('result');
 
-    const params = new URLSearchParams(window.location.search);
-    const deviceId = params.get('deviceId');
+      const params = new URLSearchParams(window.location.search);
+      const deviceId = params.get('deviceId');
 
-    if (!deviceId) {
-      instructionsEl.textContent = 'Missing deviceId query parameter.';
-      instructionsEl.classList.add('error', 'status-message');
-      throw new Error('Device ID is required in the query string.');
-    }
-
-    const deviceRef = doc(db, 'devices', deviceId);
-
-    let isChecking = false;
-
-    const updateButtonState = () => {
-      if (isChecking) {
-        button.textContent = 'Checking…';
-        button.disabled = true;
-      } else {
-        button.textContent = 'Check IMEI';
-        button.disabled = false;
-      }
-    };
-
-    const renderResult = (result) => {
-      if (!result) {
-        resultEl.classList.add('hidden');
-        resultEl.textContent = '';
-        return;
-      }
-
-      const pretty = JSON.stringify(result, null, 2);
-      resultEl.textContent = pretty;
-      resultEl.classList.remove('error');
-      resultEl.classList.remove('hidden');
-    };
-
-    onSnapshot(deviceRef, (snapshot) => {
-      if (!snapshot.exists()) {
-        instructionsEl.textContent = 'Device not found.';
+      if (!deviceId) {
+        instructionsEl.textContent = 'Missing deviceId query parameter.';
         instructionsEl.classList.add('error', 'status-message');
-        imeiForm.classList.add('hidden');
-        return;
+        throw new Error('Device ID is required in the query string.');
       }
 
-      const data = snapshot.data();
-      renderResult(data.imeiCheckResult || null);
+      const deviceRef = doc(db, 'devices', deviceId);
 
-      const statusValue = (data.status || '').toString().trim().toLowerCase();
-      const isReceivedStatus = statusValue === 'received' || statusValue === 'imei_checked';
-      const shouldShowForm =
-        isReceivedStatus &&
-        (!data.imei || data.imeiChecked === false);
+      let isChecking = false;
 
-      if (shouldShowForm) {
-        instructionsEl.textContent = 'Enter the IMEI to test for this device.';
-        instructionsEl.classList.remove('error', 'status-message');
-        imeiForm.classList.remove('hidden');
-        if (data.imei && !imeiInput.value) {
-          imeiInput.value = data.imei;
-        }
-      } else {
-        imeiForm.classList.add('hidden');
-        if (!isReceivedStatus) {
-          instructionsEl.textContent = 'Device is not in a receivable state for IMEI checks.';
-          instructionsEl.classList.add('status-message');
+      const updateButtonState = () => {
+        if (isChecking) {
+          button.textContent = 'Checking…';
+          button.disabled = true;
         } else {
-          instructionsEl.textContent = 'IMEI check completed or already recorded.';
-          instructionsEl.classList.add('status-message');
+          button.textContent = 'Check IMEI';
+          button.disabled = false;
         }
-      }
-    }, (error) => {
-      instructionsEl.textContent = `Failed to load device: ${error.message}`;
-      instructionsEl.classList.add('error', 'status-message');
-    });
+      };
 
-    button.addEventListener('click', async () => {
-      if (isChecking) {
-        return;
-      }
+      const renderResult = (result) => {
+        if (!result) {
+          resultEl.classList.add('hidden');
+          resultEl.textContent = '';
+          return;
+        }
 
-      const imeiValue = imeiInput.value.trim();
-      if (!/^\d{15}$/.test(imeiValue)) {
-        resultEl.textContent = 'Please enter a 15-digit IMEI number.';
+        const pretty = JSON.stringify(result, null, 2);
+        resultEl.textContent = pretty;
+        resultEl.classList.remove('error');
         resultEl.classList.remove('hidden');
-        resultEl.classList.add('error');
-        return;
-      }
+      };
 
-      resultEl.classList.remove('error');
-      resultEl.textContent = '';
-      resultEl.classList.add('hidden');
-
-      try {
-        isChecking = true;
-        updateButtonState();
-
-        await setDoc(deviceRef, {
-          imei: imeiValue,
-          imeiChecked: false
-        }, { merge: true });
-
-        const response = await fetch('/checkImei', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ deviceId, imei: imeiValue })
-        });
-
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({ error: 'Failed to check IMEI.' }));
-          throw new Error(error.error || 'Failed to check IMEI.');
+      onSnapshot(deviceRef, (snapshot) => {
+        if (!snapshot.exists()) {
+          instructionsEl.textContent = 'Device not found.';
+          instructionsEl.classList.add('error', 'status-message');
+          imeiForm.classList.add('hidden');
+          return;
         }
 
-        const payload = await response.json();
-        if (payload.result) {
-          renderResult(payload.result);
+        const data = snapshot.data();
+        renderResult(data.imeiCheckResult || null);
+
+        const statusValue = (data.status || '').toString().trim().toLowerCase();
+        const isReceivedStatus = statusValue === 'received' || statusValue === 'imei_checked';
+        const shouldShowForm =
+          isReceivedStatus &&
+          (!data.imei || data.imeiChecked === false);
+
+        if (shouldShowForm) {
+          instructionsEl.textContent = 'Enter the IMEI to test for this device.';
+          instructionsEl.classList.remove('error', 'status-message');
+          imeiForm.classList.remove('hidden');
+          if (data.imei && !imeiInput.value) {
+            imeiInput.value = data.imei;
+          }
+        } else {
+          imeiForm.classList.add('hidden');
+          if (!isReceivedStatus) {
+            instructionsEl.textContent = 'Device is not in a receivable state for IMEI checks.';
+            instructionsEl.classList.add('status-message');
+          } else {
+            instructionsEl.textContent = 'IMEI check completed or already recorded.';
+            instructionsEl.classList.add('status-message');
+          }
         }
-      } catch (error) {
-        resultEl.textContent = error.message || 'Failed to check IMEI.';
-        resultEl.classList.remove('hidden');
-        resultEl.classList.add('error');
-        console.error('IMEI check failed:', error);
-      } finally {
-        isChecking = false;
-        updateButtonState();
-      }
+      }, (error) => {
+        instructionsEl.textContent = `Failed to load device: ${error.message}`;
+        instructionsEl.classList.add('error', 'status-message');
+      });
+
+      button.addEventListener('click', async () => {
+        if (isChecking) {
+          return;
+        }
+
+        const imeiValue = imeiInput.value.trim();
+        if (!/^\d{15}$/.test(imeiValue)) {
+          resultEl.textContent = 'Please enter a 15-digit IMEI number.';
+          resultEl.classList.remove('hidden');
+          resultEl.classList.add('error');
+          return;
+        }
+
+        resultEl.classList.remove('error');
+        resultEl.textContent = '';
+        resultEl.classList.add('hidden');
+
+        try {
+          isChecking = true;
+          updateButtonState();
+
+          await setDoc(deviceRef, {
+            imei: imeiValue,
+            imeiChecked: false
+          }, { merge: true });
+
+          const response = await fetch('/checkImei', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deviceId, imei: imeiValue })
+          });
+
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Failed to check IMEI.' }));
+            throw new Error(error.error || 'Failed to check IMEI.');
+          }
+
+          const payload = await response.json();
+          if (payload.result) {
+            renderResult(payload.result);
+          }
+        } catch (error) {
+          resultEl.textContent = error.message || 'Failed to check IMEI.';
+          resultEl.classList.remove('hidden');
+          resultEl.classList.add('error');
+          console.error('IMEI check failed:', error);
+        } finally {
+          isChecking = false;
+          updateButtonState();
+        }
+      });
+
+      window.addEventListener('load', updateButtonState);
     });
-
-    updateButtonState();
   </script>
 <!-- <script src="/assets/js/ship48-banner.js" defer></script> -->
   <script type="module" src="/assets/js/global-auth.js" defer></script>

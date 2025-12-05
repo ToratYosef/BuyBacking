@@ -23,7 +23,7 @@
     })(window,document,'script','dataLayer','GTM-W3BM2JC8');</script>
     
     <!-- End Google Tag Manager -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
+    <script defer src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
@@ -795,11 +795,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         };
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
         document.addEventListener('DOMContentLoaded', async function() {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+
+            window.addEventListener('load', () => {
+                const deferredTasks = window.deferredTasks || [];
+                deferredTasks.forEach((task) => {
+                    if (typeof task === 'function') {
+                        task();
+                    }
+                });
+            });
+
             // --- AUTHENTICATION LOGIC ---
             const loginNavBtn = document.getElementById('loginNavBtn');
             const userMonogram = document.getElementById('userMonogram');
