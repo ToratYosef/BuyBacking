@@ -931,6 +931,5 @@ button.addEventListener('mouseenter', () => {
 clearTimeout(tooltipTimeout);
 });
 });
-});
 }
 });
