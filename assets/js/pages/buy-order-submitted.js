@@ -11,7 +11,7 @@ try {
 const app = firebaseApp;
 db = getFirestore(app);
 auth = getAuth(app);
-setLogLevel('Debug');
+setLogLevel('error');
 } catch (e) {
 console.error("Firebase initialization failed:", e);
 }

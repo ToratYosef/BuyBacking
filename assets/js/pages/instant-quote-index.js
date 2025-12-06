@@ -4,7 +4,7 @@ import { getAuth, signInAnonymously, GoogleAuthProvider, signInWithPopup, signIn
 import { getFirestore, collection, getDocs, doc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // --- Configuration and State ---
-setLogLevel('Debug');
+setLogLevel('error');
 
 // ** API URL FOR BACKEND SUBMISSION **
 // This should point to your Firebase Cloud Functions HTTP endpoint (exports.api).

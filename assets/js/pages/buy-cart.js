@@ -32,7 +32,7 @@ const authRequiredNotice = document.getElementById("authRequiredNotice");
 // --- Firebase Initialization ---
 try {
 auth = getAuth(app);
-setLogLevel('Debug');
+setLogLevel('error');
 } catch (e) {
 console.error("Firebase initialization failed:", e);
 }

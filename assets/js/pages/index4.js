@@ -3,7 +3,7 @@ import { getAuth, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvid
 import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, runTransaction, increment, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-       // setLogLevel('debug');
+       // setLogLevel('error');
 
 // --- START: USER'S EXPLICIT FIREBASE CONFIG ---
 // Removed global variables based on user request.
