@@ -4,6 +4,16 @@ const POST_RECEIVED_STATUS_HINTS = new Set([
   'received_device',
   'imei_checked',
   'imei checked',
+  'balance_email_sent',
+  'balanced_email_sent',
+  'balance email sent',
+  'balanced email sent',
+  'password_email_sent',
+  'password email sent',
+  'fmi_email_sent',
+  'fmi email sent',
+  'lost_stolen',
+  'lost stolen',
   'completed',
   'complete',
   're-offered-pending',
@@ -34,6 +44,14 @@ const POST_RECEIVED_STATUS_HINTS = new Set([
   'emailed',
   'cancelled',
   'canceled',
+]);
+
+const BALANCE_EMAIL_STATUS_ALIASES = new Set([
+  'emailed',
+  'balance_email_sent',
+  'balanced_email_sent',
+  'balance email sent',
+  'balanced email sent',
 ]);
 
 function hasBalanceEmailFlag(input = {}) {
@@ -142,7 +160,11 @@ function isBalanceEmailStatus(input = {}) {
     return false;
   }
   const normalized = normalizeStatusString(extractStatusCandidate(input));
-  if (normalized !== 'emailed') {
+  if (BALANCE_EMAIL_STATUS_ALIASES.has(normalized)) {
+    if (normalized !== 'emailed') {
+      return true;
+    }
+  } else {
     return false;
   }
   return hasBalanceEmailFlag(input);

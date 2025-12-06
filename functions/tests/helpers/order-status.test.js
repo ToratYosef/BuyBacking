@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { isStatusPastReceived } = require('../../helpers/order-status');
+const { isStatusPastReceived, isBalanceEmailStatus } = require('../../helpers/order-status');
 
 test('flags received/completed style statuses', () => {
   assert.equal(isStatusPastReceived('received'), true);
@@ -33,4 +33,19 @@ test('treats any emailed status as past received', () => {
   );
   assert.equal(isStatusPastReceived({ status: 'emailed' }), true);
   assert.equal(isStatusPastReceived('emailed'), true);
+});
+
+test('treats balance and follow-up email statuses as post-receiving', () => {
+  assert.equal(isStatusPastReceived({ status: 'balance_email_sent' }), true);
+  assert.equal(isStatusPastReceived({ status: 'balanced email sent' }), true);
+  assert.equal(isStatusPastReceived({ status: 'password_email_sent' }), true);
+  assert.equal(isStatusPastReceived({ status: 'fmi_email_sent' }), true);
+  assert.equal(isStatusPastReceived({ status: 'lost_stolen' }), true);
+});
+
+test('detects balance email aliases without extra flags', () => {
+  assert.equal(isBalanceEmailStatus({ status: 'balance_email_sent' }), true);
+  assert.equal(isBalanceEmailStatus({ status: 'balanced email sent' }), true);
+  assert.equal(isBalanceEmailStatus({ status: 'emailed', lastConditionEmailReason: 'outstanding_balance' }), true);
+  assert.equal(isBalanceEmailStatus({ status: 'emailed' }), false);
 });

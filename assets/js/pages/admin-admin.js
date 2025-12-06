@@ -13,12 +13,29 @@ import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+const BALANCE_EMAIL_STATUS_ALIASES = new Set([
+  'emailed',
+  'balance_email_sent',
+  'balanced_email_sent',
+  'balance email sent',
+  'balanced email sent',
+]);
+
 function isBalanceEmailStatus(order = {}) {
   if (!order || typeof order !== 'object') {
     return false;
   }
-  if ((order.status || '').toLowerCase() !== 'emailed') {
+  const normalizedStatus = (order.status || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  if (!BALANCE_EMAIL_STATUS_ALIASES.has(normalizedStatus)) {
     return false;
+  }
+
+  if (normalizedStatus !== 'emailed') {
+    return true;
   }
   if (order.balanceEmailSentAt) {
     return true;
@@ -47,7 +64,22 @@ function isLabelGenerationStage(order = {}) {
   return false;
 }
 
-const RECEIVED_STATUS_KEYS = new Set(['received', 'device_received', 'received_device', 'imei_checked']);
+const RECEIVED_STATUS_KEYS = new Set([
+  'received',
+  'device_received',
+  'received_device',
+  'imei_checked',
+  'balance_email_sent',
+  'balanced_email_sent',
+  'balance email sent',
+  'balanced email sent',
+  'password_email_sent',
+  'password email sent',
+  'fmi_email_sent',
+  'fmi email sent',
+  'lost_stolen',
+  'lost stolen',
+]);
 
 function isReceivedStatusValue(status) {
   if (!status) {
