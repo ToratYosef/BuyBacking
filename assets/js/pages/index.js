@@ -78,6 +78,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
     const closeModal = (modal) => modal.classList.remove('is-visible');
 
+    // Auth-aware header controls
+    const auth = getAuth(app);
+    const loginNavBtn = document.getElementById('loginNavBtn');
+    const userMonogram = document.getElementById('userMonogram');
+    const authDropdown = document.getElementById('authDropdown');
+
+    onAuthStateChanged(auth, (user) => {
+        const isLoggedIn = !!user && !user.isAnonymous;
+        if (loginNavBtn) {
+            loginNavBtn.classList.toggle('hidden', isLoggedIn);
+        }
+        if (userMonogram) {
+            const initialsSource = (user?.displayName || user?.email || '').trim();
+            const initials = initialsSource
+                ? initialsSource.split(' ').map((part) => part[0]).join('').substring(0, 2).toUpperCase()
+                : '';
+            if (isLoggedIn && initials) {
+                userMonogram.textContent = initials;
+            }
+            userMonogram.classList.toggle('hidden', !isLoggedIn);
+        }
+        if (authDropdown) {
+            authDropdown.classList.toggle('hidden', !isLoggedIn);
+            if (!isLoggedIn) {
+                authDropdown.classList.remove('is-visible');
+            }
+        }
+    });
+
     const aboutUsLink = document.getElementById('aboutUsLink');
     if (aboutUsLink) {
         aboutUsLink.addEventListener('click', (e) => {
