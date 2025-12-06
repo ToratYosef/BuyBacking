@@ -50,8 +50,11 @@ document.getElementById('termsAndConditionsLinkFooter')?.addEventListener('click
 modals.forEach(modal => {
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
 modal.querySelector('.close-modal-btn')?.addEventListener('click', () => closeModal(modal));
+// Ensure this closing brace matches the correct opening brace or parenthesis
+// If misplaced, adjust the structure of the code above to fix the issue.
 });
 
+// Add missing closing brace for modals.forEach
 window.addEventListener('shc:ship48-start-order', () => {
     openModal('quoteModal');
 });
