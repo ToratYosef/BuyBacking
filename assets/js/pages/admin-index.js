@@ -211,12 +211,29 @@ if (typeof window !== "undefined" && !window.formatShippingAddress) {
   window.formatShippingAddress = formatShippingAddress;
 }
 
+const BALANCE_EMAIL_STATUS_ALIASES = new Set([
+  'emailed',
+  'balance_email_sent',
+  'balanced_email_sent',
+  'balance email sent',
+  'balanced email sent',
+]);
+
 function isBalanceEmailStatus(order = {}) {
   if (!order || typeof order !== 'object') {
     return false;
   }
-  if ((order.status || '').toLowerCase() !== 'emailed') {
+  const normalizedStatus = (order.status || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  if (!BALANCE_EMAIL_STATUS_ALIASES.has(normalizedStatus)) {
     return false;
+  }
+
+  if (normalizedStatus !== 'emailed') {
+    return true;
   }
   if (order.balanceEmailSentAt) {
     return true;
@@ -369,6 +386,16 @@ const TRACKING_POST_RECEIVED_STATUSES = new Set([
   'imei_checked',
   'device_received',
   'received_device',
+  'balance_email_sent',
+  'balanced_email_sent',
+  'balance email sent',
+  'balanced email sent',
+  'password_email_sent',
+  'password email sent',
+  'fmi_email_sent',
+  'fmi email sent',
+  'lost_stolen',
+  'lost stolen',
   'completed',
   'complete',
   're-offered-pending',
