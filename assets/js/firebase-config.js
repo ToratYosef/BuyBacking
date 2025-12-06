@@ -2,12 +2,13 @@ import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.6.
 import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+  authDomain: "auth.secondhandcell.com",
+  projectId: "buyback-a0f05",
+  storageBucket: "buyback-a0f05.appspot.com",
+  messagingSenderId: "876430429098",
+  appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+  measurementId: "G-6WWQN44JHT",
 };
 
 // Initialize Firebase app if not already initialized

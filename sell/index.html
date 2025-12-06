@@ -1966,16 +1966,27 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 const modal = document.getElementById(modalId);
                 if (!modal) return;
 
-                // Some modals (like the auth modal) may have their display set to "none" by external scripts.
-                // Ensure they become visible when we add the `is-visible` class.
+                // Reset visibility so the animation can restart on every open
+                modal.classList.remove('is-visible');
                 modal.style.display = 'flex';
+
+                // Force a reflow before re-adding the class to trigger the transition
+                void modal.offsetWidth;
                 modal.classList.add('is-visible');
             };
 
             const closeModal = (modal) => {
                 if (!modal) return;
                 modal.classList.remove('is-visible');
-                modal.style.display = 'none';
+
+                const hideModal = () => {
+                    modal.style.display = 'none';
+                };
+
+                modal.addEventListener('transitionend', hideModal, { once: true });
+
+                // Fallback in case the transitionend event does not fire
+                setTimeout(hideModal, 400);
             };
             
             document.querySelectorAll('.modal').forEach(modal => {
@@ -2388,11 +2399,11 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                     quoteModalNoOfferContent.classList.toggle('hidden', hasOffer);
                     quoteModalContinueBtn.textContent = hasOffer ? 'Continue' : 'Choose Other Options';
                 }
-                quoteModal.classList.add('is-visible');
+                openModal('quoteModal');
             }
 
             function hideQuotePopup() {
-                quoteModal.classList.remove('is-visible');
+                closeModal(quoteModal);
             }
 
             if(closeLoginModalBtn) closeLoginModalBtn.addEventListener('click', hideLoginModal);
