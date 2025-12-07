@@ -645,7 +645,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 storage: '128GB',
                 price: 550,
                 reoffer: null,
-                imageUrl: 'https://secondhandcell.com/aseets/ipm2.webp',
+                imageUrl: 'https://secondhandcell.com/assets/ipm2.webp',
                 timestamp: serverTimestamp()
             });
         } else {
