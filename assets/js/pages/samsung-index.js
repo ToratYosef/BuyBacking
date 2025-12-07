@@ -239,7 +239,7 @@ return numB - numA;
     const normalized = name.toLowerCase();
 
     const isUltra = /\bultra\b/.test(normalized);
-    const isPlus = /\bplus\b/.test(normalized) || /\+($|\s)/.test(normalized);
+    const isPlus = /\bplus\b/.test(normalized) || /\+/.test(normalized.replace(/\s+/g, ''));
     const isEdge = /\bedge\b/.test(normalized);
     const isFe = /\bfe\b/.test(normalized);
 
