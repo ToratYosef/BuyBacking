@@ -94,7 +94,7 @@ test('returns in-transit tracking data without forcing delivery status', async (
     });
 });
 
-test('requires an estimated delivery date before treating accepted kit scans as in transit', async () => {
+test('treats accepted kit scans without an ETA as in transit', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'AC',
         status_description: 'Accepted at USPS Origin Facility'
@@ -112,7 +112,7 @@ test('requires an estimated delivery date before treating accepted kit scans as 
 
     assert.equal(delivered, false);
     assert.equal(direction, 'outbound');
-    assert.ok(!('status' in updatePayload));
+    assert.equal(updatePayload.status, 'kit_on_the_way_to_customer');
     assert.equal(updatePayload.kitTrackingStatus.statusCode, 'AC');
     assert.equal(updatePayload.kitTrackingStatus.estimatedDelivery, null);
 });
@@ -141,7 +141,7 @@ test('treats accepted kit scans with an ETA as in transit', async () => {
     assert.equal(updatePayload.kitTrackingStatus.estimatedDelivery, '2025-11-17');
 });
 
-test('reverts kit transit status back to label_generated when only acceptance scans exist', async () => {
+test('keeps kit transit status when only acceptance scans exist', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'AC',
         status_description: 'Accepted at USPS Origin Facility'
@@ -159,7 +159,7 @@ test('reverts kit transit status back to label_generated when only acceptance sc
         }
     );
 
-    assert.equal(updatePayload.status, 'label_generated');
+    assert.equal(updatePayload.status, 'kit_on_the_way_to_customer');
     assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
 });
 
@@ -184,7 +184,7 @@ test('prefers inbound tracking once the kit is delivered', async () => {
 
     assert.equal(delivered, false);
     assert.equal(direction, 'inbound');
-    assert.equal(updatePayload.status, 'phone_on_the_way_to_us');
+    assert.equal(updatePayload.status, 'phone_on_the_way');
     assert.ok(
         axiosStub.calls[0].url.includes('carrier_code=stamps_com'),
         'Inbound tracking should default to the standard carrier code when unspecified'
@@ -237,7 +237,7 @@ test('marks inbound kits as delivered to us when ShipEngine reports delivery', a
     });
 });
 
-test('reverts inbound phone transit status to label_generated when only acceptance scans exist', async () => {
+test('keeps inbound phone transit status when only acceptance scans exist', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'AC',
         status_description: 'Shipment accepted at USPS facility'
@@ -256,11 +256,10 @@ test('reverts inbound phone transit status to label_generated when only acceptan
     );
 
     assert.equal(direction, 'inbound');
-    assert.equal(updatePayload.status, 'label_generated');
-    assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
+    assert.equal(updatePayload.status, 'phone_on_the_way');
 });
 
-test('rolls kit inbound transit status back to kit_delivered when no ETA exists', async () => {
+test('keeps kit inbound transit status when no ETA exists', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'IT',
         status_description: 'Inbound in transit'
@@ -281,11 +280,11 @@ test('rolls kit inbound transit status back to kit_delivered when no ETA exists'
     );
 
     assert.equal(direction, 'inbound');
-    assert.equal(updatePayload.status, 'kit_delivered');
+    assert.equal(updatePayload.status, 'phone_on_the_way');
     assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
 });
 
-test('rolls kit inbound transit status back to kit_sent when scans are not yet in transit', async () => {
+test('keeps kit inbound transit status when scans are not yet in transit', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'LA',
         status_description: 'Label created'
@@ -305,11 +304,10 @@ test('rolls kit inbound transit status back to kit_sent when scans are not yet i
         }
     );
 
-    assert.equal(updatePayload.status, 'kit_sent');
-    assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
+    assert.equal(updatePayload.status, 'phone_on_the_way');
 });
 
-test('rolls emailed label inbound transit status back to label_generated when no ETA exists', async () => {
+test('keeps emailed label inbound transit status when no ETA exists', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'IT',
         status_description: 'Inbound in transit'
@@ -329,7 +327,7 @@ test('rolls emailed label inbound transit status back to label_generated when no
     );
 
     assert.equal(direction, 'inbound');
-    assert.equal(updatePayload.status, 'label_generated');
+    assert.equal(updatePayload.status, 'phone_on_the_way');
     assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
 });
 

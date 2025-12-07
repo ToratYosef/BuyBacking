@@ -985,7 +985,7 @@ return 'Balance Email Sent';
 }
 
 if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
-return 'Phone On The Way To Us';
+return 'Phone On The Way';
 }
 
 // Fallback for other statuses
