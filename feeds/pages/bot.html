@@ -1049,6 +1049,47 @@
       return lines.join("\n");
     }
 
+    // ===================== XML PRETTY PRINT HELPER =====================
+
+    function prettyPrintXml(xml) {
+      const PADDING = "  "; // 2 spaces
+      const reg = /(>)(<)(\/*)/g;
+
+      // Put each tag on its own line first
+      xml = xml.replace(reg, "$1\n$2$3");
+
+      const lines = xml.split("\n");
+      let pad = 0;
+      const result = [];
+
+      for (let rawLine of lines) {
+        let line = rawLine.trim();
+        if (!line) continue;
+
+        // Closing tag: decrease indent first
+        if (/^<\/.+>/.test(line)) {
+          pad = Math.max(pad - 1, 0);
+        }
+
+        let indent = "";
+        for (let i = 0; i < pad; i++) {
+          indent += PADDING;
+        }
+
+        result.push(indent + line);
+
+        // Opening tag that is not self-closing and not on same line as its closing tag
+        if (
+          /^<[^!?][^>]*[^/]>$/.test(line) &&      // <tag> (not <?xml, <!DOCTYPE, <tag />, etc)
+          !/<\/.+>$/.test(line)                   // and not <tag>...</tag> on one line
+        ) {
+          pad++;
+        }
+      }
+
+      return result.join("\n");
+    }
+
     // ===================== XML EXPORT (CARRIER FORMAT) =====================
 
     function buildUpdatedXmlFromTemplate(templateXmlText, rows) {
@@ -1122,6 +1163,9 @@
       if (!/^<\?xml/i.test(xmlOut.trim())) {
         xmlOut = '<?xml version="1.0" encoding="UTF-8"?>\n' + xmlOut;
       }
+
+      // Pretty-print the entire XML so Pixels & everything else aren't on one mega-line
+      xmlOut = prettyPrintXml(xmlOut);
 
       return xmlOut;
     }

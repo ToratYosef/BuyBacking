@@ -165,12 +165,102 @@ userMonogram?.addEventListener('click', (e) => {
 e.stopPropagation();
 authDropdown?.classList.toggle('hidden');
 });
+await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
+orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
+deviceName: 'Google Pixel Fold',
+storage: '512GB',
+price: 600,
+reoffer: 550,
+imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
+timestamp: serverTimestamp()
+});
+await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
+orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
+deviceName: 'iPad Pro (M2)',
+storage: '128GB',
+price: 550,
+reoffer: null,
+imageUrl: 'https://secondhandcell.com/assets/ipm2.webp',
+timestamp: serverTimestamp()
+});
+} else {
+console.log("Example orders already exist for user:", userId);
+}
+};
+
+const parseCurrencyValue = (value) => {
+const numeric = Number(value);
+return Number.isFinite(numeric) ? numeric : null;
+};
+
+const getDisplayPrice = (order) => {
+if (!order || typeof order !== 'object') {
+return 0;
+}
+const candidates = [
+order.reoffer,
+order.reOffer?.newPrice,
+order.reOffer,
+order.price,
+order.estimatedQuote,
+];
+
+// Logout
+logoutBtn?.addEventListener('click', () => {
+signOut(auth);
+});
+
+// --- UPDATED DYNAMIC PHONE DATA & RENDERING ---
+const phoneGrid = document.getElementById('phoneGrid');
+const searchInput = document.getElementById('searchInput');
+const noResultsMessage = document.getElementById('noResultsMessage');
+const searchTermSpan = document.getElementById('searchTerm');
+const loadingIndicator = document.getElementById('loadingIndicator');
+
+// Define screen size check once at the top level
+const isMobile = window.matchMedia('(max-width: 767px)').matches;
+
+let allPhones = []; // This will now store our fetched phones
 
 // Close dropdown if clicking outside
 document.addEventListener('click', () => {
 if (!authDropdown?.classList.contains('hidden')) {
   authDropdown?.classList.add('hidden');
 }
+
+// Sort phones from newest to oldest based on the name.
+// Pixel models are primarily numbered (e.g., Pixel 9, Pixel 9 Pro XL, Pixel Fold).
+allPhones.sort((a, b) => {
+  const getModelNumber = (name) => {
+    const match = (name || '').match(/(\d{1,2})/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+
+  const getModelPriority = (name) => {
+    const normalized = (name || '').toLowerCase();
+
+    if (normalized.includes('pro xl')) return 0;
+    if (normalized.includes('pro')) return 1;
+    if (normalized.includes('fold')) return 2;
+    if (normalized.match(/\bxl\b/)) return 3;
+    if (normalized.match(/\ba\b/)) return 4; // "a" series (e.g., Pixel 8a)
+    return 5; // standard models
+  };
+
+  const numA = getModelNumber(a.name);
+  const numB = getModelNumber(b.name);
+
+  if (numA !== numB) {
+    return numB - numA;
+  }
+
+  const priorityA = getModelPriority(a.name);
+  const priorityB = getModelPriority(b.name);
+  if (priorityA !== priorityB) {
+    return priorityA - priorityB;
+  }
+
+  return (a.name || '').localeCompare(b.name || '');
 });
 
 // Logout
@@ -410,6 +500,19 @@ const slug = phoneId || createUrlSlug(phoneName);
 trackDeviceClick(slug, phoneName);
 }
 });
+orderSelectionPrompt.textContent = 'Login to access your orders:';
+return;
+}
+
+// --- REDIRECT LOGIC FOR THE "CONTINUE" BUTTON ---
+  continueWithDeviceBtn?.addEventListener('click', (event) => {
+  event.preventDefault();
+  const phoneData = JSON.parse(continueWithDeviceBtn.dataset.phoneData);
+  if (phoneData) {
+  const slug = createUrlSlug(phoneData.name);
+  window.location.href = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
+  }
+  });
 
 // --- REDIRECT LOGIC FOR THE "CONTINUE" BUTTON ---
   continueWithDeviceBtn?.addEventListener('click', (event) => {
