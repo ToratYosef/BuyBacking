@@ -171,7 +171,78 @@ document.addEventListener('click', () => {
 if (!authDropdown?.classList.contains('hidden')) {
   authDropdown?.classList.add('hidden');
 }
+const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+console.log("fetchUserOrders: Fetched orders:", orders);
+resolve(orders);
+} catch (error) {
+console.error("fetchUserOrders: Error fetching user orders:", error);
+resolve({ error: error.message });
+}
 });
+});
+};
+
+const createDummyOrder = async (userId) => {
+const ordersRef = collection(db, `users/${userId}/orders`);
+const existingOrders = await getDocs(ordersRef);
+if (existingOrders.empty) {
+console.log("Creating initial dummy orders for user:", userId);
+let lastOrderNum = parseInt(localStorage.getItem('lastOrderNum') || '0', 10);
+
+const generateSequentialOrderId = () => {
+lastOrderNum++;
+localStorage.setItem('lastOrderNum', lastOrderNum);
+return `SHC-${String(lastOrderNum).padStart(5, '0')}`;
+};
+
+await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
+orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
+deviceName: 'Google Pixel 9 Pro XL',
+storage: '256GB',
+price: 700,
+reoffer: null,
+imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
+timestamp: serverTimestamp()
+});
+await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
+orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
+deviceName: 'Google Pixel Fold',
+storage: '512GB',
+price: 600,
+reoffer: 550,
+imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
+timestamp: serverTimestamp()
+});
+await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
+orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
+deviceName: 'iPad Pro (M2)',
+storage: '128GB',
+price: 550,
+reoffer: null,
+imageUrl: 'https://secondhandcell.com/assets/ipm2.webp',
+timestamp: serverTimestamp()
+});
+} else {
+console.log("Example orders already exist for user:", userId);
+}
+};
+
+const parseCurrencyValue = (value) => {
+const numeric = Number(value);
+return Number.isFinite(numeric) ? numeric : null;
+};
+
+const getDisplayPrice = (order) => {
+if (!order || typeof order !== 'object') {
+return 0;
+}
+const candidates = [
+order.reoffer,
+order.reOffer?.newPrice,
+order.reOffer,
+order.price,
+order.estimatedQuote,
+];
 
 // Logout
 logoutBtn?.addEventListener('click', () => {
@@ -323,11 +394,11 @@ loadImageWithFallback(img, img.src.replace('.webp', ''));
 }
 };
 
-searchInput.addEventListener('input', () => {
-const query = searchInput.value.toLowerCase().trim();
-const filteredPhones = allPhones.filter(p => p.name.toLowerCase().includes(query));
-renderPhones(filteredPhones, isMobile);
-});
+  searchInput?.addEventListener('input', () => {
+  const query = searchInput.value.toLowerCase().trim();
+  const filteredPhones = allPhones.filter(p => p.name.toLowerCase().includes(query));
+  renderPhones(filteredPhones, isMobile);
+  });
 
 fetchAndRenderPhones();
 
@@ -380,9 +451,9 @@ console.error("Error tracking device click:", error);
 
 // --- Updated Event Listener for PC and Mobile Cards ---
 // Using event delegation on the parent container to handle clicks on dynamically created elements.
-document.getElementById('phoneGrid').addEventListener('click', (e) => {
-const card = e.target.closest('.phone-card-link');
-const desktopLink = e.target.closest('.desktop-image-link');
+  document.getElementById('phoneGrid')?.addEventListener('click', (e) => {
+  const card = e.target.closest('.phone-card-link');
+  const desktopLink = e.target.closest('.desktop-image-link');
 
 if (card) {
 e.preventDefault();
@@ -405,20 +476,23 @@ const slug = createUrlSlug(phoneName);
 trackDeviceClick(slug, phoneName);
 }
 });
+orderSelectionPrompt.textContent = 'Login to access your orders:';
+return;
+}
 
 // --- REDIRECT LOGIC FOR THE "CONTINUE" BUTTON ---
-continueWithDeviceBtn.addEventListener('click', (event) => {
-event.preventDefault();
-const phoneData = JSON.parse(continueWithDeviceBtn.dataset.phoneData);
-if (phoneData) {
-const slug = createUrlSlug(phoneData.name);
-window.location.href = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
-}
-});
+  continueWithDeviceBtn?.addEventListener('click', (event) => {
+  event.preventDefault();
+  const phoneData = JSON.parse(continueWithDeviceBtn.dataset.phoneData);
+  if (phoneData) {
+  const slug = createUrlSlug(phoneData.name);
+  window.location.href = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
+  }
+  });
 
-document.getElementById('chooseDifferentDeviceBtn').addEventListener('click', () => {
-closeModal(quoteModal);
-});
+  document.getElementById('chooseDifferentDeviceBtn')?.addEventListener('click', () => {
+  closeModal(quoteModal);
+  });
 
 // --- ADVANCED LIVE CHAT LOGIC ---
 const chatWindow = document.getElementById('chat-window');
@@ -608,26 +682,26 @@ listenForMessages(currentChatId);
 listenForChatSessionChanges(currentChatId);
 }
 };
-chatOpenBtn.addEventListener('click', openChat);
+  chatOpenBtn?.addEventListener('click', openChat);
 
 const minimizeChat = () => {
 chatWindow.classList.remove('is-visible');
 isChatMinimized = true;
 };
-chatMinimizeBtn.addEventListener('click', minimizeChat);
+  chatMinimizeBtn?.addEventListener('click', minimizeChat);
 
-chatCloseBtn.addEventListener('click', () => {
-endChatConfirmModal.classList.remove('hidden');
-endChatConfirmModal.classList.add('flex');
-});
+  chatCloseBtn?.addEventListener('click', () => {
+  endChatConfirmModal.classList.remove('hidden');
+  endChatConfirmModal.classList.add('flex');
+  });
 
-endChatNoBtn.addEventListener('click', () => {
-endChatConfirmModal.classList.add('hidden');
-endChatConfirmModal.classList.remove('flex');
-});
+  endChatNoBtn?.addEventListener('click', () => {
+  endChatConfirmModal.classList.add('hidden');
+  endChatConfirmModal.classList.remove('flex');
+  });
 
-endChatYesBtn.addEventListener('click', async () => {
-if (currentChatId) {
+  endChatYesBtn?.addEventListener('click', async () => {
+  if (currentChatId) {
 await addDoc(collection(db, `chats/${currentChatId}/messages`), {
 text: "Chat ended by user.",
 timestamp: serverTimestamp(),
@@ -666,53 +740,53 @@ lastMessageTimestamp: serverTimestamp()
 });
 };
 
-chatInput.addEventListener('keypress', (e) => {
-if (e.key === 'Enter') {
-e.preventDefault();
-sendMessage(chatInput.value);
-}
-});
-sendMessageBtn.addEventListener('click', () => {
-sendMessage(chatInput.value);
-});
+  chatInput?.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+  e.preventDefault();
+  sendMessage(chatInput.value);
+  }
+  });
+  sendMessageBtn?.addEventListener('click', () => {
+  sendMessage(chatInput.value);
+  });
 
-chatInput.addEventListener('keyup', () => {
-clearTimeout(userTypingTimeout);
-userTypingTimeout = setTimeout(async () => {
-if (currentChatId) {
-await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
-}
-}, 300);
-});
+  chatInput?.addEventListener('keyup', () => {
+  clearTimeout(userTypingTimeout);
+  userTypingTimeout = setTimeout(async () => {
+  if (currentChatId) {
+  await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
+  }
+  }, 300);
+  });
 
-guestLoginBtn.addEventListener('click', () => openModal('loginModal'));
-guestContinueBtn.addEventListener('click', () => {
-guestPromptContainer.classList.add('hidden');
-chatInputContainer.classList.remove('hidden');
-chatInput.focus();
-});
+  guestLoginBtn?.addEventListener('click', () => openModal('loginModal'));
+  guestContinueBtn?.addEventListener('click', () => {
+  guestPromptContainer.classList.add('hidden');
+  chatInputContainer.classList.remove('hidden');
+  chatInput.focus();
+  });
 
 const friendlinessRating = document.getElementById('friendliness-rating');
 const friendlinessValue = document.getElementById('friendliness-value');
-if (friendlinessRating) {
-friendlinessRating.addEventListener('input', (e) => { friendlinessValue.textContent = e.target.value; });
-}
-starRatingContainer.addEventListener('mouseover', e => {
-if (e.target.tagName === 'I') {
+  if (friendlinessRating) {
+  friendlinessRating.addEventListener('input', (e) => { friendlinessValue.textContent = e.target.value; });
+  }
+  starRatingContainer?.addEventListener('mouseover', e => {
+  if (e.target.tagName === 'I') {
 const rating = e.target.dataset.value;
 Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= rating));
 }
 });
-starRatingContainer.addEventListener('mouseout', () => {
-const currentRating = starRatingContainer.dataset.rating;
-Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= currentRating));
-});
-starRatingContainer.addEventListener('click', e => {
-if (e.target.tagName === 'I') {
-starRatingContainer.dataset.rating = e.target.dataset.value;
-}
-});
-surveyForm.addEventListener('submit', async (e) => {
+  starRatingContainer?.addEventListener('mouseout', () => {
+  const currentRating = starRatingContainer.dataset.rating;
+  Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= currentRating));
+  });
+  starRatingContainer?.addEventListener('click', e => {
+  if (e.target.tagName === 'I') {
+  starRatingContainer.dataset.rating = e.target.dataset.value;
+  }
+  });
+  surveyForm?.addEventListener('submit', async (e) => {
 e.preventDefault();
 const surveyData = {
 overallRating: parseInt(starRatingContainer.dataset.rating, 10),
@@ -842,10 +916,10 @@ const renderOrderSelection = (orders) => {
 orderList.innerHTML = '';
 if (orders.requiresLogin) {
 orderList.innerHTML = '<p class="text-center text-slate-500">Please <a href="#" id="orderLoginPromptLink" class="text-blue-600 font-semibold hover:underline">log in</a> to view and select your orders.</p>';
-document.getElementById('orderLoginPromptLink').addEventListener('click', (e) => {
-e.preventDefault();
-openModal('loginModal');
-orderSelectionContainer.classList.add('hidden');
+  document.getElementById('orderLoginPromptLink')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  openModal('loginModal');
+  orderSelectionContainer.classList.add('hidden');
 });
 orderSelectionPrompt.textContent = 'Login to access your orders:';
 return;
@@ -872,7 +946,7 @@ orderCard.innerHTML = `
 ${reofferAmount !== null ? `<span class="reoffer">Reoffer: $${reofferAmount.toFixed(2)}</span>` : ''}
 </div>
 `;
-orderCard.addEventListener('click', () => handleOrderSelection(order));
+  orderCard.addEventListener('click', () => handleOrderSelection(order));
 orderList.appendChild(orderCard);
 });
 };
@@ -897,18 +971,18 @@ await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false 
 }
 };
 
-closeOrderSelectionBtn.addEventListener('click', async () => {
-orderSelectionContainer.classList.add('hidden');
-if (currentChatId) {
-await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false });
+  closeOrderSelectionBtn?.addEventListener('click', async () => {
+  orderSelectionContainer.classList.add('hidden');
+  if (currentChatId) {
+  await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false });
 }
 });
 
-const chatOrderBtn = document.getElementById('chat-order-btn');
-chatOrderBtn.addEventListener('click', async () => {
-if (currentChatId) {
-await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
-} else {
+  const chatOrderBtn = document.getElementById('chat-order-btn');
+  chatOrderBtn?.addEventListener('click', async () => {
+  if (currentChatId) {
+  await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
+  } else {
 displayOrderSelectionUI();
 }
 });
