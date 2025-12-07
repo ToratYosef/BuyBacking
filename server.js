@@ -28,9 +28,40 @@ const MIMES = {
   ".pdf": "application/pdf"
 };
 
+const HASHED_ASSET_REGEX = /-[a-f0-9]{8}\.(css|js|json|png|webp|svg|woff2?|ttf)$/;
+const STATIC_EXTENSIONS = new Set([
+  ".css",
+  ".js",
+  ".mjs",
+  ".json",
+  ".png",
+  ".webp",
+  ".svg",
+  ".ico",
+  ".woff2",
+  ".woff",
+  ".ttf",
+]);
+
+function cacheControlFor(filePath) {
+  const basename = path.basename(filePath);
+
+  if (HASHED_ASSET_REGEX.test(basename)) {
+    return "public, max-age=31536000, immutable";
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  if (STATIC_EXTENSIONS.has(ext)) {
+    // Keep a modest cache for non-hashed assets while pushing callers toward hashed filenames.
+    return "public, max-age=600";
+  }
+
+  return "public, max-age=0";
+}
+
 function send(res, status, body, headers = {}) {
   res.writeHead(status, {
-    "Cache-Control": "public, max-age=0",
+    "Cache-Control": headers["Cache-Control"] || "public, max-age=0",
     ...headers
   });
   res.end(body);
@@ -74,7 +105,8 @@ function serveFile(filePath, res) {
     }
     const ext = path.extname(filePath).toLowerCase();
     const mime = MIMES[ext] || "application/octet-stream";
-    res.writeHead(200, { "Content-Type": mime, "Content-Length": stat.size, "Cache-Control":"public, max-age=0" });
+    const cacheControl = cacheControlFor(filePath);
+    res.writeHead(200, { "Content-Type": mime, "Content-Length": stat.size, "Cache-Control": cacheControl });
     fs.createReadStream(filePath).pipe(res);
   });
 }
