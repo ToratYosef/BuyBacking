@@ -7,7 +7,8 @@ const {
 
 const DEFAULT_CARRIER_CODE = 'stamps_com';
 const KIT_TRANSIT_STATUS = 'kit_on_the_way_to_customer';
-const PHONE_TRANSIT_STATUS = 'phone_on_the_way_to_us';
+const PHONE_TRANSIT_STATUS = 'phone_on_the_way';
+const PHONE_TRANSIT_STATUS_LEGACY = 'phone_on_the_way_to_us';
 
 const TRANSIT_STATUS_CODES = new Set([
     'IT',
@@ -191,6 +192,7 @@ const INBOUND_TRACKING_STATUSES = new Set([
     'emailed',
     'received',
     PHONE_TRANSIT_STATUS,
+    PHONE_TRANSIT_STATUS_LEGACY,
     'completed',
     're-offered-pending',
     're-offered-accepted',
@@ -342,10 +344,12 @@ async function buildKitTrackingUpdate(
     }
 
     const normalizedStatus = String(order?.status || '').toLowerCase();
+    const normalizedTransitStatus =
+        normalizedStatus === PHONE_TRANSIT_STATUS_LEGACY ? PHONE_TRANSIT_STATUS : normalizedStatus;
     const prefersInbound =
         hasInbound &&
         (String(order?.kitTrackingStatus?.direction || '').toLowerCase() === 'inbound' ||
-            INBOUND_TRACKING_STATUSES.has(normalizedStatus));
+            INBOUND_TRACKING_STATUSES.has(normalizedTransitStatus));
 
     const useInbound = (!hasOutbound && hasInbound) || prefersInbound;
     const trackingNumber = useInbound
@@ -389,6 +393,10 @@ async function buildKitTrackingUpdate(
     const updatePayload = {
         kitTrackingStatus: statusPayload,
     };
+
+    if (normalizedStatus === PHONE_TRANSIT_STATUS_LEGACY) {
+        updatePayload.status = PHONE_TRANSIT_STATUS;
+    }
 
     const shippingPreference = String(order?.shippingPreference || '').toLowerCase();
     const isShippingKit = shippingPreference === 'shipping kit requested';
@@ -442,10 +450,20 @@ async function buildKitTrackingUpdate(
             if (typeof serverTimestamp === 'function') {
                 updatePayload.lastStatusUpdateAt = serverTimestamp();
             }
-        } else if (inboundBaseStatus && inboundBaseStatus !== normalizedStatus) {
-            updatePayload.status = inboundBaseStatus;
-            if (typeof serverTimestamp === 'function') {
-                updatePayload.lastStatusUpdateAt = serverTimestamp();
+        } else if (inboundBaseStatus && inboundBaseStatus !== normalizedTransitStatus) {
+            const inboundLockStatuses = new Set([
+                PHONE_TRANSIT_STATUS,
+                PHONE_TRANSIT_STATUS_LEGACY,
+                'delivered_to_us',
+                'received',
+                'completed',
+            ]);
+
+            if (!inboundLockStatuses.has(normalizedTransitStatus)) {
+                updatePayload.status = inboundBaseStatus;
+                if (typeof serverTimestamp === 'function') {
+                    updatePayload.lastStatusUpdateAt = serverTimestamp();
+                }
             }
         }
     }

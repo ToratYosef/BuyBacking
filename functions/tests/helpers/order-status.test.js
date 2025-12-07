@@ -19,6 +19,7 @@ test('flags re-offer and return label variations', () => {
 test('ignores active statuses that still need refreshes', () => {
   assert.equal(isStatusPastReceived('kit_sent'), false);
   assert.equal(isStatusPastReceived('kit_delivered'), false);
+  assert.equal(isStatusPastReceived('phone_on_the_way'), false);
   assert.equal(isStatusPastReceived('phone_on_the_way_to_us'), false);
 });
 

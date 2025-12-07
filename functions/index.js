@@ -2501,6 +2501,29 @@ function normalizeKitStatusValue(status) {
   return status;
 }
 
+function normalizeTransitStatus(status) {
+  const normalized = (status || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  if (normalized === 'phone_on_the_way_to_us') {
+    return PHONE_TRANSIT_STATUS;
+  }
+
+  return normalized;
+}
+
+function hasReachedInboundTransit(status) {
+  const normalized = normalizeTransitStatus(status);
+  return (
+    normalized === PHONE_TRANSIT_STATUS ||
+    normalized === 'delivered_to_us' ||
+    normalized === 'received' ||
+    normalized === 'completed'
+  );
+}
+
 function mapShipEngineStatus(code) {
   if (!code) return null;
   const normalized = String(code).toUpperCase();
@@ -2553,7 +2576,7 @@ function getInboundTrackingNumber(order = {}) {
 
 function shouldTrackInbound(order = {}) {
   if (!order || typeof order !== "object") return false;
-  const status = (order.status || "").toLowerCase();
+  const status = normalizeTransitStatus(order.status);
   if (status === 'emailed' && isBalanceEmailStatus(order)) {
     return false;
   }
@@ -2566,7 +2589,7 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadat
   const upper = String(normalizedStatus).toUpperCase();
   const kitOrder = isKitOrder(order);
   const emailLabelOrder = isEmailLabelOrder(order);
-  const currentStatus = (order.status || '').toLowerCase();
+  const currentStatus = normalizeTransitStatus(order.status);
   const hasEstimatedDelivery = Boolean(
     trackingMetadata?.labelTrackingEstimatedDelivery ||
       trackingMetadata?.estimatedDelivery ||
@@ -2574,11 +2597,13 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadat
       trackingMetadata?.estimatedDeliveryDate ||
       trackingMetadata?.estimated_delivery
   );
-  const baseStatus = kitOrder
-    ? resolveInboundTransitResetStatus(order)
-    : emailLabelOrder
-      ? 'label_generated'
-      : currentStatus;
+  const baseStatus = normalizeTransitStatus(
+    kitOrder
+      ? resolveInboundTransitResetStatus(order)
+      : emailLabelOrder
+        ? 'label_generated'
+        : currentStatus
+  );
 
   if (upper === 'DELIVERED' || upper === 'DELIVERED_TO_AGENT') {
     if (currentStatus === 'delivered_to_us') {
@@ -2611,11 +2636,11 @@ function deriveInboundStatusUpdate(order = {}, normalizedStatus, trackingMetadat
   }
 
   const noMovementStatuses = new Set(['LABEL_CREATED', 'UNKNOWN', 'NOT_YET_IN_SYSTEM']);
-  if (noMovementStatuses.has(upper) && baseStatus && baseStatus !== currentStatus) {
+  if (noMovementStatuses.has(upper) && baseStatus && baseStatus !== currentStatus && !hasReachedInboundTransit(currentStatus)) {
     return { nextStatus: baseStatus, delivered: false };
   }
 
-  if (baseStatus && baseStatus !== currentStatus) {
+  if (baseStatus && baseStatus !== currentStatus && !hasReachedInboundTransit(currentStatus)) {
     return { nextStatus: baseStatus, delivered: false };
   }
 

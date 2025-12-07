@@ -140,6 +140,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function formatStatus(status) {
+  if (status === 'kit_in_transit') {
+    status = 'kit_on_the_way_to_customer';
+  }
+
+  if (status === 'phone_on_the_way_to_us') {
+    status = 'phone_on_the_way';
+  }
+
   if (status === 'order_pending') {
   return 'Order Pending';
   }
@@ -152,7 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (status === 'kit_sent') {
   return 'Kit Sent';
   }
-  if (status === 'kit_on_the_way_to_customer' || status === 'kit_in_transit') {
+  if (status === 'kit_on_the_way_to_customer') {
   return 'Kit On The Way To Customer';
   }
   if (status === 'kit_delivered') {
@@ -167,8 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (status === 'emailed') {
   return 'Balance Email Sent';
   }
-    if (status === 'phone_on_the_way' || status === 'phone_on_the_way_to_us') {
-      return 'Phone On The Way To Us';
+    if (status === 'phone_on_the_way') {
+      return 'Phone On The Way';
     }
     if (status === 'imei_checked') {
       return 'Device Received';
@@ -195,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
   'kit_on_the_way_to_customer',
   'kit_delivered',
   'kit_on_the_way_to_us',
-  'phone_on_the_way_to_us',
+  'phone_on_the_way',
   'delivered_to_us',
   'received',
   'imei_checked',

@@ -93,7 +93,6 @@ const STATUS_CHART_CONFIG = [
   { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
   { key: 'emailed', label: 'Balance Email Sent', color: '#38bdf8' },
   { key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0ea5e9' },
-  { key: 'phone_on_the_way_to_us', label: 'Phone On The Way To Us', color: '#0284c7' },
   { key: 'received', label: 'Received', color: '#0ea5e9' },
 { key: 'completed', label: 'Completed', color: '#22c55e' },
   { key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
@@ -116,7 +115,6 @@ const STATUS_DROPDOWN_OPTIONS = [
   'label_generated',
   'emailed',
   'phone_on_the_way',
-  'phone_on_the_way_to_us',
   'received',
   'completed',
   're-offered-pending',
@@ -133,7 +131,6 @@ const STATUS_LABEL_OVERRIDES = Object.freeze({
   kit_in_transit: 'Kit On The Way To Customer',
   kit_on_the_way_to_customer: 'Kit On The Way To Customer',
   phone_on_the_way: 'Phone On The Way',
-  phone_on_the_way_to_us: 'Phone On The Way To Us',
   're-offered-pending': 'Reoffer Pending',
   're-offered-accepted': 'Reoffer Accepted',
   're-offered-declined': 'Reoffer Declined',
@@ -155,7 +152,6 @@ const SHIPPING_STATUS_KEYS = new Set([
   'kit_on_the_way_to_us',
   'label_generated',
   'phone_on_the_way',
-  'phone_on_the_way_to_us',
   'delivered_to_us',
 ]);
 
@@ -367,7 +363,6 @@ const EMAIL_STATUS_HINTS = new Set([
   'email_label_requested',
   'label_generated',
   'phone_on_the_way',
-  'phone_on_the_way_to_us',
   'delivered_to_us',
   'received',
   'imei_checked',
@@ -515,7 +510,6 @@ const deliveredToUsCount = document.getElementById('delivered-to-us-count');
 const labelGeneratedCount = document.getElementById('label-generated-count');
 const emailedCount = document.getElementById('emailed-count');
 const phoneOnTheWayCount = document.getElementById('phone-on-the-way-count');
-const phoneOnTheWayToUsCount = document.getElementById('phone-on-the-way-to-us-count');
 const receivedCount = document.getElementById('received-count');
 const completedCount = document.getElementById('completed-count');
 const reofferedPendingCount = document.getElementById('re-offered-pending-count');
@@ -1083,7 +1077,6 @@ const REMINDER_ELIGIBLE_STATUSES = [
   'kit_on_the_way_to_us',
   'kit_on_the_way_to_customer',
   'phone_on_the_way',
-  'phone_on_the_way_to_us',
 ];
 const EXPIRING_REMINDER_STATUSES = [
   'order_pending',
@@ -1092,7 +1085,6 @@ const EXPIRING_REMINDER_STATUSES = [
   'kit_on_the_way_to_us',
   'kit_on_the_way_to_customer',
   'phone_on_the_way',
-  'phone_on_the_way_to_us',
 ];
 const KIT_REMINDER_STATUSES = ['kit_sent', 'kit_delivered', 'kit_on_the_way_to_us', 'kit_on_the_way_to_customer'];
 const AGING_EXCLUDED_STATUSES = new Set([
@@ -4085,8 +4077,12 @@ modalLoadingMessage.classList.add('hidden');
 }
 
 function updateDashboardCounts(ordersData) {
-  const cancelledOrders = ordersData.filter(o => o.status === 'cancelled');
-  const visibleOrders = ordersData.filter(o => o.status !== 'cancelled');
+  const normalizedOrders = Array.isArray(ordersData)
+    ? ordersData.map(order => ({ ...order, status: normalizeStatus(order) }))
+    : [];
+
+  const cancelledOrders = normalizedOrders.filter(o => o.status === 'cancelled');
+  const visibleOrders = normalizedOrders.filter(o => o.status !== 'cancelled');
 
   const statusCounts = {
     'order_pending': visibleOrders.filter(o => o.status === 'order_pending').length,
@@ -4099,7 +4095,6 @@ function updateDashboardCounts(ordersData) {
     'label_generated': visibleOrders.filter(order => isLabelGenerationStage(order)).length,
     'emailed': visibleOrders.filter(order => isBalanceEmailStatus(order)).length,
     'phone_on_the_way': visibleOrders.filter(o => o.status === 'phone_on_the_way').length,
-    'phone_on_the_way_to_us': visibleOrders.filter(o => o.status === 'phone_on_the_way_to_us').length,
     'received': visibleOrders.filter(o => isReceivedStatusValue(o.status)).length,
     'completed': visibleOrders.filter(o => o.status === 'completed').length,
     're-offered-pending': visibleOrders.filter(o => o.status === 're-offered-pending').length,
@@ -4138,9 +4133,6 @@ if (emailedCount) {
 }
 if (phoneOnTheWayCount) {
   phoneOnTheWayCount.textContent = statusCounts['phone_on_the_way'];
-}
-if (phoneOnTheWayToUsCount) {
-  phoneOnTheWayToUsCount.textContent = statusCounts['phone_on_the_way_to_us'];
 }
 if (receivedCount) {
   receivedCount.textContent = statusCounts['received'];
@@ -4514,10 +4506,20 @@ function normalizeShippingPreference(order = {}) {
 }
 
 function normalizeStatus(order = {}) {
-  return (order.status || '')
+  const normalized = (order.status || '')
     .toString()
     .trim()
     .toLowerCase();
+
+  if (normalized === 'kit_in_transit') {
+    return 'kit_on_the_way_to_customer';
+  }
+
+  if (normalized === 'phone_on_the_way_to_us') {
+    return 'phone_on_the_way';
+  }
+
+  return normalized;
 }
 
 function extractStatusCandidate(statusOrOrder = {}) {
@@ -5339,8 +5341,8 @@ return 'Kit Sent';
 if (normalizedStatus === 'emailed') {
 return 'Balance Email Sent';
 }
-  if (normalizedStatus === 'phone_on_the_way' || normalizedStatus === 'phone_on_the_way_to_us') {
-    return 'Phone On The Way To Us';
+  if (normalizedStatus === 'phone_on_the_way') {
+    return 'Phone On The Way';
   }
 // Fallback for other statuses
 return normalizedStatus.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
@@ -5604,7 +5606,6 @@ return 'bg-teal-100 text-teal-800 status-bubble';
 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'emailed': return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'phone_on_the_way':
-case 'phone_on_the_way_to_us':
   return 'bg-sky-100 text-sky-800 status-bubble';
   case 'received':
   case 'imei_checked':
@@ -6381,18 +6382,17 @@ function renderActionButtons(order) {
     case 'label_generated':
       appendLabelGenerationActions();
       break;
-    case 'emailed':
-      if (isBalanceEmailStatus(order)) {
-        appendPostReceivedActions();
-      } else {
-        appendLabelGenerationActions();
-      }
-      break;
-    case 'phone_on_the_way':
-    case 'phone_on_the_way_to_us':
-    case 'delivered_to_us':
-      appendMarkAsReceivedButton();
-      break;
+  case 'emailed':
+    if (isBalanceEmailStatus(order)) {
+      appendPostReceivedActions();
+    } else {
+      appendLabelGenerationActions();
+    }
+    break;
+  case 'phone_on_the_way':
+  case 'delivered_to_us':
+    appendMarkAsReceivedButton();
+    break;
     case 'received':
     case 'imei_checked':
       appendPostReceivedActions();
