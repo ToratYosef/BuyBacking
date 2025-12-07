@@ -235,15 +235,23 @@ if (numA !== numB) {
 return numB - numA;
 }
 
-// Secondary sort for pro/pro max etc.
-if (a.name.includes('Ultra')) return -1;
-if (b.name.includes('Ultra')) return 1;
-if (a.name.includes('Plus')) return -1;
-if (b.name.includes('Plus')) return 1;
-if (a.name.includes('FE')) return 1;
-if (b.name.includes('FE')) return -1;
+  const getModelPriority = (name) => {
+    const normalized = name.toLowerCase();
 
-return 0;
+    const isUltra = /\bultra\b/.test(normalized);
+    const isPlus = /\bplus\b/.test(normalized) || /\+($|\s)/.test(normalized);
+    const isEdge = /\bedge\b/.test(normalized);
+    const isFe = /\bfe\b/.test(normalized);
+
+    if (isUltra) return 0;
+    if (isPlus) return 1;
+    if (isEdge) return 2;
+    if (isFe) return 3;
+
+    return 4;
+  };
+
+  return getModelPriority(a.name) - getModelPriority(b.name);
 });
 
 renderPhones(allPhones, isMobile);

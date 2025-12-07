@@ -2177,10 +2177,9 @@ function buildLabelReminderEmail(orderId, order = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>⏰ Reminder: We're Waiting for Your Device!</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background-color: #f9fafb;
       margin: 0;
       padding: 0;
@@ -5091,7 +5090,7 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Don't Miss Out On Your Trade-In</title>
   <style>
-    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; margin: 0; padding: 0; }
     .wrapper { max-width: 620px; margin: 0 auto; padding: 32px 16px; }
     .card { background: #ffffff; border-radius: 18px; box-shadow: 0 22px 60px rgba(15, 23, 42, 0.12); overflow: hidden; }
     .card-header { background: linear-gradient(135deg, #2563eb, #38bdf8); color: #fff; padding: 36px 32px; text-align: center; }
@@ -5261,7 +5260,7 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Your SecondHandCell Kit Is Ready</title>
   <style>
-    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 0; }
     .wrapper { max-width: 620px; margin: 0 auto; padding: 32px 16px; }
     .card { background: #ffffff; border-radius: 18px; box-shadow: 0 20px 55px rgba(15, 23, 42, 0.12); overflow: hidden; }
     .header { background: linear-gradient(135deg, #10b981, #14b8a6); color: #fff; padding: 34px 30px; text-align: center; }
