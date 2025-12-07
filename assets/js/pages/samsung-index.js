@@ -239,11 +239,11 @@ return numB - numA;
     const normalized = name.toLowerCase();
 
     if (normalized.includes('ultra')) return 0;
-    if (normalized.includes('edge')) return 1;
-    if (normalized.includes('plus')) return 2;
-    if (normalized.includes('fe')) return 4;
+    if (normalized.includes('plus') || normalized.includes('+')) return 1;
+    if (normalized.includes('edge')) return 2;
+    if (normalized.includes('fe')) return 3;
 
-    return 3;
+    return 4;
   };
 
   return getModelPriority(a.name) - getModelPriority(b.name);
