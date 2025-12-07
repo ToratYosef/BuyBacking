@@ -3,7 +3,7 @@ import { getAuth, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvid
 import { getFirestore, collection, addDoc, doc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-setLogLevel('debug');
+setLogLevel('error');
 
 // Use global variables provided by the platform
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';

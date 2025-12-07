@@ -2,7 +2,7 @@ import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getFirestore, collection, query, where, getDocs, deleteDoc, doc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Set Firebase debug logging for development
-setLogLevel('debug');
+setLogLevel('error');
 
 const app = firebaseApp;
 const db = getFirestore(app);
