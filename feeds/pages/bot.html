@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="/assets/css/tailwind.css">
+  <link rel="stylesheet" href="/assets/css/tailwind.css">
   <meta charset="UTF-8" />
   <title>SecondHandCell Repricer – SellCell + Amazon (Local XML)</title>
   <style>
@@ -90,13 +90,13 @@
       font-size: 0.8rem;
       color: #e5e7eb;
     }
-    input[type="number"] { /* Style for the new number input */
-      width: 100px; 
-      padding: 0.35rem 0.5rem; 
-      border-radius: 0.3rem; 
-      border: 1px solid #1f2937; 
-      background: #020617; 
-      color: #e5e7eb; 
+    input[type="number"] {
+      width: 100px;
+      padding: 0.35rem 0.5rem;
+      border-radius: 0.3rem;
+      border: 1px solid #1f2937;
+      background: #020617;
+      color: #e5e7eb;
       font-size: 0.9rem;
     }
     input[type="number"]:focus {
@@ -243,7 +243,6 @@
       font-size: 0.75rem;
       color: #9ca3af;
     }
-
     @media (max-width: 1200px) {
       main {
         grid-template-columns: minmax(0, 1fr);
@@ -285,7 +284,7 @@
         <span class="file-label">Template XML</span>
         <input type="file" id="templateXmlFile" accept=".xml,text/xml" />
       </div>
-      
+
       <div class="file-row" style="margin-top: 0.75rem;">
         <span class="file-label">Price Increase ($)</span>
         <input type="number" id="priceIncreaseAmount" value="1.00" min="0" step="0.01" />
@@ -385,6 +384,7 @@
       "GALAXY Z FOLD 6": "GALAXY Z FOLD6",
     };
 
+    // Normalization used when building the feed index (on XML device_name).
     function normalizeModelNameForFeed(rawName) {
       if (!rawName) return "";
       let upper = rawName
@@ -398,7 +398,30 @@
       return upper;
     }
 
-    // Backwards-compatible wrapper (used elsewhere in this file)
+    // NEW: Normalization used for CSV rows, aware of storage.
+    // If the CSV name ends with the storage (e.g. "PIXEL 10 128GB" + storage "128GB"),
+    // strip that off so it matches SellCell's device_name ("PIXEL 10").
+    function normalizeModelNameFromCsv(rawName, storage) {
+      if (!rawName) return "";
+      let upper = rawName
+        .toString()
+        .toUpperCase()
+        .replace(/\s+/g, " ")
+        .trim();
+
+      const storageNorm = (storage || "").toString().toUpperCase().trim();
+      if (storageNorm && upper.endsWith(" " + storageNorm)) {
+        // Remove the trailing " 128GB" / " 256GB" / etc.
+        upper = upper.slice(0, upper.length - storageNorm.length).trim();
+      }
+
+      if (MODEL_ALIASES[upper]) {
+        return MODEL_ALIASES[upper];
+      }
+      return upper;
+    }
+
+    // Backwards-compatible wrapper (if something else calls it)
     function normalizeName(name) {
       return normalizeModelNameForFeed(name);
     }
@@ -413,7 +436,7 @@
       if (s === "verizon") return "verizon";
       if (s === "unlocked") return "unlocked";
       if (s === "tmobile" || s === "t-mobile" || s === "t mobile") return "tmobile";
-      // Legacy "locked" → treat as Verizon (most common locked carrier in your earlier logic)
+      // Legacy "locked" → treat as Verizon
       if (s === "locked") return "verizon";
       return null;
     }
@@ -426,7 +449,7 @@
       if (s === "verizon") return "verizon";
       if (s === "unlocked" || s === "sim-free" || s === "sim free") return "unlocked";
       if (s.includes("t-mobile") || s === "tmobile" || s === "t mobile") return "tmobile";
-      return null; // other networks still contribute to "any"
+      return null; // other networks feed into "any"
     }
 
     // ---------- Helpers ----------
@@ -517,7 +540,7 @@
       return records;
     }
 
-    // ===================== FEED INDEX (NOW CARRIER-SPECIFIC) =====================
+    // ===================== FEED INDEX (CARRIER-SPECIFIC) =====================
 
     // key: "DEVICE_NAME|CAPACITY"
     // value:
@@ -527,6 +550,8 @@
     //     tmobile:  { flawless, good, fair, damaged }
     //     unlocked: { flawless, good, fair, damaged }
     //     any:      { flawless, good, fair, damaged }   // max across all networks
+    //     _modelName: "DEVICE_NAME"
+    //     _storage: "CAPACITY"
     //   }
     function buildFeedIndexFromXml(xmlText) {
       setStatus("Parsing XML feed...");
@@ -557,7 +582,7 @@
         const deviceName = normalizeModelNameForFeed(nameEl ? nameEl.textContent : "");
         const capacity = String(capEl ? capEl.textContent : "").trim().toUpperCase();
         const networkRaw = netEl ? netEl.textContent : "";
-        const carrierBucket = normalizeCarrierFromNetwork(networkRaw); // att / verizon / tmobile / unlocked / null
+        const carrierBucket = normalizeCarrierFromNetwork(networkRaw);
 
         if (!deviceName || !capacity) continue;
 
@@ -589,7 +614,7 @@
               const mEl = p.getElementsByTagName("merchant_name")[0];
               const priceEl = p.getElementsByTagName("merchant_price")[0];
               const merchant = String(mEl ? mEl.textContent : "").trim().toLowerCase();
-              if (merchant === "secondhandcell") return null; // exclude SHC
+              if (merchant === "secondhandcell") return null;
               const v = parseMoney(priceEl ? priceEl.textContent : "");
               return Number.isFinite(v) ? v : null;
             })
@@ -598,7 +623,6 @@
           if (!competitorPrices.length) continue;
           const top = Math.max.apply(null, competitorPrices);
 
-          // Fill per-carrier bucket where appropriate
           if (carrierBucket && index[keyBase][carrierBucket]) {
             const bucket = index[keyBase][carrierBucket];
             if (!bucket[condKey] || top > bucket[condKey]) {
@@ -606,7 +630,6 @@
             }
           }
 
-          // Always fill "any" as max across all networks (fallback)
           const anyBucket = index[keyBase].any;
           if (!anyBucket[condKey] || top > anyBucket[condKey]) {
             anyBucket[condKey] = top;
@@ -619,66 +642,59 @@
       return index;
     }
 
-    // NEW: Detect missing storage variants and create placeholder rows
+    // Detect missing storage variants vs the feed and create placeholder rows
     function detectAndAddMissingVariants(csvRecords, feedIndex) {
-      // Build a set of existing model+storage combinations from CSV
       const existingCombos = new Set();
       const modelStoragesInCsv = {};
-      
+
       csvRecords.forEach(r => {
-        const modelName = normalizeModelNameForFeed(r.name);
+        const modelName = normalizeModelNameFromCsv(r.name, r.storage);
         const storage = String(r.storage || "").trim().toUpperCase();
         const key = modelName + "|" + storage;
         existingCombos.add(key);
-        
+
         if (!modelStoragesInCsv[modelName]) {
           modelStoragesInCsv[modelName] = new Set();
         }
         modelStoragesInCsv[modelName].add(storage);
       });
-      
-      // Find all storage variants in feed for each model
+
       const feedModelStorages = {};
       Object.keys(feedIndex).forEach(key => {
         const entry = feedIndex[key];
         const modelName = entry._modelName;
         const storage = entry._storage;
-        
+
         if (!feedModelStorages[modelName]) {
           feedModelStorages[modelName] = new Set();
         }
         feedModelStorages[modelName].add(storage);
       });
-      
-      // Detect missing variants
+
       const newVariants = [];
       const carriers = ["att", "verizon", "tmobile", "unlocked"];
       const conditions = ["flawless", "good", "fair", "damaged"];
-      
+
       Object.keys(modelStoragesInCsv).forEach(modelName => {
         const csvStorages = modelStoragesInCsv[modelName];
         const feedStorages = feedModelStorages[modelName];
-        
+
         if (feedStorages) {
           feedStorages.forEach(feedStorage => {
             if (!csvStorages.has(feedStorage)) {
-              // This storage exists in feed but not in CSV - it's a new variant!
-              // Create placeholder rows for all carriers and conditions
               carriers.forEach(carrier => {
                 conditions.forEach(condition => {
-                  // Find a sample row from CSV for this model to copy basic structure
-                  const sampleRow = csvRecords.find(r => 
-                    normalizeModelNameForFeed(r.name) === modelName
+                  const sampleRow = csvRecords.find(r =>
+                    normalizeModelNameFromCsv(r.name, r.storage) === modelName
                   );
-                  
                   if (sampleRow) {
                     newVariants.push({
-                      name: sampleRow.name, // Keep original casing from CSV
+                      name: sampleRow.name,
                       storage: feedStorage,
                       lock_status: carrier,
                       condition: condition,
                       price: "",
-                      amz: "", // Will be filled by user
+                      amz: "",
                       _isNewVariant: true,
                     });
                   }
@@ -688,14 +704,13 @@
           });
         }
       });
-      
+
       console.log(`[repricer] Found ${newVariants.length} new storage variants`);
       return newVariants;
     }
 
     // ===================== REPRICER LOGIC =====================
 
-    // MODIFIED: Added priceIncrease parameter
     function repriceRowFromFeed(row, feedIndex, priceIncrease) {
       const result = { ...row };
 
@@ -703,16 +718,16 @@
       const storage = String(row.storage || "").trim().toUpperCase();
       const conditionRaw = row.condition;
       const condition = String(conditionRaw || "").toLowerCase();
-      const carrierLock = normalizeCarrierLock(row.lock_status); // att/verizon/tmobile/unlocked or null
+      const carrierLock = normalizeCarrierLock(row.lock_status);
 
-      const key = normalizeModelNameForFeed(name) + "|" + storage;
+      const key = normalizeModelNameFromCsv(name, storage) + "|" + storage;
       const feedEntry = feedIndex[key];
 
       let status = "";
       let statusClass = "status-ok";
 
       let feedPrice = null;
-      const condKey = condition; // flawless/good/fair/damaged
+      const condKey = condition;
 
       if (feedEntry) {
         let bucket = null;
@@ -784,7 +799,6 @@
         return result;
       }
 
-      // ---- Pricing math ----
       const after_amazon = amazonPrice * 0.92 - 10;
       const sellcell_fee = Math.min(after_amazon * 0.08, 30);
       const after_sellcell = after_amazon - sellcell_fee;
@@ -806,8 +820,7 @@
 
       let new_price;
       if (profit_pct != null && profit_pct >= 0.15) {
-        // CHANGED: Use the custom priceIncrease amount instead of hardcoded 1
-        new_price = original_price + priceIncrease; 
+        new_price = original_price + priceIncrease;
       } else {
         new_price = total_walkaway / 1.15;
       }
@@ -828,8 +841,7 @@
       result.new_profit_pct = new_profit_pct;
 
       if (profit_pct != null && profit_pct >= 0.15) {
-        // CHANGED: Use priceIncrease amount in status message
-        status = `Already ≥ 15% profit – bumped $${priceIncrease.toFixed(2)}`; 
+        status = `Already ≥ 15% profit – bumped $${priceIncrease.toFixed(2)}`;
         statusClass = "status-ok";
       } else {
         status = "Repriced to hit 15% profit";
@@ -843,8 +855,8 @@
 
     // ===================== RENDER + CSV EXPORT =====================
 
-    let allResultRows = []; // Store all rows
-    let showingNewOnly = false; // Track filter state
+    let allResultRows = [];
+    let showingNewOnly = false;
 
     function renderResults(rows) {
       const tbody = document.getElementById("resultBody");
@@ -859,10 +871,10 @@
         return (v * 100).toFixed(2) + "%";
       }
 
-      rows.forEach((r, idx) => {
+      rows.forEach((r) => {
         const tr = document.createElement("tr");
         if (r._isNewVariant) {
-          tr.style.background = "rgba(59, 130, 246, 0.2)"; // Highlight new variants
+          tr.style.background = "rgba(59, 130, 246, 0.2)";
         }
 
         const cells = [
@@ -898,7 +910,6 @@
         statusTd.appendChild(span);
         tr.appendChild(statusTd);
 
-        // Add AMZ price input column for new variants
         const amzInputTd = document.createElement("td");
         if (r._isNewVariant) {
           const input = document.createElement("input");
@@ -913,24 +924,18 @@
           input.style.background = "#020617";
           input.style.color = "#e5e7eb";
           input.style.fontSize = "0.9rem";
-          
+
           input.addEventListener("change", (e) => {
             const newAmzPrice = parseFloat(e.target.value);
             if (newAmzPrice && newAmzPrice > 0) {
-              // Update the row data with new AMZ price
               allResultRows[r._originalIndex].amz = newAmzPrice;
-              
-              // Get price increase amount
               const priceIncreaseAmount = parseMoney(document.getElementById("priceIncreaseAmount").value) || 1.00;
-              
-              // Recalculate this row
               const feedIndex = window._currentFeedIndex || {};
               const updatedRow = repriceRowFromFeed(allResultRows[r._originalIndex], feedIndex, priceIncreaseAmount);
               updatedRow._isNewVariant = true;
               updatedRow._originalIndex = r._originalIndex;
               allResultRows[r._originalIndex] = updatedRow;
-              
-              // Re-render
+
               if (showingNewOnly) {
                 const newVariants = allResultRows.filter(row => row._isNewVariant);
                 renderResults(newVariants);
@@ -939,7 +944,7 @@
               }
             }
           });
-          
+
           amzInputTd.appendChild(input);
         } else {
           amzInputTd.textContent = "-";
@@ -1012,7 +1017,6 @@
       return lines.join("\n");
     }
 
-    // NEW: Build CSV in the exact format of the provided CSV (name,storage,lock_status,condition,price,amz)
     function buildMatchingFormatCsv(rows) {
       const header = ["name", "storage", "lock_status", "condition", "price", "amz"];
 
@@ -1037,17 +1041,16 @@
           r.storage,
           r.lock_status,
           r.condition,
-          fmtMoney(r.new_price), // Use new calculated price
-          fmtMoney(r.amazon_price || parseMoney(r.amz)), // Use amazon_price if available, otherwise original amz
+          fmtMoney(r.new_price),
+          fmtMoney(r.amazon_price || parseMoney(r.amz)),
         ];
         lines.push(row.map(escapeCsv).join(","));
       }
       return lines.join("\n");
     }
 
-    // ===================== XML EXPORT (NEW CARRIER FORMAT) =====================
+    // ===================== XML EXPORT (CARRIER FORMAT) =====================
 
-    // Template XML is expected to have <priceValue> with <att>, <verizon>, <tmobile>, <unlocked> tags.
     function buildUpdatedXmlFromTemplate(templateXmlText, rows) {
       setStatus("Building updated XML from template...");
       const parser = new DOMParser();
@@ -1057,13 +1060,12 @@
         throw new Error("Template XML parse error: " + parseErr.textContent.trim());
       }
 
-      // Build lookup: NAME|STORAGE|CARRIER_TAG|COND_TAG -> new_price
       const priceMap = new Map();
 
       rows.forEach(r => {
-        const nameNorm = normalizeModelNameForFeed(r.name);
+        const nameNorm = normalizeModelNameFromCsv(r.name, r.storage);
         const storage = String(r.storage || "").trim().toUpperCase();
-        const lockCarrier = normalizeCarrierLock(r.lock_status); // att/verizon/tmobile/unlocked
+        const lockCarrier = normalizeCarrierLock(r.lock_status);
         if (!lockCarrier) return;
 
         const condRaw = String(r.condition || "").toLowerCase();
@@ -1089,11 +1091,11 @@
         const pricesBlocks = model.getElementsByTagName("prices");
         for (let j = 0; j < pricesBlocks.length; j++) {
           const pricesBlock = pricesBlocks[j];
-          const storageEl = pricesBlocks[j].getElementsByTagName("storageSize")[0];
+          const storageEl = pricesBlock.getElementsByTagName("storageSize")[0];
           if (!storageEl) continue;
           const storageVal = String(storageEl.textContent || "").trim().toUpperCase();
 
-          const priceValueEl = pricesBlocks[j].getElementsByTagName("priceValue")[0];
+          const priceValueEl = pricesBlock.getElementsByTagName("priceValue")[0];
           if (!priceValueEl) continue;
 
           ["att", "verizon", "tmobile", "unlocked"].forEach(carrierTag => {
@@ -1131,7 +1133,7 @@
     const templateXmlFileInput = document.getElementById("templateXmlFile");
     const csvTextArea = document.getElementById("csvInput");
     const btnProcessLocal = document.getElementById("btnProcessLocal");
-    const priceIncreaseInput = document.getElementById("priceIncreaseAmount"); // NEW INPUT REFERENCE
+    const priceIncreaseInput = document.getElementById("priceIncreaseAmount");
     const btnDownload = document.getElementById("btnDownload");
     const btnDownloadXml = document.getElementById("btnDownloadXml");
     const btnExportMatchingCsv = document.getElementById("btnExportMatchingCsv");
@@ -1206,7 +1208,7 @@
         });
 
         const feedIndex = buildFeedIndexFromXml(xmlText);
-        window._currentFeedIndex = feedIndex; // Store for later use in AMZ price updates
+        window._currentFeedIndex = feedIndex;
 
         setStatus("Parsing CSV...");
         const rawRecords = csvToRecords(csvText);
@@ -1221,29 +1223,25 @@
             throw new Error("CSV is missing required column: " + col);
           }
         }
-        
-        // NEW: Detect and add missing storage variants
+
         setStatus("Detecting new storage variants...");
         const newVariants = detectAndAddMissingVariants(rawRecords, feedIndex);
         console.log("[repricer] New variants detected:", newVariants.length);
-        
-        // Combine existing records with new variants
+
         const allRecords = [...rawRecords, ...newVariants];
-        
-        // NEW: Get the price increase amount from the new input field
+
         const priceIncreaseRaw = priceIncreaseInput.value;
-        const priceIncreaseAmount = parseMoney(priceIncreaseRaw) || 1.00; // Use 1.00 as a safe default if input is invalid or empty
+        const priceIncreaseAmount = parseMoney(priceIncreaseRaw) || 1.00;
 
         setStatus("Applying repricer logic to " + allRecords.length + " rows (including " + newVariants.length + " new variants)...");
 
-        // UPDATED: Pass priceIncreaseAmount to repriceRowFromFeed and track original index
         const resultRows = allRecords.map((r, idx) => {
           const result = repriceRowFromFeed(r, feedIndex, priceIncreaseAmount);
           result._isNewVariant = r._isNewVariant || false;
           result._originalIndex = idx;
           return result;
         });
-        
+
         lastResultRows = resultRows;
         allResultRows = resultRows;
 
