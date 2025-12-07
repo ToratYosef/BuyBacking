@@ -802,7 +802,7 @@ deviceName: 'Samsung 15 Pro Max',
 storage: '256GB',
 price: 700,
 reoffer: null,
-imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/Samsung/assets/i15pm.webp',
+imageUrl: 'https://secondhandcell.com/assets/Samsung/assets/i15pm.webp',
 timestamp: serverTimestamp()
 });
 await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
@@ -811,7 +811,7 @@ deviceName: 'Samsung Galaxy S24 Ultra',
 storage: '512GB',
 price: 600,
 reoffer: 550,
-imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/samsung/assets/s24u.webp',
+imageUrl: 'https://secondhandcell.com/assets/samsung/assets/s24u.webp',
 timestamp: serverTimestamp()
 });
 await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
@@ -820,7 +820,7 @@ deviceName: 'iPad Pro (M2)',
 storage: '128GB',
 price: 550,
 reoffer: null,
-imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/ipm2.webp',
+imageUrl: 'https://secondhandcell.com/assets/assets/ipm2.webp',
 timestamp: serverTimestamp()
 });
 } else {
