@@ -38,7 +38,7 @@ messaging.onBackgroundMessage(function(payload) {
     
     const notificationOptions = {
         body: notificationBody,
-        icon: 'https://secondhandcell.com/assets/logo.png', // Updated icon path
+        icon: 'https://secondhandcell.com/assets/logo.webp', // Updated icon path
         data: payload.data // Pass along custom data for click handling
     };
 

@@ -263,7 +263,7 @@
     <header class="shc-global-header">
       <div class="shc-header-inner">
         <a class="shc-brand" href="/">
-          <img src="/assets/logo.png" alt="SecondHandCell logo" loading="lazy" />
+          <img src="/assets/logo.webp" alt="SecondHandCell logo" loading="lazy" />
           <div>
             <div>SecondHandCell</div>
             <small style="display:block;color:#6366f1;font-weight:700;">Sell • Upgrade • Protect</small>
@@ -295,7 +295,7 @@
       <div class="shc-footer-inner">
         <div class="shc-footer-top">
           <div style="display:flex;align-items:center;gap:10px;">
-            <img src="/assets/logo.png" alt="SecondHandCell" style="height:44px;width:44px;object-fit:contain;">
+            <img src="/assets/logo.webp" alt="SecondHandCell" style="height:44px;width:44px;object-fit:contain;">
             <div>
               <div style="font-weight:800;font-size:18px;">SecondHandCell</div>
               <div style="color:#c7d2fe;font-weight:600;">Turn your old phone into cash</div>
