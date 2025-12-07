@@ -165,45 +165,6 @@ userMonogram?.addEventListener('click', (e) => {
 e.stopPropagation();
 authDropdown?.classList.toggle('hidden');
 });
-
-// Close dropdown if clicking outside
-document.addEventListener('click', () => {
-if (!authDropdown?.classList.contains('hidden')) {
-  authDropdown?.classList.add('hidden');
-}
-const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-console.log("fetchUserOrders: Fetched orders:", orders);
-resolve(orders);
-} catch (error) {
-console.error("fetchUserOrders: Error fetching user orders:", error);
-resolve({ error: error.message });
-}
-});
-});
-};
-
-const createDummyOrder = async (userId) => {
-const ordersRef = collection(db, `users/${userId}/orders`);
-const existingOrders = await getDocs(ordersRef);
-if (existingOrders.empty) {
-console.log("Creating initial dummy orders for user:", userId);
-let lastOrderNum = parseInt(localStorage.getItem('lastOrderNum') || '0', 10);
-
-const generateSequentialOrderId = () => {
-lastOrderNum++;
-localStorage.setItem('lastOrderNum', lastOrderNum);
-return `SHC-${String(lastOrderNum).padStart(5, '0')}`;
-};
-
-await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
-orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
-deviceName: 'Google Pixel 9 Pro XL',
-storage: '256GB',
-price: 700,
-reoffer: null,
-imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
-timestamp: serverTimestamp()
-});
 await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
 orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
 deviceName: 'Google Pixel Fold',
@@ -261,16 +222,76 @@ const isMobile = window.matchMedia('(max-width: 767px)').matches;
 
 let allPhones = []; // This will now store our fetched phones
 
+// Close dropdown if clicking outside
+document.addEventListener('click', () => {
+if (!authDropdown?.classList.contains('hidden')) {
+  authDropdown?.classList.add('hidden');
+}
+
+// Sort phones from newest to oldest based on the name.
+// Pixel models are primarily numbered (e.g., Pixel 9, Pixel 9 Pro XL, Pixel Fold).
+allPhones.sort((a, b) => {
+  const getModelNumber = (name) => {
+    const match = (name || '').match(/(\d{1,2})/);
+    return match ? parseInt(match[1], 10) : 0;
+  };
+
+  const getModelPriority = (name) => {
+    const normalized = (name || '').toLowerCase();
+
+    if (normalized.includes('pro xl')) return 0;
+    if (normalized.includes('pro')) return 1;
+    if (normalized.includes('fold')) return 2;
+    if (normalized.match(/\bxl\b/)) return 3;
+    if (normalized.match(/\ba\b/)) return 4; // "a" series (e.g., Pixel 8a)
+    return 5; // standard models
+  };
+
+  const numA = getModelNumber(a.name);
+  const numB = getModelNumber(b.name);
+
+  if (numA !== numB) {
+    return numB - numA;
+  }
+
+  const priorityA = getModelPriority(a.name);
+  const priorityB = getModelPriority(b.name);
+  if (priorityA !== priorityB) {
+    return priorityA - priorityB;
+  }
+
+  return (a.name || '').localeCompare(b.name || '');
+});
+
+// Logout
+logoutBtn?.addEventListener('click', () => {
+signOut(auth);
+});
+
+// --- UPDATED DYNAMIC PHONE DATA & RENDERING ---
+const phoneGrid = document.getElementById('phoneGrid');
+const searchInput = document.getElementById('searchInput');
+const noResultsMessage = document.getElementById('noResultsMessage');
+const searchTermSpan = document.getElementById('searchTerm');
+const loadingIndicator = document.getElementById('loadingIndicator');
+
+// Define screen size check once at the top level
+const isMobile = window.matchMedia('(max-width: 767px)').matches;
+
+let allPhones = []; // This will now store our fetched phones
+
 const fetchAndRenderPhones = async () => {
-loadingIndicator.classList.remove('hidden');
-const googleCollection = collection(db, "devices/google/models");
-allPhones = [];
+  loadingIndicator.classList.remove('hidden');
+  // Explicitly target the Google models subcollection (e.g., /devices/google/models/9)
+  const googleCollection = collection(db, "devices", "google", "models");
+  allPhones = [];
 
 try {
-const querySnapshot = await getDocs(googleCollection);
-querySnapshot.forEach((doc) => {
-const data = doc.data();
-let maxPrice = 0;
+    const querySnapshot = await getDocs(googleCollection);
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      const docId = doc.id;
+      let maxPrice = 0;
     if (data.prices) {
       Object.values(data.prices).forEach((storageOption = {}) => {
         Object.values(storageOption || {}).forEach((carrierPrices = {}) => {
@@ -280,11 +301,12 @@ let maxPrice = 0;
         });
       });
     }
-allPhones.push({
-...data,
-highestPrice: maxPrice
-});
-});
+      allPhones.push({
+        ...data,
+        id: docId,
+        highestPrice: maxPrice
+      });
+    });
 } catch (error) {
 console.error("Error fetching Google Pixel devices:", error);
 phoneGrid.innerHTML = '<p class="text-center text-red-500">Failed to load device data.</p>';
@@ -333,13 +355,14 @@ loadingIndicator.classList.add('hidden');
 };
 
 const createUrlSlug = (name) => {
-return name
-.toLowerCase()
-.replace('google ', '')
-.replace('pixel ', '')
-.replace(/\s+/g, '-')
-.replace(/\+/g, '-plus')
-.replace(/[^a-z0-9-]/g, '');
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .replace('google ', '')
+    .replace('pixel ', '')
+    .replace(/\s+/g, '-')
+    .replace(/\+/g, '-plus')
+    .replace(/[^a-z0-9-]/g, '');
 };
 
 const renderPhones = (phoneList, isMobile) => {
@@ -351,16 +374,16 @@ searchTermSpan.textContent = searchInput.value;
 } else {
 phoneGrid.classList.remove('hidden');
 noResultsMessage.classList.add('hidden');
-phoneList.forEach(phone => {
-const slug = createUrlSlug(phone.name);
-const deviceLink = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
+      phoneList.forEach(phone => {
+        const slug = phone.slug || phone.id || createUrlSlug(phone.name);
+        const deviceLink = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
 
 let cardContent;
 
 if (!isMobile) {
 // PC version with image and direct link
-cardContent = `
-<a href="${deviceLink}" class="desktop-image-link">
+        cardContent = `
+          <a href="${deviceLink}" class="desktop-image-link" data-phone-id="${slug}">
 <div class="p-6 rounded-lg text-center">
 <img src="${phone.imageUrl}.webp" onerror="this.onerror=null;this.src='https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';this.classList.remove('hidden');" class="mx-auto my-4 w-48 h-auto object-contain hidden" alt="${phone.name}">
 <h3 class="text-xl font-semibold text-slate-800">${phone.name}</h3>
@@ -388,11 +411,11 @@ phoneGrid.insertAdjacentHTML('beforeend', cardContent);
 // Manually load images for the PC version since they aren't hidden by default
 if (!isMobile) {
 document.querySelectorAll('.desktop-image-link img').forEach(img => {
-loadImageWithFallback(img, img.src.replace('.webp', ''));
-});
-}
-}
-};
+        loadImageWithFallback(img, img.src.replace('.webp', ''));
+        });
+      }
+    }
+  };
 
   searchInput?.addEventListener('input', () => {
   const query = searchInput.value.toLowerCase().trim();
@@ -458,7 +481,7 @@ console.error("Error tracking device click:", error);
 if (card) {
 e.preventDefault();
 const phoneData = JSON.parse(card.dataset.phoneData);
-const slug = createUrlSlug(phoneData.name);
+const slug = phoneData.slug || phoneData.id || createUrlSlug(phoneData.name);
 
 // Track click for the mobile card
 trackDeviceClick(slug, phoneData.name);
@@ -472,7 +495,8 @@ openModal('quoteModal');
 } else if (desktopLink) {
 // Track click for the desktop card
 const phoneName = desktopLink.querySelector('h3').textContent;
-const slug = createUrlSlug(phoneName);
+const phoneId = desktopLink.dataset.phoneId;
+const slug = phoneId || createUrlSlug(phoneName);
 trackDeviceClick(slug, phoneName);
 }
 });
@@ -488,6 +512,16 @@ return;
   const slug = createUrlSlug(phoneData.name);
   window.location.href = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
   }
+  });
+
+// --- REDIRECT LOGIC FOR THE "CONTINUE" BUTTON ---
+  continueWithDeviceBtn?.addEventListener('click', (event) => {
+  event.preventDefault();
+  const phoneData = JSON.parse(continueWithDeviceBtn.dataset.phoneData);
+  if (phoneData) {
+    const slug = phoneData.slug || phoneData.id || createUrlSlug(phoneData.name);
+    window.location.href = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
+    }
   });
 
   document.getElementById('chooseDifferentDeviceBtn')?.addEventListener('click', () => {
