@@ -224,35 +224,55 @@ return;
 // Sort phones from newest to oldest based on the name.
 // Assuming newer models have higher numbers in their names.
 allPhones.sort((a, b) => {
-const getModelNumber = (name) => {
-const match = name.match(/(\d+)/);
-return match ? parseInt(match[1]) : 0;
-};
-const numA = getModelNumber(a.name);
-const numB = getModelNumber(b.name);
+  const getSeriesNumber = (name) => {
+    const lower = name.toLowerCase();
 
-if (numA !== numB) {
-return numB - numA;
-}
+    // Prefer a pattern like "s25", "s 24", etc.
+    const sMatch = lower.match(/s\s*(\d{2})\b/);
+    if (sMatch) return parseInt(sMatch[1], 10);
+
+    // Fallback: first number in the string (if your names are literally "S25 Ultra", this still works)
+    const fallback = lower.match(/(\d{2})/);
+    return fallback ? parseInt(fallback[1], 10) : 0;
+  };
 
   const getModelPriority = (name) => {
-    const normalized = name.toLowerCase();
+    const normalized = name.toLowerCase().replace(/\s+/g, ' ').trim();
 
     const isUltra = /\bultra\b/.test(normalized);
-    const isPlus = /\bplus\b/.test(normalized) || /\+/.test(normalized.replace(/\s+/g, ''));
+    const isPlusWord = /\bplus\b/.test(normalized);
+    const isPlusSymbol = /\+\b/.test(normalized) || /\b\w+\+/.test(normalized);
+    const isPlus = isPlusWord || isPlusSymbol;
     const isEdge = /\bedge\b/.test(normalized);
     const isFe = /\bfe\b/.test(normalized);
 
+    // ultra → plus → edge → fe → regular
     if (isUltra) return 0;
     if (isPlus) return 1;
     if (isEdge) return 2;
     if (isFe) return 3;
-
-    return 4;
+    return 4; // plain "S25", "S24", etc.
   };
 
-  return getModelPriority(a.name) - getModelPriority(b.name);
+  const numA = getSeriesNumber(a.name || '');
+  const numB = getSeriesNumber(b.name || '');
+
+  // Newer series (bigger number) first
+  if (numA !== numB) {
+    return numB - numA;
+  }
+
+  // Same series number → sort by variant priority
+  const priorityA = getModelPriority(a.name || '');
+  const priorityB = getModelPriority(b.name || '');
+  if (priorityA !== priorityB) {
+    return priorityA - priorityB;
+  }
+
+  // Last fallback: alphabetical to keep it stable
+  return (a.name || '').localeCompare(b.name || '');
 });
+
 
 renderPhones(allPhones, isMobile);
 loadingIndicator.classList.add('hidden');
