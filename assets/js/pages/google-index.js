@@ -171,7 +171,78 @@ document.addEventListener('click', () => {
 if (!authDropdown?.classList.contains('hidden')) {
   authDropdown?.classList.add('hidden');
 }
+const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+console.log("fetchUserOrders: Fetched orders:", orders);
+resolve(orders);
+} catch (error) {
+console.error("fetchUserOrders: Error fetching user orders:", error);
+resolve({ error: error.message });
+}
 });
+});
+};
+
+const createDummyOrder = async (userId) => {
+const ordersRef = collection(db, `users/${userId}/orders`);
+const existingOrders = await getDocs(ordersRef);
+if (existingOrders.empty) {
+console.log("Creating initial dummy orders for user:", userId);
+let lastOrderNum = parseInt(localStorage.getItem('lastOrderNum') || '0', 10);
+
+const generateSequentialOrderId = () => {
+lastOrderNum++;
+localStorage.setItem('lastOrderNum', lastOrderNum);
+return `SHC-${String(lastOrderNum).padStart(5, '0')}`;
+};
+
+await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
+orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
+deviceName: 'Google Pixel 9 Pro XL',
+storage: '256GB',
+price: 700,
+reoffer: null,
+imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
+timestamp: serverTimestamp()
+});
+await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
+orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
+deviceName: 'Google Pixel Fold',
+storage: '512GB',
+price: 600,
+reoffer: 550,
+imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
+timestamp: serverTimestamp()
+});
+await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
+orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
+deviceName: 'iPad Pro (M2)',
+storage: '128GB',
+price: 550,
+reoffer: null,
+imageUrl: 'https://secondhandcell.com/assets/ipm2.webp',
+timestamp: serverTimestamp()
+});
+} else {
+console.log("Example orders already exist for user:", userId);
+}
+};
+
+const parseCurrencyValue = (value) => {
+const numeric = Number(value);
+return Number.isFinite(numeric) ? numeric : null;
+};
+
+const getDisplayPrice = (order) => {
+if (!order || typeof order !== 'object') {
+return 0;
+}
+const candidates = [
+order.reoffer,
+order.reOffer?.newPrice,
+order.reOffer,
+order.price,
+order.estimatedQuote,
+];
 
 // Logout
 logoutBtn?.addEventListener('click', () => {
@@ -405,6 +476,9 @@ const slug = createUrlSlug(phoneName);
 trackDeviceClick(slug, phoneName);
 }
 });
+orderSelectionPrompt.textContent = 'Login to access your orders:';
+return;
+}
 
 // --- REDIRECT LOGIC FOR THE "CONTINUE" BUTTON ---
   continueWithDeviceBtn?.addEventListener('click', (event) => {
