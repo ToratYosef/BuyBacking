@@ -23,15 +23,58 @@
 
     body {
       margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
       font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: var(--slate-50);
+      background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 40%);
       color: var(--slate-900);
     }
 
+    main {
+      flex: 1 0 auto;
+    }
+
     .page-shell {
-      max-width: 960px;
+      max-width: 1100px;
       margin: 0 auto;
-      padding: 32px 20px 64px;
+      padding: 48px 20px 72px;
+    }
+
+    .page-header {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .page-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #e0f2fe;
+      color: #0ea5e9;
+      font-weight: 700;
+      width: fit-content;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 13px;
+    }
+
+    .page-title {
+      font-size: clamp(28px, 4vw, 38px);
+      margin: 0;
+      letter-spacing: -0.02em;
+      color: #0f172a;
+    }
+
+    .page-subtitle {
+      margin: 0;
+      max-width: 700px;
+      color: var(--slate-700);
+      line-height: 1.7;
     }
 
     header h1 {
@@ -49,9 +92,9 @@
     .card {
       background: #fff;
       border: 1px solid var(--slate-200);
-      border-radius: 16px;
-      box-shadow: 0 12px 35px rgba(15, 23, 42, 0.08);
-      padding: 24px;
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08);
+      padding: 28px;
     }
 
     form {
@@ -68,7 +111,8 @@
       color: var(--slate-700);
     }
 
-    input[type="text"] {
+    input[type="text"],
+    input[type="email"] {
       width: 100%;
       padding: 12px 14px;
       border: 1px solid var(--slate-200);
@@ -77,7 +121,8 @@
       transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
-    input[type="text"]:focus {
+    input[type="text"]:focus,
+    input[type="email"]:focus {
       outline: none;
       border-color: var(--blue-600);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
@@ -109,9 +154,10 @@
     .status-card {
       margin-top: 24px;
       padding: 20px;
-      border-radius: 14px;
+      border-radius: 16px;
       border: 1px solid var(--slate-200);
-      background: var(--slate-100);
+      background: #f8fafc;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
     }
 
     .status-header {
@@ -142,23 +188,48 @@
     .muted-label { color: var(--slate-700); margin: 0 0 6px; font-size: 14px; }
     .value-text { margin: 0; font-weight: 700; font-size: 17px; }
 
-    .progress-list { list-style: none; padding: 0; margin: 18px 0 0; }
-    .progress-item { display: flex; gap: 12px; padding: 12px 10px; border-radius: 12px; align-items: flex-start; }
+    .progress-list { list-style: none; padding: 0; margin: 20px 0 0; }
+    .progress-item {
+      position: relative;
+      display: flex;
+      gap: 12px;
+      padding: 14px 12px 14px 4px;
+      border-radius: 12px;
+      align-items: flex-start;
+    }
     .progress-item + .progress-item { margin-top: 6px; }
 
-    .dot {
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      margin-top: 4px;
-      border: 2px solid var(--slate-200);
-      background: #fff;
+    .progress-item::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 18px;
+      width: 2px;
+      height: calc(100% - 18px);
+      background: var(--slate-200);
     }
 
+    .progress-item:last-child::before { display: none; }
+
+    .dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      margin-top: 2px;
+      border: 2px solid var(--slate-200);
+      background: #fff;
+      position: relative;
+      z-index: 1;
+      flex-shrink: 0;
+    }
+
+    .progress-item.complete { background: #ecfdf3; }
     .progress-item.complete .dot { background: var(--green-600); border-color: var(--green-600); }
-    .progress-item.current .dot { background: var(--amber-500); border-color: var(--amber-500); }
+    .progress-item.complete::before { background: rgba(22, 163, 74, 0.5); }
+    .progress-item.current { background: #fff7ed; border: 1px solid #fed7aa; }
+    .progress-item.current .dot { background: var(--amber-500); border-color: var(--amber-500); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.18); }
     .progress-item .content { flex: 1; }
-    .progress-item h4 { margin: 0 0 4px; font-size: 15px; }
+    .progress-item h4 { margin: 0 0 6px; font-size: 16px; color: #0f172a; }
     .progress-item p { margin: 0; color: var(--slate-700); line-height: 1.5; }
 
     .hidden { display: none; }
@@ -171,17 +242,16 @@
       button[type="submit"] { width: 100%; }
     }
   </style>
-  
+
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
 </head>
-<body>
-  <div class="page-shell">
-    <!-- Site Header -->
-<header class="site-header" data-site-header>
+<body class="bg-slate-50">
+  <!-- Site Header -->
+  <header class="site-header" data-site-header>
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
             <a href="/" class="logo-link" aria-label="SecondHandCell home">
-                <img src="https://raw.githubusercontent.com/ToratYosef/BuyBacking/refs/heads/main/assets/logo.png" alt="SecondHandCell Logo" class="logo-image" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+                <img src="/assets/logo.png" alt="SecondHandCell Logo" class="logo-image" width="320" height="320" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
             </a>
         </div>
         <div class="logo-text-container-center">
@@ -195,8 +265,9 @@
                 <a href="#" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
                 <div id="userMonogram" class="user-monogram hidden"></div>
                 <div id="authDropdown" class="auth-dropdown hidden">
-                    <a href="/my-account.html" class="auth-dropdown__link">My Account</a>
-                    <button id="logoutBtn" type="button" class="auth-dropdown__button btn-red-logout">Logout</button>
+                    <a href="/my-account.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">My Account</a>
+                    <a href="/track-order.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Track an Order</a>
+                    <button id="logoutBtn" class="btn-red-logout">Logout</button>
                 </div>
             </div>
         </nav>
@@ -215,8 +286,12 @@
     </div>
     <button type="button" class="ship48-banner__dismiss" aria-label="Dismiss Ship48 promo" data-ship48-dismiss>&times;</button>
 </section>
-
-
+  <main class="page-shell">
+    <div class="page-header">
+      <span class="page-eyebrow">Track order</span>
+      <h1 class="page-title">Check the status of your trade-in</h1>
+      <p class="page-subtitle">Enter the order ID and email used at checkout so we can securely pull your latest status updates.</p>
+    </div>
     <section class="card" aria-labelledby="track-order-form-title">
       <h2 id="track-order-form-title" class="hidden">Order lookup</h2>
       <form id="orderLookupForm">
@@ -225,13 +300,13 @@
           <input id="orderId" name="orderId" type="text" placeholder="e.g. SHC-01234" autocomplete="off" required>
         </div>
         <div>
-          <label for="customerName">Full name</label>
-          <input id="customerName" name="customerName" type="text" placeholder="Name used on the order" autocomplete="name" required>
+          <label for="customerEmail">Email address</label>
+          <input id="customerEmail" name="customerEmail" type="email" placeholder="Email used on the order" autocomplete="email" required>
         </div>
         <div>
           <button id="submitButton" type="submit">Check status</button>
         </div>
-        <p class="helper-text">You can prefill this page with <code>?orderId=&</code> and <code>&name=</code> in the URL.</p>
+        <p class="helper-text">You can prefill this page with <code>?orderId=</code> and <code>&email=</code> in the URL.</p>
       </form>
       <p id="formError" class="inline-error error hidden" role="alert"></p>
 
@@ -266,10 +341,38 @@
         <ol id="progressList" class="progress-list" aria-label="Order progress"></ol>
       </div>
     </section>
-  </div>
+  </main>
 
-  <script>
-    const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+    <footer class="bg-slate-800 text-white">
+        <div class="container mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
+                    <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2"><li><a href="#" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                    <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
+                </div>
+                <div class="bg-slate-700 p-6 rounded-lg">
+                    <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
+                    <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                    <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
+                        <label for="footerPromoEmail" class="sr-only">Email Address</label>
+                        <input type="email" id="footerPromoEmail" placeholder="Enter your email" autocomplete="email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="submit" id="footerSignupBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-sm">Sign Up</button>
+                    </form>
+                    <p id="footerSignupMessage" class="mt-3 text-sm text-center text-slate-400 hidden"></p>
+                </div>
+            </div>
+            <div class="mt-12 border-t border-slate-700 pt-8 text-center">
+                <p class="text-slate-400 text-sm">&copy; 2024 SecondHandCell. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+  <script type="module">
+    import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+    import { getFirebaseApp } from '/assets/js/firebase-app.js';
+
+    const db = getFirestore(getFirebaseApp());
 
     const statusDescriptions = {
       order_pending: 'We have your order and are preparing your shipping kit details.',
@@ -338,7 +441,7 @@
     };
 
     const orderIdInput = document.getElementById('orderId');
-    const customerNameInput = document.getElementById('customerName');
+    const customerEmailInput = document.getElementById('customerEmail');
     const form = document.getElementById('orderLookupForm');
     const submitButton = document.getElementById('submitButton');
     const formError = document.getElementById('formError');
@@ -430,25 +533,40 @@
       });
     }
 
-    async function fetchOrder(orderId) {
-      const url = `${BACKEND_BASE_URL}/orders/find?identifier=${encodeURIComponent(orderId)}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        const detail = await response.json().catch(() => ({}));
-        const message = detail.error || 'Unable to find that order.';
-        throw new Error(message);
-      }
-      return response.json();
+    function resolveOrderEmail(order = {}) {
+      return normalize(
+        order?.shippingInfo?.email ||
+          order?.email ||
+          order?.contactEmail ||
+          order?.customerEmail ||
+          order?.userEmail
+      );
     }
 
-    function displayOrder(order, enteredName) {
-      const orderName = normalize(order?.shippingInfo?.fullName || order?.shippingInfo?.name || '');
-      const inputName = normalize(enteredName);
+    async function fetchOrder(orderId, email) {
+      const orderRef = doc(db, 'orders', orderId);
+      const snapshot = await getDoc(orderRef);
 
-      if (orderName && inputName && orderName !== inputName) {
-        throw new Error('The name you entered does not match the name on the order.');
+      if (!snapshot.exists()) {
+        throw new Error('Unable to find that order.');
       }
 
+      const order = { id: snapshot.id, ...snapshot.data() };
+      const orderEmail = resolveOrderEmail(order);
+      const enteredEmail = normalize(email);
+
+      if (!orderEmail) {
+        throw new Error('This order does not have an email on file. Please contact support.');
+      }
+
+      if (enteredEmail && orderEmail !== enteredEmail) {
+        throw new Error('The email you entered does not match the email on the order.');
+      }
+
+      return order;
+    }
+
+    function displayOrder(order) {
       const statusKey = normalize(order.status) || 'order_pending';
       statusPill.textContent = friendlyStatus(statusKey);
       statusTitle.textContent = `Status: ${friendlyStatus(statusKey)}`;
@@ -483,17 +601,17 @@
       formError.classList.add('hidden');
 
       const orderId = orderIdInput.value.trim();
-      const name = customerNameInput.value.trim();
+      const email = customerEmailInput.value.trim();
 
-      if (!orderId || !name) {
-        showError('Please enter both your order ID and the full name used on the order.');
+      if (!orderId || !email) {
+        showError('Please enter both your order ID and the email used on the order.');
         return;
       }
 
       try {
         setLoading(true);
-        const order = await fetchOrder(orderId);
-        displayOrder(order, name);
+        const order = await fetchOrder(orderId, email);
+        displayOrder(order);
       } catch (error) {
         showError(error.message || 'Unable to find your order. Please double-check the details.');
       } finally {
@@ -504,23 +622,22 @@
     function applyPrefillFromUrl() {
       const params = new URLSearchParams(window.location.search);
       const idFromUrl = params.get('orderId') || params.get('id');
-      const nameFromUrl = params.get('name') || params.get('customerName');
+      const emailFromUrl = params.get('email');
 
       if (idFromUrl) {
         orderIdInput.value = idFromUrl;
       }
-      if (nameFromUrl) {
-        customerNameInput.value = nameFromUrl;
+      if (emailFromUrl) {
+        customerEmailInput.value = emailFromUrl;
       }
 
-      if (idFromUrl && nameFromUrl) {
+      if (idFromUrl && emailFromUrl) {
         form.dispatchEvent(new Event('submit'));
       }
     }
 
     applyPrefillFromUrl();
   </script>
-<!-- <script src="/assets/js/ship48-banner.js" defer></script> -->
   <script type="module" src="/assets/js/global-auth.js" defer></script>
   <script src="/assets/js/ship48-banner.js" defer></script>
 </body>
