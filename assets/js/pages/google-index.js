@@ -16,7 +16,7 @@ imgElement.classList.remove('hidden');
 return;
 }
 
-const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
+const extensions = ['.webp', '.avif', '.png', '.webp', '.webp'];
 let current = 0;
 
 function tryLoad() {
@@ -42,19 +42,16 @@ const modals = document.querySelectorAll('.modal');
 const openModal = (modalId) => document.getElementById(modalId)?.classList.add('is-visible');
 const closeModal = (modal) => modal.classList.remove('is-visible');
 
-document.getElementById('loginNavBtn')?.addEventListener('click', (e) => { e.preventDefault(); openModal('loginModal'); showTab('login'); });
-document.getElementById('aboutUsLink')?.addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
-document.getElementById('privacyPolicyLink')?.addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
-document.getElementById('termsAndConditionsLinkFooter')?.addEventListener('click', (e) => { e.preventDefault(); openModal('termsAndConditionsModal'); });
+document.getElementById('loginNavBtn').addEventListener('click', (e) => { e.preventDefault(); openModal('loginModal'); showTab('login'); });
+document.getElementById('aboutUsLink').addEventListener('click', (e) => { e.preventDefault(); openModal('aboutUsModal'); });
+document.getElementById('privacyPolicyLink').addEventListener('click', (e) => { e.preventDefault(); openModal('privacyPolicyModal'); });
+document.getElementById('termsAndConditionsLinkFooter').addEventListener('click', (e) => { e.preventDefault(); openModal('termsAndConditionsModal'); });
 
 modals.forEach(modal => {
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
 modal.querySelector('.close-modal-btn')?.addEventListener('click', () => closeModal(modal));
-// Ensure this closing brace matches the correct opening brace or parenthesis
-// If misplaced, adjust the structure of the code above to fix the issue.
 });
 
-// Add missing closing brace for modals.forEach
 window.addEventListener('shc:ship48-start-order', () => {
     openModal('quoteModal');
 });
@@ -66,22 +63,21 @@ const signupForm = document.getElementById('signupForm');
 const authMessage = document.getElementById('authMessage');
 
 const showTab = (tabName) => {
-  if (!authMessage || !loginForm || !signupForm || !loginTabBtn || !signupTabBtn) return;
-  authMessage.classList.add('hidden');
-  [loginForm, signupForm].forEach(form => form.classList.add('hidden'));
-  [loginTabBtn, signupTabBtn].forEach(btn => btn.classList.remove('border-blue-600', 'text-blue-600'));
+authMessage.classList.add('hidden');
+[loginForm, signupForm].forEach(form => form.classList.add('hidden'));
+[loginTabBtn, signupTabBtn].forEach(btn => btn.classList.remove('border-blue-600', 'text-blue-600'));
 
-  if (tabName === 'login') {
-    loginForm.classList.remove('hidden');
-    loginTabBtn.classList.add('border-blue-600', 'text-blue-600');
-  } else {
-    signupForm.classList.remove('hidden');
-    signupTabBtn.classList.add('border-blue-600', 'text-blue-600');
-  }
+if (tabName === 'login') {
+loginForm.classList.remove('hidden');
+loginTabBtn.classList.add('border-blue-600', 'text-blue-600');
+} else {
+signupForm.classList.remove('hidden');
+signupTabBtn.classList.add('border-blue-600', 'text-blue-600');
+}
 };
 
-loginTabBtn?.addEventListener('click', () => showTab('login'));
-signupTabBtn?.addEventListener('click', () => showTab('signup'));
+loginTabBtn.addEventListener('click', () => showTab('login'));
+signupTabBtn.addEventListener('click', () => showTab('signup'));
 
 const authStatusContainer = document.getElementById('authStatusContainer');
 const loginNavBtn = document.getElementById('loginNavBtn');
@@ -116,11 +112,11 @@ closeModal(document.getElementById('loginModal'));
 showAuthMessage(error.message);
 }
 };
-googleLoginBtn?.addEventListener('click', signInWithGoogle);
-googleSignupBtn?.addEventListener('click', signInWithGoogle);
+googleLoginBtn.addEventListener('click', signInWithGoogle);
+googleSignupBtn.addEventListener('click', signInWithGoogle);
 
 // Email/Password Login
-loginForm?.addEventListener('submit', async (e) => {
+loginForm.addEventListener('submit', async (e) => {
 e.preventDefault();
 try {
 await signInWithEmailAndPassword(auth, loginEmailInput.value, loginPasswordInput.value);
@@ -131,7 +127,7 @@ showAuthMessage(error.message);
 });
 
 // Email/Password Signup
-signupForm?.addEventListener('submit', async (e) => {
+signupForm.addEventListener('submit', async (e) => {
 e.preventDefault();
 if (signupPasswordInput.value.length < 6) {
 showAuthMessage('Password must be at least 6 characters long.');
@@ -149,122 +145,32 @@ showAuthMessage(error.message);
 // Auth State Change Listener
 onAuthStateChanged(auth, user => {
 if (user) {
-  loginNavBtn?.classList.add('hidden');
-  userMonogram?.classList.remove('hidden');
-  const initials = (user.displayName || user.email).split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  if (userMonogram) userMonogram.textContent = initials;
+loginNavBtn.classList.add('hidden');
+userMonogram.classList.remove('hidden');
+const initials = (user.displayName || user.email).split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+userMonogram.textContent = initials;
 } else {
-  loginNavBtn?.classList.remove('hidden');
-  userMonogram?.classList.add('hidden');
-  authDropdown?.classList.add('hidden');
+loginNavBtn.classList.remove('hidden');
+userMonogram.classList.add('hidden');
+authDropdown.classList.add('hidden');
 }
 });
 
 // Monogram Dropdown Toggle
-userMonogram?.addEventListener('click', (e) => {
+userMonogram.addEventListener('click', (e) => {
 e.stopPropagation();
-authDropdown?.classList.toggle('hidden');
+authDropdown.classList.toggle('hidden');
 });
-await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
-orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
-deviceName: 'Google Pixel Fold',
-storage: '512GB',
-price: 600,
-reoffer: 550,
-imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
-timestamp: serverTimestamp()
-});
-await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
-orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
-deviceName: 'iPad Pro (M2)',
-storage: '128GB',
-price: 550,
-reoffer: null,
-imageUrl: 'https://secondhandcell.com/assets/ipm2.webp',
-timestamp: serverTimestamp()
-});
-} else {
-console.log("Example orders already exist for user:", userId);
-}
-};
-
-const parseCurrencyValue = (value) => {
-const numeric = Number(value);
-return Number.isFinite(numeric) ? numeric : null;
-};
-
-const getDisplayPrice = (order) => {
-if (!order || typeof order !== 'object') {
-return 0;
-}
-const candidates = [
-order.reoffer,
-order.reOffer?.newPrice,
-order.reOffer,
-order.price,
-order.estimatedQuote,
-];
-
-// Logout
-logoutBtn?.addEventListener('click', () => {
-signOut(auth);
-});
-
-// --- UPDATED DYNAMIC PHONE DATA & RENDERING ---
-const phoneGrid = document.getElementById('phoneGrid');
-const searchInput = document.getElementById('searchInput');
-const noResultsMessage = document.getElementById('noResultsMessage');
-const searchTermSpan = document.getElementById('searchTerm');
-const loadingIndicator = document.getElementById('loadingIndicator');
-
-// Define screen size check once at the top level
-const isMobile = window.matchMedia('(max-width: 767px)').matches;
-
-let allPhones = []; // This will now store our fetched phones
 
 // Close dropdown if clicking outside
 document.addEventListener('click', () => {
-if (!authDropdown?.classList.contains('hidden')) {
-  authDropdown?.classList.add('hidden');
+if (!authDropdown.classList.contains('hidden')) {
+authDropdown.classList.add('hidden');
 }
-
-// Sort phones from newest to oldest based on the name.
-// Pixel models are primarily numbered (e.g., Pixel 9, Pixel 9 Pro XL, Pixel Fold).
-allPhones.sort((a, b) => {
-  const getModelNumber = (name) => {
-    const match = (name || '').match(/(\d{1,2})/);
-    return match ? parseInt(match[1], 10) : 0;
-  };
-
-  const getModelPriority = (name) => {
-    const normalized = (name || '').toLowerCase();
-
-    if (normalized.includes('pro xl')) return 0;
-    if (normalized.includes('pro')) return 1;
-    if (normalized.includes('fold')) return 2;
-    if (normalized.match(/\bxl\b/)) return 3;
-    if (normalized.match(/\ba\b/)) return 4; // "a" series (e.g., Pixel 8a)
-    return 5; // standard models
-  };
-
-  const numA = getModelNumber(a.name);
-  const numB = getModelNumber(b.name);
-
-  if (numA !== numB) {
-    return numB - numA;
-  }
-
-  const priorityA = getModelPriority(a.name);
-  const priorityB = getModelPriority(b.name);
-  if (priorityA !== priorityB) {
-    return priorityA - priorityB;
-  }
-
-  return (a.name || '').localeCompare(b.name || '');
 });
 
 // Logout
-logoutBtn?.addEventListener('click', () => {
+logoutBtn.addEventListener('click', () => {
 signOut(auth);
 });
 
@@ -281,17 +187,15 @@ const isMobile = window.matchMedia('(max-width: 767px)').matches;
 let allPhones = []; // This will now store our fetched phones
 
 const fetchAndRenderPhones = async () => {
-  loadingIndicator.classList.remove('hidden');
-  // Explicitly target the Google models subcollection (e.g., /devices/google/models/9)
-  const googleCollection = collection(db, "devices", "google", "models");
-  allPhones = [];
+loadingIndicator.classList.remove('hidden');
+const googleCollection = collection(db, "devices/google/models");
+allPhones = [];
 
 try {
-    const querySnapshot = await getDocs(googleCollection);
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      const docId = doc.id;
-      let maxPrice = 0;
+const querySnapshot = await getDocs(googleCollection);
+querySnapshot.forEach((doc) => {
+const data = doc.data();
+let maxPrice = 0;
     if (data.prices) {
       Object.values(data.prices).forEach((storageOption = {}) => {
         Object.values(storageOption || {}).forEach((carrierPrices = {}) => {
@@ -301,68 +205,60 @@ try {
         });
       });
     }
-      allPhones.push({
-        ...data,
-        id: docId,
-        highestPrice: maxPrice
-      });
-    });
+allPhones.push({
+...data,
+highestPrice: maxPrice
+});
+});
 } catch (error) {
-console.error("Error fetching Google Pixel devices:", error);
+console.error("Error fetching google devices:", error);
 phoneGrid.innerHTML = '<p class="text-center text-red-500">Failed to load device data.</p>';
 loadingIndicator.classList.add('hidden');
 return;
 }
 
 // Sort phones from newest to oldest based on the name.
-// Pixel models are primarily numbered (e.g., Pixel 9, Pixel 9 Pro XL, Pixel Fold).
+// Assuming newer models have higher numbers in their names.
 allPhones.sort((a, b) => {
-  const getModelNumber = (name) => {
-    const match = (name || '').match(/(\d{1,2})/);
-    return match ? parseInt(match[1], 10) : 0;
-  };
+const getModelNumber = (name) => {
+const match = name.match(/(\d+)/);
+return match ? parseInt(match[1]) : 0;
+};
+const numA = getModelNumber(a.name);
+const numB = getModelNumber(b.name);
+
+if (numA !== numB) {
+return numB - numA;
+}
 
   const getModelPriority = (name) => {
-    const normalized = (name || '').toLowerCase();
+    const normalized = name.toLowerCase();
 
-    if (normalized.includes('pro xl')) return 0;
-    if (normalized.includes('pro')) return 1;
-    if (normalized.includes('fold')) return 2;
-    if (normalized.match(/\bxl\b/)) return 3;
-    if (normalized.match(/\ba\b/)) return 4; // "a" series (e.g., Pixel 8a)
-    return 5; // standard models
+    if (normalized.includes('ultra')) return 0;
+    if (normalized.includes('pro max')) return 1;
+    if (normalized.includes('pro')) return 2;
+    if (normalized.includes('plus')) return 3;
+    if (normalized.includes('fe')) return 5;
+
+    return 4;
   };
 
-  const numA = getModelNumber(a.name);
-  const numB = getModelNumber(b.name);
-
-  if (numA !== numB) {
-    return numB - numA;
-  }
-
-  const priorityA = getModelPriority(a.name);
-  const priorityB = getModelPriority(b.name);
-  if (priorityA !== priorityB) {
-    return priorityA - priorityB;
-  }
-
-  return (a.name || '').localeCompare(b.name || '');
+  return getModelPriority(a.name) - getModelPriority(b.name);
 });
-
 
 renderPhones(allPhones, isMobile);
 loadingIndicator.classList.add('hidden');
 };
 
 const createUrlSlug = (name) => {
-  if (!name) return '';
-  return name
-    .toLowerCase()
-    .replace('google ', '')
-    .replace('pixel ', '')
-    .replace(/\s+/g, '-')
-    .replace(/\+/g, '-plus')
-    .replace(/[^a-z0-9-]/g, '');
+return name
+.toLowerCase()
+.replace('iphone ', '')
+.replace('galaxy ', '')
+.replace('pixel ', '')
+.replace(/\s+/g, '-')
+.replace(/\+/g, '-plus')
+.replace(/[^a-z0-9-]/g, '');
 };
 
 const renderPhones = (phoneList, isMobile) => {
@@ -374,16 +270,16 @@ searchTermSpan.textContent = searchInput.value;
 } else {
 phoneGrid.classList.remove('hidden');
 noResultsMessage.classList.add('hidden');
-      phoneList.forEach(phone => {
-        const slug = phone.slug || phone.id || createUrlSlug(phone.name);
-        const deviceLink = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
+phoneList.forEach(phone => {
+const slug = createUrlSlug(phone.name);
+const deviceLink = `https://secondhandcell.com/sell?device=google-${slug}`;
 
 let cardContent;
 
 if (!isMobile) {
 // PC version with image and direct link
-        cardContent = `
-          <a href="${deviceLink}" class="desktop-image-link" data-phone-id="${slug}">
+cardContent = `
+<a href="${deviceLink}" class="desktop-image-link">
 <div class="p-6 rounded-lg text-center">
 <img src="${phone.imageUrl}.webp" onerror="this.onerror=null;this.src='https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';this.classList.remove('hidden');" class="mx-auto my-4 w-48 h-auto object-contain hidden" alt="${phone.name}">
 <h3 class="text-xl font-semibold text-slate-800">${phone.name}</h3>
@@ -411,17 +307,17 @@ phoneGrid.insertAdjacentHTML('beforeend', cardContent);
 // Manually load images for the PC version since they aren't hidden by default
 if (!isMobile) {
 document.querySelectorAll('.desktop-image-link img').forEach(img => {
-        loadImageWithFallback(img, img.src.replace('.webp', ''));
-        });
-      }
-    }
-  };
+loadImageWithFallback(img, img.src.replace('.webp', ''));
+});
+}
+}
+};
 
-  searchInput?.addEventListener('input', () => {
-  const query = searchInput.value.toLowerCase().trim();
-  const filteredPhones = allPhones.filter(p => p.name.toLowerCase().includes(query));
-  renderPhones(filteredPhones, isMobile);
-  });
+searchInput.addEventListener('input', () => {
+const query = searchInput.value.toLowerCase().trim();
+const filteredPhones = allPhones.filter(p => p.name.toLowerCase().includes(query));
+renderPhones(filteredPhones, isMobile);
+});
 
 fetchAndRenderPhones();
 
@@ -474,14 +370,14 @@ console.error("Error tracking device click:", error);
 
 // --- Updated Event Listener for PC and Mobile Cards ---
 // Using event delegation on the parent container to handle clicks on dynamically created elements.
-  document.getElementById('phoneGrid')?.addEventListener('click', (e) => {
-  const card = e.target.closest('.phone-card-link');
-  const desktopLink = e.target.closest('.desktop-image-link');
+document.getElementById('phoneGrid').addEventListener('click', (e) => {
+const card = e.target.closest('.phone-card-link');
+const desktopLink = e.target.closest('.desktop-image-link');
 
 if (card) {
 e.preventDefault();
 const phoneData = JSON.parse(card.dataset.phoneData);
-const slug = phoneData.slug || phoneData.id || createUrlSlug(phoneData.name);
+const slug = createUrlSlug(phoneData.name);
 
 // Track click for the mobile card
 trackDeviceClick(slug, phoneData.name);
@@ -495,40 +391,26 @@ openModal('quoteModal');
 } else if (desktopLink) {
 // Track click for the desktop card
 const phoneName = desktopLink.querySelector('h3').textContent;
-const phoneId = desktopLink.dataset.phoneId;
-const slug = phoneId || createUrlSlug(phoneName);
+const slug = createUrlSlug(phoneName);
 trackDeviceClick(slug, phoneName);
 }
 });
-orderSelectionPrompt.textContent = 'Login to access your orders:';
-return;
+
+// --- REDIRECT LOGIC FOR THE "CONTINUE" BUTTON ---
+continueWithDeviceBtn.addEventListener('click', (event) => {
+event.preventDefault();
+const phoneData = JSON.parse(continueWithDeviceBtn.dataset.phoneData);
+if (phoneData) {
+const slug = createUrlSlug(phoneData.name);
+window.location.href = `https://secondhandcell.com/sell?device=google-${slug}`;
 }
+});
 
-// --- REDIRECT LOGIC FOR THE "CONTINUE" BUTTON ---
-  continueWithDeviceBtn?.addEventListener('click', (event) => {
-  event.preventDefault();
-  const phoneData = JSON.parse(continueWithDeviceBtn.dataset.phoneData);
-  if (phoneData) {
-  const slug = createUrlSlug(phoneData.name);
-  window.location.href = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
-  }
-  });
-
-// --- REDIRECT LOGIC FOR THE "CONTINUE" BUTTON ---
-  continueWithDeviceBtn?.addEventListener('click', (event) => {
-  event.preventDefault();
-  const phoneData = JSON.parse(continueWithDeviceBtn.dataset.phoneData);
-  if (phoneData) {
-    const slug = phoneData.slug || phoneData.id || createUrlSlug(phoneData.name);
-    window.location.href = `https://secondhandcell.com/sell?device=google-pixel-${slug}`;
-    }
-  });
-
-  document.getElementById('chooseDifferentDeviceBtn')?.addEventListener('click', () => {
-  closeModal(quoteModal);
-  });
-
-// --- ADVANCED LIVE CHAT LOGIC ---
+document.getElementById('chooseDifferentDeviceBtn').addEventListener('click', () => {
+    closeModal(quoteModal);
+    // Clear any cached data to ensure fresh selection
+    continueWithDeviceBtn.dataset.phoneData = '';
+});// --- ADVANCED LIVE CHAT LOGIC ---
 const chatWindow = document.getElementById('chat-window');
 const chatOpenBtn = document.getElementById('chat-open-btn');
 const chatCloseBtn = document.getElementById('chat-close-btn');
@@ -716,26 +598,26 @@ listenForMessages(currentChatId);
 listenForChatSessionChanges(currentChatId);
 }
 };
-  chatOpenBtn?.addEventListener('click', openChat);
+chatOpenBtn.addEventListener('click', openChat);
 
 const minimizeChat = () => {
 chatWindow.classList.remove('is-visible');
 isChatMinimized = true;
 };
-  chatMinimizeBtn?.addEventListener('click', minimizeChat);
+chatMinimizeBtn.addEventListener('click', minimizeChat);
 
-  chatCloseBtn?.addEventListener('click', () => {
-  endChatConfirmModal.classList.remove('hidden');
-  endChatConfirmModal.classList.add('flex');
-  });
+chatCloseBtn.addEventListener('click', () => {
+endChatConfirmModal.classList.remove('hidden');
+endChatConfirmModal.classList.add('flex');
+});
 
-  endChatNoBtn?.addEventListener('click', () => {
-  endChatConfirmModal.classList.add('hidden');
-  endChatConfirmModal.classList.remove('flex');
-  });
+endChatNoBtn.addEventListener('click', () => {
+endChatConfirmModal.classList.add('hidden');
+endChatConfirmModal.classList.remove('flex');
+});
 
-  endChatYesBtn?.addEventListener('click', async () => {
-  if (currentChatId) {
+endChatYesBtn.addEventListener('click', async () => {
+if (currentChatId) {
 await addDoc(collection(db, `chats/${currentChatId}/messages`), {
 text: "Chat ended by user.",
 timestamp: serverTimestamp(),
@@ -774,53 +656,53 @@ lastMessageTimestamp: serverTimestamp()
 });
 };
 
-  chatInput?.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-  e.preventDefault();
-  sendMessage(chatInput.value);
-  }
-  });
-  sendMessageBtn?.addEventListener('click', () => {
-  sendMessage(chatInput.value);
-  });
+chatInput.addEventListener('keypress', (e) => {
+if (e.key === 'Enter') {
+e.preventDefault();
+sendMessage(chatInput.value);
+}
+});
+sendMessageBtn.addEventListener('click', () => {
+sendMessage(chatInput.value);
+});
 
-  chatInput?.addEventListener('keyup', () => {
-  clearTimeout(userTypingTimeout);
-  userTypingTimeout = setTimeout(async () => {
-  if (currentChatId) {
-  await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
-  }
-  }, 300);
-  });
+chatInput.addEventListener('keyup', () => {
+clearTimeout(userTypingTimeout);
+userTypingTimeout = setTimeout(async () => {
+if (currentChatId) {
+await updateDoc(doc(db, "chats", currentChatId), { userTypingText: chatInput.value });
+}
+}, 300);
+});
 
-  guestLoginBtn?.addEventListener('click', () => openModal('loginModal'));
-  guestContinueBtn?.addEventListener('click', () => {
-  guestPromptContainer.classList.add('hidden');
-  chatInputContainer.classList.remove('hidden');
-  chatInput.focus();
-  });
+guestLoginBtn.addEventListener('click', () => openModal('loginModal'));
+guestContinueBtn.addEventListener('click', () => {
+guestPromptContainer.classList.add('hidden');
+chatInputContainer.classList.remove('hidden');
+chatInput.focus();
+});
 
 const friendlinessRating = document.getElementById('friendliness-rating');
 const friendlinessValue = document.getElementById('friendliness-value');
-  if (friendlinessRating) {
-  friendlinessRating.addEventListener('input', (e) => { friendlinessValue.textContent = e.target.value; });
-  }
-  starRatingContainer?.addEventListener('mouseover', e => {
-  if (e.target.tagName === 'I') {
+if (friendlinessRating) {
+friendlinessRating.addEventListener('input', (e) => { friendlinessValue.textContent = e.target.value; });
+}
+starRatingContainer.addEventListener('mouseover', e => {
+if (e.target.tagName === 'I') {
 const rating = e.target.dataset.value;
 Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= rating));
 }
 });
-  starRatingContainer?.addEventListener('mouseout', () => {
-  const currentRating = starRatingContainer.dataset.rating;
-  Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= currentRating));
-  });
-  starRatingContainer?.addEventListener('click', e => {
-  if (e.target.tagName === 'I') {
-  starRatingContainer.dataset.rating = e.target.dataset.value;
-  }
-  });
-  surveyForm?.addEventListener('submit', async (e) => {
+starRatingContainer.addEventListener('mouseout', () => {
+const currentRating = starRatingContainer.dataset.rating;
+Array.from(starRatingContainer.children).forEach(star => star.classList.toggle('selected', star.dataset.value <= currentRating));
+});
+starRatingContainer.addEventListener('click', e => {
+if (e.target.tagName === 'I') {
+starRatingContainer.dataset.rating = e.target.dataset.value;
+}
+});
+surveyForm.addEventListener('submit', async (e) => {
 e.preventDefault();
 const surveyData = {
 overallRating: parseInt(starRatingContainer.dataset.rating, 10),
@@ -848,139 +730,50 @@ return new Promise((resolve) => {
 const unsubscribe = onAuthStateChanged(auth, async (user) => {
 unsubscribe();
 if (!user) {
-console.log("fetchUserOrders: User not logged in, returning requiresLogin: true");
 resolve({ requiresLogin: true });
 return;
 }
 const userId = user.uid;
-console.log("fetchUserOrders: Current user ID:", userId);
-const ordersRef = collection(db, `users/${userId}/orders`);
-const q = query(ordersRef, orderBy("timestamp", "desc"));
+const ordersRef = collection(db, "orders");
+const q = query(ordersRef, where("userId", "==", userId), orderBy("createdAt", "desc"));
 try {
-await createDummyOrder(userId);
 const snapshot = await getDocs(q);
-console.log("fetchUserOrders: Orders snapshot size:", snapshot.size);
-if (snapshot.empty) {
-console.log("fetchUserOrders: No orders found for this user in Firestore path:", `users/${userId}/orders`);
-}
 const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-console.log("fetchUserOrders: Fetched orders:", orders);
 resolve(orders);
 } catch (error) {
-console.error("fetchUserOrders: Error fetching user orders:", error);
+console.error("Error fetching user orders:", error);
 resolve({ error: error.message });
 }
 });
 });
 };
 
-const createDummyOrder = async (userId) => {
-const ordersRef = collection(db, `users/${userId}/orders`);
-const existingOrders = await getDocs(ordersRef);
-if (existingOrders.empty) {
-console.log("Creating initial dummy orders for user:", userId);
-let lastOrderNum = parseInt(localStorage.getItem('lastOrderNum') || '0', 10);
-
-const generateSequentialOrderId = () => {
-lastOrderNum++;
-localStorage.setItem('lastOrderNum', lastOrderNum);
-return `SHC-${String(lastOrderNum).padStart(5, '0')}`;
-};
-
-await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
-orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
-deviceName: 'Google Pixel 9 Pro XL',
-storage: '256GB',
-price: 700,
-reoffer: null,
-imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
-timestamp: serverTimestamp()
-});
-await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
-orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
-deviceName: 'Google Pixel Fold',
-storage: '512GB',
-price: 600,
-reoffer: 550,
-imageUrl: 'https://secondhandcell.com/assets/googlepixel.webp',
-timestamp: serverTimestamp()
-});
-await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
-orderId: `SHC-${String(lastOrderNum).padStart(5, '0')}`,
-deviceName: 'iPad Pro (M2)',
-storage: '128GB',
-price: 550,
-reoffer: null,
-imageUrl: 'https://secondhandcell.com/assets/ipm2.webp',
-timestamp: serverTimestamp()
-});
-} else {
-console.log("Example orders already exist for user:", userId);
-}
-};
-
-const parseCurrencyValue = (value) => {
-const numeric = Number(value);
-return Number.isFinite(numeric) ? numeric : null;
-};
-
-const getDisplayPrice = (order) => {
-if (!order || typeof order !== 'object') {
-return 0;
-}
-const candidates = [
-order.reoffer,
-order.reOffer?.newPrice,
-order.reOffer,
-order.price,
-order.estimatedQuote,
-];
-
-for (const candidate of candidates) {
-const numeric = parseCurrencyValue(candidate);
-if (numeric !== null) {
-return numeric;
-}
-}
-
-return 0;
-};
-
 const renderOrderSelection = (orders) => {
 orderList.innerHTML = '';
 if (orders.requiresLogin) {
-orderList.innerHTML = '<p class="text-center text-slate-500">Please <a href="#" id="orderLoginPromptLink" class="text-blue-600 font-semibold hover:underline">log in</a> to view and select your orders.</p>';
-  document.getElementById('orderLoginPromptLink')?.addEventListener('click', (e) => {
-  e.preventDefault();
-  openModal('loginModal');
-  orderSelectionContainer.classList.add('hidden');
+orderList.innerHTML = '<p class="text-center text-slate-500">Please <a href="#" id="orderLoginPromptLink" class="text-blue-600 font-semibold hover:underline">log in</a> to view orders.</p>';
+document.getElementById('orderLoginPromptLink').addEventListener('click', (e) => {
+e.preventDefault();
+openModal('loginModal');
 });
-orderSelectionPrompt.textContent = 'Login to access your orders:';
 return;
 }
 
-if (orders.length === 0) {
+if (!orders || orders.length === 0) {
 orderList.innerHTML = '<p class="text-center text-slate-500">No recent orders found.</p>';
-orderSelectionPrompt.textContent = 'Please select your order:';
 return;
 }
-orderSelectionPrompt.textContent = 'Please select your order:';
 orders.forEach(order => {
 const orderCard = document.createElement('div');
 orderCard.className = 'order-card';
 orderCard.dataset.orderId = order.orderId;
-const reofferAmount = parseCurrencyValue(order.reoffer ?? order.reOffer?.newPrice);
-const displayPriceValue = getDisplayPrice(order);
-const formattedPrice = displayPriceValue.toFixed(2);
 orderCard.innerHTML = `
-<img src="${order.imageUrl || 'https://placehold.co/48x48/e0e7ff/4338ca?text=📱'}" alt="${order.deviceName}" onerror="this.onerror=null;this.src='https://placehold.co/48x48/e0e7ff/4338ca?text=📱';">
+<img src="${order.imageUrl || 'https://placehold.co/48x48/e0e7ff/4338ca?text=📱'}" alt="${order.device}" onerror="this.onerror=null;this.src='https://placehold.co/48x48/e0e7ff/4338ca?text=📱';">
 <div class="order-card-details">
-<strong>ID: ${order.orderId} - ${order.deviceName}</strong>
-<span>${order.storage} | $${formattedPrice}</span>
-${reofferAmount !== null ? `<span class="reoffer">Reoffer: $${reofferAmount.toFixed(2)}</span>` : ''}
-</div>
-`;
-  orderCard.addEventListener('click', () => handleOrderSelection(order));
+<strong>ID: ${order.orderId} - ${order.device}</strong>
+<span>${order.storage} | $${order.estimatedQuote}</span>
+</div>`;
+orderCard.addEventListener('click', () => handleOrderSelection(order));
 orderList.appendChild(orderCard);
 });
 };
@@ -994,10 +787,7 @@ renderOrderSelection(orders);
 };
 
 const handleOrderSelection = async (order) => {
-const reofferAmount = parseCurrencyValue(order.reoffer ?? order.reOffer?.newPrice);
-const displayPriceValue = getDisplayPrice(order);
-const formattedPrice = displayPriceValue.toFixed(2);
-const messageText = `Selected Order: ID: ${order.orderId}, Device: ${order.deviceName}, Storage: ${order.storage}, Price: $${formattedPrice}${reofferAmount !== null ? `, Reoffer: $${reofferAmount.toFixed(2)}` : ''}`;
+const messageText = `Selected Order: ID: ${order.orderId}, Device: ${order.device}`;
 await sendMessage(messageText);
 orderSelectionContainer.classList.add('hidden');
 if (currentChatId) {
@@ -1005,28 +795,25 @@ await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false 
 }
 };
 
-  closeOrderSelectionBtn?.addEventListener('click', async () => {
-  orderSelectionContainer.classList.add('hidden');
-  if (currentChatId) {
-  await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false });
+closeOrderSelectionBtn.addEventListener('click', async () => {
+orderSelectionContainer.classList.add('hidden');
+if (currentChatId) {
+await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: false });
 }
 });
 
-  const chatOrderBtn = document.getElementById('chat-order-btn');
-  chatOrderBtn?.addEventListener('click', async () => {
-  if (currentChatId) {
-  await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
-  } else {
+const chatOrderBtn = document.getElementById('chat-order-btn');
+chatOrderBtn.addEventListener('click', async () => {
+if (currentChatId) {
+await updateDoc(doc(db, "chats", currentChatId), { agentAskingForOrderId: true });
+} else {
 displayOrderSelectionUI();
 }
 });
 
-// --- Global Tooltip Logic ---
 const chatHeaderButtons = document.querySelectorAll('.chat-header-button');
-
 chatHeaderButtons.forEach(button => {
 let tooltipTimeout;
-
 button.addEventListener('mouseover', (e) => {
 clearTimeout(tooltipTimeout);
 const tooltipText = button.dataset.tooltipText;
@@ -1034,23 +821,17 @@ if (tooltipText) {
 globalTooltip.textContent = tooltipText;
 globalTooltip.style.visibility = 'visible';
 globalTooltip.style.opacity = '1';
-
 const rect = button.getBoundingClientRect();
 globalTooltip.style.top = `${rect.bottom + 8}px`;
 globalTooltip.style.left = `${rect.left + rect.width / 2}px`;
 globalTooltip.style.transform = `translateX(-50%)`;
 }
 });
-
 button.addEventListener('mouseout', () => {
 tooltipTimeout = setTimeout(() => {
 globalTooltip.style.visibility = 'hidden';
 globalTooltip.style.opacity = '0';
 }, 100);
-});
-
-button.addEventListener('mouseenter', () => {
-clearTimeout(tooltipTimeout);
 });
 });
 }
