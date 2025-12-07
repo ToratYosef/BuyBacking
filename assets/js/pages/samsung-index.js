@@ -238,10 +238,15 @@ return numB - numA;
   const getModelPriority = (name) => {
     const normalized = name.toLowerCase();
 
-    if (normalized.includes('ultra')) return 0;
-    if (normalized.includes('plus') || normalized.includes('+')) return 1;
-    if (normalized.includes('edge')) return 2;
-    if (normalized.includes('fe')) return 3;
+    const isUltra = /\bultra\b/.test(normalized);
+    const isPlus = /\bplus\b/.test(normalized) || /\+($|\s)/.test(normalized);
+    const isEdge = /\bedge\b/.test(normalized);
+    const isFe = /\bfe\b/.test(normalized);
+
+    if (isUltra) return 0;
+    if (isPlus) return 1;
+    if (isEdge) return 2;
+    if (isFe) return 3;
 
     return 4;
   };
