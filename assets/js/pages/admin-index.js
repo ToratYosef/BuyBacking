@@ -583,7 +583,7 @@ const modalZelleDetails = document.getElementById('modal-zelle-details');
 const modalShippingAddress = document.getElementById('modal-shipping-address');
 const shippingAddressDisplayRow = document.getElementById('shipping-address-display-row');
 const shippingAddressAddRow = document.getElementById('shipping-address-add-row');
-const shippingAddressDeleteBtn = document.getElementById('shipping-address-delete-btn');
+const shippingAddressEditBtn = document.getElementById('shipping-address-edit-btn');
 const shippingAddressAddBtn = document.getElementById('shipping-address-add-btn');
 const shippingAddressEditContainer = document.getElementById('shipping-address-edit-container');
 const shippingAddressInput = document.getElementById('shipping-address-text');
@@ -1140,47 +1140,19 @@ if (orderDetailsModal) {
   });
 }
 
-if (shippingAddressDeleteBtn) {
-  shippingAddressDeleteBtn.addEventListener('click', async () => {
-    if (!currentOrderDetails || !currentOrderDetails.id) {
-      alert('No order loaded');
-      return;
-    }
-    
-    if (!confirm('Are you sure you want to delete this shipping address?')) {
+if (shippingAddressEditBtn) {
+  shippingAddressEditBtn.addEventListener('click', () => {
+    if (!currentOrderDetails) {
       return;
     }
 
-    try {
-      console.log('Deleting shipping address for order:', currentOrderDetails.id);
-      const response = await fetch(`${BACKEND_BASE_URL}/orders/${currentOrderDetails.id}/shipping-info`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      console.log('Delete response status:', response.status);
-      
-      let responseData = null;
-      try {
-        responseData = await response.json();
-        console.log('Delete response data:', responseData);
-      } catch (e) {
-        console.log('No JSON response');
-      }
-
-      if (!response.ok) {
-        throw new Error(responseData?.error || 'Failed to delete shipping address');
-      }
-
-      currentOrderDetails.shippingInfo = null;
-      updateShippingAddressUI(null);
-      
-      // Show success message
-      alert('Shipping address deleted successfully');
-    } catch (error) {
-      console.error('Delete error:', error);
-      alert('Failed to delete shipping address: ' + error.message);
-    }
+    const editorValue = formatShippingAddressForEditor(currentOrderDetails.shippingInfo);
+    shippingAddressInput.value = editorValue;
+    clearShippingAddressFeedback();
+    toggleShippingAddressEditor(true);
+    setTimeout(() => {
+      shippingAddressInput?.focus();
+    }, 0);
   });
 }
 
@@ -5809,7 +5781,9 @@ function updateShippingAddressUI(shippingInfo) {
 function resetShippingAddressEditor({ restoreFromOrder = false } = {}) {
   toggleShippingAddressEditor(false);
   if (shippingAddressInput) {
-    shippingAddressInput.value = '';
+    shippingAddressInput.value = restoreFromOrder
+      ? formatShippingAddressForEditor(currentOrderDetails?.shippingInfo)
+      : '';
   }
 }
 
