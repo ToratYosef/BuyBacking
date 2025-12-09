@@ -268,7 +268,7 @@ function resolveReminderStatusKey(order = {}) {
 
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
 import { createOrderInfoLabelPdf } from "/assets/js/pdf/order-labels.js";
 /* --- API BASE URL FIX: Redirect /api/* to Cloud Functions base --- */
@@ -349,6 +349,15 @@ const refreshAllKitTrackingBtn = document.getElementById('refresh-all-kit-tracki
 const refreshAllEmailTrackingBtn = document.getElementById('refresh-all-email-tracking');
 const bulkGenerateLabelsBtn = document.getElementById('bulk-generate-labels');
 const separateKitOrdersBtn = document.getElementById('separate-kit-orders');
+const orderTextImportBtn = document.getElementById('open-order-text-import');
+const orderTextImportModal = document.getElementById('order-text-import-modal');
+const orderTextImportInput = document.getElementById('order-text-import');
+const orderTextImportOrderId = document.getElementById('order-text-import-id');
+const orderTextImportShippingSelect = document.getElementById('order-text-import-shipping');
+const orderTextImportFeedback = document.getElementById('order-text-import-feedback');
+const orderTextImportSubmit = document.getElementById('submit-order-text-import');
+const orderTextImportClose = document.getElementById('close-order-text-import');
+const orderTextImportCancel = document.getElementById('cancel-order-text-import');
 
 const KIT_STATUS_HINTS = new Set([
   'shipping_kit_requested',
@@ -583,7 +592,7 @@ const modalZelleDetails = document.getElementById('modal-zelle-details');
 const modalShippingAddress = document.getElementById('modal-shipping-address');
 const shippingAddressDisplayRow = document.getElementById('shipping-address-display-row');
 const shippingAddressAddRow = document.getElementById('shipping-address-add-row');
-const shippingAddressDeleteBtn = document.getElementById('shipping-address-delete-btn');
+const shippingAddressEditBtn = document.getElementById('shipping-address-edit-btn');
 const shippingAddressAddBtn = document.getElementById('shipping-address-add-btn');
 const shippingAddressEditContainer = document.getElementById('shipping-address-edit-container');
 const shippingAddressInput = document.getElementById('shipping-address-text');
@@ -1047,6 +1056,33 @@ if (bulkGenerateLabelsBtn) {
   bulkGenerateLabelsBtn.addEventListener('click', handleBulkLabelGeneration);
 }
 
+if (orderTextImportBtn) {
+  orderTextImportBtn.addEventListener('click', () => {
+    resetOrderTextImportForm();
+    toggleOrderTextImportModal(true);
+  });
+}
+
+if (orderTextImportClose) {
+  orderTextImportClose.addEventListener('click', () => toggleOrderTextImportModal(false));
+}
+
+if (orderTextImportCancel) {
+  orderTextImportCancel.addEventListener('click', () => toggleOrderTextImportModal(false));
+}
+
+if (orderTextImportModal) {
+  orderTextImportModal.addEventListener('click', (event) => {
+    if (event.target === orderTextImportModal) {
+      toggleOrderTextImportModal(false);
+    }
+  });
+}
+
+if (orderTextImportSubmit) {
+  orderTextImportSubmit.addEventListener('click', handleOrderTextImportSubmit);
+}
+
 if (selectAllOrdersCheckbox) {
   selectAllOrdersCheckbox.addEventListener('change', (event) => {
     if (!lastRenderedOrderIds.length) {
@@ -1140,47 +1176,19 @@ if (orderDetailsModal) {
   });
 }
 
-if (shippingAddressDeleteBtn) {
-  shippingAddressDeleteBtn.addEventListener('click', async () => {
-    if (!currentOrderDetails || !currentOrderDetails.id) {
-      alert('No order loaded');
-      return;
-    }
-    
-    if (!confirm('Are you sure you want to delete this shipping address?')) {
+if (shippingAddressEditBtn) {
+  shippingAddressEditBtn.addEventListener('click', () => {
+    if (!currentOrderDetails) {
       return;
     }
 
-    try {
-      console.log('Deleting shipping address for order:', currentOrderDetails.id);
-      const response = await fetch(`${BACKEND_BASE_URL}/orders/${currentOrderDetails.id}/shipping-info`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      console.log('Delete response status:', response.status);
-      
-      let responseData = null;
-      try {
-        responseData = await response.json();
-        console.log('Delete response data:', responseData);
-      } catch (e) {
-        console.log('No JSON response');
-      }
-
-      if (!response.ok) {
-        throw new Error(responseData?.error || 'Failed to delete shipping address');
-      }
-
-      currentOrderDetails.shippingInfo = null;
-      updateShippingAddressUI(null);
-      
-      // Show success message
-      alert('Shipping address deleted successfully');
-    } catch (error) {
-      console.error('Delete error:', error);
-      alert('Failed to delete shipping address: ' + error.message);
-    }
+    const editorValue = formatShippingAddressForEditor(currentOrderDetails.shippingInfo);
+    shippingAddressInput.value = editorValue;
+    clearShippingAddressFeedback();
+    toggleShippingAddressEditor(true);
+    setTimeout(() => {
+      shippingAddressInput?.focus();
+    }, 0);
   });
 }
 
@@ -2368,6 +2376,419 @@ modalLoadingMessage.classList.add('hidden');
 function coerceCurrencyValue(value) {
 const numeric = Number(value);
 return Number.isFinite(numeric) ? numeric : null;
+}
+
+function normalizeCurrencyInput(value) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  return String(value).replace(/[^0-9.-]/g, '');
+}
+
+function normalizeOrderIdInput(rawValue) {
+  if (!rawValue) {
+    return '';
+  }
+
+  let formatted = String(rawValue).trim();
+  if (!formatted) {
+    return '';
+  }
+
+  formatted = formatted.toUpperCase();
+
+  if (/^SHC-\d+$/i.test(formatted)) {
+    return formatted;
+  }
+
+  if (/^SHC\d+$/i.test(formatted)) {
+    return formatted.replace(/^SHC/i, 'SHC-');
+  }
+
+  if (/^\d+$/.test(formatted)) {
+    return `SHC-${formatted}`;
+  }
+
+  if (!formatted.startsWith('SHC-') && formatted.startsWith('SHC')) {
+    return formatted.replace(/^SHC/i, 'SHC-');
+  }
+
+  if (!formatted.startsWith('SHC-')) {
+    return `SHC-${formatted}`;
+  }
+
+  return formatted;
+}
+
+function setOrderTextImportFeedback(message, type = 'info') {
+  if (!orderTextImportFeedback) {
+    return;
+  }
+
+  if (!message) {
+    orderTextImportFeedback.textContent = '';
+    orderTextImportFeedback.classList.add('hidden');
+    orderTextImportFeedback.classList.remove('border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'border-rose-200', 'bg-rose-50', 'text-rose-800');
+    return;
+  }
+
+  orderTextImportFeedback.textContent = message;
+  orderTextImportFeedback.classList.remove('hidden');
+  orderTextImportFeedback.classList.remove('border-emerald-200', 'bg-emerald-50', 'text-emerald-800', 'border-rose-200', 'bg-rose-50', 'text-rose-800');
+
+  if (type === 'error') {
+    orderTextImportFeedback.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-800');
+  } else {
+    orderTextImportFeedback.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-800');
+  }
+}
+
+function resetOrderTextImportForm() {
+  if (orderTextImportInput) {
+    orderTextImportInput.value = '';
+  }
+  if (orderTextImportOrderId) {
+    orderTextImportOrderId.value = '';
+  }
+  if (orderTextImportShippingSelect) {
+    orderTextImportShippingSelect.value = 'Shipping Kit Requested';
+  }
+  setOrderTextImportFeedback('');
+}
+
+function toggleOrderTextImportModal(show) {
+  if (!orderTextImportModal) {
+    return;
+  }
+
+  if (show) {
+    orderTextImportModal.classList.remove('hidden');
+    if (orderTextImportOrderId) {
+      orderTextImportOrderId.focus();
+    }
+  } else {
+    orderTextImportModal.classList.add('hidden');
+  }
+}
+
+function parseOrderText(rawText = '') {
+  const normalized = String(rawText || '').replace(/\r\n/g, '\n');
+
+  const getField = (label) => {
+    const regex = new RegExp(`${label}\\s*:\\s*(.+)`, 'i');
+    const match = normalized.match(regex);
+    return match ? match[1].trim() : '';
+  };
+
+  const shippingMatch = normalized.match(/Shipping Address:\s*([\s\S]*?)(?:\n\s*\n|\n?Conditions:|$)/i);
+  const conditionsMatch = normalized.match(/Conditions:\s*([\s\S]*)/i);
+
+  return {
+    customerName: getField('Customer'),
+    email: getField('Email'),
+    phone: getField('Phone'),
+    device: getField('Item'),
+    storage: getField('Storage'),
+    carrier: getField('Carrier'),
+    estimatedPayout: getField('Estimated Payout'),
+    paymentMethod: getField('Payment Method'),
+    paymentInfo: getField('Payment Info'),
+    shippingBlock: shippingMatch ? shippingMatch[1].trim() : '',
+    conditionBlock: conditionsMatch ? conditionsMatch[1].trim() : '',
+  };
+}
+
+function parseShippingBlock(block = '') {
+  const lines = String(block || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    return null;
+  }
+
+  const [line1, line2, line3] = lines;
+  let city = '';
+  let state = '';
+  let zipCode = '';
+
+  if (line2) {
+    const [cityPart, statePart] = line2.split(',').map((part) => part.trim());
+    city = cityPart || '';
+
+    if (statePart) {
+      const stateZipPieces = statePart.split(/\s+/).filter(Boolean);
+      state = stateZipPieces.shift() || '';
+      if (stateZipPieces.length) {
+        zipCode = stateZipPieces.join(' ');
+      }
+    }
+  }
+
+  if (line3 && !zipCode) {
+    zipCode = line3;
+  }
+
+  return {
+    streetAddress: line1 || '',
+    city,
+    state,
+    zipCode,
+  };
+}
+
+function normalizeYesNo(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  const normalized = String(value).trim();
+  const lower = normalized.toLowerCase();
+
+  if (['yes', 'y', 'true', 'ok'].includes(lower)) {
+    return 'Yes';
+  }
+  if (['no', 'n', 'false'].includes(lower)) {
+    return 'No';
+  }
+  return normalized;
+}
+
+function parseConditionBlock(block = '') {
+  const lines = String(block || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const parsed = {};
+
+  lines.forEach((line) => {
+    const [rawLabel, ...rest] = line.split(':');
+    if (!rawLabel || !rest.length) {
+      return;
+    }
+
+    const label = rawLabel.trim().toLowerCase();
+    const value = rest.join(':').trim();
+
+    if (label.includes('power')) {
+      parsed.powerOn = normalizeYesNo(value);
+    } else if (label.includes('functional')) {
+      parsed.functional = normalizeYesNo(value);
+    } else if (label.includes('crack')) {
+      parsed.cracks = normalizeYesNo(value);
+    } else if (label.includes('cosmetic')) {
+      parsed.cosmetic = value;
+    }
+  });
+
+  return parsed;
+}
+
+function buildPaymentDetails(method = '', info = '') {
+  const normalizedMethod = (method || '').toLowerCase();
+  const trimmedInfo = (info || '').trim();
+  const details = {};
+
+  if (!normalizedMethod && !trimmedInfo) {
+    return details;
+  }
+
+  switch (normalizedMethod) {
+    case 'cashapp':
+      if (trimmedInfo) {
+        details.cashappTag = trimmedInfo.replace(/^\$/, '');
+      }
+      break;
+    case 'paypal':
+      if (trimmedInfo) {
+        details.paypalEmail = trimmedInfo;
+      }
+      break;
+    case 'zelle':
+      if (trimmedInfo) {
+        details.zelleIdentifier = trimmedInfo;
+      }
+      break;
+    case 'check':
+      if (trimmedInfo) {
+        details.checkPayableTo = trimmedInfo;
+      }
+      break;
+    case 'echeck':
+      if (trimmedInfo) {
+        details.accountNumber = trimmedInfo;
+      }
+      break;
+    default:
+      if (trimmedInfo) {
+        details.notes = trimmedInfo;
+      }
+      break;
+  }
+
+  return details;
+}
+
+function buildOrderUpsertPayload(parsed, shippingPreference, existingOrder = null) {
+  const now = serverTimestamp();
+  const payload = {
+    updatedAt: now,
+    lastStatusUpdateAt: existingOrder?.lastStatusUpdateAt || now,
+    shippingPreference: shippingPreference || existingOrder?.shippingPreference || 'Shipping Kit Requested',
+    enteredBy: currentUserId,
+    manualEntry: true,
+  };
+
+  const payoutValue = coerceCurrencyValue(normalizeCurrencyInput(parsed.estimatedPayout));
+  if (payoutValue !== null) {
+    payload.estimatedQuote = payoutValue;
+    payload.price = payoutValue;
+    payload.totalPayout = payoutValue;
+    payload.originalQuote = existingOrder?.originalQuote ?? payoutValue;
+    payload.finalPayout = existingOrder?.finalPayout ?? payoutValue;
+    payload.finalPayoutAmount = existingOrder?.finalPayoutAmount ?? payoutValue;
+  }
+
+  if (!existingOrder) {
+    payload.createdAt = now;
+    payload.status = 'order_pending';
+  }
+
+  if (parsed.customerName) {
+    payload.customerName = parsed.customerName;
+  }
+  if (parsed.device) {
+    payload.device = parsed.device;
+  }
+  if (parsed.storage) {
+    payload.storage = parsed.storage;
+  }
+  if (parsed.carrier) {
+    payload.carrier = parsed.carrier;
+  }
+
+  if (parsed.shippingInfo) {
+    payload.shippingInfo = {
+      ...existingOrder?.shippingInfo,
+      ...parsed.shippingInfo,
+    };
+  }
+
+  if (parsed.paymentMethod) {
+    payload.paymentMethod = parsed.paymentMethod.toLowerCase();
+  }
+
+  if (parsed.paymentDetails && Object.keys(parsed.paymentDetails).length) {
+    payload.paymentDetails = {
+      ...existingOrder?.paymentDetails,
+      ...parsed.paymentDetails,
+    };
+  }
+
+  if (parsed.conditions) {
+    if (parsed.conditions.powerOn) {
+      payload.condition_power_on = parsed.conditions.powerOn;
+    }
+    if (parsed.conditions.functional) {
+      payload.condition_functional = parsed.conditions.functional;
+    }
+    if (parsed.conditions.cracks) {
+      payload.condition_cracks = parsed.conditions.cracks;
+    }
+    if (parsed.conditions.cosmetic) {
+      payload.condition_cosmetic = parsed.conditions.cosmetic;
+    }
+  }
+
+  return payload;
+}
+
+async function handleOrderTextImportSubmit() {
+  if (!orderTextImportInput || !orderTextImportOrderId) {
+    return;
+  }
+
+  const desiredId = normalizeOrderIdInput(orderTextImportOrderId.value);
+  const rawText = orderTextImportInput.value || '';
+
+  setOrderTextImportFeedback('');
+
+  if (!desiredId) {
+    setOrderTextImportFeedback('Enter the order ID you want to use.', 'error');
+    return;
+  }
+
+  if (!rawText.trim()) {
+    setOrderTextImportFeedback('Paste the order details to import.', 'error');
+    return;
+  }
+
+  const parsedText = parseOrderText(rawText);
+  const shippingInfo = parseShippingBlock(parsedText.shippingBlock);
+  const conditions = parseConditionBlock(parsedText.conditionBlock);
+
+  const parsed = {
+    ...parsedText,
+    shippingInfo: shippingInfo
+      ? {
+          fullName: parsedText.customerName || '',
+          email: parsedText.email || '',
+          phone: parsedText.phone || '',
+          ...shippingInfo,
+        }
+      : null,
+    paymentDetails: buildPaymentDetails(parsedText.paymentMethod, parsedText.paymentInfo),
+    conditions,
+  };
+
+  if (!parsed.shippingInfo) {
+    setOrderTextImportFeedback('Add a shipping address block so we can save the order.', 'error');
+    return;
+  }
+
+  const shippingPreference = orderTextImportShippingSelect?.value || 'Shipping Kit Requested';
+
+  const closeModalAfter = () => {
+    toggleOrderTextImportModal(false);
+    setTimeout(() => {
+      openOrderDetailsModal(desiredId);
+    }, 150);
+  };
+
+  if (orderTextImportSubmit) {
+    orderTextImportSubmit.disabled = true;
+    orderTextImportSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span class="ml-2">Saving…</span>';
+  }
+
+  try {
+    const orderRef = doc(db, 'orders', desiredId);
+    const existingSnapshot = await getDoc(orderRef);
+    const existingOrder = existingSnapshot.exists() ? existingSnapshot.data() : null;
+
+    const payload = buildOrderUpsertPayload(parsed, shippingPreference, existingOrder);
+
+    await setDoc(orderRef, payload, { merge: true });
+
+    const action = existingOrder ? 'updated' : 'created';
+    setOrderTextImportFeedback(`Order ${desiredId} ${action} from pasted text.`, 'success');
+    resetOrderTextImportForm();
+    closeModalAfter();
+  } catch (error) {
+    console.error('Failed to save pasted order:', error);
+    setOrderTextImportFeedback(error.message || 'Failed to save the order.', 'error');
+  } finally {
+    if (orderTextImportSubmit) {
+      orderTextImportSubmit.disabled = false;
+      orderTextImportSubmit.innerHTML = 'Save Order';
+    }
+  }
 }
 
 function getOrderPayout(order) {
@@ -5809,7 +6230,9 @@ function updateShippingAddressUI(shippingInfo) {
 function resetShippingAddressEditor({ restoreFromOrder = false } = {}) {
   toggleShippingAddressEditor(false);
   if (shippingAddressInput) {
-    shippingAddressInput.value = '';
+    shippingAddressInput.value = restoreFromOrder
+      ? formatShippingAddressForEditor(currentOrderDetails?.shippingInfo)
+      : '';
   }
 }
 
