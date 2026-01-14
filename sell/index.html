@@ -20,79 +20,11 @@
     <!-- End Google Tag Manager -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
     <script>
-        const runLegacySellFlow = false;
-        if (runLegacySellFlow) {
+        window.runLegacySellFlow = false;
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-
         gtag('config', 'AW-17534255111');
-    </script>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import {
-            getAuth,
-            signInWithPopup,
-            GoogleAuthProvider,
-            signInWithEmailAndPassword,
-            createUserWithEmailAndPassword,
-            signOut,
-            onAuthStateChanged,
-            updateProfile,
-            sendPasswordResetEmail
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import {
-            getFirestore,
-            collection,
-            addDoc,
-            serverTimestamp,
-            doc,
-            getDoc,
-            setDoc,
-            getDocs,
-            query,
-            orderBy,
-            limit
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
-            authDomain: "auth.secondhandcell.com",
-            projectId: "buyback-a0f05",
-            storageBucket: "buyback-a0f05.appspot.com",
-            messagingSenderId: "876430429098",
-            appId: "1:876430429098:web:f6dd64b1960d90461979d3",
-            measurementId: "G-6WWQN44JHT"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        window.firebaseAuth = auth;
-        window.GoogleAuthProvider = GoogleAuthProvider;
-        window.signInWithPopup = signInWithPopup;
-        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
-        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
-        window.signOut = signOut;
-        window.onAuthStateChanged = onAuthStateChanged;
-        window.updateProfile = updateProfile;
-        window.sendPasswordResetEmail = sendPasswordResetEmail;
-        window.firebaseDb = db;
-        window.firebaseServerTimestamp = serverTimestamp;
-        window.firebase = {
-            firestore: {
-                doc,
-                getDoc,
-                collection,
-                getDocs,
-                setDoc,
-                query,
-                orderBy,
-                limit
-            }
-        };
     </script>
     <style>
         body {
@@ -505,7 +437,7 @@
             --border: #E5E7EB;
         }
 
-        .sell-app-wrapper { font-family: 'Inter', -apple-system, sans-serif; color: var(--text-main); line-height: 1.5; padding: 40px 0; }
+        .sell-app-wrapper { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--text-main); line-height: 1.5; padding: 40px 0; }
         .hidden { display: none !important; }
 
         .app-container { max-width: 800px; margin: 0 auto; padding: 0 20px; }
@@ -877,6 +809,7 @@
         let deviceInfo = null; // Declare globally to hold parsed info
 
         document.addEventListener('DOMContentLoaded', async function() {
+            if (!window.runLegacySellFlow) return;
             // --- UPDATED: Populate the state select on load ---
             populateStateSelect();
             
@@ -933,263 +866,482 @@
             // Log the URL parameters for debugging
             console.log('URL Parameters:', {
                 deviceParam: deviceParam,
-                parsedInfo: deviceInfo,
                 storage: storageParam,
-                carrier: carrierParam,
-                //... rest of params
-            });
+            <script type="module">
+                import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+                import { getFirebaseApp } from "/assets/js/firebase-app.js";
 
-            // Validate required parameters: We only need a successfully parsed brand and slug
-            if (!deviceInfo || !deviceInfo.brand || !deviceInfo.slug) {
-                loadingIndicator.classList.add('hidden');
-                errorDisplay.classList.remove('hidden');
-                console.error("Missing required parameters (device=brand-slug) or invalid URL format.");
-                return;
-            }
+                const db = getFirestore(getFirebaseApp());
 
-            // Populate remaining properties for initial form state loading if provided in URL (old behavior)
-            deviceInfo.storage = storageParam;
-            deviceInfo.carrier = carrierParam;
-            deviceInfo.power = powerParam;
-            deviceInfo.functionality = functionalityParam;
-            deviceInfo.quality = qualityParam;
-            deviceInfo.estimatedPrice = priceParam;
+                const BRAND_OPTIONS = [
+                    { key: 'iphone', label: 'iPhone' },
+                    { key: 'samsung', label: 'Samsung' },
+                    { key: 'ipad', label: 'iPad' },
+                ];
 
-            async function fetchDevicePricing(brand, slug) {
-                try {
-                    // Use the parsed brand and slug for the Firestore path
-                    const docRef = doc(db, `devices/${brand}/models`, slug);
-                    const docSnap = await getDoc(docRef);
-                    
-                    if (docSnap.exists()) {
-                        return docSnap.data();
-                    } else {
-                        console.error(`Device data for slug "${slug}" not found in brand "${brand}".`);
-                        return null;
+                const LOCK_LABELS = {
+                    unlocked: 'Unlocked',
+                    att: 'AT&T',
+                    verizon: 'Verizon',
+                    tmobile: 'T-Mobile',
+                    other: 'Other',
+                    locked: 'Carrier Locked',
+                };
+
+                const carrierAliasMap = {
+                    att: 'att',
+                    atandt: 'att',
+                    at_t: 'att',
+                    verizon: 'verizon',
+                    vzw: 'verizon',
+                    vz: 'verizon',
+                    tmobile: 'tmobile',
+                    t_mobile: 'tmobile',
+                    magenta: 'tmobile',
+                    unlocked: 'unlocked',
+                    simfree: 'unlocked',
+                    other: 'other',
+                    carrierlocked: 'locked',
+                    locked: 'locked'
+                };
+
+                const normalizeCarrierKey = (value = '') => {
+                    const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                    return carrierAliasMap[normalized] || normalized;
+                };
+
+                const resolveCarrierPricing = (storagePricing = {}, selectedCarrier = '') => {
+                    const normalizedPricing = Object.entries(storagePricing || {}).reduce((acc, [key, value]) => {
+                        acc[normalizeCarrierKey(key)] = value || {};
+                        return acc;
+                    }, {});
+
+                    const preferredOrder = [
+                        normalizeCarrierKey(selectedCarrier),
+                        'unlocked',
+                        'att',
+                        'verizon',
+                        'tmobile',
+                        'other',
+                        'locked'
+                    ].filter(Boolean);
+
+                    for (const key of preferredOrder) {
+                        if (normalizedPricing[key]) {
+                            return normalizedPricing[key];
+                        }
                     }
-                } catch (error) {
-                    console.error("Error fetching document:", error);
-                    return null;
-                }
-            }
-            
-            device = await fetchDevicePricing(deviceInfo.brand, deviceInfo.slug);
-            
-            if (!device) {
-                loadingIndicator.classList.add('hidden');
-                errorDisplay.classList.remove('hidden');
-                // Update error message for clarity based on new structure
-                document.querySelector('#errorDisplay p:nth-child(2)').textContent = 'Error: Device data not found.';
-                return;
-            }
 
-            loadingIndicator.classList.add('hidden');
-            questionContainer.classList.remove('hidden');
+                    const fallbackKey = Object.keys(normalizedPricing)[0];
+                    return fallbackKey ? normalizedPricing[fallbackKey] : null;
+                };
 
-            document.title = `SecondHandCell - Sell ${device.name}`;
-            
-            // --- IMAGE LOADING LOGIC ---
-            function loadImageWithFallback(imgElement) {
-                const baseSrc = device.imageUrl; // Use the image URL retrieved from Firestore
-                if (!baseSrc) {
-                     imgElement.src = 'https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';
-                     return;
-                }
-                // Use data-base-src to test extensions, but for single-file systems, direct set is cleaner
-                // However, since the function uses new Image() and load/error, we keep it this way
-                imgElement.dataset.baseSrc = baseSrc; 
-                
-                const extensions = ['.webp', '.avif', '.png', '.jpeg', '.jpg'];
-                let current = 0;
-                function tryLoad() {
-                    if (current >= extensions.length) {
-                        imgElement.src = 'https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';
-                        return;
+                const CONDITION_DEFS = [
+                    {
+                        key: 'flawless',
+                        name: 'Flawless',
+                        desc: ['Powers on and fully functional.', 'No cracks, chips, or major dents.', 'Minimal to no visible wear.']
+                    },
+                    {
+                        key: 'good',
+                        name: 'Good',
+                        desc: ['Powers on and fully functional.', 'No cracks.', 'Light scratches or normal wear is okay.']
+                    },
+                    {
+                        key: 'broken',
+                        name: 'Broken',
+                        desc: ['Cracked screen/back, heavy damage, or not fully functional.', 'May have defects that impact usability.']
+                    },
+                    {
+                        key: 'noPower',
+                        name: 'No Power',
+                        desc: ['Does not power on.', 'Still eligible depending on model.']
                     }
-                    const testSrc = baseSrc + extensions[current];
-                    const img = new Image();
-                    img.onload = () => { imgElement.src = testSrc; };
-                    img.onerror = () => { current++; tryLoad(); };
-                    img.src = testSrc;
-                }
-                // Call the loading function only if a base URL is provided by Firestore
-                tryLoad();
-            }
+                ];
 
-            // Find the device image element
-            const deviceImageElement = document.getElementById('deviceImage');
-            if (deviceImageElement && device.imageUrl) {
-                loadImageWithFallback(deviceImageElement);
-            } else {
-                deviceImageElement.src = 'https://placehold.co/200x200/e0e7ff/4338ca?text=No+Image';
-            }
-            
-            document.getElementById('deviceImage').alt = device.name;
-            document.getElementById('deviceDisplayName').textContent = device.name;
-            document.getElementById('deviceDisplayNameText').textContent = device.name;
-            document.getElementById('overviewDevice').textContent = device.name;
+                const els = {
+                    stepName: document.getElementById('step-name'),
+                    gridContent: document.getElementById('grid-content'),
+                    crumbs: document.getElementById('crumbs'),
+                    finalCrumbs: document.getElementById('final-crumbs'),
+                    selectionFlow: document.getElementById('selection-flow'),
+                    offerView: document.getElementById('offer-view'),
+                    finalDeviceName: document.getElementById('final-device-name'),
+                    summaryTags: document.getElementById('summary-tags'),
+                    finalConditionGrid: document.getElementById('final-condition-grid'),
+                    finalPrice: document.getElementById('final-price'),
+                    conditionTitle: document.getElementById('condition-title-display'),
+                    conditionDetails: document.getElementById('condition-details'),
+                    userEmail: document.getElementById('user-email'),
+                    qtyModal: document.getElementById('qty-modal'),
+                    qtyVal: document.getElementById('qty-val'),
+                    startOverLink: document.getElementById('startOverLink'),
+                    startCheckoutBtn: document.getElementById('startCheckoutBtn'),
+                    qtyMinusBtn: document.getElementById('qtyMinusBtn'),
+                    qtyPlusBtn: document.getElementById('qtyPlusBtn'),
+                    finalSubmitBtn: document.getElementById('finalSubmitBtn')
+                };
 
-            const storageSelect = document.getElementById('storage');
-            const fragment = document.createDocumentFragment();
-            // Use the fetched device data to populate the storage options
-            for (const storage in device.prices) {
-                const option = document.createElement('option');
-                option.value = storage;
-                option.textContent = storage;
-                fragment.appendChild(option);
-            }
-            storageSelect.innerHTML = '<option value="">Select Storage</option>';
-            storageSelect.appendChild(fragment);
-            
-            const hasUrlPrefill = Boolean(deviceInfo.storage || deviceInfo.carrier || deviceInfo.power || deviceInfo.functionality || deviceInfo.quality);
+                const state = {
+                    modelsCache: {},
+                    modelDoc: null,
+                    selections: {
+                        brand: '',
+                        modelId: '',
+                        modelName: '',
+                        storage: '',
+                        lock: 'unlocked',
+                        conditionKey: 'good',
+                        qty: 1
+                    },
+                    currentStep: 'brand',
+                    isFinalView: false
+                };
 
-            if (hasUrlPrefill) {
-                console.log('Applying URL parameter prefill...', deviceInfo);
+                const stepOrder = ['brand', 'model', 'storage', 'lock', 'condition'];
 
-                setTimeout(() => {
-                    const carrierSection = document.getElementById('carrierSection');
-                    const powerOnSection = document.getElementById('powerOnSection');
-                    const functionalSection = document.getElementById('functionalSection');
-                    const cracksSection = document.getElementById('cracksSection');
-                    const cosmeticSection = document.getElementById('cosmeticSection');
-                    const getQuoteBtn = document.getElementById('getQuoteBtn');
+                const getStorageOptions = () => {
+                    const prices = state.modelDoc?.prices || {};
+                    return Object.keys(prices);
+                };
 
-                    const carrierMapping = {
-                        unlocked: 'unlocked',
-                        verizon: 'verizon',
-                        att: 'att',
-                        tmobile: 'tmobile'
+                const getLockOptions = () => {
+                    const storagePricing = state.modelDoc?.prices?.[state.selections.storage] || {};
+                    const carriers = Object.keys(storagePricing).map(normalizeCarrierKey);
+                    const deduped = Array.from(new Set(carriers)).filter(Boolean);
+                    const preferredOrder = ['unlocked', 'att', 'verizon', 'tmobile', 'other', 'locked'];
+                    deduped.sort((a, b) => preferredOrder.indexOf(a) - preferredOrder.indexOf(b));
+                    return deduped.length ? deduped : ['unlocked'];
+                };
+
+                const getConditionPrice = () => {
+                    const storagePricing = state.modelDoc?.prices?.[state.selections.storage] || {};
+                    const base = resolveCarrierPricing(storagePricing, state.selections.lock) || {};
+                    const raw = base?.[state.selections.conditionKey];
+                    const numeric = Number(raw);
+                    return Number.isFinite(numeric) ? numeric : 0;
+                };
+
+                const updateURL = () => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('brand');
+                    url.searchParams.delete('model');
+                    url.searchParams.delete('storage');
+                    url.searchParams.delete('lock');
+                    url.searchParams.delete('condition');
+
+                    if (state.selections.brand) url.searchParams.set('brand', state.selections.brand);
+                    if (state.selections.modelId) url.searchParams.set('model', state.selections.modelId);
+                    if (state.selections.storage) url.searchParams.set('storage', state.selections.storage);
+                    if (state.selections.lock) url.searchParams.set('lock', state.selections.lock);
+                    if (state.selections.conditionKey) url.searchParams.set('condition', state.selections.conditionKey);
+                    window.history.replaceState({}, '', url);
+                };
+
+                const updateCrumbs = () => {
+                    const container = state.isFinalView ? els.finalCrumbs : els.crumbs;
+                    if (!container) return;
+                    container.innerHTML = '';
+
+                    const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
+
+                    const getLabel = (stepKey) => {
+                        if (stepKey === 'brand') return BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || 'Brand';
+                        if (stepKey === 'model') return state.selections.modelName || 'Model';
+                        if (stepKey === 'storage') return state.selections.storage || 'Capacity';
+                        if (stepKey === 'lock') return LOCK_LABELS[state.selections.lock] || state.selections.lock || 'Network';
+                        if (stepKey === 'condition') return CONDITION_DEFS.find(c => c.key === state.selections.conditionKey)?.name || 'Condition';
+                        return stepKey;
                     };
 
-                    const carrierParam = typeof deviceInfo.carrier === 'string' ? deviceInfo.carrier.toLowerCase() : '';
-                    const qualityValue = typeof deviceInfo.quality === 'string' ? deviceInfo.quality.toLowerCase() : '';
+                    stepOrder.forEach((stepKey, i) => {
+                        const c = document.createElement('span');
+                        c.className = 'crumb';
+                        c.addEventListener('click', () => jumpTo(stepKey));
 
-                    const storageOptionExists = deviceInfo.storage
-                        ? Array.from(storageSelect.options).some(option => option.value === deviceInfo.storage)
-                        : false;
+                        if (i === currentIdx) {
+                            c.classList.add('active');
+                            c.textContent = getLabel(stepKey);
+                        } else if (i < currentIdx) {
+                            c.classList.add('filled', 'can-jump');
+                            c.textContent = getLabel(stepKey);
+                        } else {
+                            c.textContent = stepKey.charAt(0).toUpperCase() + stepKey.slice(1);
+                        }
+                        container.appendChild(c);
+                    });
+                };
 
-                    if (deviceInfo.storage && storageOptionExists) {
-                        storageSelect.value = deviceInfo.storage;
-                        if (carrierSection) carrierSection.classList.remove('hidden');
-                    } else if (carrierSection && (deviceInfo.carrier || deviceInfo.power || deviceInfo.functionality || deviceInfo.quality)) {
-                        carrierSection.classList.remove('hidden');
+                const jumpTo = (stepKey) => {
+                    const targetIdx = stepOrder.indexOf(stepKey);
+                    const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
+                    if (targetIdx < currentIdx) {
+                        state.isFinalView = false;
+                        els.offerView?.classList.add('hidden');
+                        els.selectionFlow?.classList.remove('hidden');
+                        state.currentStep = stepKey;
+                        renderStep();
+                        updateURL();
+                    }
+                };
+
+                const loadModelsForBrand = async (brandKey) => {
+                    if (!brandKey) return [];
+                    if (state.modelsCache[brandKey]) return state.modelsCache[brandKey];
+
+                    if (els.gridContent) {
+                        els.gridContent.innerHTML = '<div style="grid-column: 1/-1; text-align:center; color: var(--text-muted); font-weight: 700;">Loading devices…</div>';
                     }
 
-                    let carrierSelected = false;
-                    if (carrierParam) {
-                        const normalizedCarrier = carrierMapping[carrierParam] || carrierParam;
-                        const carrierRadio = document.querySelector(`input[name="carrier"][value="${carrierParam}"]`) ||
-                            document.querySelector(`input[name="carrier"][value="${normalizedCarrier}"]`) ||
-                            document.getElementById(normalizedCarrier);
+                    const snapshot = await getDocs(collection(db, `devices/${brandKey}/models`));
+                    const models = [];
+                    snapshot.forEach((docSnap) => {
+                        const data = docSnap.data() || {};
+                        models.push({
+                            id: docSnap.id,
+                            name: data.name || docSnap.id,
+                            prices: data.prices || {}
+                        });
+                    });
+                    models.sort((a, b) => a.name.localeCompare(b.name));
+                    state.modelsCache[brandKey] = models;
+                    return models;
+                };
 
-                        if (carrierRadio) {
-                            carrierRadio.checked = true;
-                            carrierSelected = true;
+                const renderStep = async () => {
+                    if (!els.gridContent || !els.stepName) return;
+                    els.gridContent.innerHTML = '';
+
+                    let items = [];
+                    if (state.currentStep === 'brand') {
+                        els.stepName.textContent = 'Select Brand';
+                        items = BRAND_OPTIONS;
+                    } else if (state.currentStep === 'model') {
+                        const brandLabel = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || 'Device';
+                        els.stepName.textContent = `Which ${brandLabel} Model?`;
+                        items = await loadModelsForBrand(state.selections.brand);
+                    } else if (state.currentStep === 'storage') {
+                        els.stepName.textContent = 'Select Capacity';
+                        items = getStorageOptions();
+                    } else if (state.currentStep === 'lock') {
+                        els.stepName.textContent = 'Select Network';
+                        items = getLockOptions();
+                    } else if (state.currentStep === 'condition') {
+                        els.stepName.textContent = 'Overall Condition';
+                        items = CONDITION_DEFS.map(c => c.key);
+                    }
+
+                    items.forEach((item) => {
+                        const card = document.createElement('div');
+                        card.className = 'select-card';
+
+                        let value = item;
+                        let displayText = String(item);
+
+                        if (state.currentStep === 'brand') {
+                            value = item.key;
+                            displayText = item.label;
+                            if (state.selections.brand === value) card.classList.add('active');
+                        } else if (state.currentStep === 'model') {
+                            value = item.id;
+                            displayText = item.name;
+                            if (state.selections.modelId === value) card.classList.add('active');
+                        } else if (state.currentStep === 'storage') {
+                            if (state.selections.storage === value) card.classList.add('active');
+                        } else if (state.currentStep === 'lock') {
+                            displayText = LOCK_LABELS[item] || item;
+                            if (state.selections.lock === value) card.classList.add('active');
+                        } else if (state.currentStep === 'condition') {
+                            const def = CONDITION_DEFS.find(c => c.key === item);
+                            displayText = def?.name || item;
+                            if (state.selections.conditionKey === value) card.classList.add('active');
                         }
 
-                        if (carrierSection) {
-                            carrierSection.classList.remove('hidden');
+                        card.textContent = displayText;
+                        card.addEventListener('click', () => handleSelect(value));
+                        els.gridContent.appendChild(card);
+                    });
+
+                    updateCrumbs();
+                };
+
+                const handleSelect = async (value) => {
+                    if (state.currentStep === 'brand') {
+                        state.selections.brand = value;
+                        state.selections.modelId = '';
+                        state.selections.modelName = '';
+                        state.selections.storage = '';
+                        state.selections.lock = 'unlocked';
+                        state.selections.conditionKey = 'good';
+                        state.modelDoc = null;
+                    } else if (state.currentStep === 'model') {
+                        state.selections.modelId = value;
+                        const models = await loadModelsForBrand(state.selections.brand);
+                        const match = models.find(m => m.id === value);
+                        state.modelDoc = match || null;
+                        state.selections.modelName = match?.name || value;
+                        state.selections.storage = '';
+                        state.selections.lock = 'unlocked';
+                        state.selections.conditionKey = 'good';
+                    } else if (state.currentStep === 'storage') {
+                        state.selections.storage = value;
+                        const locks = getLockOptions();
+                        state.selections.lock = locks.includes(state.selections.lock) ? state.selections.lock : (locks[0] || 'unlocked');
+                    } else if (state.currentStep === 'lock') {
+                        state.selections.lock = value;
+                    } else if (state.currentStep === 'condition') {
+                        state.selections.conditionKey = value;
+                    }
+
+                    updateURL();
+
+                    const currentIdx = stepOrder.indexOf(state.currentStep);
+                    if (currentIdx < stepOrder.length - 1) {
+                        state.currentStep = stepOrder[currentIdx + 1];
+                        renderStep();
+                    } else {
+                        showOffer();
+                    }
+                };
+
+                const renderFinalConditionGrid = () => {
+                    if (!els.finalConditionGrid) return;
+                    els.finalConditionGrid.innerHTML = '';
+                    CONDITION_DEFS.forEach((c) => {
+                        const card = document.createElement('div');
+                        card.className = 'select-card';
+                        if (state.selections.conditionKey === c.key) card.classList.add('active');
+                        card.innerHTML = `<div>${c.name}</div>`;
+                        card.addEventListener('click', () => {
+                            state.selections.conditionKey = c.key;
+                            renderFinalConditionGrid();
+                            updatePriceDisplay();
+                            updateURL();
+                        });
+                        els.finalConditionGrid.appendChild(card);
+                    });
+                };
+
+                const updatePriceDisplay = () => {
+                    const def = CONDITION_DEFS.find(c => c.key === state.selections.conditionKey) || CONDITION_DEFS[1];
+                    const price = getConditionPrice();
+                    if (els.finalPrice) els.finalPrice.textContent = `$${price}`;
+                    if (els.conditionTitle) els.conditionTitle.textContent = def.name;
+                    if (els.conditionDetails) els.conditionDetails.innerHTML = (def.desc || []).map(d => `<li>${d}</li>`).join('');
+                };
+
+                const showOffer = () => {
+                    state.isFinalView = true;
+                    els.selectionFlow?.classList.add('hidden');
+                    els.offerView?.classList.remove('hidden');
+
+                    if (els.finalDeviceName) els.finalDeviceName.textContent = state.selections.modelName || '--';
+                    const lockLabel = LOCK_LABELS[state.selections.lock] || state.selections.lock || 'Network';
+                    if (els.summaryTags) els.summaryTags.textContent = `${state.selections.storage || '--'}  •  ${lockLabel}`;
+
+                    renderFinalConditionGrid();
+                    updatePriceDisplay();
+                    updateCrumbs();
+                };
+
+                const openQtyModal = () => {
+                    if (!els.qtyModal) return;
+                    els.qtyModal.style.display = 'flex';
+                    els.qtyModal.setAttribute('aria-hidden', 'false');
+                };
+
+                const closeQtyModal = () => {
+                    if (!els.qtyModal) return;
+                    els.qtyModal.style.display = 'none';
+                    els.qtyModal.setAttribute('aria-hidden', 'true');
+                };
+
+                const resetFlow = () => {
+                    state.modelDoc = null;
+                    state.selections = { brand: '', modelId: '', modelName: '', storage: '', lock: 'unlocked', conditionKey: 'good', qty: 1 };
+                    state.currentStep = 'brand';
+                    state.isFinalView = false;
+                    updateURL();
+                    els.offerView?.classList.add('hidden');
+                    els.selectionFlow?.classList.remove('hidden');
+                    renderStep();
+                };
+
+                const initFromUrl = async () => {
+                    const params = new URLSearchParams(window.location.search);
+                    const brand = params.get('brand');
+                    const model = params.get('model');
+                    const storage = params.get('storage');
+                    const lock = params.get('lock');
+                    const condition = params.get('condition');
+
+                    if (brand && BRAND_OPTIONS.some(b => b.key === brand)) {
+                        state.selections.brand = brand;
+                        state.currentStep = 'model';
+                        await loadModelsForBrand(brand);
+                    }
+
+                    if (brand && model) {
+                        const models = state.modelsCache[brand] || [];
+                        const match = models.find(m => m.id === model);
+                        if (match) {
+                            state.selections.modelId = match.id;
+                            state.selections.modelName = match.name;
+                            state.modelDoc = match;
+                            state.currentStep = 'storage';
                         }
                     }
 
-                    if (powerOnSection && (carrierSelected || deviceInfo.power || storageOptionExists)) {
-                        powerOnSection.classList.remove('hidden');
+                    if (storage) state.selections.storage = storage;
+                    if (lock) state.selections.lock = normalizeCarrierKey(lock);
+                    if (condition && CONDITION_DEFS.some(c => c.key === condition)) state.selections.conditionKey = condition;
+
+                    if (state.selections.brand && state.selections.modelId && state.selections.storage) {
+                        showOffer();
+                    } else {
+                        renderStep();
                     }
+                };
 
-                    let powerSelected = '';
-                    if (deviceInfo.power) {
-                        const powerValue = deviceInfo.power.toLowerCase();
-                        const powerRadio = document.querySelector(`input[name="q1_power_on"][value="${powerValue}"]`);
-                        if (powerRadio) {
-                            powerRadio.checked = true;
-                            powerSelected = powerValue;
-                        }
+                els.startOverLink?.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    resetFlow();
+                });
+
+                els.startCheckoutBtn?.addEventListener('click', () => {
+                    const email = (els.userEmail?.value || '').trim();
+                    if (!email.includes('@')) {
+                        alert('Enter valid email.');
+                        return;
                     }
+                    openQtyModal();
+                });
 
-                    if (!powerSelected) {
-                        powerSelected = document.querySelector('input[name="q1_power_on"]:checked')?.value || '';
-                    }
+                els.qtyMinusBtn?.addEventListener('click', () => {
+                    state.selections.qty = Math.max(1, state.selections.qty - 1);
+                    if (els.qtyVal) els.qtyVal.textContent = String(state.selections.qty);
+                });
 
-                    if (powerSelected === 'yes') {
-                        if (functionalSection) {
-                            functionalSection.classList.remove('hidden');
-                        }
+                els.qtyPlusBtn?.addEventListener('click', () => {
+                    state.selections.qty = Math.max(1, state.selections.qty + 1);
+                    if (els.qtyVal) els.qtyVal.textContent = String(state.selections.qty);
+                });
 
-                        let functionalSelected = '';
-                        if (deviceInfo.functionality) {
-                            const functionalValue = deviceInfo.functionality === 'working' ? 'yes' : 'no';
-                            const functionalRadio = document.querySelector(`input[name="q2_fully_functional"][value="${functionalValue}"]`);
-                            if (functionalRadio) {
-                                functionalRadio.checked = true;
-                                functionalSelected = functionalValue;
-                            }
-                        }
+                els.qtyModal?.addEventListener('click', (e) => {
+                    if (e.target === els.qtyModal) closeQtyModal();
+                });
 
-                        if (!functionalSelected) {
-                            functionalSelected = document.querySelector('input[name="q2_fully_functional"]:checked')?.value || '';
-                        }
+                els.finalSubmitBtn?.addEventListener('click', () => {
+                    // Keep your existing checkout wiring here later.
+                    closeQtyModal();
+                    console.log('Sell flow submit:', { ...state.selections, email: (els.userEmail?.value || '').trim() });
+                });
 
-                        if (functionalSelected === 'yes') {
-                            if (cracksSection) {
-                                cracksSection.classList.remove('hidden');
-                            }
-
-                            if (qualityValue) {
-                                const cracksValue = ['damaged', 'broken', 'cracked'].includes(qualityValue) ? 'no' : 'yes'; // "cracked" kept for legacy URLs
-                                const cracksRadio = document.querySelector(`input[name="q3_no_cracks"][value="${cracksValue}"]`);
-                                if (cracksRadio) {
-                                    cracksRadio.checked = true;
-                                }
-
-                                if (cracksValue === 'yes') {
-                                    if (cosmeticSection) {
-                                        cosmeticSection.classList.remove('hidden');
-                                    }
-
-                                    const cosmeticMapping = {
-                                        flawless: 'flawless',
-                                        mint: 'flawless',
-                                        new: 'flawless',
-                                        pristine: 'flawless',
-                                        good: 'good',
-                                        great: 'good',
-                                        excellent: 'good',
-                                        gentlyused: 'good',
-                                        scratched: 'good',
-                                        fair: 'fair',
-                                        average: 'fair',
-                                        used: 'fair',
-                                        worn: 'fair',
-                                        damaged: 'damaged',
-                                        cracked: 'damaged' // legacy quality option maps to damaged
-                                    };
-
-                                    const cosmeticValue = cosmeticMapping[qualityValue] || 'fair';
-                                    const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${cosmeticValue}"]`);
-                                    if (cosmeticRadio) {
-                                        cosmeticRadio.checked = true;
-                                    }
-                                } else if (cosmeticSection) {
-                                    cosmeticSection.classList.add('hidden');
-                                }
-                            }
-                        } else if (functionalSelected === 'no') {
-                            if (cracksSection) {
-                                cracksSection.classList.add('hidden');
-                            }
-                            if (cosmeticSection) {
-                                cosmeticSection.classList.add('hidden');
-                            }
-                        }
-                    } else if (powerSelected === 'no') {
-                        if (functionalSection) {
-                            functionalSection.classList.add('hidden');
-                        }
-                        if (cracksSection) {
-                            cracksSection.classList.add('hidden');
-                        }
-                        if (cosmeticSection) {
-                            cosmeticSection.classList.add('hidden');
+                initFromUrl().catch((err) => {
+                    console.error('Sell flow init failed:', err);
+                    resetFlow();
+                });
+            </script>
                         }
                     }
 
