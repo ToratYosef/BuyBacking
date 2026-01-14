@@ -510,7 +510,7 @@
       return;
     }
     safeStorage.set(SHIP48_START_KEY, '1');
-    const targetUrl = new URL('/sell-device.html', window.location.origin);
+    const targetUrl = new URL('/sell', window.location.origin);
     targetUrl.searchParams.set('ship48Start', '1');
     window.location.href = targetUrl.toString();
   }
