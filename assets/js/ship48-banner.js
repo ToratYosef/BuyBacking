@@ -58,7 +58,7 @@
     `;
 
     const startLink = document.createElement('a');
-    startLink.href = 'sell-device.html';
+    startLink.href = 'sell/';
     startLink.className = 'ship48-btn-start';
     startLink.textContent = 'Sell Your Device →';
 

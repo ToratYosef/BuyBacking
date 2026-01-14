@@ -6,8 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SecondHandCell - Sell Your Device</title>
     <link rel="icon" href="/favicon/favicon.ico">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+
     <!-- Google Tag Manager -->
     <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
     new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -15,6 +16,14 @@
     'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
     })(window,document,'script','dataLayer','GTM-W3BM2JC8');</script>
     
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-17534255111');
+    </script>
+
     <style>
         :root {
             --brand-primary: #15803d;
@@ -32,14 +41,82 @@
         .app-container { max-width: 800px; margin: 0 auto; padding: 0 20px; }
         .step-title { font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 30px; color: var(--text-main); }
         
-        .selection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+        .selection-grid { display: grid; gap: 15px; }
         .select-card {
             background: var(--white); border: 2px solid var(--border); border-radius: 12px;
             padding: 25px 15px; text-align: center; cursor: pointer; transition: 0.2s;
             font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative;
         }
-        .select-card:hover { border-color: var(--brand-secondary); transform: translateY(-2px); }
+        .select-card:hover:not(.disabled) { border-color: var(--brand-secondary); transform: translateY(-2px); }
         .select-card.active { border-color: var(--brand-primary); background: #f0fdf4; color: var(--brand-primary); box-shadow: 0 0 0 1px var(--brand-primary); }
+        
+        .select-card.disabled { 
+            opacity: 0.6; 
+            cursor: help; 
+            background: #f9fafb; 
+            border-style: dashed; 
+            filter: grayscale(0.5);
+        }
+
+        /* Tooltip Styling */
+        .shc-tooltip {
+            visibility: hidden;
+            background-color: #1e293b; /* slate-800 dark grey */
+            color: #ffffff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 10px 14px;
+            position: absolute;
+            z-index: 50;
+            bottom: 115%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 220px;
+            font-size: 12px;
+            line-height: 1.4;
+            font-weight: 600;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .shc-tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: #1e293b transparent transparent transparent;
+        }
+
+        .select-card.disabled:hover .shc-tooltip,
+        .select-card.disabled:active .shc-tooltip {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(-5px);
+        }
+
+        /* Progress Bar Styling */
+        .progress-bar-shine {
+            position: relative;
+            overflow: hidden;
+        }
+        .progress-bar-shine::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shine 2s infinite;
+        }
+        @keyframes shine {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
 
         .breadcrumbs { display: flex; gap: 8px; margin-bottom: 30px; font-size: 13px; justify-content: center; flex-wrap: wrap; }
         .crumb { padding: 8px 16px; background: #e5e7eb; border-radius: 20px; font-weight: 600; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
@@ -61,7 +138,7 @@
         .modal-card { background: white; padding: 40px; border-radius: 20px; text-align: center; max-width: 400px; width: 90%; }
         
         .hidden { display: none !important; }
-        @media (max-width: 600px) { .selection-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 600px) { .selection-grid { grid-template-columns: 1fr 1fr !important; } }
     </style>
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
 </head>
@@ -83,7 +160,7 @@
         </div>
         <nav class="header-auth-nav">
             <div id="authStatusContainer" class="site-header__auth-wrapper">
-                <a href="#" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
+                <a href="/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
                 <div id="userMonogram" class="user-monogram hidden"></div>
                 <div id="authDropdown" class="auth-dropdown hidden">
                     <a href="/my-account.html" class="auth-dropdown__link">My Account</a>
@@ -95,39 +172,63 @@
 </header>
 
 <main class="sell-app-wrapper">
-    <!-- Selection View -->
+    <!-- Selection Flow Container -->
     <div class="app-container" id="selection-flow">
+        <!-- Animated Progress Bar -->
+        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-8">
+            <div id="main-progress-bar" class="bg-brand-primary h-full transition-all duration-500 ease-out progress-bar-shine" style="width: 10%;"></div>
+        </div>
+
         <div class="breadcrumbs" id="crumbs"></div>
         <h2 class="step-title" id="step-name">Select Brand</h2>
         <div class="selection-grid" id="grid-content">
             <div class="col-span-full text-center py-10 text-slate-400">Loading selections...</div>
         </div>
+
+        <!-- Inline Condition Help Box (Selection Flow) -->
+        <div id="condition-help-box" class="hidden mt-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl text-left max-w-[600px] mx-auto shadow-sm">
+            <div class="font-extrabold mb-2 text-slate-800">
+                <span id="help-condition-name">--</span> Condition Requirements:
+            </div>
+            <ul id="help-condition-desc" class="list-disc pl-5 space-y-2 text-slate-600 text-sm"></ul>
+            <div class="mt-6 flex justify-center">
+                <button id="confirmConditionBtn" class="btn-primary w-full max-w-[280px]">Continue to Quote</button>
+            </div>
+        </div>
     </div>
 
     <!-- Final Offer View -->
     <div class="app-container hidden" id="offer-view">
+        <!-- Progress Bar for Offer View (100%) -->
+        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-8">
+            <div id="final-progress-bar" class="bg-brand-primary h-full transition-all duration-500 ease-out progress-bar-shine" style="width: 100%;"></div>
+        </div>
+
         <div class="breadcrumbs" id="final-crumbs"></div>
         <div class="offer-card">
-            <h2 id="final-device-name" class="text-2xl font-bold mb-1">--</h2>
+            <h2 id="final-device-name" class="text-2xl font-bold mb-1 text-slate-900">--</h2>
             <div id="summary-tags" class="text-sm text-green-700 font-bold uppercase tracking-wide mb-6"></div>
 
+            <!-- Condition Grid in final view -->
             <div class="selection-grid mb-8" id="final-condition-grid"></div>
 
-            <div class="text-sm font-semibold text-slate-500 uppercase">Your Instant Offer:</div>
-            <div class="price-val" id="final-price">$0</div>
-
             <div class="req-box">
-                <div class="font-extrabold mb-2 text-slate-800">
+                <div class="font-extrabold mb-2 text-slate-800 text-center md:text-left">
                     <span id="condition-title-display">--</span> Condition Requirements:
                 </div>
                 <ul id="condition-details" class="list-disc pl-5 space-y-1 text-slate-600 text-sm"></ul>
             </div>
 
-            <input type="email" id="user-email" class="form-control" placeholder="Enter email to save quote">
-            <button class="btn-primary" id="startCheckoutBtn">GET PAID INSTANTLY</button>
-            <p class="mt-6">
-                <a href="#" id="resetFlowBtn" class="text-green-700 text-sm font-bold hover:underline">← Start New Trade-in</a>
-            </p>
+            <div class="text-sm font-semibold text-slate-500 uppercase mt-8">Your Instant Offer:</div>
+            <div class="price-val" id="final-price">$0</div>
+
+            <div class="max-w-[400px] mx-auto mt-6">
+                <input type="email" id="user-email" class="form-control" placeholder="Enter email to save quote">
+                <button class="btn-primary" id="startCheckoutBtn">GET PAID INSTANTLY</button>
+                <p class="mt-6">
+                    <a href="#" id="resetFlowBtn" class="text-green-700 text-sm font-bold hover:underline">← Start New Trade-in</a>
+                </p>
+            </div>
         </div>
     </div>
 </main>
@@ -135,13 +236,13 @@
 <!-- Login Modal -->
 <div id="loginModal" class="modal-overlay">
     <div class="modal-card">
-        <h2 class="text-2xl font-bold mb-6">Trade-in Account</h2>
-        <p class="text-slate-500 mb-6">Sign in to save your order or continue as guest.</p>
-        <div class="space-y-4">
-            <button id="modalLoginBtn" class="btn-primary w-full">Login / Sign Up</button>
-            <button id="modalGuestBtn" class="w-full py-4 rounded-lg border-2 border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Continue as Guest</button>
+        <h2 class="text-2xl font-bold mb-4">Trade-in Account</h2>
+        <p class="mb-6 text-slate-600">Sign in to save your order or continue as a guest.</p>
+        <div class="flex flex-col gap-4">
+            <button id="modalLoginBtn" class="bg-indigo-600 text-white p-3 rounded-lg font-bold">Sign In / Sign Up</button>
+            <button id="modalGuestBtn" class="border-2 border-slate-200 p-3 rounded-lg font-bold text-slate-600">Continue as Guest</button>
         </div>
-        <button class="mt-6 text-slate-400 text-sm" onclick="document.getElementById('loginModal').style.display='none'">Cancel</button>
+        <button class="mt-6 text-slate-400 w-full text-center text-sm" onclick="document.getElementById('loginModal').style.display='none'">Cancel</button>
     </div>
 </div>
 
@@ -156,6 +257,7 @@
             <button id="qtyPlus" class="w-12 h-12 rounded-full border-2 border-green-700 text-green-700 text-2xl font-bold">+</button>
         </div>
         <button class="btn-primary" id="finalSubmitBtn">PROCEED TO SHIPPING</button>
+        <button class="mt-4 text-slate-400 text-sm block mx-auto" onclick="document.getElementById('qty-modal').style.display='none'">Cancel</button>
     </div>
 </div>
 
@@ -172,24 +274,19 @@
                 <p class="text-slate-300 mb-4 text-sm">Sign up for promos and price increases!</p>
                 <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
                     <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Sign Up</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition">Sign Up</button>
                 </form>
-                <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
             </div>
         </div>
         <div class="bg-slate-800 text-white p-6 rounded-xl shadow-lg mt-8 text-center border-2 border-red-600">
-            <p class="text-lg font-bold">IMPORTANT NOTICE</p>
+            <p class="text-lg font-bold uppercase">IMPORTANT NOTICE</p>
             <p class="mt-2 text-sm md:text-base">We do not purchase blacklisted or lost/stolen devices. All devices are verified through a legal compliance check.</p>
         </div>
-        <div class="mt-8">
-            <div class="flex flex-wrap items-center justify-center gap-6 sm:flex-row sm:justify-center sm:gap-8 lg:justify-start">
-                <a href="https://www.sellcell.com/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
-                    <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" width="150" height="107" alt="SellCell Accredited Buyer" loading="lazy" class="h-20 w-auto object-contain">
-                </a>
-                <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
-                    <img src="https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png" alt="Trustpilot 5 star rating" loading="lazy" class="h-12 w-auto object-contain">
-                </a>
-            </div>
+        <div class="mt-8 flex flex-wrap justify-center items-center gap-8">
+            <a href="https://www.sellcell.com/" target="_blank" rel="noopener">
+                <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" class="h-16 grayscale hover:grayscale-0 transition" alt="SellCell Accredited Buyer">
+            </a>
+            <img src="/assets/stars-5.svg" class="h-10" alt="Trustpilot 5 Star">
         </div>
         <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
     </div>
@@ -214,23 +311,11 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    let currentUser = null;
-
-    // Monitor Auth State for Header & Modal
-    onAuthStateChanged(auth, (user) => {
-        currentUser = user;
-        const loginBtn = document.getElementById('loginNavBtn');
-        const monogram = document.getElementById('userMonogram');
-        if (user) {
-            loginBtn.classList.add('hidden');
-            monogram.classList.remove('hidden');
-            monogram.textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U';
-            document.getElementById('user-email').value = user.email || '';
-        } else {
-            loginBtn.classList.remove('hidden');
-            monogram.classList.add('hidden');
-        }
-    });
+    const BRAND_DISPLAY = {
+        iphone: 'Apple iPhone',
+        samsung: 'Samsung Galaxy',
+        ipad: 'Apple iPad'
+    };
 
     const BRAND_OPTIONS = [
         { key: 'iphone', label: 'iPhone' },
@@ -248,15 +333,54 @@
     };
 
     const CONDITION_DEFS = [
-        { key: 'flawless', name: 'Flawless', desc: ['Looks brand new.', 'No scratches or dents.', '100% functional.'] },
-        { key: 'good', name: 'Good', desc: ['Light signs of use.', 'Minor scratches allowed.', '100% functional.'] },
-        { key: 'broken', name: 'Broken', desc: ['Cracked screen or back.', 'Heavy cosmetic damage.', 'Functional defects.'] },
-        { key: 'noPower', name: 'No Power', desc: ['Does not turn on.', 'DED or water damaged.', 'Missing parts.'] }
+        { 
+            key: 'flawless', 
+            name: 'Flawless', 
+            desc: [
+                'Looks brand new with no signs of use.',
+                'Screen & display work perfectly (no dead pixels or image burn).',
+                'Device contains all original manufacturer parts.',
+                'All exterior buttons and biometrics (FaceID/TouchID) work.',
+                '100% functional and free of defects.'
+            ] 
+        },
+        { 
+            key: 'good', 
+            name: 'Good', 
+            desc: [
+                'Light signs of use (minor scuffs or light scratches).',
+                'No cracks on front or back glass.',
+                'Device contains all original manufacturer parts.',
+                'Everything functions correctly including buttons and cameras.',
+                'Battery holds charge for normal operation.'
+            ] 
+        },
+        { 
+            key: 'broken', 
+            name: 'Broken', 
+            desc: [
+                'Cracked screen or back glass.',
+                'Heavy cosmetic damage (major dents or chips).',
+                'LCD defects like dead pixels, black dots, or discoloration.',
+                'One or more functional components do not work.',
+                'Must still power on to home screen.'
+            ] 
+        },
+        { 
+            key: 'noPower', 
+            name: 'No Power', 
+            desc: [
+                'Does not power on or stays on a black screen.',
+                'iCloud / Activation Lock remains on device.',
+                'Significant liquid or motherboard damage.',
+                'Missing internal or external parts.'
+            ] 
+        }
     ];
 
     const state = {
         currentStep: 'brand',
-        selections: { brand: '', model: '', modelName: '', storage: '', lock: '', condition: 'good', qty: 1 },
+        selections: { brand: '', model: '', modelName: '', storage: '', lock: '', condition: '', qty: 1 },
         deviceData: null,
         modelsCache: {},
         isFinalView: false
@@ -264,13 +388,45 @@
 
     const stepOrder = ['brand', 'model', 'storage', 'lock', 'condition'];
 
+    let currentUser = null;
+    onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        const loginBtn = document.getElementById('loginNavBtn');
+        const monogram = document.getElementById('userMonogram');
+        if (user) {
+            loginBtn.classList.add('hidden');
+            monogram.classList.remove('hidden');
+            monogram.textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U');
+            document.getElementById('user-email').value = user.email || '';
+        } else {
+            loginBtn.classList.remove('hidden');
+            monogram.classList.add('hidden');
+        }
+    });
+
     const updateURL = () => {
         const url = new URL(window.location);
+        url.searchParams.delete('device');
         Object.entries(state.selections).forEach(([key, val]) => {
             if (val && key !== 'qty' && key !== 'modelName') url.searchParams.set(key, val);
             else if (key !== 'qty' && key !== 'modelName') url.searchParams.delete(key);
         });
         window.history.replaceState({}, '', url);
+    };
+
+    const updateProgressBar = () => {
+        const bar = document.getElementById('main-progress-bar');
+        if (!bar) return;
+        
+        const steps = {
+            'brand': 10,
+            'model': 30,
+            'storage': 50,
+            'lock': 70,
+            'condition': 90
+        };
+        
+        bar.style.width = (steps[state.currentStep] || 10) + '%';
     };
 
     const getModels = async (brand) => {
@@ -284,36 +440,52 @@
 
     const hydrateFromURL = async () => {
         const params = new URLSearchParams(window.location.search);
-        if (params.has('brand')) {
-            const b = params.get('brand');
-            state.selections.brand = b;
-            state.currentStep = 'model';
-            if (params.has('model')) {
-                const mId = params.get('model');
-                const models = await getModels(b);
-                const match = models.find(m => m.id === mId);
+        
+        if (params.has('device')) {
+            const deviceParam = params.get('device');
+            const [brand, ...slugParts] = deviceParam.split('-');
+            const slug = slugParts.join('-');
+
+            if (BRAND_OPTIONS.some(opt => opt.key === brand)) {
+                state.selections.brand = brand;
+                const models = await getModels(brand);
+                const match = models.find(m => m.id === slug);
                 if (match) {
-                    state.selections.model = mId;
+                    state.selections.model = slug;
                     state.selections.modelName = match.name;
                     state.deviceData = match;
                     state.currentStep = 'storage';
-                    if (params.has('storage')) {
-                        const s = params.get('storage');
-                        if (state.deviceData.prices[s]) {
-                            state.selections.storage = s;
-                            state.currentStep = 'lock';
-                            if (params.has('lock')) {
-                                const l = params.get('lock');
-                                if (state.deviceData.prices[s][l]) {
-                                    state.selections.lock = l;
-                                    state.currentStep = 'condition';
-                                    if (params.has('condition')) {
-                                        state.selections.condition = params.get('condition');
-                                        showFinalOffer();
-                                        return;
-                                    }
-                                }
-                            }
+                    if (params.has('storage')) state.selections.storage = params.get('storage');
+                    if (params.has('lock')) state.selections.lock = params.get('lock');
+                    if (params.has('condition')) state.selections.condition = params.get('condition');
+                    
+                    if (state.selections.storage && state.selections.lock && state.selections.condition) {
+                        showFinalOffer();
+                        return;
+                    }
+                }
+            }
+        }
+        else if (params.has('brand')) {
+            const b = params.get('brand');
+            if (BRAND_OPTIONS.some(opt => opt.key === b)) {
+                state.selections.brand = b;
+                state.currentStep = 'model';
+                if (params.has('model')) {
+                    const mId = params.get('model');
+                    const models = await getModels(b);
+                    const match = models.find(m => m.id === mId);
+                    if (match) {
+                        state.selections.model = mId;
+                        state.selections.modelName = match.name;
+                        state.deviceData = match;
+                        state.currentStep = 'storage';
+                        if (params.has('storage')) state.selections.storage = params.get('storage');
+                        if (params.has('lock')) state.selections.lock = params.get('lock');
+                        if (params.has('condition')) {
+                            state.selections.condition = params.get('condition');
+                            showFinalOffer();
+                            return;
                         }
                     }
                 }
@@ -326,9 +498,11 @@
         const container = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
         container.innerHTML = '';
         const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
+
         stepOrder.forEach((step, i) => {
             const span = document.createElement('span');
             span.className = `crumb ${i === currentIdx ? 'active' : ''} ${i < currentIdx ? 'filled' : ''}`;
+            
             let label = step.charAt(0).toUpperCase() + step.slice(1);
             if (i <= currentIdx) {
                 if (step === 'brand') label = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || label;
@@ -337,6 +511,7 @@
                 if (step === 'lock') label = LOCK_LABELS[state.selections.lock] || state.selections.lock || label;
                 if (step === 'condition') label = CONDITION_DEFS.find(c => c.key === state.selections.condition)?.name || label;
             }
+            
             span.textContent = label;
             if (i < currentIdx) span.onclick = () => jumpToStep(step);
             container.appendChild(span);
@@ -346,9 +521,28 @@
     const jumpToStep = (step) => {
         state.isFinalView = false;
         state.currentStep = step;
+
+        const stepIndex = stepOrder.indexOf(step);
+        stepOrder.forEach((s, i) => {
+            if (i >= stepIndex) {
+                state.selections[s] = '';
+                if (s === 'model') state.selections.modelName = '';
+            }
+        });
+
+        updateURL();
         document.getElementById('offer-view').classList.add('hidden');
         document.getElementById('selection-flow').classList.remove('hidden');
+        document.getElementById('condition-help-box').classList.add('hidden');
         renderCurrentStep();
+    };
+
+    const applyGridCols = (grid, count) => {
+        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'md:grid-cols-4', 'max-w-[280px]', 'max-w-[500px]', 'max-w-[700px]', 'mx-auto');
+        if (count === 1) grid.classList.add('grid-cols-1', 'max-w-[280px]', 'mx-auto');
+        else if (count === 2) grid.classList.add('grid-cols-2', 'max-w-[500px]', 'mx-auto');
+        else if (count === 3) grid.classList.add('grid-cols-3', 'max-w-[700px]', 'mx-auto');
+        else grid.classList.add('grid-cols-2', 'md:grid-cols-4');
     };
 
     const renderCurrentStep = async () => {
@@ -356,53 +550,120 @@
         const title = document.getElementById('step-name');
         grid.innerHTML = '';
         updateCrumbs();
+        updateProgressBar();
+
         if (state.currentStep === 'brand') {
             title.textContent = "Select Brand";
             BRAND_OPTIONS.forEach(b => createCard(grid, b.label, b.key));
-        } else if (state.currentStep === 'model') {
+            applyGridCols(grid, BRAND_OPTIONS.length);
+        } 
+        else if (state.currentStep === 'model') {
             title.textContent = `Select Model`;
             grid.innerHTML = '<div class="col-span-full text-center py-10 text-slate-400">Fetching models...</div>';
             const models = await getModels(state.selections.brand);
             grid.innerHTML = '';
             models.forEach(m => createCard(grid, m.name, m.id));
-        } else if (state.currentStep === 'storage') {
-            title.textContent = "Select Storage Capacity";
-            Object.keys(state.deviceData.prices || {}).forEach(s => createCard(grid, s, s));
-        } else if (state.currentStep === 'lock') {
-            title.textContent = "Select Network/Carrier";
-            Object.keys(state.deviceData.prices[state.selections.storage] || {}).forEach(l => createCard(grid, LOCK_LABELS[l] || l, l));
+            applyGridCols(grid, models.length);
+        }
+        else if (state.currentStep === 'storage') {
+            title.textContent = "Select Capacity";
+            const allStorageKeys = Object.keys(state.deviceData.prices || {});
+            const storageItems = allStorageKeys.map(sKey => {
+                const carrierMap = state.deviceData.prices[sKey] || {};
+                const isPriceAvailable = Object.values(carrierMap).some(conditionPrices => {
+                    return Object.values(conditionPrices).some(p => Number(p) > 0);
+                });
+                return { label: sKey, value: sKey, disabled: !isPriceAvailable };
+            });
+            storageItems.forEach(item => createCard(grid, item.label, item.value, item.disabled));
+            applyGridCols(grid, storageItems.length);
+        }
+        else if (state.currentStep === 'lock') {
+            title.textContent = "Select Network";
+            const currentStorageMap = state.deviceData.prices[state.selections.storage] || {};
+            const allLockKeys = Object.keys(currentStorageMap);
+            const lockItems = allLockKeys.map(lKey => {
+                const conditionPrices = currentStorageMap[lKey] || {};
+                const isPriceAvailable = Object.values(conditionPrices).some(p => Number(p) > 0);
+                return { label: LOCK_LABELS[lKey] || lKey, value: lKey, disabled: !isPriceAvailable };
+            });
+            lockItems.forEach(item => createCard(grid, item.label, item.value, item.disabled));
+            applyGridCols(grid, lockItems.length);
+        }
+        else if (state.currentStep === 'condition') {
+            title.textContent = "Overall Condition";
+            CONDITION_DEFS.forEach(c => createCard(grid, c.name, c.key));
+            applyGridCols(grid, CONDITION_DEFS.length);
+            if (state.selections.condition) updateConditionHelp();
         }
     };
 
-    const createCard = (container, label, value) => {
+    const createCard = (container, label, value, isDisabled = false) => {
         const card = document.createElement('div');
-        card.className = `select-card ${state.selections[state.currentStep] === value ? 'active' : ''}`;
-        card.textContent = label;
-        card.onclick = () => handleSelection(value, label);
+        card.className = `select-card ${state.selections[state.currentStep] === value ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
+        
+        if (isDisabled) {
+            card.innerHTML = `
+                <i class="fa-solid fa-circle-info text-slate-400 mb-1"></i>
+                <span>${label}</span>
+                <div class="shc-tooltip">
+                    Sorry, we don't have any offers for this variant.
+                </div>
+            `;
+        } else {
+            card.textContent = label;
+            card.onclick = () => handleSelection(value, label);
+        }
         container.appendChild(card);
     };
 
     const handleSelection = async (value, label) => {
+        const stepIndex = stepOrder.indexOf(state.currentStep);
+        stepOrder.forEach((s, i) => {
+            if (i > stepIndex) {
+                state.selections[s] = '';
+                if (s === 'model') state.selections.modelName = '';
+            }
+        });
+
         state.selections[state.currentStep] = value;
         updateURL();
-        if (state.currentStep === 'brand') state.currentStep = 'model';
+        
+        if (state.currentStep === 'brand') { state.currentStep = 'model'; } 
         else if (state.currentStep === 'model') {
             state.selections.modelName = label;
-            const docRef = doc(db, "devices", state.selections.brand, "models", value);
-            const snap = await getDoc(docRef);
+            const snap = await getDoc(doc(db, "devices", state.selections.brand, "models", value));
             state.deviceData = snap.data();
             state.currentStep = 'storage';
-        } else if (state.currentStep === 'storage') state.currentStep = 'lock';
-        else if (state.currentStep === 'lock') { showFinalOffer(); return; }
+        }
+        else if (state.currentStep === 'storage') { state.currentStep = 'lock'; }
+        else if (state.currentStep === 'lock') { state.currentStep = 'condition'; }
+        else if (state.currentStep === 'condition') {
+            updateConditionHelp();
+            return;
+        }
         renderCurrentStep();
+    };
+
+    const updateConditionHelp = () => {
+        const cond = CONDITION_DEFS.find(c => c.key === state.selections.condition);
+        const helpBox = document.getElementById('condition-help-box');
+        document.getElementById('help-condition-name').textContent = cond.name;
+        document.getElementById('help-condition-desc').innerHTML = cond.desc.map(d => `<li>${d}</li>`).join('');
+        helpBox.classList.remove('hidden');
+        helpBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
 
     const showFinalOffer = () => {
         state.isFinalView = true;
+        updateURL();
         document.getElementById('selection-flow').classList.add('hidden');
         document.getElementById('offer-view').classList.remove('hidden');
-        document.getElementById('final-device-name').textContent = state.selections.modelName;
-        document.getElementById('summary-tags').textContent = `${state.selections.storage} • ${LOCK_LABELS[state.selections.lock] || state.selections.lock}`;
+        
+        const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
+        document.getElementById('final-device-name').textContent = `${fullBrand} ${state.selections.modelName} ${state.selections.storage}`;
+        document.getElementById('summary-tags').textContent = `Network: ${LOCK_LABELS[state.selections.lock] || state.selections.lock}`;
+        
         renderConditionGrid();
         updatePrice();
         updateCrumbs();
@@ -423,6 +684,7 @@
             };
             grid.appendChild(card);
         });
+        applyGridCols(grid, CONDITION_DEFS.length);
     };
 
     const updatePrice = () => {
@@ -431,17 +693,16 @@
         document.getElementById('final-price').textContent = `$${price}`;
         const cond = CONDITION_DEFS.find(c => c.key === state.selections.condition);
         document.getElementById('condition-title-display').textContent = cond.name;
-        document.getElementById('condition-details').innerHTML = cond.desc.map(d => `<li>${d}</li>`).join('');
+        document.getElementById('condition-details').innerHTML = (cond.desc || []).map(d => `<li>${d}</li>`).join('');
     };
+
+    document.getElementById('confirmConditionBtn').onclick = showFinalOffer;
 
     document.getElementById('startCheckoutBtn').onclick = () => {
         const email = document.getElementById('user-email').value;
         if (!email.includes('@')) return alert("Please enter a valid email to continue.");
-        if (currentUser) {
-            document.getElementById('qty-modal').style.display = 'flex';
-        } else {
-            document.getElementById('loginModal').style.display = 'flex';
-        }
+        if (currentUser) document.getElementById('qty-modal').style.display = 'flex';
+        else document.getElementById('loginModal').style.display = 'flex';
     };
 
     document.getElementById('modalLoginBtn').onclick = () => window.location.href = '/login.html';
@@ -462,8 +723,5 @@
 
     hydrateFromURL();
 </script>
-
-<script src="/assets/js/ship48-banner.js" defer></script>
-<script type="module" src="/assets/js/global-auth.js" defer></script>
 </body>
 </html>

@@ -278,13 +278,13 @@
           </svg>
         </button>
         <nav class="shc-nav" aria-label="Primary">
-          <a href="/sell-device.html">Sell Device</a>
+          <a href="/sell/">Sell Device</a>
           <a href="/popular-devices.html">Popular Devices</a>
           <a href="/iphone/">iPhone</a>
           <a href="/samsung/">Samsung</a>
           <a href="/ipad/">iPad</a>
           <a href="/login.html">My Account</a>
-          <a class="shc-cta" href="/sell-device.html">Get My Offer</a>
+          <a class="shc-cta" href="/sell/">Get My Offer</a>
         </nav>
       </div>
     </header>
@@ -306,7 +306,7 @@
         <div class="shc-footer-col">
           <h4>Coverage</h4>
           <ul>
-            <li><a href="/sell-device.html">Sell Your Device</a></li>
+            <li><a href="/sell/">Sell Your Device</a></li>
             <li><a href="/popular-devices.html">Popular Devices</a></li>
             <li><a href="/ipad/">iPad Trade-Ins</a></li>
             <li><a href="/samsung/">Samsung Offers</a></li>

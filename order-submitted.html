@@ -4,7 +4,7 @@
     <link rel="stylesheet" href="/assets/css/tailwind.css">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Submitted - secondhandcell</title>
+    <title>Order Submitted - SecondHandCell</title>
     
     <!-- IMMEDIATE ACCESS CONTROL CHECK (MUST RUN FIRST) -->
     <script>
@@ -89,6 +89,7 @@
                 We've locked in your final payout of <span id="heroPrice" class="font-semibold text-slate-900">$0.00</span> for your <span id="heroDevice" class="font-semibold text-slate-900">device</span>. Look out for confirmation emails from us shortly.
             </p>
 
+            <!-- Conditional Label Card (Only for Email Label) -->
             <div id="emailLabelCard" class="hidden mb-8 p-6 rounded-2xl border border-emerald-200 bg-emerald-50 text-left">
                 <h3 class="text-xl font-bold text-emerald-900 mb-2">Download your prepaid USPS label</h3>
                 <p class="text-sm text-emerald-800 mb-4" id="labelStatusMessage">Download your label and ship within 48 hours to lock in your payout.</p>
@@ -99,6 +100,7 @@
                 <p class="text-sm text-emerald-700 mt-3" id="labelTrackingDisplay"></p>
             </div>
 
+            <!-- Summary Card -->
             <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-left mb-6">
                 <h2 class="text-xl font-bold text-slate-800 mb-4">Order Summary</h2>
                 <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-slate-700">
@@ -122,77 +124,70 @@
                         <dt class="font-semibold text-slate-600">Payment Method</dt>
                         <dd id="summaryPaymentMethod" class="mt-1 text-slate-900">Not specified</dd>
                     </div>
-                    <div class="sm:col-span-2">
+                    <div class="sm:col-span-2 border-t pt-4">
                         <dt class="font-semibold text-slate-600">Shipping Address</dt>
-                        <dd id="summaryFullAddress" class="mt-1 text-slate-900">Address details on file</dd>
+                        <dd id="summaryFullAddress" class="mt-1 text-slate-900 leading-relaxed">Address details on file</dd>
                     </div>
                 </dl>
             </div>
 
+            <!-- Dynamic Shipping Path Instructions -->
             <div class="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 mb-8 text-left shadow-sm">
-                <div class="flex items-start gap-3 mb-4">
+                <div class="flex items-start gap-3 mb-6">
                     <div class="h-12 w-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl font-bold">1</div>
                     <div>
-                        <h2 class="text-xl font-bold text-slate-800">Choose your shipping path</h2>
-                        <p class="text-slate-600 mt-1">Pick the option that works best for you. Your choice is already saved, but you can still follow the steps below.</p>
+                        <h2 class="text-xl font-bold text-slate-800">Your next shipping steps</h2>
+                        <p class="text-slate-600 mt-1">Based on your choice at checkout, please follow the instructions below to send us your device.</p>
                     </div>
                 </div>
-                <div class="grid md:grid-cols-2 gap-6">
-                    <div id="emailOptionCard" class="border border-slate-200 rounded-xl p-5 bg-slate-50">
-                        <div class="flex items-center justify-between mb-3">
-                            <div>
-                                <p class="text-xs uppercase tracking-wide text-emerald-700 font-semibold">Option 1</p>
-                                <h3 class="text-lg font-bold text-slate-900">Print label &amp; use your own packaging</h3>
-                            </div>
-                            <span class="text-sm text-emerald-700 font-semibold hidden" id="emailOptionTag">Selected</span>
+
+                <div id="emailOptionCard" class="hidden border border-emerald-200 rounded-xl p-6 bg-emerald-50 ring-2 ring-emerald-400">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-emerald-700 font-semibold">Method: Email Label</p>
+                            <h3 class="text-lg font-bold text-slate-900">Print label & use your own packaging</h3>
                         </div>
-                        <ol class="list-decimal list-inside space-y-2 text-slate-700 text-sm">
-                            <li>Download and print your prepaid USPS label.</li>
-                            <li>Turn off locks, remove SIM, and factory reset.</li>
-                            <li>Wrap device safely and place in a sturdy box.</li>
-                            <li>Include a note with order number and attach label.</li>
-                            <li>Drop off at any USPS location.</li>
-                        </ol>
+                        <span class="px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-full">Selected</span>
                     </div>
-                    <div id="kitOptionCard" class="border border-slate-200 rounded-xl p-5 bg-slate-50">
-                        <div class="flex items-center justify-between mb-3">
-                            <div>
-                                <p class="text-xs uppercase tracking-wide text-indigo-700 font-semibold">Option 2</p>
-                                <h3 class="text-lg font-bold text-slate-900">Receive a prepaid shipping kit</h3>
-                            </div>
-                            <span class="text-sm text-indigo-700 font-semibold hidden" id="kitOptionTag">Selected</span>
+                    <ol class="list-decimal list-inside space-y-3 text-slate-700 text-sm">
+                        <li>Download and print your prepaid USPS label from the section above or your email.</li>
+                        <li>Turn off locks (Find My / Google Account), remove SIM, and factory reset the device.</li>
+                        <li>Wrap device safely in bubble wrap or soft cloth and place in a sturdy box.</li>
+                        <li>Include a note with order number <strong id="instructionOrderId1"></strong> inside, and attach label to the box.</li>
+                        <li>Drop off at any USPS location (Post Office, blue box, or scheduled pickup).</li>
+                    </ol>
+                </div>
+
+                <div id="kitOptionCard" class="hidden border border-indigo-200 rounded-xl p-6 bg-indigo-50 ring-2 ring-indigo-400">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-indigo-700 font-semibold">Method: Shipping Kit</p>
+                            <h3 class="text-lg font-bold text-slate-900">Receive a prepaid shipping kit in the mail</h3>
                         </div>
-                        <ol class="list-decimal list-inside space-y-2 text-slate-700 text-sm">
-                            <li>We mail you a padded kit with a return label.</li>
-                            <li>Prep device: remove accounts and factory reset.</li>
-                            <li>Place device in the included protective sleeve.</li>
-                            <li>Seal the kit mailer and attach label.</li>
-                            <li>Drop at USPS and keep your tracking receipt.</li>
-                        </ol>
+                        <span class="px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-full">Selected</span>
                     </div>
+                    <ol class="list-decimal list-inside space-y-3 text-slate-700 text-sm">
+                        <li>Wait for your padded kit to arrive (usually 3-5 business days).</li>
+                        <li>Prep device: Sign out of accounts, turn off locks, and perform a full factory reset.</li>
+                        <li>Place your device in the included protective sleeve and add any extra padding.</li>
+                        <li>Seal the kit mailer securely and attach the included prepaid return label.</li>
+                        <li>Drop at your local USPS office and keep your tracking receipt for your records.</li>
+                    </ol>
                 </div>
             </div>
 
-            <div class="text-center mb-8 space-y-3">
-                <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block text-lg font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">Review us on Trustpilot</a>
-                <div>
-                    <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block">
-                        <img src="/assets/stars-5.svg" alt="Trustpilot stars" class="h-12 mx-auto">
-                    </a>
-                </div>
-            </div>
-
+            <!-- Prep Checklist -->
             <div class="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 text-left shadow-sm mb-8">
                 <div class="flex items-start gap-3 mb-4">
                     <div class="h-12 w-12 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl font-bold">2</div>
                     <div>
                         <h2 class="text-xl font-bold text-slate-800">Prep &amp; pack like a pro</h2>
-                        <p class="text-slate-600 mt-1">Follow this checklist to avoid delays.</p>
+                        <p class="text-slate-600 mt-1">Check these off to ensure a fast inspection and payout.</p>
                     </div>
                 </div>
                 <div class="grid md:grid-cols-2 gap-6 text-sm">
                     <div class="space-y-3">
-                        <h3 class="font-semibold text-slate-900">Prepare your device</h3>
+                        <h3 class="font-semibold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-mobile-screen text-indigo-500"></i> The Device</h3>
                         <ul class="list-disc list-inside space-y-2 text-slate-700">
                             <li>Sign out of iCloud / Google accounts.</li>
                             <li>Turn off Find My iPhone / Activation Lock.</li>
@@ -201,7 +196,7 @@
                         </ul>
                     </div>
                     <div class="space-y-3">
-                        <h3 class="font-semibold text-slate-900">Pack safely</h3>
+                        <h3 class="font-semibold text-slate-900 flex items-center gap-2"><i class="fa-solid fa-box-archive text-indigo-500"></i> The Package</h3>
                         <ul class="list-disc list-inside space-y-2 text-slate-700">
                             <li>Wrap device in bubble wrap or soft cloth.</li>
                             <li>Use a sturdy box or the provided kit mailer.</li>
@@ -209,6 +204,15 @@
                             <li>Seal all edges securely with tape.</li>
                         </ul>
                     </div>
+                </div>
+            </div>
+
+            <div class="text-center mb-10 space-y-3">
+                <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block text-lg font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">Review us on Trustpilot</a>
+                <div>
+                    <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block">
+                        <img src="/assets/stars-5.svg" alt="Trustpilot stars" class="h-12 mx-auto">
+                    </a>
                 </div>
             </div>
 
@@ -230,15 +234,14 @@
             try {
                 const stored = sessionStorage.getItem('shcOrderSummary');
                 if (stored) { 
-                    sessionSummary = JSON.parse(stored); 
-                    // Clear it once read so manual refreshes rely on URL or show default
+                    sessionSummary = JSON.parse(stored);
                     sessionStorage.removeItem('shcOrderSummary');
                 }
             } catch (e) {}
 
             const getV = (key) => urlParams.get(key) || sessionSummary?.[key] || '';
 
-            // Map data from URL parameters sent by checkout page
+            // Data extraction
             const orderId = getV('id') || getV('orderId') || 'Pending';
             const priceVal = parseFloat(getV('price') || getV('finalPayout') || '0');
             const priceStr = priceVal.toFixed(2);
@@ -247,7 +250,7 @@
             const method = getV('payMethod') || getV('paymentMethod') || 'Not specified';
             const shippingPref = (getV('shipping') || getV('shippingPreference') || 'email_label').toLowerCase();
 
-            // Detailed Shipping Address Formatting (Street, Unit, City, State, Zip)
+            // Full Address Reconstruction
             const street = getV('street');
             const unit = getV('unit');
             const city = getV('city');
@@ -261,45 +264,41 @@
                 fullAddressHtml = `${line1}<br>${line2}`;
             }
 
-            // Populate Main UI Elements
+            // Populate Text Elements
             document.getElementById('heroName').textContent = name;
             document.getElementById('heroPrice').textContent = `$${priceStr}`;
             document.getElementById('heroDevice').textContent = device;
-            
-            // Populate Summary Table
             document.getElementById('summaryOrderId').textContent = orderId;
             document.getElementById('summaryName').textContent = name;
             document.getElementById('summaryDevice').textContent = device;
             document.getElementById('summaryPrice').textContent = `$${priceStr}`;
-            
-            // Format and Display Payment Method
+            document.getElementById('instructionOrderId1').textContent = `(#${orderId})`;
+
             const displayMethod = method.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             document.getElementById('summaryPaymentMethod').textContent = displayMethod;
-            
-            // Inject Full Address
             document.getElementById('summaryFullAddress').innerHTML = fullAddressHtml;
 
-            // Manage Email Label Visibility
-            const labelUrl = getV('labelUrl');
-            if (shippingPref !== 'ship_kit' && labelUrl) {
-                document.getElementById('emailLabelCard').classList.remove('hidden');
-                document.getElementById('labelDownloadLink').href = labelUrl;
-                const tracking = getV('trackingNumber');
-                if (tracking) {
-                    document.getElementById('labelTrackingDisplay').innerHTML = `Tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${tracking}" target="_blank" class="underline font-bold">${tracking}</a>`;
+            // Handle Instruction Card Visibility (Only show chosen option)
+            if (shippingPref === 'ship_kit' || shippingPref === 'ship kit requested') {
+                document.getElementById('kitOptionCard').classList.remove('hidden');
+                document.getElementById('emailOptionCard').classList.add('hidden');
+            } else {
+                document.getElementById('emailOptionCard').classList.remove('hidden');
+                document.getElementById('kitOptionCard').classList.add('hidden');
+                
+                // Show Label Generation Card if available
+                const labelUrl = getV('labelUrl');
+                if (labelUrl) {
+                    document.getElementById('emailLabelCard').classList.remove('hidden');
+                    document.getElementById('labelDownloadLink').href = labelUrl;
+                    const tracking = getV('trackingNumber');
+                    if (tracking) {
+                        document.getElementById('labelTrackingDisplay').innerHTML = `Tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${tracking}" target="_blank" class="underline font-bold">${tracking}</a>`;
+                    }
                 }
             }
 
-            // Update Visual State for Selected Shipping Path
-            if (shippingPref === 'ship_kit') {
-                document.getElementById('kitOptionCard').classList.add('ring-2', 'ring-indigo-400', 'bg-white');
-                document.getElementById('kitOptionTag').classList.remove('hidden');
-            } else {
-                document.getElementById('emailOptionCard').classList.add('ring-2', 'ring-emerald-400', 'bg-white');
-                document.getElementById('emailOptionTag').classList.remove('hidden');
-            }
-
-            // Affiliate Tracking Pixel Integration
+            // Fix Affiliate Tracking Pixel
             if (orderId && orderId !== 'Pending' && orderId !== 'unknown' && priceVal > 0) {
                 const pixel = document.createElement('iframe');
                 pixel.src = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(orderId)}&p=${priceStr}`;
@@ -308,7 +307,6 @@
                 pixel.frameBorder = '0'; 
                 pixel.style.display = 'none';
                 document.body.appendChild(pixel);
-                console.log('Affiliate tracking pixel triggered.');
             }
         });
     </script>
@@ -321,13 +319,10 @@
                     <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="/" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="/privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="/terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
                     <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
                 </div>
-                <div class="bg-slate-700 p-6 rounded-lg">
-                    <h3 class="text-xl font-bold mb-2">Stay Updated</h3>
-                    <p class="text-slate-300 mb-4 text-sm">Sign up for promos and price increases!</p>
-                    <form class="flex flex-col sm:flex-row gap-2">
-                        <input type="email" placeholder="Email address" class="flex-grow p-3 rounded-lg bg-slate-800 text-white border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button type="button" class="bg-blue-600 px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition">Sign Up</button>
-                    </form>
+                <div class="bg-slate-700 p-6 rounded-lg text-center">
+                    <h3 class="text-xl font-bold mb-2">Review us on Trustpilot</h3>
+                    <img src="/assets/stars-5.svg" class="h-10 mx-auto mb-4" alt="Trustpilot">
+                    <p class="text-sm text-slate-300">Join thousands of happy sellers!</p>
                 </div>
             </div>
             <div class="bg-slate-800 text-white p-6 rounded-xl shadow-lg mt-8 text-center border-2 border-red-600">
@@ -338,7 +333,6 @@
                 <a href="https://www.sellcell.com/" target="_blank" rel="noopener">
                     <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" class="h-16 grayscale hover:grayscale-0 transition" alt="SellCell Accredited Buyer">
                 </a>
-                <img src="/assets/stars-5.svg" class="h-10" alt="Trustpilot 5 Stars">
             </div>
             <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
         </div>
