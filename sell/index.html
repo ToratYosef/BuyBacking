@@ -171,14 +171,14 @@
     </div>
 </header>
 
+<!-- Global Animated Progress Bar (Always below header) -->
+<div class="w-full bg-slate-200 h-2 overflow-hidden shadow-sm">
+    <div id="global-progress-bar" class="bg-brand-primary h-full transition-all duration-500 ease-out progress-bar-shine" style="width: 10%;"></div>
+</div>
+
 <main class="sell-app-wrapper">
     <!-- Selection Flow Container -->
     <div class="app-container" id="selection-flow">
-        <!-- Animated Progress Bar -->
-        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-8">
-            <div id="main-progress-bar" class="bg-brand-primary h-full transition-all duration-500 ease-out progress-bar-shine" style="width: 10%;"></div>
-        </div>
-
         <div class="breadcrumbs" id="crumbs"></div>
         <h2 class="step-title" id="step-name">Select Brand</h2>
         <div class="selection-grid" id="grid-content">
@@ -199,11 +199,6 @@
 
     <!-- Final Offer View -->
     <div class="app-container hidden" id="offer-view">
-        <!-- Progress Bar for Offer View (100%) -->
-        <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden mb-8">
-            <div id="final-progress-bar" class="bg-brand-primary h-full transition-all duration-500 ease-out progress-bar-shine" style="width: 100%;"></div>
-        </div>
-
         <div class="breadcrumbs" id="final-crumbs"></div>
         <div class="offer-card">
             <h2 id="final-device-name" class="text-2xl font-bold mb-1 text-slate-900">--</h2>
@@ -415,9 +410,14 @@
     };
 
     const updateProgressBar = () => {
-        const bar = document.getElementById('main-progress-bar');
+        const bar = document.getElementById('global-progress-bar');
         if (!bar) return;
         
+        if (state.isFinalView) {
+            bar.style.width = '100%';
+            return;
+        }
+
         const steps = {
             'brand': 10,
             'model': 30,
@@ -457,9 +457,8 @@
                     state.currentStep = 'storage';
                     if (params.has('storage')) state.selections.storage = params.get('storage');
                     if (params.has('lock')) state.selections.lock = params.get('lock');
-                    if (params.has('condition')) state.selections.condition = params.get('condition');
-                    
-                    if (state.selections.storage && state.selections.lock && state.selections.condition) {
+                    if (params.has('condition')) {
+                        state.selections.condition = params.get('condition');
                         showFinalOffer();
                         return;
                     }
@@ -548,6 +547,7 @@
     const renderCurrentStep = async () => {
         const grid = document.getElementById('grid-content');
         const title = document.getElementById('step-name');
+        const helpBox = document.getElementById('condition-help-box');
         grid.innerHTML = '';
         updateCrumbs();
         updateProgressBar();
@@ -603,6 +603,7 @@
         card.className = `select-card ${state.selections[state.currentStep] === value ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
         
         if (isDisabled) {
+            // New tooltip UI structure with Info icon
             card.innerHTML = `
                 <i class="fa-solid fa-circle-info text-slate-400 mb-1"></i>
                 <span>${label}</span>
@@ -657,6 +658,7 @@
     const showFinalOffer = () => {
         state.isFinalView = true;
         updateURL();
+        updateProgressBar();
         document.getElementById('selection-flow').classList.add('hidden');
         document.getElementById('offer-view').classList.remove('hidden');
         
