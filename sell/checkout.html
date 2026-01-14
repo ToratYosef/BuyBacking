@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="/assets/css/tailwind.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecondHandCell - Checkout</title>
+    <link rel="icon" href="/favicon/favicon.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+    
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-W3BM2JC8');</script>
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'AW-17534255111');
+    </script>
+
+    <!-- SellCell Pixel -->
+    <script>
+        (function(w, d, s, l, i) {
+            w[l] = w[l] || [];
+            w[l].push({ 'sellcell.start': new Date().getTime(), event: 'sellcell.js' });
+            var f = d.getElementsByTagName(s)[0], j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : '';
+            j.async = true; j.src = 'https://www.sellcell.com/pixel.js?id=' + i + dl;
+            f.parentNode.insertBefore(j, f);
+        })(window, document, 'script', 'dataLayer', '1356'); // SellCell ID Placeholder
+    </script>
+
+    <style>
+        :root {
+            --brand-primary: #15803d;
+            --brand-gradient: linear-gradient(135deg, #15803d 0%, #eab308 100%);
+            --border: #E5E7EB;
+        }
+        body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background-color: #f8fafc; -webkit-font-smoothing: antialiased; }
+        .checkout-wrapper { max-width: 1100px; margin: 40px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 380px; gap: 30px; }
+        @media (max-width: 900px) { .checkout-wrapper { grid-template-columns: 1fr; } }
+        .section-card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 5px; text-transform: uppercase; }
+        .input-field { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; outline: none; transition: 0.2s; }
+        .input-field:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.1); }
+        .payment-opt { border: 2px solid var(--border); border-radius: 12px; padding: 15px; cursor: pointer; text-align: center; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .payment-opt.active { border-color: var(--brand-primary); background: #f0fdf4; }
+        .summary-card { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); position: sticky; top: 20px; }
+        .btn-submit { width: 100%; padding: 18px; background: var(--brand-gradient); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 20px; transition: 0.3s; }
+        .btn-submit:hover { opacity: 0.9; transform: scale(1.01); }
+    </style>
+    <link rel="stylesheet" href="/assets/css/site-chrome.css">
+</head>
+<body>
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+
+<!-- Site Header -->
+<header class="site-header">
+    <div class="site-header__inner site-header__inner--centered">
+        <div class="logo-container-left">
+            <a href="/" class="logo-link">
+                <img src="/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320">
+            </a>
+        </div>
+        <div class="logo-text-container-center">
+            <div class="logo-wordmark">
+                <span class="logo-wordmark__primary">Second</span><span class="logo-wordmark__accent">HandCell</span>
+            </div>
+            <p class="logo-tagline">Turn Your Old <span>Phone Into Cash!</span></p>
+        </div>
+        <nav class="header-auth-nav">
+            <div id="authStatusContainer" class="site-header__auth-wrapper">
+                <a href="/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
+                <div id="userMonogram" class="user-monogram hidden"></div>
+            </div>
+        </nav>
+    </div>
+</header>
+
+<main class="checkout-wrapper">
+    <!-- Main Form -->
+    <div id="checkout-form">
+        <div class="section-card">
+            <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Address</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="input-group md:col-span-2">
+                    <label>Full Name</label>
+                    <input type="text" id="fullName" class="input-field" placeholder="John Doe">
+                </div>
+                <div class="input-group">
+                    <label>Phone Number</label>
+                    <input type="tel" id="phone" class="input-field" placeholder="(555) 555-5555">
+                </div>
+                <div class="input-group">
+                    <label>Email Address</label>
+                    <input type="email" id="email" class="input-field">
+                </div>
+                <div class="input-group md:col-span-2">
+                    <label>Street Address</label>
+                    <input type="text" id="streetAddress" class="input-field" placeholder="123 Main St">
+                </div>
+                <div class="input-group">
+                    <label>City</label>
+                    <input type="text" id="city" class="input-field">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="input-group">
+                        <label>State</label>
+                        <select id="state" class="input-field">
+                            <option value="">Select State</option>
+                            <option value="AL">Alabama</option>
+                            <option value="AK">Alaska</option>
+                            <option value="AZ">Arizona</option>
+                            <option value="AR">Arkansas</option>
+                            <option value="CA">California</option>
+                            <option value="CO">Colorado</option>
+                            <option value="CT">Connecticut</option>
+                            <option value="DE">Delaware</option>
+                            <option value="FL">Florida</option>
+                            <option value="GA">Georgia</option>
+                            <option value="HI">Hawaii</option>
+                            <option value="ID">Idaho</option>
+                            <option value="IL">Illinois</option>
+                            <option value="IN">Indiana</option>
+                            <option value="IA">Iowa</option>
+                            <option value="KS">Kansas</option>
+                            <option value="KY">Kentucky</option>
+                            <option value="LA">Louisiana</option>
+                            <option value="ME">Maine</option>
+                            <option value="MD">Maryland</option>
+                            <option value="MA">Massachusetts</option>
+                            <option value="MI">Michigan</option>
+                            <option value="MN">Minnesota</option>
+                            <option value="MS">Mississippi</option>
+                            <option value="MO">Missouri</option>
+                            <option value="MT">Montana</option>
+                            <option value="NE">Nebraska</option>
+                            <option value="NV">Nevada</option>
+                            <option value="NH">New Hampshire</option>
+                            <option value="NJ">New Jersey</option>
+                            <option value="NM">New Mexico</option>
+                            <option value="NY">New York</option>
+                            <option value="NC">North Carolina</option>
+                            <option value="ND">North Dakota</option>
+                            <option value="OH">Ohio</option>
+                            <option value="OK">Oklahoma</option>
+                            <option value="OR">Oregon</option>
+                            <option value="PA">Pennsylvania</option>
+                            <option value="RI">Rhode Island</option>
+                            <option value="SC">South Carolina</option>
+                            <option value="SD">South Dakota</option>
+                            <option value="TN">Tennessee</option>
+                            <option value="TX">Texas</option>
+                            <option value="UT">Utah</option>
+                            <option value="VT">Vermont</option>
+                            <option value="VA">Virginia</option>
+                            <option value="WA">Washington</option>
+                            <option value="WV">West Virginia</option>
+                            <option value="WI">Wisconsin</option>
+                            <option value="WY">Wyoming</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Zip Code</label>
+                        <input type="text" id="zip" class="input-field">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <h2 class="text-xl font-bold mb-6 border-b pb-2">2. Payout Method</h2>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" id="payment-methods">
+                <div class="payment-opt active" data-method="cashapp">
+                    <i class="fa-solid fa-dollar-sign text-2xl mb-1 text-green-600"></i>
+                    <div class="text-xs font-bold">Cash App</div>
+                </div>
+                <div class="payment-opt" data-method="zelle">
+                    <i class="fa-solid fa-bolt text-2xl mb-1 text-purple-600"></i>
+                    <div class="text-xs font-bold">Zelle</div>
+                </div>
+                <div class="payment-opt" data-method="paypal">
+                    <i class="fa-brands fa-paypal text-2xl mb-1 text-blue-600"></i>
+                    <div class="text-xs font-bold">PayPal</div>
+                </div>
+                <div class="payment-opt" data-method="check">
+                    <i class="fa-solid fa-envelope-open-text text-2xl mb-1 text-slate-500"></i>
+                    <div class="text-xs font-bold">Check</div>
+                </div>
+            </div>
+            <div id="payment-details-input">
+                <label id="payment-label" class="block text-xs font-bold text-slate-500 uppercase mb-2">Cash App $Cashtag</label>
+                <input type="text" id="payoutIdentifier" class="input-field" placeholder="$cashtag">
+            </div>
+        </div>
+
+        <div class="section-card">
+            <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" id="terms" class="w-5 h-5 accent-green-700">
+                <span class="text-sm text-slate-600">I certify this device is not lost/stolen and I accept the terms & conditions.</span>
+            </label>
+            <button class="btn-submit" id="submitOrderBtn">SUBMIT MY TRADE-IN</button>
+        </div>
+    </div>
+
+    <!-- Summary Sidebar -->
+    <aside>
+        <div class="summary-card">
+            <h3 class="text-lg font-bold mb-4 border-b pb-2">Trade-in Summary</h3>
+            <div id="summary-content" class="space-y-4">
+                <div class="flex justify-between">
+                    <span class="text-slate-500 text-sm">Device</span>
+                    <span id="sum-device" class="font-bold text-sm text-right">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500 text-sm">Specs</span>
+                    <span id="sum-specs" class="font-bold text-sm text-right">--</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-500 text-sm">Quantity</span>
+                    <span id="sum-qty" class="font-bold text-sm">1</span>
+                </div>
+                <div class="pt-4 mt-4 border-t flex justify-between items-end">
+                    <span class="text-slate-800 font-bold">Total Payout</span>
+                    <span id="sum-total" class="text-3xl font-black text-green-700">$0</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+</main>
+
+<footer class="bg-slate-800 text-white">
+    <div class="container mx-auto px-4 py-12">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
+                <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
+                <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="/" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="/privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="/terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
+            </div>
+            <div class="bg-slate-700 p-6 rounded-lg">
+                <h3 class="text-xl font-bold mb-2 text-white">Stay Updated </h3>
+                <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
+                    <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Sign Up</button>
+                </form>
+                <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
+            </div>
+        </div>
+        <div class="bg-slate-800 text-white p-6 rounded-xl shadow-lg mt-8 text-center border-2 border-red-600">
+            <p class="text-lg font-bold">IMPORTANT NOTICE</p>
+            <p class="mt-2 text-sm md:text-base">We do not purchase blacklisted or lost/stolen devices. All devices are verified through a legal compliance check.</p>
+        </div>
+        <div class="mt-8">
+            <div class="flex flex-wrap items-center justify-center gap-6 sm:flex-row sm:justify-center sm:gap-8 lg:justify-start">
+                <a href="https://www.sellcell.com/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
+                    <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" width="150" height="107" alt="SellCell Accredited Buyer" loading="lazy" class="h-20 w-auto object-contain">
+                </a>
+                <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
+                    <img src="https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png" alt="Trustpilot 5 star rating" loading="lazy" class="h-12 w-auto object-contain">
+                </a>
+            </div>
+        </div>
+        <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
+    </div>
+</footer>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+        authDomain: "auth.secondhandcell.com",
+        projectId: "buyback-a0f05",
+        storageBucket: "buyback-a0f05.appspot.com",
+        messagingSenderId: "876430429098",
+        appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+        measurementId: "G-6WWQN44JHT"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const params = new URLSearchParams(window.location.search);
+    let selectedMethod = 'cashapp';
+    let unitPrice = 0;
+
+    const init = async () => {
+        const b = params.get('brand');
+        const m = params.get('model'); // Updated to use 'model' key consistently
+        const s = params.get('storage');
+        const l = params.get('lock');
+        const c = params.get('condition');
+        const email = params.get('email');
+        const qty = parseInt(params.get('qty') || '1');
+
+        if (email) document.getElementById('email').value = email;
+
+        try {
+            if (!b || !m || !s || !l || !c) {
+                console.warn("Missing required trade-in parameters.");
+                return;
+            }
+
+            const docRef = doc(db, "devices", b, "models", m);
+            const snap = await getDoc(docRef);
+            if (snap.exists()) {
+                const data = snap.data();
+                unitPrice = data.prices[s][l][c] || 0;
+                document.getElementById('sum-device').textContent = data.name;
+                document.getElementById('sum-specs').textContent = `${s} • ${l}`;
+                document.getElementById('sum-qty').textContent = qty;
+                document.getElementById('sum-total').textContent = `$${unitPrice * qty}`;
+            }
+        } catch (err) {
+            console.error("Initialization error:", err);
+        }
+    };
+
+    document.querySelectorAll('.payment-opt').forEach(opt => {
+        opt.onclick = () => {
+            document.querySelectorAll('.payment-opt').forEach(x => x.classList.remove('active'));
+            opt.classList.add('active');
+            selectedMethod = opt.dataset.method;
+            const labels = { cashapp: 'Cash App $Cashtag', zelle: 'Zelle Email or Phone', paypal: 'PayPal Email', check: 'Full Name for Check' };
+            document.getElementById('payment-label').textContent = labels[selectedMethod];
+            document.getElementById('payoutIdentifier').placeholder = selectedMethod === 'cashapp' ? '$cashtag' : '';
+        };
+    });
+
+    document.getElementById('submitOrderBtn').onclick = async () => {
+        if (!document.getElementById('terms').checked) return alert("Please accept the terms and conditions.");
+        
+        const required = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        for (let id of required) {
+            if (!document.getElementById(id).value) return alert("Please fill in all required fields.");
+        }
+
+        const btn = document.getElementById('submitOrderBtn');
+        btn.disabled = true;
+        btn.textContent = "Processing...";
+
+        const orderData = {
+            brand: params.get('brand'),
+            modelId: params.get('model'),
+            storage: params.get('storage'),
+            lock: params.get('lock'),
+            condition: params.get('condition'),
+            qty: parseInt(params.get('qty') || '1'),
+            totalPayout: unitPrice * parseInt(params.get('qty') || '1'),
+            shippingInfo: {
+                fullName: document.getElementById('fullName').value,
+                email: document.getElementById('email').value,
+                phone: document.getElementById('phone').value,
+                address: document.getElementById('streetAddress').value,
+                city: document.getElementById('city').value,
+                state: document.getElementById('state').value,
+                zip: document.getElementById('zip').value
+            },
+            paymentMethod: selectedMethod,
+            paymentIdentifier: document.getElementById('payoutIdentifier').value,
+            createdAt: new Date().toISOString()
+        };
+
+        try {
+            const res = await fetch('https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            });
+            const result = await res.json();
+            if (res.ok) {
+                // Tracking event for successful submission
+                window.dataLayer.push({
+                    event: 'trade_in_submission',
+                    orderId: result.orderId,
+                    totalValue: orderData.totalPayout
+                });
+                window.location.href = `/order-submitted.html?id=${result.orderId}`;
+            } else {
+                alert("Error submitting order: " + (result.error || "Please try again later."));
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Submission failed. Check your internet connection.");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "SUBMIT MY TRADE-IN";
+        }
+    };
+
+    init();
+</script>
+
+<script src="/assets/js/ship48-banner.js" defer></script>
+<script type="module" src="/assets/js/global-auth.js" defer></script>
+</body>
+</html>
