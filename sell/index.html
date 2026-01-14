@@ -20,7 +20,8 @@
     <!-- End Google Tag Manager -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
     <script>
-        window.runLegacySellFlow = false;
+        const runLegacySellFlow = false;
+        if (runLegacySellFlow) {
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
@@ -75,446 +76,233 @@
                 locked: 'Carrier Locked',
             };
 
-            const carrierAliasMap = {
-                att: 'att',
-                atandt: 'att',
-                at_t: 'att',
-                verizon: 'verizon',
-                vzw: 'verizon',
-                vz: 'verizon',
-                tmobile: 'tmobile',
-                t_mobile: 'tmobile',
-                magenta: 'tmobile',
-                unlocked: 'unlocked',
-                simfree: 'unlocked',
-                other: 'other',
-                carrierlocked: 'locked',
-                locked: 'locked'
-            };
+        .btn-google-style {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; background-color: white; color: #475569;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            border: 1px solid #cbd5e1; font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+        }
+        .btn-google-style:hover { background-color: #f8fafc; }
+        .btn-dark-slate {
+            width: 100%; background-color: #1e293b; color: white;
+            padding: 0.75rem 1rem; border-radius: 0.5rem;
+            font-weight: 600; transition: all 0.3s ease;
+            border: none; cursor: pointer;
+        }
+        .btn-dark-slate:hover { background-color: #0f172a; }
+        .btn-red-logout {
+            display: block; width: 100%; text-align: left;
+            padding: 0.5rem 1rem; font-size: 0.875rem; color: #dc2626;
+            background-color: transparent; border: none;
+            transition: background-color 0.2s ease; cursor: pointer;
+        }
+        .btn-red-logout:hover { background-color: #fef2f2; }
+        .prose {
+            max-width: 65ch;
+            color: #334155; /* slate-700 */
+        }
+        .prose h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .prose h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+        }
+        .prose p, .prose ul {
+            margin-bottom: 1em;
+        }
+        .prose ul {
+            list-style-position: inside;
+            padding-left: 1em;
+        }
+        .prose li {
+                margin-bottom: 0.5em;
+        }
+        /* Specific styling for the Fully Functional Modal content (smaller font, scrolling) */
+        #fullyFunctionalModal .prose p, 
+        #fullyFunctionalModal .prose ul,
+        #fullyFunctionalModal .prose li {
+            font-size: 0.9rem; /* Slightly smaller text for info density */
+        }
+        #fullyFunctionalModal .prose h3 {
+            font-size: 1.1rem;
+        }
+        .loading-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 1rem;
+            height: 200px;
+        }
 
-            const normalizeCarrierKey = (value = '') => {
-                const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                return carrierAliasMap[normalized] || normalized;
-            };
+        :root {
+            --brand-primary: #15803d;
+            --brand-secondary: #eab308;
+            --brand-gradient: linear-gradient(135deg, #15803d 0%, #eab308 100%);
+            --text-main: #1F2937;
+            --text-muted: #6B7280;
+            --bg-gray: #F3F4F6;
+            --white: #FFFFFF;
+            --border: #E5E7EB;
+        }
 
-            const resolveCarrierPricing = (storagePricing = {}, selectedCarrier = '') => {
-                const normalizedPricing = Object.entries(storagePricing || {}).reduce((acc, [key, value]) => {
-                    acc[normalizeCarrierKey(key)] = value || {};
-                    return acc;
-                }, {});
+        .sell-app-wrapper { font-family: 'Inter', -apple-system, sans-serif; color: var(--text-main); line-height: 1.5; padding: 40px 0; }
+        .hidden { display: none !important; }
 
-                const preferredOrder = [
-                    normalizeCarrierKey(selectedCarrier),
-                    'unlocked',
-                    'att',
-                    'verizon',
-                    'tmobile',
-                    'other',
-                    'locked'
-                ].filter(Boolean);
+        .app-container { max-width: 800px; margin: 0 auto; padding: 0 20px; }
+        .step-title { font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 30px; }
 
-                for (const key of preferredOrder) {
-                    if (normalizedPricing[key]) return normalizedPricing[key];
-                }
+        .selection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+        .select-card {
+            background: var(--white); border: 2px solid var(--border); border-radius: 12px;
+            padding: 25px 15px; text-align: center; cursor: pointer; transition: 0.2s;
+            font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .select-card:hover { border-color: var(--brand-secondary); transform: translateY(-2px); }
+        .select-card.active { border-color: var(--brand-primary); background: #f0fdf4; color: var(--brand-primary); box-shadow: 0 0 0 1px var(--brand-primary); }
 
-                const fallbackKey = Object.keys(normalizedPricing)[0];
-                return fallbackKey ? normalizedPricing[fallbackKey] : null;
-            };
+        .breadcrumbs { display: flex; gap: 8px; margin-bottom: 30px; font-size: 13px; justify-content: center; flex-wrap: wrap; }
+        .crumb {
+            padding: 8px 16px; background: #e5e7eb; border-radius: 20px;
+            transition: all 0.2s; position: relative; font-weight: 600; color: var(--text-muted);
+            cursor: default;
+        }
 
-            const CONDITION_DEFS = [
-                {
-                    key: 'flawless',
-                    name: 'Flawless',
-                    desc: ['Powers on and fully functional.', 'No cracks, chips, or major dents.', 'Minimal to no visible wear.']
-                },
-                {
-                    key: 'good',
-                    name: 'Good',
-                    desc: ['Powers on and fully functional.', 'No cracks.', 'Light scratches or normal wear is okay.']
-                },
-                {
-                    key: 'broken',
-                    name: 'Broken',
-                    desc: ['Cracked screen/back, heavy damage, or not fully functional.', 'May have defects that impact usability.']
-                },
-                {
-                    key: 'noPower',
-                    name: 'No Power',
-                    desc: ['Does not power on.', 'Still eligible depending on model.']
-                }
-            ];
+        .crumb.can-jump { cursor: pointer; }
+        .crumb.can-jump:hover::after {
+            content: "Take me to this step";
+            position: absolute; bottom: -25px; left: 50%; transform: translateX(-50%);
+            background: #333; color: white; padding: 2px 8px; border-radius: 4px;
+            font-size: 10px; white-space: nowrap; z-index: 10;
+        }
 
-            const els = {
-                stepName: document.getElementById('step-name'),
-                gridContent: document.getElementById('grid-content'),
-                crumbs: document.getElementById('crumbs'),
-                finalCrumbs: document.getElementById('final-crumbs'),
-                selectionFlow: document.getElementById('selection-flow'),
-                offerView: document.getElementById('offer-view'),
-                finalDeviceName: document.getElementById('final-device-name'),
-                summaryTags: document.getElementById('summary-tags'),
-                finalConditionGrid: document.getElementById('final-condition-grid'),
-                finalPrice: document.getElementById('final-price'),
-                conditionTitle: document.getElementById('condition-title-display'),
-                conditionDetails: document.getElementById('condition-details'),
-                userEmail: document.getElementById('user-email'),
-                qtyModal: document.getElementById('qty-modal'),
-                qtyVal: document.getElementById('qty-val'),
-                startOverLink: document.getElementById('startOverLink'),
-                startCheckoutBtn: document.getElementById('startCheckoutBtn'),
-                qtyMinusBtn: document.getElementById('qtyMinusBtn'),
-                qtyPlusBtn: document.getElementById('qtyPlusBtn'),
-                finalSubmitBtn: document.getElementById('finalSubmitBtn')
-            };
+        .crumb.active { background: var(--brand-primary); color: white; cursor: default; }
+        .crumb.filled { background: #dcfce7; color: var(--brand-primary); border: 1px solid var(--brand-primary); }
 
-            const state = {
-                modelsCache: {},
-                modelDoc: null,
-                selections: {
-                    brand: '',
-                    modelId: '',
-                    modelName: '',
-                    storage: '',
-                    lock: 'unlocked',
-                    conditionKey: 'good',
-                    qty: 1
-                },
-                currentStep: 'brand',
-                isFinalView: false
-            };
+        .offer-card { background: var(--white); border-radius: 16px; padding: 30px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+        .price-val { font-size: 64px; font-weight: 900; margin: 5px 0; color: var(--text-main); }
 
-            const stepOrder = ['brand', 'model', 'storage', 'lock', 'condition'];
+        .req-box { text-align: left; max-width: 500px; margin: 20px auto; background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid var(--border); }
 
-            const updateURL = () => {
-                const url = new URL(window.location.href);
-                url.searchParams.delete('brand');
-                url.searchParams.delete('model');
-                url.searchParams.delete('storage');
-                url.searchParams.delete('lock');
-                url.searchParams.delete('condition');
+        .form-control { width: 100%; max-width: 400px; padding: 15px; border: 2px solid var(--border); border-radius: 10px; margin-bottom: 15px; font-size: 16px; outline: none; }
+        .btn-primary {
+            width: 100%; max-width: 400px; padding: 18px; background: var(--brand-gradient);
+            color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 700; cursor: pointer;
+        }
 
-                if (state.selections.brand) url.searchParams.set('brand', state.selections.brand);
-                if (state.selections.modelId) url.searchParams.set('model', state.selections.modelId);
-                if (state.selections.storage) url.searchParams.set('storage', state.selections.storage);
-                if (state.selections.lock) url.searchParams.set('lock', state.selections.lock);
-                if (state.selections.conditionKey) url.searchParams.set('condition', state.selections.conditionKey);
-                window.history.replaceState({}, '', url);
-            };
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 2000; }
+        .modal-card { background: white; padding: 40px; border-radius: 20px; text-align: center; max-width: 400px; width: 90%; }
 
-            const getStorageOptions = () => Object.keys(state.modelDoc?.prices || {});
+        @media (max-width: 600px) {
+            .selection-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+    <link rel="stylesheet" href="/assets/css/site-chrome.css">
+</head>
+<body class="bg-slate-50">
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- Site Header -->
+<header class="site-header" data-site-header>
+    <div class="site-header__inner site-header__inner--centered">
+        <div class="logo-container-left">
+            <a href="/" class="logo-link" aria-label="SecondHandCell home">
+                <img src="/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320" height="320" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+            </a>
+        </div>
+        <div class="logo-text-container-center">
+            <div class="logo-wordmark">
+                <span class="logo-wordmark__primary">Second</span><span class="logo-wordmark__accent">HandCell</span>
+            </div>
+            <p class="logo-tagline">Turn Your Old <span>Phone Into Cash!</span></p>
+        </div>
+        <nav class="header-auth-nav" aria-label="Account navigation">
+            <div id="authStatusContainer" class="site-header__auth-wrapper">
+                <a href="#" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
+                <div id="userMonogram" class="user-monogram hidden"></div>
+                <div id="authDropdown" class="auth-dropdown hidden">
+                    <a href="/my-account.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">My Account</a>
+                    <a href="/track-order.html" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Track an Order</a>
+                    <button id="logoutBtn" class="btn-red-logout">Logout</button>
+                </div>
+            </div>
+        </nav>
+    </div>
+</header>
+<section class="ship48-banner" data-ship48-banner hidden>
+    <div class="ship48-banner__inner">
+        <p class="ship48-banner__message" title="Email label orders sent within 48 hours get +$10 with SHIP48 when you send within 48h.">
+            <strong>SHIP48</strong> Email label orders sent within 48h earn +$10 with code <span class="ship48-banner__code">SHIP48</span>. Email label only. <span class="ship48-banner__counter" data-ship48-counter></span>
+            <span class="ship48-banner__status" data-ship48-status></span>
+        </p>
+        <div class="ship48-banner__actions">
+            <button type="button" class="ship48-banner__apply" data-ship48-apply>Apply SHIP48</button>
+            <button type="button" class="ship48-banner__start" data-ship48-start>Start my quote now</button>
+        </div>
+    </div>
+    <button type="button" class="ship48-banner__dismiss" aria-label="Dismiss Ship48 promo" data-ship48-dismiss>&times;</button>
+</section>
 
-            const getLockOptions = () => {
-                const storagePricing = state.modelDoc?.prices?.[state.selections.storage] || {};
-                const carriers = Object.keys(storagePricing).map(normalizeCarrierKey);
-                const deduped = Array.from(new Set(carriers)).filter(Boolean);
-                const preferredOrder = ['unlocked', 'att', 'verizon', 'tmobile', 'other', 'locked'];
-                deduped.sort((a, b) => preferredOrder.indexOf(a) - preferredOrder.indexOf(b));
-                return deduped.length ? deduped : ['unlocked'];
-            };
+    <main class="sell-app-wrapper">
+        <div class="app-container" id="selection-flow">
+            <div class="breadcrumbs" id="crumbs"></div>
 
-            const getConditionPrice = () => {
-                const storagePricing = state.modelDoc?.prices?.[state.selections.storage] || {};
-                const base = resolveCarrierPricing(storagePricing, state.selections.lock) || {};
-                const numeric = Number(base?.[state.selections.conditionKey]);
-                return Number.isFinite(numeric) ? numeric : 0;
-            };
+            <h2 class="step-title" id="step-name">Select Brand</h2>
+            <div class="selection-grid" id="grid-content"></div>
+        </div>
 
-            const updateCrumbs = () => {
-                const container = state.isFinalView ? els.finalCrumbs : els.crumbs;
-                if (!container) return;
-                container.innerHTML = '';
+        <div class="app-container hidden" id="offer-view">
+            <div class="breadcrumbs" id="final-crumbs"></div>
 
-                const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
-                const getLabel = (stepKey) => {
-                    if (stepKey === 'brand') return BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || 'Brand';
-                    if (stepKey === 'model') return state.selections.modelName || 'Model';
-                    if (stepKey === 'storage') return state.selections.storage || 'Capacity';
-                    if (stepKey === 'lock') return LOCK_LABELS[state.selections.lock] || state.selections.lock || 'Network';
-                    if (stepKey === 'condition') return CONDITION_DEFS.find(c => c.key === state.selections.conditionKey)?.name || 'Condition';
-                    return stepKey;
-                };
+            <div class="offer-card">
+                <h2 id="final-device-name" style="margin-bottom:5px;">--</h2>
+                <div id="summary-tags" style="font-size: 12px; color: var(--brand-primary); font-weight: 700; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 0.5px;">
+                </div>
 
-                stepOrder.forEach((stepKey, i) => {
-                    const c = document.createElement('span');
-                    c.className = 'crumb';
-                    c.addEventListener('click', () => jumpTo(stepKey));
+                <div class="selection-grid" id="final-condition-grid" style="margin-bottom: 25px;">
+                </div>
 
-                    if (i === currentIdx) {
-                        c.classList.add('active');
-                        c.textContent = getLabel(stepKey);
-                    } else if (i < currentIdx) {
-                        c.classList.add('filled', 'can-jump');
-                        c.textContent = getLabel(stepKey);
-                    } else {
-                        c.textContent = stepKey.charAt(0).toUpperCase() + stepKey.slice(1);
-                    }
-                    container.appendChild(c);
-                });
-            };
+                <div style="font-size: 14px; font-weight: 600; color: var(--text-muted);">Instant Payout:</div>
+                <div class="price-val" id="final-price">$0</div>
 
-            const jumpTo = (stepKey) => {
-                const targetIdx = stepOrder.indexOf(stepKey);
-                const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
-                if (targetIdx < currentIdx) {
-                    state.isFinalView = false;
-                    els.offerView?.classList.add('hidden');
-                    els.selectionFlow?.classList.remove('hidden');
-                    state.currentStep = stepKey;
-                    renderStep();
-                    updateURL();
-                }
-            };
+                <div class="req-box">
+                    <div style="font-weight: 800; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                        <span id="condition-title-display">--</span> Requirements:
+                    </div>
+                    <ul id="condition-details" style="padding-left: 20px; font-size: 14px; color: var(--text-muted);">
+                    </ul>
+                </div>
 
-            const loadModelsForBrand = async (brandKey) => {
-                if (!brandKey) return [];
-                if (state.modelsCache[brandKey]) return state.modelsCache[brandKey];
+                <input type="email" id="user-email" class="form-control" placeholder="Enter your email address">
+                <button class="btn-primary" onclick="handleCheckout()">GET PAID INSTANTLY</button>
+                <p style="margin-top: 20px;"><a href="#" onclick="resetFlow()" style="color: var(--brand-primary); font-size: 13px; font-weight: 700; text-decoration: none;">← Start New Trade-in</a></p>
+            </div>
+        </div>
+    </main>
 
-                if (els.gridContent) {
-                    els.gridContent.innerHTML = '<div style="grid-column: 1/-1; text-align:center; color: var(--text-muted); font-weight: 700;">Loading devices…</div>';
-                }
-
-                const snapshot = await getDocs(collection(db, `devices/${brandKey}/models`));
-                const models = [];
-                snapshot.forEach((docSnap) => {
-                    const data = docSnap.data() || {};
-                    models.push({ id: docSnap.id, name: data.name || docSnap.id, prices: data.prices || {} });
-                });
-                models.sort((a, b) => a.name.localeCompare(b.name));
-                state.modelsCache[brandKey] = models;
-                return models;
-            };
-
-            const renderStep = async () => {
-                if (!els.gridContent || !els.stepName) return;
-                els.gridContent.innerHTML = '';
-
-                let items = [];
-                if (state.currentStep === 'brand') {
-                    els.stepName.textContent = 'Select Brand';
-                    items = BRAND_OPTIONS;
-                } else if (state.currentStep === 'model') {
-                    const brandLabel = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || 'Device';
-                    els.stepName.textContent = `Which ${brandLabel} Model?`;
-                    items = await loadModelsForBrand(state.selections.brand);
-                } else if (state.currentStep === 'storage') {
-                    els.stepName.textContent = 'Select Capacity';
-                    items = getStorageOptions();
-                } else if (state.currentStep === 'lock') {
-                    els.stepName.textContent = 'Select Network';
-                    items = getLockOptions();
-                } else if (state.currentStep === 'condition') {
-                    els.stepName.textContent = 'Overall Condition';
-                    items = CONDITION_DEFS.map(c => c.key);
-                }
-
-                items.forEach((item) => {
-                    const card = document.createElement('div');
-                    card.className = 'select-card';
-
-                    let value = item;
-                    let label = String(item);
-
-                    if (state.currentStep === 'brand') {
-                        value = item.key;
-                        label = item.label;
-                        if (state.selections.brand === value) card.classList.add('active');
-                    } else if (state.currentStep === 'model') {
-                        value = item.id;
-                        label = item.name;
-                        if (state.selections.modelId === value) card.classList.add('active');
-                    } else if (state.currentStep === 'storage') {
-                        if (state.selections.storage === value) card.classList.add('active');
-                    } else if (state.currentStep === 'lock') {
-                        label = LOCK_LABELS[item] || item;
-                        if (state.selections.lock === value) card.classList.add('active');
-                    } else if (state.currentStep === 'condition') {
-                        label = CONDITION_DEFS.find(c => c.key === item)?.name || item;
-                        if (state.selections.conditionKey === value) card.classList.add('active');
-                    }
-
-                    card.textContent = label;
-                    card.addEventListener('click', () => handleSelect(value));
-                    els.gridContent.appendChild(card);
-                });
-
-                updateCrumbs();
-            };
-
-            const handleSelect = async (value) => {
-                if (state.currentStep === 'brand') {
-                    state.selections.brand = value;
-                    state.selections.modelId = '';
-                    state.selections.modelName = '';
-                    state.selections.storage = '';
-                    state.selections.lock = 'unlocked';
-                    state.selections.conditionKey = 'good';
-                    state.modelDoc = null;
-                } else if (state.currentStep === 'model') {
-                    state.selections.modelId = value;
-                    const models = await loadModelsForBrand(state.selections.brand);
-                    const match = models.find(m => m.id === value);
-                    state.modelDoc = match || null;
-                    state.selections.modelName = match?.name || value;
-                    state.selections.storage = '';
-                    state.selections.lock = 'unlocked';
-                    state.selections.conditionKey = 'good';
-                } else if (state.currentStep === 'storage') {
-                    state.selections.storage = value;
-                    const locks = getLockOptions();
-                    state.selections.lock = locks.includes(state.selections.lock) ? state.selections.lock : (locks[0] || 'unlocked');
-                } else if (state.currentStep === 'lock') {
-                    state.selections.lock = value;
-                } else if (state.currentStep === 'condition') {
-                    state.selections.conditionKey = value;
-                }
-
-                updateURL();
-
-                const currentIdx = stepOrder.indexOf(state.currentStep);
-                if (currentIdx < stepOrder.length - 1) {
-                    state.currentStep = stepOrder[currentIdx + 1];
-                    renderStep();
-                } else {
-                    showOffer();
-                }
-            };
-
-            const renderFinalConditionGrid = () => {
-                if (!els.finalConditionGrid) return;
-                els.finalConditionGrid.innerHTML = '';
-                CONDITION_DEFS.forEach((c) => {
-                    const card = document.createElement('div');
-                    card.className = 'select-card';
-                    if (state.selections.conditionKey === c.key) card.classList.add('active');
-                    card.innerHTML = `<div>${c.name}</div>`;
-                    card.addEventListener('click', () => {
-                        state.selections.conditionKey = c.key;
-                        renderFinalConditionGrid();
-                        updatePriceDisplay();
-                        updateURL();
-                    });
-                    els.finalConditionGrid.appendChild(card);
-                });
-            };
-
-            const updatePriceDisplay = () => {
-                const def = CONDITION_DEFS.find(c => c.key === state.selections.conditionKey) || CONDITION_DEFS[1];
-                const price = getConditionPrice();
-                if (els.finalPrice) els.finalPrice.textContent = `$${price}`;
-                if (els.conditionTitle) els.conditionTitle.textContent = def.name;
-                if (els.conditionDetails) els.conditionDetails.innerHTML = (def.desc || []).map(d => `<li>${d}</li>`).join('');
-            };
-
-            const showOffer = () => {
-                state.isFinalView = true;
-                els.selectionFlow?.classList.add('hidden');
-                els.offerView?.classList.remove('hidden');
-                if (els.finalDeviceName) els.finalDeviceName.textContent = state.selections.modelName || '--';
-                const lockLabel = LOCK_LABELS[state.selections.lock] || state.selections.lock || 'Network';
-                if (els.summaryTags) els.summaryTags.textContent = `${state.selections.storage || '--'}  •  ${lockLabel}`;
-
-                renderFinalConditionGrid();
-                updatePriceDisplay();
-                updateCrumbs();
-            };
-
-            const openQtyModal = () => {
-                if (!els.qtyModal) return;
-                els.qtyModal.style.display = 'flex';
-                els.qtyModal.setAttribute('aria-hidden', 'false');
-            };
-
-            const closeQtyModal = () => {
-                if (!els.qtyModal) return;
-                els.qtyModal.style.display = 'none';
-                els.qtyModal.setAttribute('aria-hidden', 'true');
-            };
-
-            const resetFlow = () => {
-                state.modelDoc = null;
-                state.selections = { brand: '', modelId: '', modelName: '', storage: '', lock: 'unlocked', conditionKey: 'good', qty: 1 };
-                state.currentStep = 'brand';
-                state.isFinalView = false;
-                updateURL();
-                els.offerView?.classList.add('hidden');
-                els.selectionFlow?.classList.remove('hidden');
-                renderStep();
-            };
-
-            const initFromUrl = async () => {
-                const params = new URLSearchParams(window.location.search);
-                const brand = params.get('brand');
-                const model = params.get('model');
-                const storage = params.get('storage');
-                const lock = params.get('lock');
-                const condition = params.get('condition');
-
-                if (brand && BRAND_OPTIONS.some(b => b.key === brand)) {
-                    state.selections.brand = brand;
-                    state.currentStep = 'model';
-                    await loadModelsForBrand(brand);
-                }
-
-                if (brand && model) {
-                    const models = state.modelsCache[brand] || [];
-                    const match = models.find(m => m.id === model);
-                    if (match) {
-                        state.selections.modelId = match.id;
-                        state.selections.modelName = match.name;
-                        state.modelDoc = match;
-                        state.currentStep = 'storage';
-                    }
-                }
-
-                if (storage) state.selections.storage = storage;
-                if (lock) state.selections.lock = normalizeCarrierKey(lock);
-                if (condition && CONDITION_DEFS.some(c => c.key === condition)) state.selections.conditionKey = condition;
-
-                if (state.selections.brand && state.selections.modelId && state.selections.storage) {
-                    showOffer();
-                } else {
-                    renderStep();
-                }
-            };
-
-            els.startOverLink?.addEventListener('click', (e) => {
-                e.preventDefault();
-                resetFlow();
-            });
-
-            els.startCheckoutBtn?.addEventListener('click', () => {
-                const email = (els.userEmail?.value || '').trim();
-                if (!email.includes('@')) {
-                    alert('Enter valid email.');
-                    return;
-                }
-                openQtyModal();
-            });
-
-            els.qtyMinusBtn?.addEventListener('click', () => {
-                state.selections.qty = Math.max(1, state.selections.qty - 1);
-                if (els.qtyVal) els.qtyVal.textContent = String(state.selections.qty);
-            });
-
-            els.qtyPlusBtn?.addEventListener('click', () => {
-                state.selections.qty = Math.max(1, state.selections.qty + 1);
-                if (els.qtyVal) els.qtyVal.textContent = String(state.selections.qty);
-            });
-
-            els.qtyModal?.addEventListener('click', (e) => {
-                if (e.target === els.qtyModal) closeQtyModal();
-            });
-
-            els.finalSubmitBtn?.addEventListener('click', () => {
-                closeQtyModal();
-                console.log('Sell flow submit:', { ...state.selections, email: (els.userEmail?.value || '').trim() });
-            });
-
-            initFromUrl().catch((err) => {
-                console.error('Sell flow init failed:', err);
-                resetFlow();
-            });
-        </script>
+    <div class="modal-overlay" id="qty-modal">
+        <div class="modal-card">
+            <h3>Quantity</h3>
+            <p>How many devices are you selling?</p>
+            <div style="display:flex; justify-content:center; align-items:center; gap:20px; margin:20px;">
+                <button onclick="changeQty(-1)" style="width:45px; height:45px; border-radius:50%; border:2px solid var(--brand-primary); background:none; font-size: 20px; color: var(--brand-primary); cursor:pointer;">-</button>
+                <span id="qty-val" style="font-size:32px; font-weight:800;">1</span>
+                <button onclick="changeQty(1)" style="width:45px; height:45px; border-radius:50%; border:2px solid var(--brand-primary); background:none; font-size: 20px; color: var(--brand-primary); cursor:pointer;">+</button>
+            </div>
+            <button class="btn-primary" onclick="finalSubmit()">CONTINUE TO CHECKOUT</button>
+        </div>
+    </div>
+    <footer class="bg-slate-800 text-white">
+        <div class="container mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
                     <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
                     <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="index.html" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" id="aboutUsLink" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="/privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="/terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
                     <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
@@ -550,6 +338,7 @@
     </footer>
 
     <script>
+        /*
         // --- STATE DATA AND VALIDATION ---
         const US_STATES = [
             { name: "Alabama", code: "AL" }, { name: "Alaska", code: "AK" }, { name: "Arizona", code: "AZ" }, { name: "Arkansas", code: "AR" },
@@ -3693,6 +3482,7 @@
             }
         });
         }
+        */
     </script>
     <script>
         const db = window.firebaseDb;
