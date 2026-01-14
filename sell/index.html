@@ -3620,7 +3620,7 @@
         const appId = db?.app?.options?.appId || 'default-app-id';
 
         const data = {
-            brands: [],
+            brands: ['iPhone', 'Samsung', 'iPad'],
             models: {},
             storage: [],
             locks: [],
@@ -3634,37 +3634,65 @@
 
         const buildSortedArray = (values) => Array.from(values).filter(Boolean).sort((a, b) => a.localeCompare(b));
 
+        const normalizeBrandName = (value = '') => {
+            const normalized = value.toLowerCase();
+            if (normalized.includes('iphone')) return 'iPhone';
+            if (normalized.includes('ipad')) return 'iPad';
+            if (normalized.includes('samsung')) return 'Samsung';
+            return value.trim() || '';
+        };
+
+        const extractStorageOptions = (device) => {
+            if (Array.isArray(device.storageOptions)) return device.storageOptions;
+            if (Array.isArray(device.storage)) return device.storage;
+            if (Array.isArray(device.capacity)) return device.capacity;
+            if (device.prices && typeof device.prices === 'object') {
+                return Object.keys(device.prices);
+            }
+            if (typeof device.storage === 'string') return [device.storage];
+            if (typeof device.capacity === 'string') return [device.capacity];
+            return [];
+        };
+
+        const extractLockOptions = (device) => {
+            if (Array.isArray(device.locks)) return device.locks;
+            if (Array.isArray(device.networks)) return device.networks;
+            if (Array.isArray(device.carriers)) return device.carriers;
+            if (typeof device.lock === 'string') return [device.lock];
+            if (typeof device.network === 'string') return [device.network];
+            if (typeof device.carrier === 'string') return [device.carrier];
+            return [];
+        };
+
         const loadDeviceData = async () => {
             if (!db || !collection || !getDocs) return;
             const devicesSnapshot = await getDocs(collection(db, `artifacts/${appId}/public/data/devices`));
-            const brandSet = new Set();
             const modelMap = {};
             const storageSet = new Set();
             const lockSet = new Set();
 
             devicesSnapshot.forEach((docSnap) => {
                 const device = docSnap.data() || {};
-                const brand = device.brand || device.make || device.manufacturer;
-                const model = device.model || device.name;
-                const storage = device.storage || device.capacity;
-                const lock = device.lock || device.network || device.carrier;
+                const brand = normalizeBrandName(device.brand || device.make || device.manufacturer || device.category);
+                const model = device.model || device.name || device.title;
 
-                if (brand) {
-                    brandSet.add(brand);
-                    if (model) {
-                        if (!modelMap[brand]) {
-                            modelMap[brand] = new Set();
-                        }
-                        modelMap[brand].add(model);
+                if (brand && data.brands.includes(brand) && model) {
+                    if (!modelMap[brand]) {
+                        modelMap[brand] = new Set();
                     }
+                    modelMap[brand].add(model);
                 }
-                if (storage) storageSet.add(storage);
-                if (lock) lockSet.add(lock);
+
+                extractStorageOptions(device).forEach((option) => {
+                    if (option) storageSet.add(option);
+                });
+                extractLockOptions(device).forEach((option) => {
+                    if (option) lockSet.add(option);
+                });
             });
 
-            data.brands = buildSortedArray(brandSet);
-            data.models = Object.entries(modelMap).reduce((acc, [brand, models]) => {
-                acc[brand] = buildSortedArray(models);
+            data.models = data.brands.reduce((acc, brand) => {
+                acc[brand] = buildSortedArray(modelMap[brand] || []);
                 return acc;
             }, {});
             data.storage = buildSortedArray(storageSet);
