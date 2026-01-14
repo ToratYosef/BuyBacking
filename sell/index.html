@@ -883,17 +883,7 @@
             <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
                 <section class="bg-white rounded-3xl shadow-xl p-6 sm:p-8 space-y-8 order-2 lg:order-1">
                     <header class="space-y-4">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">Instant quote in minutes</p>
                         <h1 class="text-4xl font-extrabold text-slate-900 sm:text-3xl">Sell Your <span id="deviceDisplayName"></span></h1>
-                        <p class="text-base text-slate-600 max-w-2xl">
-                            Answer a few quick questions about your <span id="deviceDisplayNameText"></span> and see your payout instantly.
-                            Everything stays simple, transparent, and ready to ship on your schedule.
-                        </p>
-                        <div class="flex flex-wrap gap-3 text-xs font-semibold text-slate-600">
-                            <span class="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1"><i class="fa-solid fa-bolt text-indigo-500"></i> 2-minute quote</span>
-                            <span class="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1"><i class="fa-solid fa-shield-halved text-indigo-500"></i> Certified inspection</span>
-                            <span class="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1"><i class="fa-solid fa-truck-fast text-indigo-500"></i> Free shipping</span>
-                        </div>
                     </header>
 
                     <div id="loadingIndicator" class="loading-container">
@@ -2864,23 +2854,7 @@
             });
 
             quoteModalContinueBtn.addEventListener('click', () => {
-                hideQuotePopup();
-                if (finalQuote <= 0) {
-                    showQuoteMessage('Sorry, we do not have an offer for this device. Please choose other options.', 'error');
-                    return;
-                }
-                finalQuoteAmountMainDisplay.classList.remove('hidden');
-                if (isUserLoggedIn || isGuestCheckout) {
-                    nextSteps.classList.remove('hidden');
-                    updateOverview();
-                    nextSteps.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                } else {
-                    isGuestCheckout = true;
-                    console.log('checking out as guest');
-                    nextSteps.classList.remove('hidden');
-                    updateOverview();
-                    nextSteps.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                proceedAfterQuote();
             });
 
             const googleProvider = new GoogleAuthProvider();
@@ -3153,6 +3127,7 @@
                     updateQuoteStep();
                     clearQuoteMessage();
                     saveFormState();
+                    calculateQuoteAndDisplay({ showModal: false, autoContinue: true });
                 });
             });
 
@@ -3217,7 +3192,31 @@
                 return carrierLabelMap[normalized] || 'Not Selected';
             }
 
-            function calculateQuoteAndDisplay() {
+            function proceedAfterQuote(options = {}) {
+                const { closeModal = true } = options;
+                if (closeModal) {
+                    hideQuotePopup();
+                }
+                if (finalQuote <= 0) {
+                    showQuoteMessage('Sorry, we do not have an offer for this device. Please choose other options.', 'error');
+                    return;
+                }
+                finalQuoteAmountMainDisplay.classList.remove('hidden');
+                if (isUserLoggedIn || isGuestCheckout) {
+                    nextSteps.classList.remove('hidden');
+                    updateOverview();
+                    nextSteps.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else {
+                    isGuestCheckout = true;
+                    console.log('checking out as guest');
+                    nextSteps.classList.remove('hidden');
+                    updateOverview();
+                    nextSteps.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+
+            function calculateQuoteAndDisplay(options = {}) {
+                const { showModal = true, autoContinue = false } = options;
                 clearQuoteMessage();
                 clearHighlights();
                 
@@ -3280,7 +3279,11 @@
 
                 updateOverview();
 
-                showQuotePopup();
+                if (showModal) {
+                    showQuotePopup();
+                } else if (autoContinue) {
+                    proceedAfterQuote({ closeModal: false });
+                }
             }
 
             getQuoteBtn.addEventListener('click', calculateQuoteAndDisplay);
