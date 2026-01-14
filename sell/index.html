@@ -647,6 +647,36 @@
             color: #ffffff;
             background: linear-gradient(135deg, #4f46e5, #6366f1);
         }
+        .device-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.5rem;
+            width: 100%;
+        }
+        .device-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 12px 24px -20px rgba(15, 23, 42, 0.35);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            cursor: pointer;
+            color: #334155;
+            font-weight: 600;
+        }
+        .device-card img {
+            width: 96px;
+            height: 96px;
+            object-fit: contain;
+            margin: 0 auto 1rem;
+        }
+        .device-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 32px -24px rgba(15, 23, 42, 0.4);
+            border-color: #6366f1;
+            color: #4338ca;
+        }
         .step-helper {
             color: #64748b;
             font-size: 1rem;
@@ -879,7 +909,19 @@
                     </div>
 
                     <div id="questionContainer" class="grid gap-10 hidden">
-                        <section id="step-storage" class="step-section" data-step="storage">
+                        <section id="step-device" class="step-section" data-step="device">
+                            <p class="step-subtitle">Sell Your Device</p>
+                            <h2 class="step-title">Choose Your Device</h2>
+                            <div id="deviceOptions" class="device-grid"></div>
+                        </section>
+
+                        <section id="step-model" class="step-section hidden" data-step="model">
+                            <p class="step-subtitle">Sell Your <span class="device-name-inline" data-device-name></span> for Cash</p>
+                            <h2 class="step-title">Choose Your Model</h2>
+                            <div id="modelOptions" class="pill-options"></div>
+                        </section>
+
+                        <section id="step-storage" class="step-section hidden" data-step="storage">
                             <p class="step-subtitle">Sell Your <span class="device-name-inline" data-device-name></span> for Cash</p>
                             <h2 class="step-title">Choose Your Storage</h2>
                             <div id="storageOptions" class="pill-options"></div>
@@ -907,57 +949,6 @@
                                 <label class="pill-option">
                                     <input type="radio" id="unlocked" name="carrier" value="unlocked">
                                     <span>Unlocked</span>
-                                </label>
-                            </div>
-                        </section>
-
-                        <section id="step-power" class="step-section hidden" data-step="power">
-                            <p class="step-subtitle">Sell Your <span class="device-name-inline" data-device-name></span> for Cash</p>
-                            <h2 class="step-title">Does the Device Power On?</h2>
-                            <div class="pill-options" id="q1Options">
-                                <label class="pill-option">
-                                    <input type="radio" name="q1_power_on" value="yes">
-                                    <span>Yes</span>
-                                </label>
-                                <label class="pill-option">
-                                    <input type="radio" name="q1_power_on" value="no">
-                                    <span>No</span>
-                                </label>
-                            </div>
-                        </section>
-
-                        <section id="step-functional" class="step-section hidden" data-step="functional">
-                            <p class="step-subtitle">Sell Your <span class="device-name-inline" data-device-name></span> for Cash</p>
-                            <h2 class="step-title">Is the Screen Fully Functional?</h2>
-                            <p class="step-helper">
-                                Free of defects
-                                <a href="#" id="functionalDetailsLink" class="ml-2 text-indigo-600 hover:text-indigo-800" aria-label="What does Fully Functional mean?">
-                                    <i class="fa-solid fa-circle-info text-lg"></i>
-                                </a>
-                            </p>
-                            <div class="pill-options" id="q2Options">
-                                <label class="pill-option">
-                                    <input type="radio" name="q2_fully_functional" value="yes">
-                                    <span>Yes</span>
-                                </label>
-                                <label class="pill-option">
-                                    <input type="radio" name="q2_fully_functional" value="no">
-                                    <span>No</span>
-                                </label>
-                            </div>
-                        </section>
-
-                        <section id="step-cracks" class="step-section hidden" data-step="cracks">
-                            <p class="step-subtitle">Sell Your <span class="device-name-inline" data-device-name></span> for Cash</p>
-                            <h2 class="step-title">Are the Front and Back Free of Cracks?</h2>
-                            <div class="pill-options" id="q3Options">
-                                <label class="pill-option">
-                                    <input type="radio" name="q3_no_cracks" value="yes">
-                                    <span>Yes</span>
-                                </label>
-                                <label class="pill-option">
-                                    <input type="radio" name="q3_no_cracks" value="no">
-                                    <span>No</span>
                                 </label>
                             </div>
                         </section>
@@ -996,6 +987,17 @@
                                 <div id="quoteMessage" class="mt-4 p-3 rounded-lg text-sm text-center hidden w-full max-w-sm"></div>
                             </div>
                         </section>
+                        <div class="sr-only">
+                            <label>
+                                <input type="radio" name="q1_power_on" value="yes" checked>
+                            </label>
+                            <label>
+                                <input type="radio" name="q2_fully_functional" value="yes" checked>
+                            </label>
+                            <label>
+                                <input type="radio" name="q3_no_cracks" value="yes" checked>
+                            </label>
+                        </div>
                     </div>
 
                     <div id="nextSteps" class="hidden space-y-6">
@@ -1146,32 +1148,6 @@
                         </div>
                     </div>
 
-                    <div class="summary-card">
-                        <h3 class="text-lg font-semibold text-slate-900">How it works</h3>
-                        <ul class="mt-4 space-y-3 text-sm text-slate-600">
-                            <li class="flex gap-3">
-                                <span class="summary-step">1</span>
-                                Tell us about the device in a few clicks.
-                            </li>
-                            <li class="flex gap-3">
-                                <span class="summary-step">2</span>
-                                Get your instant quote and choose shipping.
-                            </li>
-                            <li class="flex gap-3">
-                                <span class="summary-step">3</span>
-                                Ship it and get paid fast after inspection.
-                            </li>
-                        </ul>
-                    </div>
-
-                    <div class="summary-card">
-                        <h3 class="text-lg font-semibold text-slate-900">Why sellers choose us</h3>
-                        <ul class="mt-4 grid gap-3 text-sm text-slate-600">
-                            <li class="flex items-center gap-2"><i class="fa-solid fa-badge-check text-indigo-500"></i> Trusted payouts</li>
-                            <li class="flex items-center gap-2"><i class="fa-solid fa-star text-indigo-500"></i> Transparent grading</li>
-                            <li class="flex items-center gap-2"><i class="fa-solid fa-message text-indigo-500"></i> Support when you need it</li>
-                        </ul>
-                    </div>
                 </aside>
             </div>
         </div>
@@ -1895,7 +1871,94 @@
             // Get device parameter from the URL query string
             const urlParams = new URLSearchParams(window.location.search);
             // This is the combined parameter (e.g., 'iphone-15-pro')
-            const deviceParam = urlParams.get('device'); 
+            const deviceParam = urlParams.get('device');
+            const deviceOptionsContainer = document.getElementById('deviceOptions');
+            const modelOptionsContainer = document.getElementById('modelOptions');
+
+            const deviceCatalog = {
+                iphone: {
+                    label: 'Sell iPhone',
+                    image: '/assets/apple.webp',
+                    models: [
+                        { label: 'iPhone 16 Pro Max', slug: 'iphone-16-pro-max' },
+                        { label: 'iPhone 16 Pro', slug: 'iphone-16-pro' },
+                        { label: 'iPhone 16 Plus', slug: 'iphone-16-plus' },
+                        { label: 'iPhone 16', slug: 'iphone-16' },
+                        { label: 'iPhone 15 Pro Max', slug: 'iphone-15-pro-max' },
+                        { label: 'iPhone 15 Pro', slug: 'iphone-15-pro' },
+                        { label: 'iPhone 15 Plus', slug: 'iphone-15-plus' },
+                        { label: 'iPhone 15', slug: 'iphone-15' }
+                    ]
+                },
+                samsung: {
+                    label: 'Sell Samsung',
+                    image: '/assets/samsung.webp',
+                    models: [
+                        { label: 'Galaxy S24 Ultra', slug: 'samsung-galaxy-s24-ultra' },
+                        { label: 'Galaxy S24+', slug: 'samsung-galaxy-s24-plus' },
+                        { label: 'Galaxy S24', slug: 'samsung-galaxy-s24' },
+                        { label: 'Galaxy Z Fold6', slug: 'samsung-galaxy-z-fold6' }
+                    ]
+                },
+                pixel: {
+                    label: 'Sell Google Pixel',
+                    image: '/assets/googlepixel.webp',
+                    models: [
+                        { label: 'Pixel 9 Pro', slug: 'google-pixel-9-pro' },
+                        { label: 'Pixel 9', slug: 'google-pixel-9' },
+                        { label: 'Pixel 8 Pro', slug: 'google-pixel-8-pro' }
+                    ]
+                },
+                ipad: {
+                    label: 'Sell iPad',
+                    image: '/assets/ipad.svg',
+                    models: [
+                        { label: 'iPad Pro 13', slug: 'ipad-pro-13' },
+                        { label: 'iPad Pro 11', slug: 'ipad-pro-11' },
+                        { label: 'iPad Air', slug: 'ipad-air' }
+                    ]
+                }
+            };
+
+            function renderDeviceCards() {
+                if (!deviceOptionsContainer) return;
+                deviceOptionsContainer.innerHTML = '';
+                Object.entries(deviceCatalog).forEach(([key, device]) => {
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'device-card';
+                    card.dataset.deviceKey = key;
+                    card.innerHTML = `
+                        <img src="${device.image}" alt="${device.label}">
+                        <div>${device.label}</div>
+                    `;
+                    card.addEventListener('click', () => {
+                        renderModelButtons(key);
+                        setStep('model');
+                    });
+                    deviceOptionsContainer.appendChild(card);
+                });
+            }
+
+            function renderModelButtons(deviceKey) {
+                if (!modelOptionsContainer) return;
+                const device = deviceCatalog[deviceKey];
+                if (!device) return;
+                modelOptionsContainer.innerHTML = '';
+                device.models.forEach((model) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'pill-button';
+                    button.textContent = model.label;
+                    button.addEventListener('click', () => {
+                        const targetUrl = new URL('/sell', window.location.origin);
+                        targetUrl.searchParams.set('device', model.slug);
+                        targetUrl.hash = '#step-storage';
+                        window.location.href = targetUrl.toString();
+                    });
+                    modelOptionsContainer.appendChild(button);
+                });
+            }
             
             // The following parameters are kept for compatibility with the old link format
             // which might still pass them, but they are generally ignored if deviceParam is used
@@ -1907,7 +1970,7 @@
             const priceParam = urlParams.get('price');
             
             // Use the new robust parsing logic
-            deviceInfo = getBrandAndSlug(deviceParam);
+            deviceInfo = deviceParam ? getBrandAndSlug(deviceParam) : null;
 
             // Log the URL parameters for debugging
             console.log('URL Parameters:', {
@@ -1921,8 +1984,9 @@
             // Validate required parameters: We only need a successfully parsed brand and slug
             if (!deviceInfo || !deviceInfo.brand || !deviceInfo.slug) {
                 loadingIndicator.classList.add('hidden');
-                errorDisplay.classList.remove('hidden');
-                console.error("Missing required parameters (device=brand-slug) or invalid URL format.");
+                questionContainer.classList.remove('hidden');
+                renderDeviceCards();
+                setStep('device');
                 return;
             }
 
@@ -2084,13 +2148,6 @@
                 console.log('Applying URL parameter prefill...', deviceInfo);
 
                 setTimeout(() => {
-                    const carrierSection = document.getElementById('step-carrier');
-                    const powerOnSection = document.getElementById('step-power');
-                    const functionalSection = document.getElementById('step-functional');
-                    const cracksSection = document.getElementById('step-cracks');
-                    const cosmeticSection = document.getElementById('step-cosmetic');
-                    const getQuoteBtn = document.getElementById('getQuoteBtn');
-
                     const carrierMapping = {
                         unlocked: 'unlocked',
                         verizon: 'verizon',
@@ -2107,12 +2164,9 @@
 
                     if (deviceInfo.storage && storageOptionExists) {
                         storageSelect.value = deviceInfo.storage;
-                        if (carrierSection) carrierSection.classList.remove('hidden');
-                    } else if (carrierSection && (deviceInfo.carrier || deviceInfo.power || deviceInfo.functionality || deviceInfo.quality)) {
-                        carrierSection.classList.remove('hidden');
+                        syncStorageButtons();
                     }
 
-                    let carrierSelected = false;
                     if (carrierParam) {
                         const normalizedCarrier = carrierMapping[carrierParam] || carrierParam;
                         const carrierRadio = document.querySelector(`input[name="carrier"][value="${carrierParam}"]`) ||
@@ -2121,149 +2175,39 @@
 
                         if (carrierRadio) {
                             carrierRadio.checked = true;
-                            carrierSelected = true;
-                        }
-
-                        if (carrierSection) {
-                            carrierSection.classList.remove('hidden');
                         }
                     }
 
-                    if (powerOnSection && (carrierSelected || deviceInfo.power || storageOptionExists)) {
-                        powerOnSection.classList.remove('hidden');
-                    }
-
-                    let powerSelected = '';
-                    if (deviceInfo.power) {
-                        const powerValue = deviceInfo.power.toLowerCase();
-                        const powerRadio = document.querySelector(`input[name="q1_power_on"][value="${powerValue}"]`);
-                        if (powerRadio) {
-                            powerRadio.checked = true;
-                            powerSelected = powerValue;
+                    if (qualityValue) {
+                        const cosmeticMapping = {
+                            flawless: 'flawless',
+                            mint: 'flawless',
+                            new: 'flawless',
+                            pristine: 'flawless',
+                            good: 'good',
+                            great: 'good',
+                            excellent: 'good',
+                            gentlyused: 'good',
+                            scratched: 'good',
+                            fair: 'fair',
+                            average: 'fair',
+                            used: 'fair',
+                            worn: 'fair',
+                            damaged: 'damaged',
+                            cracked: 'damaged',
+                            broken: 'damaged',
+                            faulty: 'damaged'
+                        };
+                        const cosmeticValue = cosmeticMapping[qualityValue] || 'fair';
+                        const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${cosmeticValue}"]`);
+                        if (cosmeticRadio) {
+                            cosmeticRadio.checked = true;
+                            cosmeticConditionDescription.textContent = cosmeticDescriptions[cosmeticValue];
+                            cosmeticConditionDescription.classList.remove('hidden');
                         }
                     }
 
-                    if (!powerSelected) {
-                        powerSelected = document.querySelector('input[name="q1_power_on"]:checked')?.value || '';
-                    }
-
-                    if (powerSelected === 'yes') {
-                        if (functionalSection) {
-                            functionalSection.classList.remove('hidden');
-                        }
-
-                        let functionalSelected = '';
-                        if (deviceInfo.functionality) {
-                            const functionalValue = deviceInfo.functionality === 'working' ? 'yes' : 'no';
-                            const functionalRadio = document.querySelector(`input[name="q2_fully_functional"][value="${functionalValue}"]`);
-                            if (functionalRadio) {
-                                functionalRadio.checked = true;
-                                functionalSelected = functionalValue;
-                            }
-                        }
-
-                        if (!functionalSelected) {
-                            functionalSelected = document.querySelector('input[name="q2_fully_functional"]:checked')?.value || '';
-                        }
-
-                        if (functionalSelected === 'yes') {
-                            if (cracksSection) {
-                                cracksSection.classList.remove('hidden');
-                            }
-
-                            if (qualityValue) {
-                                const cracksValue = ['damaged', 'broken', 'cracked'].includes(qualityValue) ? 'no' : 'yes'; // "cracked" kept for legacy URLs
-                                const cracksRadio = document.querySelector(`input[name="q3_no_cracks"][value="${cracksValue}"]`);
-                                if (cracksRadio) {
-                                    cracksRadio.checked = true;
-                                }
-
-                                if (cracksValue === 'yes') {
-                                    if (cosmeticSection) {
-                                        cosmeticSection.classList.remove('hidden');
-                                    }
-
-                                    const cosmeticMapping = {
-                                        flawless: 'flawless',
-                                        mint: 'flawless',
-                                        new: 'flawless',
-                                        pristine: 'flawless',
-                                        good: 'good',
-                                        great: 'good',
-                                        excellent: 'good',
-                                        gentlyused: 'good',
-                                        scratched: 'good',
-                                        fair: 'fair',
-                                        average: 'fair',
-                                        used: 'fair',
-                                        worn: 'fair',
-                                        damaged: 'damaged',
-                                        cracked: 'damaged' // legacy quality option maps to damaged
-                                    };
-
-                                    const cosmeticValue = cosmeticMapping[qualityValue] || 'fair';
-                                    const cosmeticRadio = document.querySelector(`input[name="q4_cosmetic_condition"][value="${cosmeticValue}"]`);
-                                    if (cosmeticRadio) {
-                                        cosmeticRadio.checked = true;
-                                    }
-                                } else if (cosmeticSection) {
-                                    uncheckRadiosInContainer(cosmeticSection);
-                                }
-                            }
-                        } else if (functionalSelected === 'no') {
-                            if (cracksSection) {
-                                cracksSection.classList.add('hidden');
-                            }
-                            if (cosmeticSection) {
-                                uncheckRadiosInContainer(cosmeticSection);
-                            }
-                        }
-                    } else if (powerSelected === 'no') {
-                        if (functionalSection) {
-                            functionalSection.classList.add('hidden');
-                        }
-                        if (cracksSection) {
-                            cracksSection.classList.add('hidden');
-                        }
-                        if (cosmeticSection) {
-                            uncheckRadiosInContainer(cosmeticSection);
-                        }
-                    }
-
-                    const selectedStorage = document.getElementById('storage').value;
-                    const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
-                    const selectedPower = document.querySelector('input[name="q1_power_on"]:checked')?.value;
-                    const selectedFunctional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value;
-                    const selectedCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
-                    const selectedCosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
-
-                    let hasAllAnswers = false;
-                    if (selectedStorage && selectedCarrier && selectedPower) {
-                        if (selectedPower === 'no') {
-                            hasAllAnswers = true;
-                        } else if (selectedFunctional) {
-                            if (selectedFunctional === 'no') {
-                                hasAllAnswers = true;
-                            } else if (selectedCracks) {
-                                if (selectedCracks === 'no') {
-                                    hasAllAnswers = true;
-                                } else if (selectedCosmetic) {
-                                    hasAllAnswers = true;
-                                }
-                            }
-                        }
-                    }
-
-                    syncStorageButtons();
                     updateDeviceNameInline();
-
-                    if (hasAllAnswers && getQuoteBtn) {
-                        getQuoteBtn.classList.remove('hidden');
-                        setStep('quote', { updateHash: false });
-                        setTimeout(() => {
-                            getQuoteBtn.click();
-                        }, 100);
-                    }
 
                     const hashStep = getStepFromHash();
                     const nextStep = hashStep || determineStepFromAnswers();
@@ -3082,23 +3026,21 @@
                 });
             });
 
+            const deviceSection = document.getElementById('step-device');
+            const modelSection = document.getElementById('step-model');
+            const storageSection = document.getElementById('step-storage');
             const carrierSection = document.getElementById('step-carrier');
-            const powerOnSection = document.getElementById('step-power');
-            const functionalSection = document.getElementById('step-functional');
-            const cracksSection = document.getElementById('step-cracks');
             const cosmeticSection = document.getElementById('step-cosmetic');
             const quoteSection = document.getElementById('step-quote');
-            const storageSection = document.getElementById('step-storage');
             const stepSections = {
+                device: deviceSection,
+                model: modelSection,
                 storage: storageSection,
                 carrier: carrierSection,
-                power: powerOnSection,
-                functional: functionalSection,
-                cracks: cracksSection,
                 cosmetic: cosmeticSection,
                 quote: quoteSection
             };
-            const stepOrder = ['storage', 'carrier', 'power', 'functional', 'cracks', 'cosmetic', 'quote'];
+            const stepOrder = ['device', 'model', 'storage', 'carrier', 'cosmetic', 'quote'];
             
             // Helper function to uncheck all radios in a container
             function uncheckRadiosInContainer(container) {
@@ -3131,21 +3073,13 @@
             }
 
             function determineStepFromAnswers() {
+                if (!deviceParam) return 'device';
                 const selectedStorage = document.getElementById('storage').value;
                 const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
-                const q1PowerOn = document.querySelector('input[name="q1_power_on"]:checked')?.value;
-                const q2Functional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value;
-                const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
                 const q4Cosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
 
                 if (!selectedStorage) return 'storage';
                 if (!selectedCarrier) return 'carrier';
-                if (!q1PowerOn) return 'power';
-                if (q1PowerOn === 'no') return 'quote';
-                if (!q2Functional) return 'functional';
-                if (q2Functional === 'no') return 'quote';
-                if (!q3NoCracks) return 'cracks';
-                if (q3NoCracks === 'no') return 'quote';
                 if (!q4Cosmetic) return 'cosmetic';
                 return 'quote';
             }
@@ -3181,19 +3115,8 @@
             function isQuestionnaireComplete() {
                 const selectedStorage = document.getElementById('storage').value;
                 const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
-                const q1PowerOn = document.querySelector('input[name="q1_power_on"]:checked')?.value;
-                const q2Functional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value;
-                const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
                 const q4Cosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
-
-                if (!selectedStorage || !selectedCarrier || !q1PowerOn) return false;
-
-                if (q1PowerOn === 'no') return true;
-                if (!q2Functional) return false;
-                if (q2Functional === 'no') return true;
-                if (!q3NoCracks) return false;
-                if (q3NoCracks === 'no') return true;
-                return Boolean(q4Cosmetic);
+                return Boolean(selectedStorage && selectedCarrier && q4Cosmetic);
             }
 
             document.getElementById('storage').addEventListener('change', function() {
@@ -3216,53 +3139,11 @@
                 radio.addEventListener('change', () => {
                     document.getElementById('carrierOptions').classList.remove('highlight-missing');
                     updateDeviceNameInline();
-                    setStep('power');
+                    setStep('cosmetic');
                     updateQuoteStep();
                     clearQuoteMessage();
                     saveFormState();
                     resetStepsAfter('carrier');
-                });
-            });
-
-            document.querySelectorAll('input[name="q1_power_on"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (radio.value === 'yes') {
-                        setStep('functional');
-                    } else {
-                        setStep('quote');
-                    }
-                    updateQuoteStep();
-                    clearQuoteMessage();
-                    saveFormState();
-                    resetStepsAfter('power');
-                });
-            });
-            
-            document.querySelectorAll('input[name="q2_fully_functional"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (radio.value === 'yes') {
-                        setStep('cracks');
-                    } else {
-                        setStep('quote');
-                    }
-                    updateQuoteStep();
-                    clearQuoteMessage();
-                    saveFormState();
-                    resetStepsAfter('functional');
-                });
-            });
-            
-            document.querySelectorAll('input[name="q3_no_cracks"]').forEach(radio => {
-                radio.addEventListener('change', () => {
-                    if (radio.value === 'yes') {
-                        setStep('cosmetic');
-                    } else {
-                        setStep('quote');
-                    }
-                    updateQuoteStep();
-                    clearQuoteMessage();
-                    saveFormState();
-                    resetStepsAfter('cracks');
                 });
             });
 
@@ -3342,9 +3223,9 @@
                 
                 const selectedStorage = document.getElementById('storage').value;
                 const selectedCarrier = document.querySelector('input[name="carrier"]:checked')?.value;
-                const q1PowerOn = document.querySelector('input[name="q1_power_on"]:checked')?.value;
-                const q2Functional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value;
-                const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value;
+                const q1PowerOn = document.querySelector('input[name="q1_power_on"]:checked')?.value || 'yes';
+                const q2Functional = document.querySelector('input[name="q2_fully_functional"]:checked')?.value || 'yes';
+                const q3NoCracks = document.querySelector('input[name="q3_no_cracks"]:checked')?.value || 'yes';
                 const q4Cosmetic = document.querySelector('input[name="q4_cosmetic_condition"]:checked')?.value;
 
                 let hasError = false;
@@ -3357,19 +3238,7 @@
                     document.getElementById('carrierOptions').classList.add('highlight-missing');
                     hasError = true;
                 }
-                if (!q1PowerOn) {
-                    document.getElementById('step-power').classList.add('highlight-missing');
-                    hasError = true;
-                }
-                if (q1PowerOn === 'yes' && !q2Functional) {
-                    document.getElementById('step-functional').classList.add('highlight-missing');
-                    hasError = true;
-                }
-                if (q1PowerOn === 'yes' && q2Functional === 'yes' && !q3NoCracks) {
-                    document.getElementById('step-cracks').classList.add('highlight-missing');
-                    hasError = true;
-                }
-                if (q1PowerOn === 'yes' && q2Functional === 'yes' && q3NoCracks === 'yes' && !q4Cosmetic) {
+                if (!q4Cosmetic) {
                     document.getElementById('step-cosmetic').classList.add('highlight-missing');
                     hasError = true;
                 }
