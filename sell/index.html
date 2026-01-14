@@ -83,8 +83,12 @@
         </div>
         <nav class="header-auth-nav">
             <div id="authStatusContainer" class="site-header__auth-wrapper">
-                <a href="/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
+                <a href="#" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
                 <div id="userMonogram" class="user-monogram hidden"></div>
+                <div id="authDropdown" class="auth-dropdown hidden">
+                    <a href="/my-account.html" class="auth-dropdown__link">My Account</a>
+                    <button id="logoutBtn" type="button" class="auth-dropdown__button btn-red-logout">Logout</button>
+                </div>
             </div>
         </nav>
     </div>
@@ -128,6 +132,20 @@
     </div>
 </main>
 
+<!-- Login Modal -->
+<div id="loginModal" class="modal-overlay">
+    <div class="modal-card">
+        <h2 class="text-2xl font-bold mb-6">Trade-in Account</h2>
+        <p class="text-slate-500 mb-6">Sign in to save your order or continue as guest.</p>
+        <div class="space-y-4">
+            <button id="modalLoginBtn" class="btn-primary w-full">Login / Sign Up</button>
+            <button id="modalGuestBtn" class="w-full py-4 rounded-lg border-2 border-slate-200 font-bold text-slate-600 hover:bg-slate-50">Continue as Guest</button>
+        </div>
+        <button class="mt-6 text-slate-400 text-sm" onclick="document.getElementById('loginModal').style.display='none'">Cancel</button>
+    </div>
+</div>
+
+<!-- Quantity Modal -->
 <div class="modal-overlay" id="qty-modal">
     <div class="modal-card">
         <h3 class="text-xl font-bold mb-2">Quantity</h3>
@@ -138,11 +156,10 @@
             <button id="qtyPlus" class="w-12 h-12 rounded-full border-2 border-green-700 text-green-700 text-2xl font-bold">+</button>
         </div>
         <button class="btn-primary" id="finalSubmitBtn">PROCEED TO SHIPPING</button>
-        <button class="mt-4 text-slate-400 text-sm block mx-auto" onclick="document.getElementById('qty-modal').style.display='none'">Cancel</button>
     </div>
 </div>
 
-<footer class="bg-slate-800 text-white">
+<footer class="bg-slate-800 text-white mt-20">
     <div class="container mx-auto px-4 py-12">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
@@ -152,7 +169,7 @@
             </div>
             <div class="bg-slate-700 p-6 rounded-lg">
                 <h3 class="text-xl font-bold mb-2 text-white">Stay Updated </h3>
-                <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                <p class="text-slate-300 mb-4 text-sm">Sign up for promos and price increases!</p>
                 <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
                     <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                     <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Sign Up</button>
@@ -181,6 +198,7 @@
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getFirestore, collection, getDocs, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
@@ -193,7 +211,26 @@
     };
 
     const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
     const db = getFirestore(app);
+
+    let currentUser = null;
+
+    // Monitor Auth State for Header & Modal
+    onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        const loginBtn = document.getElementById('loginNavBtn');
+        const monogram = document.getElementById('userMonogram');
+        if (user) {
+            loginBtn.classList.add('hidden');
+            monogram.classList.remove('hidden');
+            monogram.textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : 'U';
+            document.getElementById('user-email').value = user.email || '';
+        } else {
+            loginBtn.classList.remove('hidden');
+            monogram.classList.add('hidden');
+        }
+    });
 
     const BRAND_OPTIONS = [
         { key: 'iphone', label: 'iPhone' },
@@ -219,7 +256,7 @@
 
     const state = {
         currentStep: 'brand',
-        selections: { brand: '', modelId: '', modelName: '', storage: '', lock: '', condition: 'good', qty: 1 },
+        selections: { brand: '', model: '', modelName: '', storage: '', lock: '', condition: 'good', qty: 1 },
         deviceData: null,
         modelsCache: {},
         isFinalView: false
@@ -230,48 +267,50 @@
     const updateURL = () => {
         const url = new URL(window.location);
         Object.entries(state.selections).forEach(([key, val]) => {
-            if (val && key !== 'qty') url.searchParams.set(key, val);
-            else url.searchParams.delete(key);
+            if (val && key !== 'qty' && key !== 'modelName') url.searchParams.set(key, val);
+            else if (key !== 'qty' && key !== 'modelName') url.searchParams.delete(key);
         });
         window.history.replaceState({}, '', url);
     };
 
+    const getModels = async (brand) => {
+        if (state.modelsCache[brand]) return state.modelsCache[brand];
+        const colRef = collection(db, "devices", brand, "models");
+        const snap = await getDocs(colRef);
+        const models = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        state.modelsCache[brand] = models;
+        return models;
+    };
+
     const hydrateFromURL = async () => {
         const params = new URLSearchParams(window.location.search);
-        
         if (params.has('brand')) {
             const b = params.get('brand');
-            if (BRAND_OPTIONS.some(opt => opt.key === b)) {
-                state.selections.brand = b;
-                state.currentStep = 'model';
-                
-                if (params.has('modelId')) {
-                    const mId = params.get('modelId');
-                    const models = await getModels(b);
-                    const match = models.find(m => m.id === mId);
-                    if (match) {
-                        state.selections.modelId = mId;
-                        state.selections.modelName = match.name;
-                        state.deviceData = match;
-                        state.currentStep = 'storage';
-                        
-                        if (params.has('storage')) {
-                            const s = params.get('storage');
-                            if (state.deviceData.prices[s]) {
-                                state.selections.storage = s;
-                                state.currentStep = 'lock';
-                                
-                                if (params.has('lock')) {
-                                    const l = params.get('lock');
-                                    if (state.deviceData.prices[s][l]) {
-                                        state.selections.lock = l;
-                                        state.currentStep = 'condition';
-                                        
-                                        if (params.has('condition')) {
-                                            state.selections.condition = params.get('condition');
-                                            showFinalOffer();
-                                            return;
-                                        }
+            state.selections.brand = b;
+            state.currentStep = 'model';
+            if (params.has('model')) {
+                const mId = params.get('model');
+                const models = await getModels(b);
+                const match = models.find(m => m.id === mId);
+                if (match) {
+                    state.selections.model = mId;
+                    state.selections.modelName = match.name;
+                    state.deviceData = match;
+                    state.currentStep = 'storage';
+                    if (params.has('storage')) {
+                        const s = params.get('storage');
+                        if (state.deviceData.prices[s]) {
+                            state.selections.storage = s;
+                            state.currentStep = 'lock';
+                            if (params.has('lock')) {
+                                const l = params.get('lock');
+                                if (state.deviceData.prices[s][l]) {
+                                    state.selections.lock = l;
+                                    state.currentStep = 'condition';
+                                    if (params.has('condition')) {
+                                        state.selections.condition = params.get('condition');
+                                        showFinalOffer();
+                                        return;
                                     }
                                 }
                             }
@@ -287,11 +326,9 @@
         const container = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
         container.innerHTML = '';
         const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
-
         stepOrder.forEach((step, i) => {
             const span = document.createElement('span');
             span.className = `crumb ${i === currentIdx ? 'active' : ''} ${i < currentIdx ? 'filled' : ''}`;
-            
             let label = step.charAt(0).toUpperCase() + step.slice(1);
             if (i <= currentIdx) {
                 if (step === 'brand') label = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || label;
@@ -300,7 +337,6 @@
                 if (step === 'lock') label = LOCK_LABELS[state.selections.lock] || state.selections.lock || label;
                 if (step === 'condition') label = CONDITION_DEFS.find(c => c.key === state.selections.condition)?.name || label;
             }
-            
             span.textContent = label;
             if (i < currentIdx) span.onclick = () => jumpToStep(step);
             container.appendChild(span);
@@ -320,28 +356,21 @@
         const title = document.getElementById('step-name');
         grid.innerHTML = '';
         updateCrumbs();
-
         if (state.currentStep === 'brand') {
             title.textContent = "Select Brand";
             BRAND_OPTIONS.forEach(b => createCard(grid, b.label, b.key));
-        } 
-        else if (state.currentStep === 'model') {
+        } else if (state.currentStep === 'model') {
             title.textContent = `Select Model`;
-            grid.innerHTML = '<div class="col-span-full text-center text-slate-400">Fetching models...</div>';
+            grid.innerHTML = '<div class="col-span-full text-center py-10 text-slate-400">Fetching models...</div>';
             const models = await getModels(state.selections.brand);
             grid.innerHTML = '';
             models.forEach(m => createCard(grid, m.name, m.id));
-        }
-        else if (state.currentStep === 'storage') {
+        } else if (state.currentStep === 'storage') {
             title.textContent = "Select Storage Capacity";
             Object.keys(state.deviceData.prices || {}).forEach(s => createCard(grid, s, s));
-        }
-        else if (state.currentStep === 'lock') {
+        } else if (state.currentStep === 'lock') {
             title.textContent = "Select Network/Carrier";
             Object.keys(state.deviceData.prices[state.selections.storage] || {}).forEach(l => createCard(grid, LOCK_LABELS[l] || l, l));
-        }
-        else if (state.currentStep === 'condition') {
-             showFinalOffer();
         }
     };
 
@@ -356,7 +385,6 @@
     const handleSelection = async (value, label) => {
         state.selections[state.currentStep] = value;
         updateURL();
-        
         if (state.currentStep === 'brand') state.currentStep = 'model';
         else if (state.currentStep === 'model') {
             state.selections.modelName = label;
@@ -364,22 +392,9 @@
             const snap = await getDoc(docRef);
             state.deviceData = snap.data();
             state.currentStep = 'storage';
-        }
-        else if (state.currentStep === 'storage') state.currentStep = 'lock';
-        else if (state.currentStep === 'lock') {
-            showFinalOffer();
-            return;
-        }
+        } else if (state.currentStep === 'storage') state.currentStep = 'lock';
+        else if (state.currentStep === 'lock') { showFinalOffer(); return; }
         renderCurrentStep();
-    };
-
-    const getModels = async (brand) => {
-        if (state.modelsCache[brand]) return state.modelsCache[brand];
-        const colRef = collection(db, "devices", brand, "models");
-        const snap = await getDocs(colRef);
-        const models = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        state.modelsCache[brand] = models;
-        return models;
     };
 
     const showFinalOffer = () => {
@@ -422,6 +437,16 @@
     document.getElementById('startCheckoutBtn').onclick = () => {
         const email = document.getElementById('user-email').value;
         if (!email.includes('@')) return alert("Please enter a valid email to continue.");
+        if (currentUser) {
+            document.getElementById('qty-modal').style.display = 'flex';
+        } else {
+            document.getElementById('loginModal').style.display = 'flex';
+        }
+    };
+
+    document.getElementById('modalLoginBtn').onclick = () => window.location.href = '/login.html';
+    document.getElementById('modalGuestBtn').onclick = () => {
+        document.getElementById('loginModal').style.display = 'none';
         document.getElementById('qty-modal').style.display = 'flex';
     };
 
@@ -437,5 +462,8 @@
 
     hydrateFromURL();
 </script>
+
+<script src="/assets/js/ship48-banner.js" defer></script>
+<script type="module" src="/assets/js/global-auth.js" defer></script>
 </body>
 </html>

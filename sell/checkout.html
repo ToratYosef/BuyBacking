@@ -48,18 +48,31 @@
         .input-group label { display: block; font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 5px; text-transform: uppercase; }
         .input-field { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; outline: none; transition: 0.2s; }
         .input-field:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.1); }
-        .payment-opt { border: 2px solid var(--border); border-radius: 12px; padding: 15px; cursor: pointer; text-align: center; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .payment-opt.active { border-color: var(--brand-primary); background: #f0fdf4; }
+        
+        .option-pill { display: none; }
+        .option-label { cursor: pointer; border: 2px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+        .option-pill:checked + .option-label { border-color: var(--brand-primary); background-color: #f0fdf4; box-shadow: 0 4px 12px rgba(21, 128, 61, 0.1); }
+
         .summary-card { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); position: sticky; top: 20px; }
         .btn-submit { width: 100%; padding: 18px; background: var(--brand-gradient); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 20px; transition: 0.3s; }
         .btn-submit:hover { opacity: 0.9; transform: scale(1.01); }
+
+        .user-monogram {
+            display: flex; align-items: center; justify-content: center;
+            width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+            background-color: #dbeafe; color: #1d4ed8; font-weight: 700; cursor: pointer;
+        }
+        .auth-dropdown {
+            position: absolute; right: 0; margin-top: 0.5rem; width: 12rem;
+            background-color: white; border-radius: 0.375rem; padding: 0.5rem 0;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); z-index: 50;
+        }
     </style>
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
 </head>
 <body>
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
-<!-- Site Header -->
 <header class="site-header">
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
@@ -74,23 +87,50 @@
             <p class="logo-tagline">Turn Your Old <span>Phone Into Cash!</span></p>
         </div>
         <nav class="header-auth-nav">
-            <div id="authStatusContainer" class="site-header__auth-wrapper">
+            <div id="authStatusContainer" class="site-header__auth-wrapper relative">
                 <a href="/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
-                <div id="userMonogram" class="user-monogram hidden"></div>
+                <div id="userMonogram" class="user-monogram hidden" onclick="document.getElementById('authDropdown').classList.toggle('hidden')"></div>
+                <div id="authDropdown" class="auth-dropdown hidden">
+                    <a href="/my-account.html" class="block px-4 py-2 text-sm hover:bg-slate-50">My Account</a>
+                    <button id="logoutBtn" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Logout</button>
+                </div>
             </div>
         </nav>
     </div>
 </header>
 
 <main class="checkout-wrapper">
-    <!-- Main Form -->
     <div id="checkout-form">
+        <!-- Step 1: Shipping Preference -->
         <div class="section-card">
-            <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Address</h2>
+            <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Preference</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <input type="radio" id="email_label" name="shipping_preference" value="email_label" class="option-pill" checked>
+                    <label for="email_label" class="option-label">
+                        <i class="fa-solid fa-envelope text-3xl text-green-600 mb-2"></i>
+                        <span class="font-bold">Email Me a Label</span>
+                        <span class="text-xs text-slate-500 mt-1">I have my own box (Fastest)</span>
+                    </label>
+                </div>
+                <div>
+                    <input type="radio" id="ship_kit" name="shipping_preference" value="ship_kit" class="option-pill">
+                    <label for="ship_kit" class="option-label">
+                        <i class="fa-solid fa-box text-3xl text-indigo-600 mb-2"></i>
+                        <span class="font-bold">Ship Me a Box</span>
+                        <span class="text-xs text-slate-500 mt-1">+$10 convenience fee</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Shipping Address -->
+        <div class="section-card">
+            <h2 class="text-xl font-bold mb-6 border-b pb-2">2. Shipping Address</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="input-group md:col-span-2">
                     <label>Full Name</label>
-                    <input type="text" id="fullName" class="input-field" placeholder="John Doe">
+                    <input type="text" id="fullName" class="input-field" placeholder="Full Name">
                 </div>
                 <div class="input-group">
                     <label>Phone Number</label>
@@ -103,6 +143,10 @@
                 <div class="input-group md:col-span-2">
                     <label>Street Address</label>
                     <input type="text" id="streetAddress" class="input-field" placeholder="123 Main St">
+                </div>
+                <div class="input-group">
+                    <label>Apt / Unit (Optional)</label>
+                    <input type="text" id="addressUnit" class="input-field" placeholder="Apt 1">
                 </div>
                 <div class="input-group">
                     <label>City</label>
@@ -124,8 +168,9 @@
             </div>
         </div>
 
+        <!-- Step 3: Payout Method -->
         <div class="section-card">
-            <h2 class="text-xl font-bold mb-6 border-b pb-2">2. Payout Method</h2>
+            <h2 class="text-xl font-bold mb-6 border-b pb-2">3. Payout Method</h2>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" id="payment-methods">
                 <div class="payment-opt active" data-method="cashapp">
                     <i class="fa-solid fa-dollar-sign text-2xl mb-1 text-green-600"></i>
@@ -159,7 +204,7 @@
         </div>
     </div>
 
-    <!-- Summary Sidebar -->
+    <!-- Sidebar Summary -->
     <aside>
         <div class="summary-card">
             <h3 class="text-lg font-bold mb-4 border-b pb-2">Trade-in Summary</h3>
@@ -176,6 +221,10 @@
                     <span class="text-slate-500 text-sm">Quantity</span>
                     <span id="sum-qty" class="font-bold text-sm">1</span>
                 </div>
+                <div id="kit-fee-row" class="flex justify-between hidden text-red-600">
+                    <span class="text-sm">Shipping Kit Fee</span>
+                    <span class="text-sm font-bold">-$10.00</span>
+                </div>
                 <div class="pt-4 mt-4 border-t flex justify-between items-end">
                     <span class="text-slate-800 font-bold">Total Payout</span>
                     <span id="sum-total" class="text-3xl font-black text-green-700">$0</span>
@@ -185,44 +234,30 @@
     </aside>
 </main>
 
-<footer class="bg-slate-800 text-white">
+<footer class="bg-slate-800 text-white mt-20">
     <div class="container mx-auto px-4 py-12">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
-                <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
-                <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="/" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="/privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="/terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
-                <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
+                <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Trusted tech buyback partner.</p></div>
+                <div><h3 class="text-xl font-bold mb-4">Quick Links</h3><ul class="space-y-2 text-sm text-slate-400"><li><a href="/">Home</a></li><li><a href="/privacy.html">Privacy</a></li><li><a href="/terms.html">Terms</a></li></ul></div>
+                <div><h3 class="text-xl font-bold mb-4">Contact</h3><p class="text-slate-400 text-sm">support@secondhandcell.com</p></div>
             </div>
             <div class="bg-slate-700 p-6 rounded-lg">
-                <h3 class="text-xl font-bold mb-2 text-white">Stay Updated </h3>
-                <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
-                <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
-                    <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Sign Up</button>
-                </form>
-                <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
+                <h3 class="text-xl font-bold mb-2">Stay Updated</h3>
+                <form class="flex gap-2"><input type="email" placeholder="Email" class="p-2 rounded bg-slate-800 w-full"><button class="bg-blue-600 px-4 rounded font-bold">Join</button></form>
             </div>
         </div>
         <div class="bg-slate-800 text-white p-6 rounded-xl shadow-lg mt-8 text-center border-2 border-red-600">
             <p class="text-lg font-bold">IMPORTANT NOTICE</p>
-            <p class="mt-2 text-sm md:text-base">We do not purchase blacklisted or lost/stolen devices. All devices are verified through a legal compliance check.</p>
+            <p class="mt-2 text-sm">No lost or stolen devices. Legally verified via GSMA.</p>
         </div>
-        <div class="mt-8">
-            <div class="flex flex-wrap items-center justify-center gap-6 sm:flex-row sm:justify-center sm:gap-8 lg:justify-start">
-                <a href="https://www.sellcell.com/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
-                    <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" width="150" height="107" alt="SellCell Accredited Buyer" loading="lazy" class="h-20 w-auto object-contain">
-                </a>
-                <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
-                    <img src="https://cdn.trustpilot.net/brand-assets/4.1.0/stars/stars-5.png" alt="Trustpilot 5 star rating" loading="lazy" class="h-12 w-auto object-contain">
-                </a>
-            </div>
-        </div>
-        <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
+        <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm">&copy; 2025 SecondHandCell.</div>
     </div>
 </footer>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -236,12 +271,28 @@
     };
 
     const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
     const db = getFirestore(app);
 
     const params = new URLSearchParams(window.location.search);
     let selectedMethod = 'cashapp';
     let unitPrice = 0;
     let deviceName = '';
+
+    onAuthStateChanged(auth, (user) => {
+        const loginBtn = document.getElementById('loginNavBtn');
+        const monogram = document.getElementById('userMonogram');
+        if (user) {
+            loginBtn.classList.add('hidden');
+            monogram.classList.remove('hidden');
+            monogram.textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U');
+            if (!document.getElementById('fullName').value) document.getElementById('fullName').value = user.displayName || '';
+            if (!document.getElementById('email').value) document.getElementById('email').value = user.email || '';
+        } else {
+            loginBtn.classList.remove('hidden');
+            monogram.classList.add('hidden');
+        }
+    });
 
     const init = async () => {
         const b = params.get('brand');
@@ -255,35 +306,35 @@
         if (email) document.getElementById('email').value = email;
 
         try {
-            if (!b || !m || !s || !l || !c) {
-                console.warn("Missing required trade-in parameters. Amount may be $0.");
-                return;
-            }
-
             const docRef = doc(db, "devices", b, "models", m);
             const snap = await getDoc(docRef);
             if (snap.exists()) {
                 const data = snap.data();
                 deviceName = data.name;
-
-                // Robust price lookup: handle potential case mismatches (e.g., "128GB" vs "128gb")
-                const storageKey = data.prices[s] ? s : s.toLowerCase();
-                const storageMap = data.prices[storageKey] || {};
-                
-                const lockKey = storageMap[l] ? l : l.toLowerCase();
-                const lockMap = storageMap[lockKey] || {};
-                
+                const getVal = (obj, key) => obj[key] || obj[key.toLowerCase()] || obj[key.toUpperCase()];
+                const storageMap = getVal(data.prices, s) || {};
+                const lockMap = getVal(storageMap, l) || {};
                 unitPrice = lockMap[c] || 0;
                 
                 document.getElementById('sum-device').textContent = data.name;
                 document.getElementById('sum-specs').textContent = `${s} • ${l}`;
                 document.getElementById('sum-qty').textContent = qty;
-                document.getElementById('sum-total').textContent = `$${(unitPrice * qty).toFixed(2)}`;
+                updateSummary();
             }
-        } catch (err) {
-            console.error("Initialization error:", err);
-        }
+        } catch (err) { console.error(err); }
     };
+
+    const updateSummary = () => {
+        const isKit = document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit';
+        const qty = parseInt(document.getElementById('sum-qty').textContent);
+        const fee = isKit ? 10 : 0;
+        const total = Math.max((unitPrice * qty) - fee, 0);
+        
+        document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
+        document.getElementById('sum-total').textContent = `$${total.toFixed(2)}`;
+    };
+
+    document.querySelectorAll('input[name="shipping_preference"]').forEach(r => r.onchange = updateSummary);
 
     document.querySelectorAll('.payment-opt').forEach(opt => {
         opt.onclick = () => {
@@ -297,37 +348,49 @@
     });
 
     document.getElementById('submitOrderBtn').onclick = async () => {
-        if (!document.getElementById('terms').checked) return alert("Please accept the terms and conditions.");
-        
+        if (!document.getElementById('terms').checked) return alert("Accept terms.");
         const required = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
-        for (let id of required) {
-            if (!document.getElementById(id).value) return alert("Please fill in all required fields.");
-        }
+        for (let id of required) { if (!document.getElementById(id).value) return alert("Fill all fields."); }
 
         const btn = document.getElementById('submitOrderBtn');
-        const qty = parseInt(params.get('qty') || '1');
-        const finalPayout = unitPrice * qty;
+        const pref = document.querySelector('input[name="shipping_preference"]:checked').value;
+        const qty = parseInt(document.getElementById('sum-qty').textContent);
+        const finalPayout = parseFloat(document.getElementById('sum-total').textContent.replace('$', ''));
 
         btn.disabled = true;
         btn.textContent = "Processing...";
 
+        const shippingInfo = {
+            fullName: document.getElementById('fullName').value,
+            email: document.getElementById('email').value,
+            phone: document.getElementById('phone').value,
+            streetAddress: document.getElementById('streetAddress').value,
+            addressUnit: document.getElementById('addressUnit').value,
+            city: document.getElementById('city').value,
+            state: document.getElementById('state').value,
+            zipCode: document.getElementById('zip').value,
+            shippingPreference: pref
+        };
+
+        const condKey = params.get('condition');
         const orderData = {
+            device: deviceName,
             brand: params.get('brand'),
             modelId: params.get('model'),
+            modelName: deviceName,
             storage: params.get('storage'),
+            carrier: params.get('lock'),
             lock: params.get('lock'),
-            condition: params.get('condition'),
+            condition: condKey,
+            condition_power_on: condKey === 'noPower' ? 'No' : 'Yes',
+            condition_functional: (condKey === 'broken' || condKey === 'noPower') ? 'No' : 'Yes',
+            condition_cracks: condKey === 'broken' ? 'Yes' : 'No',
+            condition_cosmetic: condKey,
             qty: qty,
             totalPayout: finalPayout,
-            shippingInfo: {
-                fullName: document.getElementById('fullName').value,
-                email: document.getElementById('email').value,
-                phone: document.getElementById('phone').value,
-                address: document.getElementById('streetAddress').value,
-                city: document.getElementById('city').value,
-                state: document.getElementById('state').value,
-                zip: document.getElementById('zip').value
-            },
+            estimatedQuote: finalPayout,
+            shippingPreference: pref === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
+            shippingInfo: shippingInfo,
             paymentMethod: selectedMethod,
             paymentIdentifier: document.getElementById('payoutIdentifier').value,
             createdAt: new Date().toISOString()
@@ -341,34 +404,29 @@
             });
             const result = await res.json();
             if (res.ok) {
-                // SellCell Tracking
-                if (typeof window.sellcell !== 'undefined') {
-                    window.sellcell.push({
-                        event: 'order_completed',
-                        order_id: result.orderId,
-                        total_value: finalPayout,
-                        item_count: qty
-                    });
-                }
+                const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
+                const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
-                // Push to success page with full info to avoid "$0" generic message
                 const successUrl = new URL('/order-submitted.html', window.location.origin);
                 successUrl.searchParams.set('id', result.orderId);
                 successUrl.searchParams.set('price', finalPayout.toFixed(2));
                 successUrl.searchParams.set('device', deviceName);
                 successUrl.searchParams.set('qty', qty);
+                successUrl.searchParams.set('name', shippingInfo.fullName);
+                successUrl.searchParams.set('street', shippingInfo.streetAddress);
+                successUrl.searchParams.set('unit', shippingInfo.addressUnit);
+                successUrl.searchParams.set('city', shippingInfo.city);
+                successUrl.searchParams.set('state', shippingInfo.state);
+                successUrl.searchParams.set('zip', shippingInfo.zipCode);
+                successUrl.searchParams.set('payMethod', selectedMethod);
+                successUrl.searchParams.set('shipping', pref);
+                
+                if (labelUrl) successUrl.searchParams.set('labelUrl', labelUrl);
+                if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);
                 
                 window.location.href = successUrl.toString();
-            } else {
-                alert("Error submitting order: " + (result.error || "Please try again later."));
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Submission failed. Check your internet connection.");
-        } finally {
-            btn.disabled = false;
-            btn.textContent = "SUBMIT MY TRADE-IN";
-        }
+            } else { alert("Submission failed: " + result.error); }
+        } catch (e) { alert("Server error."); } finally { btn.disabled = false; btn.textContent = "SUBMIT MY TRADE-IN"; }
     };
 
     init();
