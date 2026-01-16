@@ -43,6 +43,14 @@
             --neon-red: #ff3131;
         }
         body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background-color: #f8fafc; -webkit-font-smoothing: antialiased; }
+        
+        /* Disable Sticky Navbar for Checkout Page */
+        .site-header { 
+            position: relative !important; 
+            top: 0 !important; 
+            z-index: 100;
+        }
+
         .checkout-wrapper { max-width: 1100px; margin: 40px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 380px; gap: 30px; }
         @media (max-width: 900px) { .checkout-wrapper { grid-template-columns: 1fr; } }
         .section-card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); margin-bottom: 20px; }
@@ -56,23 +64,28 @@
             border-color: var(--neon-red) !important;
             box-shadow: 0 0 12px var(--neon-red) !important;
         }
-        .error-banner {
-            background: #fff1f2;
-            border: 1px solid var(--neon-red);
+        
+        /* Specific Error Text Logic */
+        .field-error-msg {
             color: var(--neon-red);
-            padding: 18px;
-            border-radius: 12px;
-            margin-bottom: 24px;
-            font-weight: 800;
+            font-size: 11px;
+            font-weight: 900;
             text-transform: uppercase;
-            font-size: 13px;
-            display: none;
-            animation: fadeIn 0.2s ease-out;
             letter-spacing: 0.5px;
-            box-shadow: 0 4px 10px rgba(255, 49, 49, 0.1);
+            margin-bottom: 4px;
+            display: none; 
+            animation: fadeIn 0.2s ease-out;
         }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+        /* Checkbox Neon Glow */
+        .checkbox-container.error-highlight {
+            border: 2px solid var(--neon-red);
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 0 12px var(--neon-red) !important;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 
         /* Consistent Selection UI */
         .option-pill { display: none; }
@@ -87,6 +100,7 @@
             display: flex; align-items: center; justify-content: center;
             width: 2.5rem; height: 2.5rem; border-radius: 9999px;
             background-color: #dbeafe; color: #1d4ed8; font-weight: 700; cursor: pointer;
+            font-size: 0.875rem; line-height: 1;
         }
         .auth-dropdown {
             position: absolute; right: 0; margin-top: 0.5rem; width: 12rem;
@@ -128,12 +142,6 @@
 
 <main class="checkout-wrapper">
     <div id="checkout-form">
-        <!-- Error Banner -->
-        <div id="form-error-banner" class="error-banner">
-            <i class="fa-solid fa-circle-exclamation mr-2"></i>
-            Error: Please complete all required fields highlighted below.
-        </div>
-
         <!-- Step 1: Shipping Preference -->
         <div class="section-card">
             <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Preference</h2>
@@ -158,23 +166,27 @@
         </div>
 
         <!-- Step 2: Shipping Address -->
-        <div class="section-card">
+        <div class="section-card" id="address-section">
             <h2 class="text-xl font-bold mb-6 border-b pb-2">2. Shipping Address</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="input-group md:col-span-2">
                     <label>Full Name</label>
+                    <div id="fullName-error" class="field-error-msg">Error: Please complete required field</div>
                     <input type="text" id="fullName" class="input-field" placeholder="Full Name">
                 </div>
                 <div class="input-group">
                     <label>Phone Number</label>
+                    <div id="phone-error" class="field-error-msg">Error: Please complete required field</div>
                     <input type="tel" id="phone" class="input-field" placeholder="(555) 555-5555">
                 </div>
                 <div class="input-group">
                     <label>Email Address</label>
+                    <div id="email-error" class="field-error-msg">Error: Please complete required field</div>
                     <input type="email" id="email" class="input-field">
                 </div>
                 <div class="input-group md:col-span-2">
                     <label>Street Address</label>
+                    <div id="streetAddress-error" class="field-error-msg">Error: Please complete required field</div>
                     <input type="text" id="streetAddress" class="input-field" placeholder="123 Main St">
                 </div>
                 <div class="input-group">
@@ -183,11 +195,13 @@
                 </div>
                 <div class="input-group">
                     <label>City</label>
+                    <div id="city-error" class="field-error-msg">Error: Please complete required field</div>
                     <input type="text" id="city" class="input-field">
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div class="input-group">
                         <label>State</label>
+                        <div id="state-error" class="field-error-msg">Error: Required</div>
                         <select id="state" class="input-field">
                             <option value="">Select State</option>
                             <option value="AL">Alabama</option><option value="AK">Alaska</option><option value="AZ">Arizona</option><option value="AR">Arkansas</option><option value="CA">California</option><option value="CO">Colorado</option><option value="CT">Connecticut</option><option value="DE">Delaware</option><option value="FL">Florida</option><option value="GA">Georgia</option><option value="HI">Hawaii</option><option value="ID">Idaho</option><option value="IL">Illinois</option><option value="IN">Indiana</option><option value="IA">Iowa</option><option value="KS">Kansas</option><option value="KY">Kentucky</option><option value="LA">Louisiana</option><option value="ME">Maine</option><option value="MD">Maryland</option><option value="MA">Massachusetts</option><option value="MI">Michigan</option><option value="MN">Minnesota</option><option value="MS">Mississippi</option><option value="MO">Missouri</option><option value="MT">Montana</option><option value="NE">Nebraska</option><option value="NV">Nevada</option><option value="NH">New Hampshire</option><option value="NJ">New Jersey</option><option value="NM">New Mexico</option><option value="NY">New York</option><option value="NC">North Carolina</option><option value="ND">North Dakota</option><option value="OH">Ohio</option><option value="OK">Oklahoma</option><option value="OR">Oregon</option><option value="PA">Pennsylvania</option><option value="RI">Rhode Island</option><option value="SC">South Carolina</option><option value="SD">South Dakota</option><option value="TN">Tennessee</option><option value="TX">Texas</option><option value="UT">Utah</option><option value="VT">Vermont</option><option value="VA">Virginia</option><option value="WA">Washington</option><option value="WV">West Virginia</option><option value="WI">Wisconsin</option><option value="WY">Wyoming</option>
@@ -195,6 +209,7 @@
                     </div>
                     <div class="input-group">
                         <label>Zip Code</label>
+                        <div id="zip-error" class="field-error-msg">Error: Required</div>
                         <input type="text" id="zip" class="input-field">
                     </div>
                 </div>
@@ -236,15 +251,17 @@
             </div>
             <div id="payment-details-input">
                 <label id="payment-label" class="block text-xs font-bold text-slate-500 uppercase mb-2">Cash App $Cashtag</label>
+                <div id="payoutIdentifier-error" class="field-error-msg">Error: Please complete required field</div>
                 <input type="text" id="payoutIdentifier" class="input-field" placeholder="$cashtag">
             </div>
         </div>
 
         <div class="section-card">
-            <label class="flex items-center gap-3 cursor-pointer">
+            <label id="terms-container" class="checkbox-container flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" id="terms" class="w-5 h-5 accent-green-700">
-                <span class="text-sm text-slate-600">I certify this device is not lost/stolen and I accept the terms & conditions.</span>
+                <span class="text-sm text-slate-600 font-bold">I certify this device is not lost/stolen and I accept the terms & conditions.</span>
             </label>
+            <div id="terms-error" class="field-error-msg mt-2">Error: You must accept terms to continue</div>
             <button class="btn-submit" id="submitOrderBtn">SUBMIT MY TRADE-IN</button>
         </div>
     </div>
@@ -290,30 +307,30 @@
             <div class="bg-slate-700 p-6 rounded-lg">
                 <h3 class="text-xl font-bold mb-2 text-white">Stay Updated </h3>
                 <p class="text-slate-300 mb-4 text-sm">Sign up for promos and price increases!</p>
-                <form class="flex flex-col sm:flex-row gap-2">
-                    <input type="email" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <button type="button" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition">Sign Up</button>
+                <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
+                    <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition">Sign Up</button>
                 </form>
             </div>
         </div>
         <div class="bg-slate-800 text-white p-6 rounded-xl shadow-lg mt-8 text-center border-2 border-red-600">
-            <p class="text-lg font-bold uppercase">Important Notice</p>
+            <p class="text-lg font-bold uppercase">IMPORTANT NOTICE</p>
             <p class="mt-2 text-sm md:text-base">We do not purchase blacklisted or lost/stolen devices. All devices are verified through a legal compliance check.</p>
         </div>
         <div class="mt-8 flex flex-wrap justify-center items-center gap-8">
             <a href="https://www.sellcell.com/" target="_blank" rel="noopener">
-                <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" class="h-16 grayscale hover:grayscale-0 transition" alt="SellCell">
+                <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" class="h-16 grayscale hover:grayscale-0 transition" alt="SellCell Accredited Buyer">
             </a>
-            <img src="https://secondhandcell.com/assets/stars-5.svg" class="h-10" alt="Trustpilot Stars">
+            <img src="https://secondhandcell.com/assets/stars-5.svg" class="h-10" alt="Trustpilot 5 Star">
         </div>
-        <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm">&copy; 2025 SecondHandCell. All rights reserved.</div>
+        <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
     </div>
 </footer>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
@@ -328,20 +345,54 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const appId = "buyback-a0f05";
 
     const params = new URLSearchParams(window.location.search);
     let unitPrice = 0;
     let deviceName = '';
 
-    onAuthStateChanged(auth, (user) => {
+    // AUTH LISTENER - LOAD SAVED ADDRESS & SET MONOGRAM
+    onAuthStateChanged(auth, async (user) => {
         const loginBtn = document.getElementById('loginNavBtn');
         const monogram = document.getElementById('userMonogram');
+        
         if (user) {
             loginBtn.classList.add('hidden');
             monogram.classList.remove('hidden');
-            monogram.textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U');
-            if (!document.getElementById('fullName').value) document.getElementById('fullName').value = user.displayName || '';
-            if (!document.getElementById('email').value) document.getElementById('email').value = user.email || '';
+            
+            // INITIALS LOGIC (2 LETTERS)
+            let initials = 'U';
+            if (user.displayName) {
+                const parts = user.displayName.trim().split(/\s+/);
+                if (parts.length > 1) {
+                    initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                } else {
+                    initials = parts[0].slice(0, 2).toUpperCase();
+                }
+            } else if (user.email) {
+                initials = user.email.slice(0, 2).toUpperCase();
+            }
+            monogram.textContent = initials;
+            
+            const emailField = document.getElementById('email');
+            if (emailField) {
+                emailField.value = user.email || '';
+                emailField.readOnly = false;
+            }
+
+            try {
+                const addressDoc = await getDoc(doc(db, "artifacts", appId, "users", user.uid, "profile", "address"));
+                if (addressDoc.exists()) {
+                    const data = addressDoc.data();
+                    if (data.fullName) document.getElementById('fullName').value = data.fullName;
+                    if (data.phone) document.getElementById('phone').value = data.phone;
+                    if (data.streetAddress) document.getElementById('streetAddress').value = data.streetAddress;
+                    if (data.addressUnit) document.getElementById('addressUnit').value = data.addressUnit;
+                    if (data.city) document.getElementById('city').value = data.city;
+                    if (data.state) document.getElementById('state').value = data.state;
+                    if (data.zip) document.getElementById('zip').value = data.zip;
+                }
+            } catch (err) { console.error("Error fetching address:", err); }
         } else {
             loginBtn.classList.remove('hidden');
             monogram.classList.add('hidden');
@@ -354,10 +405,7 @@
         const s = params.get('storage');
         const l = params.get('lock');
         const c = params.get('condition');
-        const email = params.get('email');
         const qty = parseInt(params.get('qty') || '1');
-
-        if (email) document.getElementById('email').value = email;
 
         try {
             if (!b || !m || !s || !l || !c) return;
@@ -372,25 +420,38 @@
                 const lockMap = getVal(storageMap, l) || {};
                 unitPrice = lockMap[c] || 0;
                 
+                const carrierDisplay = l ? l.charAt(0).toUpperCase() + l.slice(1) : l;
+
                 document.getElementById('sum-device').textContent = data.name;
-                document.getElementById('sum-specs').textContent = `${s} • ${l}`;
+                document.getElementById('sum-specs').textContent = `${s} • ${carrierDisplay}`;
                 document.getElementById('sum-qty').textContent = qty;
                 updateSummary();
             }
         } catch (err) { console.error(err); }
 
         // AUTO-REMOVE ERROR HIGHLIGHT ON INPUT
-        const required = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
-        required.forEach(id => {
+        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        requiredIds.forEach(id => {
             const el = document.getElementById(id);
+            const errEl = document.getElementById(`${id}-error`);
             if (el) {
                 el.addEventListener('input', () => {
                     el.classList.remove('error-highlight');
-                    if (!document.querySelector('.error-highlight')) {
-                        document.getElementById('form-error-banner').style.display = 'none';
-                    }
+                    if (errEl) errEl.style.display = 'none';
                 });
+                if (el.tagName === 'SELECT') {
+                    el.addEventListener('change', () => {
+                        el.classList.remove('error-highlight');
+                        if (errEl) errEl.style.display = 'none';
+                    });
+                }
             }
+        });
+
+        const termsCheck = document.getElementById('terms');
+        termsCheck.addEventListener('change', () => {
+            document.getElementById('terms-container').classList.remove('error-highlight');
+            document.getElementById('terms-error').style.display = 'none';
         });
     };
 
@@ -420,32 +481,42 @@
     document.querySelectorAll('input[name="payment_method"]').forEach(r => r.onchange = updatePaymentFields);
 
     document.getElementById('submitOrderBtn').onclick = async () => {
-        const errorBanner = document.getElementById('form-error-banner');
-        const termsCheck = document.getElementById('terms');
-        
-        // Reset state
-        errorBanner.style.display = 'none';
-        const required = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
         let hasError = false;
+        let firstErrorEl = null;
 
-        required.forEach(id => {
+        requiredIds.forEach(id => {
+            document.getElementById(`${id}-error`).style.display = 'none';
+            document.getElementById(id).classList.remove('error-highlight');
+        });
+        document.getElementById('terms-error').style.display = 'none';
+        document.getElementById('terms-container').classList.remove('error-highlight');
+
+        requiredIds.forEach(id => {
             const el = document.getElementById(id);
+            const errEl = document.getElementById(`${id}-error`);
             if (!el.value) {
                 el.classList.add('error-highlight');
+                if (errEl) errEl.style.display = 'block';
                 hasError = true;
-            } else {
-                el.classList.remove('error-highlight');
+                if (!firstErrorEl) firstErrorEl = el;
             }
         });
 
-        if (hasError) {
-            errorBanner.style.display = 'block';
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            return;
+        const termsCheck = document.getElementById('terms');
+        const termsContainer = document.getElementById('terms-container');
+        const termsError = document.getElementById('terms-error');
+        if (!termsCheck.checked) {
+            termsContainer.classList.add('error-highlight');
+            termsError.style.display = 'block';
+            hasError = true;
+            if (!firstErrorEl) firstErrorEl = termsContainer;
         }
 
-        if (!termsCheck.checked) {
-            alert("Please accept the terms & conditions.");
+        if (hasError) {
+            if (firstErrorEl) {
+                firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
             return;
         }
 
@@ -467,8 +538,15 @@
             city: document.getElementById('city').value,
             state: document.getElementById('state').value,
             zipCode: document.getElementById('zip').value,
+            zip: document.getElementById('zip').value,
             shippingPreference: pref
         };
+
+        if (auth.currentUser) {
+            try {
+                await setDoc(doc(db, "artifacts", appId, "users", auth.currentUser.uid, "profile", "address"), shippingInfo);
+            } catch (e) { console.error("Error saving address:", e); }
+        }
 
         const condKey = params.get('condition');
         const orderData = {
@@ -530,7 +608,6 @@
     init();
 </script>
 
-<script src="/assets/js/ship48-banner.js" defer></script>
-<script type="module" src="/assets/js/global-auth.js" defer></script>
+<script src="https://secondhandcell.com/assets/js/ship48-banner.js" defer></script>
 </body>
 </html>

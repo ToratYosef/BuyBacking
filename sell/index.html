@@ -215,6 +215,7 @@
             display: flex; align-items: center; justify-content: center;
             width: 2.5rem; height: 2.5rem; border-radius: 9999px;
             background-color: #dbeafe; color: #1d4ed8; font-weight: 700; cursor: pointer;
+            font-size: 0.875rem; line-height: 1;
         }
     </style>
     <!-- Site Chrome logic -->
@@ -525,13 +526,40 @@
         currentUser = user;
         const loginBtn = document.getElementById('loginNavBtn');
         const monogram = document.getElementById('userMonogram');
+        const emailInput = document.getElementById('user-email');
+
         if (user) {
             loginBtn.classList.add('hidden');
             monogram.classList.remove('hidden');
-            monogram.textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U');
+            
+            // INITIALS LOGIC (2 LETTERS)
+            let initials = 'U';
+            if (user.displayName) {
+                const parts = user.displayName.trim().split(/\s+/);
+                if (parts.length > 1) {
+                    initials = (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                } else {
+                    initials = parts[0].slice(0, 2).toUpperCase();
+                }
+            } else if (user.email) {
+                initials = user.email.slice(0, 2).toUpperCase();
+            }
+            monogram.textContent = initials;
+
+            // Pre-fill email field for account holders but keep editable
+            if (emailInput) {
+                emailInput.value = user.email || '';
+                emailInput.readOnly = false; // ALLOW CHANGING EVEN IF SIGNED IN
+                emailInput.classList.remove('error-highlight');
+                document.getElementById('email-error-msg').style.display = 'none';
+            }
         } else {
             loginBtn.classList.remove('hidden');
             monogram.classList.add('hidden');
+            if (emailInput) {
+                emailInput.value = '';
+                emailInput.readOnly = false;
+            }
         }
     });
 
@@ -731,7 +759,15 @@
         updatePrice();
         updateCrumbs();
         
-        // SCROLL TO TOP FOR BETTER USER EXPERIENCE
+        // Ensure email pre-fill logic is updated when switching to final view
+        if (currentUser && currentUser.email) {
+            const emailInput = document.getElementById('user-email');
+            if (emailInput) {
+                emailInput.value = currentUser.email;
+                emailInput.readOnly = false; // KEEP EDITABLE EVEN WHEN SIGNED IN
+            }
+        }
+
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
