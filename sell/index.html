@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="/assets/css/tailwind.css">
+    <!-- Tailwind CDN for testing reliability -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SecondHandCell - Sell Your Device</title>
-    <link rel="icon" href="/favicon/favicon.ico">
+    <link rel="icon" href="https://secondhandcell.com/favicon/favicon.ico">
     
+    <!-- Font Awesome CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
 
     <!-- Google Tag Manager -->
@@ -34,11 +36,68 @@
             --bg-gray: #F3F4F6;
             --white: #FFFFFF;
             --border: #E5E7EB;
+            --header-height: 80px; 
+            
+            /* Updated Loading Bar Colors */
+            --progress-track: #bbf7d0; /* Light Green (Unfinished part) */
+            --progress-fill: #15803d;  /* Dark Green (Finished part) */
+            
+            /* Neon Error Color */
+            --neon-red: #ff3131;
         }
 
+        .bg-brand-primary { background-color: var(--brand-primary); }
+        .text-brand-primary { color: var(--brand-primary); }
+
         body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
-        .sell-app-wrapper { min-height: 60vh; padding: 40px 0; }
-        .app-container { max-width: 800px; margin: 0 auto; padding: 0 20px; }
+        
+        /* Material Progress Bar - Redesigned Positioning */
+        @keyframes progress-bar-stripes {
+            0% { background-position: 0 0; }
+            to { background-position: 2rem 0; }
+        }
+
+        .mat-progress-bar {
+            position: absolute;
+            top: 100%; /* Sits exactly at the bottom edge of the nav bar */
+            left: 0;
+            width: 100%;
+            height: 12px !important; /* Consistent height */
+            background-color: var(--progress-track); 
+            overflow: hidden;
+            z-index: 50;
+            display: block;
+            margin: 0;
+            padding: 0;
+            border: none;
+        }
+
+        .mat-progress-bar-fill {
+            height: 100%;
+            width: 10%; /* Managed by JS */
+            background-color: var(--progress-fill);
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        /* Stripes logic */
+        .mat-progress-bar-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            animation: progress-bar-stripes 1s linear infinite !important;
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent);
+            background-size: 2rem 2rem;
+        }
+
+        /* Spacing content to move below the header and progress bar */
+        .sell-app-wrapper { 
+            min-height: 60vh; 
+            padding-top: 130px; /* Increased to account for the new bar position */
+            padding-bottom: 80px;
+        }
+        
+        .app-container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
         .step-title { font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 30px; color: var(--text-main); }
         
         .selection-grid { display: grid; gap: 15px; }
@@ -46,7 +105,6 @@
             background: var(--white); border: 2px solid var(--border); border-radius: 12px;
             padding: 25px 15px; text-align: center; cursor: pointer; transition: 0.2s;
             font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center;
-            position: relative;
         }
         .select-card:hover:not(.disabled) { border-color: var(--brand-secondary); transform: translateY(-2px); }
         .select-card.active { border-color: var(--brand-primary); background: #f0fdf4; color: var(--brand-primary); box-shadow: 0 0 0 1px var(--brand-primary); }
@@ -59,10 +117,9 @@
             filter: grayscale(0.5);
         }
 
-        /* Tooltip Styling */
         .shc-tooltip {
             visibility: hidden;
-            background-color: #1e293b; /* slate-800 dark grey */
+            background-color: #1e293b;
             color: #ffffff;
             text-align: center;
             border-radius: 8px;
@@ -79,7 +136,7 @@
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.2s, transform 0.2s;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
         }
 
         .shc-tooltip::after {
@@ -93,29 +150,10 @@
             border-color: #1e293b transparent transparent transparent;
         }
 
-        .select-card.disabled:hover .shc-tooltip,
-        .select-card.disabled:active .shc-tooltip {
+        .select-card.disabled:hover .shc-tooltip {
             visibility: visible;
             opacity: 1;
             transform: translateX(-50%) translateY(-5px);
-        }
-
-        /* Progress Bar Styling */
-        .progress-bar-shine {
-            position: relative;
-            overflow: hidden;
-        }
-        .progress-bar-shine::after {
-            content: '';
-            position: absolute;
-            top: 0; left: -100%;
-            width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            animation: shine 2s infinite;
-        }
-        @keyframes shine {
-            0% { left: -100%; }
-            100% { left: 100%; }
         }
 
         .breadcrumbs { display: flex; gap: 8px; margin-bottom: 30px; font-size: 13px; justify-content: center; flex-wrap: wrap; }
@@ -123,33 +161,74 @@
         .crumb.active { background: var(--brand-primary); color: white; cursor: default; }
         .crumb.filled { background: #dcfce7; color: var(--brand-primary); border: 1px solid var(--brand-primary); }
 
-        .offer-card { background: var(--white); border-radius: 16px; padding: 30px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid var(--border); }
-        .price-val { font-size: 64px; font-weight: 900; margin: 10px 0; color: var(--text-main); }
-        .req-box { text-align: left; max-width: 500px; margin: 20px auto; background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid var(--border); }
+        .price-val { font-size: 54px; font-weight: 900; margin: 10px 0; color: var(--brand-primary); line-height: 1; }
+        .req-box { text-align: left; background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid var(--border); }
 
-        .form-control { width: 100%; max-width: 400px; padding: 15px; border: 2px solid var(--border); border-radius: 10px; margin-bottom: 15px; font-size: 16px; outline: none; }
-        .btn-primary {
-            width: 100%; max-width: 400px; padding: 18px; background: var(--brand-gradient);
-            color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 700; cursor: pointer; transition: 0.3s;
+        .form-control { width: 100%; padding: 15px; border: 2px solid var(--border); border-radius: 10px; margin-bottom: 15px; font-size: 16px; outline: none; transition: border-color 0.2s; }
+        .form-control:focus { border-color: var(--brand-primary); }
+        
+        /* Neon Red Error Highlights */
+        .form-control.error-highlight {
+            border-color: var(--neon-red) !important;
+            box-shadow: 0 0 12px var(--neon-red) !important;
         }
-        .btn-primary:hover { opacity: 0.9; transform: scale(1.02); }
+        .error-label {
+            color: var(--neon-red);
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            text-align: left;
+            display: none;
+            animation: fadeIn 0.2s ease-out;
+        }
 
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 2000; }
-        .modal-card { background: white; padding: 40px; border-radius: 20px; text-align: center; max-width: 400px; width: 90%; }
+        .btn-primary {
+            width: 100%; padding: 18px; background: var(--brand-gradient);
+            color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 800; cursor: pointer; transition: 0.3s;
+        }
+        .btn-primary:hover { opacity: 0.9; transform: scale(1.01); }
+
+        /* MODAL ANIMATIONS AND NEATER STYLING */
+        .modal-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.4); 
+            display: none; justify-content: center; align-items: center; 
+            z-index: 2000; 
+            backdrop-filter: blur(6px); /* Blurs background for high-end look */
+            animation: fadeIn 0.2s ease-out;
+        }
+        .modal-card { 
+            background: white; padding: 40px; border-radius: 24px; 
+            text-align: center; max-width: 440px; width: 90%; 
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); /* Bounce slide up */
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         
         .hidden { display: none !important; }
-        @media (max-width: 600px) { .selection-grid { grid-template-columns: 1fr 1fr !important; } }
+        
+        .user-monogram {
+            display: flex; align-items: center; justify-content: center;
+            width: 2.5rem; height: 2.5rem; border-radius: 9999px;
+            background-color: #dbeafe; color: #1d4ed8; font-weight: 700; cursor: pointer;
+        }
     </style>
-    <link rel="stylesheet" href="/assets/css/site-chrome.css">
+    <!-- Site Chrome logic -->
+    <link rel="stylesheet" href="https://secondhandcell.com/assets/css/site-chrome.css">
 </head>
 <body class="bg-slate-50">
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
-<header class="site-header">
+<!-- Navbar -->
+<header class="site-header relative">
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
-            <a href="/" class="logo-link">
-                <img src="/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320">
+            <a href="https://secondhandcell.com/" class="logo-link">
+                <img src="https://secondhandcell.com/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320">
             </a>
         </div>
         <div class="logo-text-container-center">
@@ -159,22 +238,22 @@
             <p class="logo-tagline">Turn Your Old <span>Phone Into Cash!</span></p>
         </div>
         <nav class="header-auth-nav">
-            <div id="authStatusContainer" class="site-header__auth-wrapper">
-                <a href="/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
-                <div id="userMonogram" class="user-monogram hidden"></div>
-                <div id="authDropdown" class="auth-dropdown hidden">
-                    <a href="/my-account.html" class="auth-dropdown__link">My Account</a>
-                    <button id="logoutBtn" type="button" class="auth-dropdown__button btn-red-logout">Logout</button>
+            <div id="authStatusContainer" class="site-header__auth-wrapper relative">
+                <a href="https://secondhandcell.com/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
+                <div id="userMonogram" class="user-monogram hidden" onclick="document.getElementById('authDropdown').classList.toggle('hidden')"></div>
+                <div id="authDropdown" class="auth-dropdown hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-100">
+                    <a href="https://secondhandcell.com/my-account.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
+                    <button id="logoutBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Logout</button>
                 </div>
             </div>
         </nav>
     </div>
+    
+    <!-- BRANDED PROGRESS BAR - Positioned Top:100% to ensure no overlap -->
+    <div class="mat-progress-bar">
+        <div id="global-progress-bar" class="mat-progress-bar-fill" style="width: 10%;"></div>
+    </div>
 </header>
-
-<!-- Global Animated Progress Bar (Always below header) -->
-<div class="w-full bg-slate-200 h-2 overflow-hidden shadow-sm">
-    <div id="global-progress-bar" class="bg-brand-primary h-full transition-all duration-500 ease-out progress-bar-shine" style="width: 10%;"></div>
-</div>
 
 <main class="sell-app-wrapper">
     <!-- Selection Flow Container -->
@@ -186,13 +265,22 @@
         </div>
 
         <!-- Inline Condition Help Box (Selection Flow) -->
-        <div id="condition-help-box" class="hidden mt-8 p-6 bg-slate-50 border border-slate-200 rounded-2xl text-left max-w-[600px] mx-auto shadow-sm">
-            <div class="font-extrabold mb-2 text-slate-800">
-                <span id="help-condition-name">--</span> Condition Requirements:
+        <div id="condition-help-box" class="hidden mt-10 p-6 bg-slate-50 border border-slate-200 rounded-3xl text-left max-w-[600px] mx-auto shadow-md">
+            <div class="flex items-center gap-4 mb-6 p-4 bg-white border border-green-200 rounded-2xl">
+                <div class="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-xl">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-slate-400 uppercase tracking-widest">You've Selected:</div>
+                    <div class="font-black text-green-700 text-2xl" id="help-condition-name">--</div>
+                </div>
             </div>
-            <ul id="help-condition-desc" class="list-disc pl-5 space-y-2 text-slate-600 text-sm"></ul>
-            <div class="mt-6 flex justify-center">
-                <button id="confirmConditionBtn" class="btn-primary w-full max-w-[280px]">Continue to Quote</button>
+            
+            <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Diagnostic Requirements:</div>
+            <ul id="help-condition-desc" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed"></ul>
+            
+            <div class="mt-8 flex justify-center">
+                <button id="confirmConditionBtn" class="btn-primary w-full max-w-[320px] shadow-lg">Confirm & See My Quote</button>
             </div>
         </div>
     </div>
@@ -200,59 +288,101 @@
     <!-- Final Offer View -->
     <div class="app-container hidden" id="offer-view">
         <div class="breadcrumbs" id="final-crumbs"></div>
-        <div class="offer-card">
-            <h2 id="final-device-name" class="text-2xl font-bold mb-1 text-slate-900">--</h2>
-            <div id="summary-tags" class="text-sm text-green-700 font-bold uppercase tracking-wide mb-6"></div>
+        
+        <!-- SIDE-BY-SIDE GRID -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            
+            <!-- Left Side: Device & Condition Info (Col Span 2) -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
+                    <h2 id="final-device-name" class="text-3xl font-black text-slate-900 leading-tight">--</h2>
+                    <div id="summary-tags" class="text-xs text-green-700 font-bold uppercase tracking-widest mt-2 border-b pb-4"></div>
 
-            <!-- Condition Grid in final view -->
-            <div class="selection-grid mb-8" id="final-condition-grid"></div>
-
-            <div class="req-box">
-                <div class="font-extrabold mb-2 text-slate-800 text-center md:text-left">
-                    <span id="condition-title-display">--</span> Condition Requirements:
+                    <div class="mt-6">
+                        <p class="text-sm font-bold text-slate-500 uppercase mb-4 tracking-wide">Adjust Condition:</p>
+                        <div class="selection-grid" id="final-condition-grid"></div>
+                    </div>
                 </div>
-                <ul id="condition-details" class="list-disc pl-5 space-y-1 text-slate-600 text-sm"></ul>
+
+                <div class="req-box bg-white shadow-sm">
+                    <div class="font-black text-slate-800 mb-4 pb-2 border-b flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-green-600"></i>
+                        <span id="condition-title-display">--</span> Requirements:
+                    </div>
+                    <ul id="condition-details" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed"></ul>
+                </div>
             </div>
 
-            <div class="text-sm font-semibold text-slate-500 uppercase mt-8">Your Instant Offer:</div>
-            <div class="price-val" id="final-price">$0</div>
+            <!-- Right Side: Price & Checkout (Sticky Action Card) -->
+            <div class="lg:sticky lg:top-[160px] space-y-4">
+                <div class="bg-white p-8 rounded-2xl border-2 border-green-600 shadow-xl text-center">
+                    <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Your Final Offer:</div>
+                    <div class="price-val mb-6" id="final-price">$0</div>
 
-            <div class="max-w-[400px] mx-auto mt-6">
-                <input type="email" id="user-email" class="form-control" placeholder="Enter email to save quote">
-                <button class="btn-primary" id="startCheckoutBtn">GET PAID INSTANTLY</button>
-                <p class="mt-6">
-                    <a href="#" id="resetFlowBtn" class="text-green-700 text-sm font-bold hover:underline">← Start New Trade-in</a>
-                </p>
+                    <div class="space-y-4">
+                        <div class="text-left">
+                            <div id="email-error-msg" class="error-label">Error: Valid Email Required</div>
+                            <input type="email" id="user-email" class="form-control" placeholder="Enter email to save quote">
+                        </div>
+                        <button class="btn-primary" id="startCheckoutBtn">GET PAID INSTANTLY</button>
+                        
+                        <div class="pt-2">
+                            <a href="https://secondhandcell.com/sell/index.html" id="resetFlowBtn" class="text-green-700 text-sm font-bold hover:underline inline-flex items-center gap-2">
+                                <i class="fa-solid fa-arrow-left"></i> Start New Trade-in
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-center gap-3">
+                    <i class="fa-solid fa-shield-halved text-indigo-600 text-xl"></i>
+                    <p class="text-[11px] text-indigo-900 leading-tight font-medium">Your price is locked for 14 days once you submit your trade-in.</p>
+                </div>
             </div>
+            
         </div>
     </div>
 </main>
 
-<!-- Login Modal -->
-<div id="loginModal" class="modal-overlay">
-    <div class="modal-card">
-        <h2 class="text-2xl font-bold mb-4">Trade-in Account</h2>
-        <p class="mb-6 text-slate-600">Sign in to save your order or continue as a guest.</p>
-        <div class="flex flex-col gap-4">
-            <button id="modalLoginBtn" class="bg-indigo-600 text-white p-3 rounded-lg font-bold">Sign In / Sign Up</button>
-            <button id="modalGuestBtn" class="border-2 border-slate-200 p-3 rounded-lg font-bold text-slate-600">Continue as Guest</button>
-        </div>
-        <button class="mt-6 text-slate-400 w-full text-center text-sm" onclick="document.getElementById('loginModal').style.display='none'">Cancel</button>
-    </div>
-</div>
-
 <!-- Quantity Modal -->
 <div class="modal-overlay" id="qty-modal">
     <div class="modal-card">
-        <h3 class="text-xl font-bold mb-2">Quantity</h3>
-        <p class="text-slate-500 mb-6">How many of this exact device are you selling?</p>
-        <div class="flex justify-center items-center gap-6 mb-8">
-            <button id="qtyMinus" class="w-12 h-12 rounded-full border-2 border-green-700 text-green-700 text-2xl font-bold">-</button>
-            <span id="qty-val" class="text-4xl font-black">1</span>
-            <button id="qtyPlus" class="w-12 h-12 rounded-full border-2 border-green-700 text-green-700 text-2xl font-bold">+</button>
+        <div class="w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">
+            <i class="fa-solid fa-boxes-stacked"></i>
         </div>
-        <button class="btn-primary" id="finalSubmitBtn">PROCEED TO SHIPPING</button>
-        <button class="mt-4 text-slate-400 text-sm block mx-auto" onclick="document.getElementById('qty-modal').style.display='none'">Cancel</button>
+        <h3 class="text-2xl font-black text-slate-900 mb-2">Quantity</h3>
+        <p class="text-slate-500 mb-8 text-sm leading-relaxed px-4">How many of this exact device are you selling today?</p>
+        
+        <div class="flex justify-center items-center gap-8 mb-10">
+            <button id="qtyMinus" class="w-14 h-14 rounded-2xl border-2 border-slate-200 text-slate-400 text-2xl font-bold hover:border-green-600 hover:text-green-600 transition-all active:scale-95 flex items-center justify-center">
+                <i class="fa-solid fa-minus"></i>
+            </button>
+            <span id="qty-val" class="text-5xl font-black text-slate-900 min-w-[60px]">1</span>
+            <button id="qtyPlus" class="w-14 h-14 rounded-2xl border-2 border-slate-200 text-slate-400 text-2xl font-bold hover:border-green-600 hover:text-green-600 transition-all active:scale-95 flex items-center justify-center">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+        
+        <div class="space-y-3">
+            <button class="btn-primary py-5 shadow-lg shadow-green-100" id="finalSubmitBtn">PROCEED TO SHIPPING</button>
+            <button class="w-full py-3 text-slate-400 text-sm font-bold hover:text-slate-600 transition-colors" onclick="document.getElementById('qty-modal').style.display='none'">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Login Modal -->
+<div id="loginModal" class="modal-overlay">
+    <div class="modal-card">
+        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">
+            <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <h2 class="text-2xl font-black mb-4">Trade-in Account</h2>
+        <p class="mb-8 text-slate-500 text-sm leading-relaxed px-4">Sign in to save your order to your account or continue as a guest.</p>
+        <div class="flex flex-col gap-3">
+            <button id="modalLoginBtn" class="bg-indigo-600 text-white p-5 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:opacity-90 transition-all active:scale-[0.98]">Sign In / Sign Up</button>
+            <button id="modalGuestBtn" class="border-2 border-slate-200 p-5 rounded-2xl font-black text-slate-600 hover:bg-slate-50 transition-all active:scale-[0.98]">Continue as Guest</button>
+        </div>
+        <button class="mt-6 text-slate-400 w-full text-center text-sm font-bold hover:text-slate-600" onclick="document.getElementById('loginModal').style.display='none'">Cancel</button>
     </div>
 </div>
 
@@ -261,7 +391,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
                 <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
-                <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="/" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="/privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="/terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="https://secondhandcell.com/" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="https://secondhandcell.com/about-us" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="https://secondhandcell.com/privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="https://secondhandcell.com/terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
                 <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
             </div>
             <div class="bg-slate-700 p-6 rounded-lg">
@@ -281,7 +411,7 @@
             <a href="https://www.sellcell.com/" target="_blank" rel="noopener">
                 <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" class="h-16 grayscale hover:grayscale-0 transition" alt="SellCell Accredited Buyer">
             </a>
-            <img src="/assets/stars-5.svg" class="h-10" alt="Trustpilot 5 Star">
+            <img src="https://secondhandcell.com/assets/stars-5.svg" class="h-10" alt="Trustpilot 5 Star">
         </div>
         <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
     </div>
@@ -298,7 +428,7 @@
         projectId: "buyback-a0f05",
         storageBucket: "buyback-a0f05.appspot.com",
         messagingSenderId: "876430429098",
-        appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+        appId: "1:876430429098:web:f6dd64b1970d90461979d3",
         measurementId: "G-6WWQN44JHT"
     };
 
@@ -309,13 +439,13 @@
     const BRAND_DISPLAY = {
         iphone: 'Apple iPhone',
         samsung: 'Samsung Galaxy',
-        ipad: 'Apple iPad'
+        google: 'Google Pixel'
     };
 
     const BRAND_OPTIONS = [
         { key: 'iphone', label: 'iPhone' },
         { key: 'samsung', label: 'Samsung' },
-        { key: 'ipad', label: 'iPad' },
+        { key: 'google', label: 'Google Pixel' },
     ];
 
     const LOCK_LABELS = {
@@ -327,48 +457,55 @@
         locked: 'Carrier Locked',
     };
 
+    const CARRIER_SORT_ORDER = ['tmobile', 'att', 'verizon', 'unlocked', 'other', 'locked'];
+
     const CONDITION_DEFS = [
         { 
             key: 'flawless', 
             name: 'Flawless', 
             desc: [
-                'Looks brand new with no signs of use.',
-                'Screen & display work perfectly (no dead pixels or image burn).',
-                'Device contains all original manufacturer parts.',
-                'All exterior buttons and biometrics (FaceID/TouchID) work.',
-                '100% functional and free of defects.'
+                'Looks new with no signs of use. This is the best condition a used device can be in.',
+                'There are no scratches, scuffs, or any other cosmetic imperfections visible to the naked eye.',
+                'The device appears as if it just came out of its original packaging.',
+                '100% functional with all original manufacturer parts.',
+                'iCloud / Activation Lock / Google Lock must be removed.',
+                'Device must not be lost or stolen with a clean IMEI and no unpaid balance.'
             ] 
         },
         { 
             key: 'good', 
             name: 'Good', 
             desc: [
-                'Light signs of use (minor scuffs or light scratches).',
-                'No cracks on front or back glass.',
-                'Device contains all original manufacturer parts.',
-                'Everything functions correctly including buttons and cameras.',
-                'Battery holds charge for normal operation.'
+                'There may be a few light scuffs or scratches that are smaller than the size of a pencil eraser.',
+                'These minor imperfections do not affect functionality or overall aesthetic.',
+                'Generally only noticeable upon close inspection.',
+                '100% functional and free of cracks.',
+                'iCloud / Activation Lock / Google Lock must be removed.',
+                'Device must not be lost or stolen with a clean IMEI and no unpaid balance.'
+            ] 
+        },
+        { 
+            key: 'fair', 
+            name: 'Fair', 
+            desc: [
+                'Noticeable scratches or scuffs on the frame, front, or back.',
+                'Could include multiple visible scratches, minor dents, or paint chips on the frame.',
+                'Cosmetic issues do not impede core functions. The screen remains fully usable despite the marks.',
+                '100% functional (no LCD defects or hardware failures).',
+                'iCloud / Activation Lock / Google Lock must be removed.',
+                'Device must not be lost or stolen with a clean IMEI and no unpaid balance.'
             ] 
         },
         { 
             key: 'broken', 
             name: 'Broken', 
             desc: [
-                'Cracked screen or back glass.',
-                'Heavy cosmetic damage (major dents or chips).',
-                'LCD defects like dead pixels, black dots, or discoloration.',
-                'One or more functional components do not work.',
-                'Must still power on to home screen.'
-            ] 
-        },
-        { 
-            key: 'noPower', 
-            name: 'No Power', 
-            desc: [
-                'Does not power on or stays on a black screen.',
-                'iCloud / Activation Lock remains on device.',
-                'Significant liquid or motherboard damage.',
-                'Missing internal or external parts.'
+                'Cracked glass (front or back), bent frame, or major visual defects.',
+                'Does not power on, not fully functional, or has LCD damage (dead pixels/discoloration).',
+                'Contains third-party, non-original, or aftermarket replacement parts.',
+                'Includes devices with significant wear and tear that impact appearance.',
+                'iCloud / Activation Lock / Google Lock must be removed.',
+                'Device must not be lost or stolen with a clean IMEI and no unpaid balance.'
             ] 
         }
     ];
@@ -392,12 +529,18 @@
             loginBtn.classList.add('hidden');
             monogram.classList.remove('hidden');
             monogram.textContent = user.displayName ? user.displayName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : 'U');
-            document.getElementById('user-email').value = user.email || '';
         } else {
             loginBtn.classList.remove('hidden');
             monogram.classList.add('hidden');
         }
     });
+
+    const updateProgressBar = () => {
+        const globalBar = document.getElementById('global-progress-bar');
+        const steps = { 'brand': 10, 'model': 30, 'storage': 50, 'lock': 70, 'condition': 90 };
+        const width = state.isFinalView ? '100%' : (steps[state.currentStep] || 10) + '%';
+        if (globalBar) globalBar.style.width = width;
+    };
 
     const updateURL = () => {
         const url = new URL(window.location);
@@ -409,26 +552,6 @@
         window.history.replaceState({}, '', url);
     };
 
-    const updateProgressBar = () => {
-        const bar = document.getElementById('global-progress-bar');
-        if (!bar) return;
-        
-        if (state.isFinalView) {
-            bar.style.width = '100%';
-            return;
-        }
-
-        const steps = {
-            'brand': 10,
-            'model': 30,
-            'storage': 50,
-            'lock': 70,
-            'condition': 90
-        };
-        
-        bar.style.width = (steps[state.currentStep] || 10) + '%';
-    };
-
     const getModels = async (brand) => {
         if (state.modelsCache[brand]) return state.modelsCache[brand];
         const colRef = collection(db, "devices", brand, "models");
@@ -438,89 +561,15 @@
         return models;
     };
 
-    const hydrateFromURL = async () => {
-        const params = new URLSearchParams(window.location.search);
-        
-        if (params.has('device')) {
-            const deviceParam = params.get('device');
-            const [brand, ...slugParts] = deviceParam.split('-');
-            const slug = slugParts.join('-');
-
-            if (BRAND_OPTIONS.some(opt => opt.key === brand)) {
-                state.selections.brand = brand;
-                const models = await getModels(brand);
-                const match = models.find(m => m.id === slug);
-                if (match) {
-                    state.selections.model = slug;
-                    state.selections.modelName = match.name;
-                    state.deviceData = match;
-                    state.currentStep = 'storage';
-                    if (params.has('storage')) state.selections.storage = params.get('storage');
-                    if (params.has('lock')) state.selections.lock = params.get('lock');
-                    if (params.has('condition')) {
-                        state.selections.condition = params.get('condition');
-                        showFinalOffer();
-                        return;
-                    }
-                }
-            }
-        }
-        else if (params.has('brand')) {
-            const b = params.get('brand');
-            if (BRAND_OPTIONS.some(opt => opt.key === b)) {
-                state.selections.brand = b;
-                state.currentStep = 'model';
-                if (params.has('model')) {
-                    const mId = params.get('model');
-                    const models = await getModels(b);
-                    const match = models.find(m => m.id === mId);
-                    if (match) {
-                        state.selections.model = mId;
-                        state.selections.modelName = match.name;
-                        state.deviceData = match;
-                        state.currentStep = 'storage';
-                        if (params.has('storage')) state.selections.storage = params.get('storage');
-                        if (params.has('lock')) state.selections.lock = params.get('lock');
-                        if (params.has('condition')) {
-                            state.selections.condition = params.get('condition');
-                            showFinalOffer();
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-        renderCurrentStep();
-    };
-
-    const updateCrumbs = () => {
-        const container = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
-        container.innerHTML = '';
-        const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
-
-        stepOrder.forEach((step, i) => {
-            const span = document.createElement('span');
-            span.className = `crumb ${i === currentIdx ? 'active' : ''} ${i < currentIdx ? 'filled' : ''}`;
-            
-            let label = step.charAt(0).toUpperCase() + step.slice(1);
-            if (i <= currentIdx) {
-                if (step === 'brand') label = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || label;
-                if (step === 'model') label = state.selections.modelName || label;
-                if (step === 'storage') label = state.selections.storage || label;
-                if (step === 'lock') label = LOCK_LABELS[state.selections.lock] || state.selections.lock || label;
-                if (step === 'condition') label = CONDITION_DEFS.find(c => c.key === state.selections.condition)?.name || label;
-            }
-            
-            span.textContent = label;
-            if (i < currentIdx) span.onclick = () => jumpToStep(step);
-            container.appendChild(span);
-        });
+    const parseStorageSize = (s) => {
+        const val = parseInt(s);
+        if (s.toLowerCase().includes('tb')) return val * 1024;
+        return val;
     };
 
     const jumpToStep = (step) => {
         state.isFinalView = false;
         state.currentStep = step;
-
         const stepIndex = stepOrder.indexOf(step);
         stepOrder.forEach((s, i) => {
             if (i >= stepIndex) {
@@ -528,7 +577,6 @@
                 if (s === 'model') state.selections.modelName = '';
             }
         });
-
         updateURL();
         document.getElementById('offer-view').classList.add('hidden');
         document.getElementById('selection-flow').classList.remove('hidden');
@@ -568,7 +616,8 @@
         else if (state.currentStep === 'storage') {
             title.textContent = "Select Capacity";
             const allStorageKeys = Object.keys(state.deviceData.prices || {});
-            const storageItems = allStorageKeys.map(sKey => {
+            const sortedStorage = allStorageKeys.sort((a, b) => parseStorageSize(a) - parseStorageSize(b));
+            const storageItems = sortedStorage.map(sKey => {
                 const carrierMap = state.deviceData.prices[sKey] || {};
                 const isPriceAvailable = Object.values(carrierMap).some(conditionPrices => {
                     return Object.values(conditionPrices).some(p => Number(p) > 0);
@@ -582,7 +631,12 @@
             title.textContent = "Select Network";
             const currentStorageMap = state.deviceData.prices[state.selections.storage] || {};
             const allLockKeys = Object.keys(currentStorageMap);
-            const lockItems = allLockKeys.map(lKey => {
+            const sortedLocks = allLockKeys.sort((a, b) => {
+                const idxA = CARRIER_SORT_ORDER.indexOf(a.toLowerCase());
+                const idxB = CARRIER_SORT_ORDER.indexOf(b.toLowerCase());
+                return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+            });
+            const lockItems = sortedLocks.map(lKey => {
                 const conditionPrices = currentStorageMap[lKey] || {};
                 const isPriceAvailable = Object.values(conditionPrices).some(p => Number(p) > 0);
                 return { label: LOCK_LABELS[lKey] || lKey, value: lKey, disabled: !isPriceAvailable };
@@ -603,13 +657,10 @@
         card.className = `select-card ${state.selections[state.currentStep] === value ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
         
         if (isDisabled) {
-            // New tooltip UI structure with Info icon
             card.innerHTML = `
                 <i class="fa-solid fa-circle-info text-slate-400 mb-1"></i>
                 <span>${label}</span>
-                <div class="shc-tooltip">
-                    Sorry, we don't have any offers for this variant.
-                </div>
+                <div class="shc-tooltip">Sorry, we don't have any offers for this variant.</div>
             `;
         } else {
             card.textContent = label;
@@ -620,13 +671,7 @@
 
     const handleSelection = async (value, label) => {
         const stepIndex = stepOrder.indexOf(state.currentStep);
-        stepOrder.forEach((s, i) => {
-            if (i > stepIndex) {
-                state.selections[s] = '';
-                if (s === 'model') state.selections.modelName = '';
-            }
-        });
-
+        stepOrder.forEach((s, i) => { if (i > stepIndex) { state.selections[s] = ''; if (s === 'model') state.selections.modelName = ''; } });
         state.selections[state.currentStep] = value;
         updateURL();
         
@@ -639,10 +684,7 @@
         }
         else if (state.currentStep === 'storage') { state.currentStep = 'lock'; }
         else if (state.currentStep === 'lock') { state.currentStep = 'condition'; }
-        else if (state.currentStep === 'condition') {
-            updateConditionHelp();
-            return;
-        }
+        else if (state.currentStep === 'condition') { updateConditionHelp(); return; }
         renderCurrentStep();
     };
 
@@ -655,20 +697,42 @@
         helpBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
 
+    const updateCrumbs = () => {
+        const container = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
+        container.innerHTML = '';
+        const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
+        stepOrder.forEach((step, i) => {
+            const span = document.createElement('span');
+            span.className = `crumb ${i === currentIdx ? 'active' : ''} ${i < currentIdx ? 'filled' : ''}`;
+            let label = step.charAt(0).toUpperCase() + step.slice(1);
+            if (i <= currentIdx) {
+                if (step === 'brand') label = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || label;
+                if (step === 'model') label = state.selections.modelName || label;
+                if (step === 'storage') label = state.selections.storage || label;
+                if (step === 'lock') label = LOCK_LABELS[state.selections.lock] || state.selections.lock || label;
+                if (step === 'condition') label = CONDITION_DEFS.find(c => c.key === state.selections.condition)?.name || label;
+            }
+            span.textContent = label;
+            if (i < currentIdx) span.onclick = () => jumpToStep(step);
+            container.appendChild(span);
+        });
+    };
+
     const showFinalOffer = () => {
         state.isFinalView = true;
         updateURL();
         updateProgressBar();
         document.getElementById('selection-flow').classList.add('hidden');
         document.getElementById('offer-view').classList.remove('hidden');
-        
         const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
         document.getElementById('final-device-name').textContent = `${fullBrand} ${state.selections.modelName} ${state.selections.storage}`;
         document.getElementById('summary-tags').textContent = `Network: ${LOCK_LABELS[state.selections.lock] || state.selections.lock}`;
-        
         renderConditionGrid();
         updatePrice();
         updateCrumbs();
+        
+        // SCROLL TO TOP FOR BETTER USER EXPERIENCE
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const renderConditionGrid = () => {
@@ -678,12 +742,7 @@
             const card = document.createElement('div');
             card.className = `select-card ${state.selections.condition === c.key ? 'active' : ''}`;
             card.textContent = c.name;
-            card.onclick = () => {
-                state.selections.condition = c.key;
-                updateURL();
-                renderConditionGrid();
-                updatePrice();
-            };
+            card.onclick = () => { state.selections.condition = c.key; updateURL(); renderConditionGrid(); updatePrice(); };
             grid.appendChild(card);
         });
         applyGridCols(grid, CONDITION_DEFS.length);
@@ -698,30 +757,77 @@
         document.getElementById('condition-details').innerHTML = (cond.desc || []).map(d => `<li>${d}</li>`).join('');
     };
 
-    document.getElementById('confirmConditionBtn').onclick = showFinalOffer;
+    // EMAIL VALIDATION HANDLER
+    document.getElementById('user-email').oninput = (e) => {
+        const val = e.target.value;
+        if (val.includes('@') && val.includes('.')) {
+            e.target.classList.remove('error-highlight');
+            document.getElementById('email-error-msg').style.display = 'none';
+        }
+    };
 
+    document.getElementById('confirmConditionBtn').onclick = showFinalOffer;
+    
     document.getElementById('startCheckoutBtn').onclick = () => {
-        const email = document.getElementById('user-email').value;
-        if (!email.includes('@')) return alert("Please enter a valid email to continue.");
+        const emailInput = document.getElementById('user-email');
+        const errorLabel = document.getElementById('email-error-msg');
+        const email = emailInput.value;
+        
+        if (!email.includes('@') || !email.includes('.')) {
+            emailInput.classList.add('error-highlight');
+            errorLabel.style.display = 'block';
+            emailInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+
         if (currentUser) document.getElementById('qty-modal').style.display = 'flex';
         else document.getElementById('loginModal').style.display = 'flex';
     };
 
-    document.getElementById('modalLoginBtn').onclick = () => window.location.href = '/login.html';
-    document.getElementById('modalGuestBtn').onclick = () => {
-        document.getElementById('loginModal').style.display = 'none';
-        document.getElementById('qty-modal').style.display = 'flex';
-    };
-
+    document.getElementById('modalLoginBtn').onclick = () => window.location.href = 'https://secondhandcell.com/login.html';
+    document.getElementById('modalGuestBtn').onclick = () => { document.getElementById('loginModal').style.display = 'none'; document.getElementById('qty-modal').style.display = 'flex'; };
     document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
-
     document.getElementById('finalSubmitBtn').onclick = () => {
         const finalData = { ...state.selections, email: document.getElementById('user-email').value };
-        window.location.href = `/sell/checkout.html?${new URLSearchParams(finalData).toString()}`;
+        window.location.href = `https://secondhandcell.com/sell/checkout.html?${new URLSearchParams(finalData).toString()}`;
     };
+    document.getElementById('resetFlowBtn').onclick = (e) => { e.preventDefault(); window.location.href = 'https://secondhandcell.com/sell/index.html'; };
 
-    document.getElementById('resetFlowBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
+    const hydrateFromURL = async () => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('brand')) {
+            state.selections.brand = params.get('brand');
+            state.currentStep = 'model';
+            if (params.has('model')) {
+                const models = await getModels(state.selections.brand);
+                const match = models.find(m => m.id === params.get('model'));
+                if (match) {
+                    state.selections.model = match.id; 
+                    state.selections.modelName = match.name; 
+                    state.deviceData = match; 
+                    state.currentStep = 'storage';
+                    
+                    if (params.has('storage')) {
+                        state.selections.storage = params.get('storage');
+                        state.currentStep = 'lock'; // Advance to lock status question
+                        
+                        if (params.has('lock')) {
+                            state.selections.lock = params.get('lock');
+                            state.currentStep = 'condition';
+                            
+                            if (params.has('condition')) { 
+                                state.selections.condition = params.get('condition'); 
+                                showFinalOffer(); 
+                                return; 
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        renderCurrentStep();
+    };
 
     hydrateFromURL();
 </script>

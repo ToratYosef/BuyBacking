@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="/assets/css/tailwind.css">
+    <!-- Tailwind CDN for testing reliability -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecondHandCell - Checkout</title>
-    <link rel="icon" href="/favicon/favicon.ico">
+    <link rel="icon" href="https://secondhandcell.com/favicon/favicon.ico">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
     
     <!-- Google Tag Manager -->
@@ -39,6 +40,7 @@
             --brand-primary: #15803d;
             --brand-gradient: linear-gradient(135deg, #15803d 0%, #eab308 100%);
             --border: #E5E7EB;
+            --neon-red: #ff3131;
         }
         body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background-color: #f8fafc; -webkit-font-smoothing: antialiased; }
         .checkout-wrapper { max-width: 1100px; margin: 40px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 380px; gap: 30px; }
@@ -49,6 +51,29 @@
         .input-field { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; outline: none; transition: 0.2s; }
         .input-field:focus { border-color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.1); }
         
+        /* Neon Red Error Highlights */
+        .input-field.error-highlight {
+            border-color: var(--neon-red) !important;
+            box-shadow: 0 0 12px var(--neon-red) !important;
+        }
+        .error-banner {
+            background: #fff1f2;
+            border: 1px solid var(--neon-red);
+            color: var(--neon-red);
+            padding: 18px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 13px;
+            display: none;
+            animation: fadeIn 0.2s ease-out;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 10px rgba(255, 49, 49, 0.1);
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
         /* Consistent Selection UI */
         .option-pill { display: none; }
         .option-label { cursor: pointer; border: 2px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
@@ -69,7 +94,7 @@
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); z-index: 50;
         }
     </style>
-    <link rel="stylesheet" href="/assets/css/site-chrome.css">
+    <link rel="stylesheet" href="https://secondhandcell.com/assets/css/site-chrome.css">
 </head>
 <body>
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
@@ -78,8 +103,8 @@
 <header class="site-header">
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
-            <a href="/" class="logo-link">
-                <img src="/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320">
+            <a href="https://secondhandcell.com/" class="logo-link">
+                <img src="https://secondhandcell.com/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320">
             </a>
         </div>
         <div class="logo-text-container-center">
@@ -90,10 +115,10 @@
         </div>
         <nav class="header-auth-nav">
             <div id="authStatusContainer" class="site-header__auth-wrapper relative">
-                <a href="/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
+                <a href="https://secondhandcell.com/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
                 <div id="userMonogram" class="user-monogram hidden" onclick="document.getElementById('authDropdown').classList.toggle('hidden')"></div>
                 <div id="authDropdown" class="auth-dropdown hidden">
-                    <a href="/my-account.html" class="block px-4 py-2 text-sm hover:bg-slate-50">My Account</a>
+                    <a href="https://secondhandcell.com/my-account.html" class="block px-4 py-2 text-sm hover:bg-slate-50">My Account</a>
                     <button id="logoutBtn" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Logout</button>
                 </div>
             </div>
@@ -103,6 +128,12 @@
 
 <main class="checkout-wrapper">
     <div id="checkout-form">
+        <!-- Error Banner -->
+        <div id="form-error-banner" class="error-banner">
+            <i class="fa-solid fa-circle-exclamation mr-2"></i>
+            Error: Please complete all required fields highlighted below.
+        </div>
+
         <!-- Step 1: Shipping Preference -->
         <div class="section-card">
             <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Preference</h2>
@@ -253,7 +284,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-8">
                 <div><h3 class="text-xl font-bold mb-4">SecondHandCell</h3><p class="text-slate-400">Your trusted partner for selling used tech. Quick quotes, fair prices, and hassle-free service.</p></div>
-                <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="/" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="#" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="/privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="/terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
+                <div><h3 class="text-xl font-bold mb-4">Quick Links </h3><ul class="space-y-2"><li><a href="https://secondhandcell.com/" class="text-slate-400 hover:text-white transition duration-300">Home</a></li><li><a href="https://secondhandcell.com/about-us" class="text-slate-400 hover:text-white transition duration-300">About Us</a></li><li><a href="https://secondhandcell.com/privacy.html" class="text-slate-400 hover:text-white transition duration-300">Privacy Policy</a></li><li><a href="https://secondhandcell.com/terms.html" class="text-slate-400 hover:text-white transition duration-300">Terms & Conditions</a></li></ul></div>
                 <div><h3 class="text-xl font-bold mb-4">Contact Us</h3><p class="text-slate-400">Email: support@secondhandcell.com</p></div>
             </div>
             <div class="bg-slate-700 p-6 rounded-lg">
@@ -273,7 +304,7 @@
             <a href="https://www.sellcell.com/" target="_blank" rel="noopener">
                 <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" class="h-16 grayscale hover:grayscale-0 transition" alt="SellCell">
             </a>
-            <img src="/assets/stars-5.svg" class="h-10" alt="Trustpilot Stars">
+            <img src="https://secondhandcell.com/assets/stars-5.svg" class="h-10" alt="Trustpilot Stars">
         </div>
         <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm">&copy; 2025 SecondHandCell. All rights reserved.</div>
     </div>
@@ -290,7 +321,7 @@
         projectId: "buyback-a0f05",
         storageBucket: "buyback-a0f05.appspot.com",
         messagingSenderId: "876430429098",
-        appId: "1:876430429098:web:f6dd64b1960d90461979d3",
+        appId: "1:876430429098:web:f6dd64b1970d90461979d3",
         measurementId: "G-6WWQN44JHT"
     };
 
@@ -347,6 +378,20 @@
                 updateSummary();
             }
         } catch (err) { console.error(err); }
+
+        // AUTO-REMOVE ERROR HIGHLIGHT ON INPUT
+        const required = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        required.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', () => {
+                    el.classList.remove('error-highlight');
+                    if (!document.querySelector('.error-highlight')) {
+                        document.getElementById('form-error-banner').style.display = 'none';
+                    }
+                });
+            }
+        });
     };
 
     const updateSummary = () => {
@@ -375,9 +420,34 @@
     document.querySelectorAll('input[name="payment_method"]').forEach(r => r.onchange = updatePaymentFields);
 
     document.getElementById('submitOrderBtn').onclick = async () => {
-        if (!document.getElementById('terms').checked) return alert("Please accept the terms.");
+        const errorBanner = document.getElementById('form-error-banner');
+        const termsCheck = document.getElementById('terms');
+        
+        // Reset state
+        errorBanner.style.display = 'none';
         const required = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
-        for (let id of required) { if (!document.getElementById(id).value) return alert("Please fill in all required fields."); }
+        let hasError = false;
+
+        required.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el.value) {
+                el.classList.add('error-highlight');
+                hasError = true;
+            } else {
+                el.classList.remove('error-highlight');
+            }
+        });
+
+        if (hasError) {
+            errorBanner.style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+
+        if (!termsCheck.checked) {
+            alert("Please accept the terms & conditions.");
+            return;
+        }
 
         const btn = document.getElementById('submitOrderBtn');
         const pref = document.querySelector('input[name="shipping_preference"]:checked').value;
