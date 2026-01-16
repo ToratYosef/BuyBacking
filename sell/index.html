@@ -637,6 +637,40 @@
             title.textContent = `Select Model`;
             grid.innerHTML = '<div class="col-span-full text-center py-10 text-slate-400">Fetching models...</div>';
             const models = await getModels(state.selections.brand);
+            
+            // NEWEST FIRST SORTING LOGIC
+            models.sort((a, b) => {
+                const nameA = a.name.toLowerCase();
+                const nameB = b.name.toLowerCase();
+
+                // 1. Separate special models (like SE) to the bottom
+                const isSpecialA = nameA.includes('se');
+                const isSpecialB = nameB.includes('se');
+                if (isSpecialA && !isSpecialB) return 1;
+                if (!isSpecialA && isSpecialB) return -1;
+
+                // 2. Extract major version numbers
+                const extractNum = (s) => {
+                    const match = s.match(/(\d+)/);
+                    return match ? parseInt(match[0]) : 0;
+                };
+                const nA = extractNum(a.name);
+                const nB = extractNum(b.name);
+
+                // Sort descending by number (e.g., 16 > 15)
+                if (nA !== nB) return nB - nA;
+
+                // 3. Same generation sorting by tier weight
+                const getTierWeight = (s) => {
+                    if (s.includes('ultra')) return 10;
+                    if (s.includes('pro max')) return 8;
+                    if (s.includes('pro')) return 6;
+                    if (s.includes('plus') || s.includes('+')) return 4;
+                    return 2; // standard
+                };
+                return getTierWeight(nameB) - getTierWeight(nameA);
+            });
+
             grid.innerHTML = '';
             models.forEach(m => createCard(grid, m.name, m.id));
             applyGridCols(grid, models.length);
