@@ -316,7 +316,7 @@
 
             <!-- Right Side: Price & Checkout (Sticky Action Card) -->
             <div class="lg:sticky lg:top-[160px] space-y-4">
-                <div class="bg-white p-8 rounded-2xl border-2 border-green-600 shadow-xl text-center">
+                <div id="final-quote-action-card" class="bg-white p-8 rounded-2xl border-2 border-green-600 shadow-xl text-center">
                     <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Your Final Offer:</div>
                     <div class="price-val mb-6" id="final-price">$0</div>
 
@@ -802,7 +802,17 @@
             }
         }
 
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        // MOBILE-SPECIFIC SCROLL LOGIC
+        if (window.innerWidth < 1024) {
+            const quoteCard = document.getElementById('final-quote-action-card');
+            if (quoteCard) {
+                setTimeout(() => {
+                    quoteCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100); // Tiny delay to ensure the hidden class removal is processed by the browser
+            }
+        } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     };
 
     const renderConditionGrid = () => {
