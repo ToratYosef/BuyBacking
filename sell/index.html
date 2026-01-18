@@ -219,13 +219,13 @@
         }
     </style>
     <!-- Site Chrome logic -->
-    <link rel="stylesheet" href="/">
+    <link rel="stylesheet" href="/assets/css/site-chrome.css">
 </head>
 <body class="bg-slate-50">
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <!-- Navbar -->
-<header class="site-header relative">
+<header class="site-header site-header--mobile-compact relative">
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
             <a href="/" class="logo-link">
@@ -763,10 +763,18 @@
         const container = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
         container.innerHTML = '';
         const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
+        const placeholderMap = {
+            brand: 'Brand',
+            model: 'Model',
+            storage: 'Storage',
+            lock: 'Lock',
+            condition: 'Condition'
+        };
+
         stepOrder.forEach((step, i) => {
             const span = document.createElement('span');
             span.className = `crumb ${i === currentIdx ? 'active' : ''} ${i < currentIdx ? 'filled' : ''}`;
-            let label = step.charAt(0).toUpperCase() + step.slice(1);
+            let label = placeholderMap[step] || step;
             if (i <= currentIdx) {
                 if (step === 'brand') label = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || label;
                 if (step === 'model') label = state.selections.modelName || label;
@@ -807,7 +815,7 @@
             const quoteCard = document.getElementById('final-quote-action-card');
             if (quoteCard) {
                 setTimeout(() => {
-                    quoteCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    quoteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }, 100); // Tiny delay to ensure the hidden class removal is processed by the browser
             }
         } else {
