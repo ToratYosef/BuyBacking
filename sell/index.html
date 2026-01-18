@@ -156,7 +156,15 @@
             transform: translateX(-50%) translateY(-5px);
         }
 
-        .breadcrumbs { display: flex; gap: 8px; margin-bottom: 30px; font-size: 13px; justify-content: center; flex-wrap: wrap; }
+        .breadcrumbs-group { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 30px; }
+        .breadcrumbs { display: flex; gap: 8px; font-size: 13px; justify-content: center; flex-wrap: wrap; }
+        .breadcrumbs--labels { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+        .breadcrumbs--labels .crumb {
+            background: transparent;
+            color: #94a3b8;
+            cursor: default;
+            padding: 0;
+        }
         .crumb { padding: 8px 16px; background: #e5e7eb; border-radius: 20px; font-weight: 600; color: var(--text-muted); cursor: pointer; transition: 0.2s; }
         .crumb.active { background: var(--brand-primary); color: white; cursor: default; }
         .crumb.filled { background: #dcfce7; color: var(--brand-primary); border: 1px solid var(--brand-primary); }
@@ -259,7 +267,10 @@
 <main class="sell-app-wrapper">
     <!-- Selection Flow Container -->
     <div class="app-container" id="selection-flow">
-        <div class="breadcrumbs" id="crumbs"></div>
+        <div class="breadcrumbs-group">
+            <div class="breadcrumbs breadcrumbs--labels" id="crumb-labels"></div>
+            <div class="breadcrumbs" id="crumbs"></div>
+        </div>
         <h2 class="step-title" id="step-name">Select Brand</h2>
         <div class="selection-grid" id="grid-content">
             <div class="col-span-full text-center py-10 text-slate-400">Loading selections...</div>
@@ -288,7 +299,10 @@
 
     <!-- Final Offer View -->
     <div class="app-container hidden" id="offer-view">
-        <div class="breadcrumbs" id="final-crumbs"></div>
+        <div class="breadcrumbs-group">
+            <div class="breadcrumbs breadcrumbs--labels" id="final-crumb-labels"></div>
+            <div class="breadcrumbs" id="final-crumbs"></div>
+        </div>
         
         <!-- SIDE-BY-SIDE GRID -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -760,8 +774,10 @@
     };
 
     const updateCrumbs = () => {
-        const container = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
-        container.innerHTML = '';
+        const labelsContainer = state.isFinalView ? document.getElementById('final-crumb-labels') : document.getElementById('crumb-labels');
+        const valuesContainer = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
+        labelsContainer.innerHTML = '';
+        valuesContainer.innerHTML = '';
         const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
         const placeholderMap = {
             brand: 'Brand',
@@ -776,15 +792,15 @@
             span.className = `crumb ${i === currentIdx ? 'active' : ''} ${i < currentIdx ? 'filled' : ''}`;
             let label = placeholderMap[step] || step;
             if (i <= currentIdx) {
-                if (step === 'brand') label = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || label;
-                if (step === 'model') label = state.selections.modelName || label;
-                if (step === 'storage') label = state.selections.storage || label;
-                if (step === 'lock') label = LOCK_LABELS[state.selections.lock] || state.selections.lock || label;
-                if (step === 'condition') label = CONDITION_DEFS.find(c => c.key === state.selections.condition)?.name || label;
+                if (step === 'brand') valueLabel = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || valueLabel;
+                if (step === 'model') valueLabel = state.selections.modelName || valueLabel;
+                if (step === 'storage') valueLabel = state.selections.storage || valueLabel;
+                if (step === 'lock') valueLabel = LOCK_LABELS[state.selections.lock] || state.selections.lock || valueLabel;
+                if (step === 'condition') valueLabel = CONDITION_DEFS.find(c => c.key === state.selections.condition)?.name || valueLabel;
             }
-            span.textContent = label;
-            if (i < currentIdx) span.onclick = () => jumpToStep(step);
-            container.appendChild(span);
+            valueSpan.textContent = valueLabel;
+            if (i < currentIdx) valueSpan.onclick = () => jumpToStep(step);
+            valuesContainer.appendChild(valueSpan);
         });
     };
 
