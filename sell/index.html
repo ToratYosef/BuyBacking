@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Tailwind CDN for testing reliability -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/css/tailwind.css">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SecondHandCell - Sell Your Device</title>
@@ -219,13 +218,13 @@
         }
     </style>
     <!-- Site Chrome logic -->
-    <link rel="stylesheet" href="/">
+    <link rel="stylesheet" href="/assets/css/site-chrome.css">
 </head>
 <body class="bg-slate-50">
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-W3BM2JC8" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <!-- Navbar -->
-<header class="site-header relative">
+<header class="site-header site-header--mobile-compact relative">
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
             <a href="/" class="logo-link">
@@ -760,23 +759,32 @@
     };
 
     const updateCrumbs = () => {
-        const container = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
-        container.innerHTML = '';
+        const crumbContainer = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
+        if (!crumbContainer) return;
+        crumbContainer.innerHTML = '';
         const currentIdx = state.isFinalView ? stepOrder.length : stepOrder.indexOf(state.currentStep);
+        const placeholderMap = {
+            brand: 'Brand',
+            model: 'Model',
+            storage: 'Storage',
+            lock: 'Lock',
+            condition: 'Condition'
+        };
+
         stepOrder.forEach((step, i) => {
             const span = document.createElement('span');
             span.className = `crumb ${i === currentIdx ? 'active' : ''} ${i < currentIdx ? 'filled' : ''}`;
-            let label = step.charAt(0).toUpperCase() + step.slice(1);
+            let valueLabel = placeholderMap[step] || step;
             if (i <= currentIdx) {
-                if (step === 'brand') label = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || label;
-                if (step === 'model') label = state.selections.modelName || label;
-                if (step === 'storage') label = state.selections.storage || label;
-                if (step === 'lock') label = LOCK_LABELS[state.selections.lock] || state.selections.lock || label;
-                if (step === 'condition') label = CONDITION_DEFS.find(c => c.key === state.selections.condition)?.name || label;
+                if (step === 'brand') valueLabel = BRAND_OPTIONS.find(b => b.key === state.selections.brand)?.label || valueLabel;
+                if (step === 'model') valueLabel = state.selections.modelName || valueLabel;
+                if (step === 'storage') valueLabel = state.selections.storage || valueLabel;
+                if (step === 'lock') valueLabel = LOCK_LABELS[state.selections.lock] || state.selections.lock || valueLabel;
+                if (step === 'condition') valueLabel = CONDITION_DEFS.find(c => c.key === state.selections.condition)?.name || valueLabel;
             }
-            span.textContent = label;
+            span.textContent = valueLabel;
             if (i < currentIdx) span.onclick = () => jumpToStep(step);
-            container.appendChild(span);
+            crumbContainer.appendChild(span);
         });
     };
 
@@ -807,7 +815,7 @@
             const quoteCard = document.getElementById('final-quote-action-card');
             if (quoteCard) {
                 setTimeout(() => {
-                    quoteCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    quoteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }, 100); // Tiny delay to ensure the hidden class removal is processed by the browser
             }
         } else {
