@@ -562,44 +562,10 @@
         broken: 'Broken'
     };
 
-    const DEVICE_IMAGE_MAP = {
-        'iphone-11': '/assets/i11.webp',
-        'iphone-11-pro': '/assets/i11p.webp',
-        'iphone-11-pro-max': '/assets/i11pm.webp',
-        'iphone-12': '/assets/i12.webp',
-        'iphone-12-mini': '/assets/i12m.webp',
-        'iphone-12-pro': '/assets/i12p.webp',
-        'iphone-12-pro-max': '/assets/i12pm.webp',
-        'iphone-13': '/assets/i13.webp',
-        'iphone-13-mini': '/assets/i13m.webp',
-        'iphone-13-pro': '/assets/i13p.webp',
-        'iphone-13-pro-max': '/assets/i13pm.webp',
-        'iphone-14': '/assets/i14.webp',
-        'iphone-14-plus': '/assets/i14pl.webp',
-        'iphone-14-pro': '/assets/i14p.webp',
-        'iphone-14-pro-max': '/assets/i14pm.webp',
-        'iphone-15': '/assets/i15.webp',
-        'iphone-15-plus': '/assets/i15pl.webp',
-        'iphone-15-pro': '/assets/i15p.webp',
-        'iphone-15-pro-max': '/assets/i15pm.webp',
-        'iphone-16': '/assets/i16.webp',
-        'iphone-16e': '/assets/i16e.webp',
-        'iphone-16-plus': '/assets/i16pl.webp',
-        'iphone-16-pro': '/assets/i16p.webp',
-        'iphone-16-pro-max': '/assets/i16pm.webp',
-        'iphone-se-2nd-gen': '/assets/ise2.webp',
-        'iphone-se-3rd-gen': '/assets/ise3.webp',
-        'iphone-x': '/assets/ix.webp',
-        'iphone-xr': '/assets/ixr.webp',
-        'iphone-xs': '/assets/ixs.webp',
-        'iphone-xs-max': '/assets/ixsm.webp',
-        'pixel-8': '/assets/gp8.webp',
-        'samsung-galaxy-tab-s9-ultra': '/assets/tbs9u.webp'
-    };
-
     const FALLBACK_DEVICE_IMAGE = '/assets/sellcell.webp';
     const CART_STORAGE_KEY = 'shc_cart';
     const EMAIL_STORAGE_KEY = 'shc_quote_email';
+    const IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
 
     const state = {
         currentStep: 'brand',
@@ -702,15 +668,39 @@
     const saveCart = (cart) => {
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
     };
-    const getDeviceImageUrl = (slug) => DEVICE_IMAGE_MAP[slug] || FALLBACK_DEVICE_IMAGE;
+    const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
+    const resolveImageUrl = (baseUrl, imgEl) => {
+        if (!imgEl) return;
+        if (!baseUrl) {
+            imgEl.src = FALLBACK_DEVICE_IMAGE;
+            return;
+        }
+        if (hasImageExtension(baseUrl)) {
+            imgEl.src = baseUrl;
+            return;
+        }
+        const candidates = IMAGE_EXTENSIONS.map(ext => `${baseUrl}${ext}`);
+        let idx = 0;
+        const tryNext = () => {
+            if (idx >= candidates.length) {
+                imgEl.src = FALLBACK_DEVICE_IMAGE;
+                return;
+            }
+            const testImg = new Image();
+            const candidate = candidates[idx];
+            testImg.onload = () => { imgEl.src = candidate; };
+            testImg.onerror = () => { idx += 1; tryNext(); };
+            testImg.src = candidate;
+        };
+        tryNext();
+    };
     const updateDevicePreview = () => {
         const preview = document.getElementById('selected-device-preview');
         const nameEl = document.getElementById('selected-device-name');
         const imgEl = document.getElementById('selected-device-thumb');
         if (!preview || !nameEl || !imgEl) return;
         if (state.selections.modelName) {
-            const slug = state.selections.deviceSlug || slugify(state.selections.modelName);
-            imgEl.src = getDeviceImageUrl(slug);
+            resolveImageUrl(state.deviceData?.imageUrl, imgEl);
             imgEl.alt = `${state.selections.modelName} preview`;
             nameEl.textContent = state.selections.modelName;
             preview.classList.remove('hidden');
@@ -721,8 +711,7 @@
     const updateFinalDeviceImage = () => {
         const imgEl = document.getElementById('final-device-image');
         if (!imgEl) return;
-        const slug = state.selections.deviceSlug || slugify(state.selections.modelName);
-        imgEl.src = getDeviceImageUrl(slug);
+        resolveImageUrl(state.deviceData?.imageUrl, imgEl);
         imgEl.alt = `${state.selections.modelName || 'Selected device'} image`;
     };
     const updateCartSummary = () => {
