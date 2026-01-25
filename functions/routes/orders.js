@@ -71,6 +71,15 @@ function createOrdersRouter({
     dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
     weight: { ounces: 8, unit: 'ounce' },
   };
+  const BASE_LABEL_OUNCES = 8;
+
+  function resolveOrderDeviceCount(order = {}) {
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemCount = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+    const qty = Number(order.qty) || 0;
+    const count = itemCount || qty || 1;
+    return Math.max(1, count);
+  }
 
   function normalizePromoCode(value) {
     if (!value) return '';
@@ -177,12 +186,17 @@ function createOrdersRouter({
       country_code: 'US',
     };
 
+    const deviceCount = resolveOrderDeviceCount(orderData);
+    const packageData = {
+      ...EMAIL_LABEL_PACKAGE_DATA,
+      weight: { ounces: BASE_LABEL_OUNCES * deviceCount, unit: 'ounce' },
+    };
     const labelReference = `${orderId}-INBOUND-DEVICE`;
     const labelData = await createShipEngineLabel(
       buyerAddress,
       SWIFT_BUYBACK_ADDRESS,
       labelReference,
-      EMAIL_LABEL_PACKAGE_DATA
+      packageData
     );
 
     const labelDownloadLink = labelData.label_download?.pdf;
@@ -436,6 +450,14 @@ function createOrdersRouter({
   function serialisePrintQueueOrder(order = {}) {
     const shippingInfo = order.shippingInfo || {};
     const labelUrls = Array.from(collectLabelUrlCandidates(order));
+    const items = Array.isArray(order.items) ? order.items : [];
+    const primaryItem = items[0] || {};
+    const deviceSummary =
+      items.length > 1
+        ? `${primaryItem.modelName || primaryItem.device || order.device || 'Device'} + ${
+            items.length - 1
+          } more`
+        : primaryItem.modelName || primaryItem.device || order.device || '';
 
     return {
       id: order.id,
@@ -453,10 +475,10 @@ function createOrdersRouter({
         city: shippingInfo.city || '',
         state: shippingInfo.state || '',
       },
-      device: order.device || '',
-      brand: order.brand || '',
-      storage: order.storage || order.memory || '',
-      carrier: order.carrier || '',
+      device: deviceSummary,
+      brand: order.brand || primaryItem.brand || '',
+      storage: order.storage || order.memory || primaryItem.storage || '',
+      carrier: order.carrier || primaryItem.carrier || primaryItem.lock || '',
       estimatedQuote:
         typeof order.estimatedQuote === 'number'
           ? order.estimatedQuote
@@ -1018,6 +1040,59 @@ function createOrdersRouter({
         return Number.isFinite(numeric) ? numeric : null;
       };
 
+      const normalizeItems = (items = []) => {
+        if (!Array.isArray(items)) return [];
+        return items
+          .map((item) => ({
+            ...item,
+            qty: Number(item.qty) || 1,
+            unitPrice: normalizeAmount(item.unitPrice) ?? normalizeAmount(item.price) ?? null,
+            totalPayout: normalizeAmount(item.totalPayout) ?? null,
+            estimatedQuote: normalizeAmount(item.estimatedQuote) ?? null,
+          }))
+          .filter((item) => item.device || item.modelName || item.modelId);
+      };
+
+      const items = normalizeItems(orderData.items);
+      if (items.length) {
+        orderData.items = items;
+        orderData.itemCount = items.length;
+        orderData.qty = items.reduce((sum, item) => sum + (item.qty || 0), 0);
+
+        const firstItem = items[0];
+        orderData.device = orderData.device || firstItem.modelName || firstItem.device || '';
+        orderData.brand = orderData.brand || firstItem.brand || '';
+        orderData.modelId = orderData.modelId || firstItem.modelId || '';
+        orderData.modelName = orderData.modelName || firstItem.modelName || firstItem.device || '';
+        orderData.storage = orderData.storage || firstItem.storage || '';
+        orderData.carrier = orderData.carrier || firstItem.carrier || firstItem.lock || '';
+        orderData.lock = orderData.lock || firstItem.lock || firstItem.carrier || '';
+        orderData.condition = orderData.condition || firstItem.condition || '';
+        orderData.condition_power_on = orderData.condition_power_on || firstItem.condition_power_on || '';
+        orderData.condition_functional = orderData.condition_functional || firstItem.condition_functional || '';
+        orderData.condition_cracks = orderData.condition_cracks || firstItem.condition_cracks || '';
+        orderData.condition_cosmetic = orderData.condition_cosmetic || firstItem.condition_cosmetic || '';
+
+        const itemsTotal = items.reduce((sum, item) => {
+          const fallbackTotal =
+            (item.unitPrice ?? normalizeAmount(item.price) ?? 0) * (item.qty || 1);
+          const itemTotal =
+            normalizeAmount(item.totalPayout) ??
+            normalizeAmount(item.estimatedQuote) ??
+            fallbackTotal;
+          return sum + (itemTotal || 0);
+        }, 0);
+        if (typeof orderData.totalPayout === 'undefined') {
+          orderData.totalPayout = itemsTotal;
+        }
+        if (typeof orderData.estimatedQuote === 'undefined') {
+          orderData.estimatedQuote = itemsTotal;
+        }
+        if (typeof orderData.originalQuote === 'undefined') {
+          orderData.originalQuote = itemsTotal;
+        }
+      }
+
       const normalizedOriginal = normalizeAmount(orderData.originalQuote);
       const normalizedTotal = normalizeAmount(orderData.totalPayout);
       const normalizedEstimated = normalizeAmount(orderData.estimatedQuote);
@@ -1371,6 +1446,7 @@ function createOrdersRouter({
       if (!doc.exists) return res.status(404).json({ error: 'Order not found' });
 
       const order = { id: doc.id, ...doc.data() };
+      const deviceCount = resolveOrderDeviceCount(order);
       const buyerShippingInfo = order.shippingInfo;
       const orderIdForLabel = order.id || 'N/A';
       const nowTimestamp = admin.firestore.Timestamp.now();
@@ -1390,7 +1466,7 @@ function createOrdersRouter({
       const inboundPackageData = {
         service_code: 'usps_first_class_mail',
         dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
-        weight: { ounces: 8, unit: 'ounce' },
+        weight: { ounces: BASE_LABEL_OUNCES * deviceCount, unit: 'ounce' },
       };
 
       const swiftBuyBackAddress = {
