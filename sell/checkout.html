@@ -717,16 +717,12 @@
             }
 
             const isKit = pref === 'ship_kit';
-            let remainingFee = isKit ? 10 : 0;
-            let lastResult = null;
-            let firstOrderId = '';
-
-            for (const item of cartItems) {
+            const totalQty = cartItems.reduce((sum, item) => sum + item.qty, 0);
+            const firstItem = cartItems[0];
+            const itemsPayload = cartItems.map((item) => {
                 const itemTotal = item.unitPrice * item.qty;
-                const payout = Math.max(itemTotal - remainingFee, 0);
-                remainingFee = 0;
                 const condKey = item.condition;
-                const orderData = {
+                return {
                     device: item.modelName,
                     brand: item.brand,
                     modelId: item.model,
@@ -740,39 +736,62 @@
                     condition_cracks: condKey === 'broken' ? 'Yes' : 'No',
                     condition_cosmetic: condKey,
                     qty: item.qty,
-                    totalPayout: payout,
-                    estimatedQuote: payout,
-                    shippingPreference: isKit ? 'Shipping Kit Requested' : 'Email Label Requested',
-                    shippingInfo: shippingInfo,
-                    paymentMethod: method,
-                    paymentIdentifier: document.getElementById('payoutIdentifier').value,
-                    createdAt: new Date().toISOString()
+                    unitPrice: item.unitPrice,
+                    totalPayout: itemTotal,
+                    estimatedQuote: itemTotal
                 };
+            });
 
-                const res = await fetch('https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-order', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(orderData)
-                });
-                const result = await res.json();
-                if (!res.ok) {
-                    alert("Submission failed: " + result.error);
-                    btn.disabled = false;
-                    btn.textContent = "SUBMIT MY TRADE-IN";
-                    return;
-                }
-                if (!firstOrderId) firstOrderId = result.orderId;
-                lastResult = result;
+            const summaryDevice = cartItems.length > 1
+                ? `${firstItem.modelName} + ${cartItems.length - 1} more`
+                : firstItem.modelName;
+
+            const orderData = {
+                device: summaryDevice,
+                brand: firstItem.brand,
+                modelId: firstItem.model,
+                modelName: firstItem.modelName,
+                storage: firstItem.storage,
+                carrier: firstItem.lock,
+                lock: firstItem.lock,
+                condition: firstItem.condition,
+                condition_power_on: firstItem.condition === 'noPower' ? 'No' : 'Yes',
+                condition_functional: (firstItem.condition === 'broken' || firstItem.condition === 'noPower') ? 'No' : 'Yes',
+                condition_cracks: firstItem.condition === 'broken' ? 'Yes' : 'No',
+                condition_cosmetic: firstItem.condition,
+                qty: totalQty,
+                items: itemsPayload,
+                totalPayout: finalPayout,
+                estimatedQuote: finalPayout,
+                shippingPreference: isKit ? 'Shipping Kit Requested' : 'Email Label Requested',
+                shippingKitFee: isKit ? 10 : 0,
+                shippingInfo: shippingInfo,
+                paymentMethod: method,
+                paymentIdentifier: document.getElementById('payoutIdentifier').value,
+                createdAt: new Date().toISOString()
+            };
+
+            const res = await fetch('https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            });
+            const result = await res.json();
+            if (!res.ok) {
+                alert("Submission failed: " + result.error);
+                btn.disabled = false;
+                btn.textContent = "SUBMIT MY TRADE-IN";
+                return;
             }
 
-            const labelUrl = lastResult?.autoLabelDownloadUrl || lastResult?.labelDownloadUrl || '';
-            const trackingNumber = lastResult?.autoLabelTrackingNumber || lastResult?.trackingNumber || '';
+            const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
+            const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
             const successUrl = new URL('/order-submitted.html', window.location.origin);
-            successUrl.searchParams.set('id', firstOrderId);
+            successUrl.searchParams.set('id', result.orderId);
             successUrl.searchParams.set('price', finalPayout.toFixed(2));
             successUrl.searchParams.set('device', cartItems.length > 1 ? 'Multiple devices' : cartItems[0].modelName);
-            successUrl.searchParams.set('qty', cartItems.reduce((sum, item) => sum + item.qty, 0));
+            successUrl.searchParams.set('qty', totalQty);
             successUrl.searchParams.set('name', shippingInfo.fullName);
             successUrl.searchParams.set('street', shippingInfo.streetAddress);
             successUrl.searchParams.set('unit', shippingInfo.addressUnit);

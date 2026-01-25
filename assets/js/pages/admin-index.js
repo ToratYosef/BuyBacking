@@ -2824,6 +2824,57 @@ return numeric;
 return 0;
 }
 
+function getOrderItems(order) {
+if (!order || typeof order !== 'object') {
+return [];
+}
+if (Array.isArray(order.items) && order.items.length) {
+return order.items;
+}
+if (order.device || order.modelName || order.modelId) {
+return [{
+device: order.device,
+modelName: order.modelName,
+modelId: order.modelId,
+storage: order.storage,
+carrier: order.carrier || order.lock,
+qty: Number(order.qty) || 1
+}];
+}
+return [];
+}
+
+function formatOrderItemLabel(item = {}) {
+const name = item.modelName || item.device || 'Device';
+const storage = item.storage ? ` ${item.storage}` : '';
+return `${name}${storage}`.trim();
+}
+
+function getOrderItemsSummary(order) {
+const items = getOrderItems(order);
+if (!items.length) {
+return 'Device';
+}
+const labels = items.map(formatOrderItemLabel);
+if (labels.length === 1) {
+return labels[0];
+}
+return `${labels[0]} + ${labels.length - 1} more`;
+}
+
+function getOrderItemsSearchText(order) {
+const items = getOrderItems(order);
+return items.map((item) => {
+return [
+item.modelName,
+item.device,
+item.storage,
+item.carrier,
+item.lock
+].filter(Boolean).join(' ');
+}).join(' ').toLowerCase();
+}
+
 function normalizeFeedKey(value) {
 if (!value && value !== 0) return '';
 return value.toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -5483,7 +5534,10 @@ ordersToDisplay.forEach(order => {
 const row = document.createElement('tr');
 row.className = 'transition-colors duration-200';
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-const itemDescription = `${order.device || 'Device'} ${order.storage || ''}`.trim();
+const itemsForDisplay = getOrderItems(order);
+const itemDescriptionBase = getOrderItemsSummary(order);
+const itemCountText = itemsForDisplay.length > 1 ? ` · ${itemsForDisplay.length} items` : '';
+const itemDescription = `${itemDescriptionBase}${itemCountText}`.trim();
 const orderDate = formatDate(order.createdAt);
 const orderAge = formatOrderAge(order.createdAt);
 const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
@@ -6481,9 +6535,16 @@ throw new Error(`Failed to fetch order details: ${response.status} - ${errorText
 modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
 modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
 modalCustomerPhone.textContent = order.shippingInfo ? order.shippingInfo.phone : 'N/A';
-modalItem.textContent = order.device;
-modalStorage.textContent = order.storage;
-modalCarrier.textContent = order.carrier;
+const modalItems = getOrderItems(order);
+const modalItemSummary = getOrderItemsSummary(order);
+modalItem.textContent = modalItemSummary;
+if (modalItems.length > 1) {
+  modalStorage.textContent = `${modalItems.length} items`;
+  modalCarrier.textContent = 'Multiple';
+} else {
+  modalStorage.textContent = order.storage;
+  modalCarrier.textContent = order.carrier;
+}
 const payoutAmount = getOrderPayout(order);
 modalPrice.textContent = payoutAmount.toFixed(2);
 
@@ -8028,13 +8089,15 @@ function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options =
       const shippingName = (order.shippingInfo?.fullName || '').toLowerCase();
       const deviceName = (order.device || '').toLowerCase();
       const storageName = (order.storage || '').toLowerCase();
+      const itemsText = getOrderItemsSearchText(order);
       const trackingNumber = (order.trackingNumber || '').toLowerCase();
       const orderId = (order.id || '').toLowerCase();
       return orderId.includes(lowerCaseSearchTerm) ||
         shippingName.includes(lowerCaseSearchTerm) ||
         deviceName.includes(lowerCaseSearchTerm) ||
         storageName.includes(lowerCaseSearchTerm) ||
-        trackingNumber.includes(lowerCaseSearchTerm);
+        trackingNumber.includes(lowerCaseSearchTerm) ||
+        itemsText.includes(lowerCaseSearchTerm);
     });
   }
 
@@ -8138,4 +8201,3 @@ notificationBadge.style.display = 'block';
 notificationBadge.style.display = 'none';
 }
 }
-
