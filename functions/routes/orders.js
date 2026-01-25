@@ -71,6 +71,15 @@ function createOrdersRouter({
     dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
     weight: { ounces: 8, unit: 'ounce' },
   };
+  const BASE_LABEL_OUNCES = 8;
+
+  function resolveOrderDeviceCount(order = {}) {
+    const items = Array.isArray(order.items) ? order.items : [];
+    const itemCount = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+    const qty = Number(order.qty) || 0;
+    const count = itemCount || qty || 1;
+    return Math.max(1, count);
+  }
 
   function normalizePromoCode(value) {
     if (!value) return '';
@@ -177,12 +186,17 @@ function createOrdersRouter({
       country_code: 'US',
     };
 
+    const deviceCount = resolveOrderDeviceCount(orderData);
+    const packageData = {
+      ...EMAIL_LABEL_PACKAGE_DATA,
+      weight: { ounces: BASE_LABEL_OUNCES * deviceCount, unit: 'ounce' },
+    };
     const labelReference = `${orderId}-INBOUND-DEVICE`;
     const labelData = await createShipEngineLabel(
       buyerAddress,
       SWIFT_BUYBACK_ADDRESS,
       labelReference,
-      EMAIL_LABEL_PACKAGE_DATA
+      packageData
     );
 
     const labelDownloadLink = labelData.label_download?.pdf;
@@ -1432,6 +1446,7 @@ function createOrdersRouter({
       if (!doc.exists) return res.status(404).json({ error: 'Order not found' });
 
       const order = { id: doc.id, ...doc.data() };
+      const deviceCount = resolveOrderDeviceCount(order);
       const buyerShippingInfo = order.shippingInfo;
       const orderIdForLabel = order.id || 'N/A';
       const nowTimestamp = admin.firestore.Timestamp.now();
@@ -1451,7 +1466,7 @@ function createOrdersRouter({
       const inboundPackageData = {
         service_code: 'usps_first_class_mail',
         dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
-        weight: { ounces: 8, unit: 'ounce' },
+        weight: { ounces: BASE_LABEL_OUNCES * deviceCount, unit: 'ounce' },
       };
 
       const swiftBuyBackAddress = {

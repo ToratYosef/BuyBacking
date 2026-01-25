@@ -378,6 +378,7 @@
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEY = 'shc_cart';
     const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken' };
+    const CONDITION_KEYS = Object.keys(CONDITION_LABELS);
     let cartItems = [];
 
     // AUTH LISTENER - LOAD SAVED ADDRESS & SET MONOGRAM
@@ -445,6 +446,19 @@
         document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
         document.getElementById('sum-total').textContent = `$${Math.max(total - fee, 0).toFixed(2)}`;
     };
+    const ensureCartCondition = (item) => {
+        const validKey = item.condition && CONDITION_LABELS[item.condition] ? item.condition : null;
+        if (validKey) return validKey;
+        const priceKeys = Object.keys(item.conditionPrices || {});
+        const matchedKey = priceKeys.find((key) => CONDITION_LABELS[key]);
+        const fallbackKey = matchedKey || CONDITION_KEYS[0];
+        item.condition = fallbackKey;
+        if (item.conditionPrices && item.conditionPrices[fallbackKey]) {
+            item.unitPrice = Number(item.conditionPrices[fallbackKey]);
+        }
+        return fallbackKey;
+    };
+
     const renderCart = () => {
         const cartContainer = document.getElementById('cart-items');
         const emptyState = document.getElementById('cart-empty');
@@ -456,6 +470,7 @@
         }
         emptyState.classList.add('hidden');
         cartItems.forEach((item, index) => {
+            const conditionKey = ensureCartCondition(item);
             const card = document.createElement('div');
             card.className = 'cart-item-card';
             const total = (item.unitPrice * item.qty).toFixed(2);
@@ -479,11 +494,11 @@
                     </div>
                     <select class="cart-condition-select" data-action="condition" data-index="${index}">
                         ${Object.entries(CONDITION_LABELS).map(([key, label]) => `
-                            <option value="${key}" ${item.condition === key ? 'selected' : ''}>${label}</option>
+                            <option value="${key}" ${conditionKey === key ? 'selected' : ''}>${label}</option>
                         `).join('')}
                     </select>
                 </div>
-                <div class="text-xs text-slate-500 mt-2">Condition: ${CONDITION_LABELS[item.condition] || item.condition}</div>
+                <div class="text-xs text-slate-500 mt-2">Condition: ${CONDITION_LABELS[conditionKey] || conditionKey}</div>
             `;
             cartContainer.appendChild(card);
         });
@@ -496,8 +511,9 @@
         if (action === 'decrease') item.qty = Math.max(item.qty - 1, 1);
         if (action === 'remove') cartItems.splice(index, 1);
         if (action === 'condition') {
-            item.condition = value;
-            const newPrice = Number(item.conditionPrices?.[value] || item.unitPrice);
+            const nextCondition = CONDITION_LABELS[value] ? value : ensureCartCondition(item);
+            item.condition = nextCondition;
+            const newPrice = Number(item.conditionPrices?.[nextCondition] || item.unitPrice);
             item.unitPrice = newPrice;
         }
         saveCart(cartItems);
