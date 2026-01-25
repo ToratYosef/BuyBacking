@@ -576,6 +576,9 @@ const modalCustomerPhone = document.getElementById('modal-customer-phone');
 const modalItem = document.getElementById('modal-item');
 const modalStorage = document.getElementById('modal-storage');
 const modalCarrier = document.getElementById('modal-carrier');
+const modalItemsSection = document.getElementById('modal-items-section');
+const modalItemsCount = document.getElementById('modal-items-count');
+const modalItemsList = document.getElementById('modal-items-list');
 const modalPrice = document.getElementById('modal-price');
 const modalPaymentMethod = document.getElementById('modal-payment-method');
 
@@ -2873,6 +2876,65 @@ item.carrier,
 item.lock
 ].filter(Boolean).join(' ');
 }).join(' ').toLowerCase();
+}
+
+function resolveOrderItemCarrier(item = {}) {
+return item.carrier || item.lock || '';
+}
+
+function resolveOrderItemCondition(item = {}, fallback = {}) {
+return {
+powerOn: item.condition_power_on || fallback.condition_power_on || '',
+functional: item.condition_functional || fallback.condition_functional || '',
+cracks: item.condition_cracks || fallback.condition_cracks || '',
+cosmetic: item.condition_cosmetic || item.condition || fallback.condition_cosmetic || fallback.condition || '',
+};
+}
+
+function renderModalItemDetails(item, order) {
+if (!item) return;
+modalItem.textContent = formatOrderItemLabel(item);
+modalStorage.textContent = item.storage || order.storage || '';
+modalCarrier.textContent = resolveOrderItemCarrier(item) || order.carrier || '';
+const resolved = resolveOrderItemCondition(item, order);
+modalConditionPowerOn.textContent = resolved.powerOn ? formatCondition(resolved.powerOn) : 'N/A';
+modalConditionFunctional.textContent = resolved.functional ? formatCondition(resolved.functional) : 'N/A';
+modalConditionCracks.textContent = resolved.cracks ? formatCondition(resolved.cracks) : 'N/A';
+modalConditionCosmetic.textContent = resolved.cosmetic ? formatCondition(resolved.cosmetic) : 'N/A';
+}
+
+function renderOrderItemsList(order) {
+if (!modalItemsList || !modalItemsCount) return;
+const items = getOrderItems(order);
+modalItemsCount.textContent = `${items.length} device${items.length === 1 ? '' : 's'}`;
+modalItemsList.innerHTML = '';
+if (!items.length) {
+modalItemsList.innerHTML = '<div class="text-xs text-slate-500">No device details available.</div>';
+return;
+}
+items.forEach((item, index) => {
+const carrier = resolveOrderItemCarrier(item);
+const conditionLabel = item.condition || item.condition_cosmetic || '';
+const qtyLabel = item.qty ? `Qty ${item.qty}` : '';
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'w-full text-left rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition hover:border-sky-300 hover:bg-white';
+button.innerHTML = `
+  <div class="flex items-center justify-between gap-2">
+    <div class="font-semibold text-slate-900">${formatOrderItemLabel(item)}</div>
+    <div class="text-xs font-semibold text-slate-500">${qtyLabel}</div>
+  </div>
+  <div class="text-xs text-slate-500 mt-1">${[item.storage, carrier].filter(Boolean).join(' • ')}</div>
+  <div class="text-xs text-slate-500 mt-1">Condition: ${conditionLabel ? formatCondition(conditionLabel) : 'N/A'}</div>
+`;
+button.addEventListener('click', () => {
+renderModalItemDetails(item, order);
+});
+modalItemsList.appendChild(button);
+if (index === 0) {
+renderModalItemDetails(item, order);
+}
+});
 }
 
 function normalizeFeedKey(value) {
@@ -6535,16 +6597,7 @@ throw new Error(`Failed to fetch order details: ${response.status} - ${errorText
 modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
 modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
 modalCustomerPhone.textContent = order.shippingInfo ? order.shippingInfo.phone : 'N/A';
-const modalItems = getOrderItems(order);
-const modalItemSummary = getOrderItemsSummary(order);
-modalItem.textContent = modalItemSummary;
-if (modalItems.length > 1) {
-  modalStorage.textContent = `${modalItems.length} items`;
-  modalCarrier.textContent = 'Multiple';
-} else {
-  modalStorage.textContent = order.storage;
-  modalCarrier.textContent = order.carrier;
-}
+renderOrderItemsList(order);
 const payoutAmount = getOrderPayout(order);
 modalPrice.textContent = payoutAmount.toFixed(2);
 
