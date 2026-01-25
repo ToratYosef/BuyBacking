@@ -106,7 +106,7 @@
             font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .select-card:hover:not(.disabled) { border-color: var(--brand-secondary); transform: translateY(-2px); }
-        .select-card.active { border-color: var(--brand-primary); background: #f0fdf4; color: var(--brand-primary); box-shadow: 0 0 0 1px var(--brand-primary); }
+        .select-card.active { border-color: var(--brand-primary); background: #f0fdf4; color: var(--brand-primary); box-shadow: 0 0 0 2px rgba(21, 128, 61, 0.2); outline: 2px solid var(--brand-primary); outline-offset: -2px; }
         
         .select-card.disabled { 
             opacity: 0.6; 
@@ -217,6 +217,27 @@
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         
         .hidden { display: none !important; }
+
+        .scroll-target { scroll-margin-top: 150px; }
+
+        .device-preview-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 12px 16px;
+            box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+        }
+        .device-preview-card img {
+            width: 72px;
+            height: 72px;
+            object-fit: contain;
+        }
+        @media (max-width: 640px) {
+            .device-preview-card img { width: 56px; height: 56px; }
+        }
         
         .user-monogram {
             display: flex; align-items: center; justify-content: center;
@@ -265,10 +286,29 @@
 
 <main class="sell-app-wrapper">
     <!-- Selection Flow Container -->
-    <div class="app-container" id="selection-flow">
+    <div class="app-container scroll-target" id="selection-flow">
         <div class="breadcrumbs-group">
             <div class="breadcrumbs breadcrumbs--labels" id="crumb-labels"></div>
             <div class="breadcrumbs" id="crumbs"></div>
+        </div>
+        <div id="sell-cart-summary" class="hidden mb-6">
+            <div class="device-preview-card justify-between">
+                <div>
+                    <div class="text-xs font-bold uppercase tracking-widest text-slate-400">Cart Ready</div>
+                    <div class="text-lg font-black text-slate-900" id="sell-cart-count">0 devices</div>
+                    <div class="text-sm text-slate-500" id="sell-cart-total">$0 total payout</div>
+                </div>
+                <button id="continueToCheckoutBtn" class="bg-green-600 text-white px-4 py-3 rounded-xl font-bold hover:bg-green-700 transition">Continue to checkout</button>
+            </div>
+        </div>
+        <div id="selected-device-preview" class="hidden mb-6">
+            <div class="device-preview-card">
+                <img id="selected-device-thumb" src="/assets/sellcell.webp" alt="Selected device" loading="lazy">
+                <div>
+                    <div class="text-xs font-bold uppercase tracking-widest text-slate-400">Selected Device</div>
+                    <div class="text-lg font-black text-slate-900" id="selected-device-name">--</div>
+                </div>
+            </div>
         </div>
         <h2 class="step-title" id="step-name">Select Brand</h2>
         <div class="selection-grid" id="grid-content">
@@ -290,14 +330,14 @@
             <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Diagnostic Requirements:</div>
             <ul id="help-condition-desc" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed"></ul>
             
-            <div class="mt-8 flex justify-center">
-                <button id="confirmConditionBtn" class="btn-primary w-full max-w-[320px] shadow-lg">Confirm & See My Quote</button>
+            <div class="mt-8 flex justify-center text-xs font-bold uppercase tracking-widest text-slate-400">
+                Quote updates automatically with your selection.
             </div>
         </div>
     </div>
 
     <!-- Final Offer View -->
-    <div class="app-container hidden" id="offer-view">
+    <div class="app-container hidden scroll-target" id="offer-view">
         <div class="breadcrumbs-group">
             <div class="breadcrumbs breadcrumbs--labels" id="final-crumb-labels"></div>
             <div class="breadcrumbs" id="final-crumbs"></div>
@@ -309,8 +349,13 @@
             <!-- Left Side: Device & Condition Info (Col Span 2) -->
             <div class="lg:col-span-2 space-y-6">
                 <div class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
-                    <h2 id="final-device-name" class="text-3xl font-black text-slate-900 leading-tight">--</h2>
-                    <div id="summary-tags" class="text-xs text-green-700 font-bold uppercase tracking-widest mt-2 border-b pb-4"></div>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <img id="final-device-image" src="/assets/sellcell.webp" alt="Selected device" loading="lazy" class="w-24 h-24 object-contain">
+                        <div>
+                            <h2 id="final-device-name" class="text-3xl font-black text-slate-900 leading-tight">--</h2>
+                            <div id="summary-tags" class="text-xs text-green-700 font-bold uppercase tracking-widest mt-2 border-b pb-4"></div>
+                        </div>
+                    </div>
 
                     <div class="mt-6">
                         <p class="text-sm font-bold text-slate-500 uppercase mb-4 tracking-wide">Adjust Condition:</p>
@@ -379,24 +424,9 @@
         
         <div class="space-y-3">
             <button class="btn-primary py-5 shadow-lg shadow-green-100" id="finalSubmitBtn">PROCEED TO SHIPPING</button>
+            <button class="w-full py-3 border-2 border-slate-200 rounded-xl text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors" id="addAnotherDeviceBtn">Add another device</button>
             <button class="w-full py-3 text-slate-400 text-sm font-bold hover:text-slate-600 transition-colors" onclick="document.getElementById('qty-modal').style.display='none'">Cancel</button>
         </div>
-    </div>
-</div>
-
-<!-- Login Modal -->
-<div id="loginModal" class="modal-overlay">
-    <div class="modal-card">
-        <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">
-            <i class="fa-solid fa-user-lock"></i>
-        </div>
-        <h2 class="text-2xl font-black mb-4">Trade-in Account</h2>
-        <p class="mb-8 text-slate-500 text-sm leading-relaxed px-4">Sign in to save your order to your account or continue as a guest.</p>
-        <div class="flex flex-col gap-3">
-            <button id="modalLoginBtn" class="bg-indigo-600 text-white p-5 rounded-2xl font-black shadow-lg shadow-indigo-100 hover:opacity-90 transition-all active:scale-[0.98]">Sign In / Sign Up</button>
-            <button id="modalGuestBtn" class="border-2 border-slate-200 p-5 rounded-2xl font-black text-slate-600 hover:bg-slate-50 transition-all active:scale-[0.98]">Continue as Guest</button>
-        </div>
-        <button class="mt-6 text-slate-400 w-full text-center text-sm font-bold hover:text-slate-600" onclick="document.getElementById('loginModal').style.display='none'">Cancel</button>
     </div>
 </div>
 
@@ -524,9 +554,21 @@
         }
     ];
 
+    const CONDITION_LABELS = {
+        flawless: 'Flawless',
+        good: 'Good',
+        fair: 'Fair',
+        broken: 'Broken'
+    };
+
+    const FALLBACK_DEVICE_IMAGE = '/assets/sellcell.webp';
+    const CART_STORAGE_KEY = 'shc_cart';
+    const EMAIL_STORAGE_KEY = 'shc_quote_email';
+    const IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
+
     const state = {
         currentStep: 'brand',
-        selections: { brand: '', model: '', modelName: '', storage: '', lock: '', condition: '', qty: 1 },
+        selections: { brand: '', model: '', modelName: '', storage: '', lock: '', condition: '', qty: 1, deviceSlug: '' },
         deviceData: null,
         modelsCache: {},
         isFinalView: false
@@ -587,6 +629,11 @@
         const url = new URL(window.location);
         url.searchParams.delete('device');
         Object.entries(state.selections).forEach(([key, val]) => {
+            if (key === 'deviceSlug') {
+                if (val) url.searchParams.set('device', val);
+                else url.searchParams.delete('device');
+                return;
+            }
             if (val && key !== 'qty' && key !== 'modelName') url.searchParams.set(key, val);
             else if (key !== 'qty' && key !== 'modelName') url.searchParams.delete(key);
         });
@@ -608,6 +655,135 @@
         return val;
     };
 
+    const normalizeParam = (val) => (val || '').trim().toLowerCase();
+    const slugify = (val) => normalizeParam(val).replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const getCart = () => {
+        try {
+            return JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '[]');
+        } catch (e) {
+            return [];
+        }
+    };
+    const saveCart = (cart) => {
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    };
+    const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
+    const resolveImageUrl = (baseUrl, imgEl) => {
+        if (!imgEl) return;
+        if (!baseUrl) {
+            imgEl.src = FALLBACK_DEVICE_IMAGE;
+            return;
+        }
+        if (hasImageExtension(baseUrl)) {
+            imgEl.src = baseUrl;
+            return;
+        }
+        const candidates = IMAGE_EXTENSIONS.map(ext => `${baseUrl}${ext}`);
+        let idx = 0;
+        const tryNext = () => {
+            if (idx >= candidates.length) {
+                imgEl.src = FALLBACK_DEVICE_IMAGE;
+                return;
+            }
+            const testImg = new Image();
+            const candidate = candidates[idx];
+            testImg.onload = () => { imgEl.src = candidate; };
+            testImg.onerror = () => { idx += 1; tryNext(); };
+            testImg.src = candidate;
+        };
+        tryNext();
+    };
+    const updateDevicePreview = () => {
+        const preview = document.getElementById('selected-device-preview');
+        const nameEl = document.getElementById('selected-device-name');
+        const imgEl = document.getElementById('selected-device-thumb');
+        if (!preview || !nameEl || !imgEl) return;
+        if (state.selections.modelName) {
+            resolveImageUrl(state.deviceData?.imageUrl, imgEl);
+            imgEl.alt = `${state.selections.modelName} preview`;
+            nameEl.textContent = state.selections.modelName;
+            preview.classList.remove('hidden');
+        } else {
+            preview.classList.add('hidden');
+        }
+    };
+    const updateFinalDeviceImage = () => {
+        const imgEl = document.getElementById('final-device-image');
+        if (!imgEl) return;
+        resolveImageUrl(state.deviceData?.imageUrl, imgEl);
+        imgEl.alt = `${state.selections.modelName || 'Selected device'} image`;
+    };
+    const updateCartSummary = () => {
+        const summary = document.getElementById('sell-cart-summary');
+        const countEl = document.getElementById('sell-cart-count');
+        const totalEl = document.getElementById('sell-cart-total');
+        if (!summary || !countEl || !totalEl) return;
+        const cart = getCart();
+        if (!cart.length) {
+            summary.classList.add('hidden');
+            return;
+        }
+        const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
+        const total = cart.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
+        countEl.textContent = `${totalQty} device${totalQty === 1 ? '' : 's'} ready`;
+        totalEl.textContent = `$${total.toFixed(2)} total payout`;
+        summary.classList.remove('hidden');
+    };
+    const addCurrentDeviceToCart = () => {
+        if (!state.deviceData) return;
+        const priceMap = state.deviceData.prices?.[state.selections.storage]?.[state.selections.lock] || {};
+        const unitPrice = Number(priceMap[state.selections.condition] || 0);
+        const cart = getCart();
+        const key = [
+            state.selections.brand,
+            state.selections.model,
+            state.selections.storage,
+            state.selections.lock,
+            state.selections.condition
+        ].join('|');
+        const existing = cart.find(item => item.key === key);
+        if (existing) {
+            existing.qty += state.selections.qty;
+        } else {
+            cart.push({
+                key,
+                brand: state.selections.brand,
+                model: state.selections.model,
+                modelName: state.selections.modelName,
+                deviceSlug: state.selections.deviceSlug || slugify(state.selections.modelName),
+                storage: state.selections.storage,
+                lock: state.selections.lock,
+                condition: state.selections.condition,
+                qty: state.selections.qty,
+                unitPrice,
+                conditionPrices: priceMap
+            });
+        }
+        saveCart(cart);
+        updateCartSummary();
+    };
+    const getStoredEmail = () => {
+        try {
+            return localStorage.getItem(EMAIL_STORAGE_KEY) || '';
+        } catch (e) {
+            return '';
+        }
+    };
+    const setStoredEmail = (email) => {
+        try {
+            if (email) localStorage.setItem(EMAIL_STORAGE_KEY, email);
+        } catch (e) {
+            return;
+        }
+    };
+    const scrollToTarget = (id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        requestAnimationFrame(() => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    };
+
     const jumpToStep = (step) => {
         state.isFinalView = false;
         state.currentStep = step;
@@ -618,6 +794,7 @@
                 if (s === 'model') state.selections.modelName = '';
             }
         });
+        if (stepIndex <= stepOrder.indexOf('model')) state.selections.deviceSlug = '';
         updateURL();
         document.getElementById('offer-view').classList.add('hidden');
         document.getElementById('selection-flow').classList.remove('hidden');
@@ -725,6 +902,8 @@
             applyGridCols(grid, CONDITION_DEFS.length);
             if (state.selections.condition) updateConditionHelp();
         }
+        updateDevicePreview();
+        scrollToTarget('selection-flow');
     };
 
     const createCard = (container, label, value, isDisabled = false) => {
@@ -748,6 +927,12 @@
         const stepIndex = stepOrder.indexOf(state.currentStep);
         stepOrder.forEach((s, i) => { if (i > stepIndex) { state.selections[s] = ''; if (s === 'model') state.selections.modelName = ''; } });
         state.selections[state.currentStep] = value;
+        if (state.currentStep === 'brand') {
+            state.selections.deviceSlug = '';
+        }
+        if (state.currentStep === 'model') {
+            state.selections.deviceSlug = value;
+        }
         updateURL();
         
         if (state.currentStep === 'brand') { state.currentStep = 'model'; } 
@@ -759,7 +944,10 @@
         }
         else if (state.currentStep === 'storage') { state.currentStep = 'lock'; }
         else if (state.currentStep === 'lock') { state.currentStep = 'condition'; }
-        else if (state.currentStep === 'condition') { updateConditionHelp(); return; }
+        else if (state.currentStep === 'condition') {
+            showFinalOffer();
+            return;
+        }
         renderCurrentStep();
     };
 
@@ -811,30 +999,23 @@
         const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
         document.getElementById('final-device-name').textContent = `${fullBrand} ${state.selections.modelName} ${state.selections.storage}`;
         document.getElementById('summary-tags').textContent = `Network: ${LOCK_LABELS[state.selections.lock] || state.selections.lock}`;
+        updateFinalDeviceImage();
         renderConditionGrid();
         updatePrice();
         updateCrumbs();
         
         // Ensure email pre-fill logic is updated when switching to final view
-        if (currentUser && currentUser.email) {
-            const emailInput = document.getElementById('user-email');
-            if (emailInput) {
+        const emailInput = document.getElementById('user-email');
+        if (emailInput) {
+            if (currentUser && currentUser.email) {
                 emailInput.value = currentUser.email;
                 emailInput.readOnly = false; // KEEP EDITABLE EVEN WHEN SIGNED IN
+            } else if (!emailInput.value) {
+                emailInput.value = getStoredEmail();
             }
         }
 
-        // MOBILE-SPECIFIC SCROLL LOGIC
-        if (window.innerWidth < 1024) {
-            const quoteCard = document.getElementById('final-quote-action-card');
-            if (quoteCard) {
-                setTimeout(() => {
-                    quoteCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 100); // Tiny delay to ensure the hidden class removal is processed by the browser
-            }
-        } else {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        scrollToTarget('offer-view');
     };
 
     const renderConditionGrid = () => {
@@ -868,8 +1049,6 @@
         }
     };
 
-    document.getElementById('confirmConditionBtn').onclick = showFinalOffer;
-    
     document.getElementById('startCheckoutBtn').onclick = () => {
         const emailInput = document.getElementById('user-email');
         const errorLabel = document.getElementById('email-error-msg');
@@ -882,56 +1061,126 @@
             return;
         }
 
-        if (currentUser) document.getElementById('qty-modal').style.display = 'flex';
-        else document.getElementById('loginModal').style.display = 'flex';
+        setStoredEmail(email);
+        document.getElementById('qty-modal').style.display = 'flex';
     };
 
-    document.getElementById('modalLoginBtn').onclick = () => window.location.href = '/login.html';
-    document.getElementById('modalGuestBtn').onclick = () => { document.getElementById('loginModal').style.display = 'none'; document.getElementById('qty-modal').style.display = 'flex'; };
     document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('finalSubmitBtn').onclick = () => {
+        setStoredEmail(document.getElementById('user-email').value);
+        addCurrentDeviceToCart();
         const finalData = { ...state.selections, email: document.getElementById('user-email').value };
         window.location.href = `/sell/checkout.html?${new URLSearchParams(finalData).toString()}`;
     };
+    document.getElementById('addAnotherDeviceBtn').onclick = () => {
+        setStoredEmail(document.getElementById('user-email').value);
+        addCurrentDeviceToCart();
+        document.getElementById('qty-modal').style.display = 'none';
+        jumpToStep('brand');
+    };
     document.getElementById('resetFlowBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
+    document.getElementById('continueToCheckoutBtn').onclick = () => {
+        window.location.href = '/sell/checkout.html';
+    };
 
+    const normalizeCarrier = (value) => {
+        const carrier = normalizeParam(value).replace(/\s+/g, '');
+        if (carrier.includes('t-mobile') || carrier.includes('tmobile')) return 'tmobile';
+        if (carrier.includes('att') || carrier.includes('at&t')) return 'att';
+        if (carrier.includes('verizon')) return 'verizon';
+        if (carrier.includes('unlocked')) return 'unlocked';
+        if (carrier.includes('locked')) return 'locked';
+        if (carrier.includes('other')) return 'other';
+        return carrier;
+    };
+    const mapQualityToCondition = (quality) => {
+        const normalized = normalizeParam(quality);
+        if (['flawless', 'excellent', 'like-new', 'likenew', 'mint'].includes(normalized)) return 'flawless';
+        if (['good'].includes(normalized)) return 'good';
+        if (['fair'].includes(normalized)) return 'fair';
+        if (['broken', 'poor', 'damaged'].includes(normalized)) return 'broken';
+        return '';
+    };
+    const findModelBySlug = async (slug, brandOverride = '') => {
+        if (!slug) return null;
+        const targetSlug = normalizeParam(slug);
+        const brands = brandOverride ? [brandOverride] : BRAND_OPTIONS.map(b => b.key);
+        for (const brand of brands) {
+            const models = await getModels(brand);
+            const match = models.find(model => {
+                const modelSlug = normalizeParam(model.id);
+                const nameSlug = slugify(model.name);
+                return modelSlug === targetSlug || nameSlug === targetSlug;
+            });
+            if (match) return { brand, model: match };
+        }
+        return null;
+    };
+    const getMatchingKey = (keys, value) => {
+        const normalized = normalizeParam(value);
+        if (!normalized) return '';
+        return keys.find(k => normalizeParam(k) === normalized) || '';
+    };
     const hydrateFromURL = async () => {
         const params = new URLSearchParams(window.location.search);
-        if (params.has('brand')) {
-            state.selections.brand = params.get('brand');
+        const deviceParam = params.get('device') || params.get('model') || '';
+        const brandParam = params.get('brand') || '';
+        const storageParam = params.get('storage') || '';
+        const carrierParam = params.get('carrier') || params.get('lock') || '';
+        const conditionParam = params.get('condition') || '';
+        const qualityParam = params.get('quality') || '';
+        const powerParam = params.get('power') || '';
+        const functionalityParam = params.get('functionality') || '';
+
+        const modelMatch = await findModelBySlug(deviceParam, brandParam);
+        if (modelMatch) {
+            state.selections.brand = modelMatch.brand;
             state.currentStep = 'model';
-            if (params.has('model')) {
-                const models = await getModels(state.selections.brand);
-                const match = models.find(m => m.id === params.get('model'));
-                if (match) {
-                    state.selections.model = match.id; 
-                    state.selections.modelName = match.name; 
-                    state.deviceData = match; 
-                    state.currentStep = 'storage';
-                    
-                    if (params.has('storage')) {
-                        state.selections.storage = params.get('storage');
-                        state.currentStep = 'lock'; // Advance to lock status question
-                        
-                        if (params.has('lock')) {
-                            state.selections.lock = params.get('lock');
-                            state.currentStep = 'condition';
-                            
-                            if (params.has('condition')) { 
-                                state.selections.condition = params.get('condition'); 
-                                showFinalOffer(); 
-                                return; 
-                            }
-                        }
-                    }
+            state.selections.model = modelMatch.model.id;
+            state.selections.modelName = modelMatch.model.name;
+            state.selections.deviceSlug = normalizeParam(deviceParam) || modelMatch.model.id;
+            const snap = await getDoc(doc(db, "devices", state.selections.brand, "models", state.selections.model));
+            state.deviceData = snap.data();
+            state.currentStep = 'storage';
+
+            if (storageParam) {
+                const storageKey = getMatchingKey(Object.keys(state.deviceData.prices || {}), storageParam);
+                if (storageKey) {
+                    state.selections.storage = storageKey;
+                    state.currentStep = 'lock';
                 }
+            }
+
+            if (state.selections.storage && carrierParam) {
+                const lockKeys = Object.keys(state.deviceData.prices?.[state.selections.storage] || {});
+                const lockKey = getMatchingKey(lockKeys, normalizeCarrier(carrierParam));
+                if (lockKey) {
+                    state.selections.lock = lockKey;
+                    state.currentStep = 'condition';
+                }
+            }
+
+            const derivedCondition = mapQualityToCondition(qualityParam) || normalizeParam(conditionParam);
+            const needsBroken = ['no', 'false'].includes(normalizeParam(powerParam)) || ['no', 'false', 'broken', 'not-working'].includes(normalizeParam(functionalityParam));
+            const finalCondition = needsBroken ? 'broken' : derivedCondition;
+            if (finalCondition && CONDITION_LABELS[finalCondition]) {
+                state.selections.condition = finalCondition;
+                showFinalOffer();
+                return;
             }
         }
         renderCurrentStep();
     };
 
     hydrateFromURL();
+    updateCartSummary();
+
+    const storedEmail = getStoredEmail();
+    if (storedEmail) {
+        const emailInput = document.getElementById('user-email');
+        if (emailInput && !emailInput.value) emailInput.value = storedEmail;
+    }
 </script>
 </body>
 </html>
