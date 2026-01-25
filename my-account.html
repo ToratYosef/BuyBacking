@@ -27,6 +27,22 @@
     <style>
         body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
         .account-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 24px; box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .status-pill.pending { background: #dbeafe; color: #1e40af; }
+        .status-pill.shipped { background: #e0e7ff; color: #3730a3; }
+        .status-pill.received { background: #e5e7eb; color: #374151; }
+        .status-pill.complete { background: #dcfce7; color: #166534; }
+        .status-pill.other { background: #fef9c3; color: #854d0e; }
     </style>
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
 </head>
@@ -47,8 +63,13 @@
                 <p class="logo-tagline">Turn Your Old <span>Phone Into Cash!</span></p>
             </div>
             <nav class="header-auth-nav">
-                <div class="site-header__auth-wrapper">
-                    <a href="/login.html" class="site-header__login">Login/Sign Up</a>
+                <div id="authStatusContainer" class="site-header__auth-wrapper relative">
+                    <a href="/login.html" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
+                    <div id="userMonogram" class="user-monogram hidden" onclick="document.getElementById('authDropdown').classList.toggle('hidden')"></div>
+                    <div id="authDropdown" class="auth-dropdown hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-100">
+                        <a href="/my-account.html" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Account</a>
+                        <button id="logoutBtn" type="button" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Logout</button>
+                    </div>
                 </div>
             </nav>
         </div>
@@ -90,6 +111,16 @@
                 </div>
             </div>
 
+            <div class="mt-10 border-t border-slate-200 pt-6">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <h2 class="text-xl font-black text-slate-900">My Orders</h2>
+                    <a href="/sell/index.html" class="text-sm font-semibold text-green-700 hover:underline">Start another trade-in</a>
+                </div>
+                <div id="account-orders" class="mt-6 space-y-4 text-sm text-slate-600">
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-slate-500">Sign in to view your orders.</div>
+                </div>
+            </div>
+
             <div class="mt-10 border-t border-slate-200 pt-6 text-sm text-slate-500">
                 Need immediate help? Call <span class="font-semibold text-slate-700">(347) 559-1707</span> or email <a href="mailto:support@secondhandcell.com" class="text-green-700 font-semibold hover:underline">support@secondhandcell.com</a>.
             </div>
@@ -126,5 +157,128 @@
             <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
         </div>
     </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
+            authDomain: "auth.secondhandcell.com",
+            projectId: "buyback-a0f05",
+            storageBucket: "buyback-a0f05.appspot.com",
+            messagingSenderId: "876430429098",
+            appId: "1:876430429098:web:f6dd64b1970d90461979d3",
+            measurementId: "G-6WWQN44JHT"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const statusMap = {
+            order_pending: { label: 'Order Pending', className: 'status-pill pending' },
+            shipping_kit_requested: { label: 'Shipping Kit', className: 'status-pill shipped' },
+            label_generated: { label: 'Label Generated', className: 'status-pill other' },
+            received: { label: 'Received', className: 'status-pill received' },
+            completed: { label: 'Completed', className: 'status-pill complete' }
+        };
+
+        const formatStatus = (status) => {
+            const normalized = (status || '').toString().toLowerCase();
+            return statusMap[normalized] || { label: status || 'In Progress', className: 'status-pill other' };
+        };
+
+        const formatDate = (value) => {
+            if (!value) return '';
+            const date = value.seconds ? new Date(value.seconds * 1000) : new Date(value);
+            return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString();
+        };
+
+        const renderOrders = (orders = []) => {
+            const container = document.getElementById('account-orders');
+            if (!container) return;
+            if (!orders.length) {
+                container.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-slate-500">No orders yet. Start a trade-in to see your orders here.</div>';
+                return;
+            }
+            container.innerHTML = orders.map((order) => {
+                const status = formatStatus(order.status);
+                const payout = Number(order.totalPayout || order.estimatedQuote || 0).toFixed(2);
+                const device = order.device || order.modelName || 'Device';
+                const createdAt = formatDate(order.createdAt);
+                const qty = order.qty ? `Qty ${order.qty}` : '';
+                return `
+                    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <div class="text-xs font-bold uppercase text-slate-400">Order ${order.id || ''}</div>
+                                <div class="text-lg font-black text-slate-900 mt-1">${device}</div>
+                                <div class="text-sm text-slate-500 mt-1">${[order.storage, order.carrier].filter(Boolean).join(' • ')}</div>
+                                <div class="text-sm text-slate-500 mt-1">${[createdAt, qty].filter(Boolean).join(' • ')}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="${status.className}">${status.label}</div>
+                                <div class="mt-3 text-lg font-black text-green-700">$${payout}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        };
+
+        const loadOrders = async (user) => {
+            const container = document.getElementById('account-orders');
+            if (!container) return;
+            container.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-slate-500">Loading your orders...</div>';
+            try {
+                const ordersRef = collection(db, 'orders');
+                const ordersQuery = query(ordersRef, where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
+                const snapshot = await getDocs(ordersQuery);
+                const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+                renderOrders(orders);
+            } catch (error) {
+                console.error('Failed to load orders:', error);
+                container.innerHTML = '<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-700">Unable to load orders right now.</div>';
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            const loginBtn = document.getElementById('loginNavBtn');
+            const monogram = document.getElementById('userMonogram');
+            if (user) {
+                loginBtn.classList.add('hidden');
+                monogram.classList.remove('hidden');
+                let initials = 'U';
+                if (user.displayName) {
+                    const parts = user.displayName.trim().split(/\s+/);
+                    initials = parts.length > 1
+                        ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+                        : parts[0].slice(0, 2).toUpperCase();
+                } else if (user.email) {
+                    initials = user.email.slice(0, 2).toUpperCase();
+                }
+                monogram.textContent = initials;
+                loadOrders(user);
+            } else {
+                loginBtn.classList.remove('hidden');
+                monogram.classList.add('hidden');
+                renderOrders([]);
+            }
+        });
+
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    await signOut(auth);
+                    window.location.href = '/';
+                } catch (error) {
+                    console.error('Logout failed:', error);
+                }
+            });
+        }
+    </script>
 </body>
 </html>
