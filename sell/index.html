@@ -598,6 +598,7 @@
 
     const FALLBACK_DEVICE_IMAGE = '/assets/sellcell.webp';
     const CART_STORAGE_KEY = 'shc_cart';
+    const EMAIL_STORAGE_KEY = 'shc_quote_email';
 
     const state = {
         currentStep: 'brand',
@@ -771,6 +772,20 @@
         }
         saveCart(cart);
         updateCartSummary();
+    };
+    const getStoredEmail = () => {
+        try {
+            return localStorage.getItem(EMAIL_STORAGE_KEY) || '';
+        } catch (e) {
+            return '';
+        }
+    };
+    const setStoredEmail = (email) => {
+        try {
+            if (email) localStorage.setItem(EMAIL_STORAGE_KEY, email);
+        } catch (e) {
+            return;
+        }
     };
     const scrollToTarget = (id) => {
         const el = document.getElementById(id);
@@ -1001,11 +1016,13 @@
         updateCrumbs();
         
         // Ensure email pre-fill logic is updated when switching to final view
-        if (currentUser && currentUser.email) {
-            const emailInput = document.getElementById('user-email');
-            if (emailInput) {
+        const emailInput = document.getElementById('user-email');
+        if (emailInput) {
+            if (currentUser && currentUser.email) {
                 emailInput.value = currentUser.email;
                 emailInput.readOnly = false; // KEEP EDITABLE EVEN WHEN SIGNED IN
+            } else if (!emailInput.value) {
+                emailInput.value = getStoredEmail();
             }
         }
 
@@ -1055,17 +1072,20 @@
             return;
         }
 
+        setStoredEmail(email);
         document.getElementById('qty-modal').style.display = 'flex';
     };
 
     document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('finalSubmitBtn').onclick = () => {
+        setStoredEmail(document.getElementById('user-email').value);
         addCurrentDeviceToCart();
         const finalData = { ...state.selections, email: document.getElementById('user-email').value };
         window.location.href = `/sell/checkout.html?${new URLSearchParams(finalData).toString()}`;
     };
     document.getElementById('addAnotherDeviceBtn').onclick = () => {
+        setStoredEmail(document.getElementById('user-email').value);
         addCurrentDeviceToCart();
         document.getElementById('qty-modal').style.display = 'none';
         jumpToStep('brand');
@@ -1166,6 +1186,12 @@
 
     hydrateFromURL();
     updateCartSummary();
+
+    const storedEmail = getStoredEmail();
+    if (storedEmail) {
+        const emailInput = document.getElementById('user-email');
+        if (emailInput && !emailInput.value) emailInput.value = storedEmail;
+    }
 </script>
 </body>
 </html>
