@@ -5556,12 +5556,35 @@ sendKitReminderBtn.onclick = null;
 }
 }
 
+function buildExpandedOrderRows(orders = []) {
+return orders.flatMap((order) => {
+const items = getOrderItems(order);
+if (!items.length) {
+return [{ order, item: null, isPrimary: true, index: 0 }];
+}
+const rows = [];
+items.forEach((item) => {
+const qty = Number(item.qty) || 1;
+for (let idx = 0; idx < qty; idx += 1) {
+rows.push({
+order,
+item,
+isPrimary: rows.length === 0,
+index: rows.length,
+});
+}
+});
+return rows;
+});
+}
+
 function renderOrders() {
 if (!ordersTableBody) {
 return;
 }
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-const total = source.length;
+const expandedRowsSource = buildExpandedOrderRows(source);
+const total = expandedRowsSource.length;
 ordersTableBody.innerHTML = '';
 
 if (!total) {
@@ -5588,18 +5611,14 @@ currentPage = totalPages;
 
 const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
 const endIndex = startIndex + ORDERS_PER_PAGE;
-const ordersToDisplay = source.slice(startIndex, endIndex);
+const expandedRows = expandedRowsSource.slice(startIndex, endIndex);
 
-lastRenderedOrderIds = ordersToDisplay.map(order => order.id);
+lastRenderedOrderIds = expandedRows.map(row => row.order.id);
 
-ordersToDisplay.forEach(order => {
+expandedRows.forEach(({ order, item, isPrimary }) => {
 const row = document.createElement('tr');
 row.className = 'transition-colors duration-200';
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-const itemsForDisplay = getOrderItems(order);
-const itemDescriptionBase = getOrderItemsSummary(order);
-const itemCountText = itemsForDisplay.length > 1 ? ` · ${itemsForDisplay.length} items` : '';
-const itemDescription = `${itemDescriptionBase}${itemCountText}`.trim();
 const orderDate = formatDate(order.createdAt);
 const orderAge = formatOrderAge(order.createdAt);
 const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
@@ -5621,10 +5640,21 @@ const trackingCellContent = trackingNumber
 : 'N/A';
 
 const isSelected = selectedOrderIds.has(order.id);
+const deviceLabel = item ? formatOrderItemLabel(item) : getOrderItemsSummary(order);
+const carrierLabel = resolveOrderItemCarrier(item || {}) || order.carrier || '';
+const conditionLabel = item?.condition || item?.condition_cosmetic || order.condition || '';
+const perDeviceQuote = (() => {
+  if (item?.unitPrice) return Number(item.unitPrice);
+  if (item?.totalPayout && item?.qty) return Number(item.totalPayout) / Number(item.qty);
+  if (order.totalPayout && order.qty) return Number(order.totalPayout) / Number(order.qty);
+  return null;
+})();
+const quoteText = Number.isFinite(perDeviceQuote) ? `$${perDeviceQuote.toFixed(2)}` : 'N/A';
+const itemDetails = [item?.storage || order.storage, carrierLabel].filter(Boolean).join(' • ');
 
 row.innerHTML = `
 <td class="select-column">
-  <input type="checkbox" class="order-select-checkbox" data-order-id="${order.id}" aria-label="Select order ${order.id}" ${isSelected ? 'checked' : ''}>
+  ${isPrimary ? `<input type="checkbox" class="order-select-checkbox" data-order-id="${order.id}" aria-label="Select order ${order.id}" ${isSelected ? 'checked' : ''}>` : ''}
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${order.id}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
@@ -5633,7 +5663,13 @@ row.innerHTML = `
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}${promoBadgeHtml}</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
+  <div class="font-semibold text-slate-900">${deviceLabel}</div>
+  <div class="text-xs text-slate-500 mt-1">${itemDetails}</div>
+  <div class="text-xs text-slate-500 mt-1">Condition: ${conditionLabel ? formatCondition(conditionLabel) : 'N/A'}</div>
+  <div class="text-xs text-slate-500 mt-1">Quote: ${quoteText}</div>
+  ${isPrimary ? promoBadgeHtml : ''}
+</td>
 <td class="px-3 py-4 whitespace-normal text-sm">
   <span class="${getStatusClass(order.status)}">
     <span class="status-bubble-text">${statusText}</span>
@@ -5643,9 +5679,9 @@ row.innerHTML = `
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
 <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
-  <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
+  ${isPrimary ? `<button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
     View Details
-  </button>
+  </button>` : ''}
 </td>
 `;
 
@@ -5693,8 +5729,8 @@ return;
 }
 
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-const total = source.length;
-const totalPages = Math.max(1, Math.ceil(Math.max(total, 0) / ORDERS_PER_PAGE));
+const totalRows = buildExpandedOrderRows(source).length;
+const totalPages = Math.max(1, Math.ceil(Math.max(totalRows, 0) / ORDERS_PER_PAGE));
 lastKnownTotalPages = totalPages;
 
 if (totalPages <= 1) {
@@ -6440,13 +6476,23 @@ function parseShippingAddressEditorValue(rawValue = '') {
   const zipCode = stateZipMatch[2];
   const beforeStateZip = normalized.slice(0, stateZipMatch.index).replace(/,\s*$/, '').trim();
 
-  const lastCommaIndex = beforeStateZip.lastIndexOf(',');
-  if (lastCommaIndex === -1) {
-    throw new Error('Separate the street and city with commas (e.g., "123 Main St, Brooklyn, NY 11230").');
-  }
+  let streetAddress = '';
+  let city = '';
 
-  const city = beforeStateZip.slice(lastCommaIndex + 1).trim();
-  const streetAddress = beforeStateZip.slice(0, lastCommaIndex).trim();
+  const lastCommaIndex = beforeStateZip.lastIndexOf(',');
+  if (lastCommaIndex !== -1) {
+    city = beforeStateZip.slice(lastCommaIndex + 1).trim();
+    streetAddress = beforeStateZip.slice(0, lastCommaIndex).trim();
+  } else {
+    const parts = beforeStateZip.split(/\s+/).filter(Boolean);
+    if (parts.length >= 4) {
+      city = parts.slice(-2).join(' ');
+      streetAddress = parts.slice(0, -2).join(' ');
+    } else if (parts.length >= 2) {
+      city = parts.slice(-1).join(' ');
+      streetAddress = parts.slice(0, -1).join(' ');
+    }
+  }
 
   if (!streetAddress) {
     throw new Error('Add the street address before the city.');
@@ -8165,7 +8211,7 @@ return dateB - dateA;
 });
 
 currentFilteredOrders = filtered;
-const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
+const totalPages = Math.max(1, Math.ceil(buildExpandedOrderRows(filtered).length / ORDERS_PER_PAGE));
 if (preservePage) {
 currentPage = Math.min(Math.max(previousPage, 1), totalPages);
 } else {
