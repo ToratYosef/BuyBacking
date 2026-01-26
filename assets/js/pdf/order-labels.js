@@ -208,7 +208,8 @@ export async function createOrderInfoLabelPdf(order = {}) {
     cursorY -= paddingBottom;
   };
 
-  drawHeading(`Order #${order.id || "—"}`);
+  const deviceInstanceLabel = order.deviceInstanceLabel ? ` (${order.deviceInstanceLabel})` : "";
+  drawHeading(`Order #${order.id || "—"}${deviceInstanceLabel}`);
 
   // --- Customer Information ---
   drawSection("Customer Information");
