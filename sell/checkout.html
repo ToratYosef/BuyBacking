@@ -96,6 +96,40 @@
         .btn-submit { width: 100%; padding: 18px; background: var(--brand-gradient); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 20px; transition: 0.3s; }
         .btn-submit:hover { opacity: 0.9; transform: scale(1.01); }
 
+        .cart-item-card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            background: #f9fafb;
+        }
+        .cart-qty-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #0f172a;
+            background: #fff;
+        }
+        .cart-qty-btn:hover { border-color: var(--brand-primary); color: var(--brand-primary); }
+        .cart-remove-btn {
+            font-size: 12px;
+            font-weight: 700;
+            color: #dc2626;
+        }
+        .cart-condition-select {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #334155;
+            background: #fff;
+        }
+
         .user-monogram {
             display: flex; align-items: center; justify-content: center;
             width: 2.5rem; height: 2.5rem; border-radius: 9999px;
@@ -213,6 +247,7 @@
                         <input type="text" id="zip" class="input-field">
                     </div>
                 </div>
+                <input type="hidden" id="country" value="US">
             </div>
         </div>
 
@@ -269,20 +304,13 @@
     <!-- Sidebar Summary -->
     <aside>
         <div class="summary-card">
-            <h3 class="text-lg font-bold mb-4 border-b pb-2">Trade-in Summary</h3>
+            <div class="flex items-center justify-between mb-4 border-b pb-2">
+                <h3 class="text-lg font-bold">Trade-in Summary</h3>
+                <a href="/sell/index.html?return=checkout" class="text-sm font-semibold text-green-700 hover:underline">Add another device</a>
+            </div>
             <div id="summary-content" class="space-y-4">
-                <div class="flex justify-between">
-                    <span class="text-slate-500 text-sm">Device</span>
-                    <span id="sum-device" class="font-bold text-sm text-right">--</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-slate-500 text-sm">Specs</span>
-                    <span id="sum-specs" class="font-bold text-sm text-right">--</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-slate-500 text-sm">Quantity</span>
-                    <span id="sum-qty" class="font-bold text-sm">1</span>
-                </div>
+                <div id="cart-items" class="space-y-4"></div>
+                <div id="cart-empty" class="text-sm text-slate-500 hidden">No devices added yet.</div>
                 <div id="kit-fee-row" class="flex justify-between hidden text-red-600">
                     <span class="text-sm">Shipping Kit Fee</span>
                     <span class="text-sm font-bold">-$10.00</span>
@@ -348,8 +376,10 @@
     const appId = "buyback-a0f05";
 
     const params = new URLSearchParams(window.location.search);
-    let unitPrice = 0;
-    let deviceName = '';
+    const CART_STORAGE_KEY = 'shc_cart';
+    const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken' };
+    const CONDITION_KEYS = Object.keys(CONDITION_LABELS);
+    let cartItems = [];
 
     // AUTH LISTENER - LOAD SAVED ADDRESS & SET MONOGRAM
     onAuthStateChanged(auth, async (user) => {
@@ -399,7 +429,116 @@
         }
     });
 
+    const getCart = () => {
+        try {
+            return JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '[]');
+        } catch (e) {
+            return [];
+        }
+    };
+    const saveCart = (cart) => {
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    };
+    const updateSummary = () => {
+        const isKit = document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit';
+        const fee = isKit ? 10 : 0;
+        const total = cartItems.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
+        document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
+        document.getElementById('sum-total').textContent = `$${Math.max(total - fee, 0).toFixed(2)}`;
+    };
+    const ensureCartCondition = (item) => {
+        const validKey = item.condition && CONDITION_LABELS[item.condition] ? item.condition : null;
+        if (validKey) return validKey;
+        const priceKeys = Object.keys(item.conditionPrices || {});
+        const matchedKey = priceKeys.find((key) => CONDITION_LABELS[key]);
+        const fallbackKey = matchedKey || CONDITION_KEYS[0];
+        item.condition = fallbackKey;
+        if (item.conditionPrices && item.conditionPrices[fallbackKey]) {
+            item.unitPrice = Number(item.conditionPrices[fallbackKey]);
+        }
+        return fallbackKey;
+    };
+
+    const renderCart = () => {
+        const cartContainer = document.getElementById('cart-items');
+        const emptyState = document.getElementById('cart-empty');
+        cartContainer.innerHTML = '';
+        if (!cartItems.length) {
+            emptyState.classList.remove('hidden');
+            updateSummary();
+            return;
+        }
+        emptyState.classList.add('hidden');
+        cartItems.forEach((item, index) => {
+            const conditionKey = ensureCartCondition(item);
+            const card = document.createElement('div');
+            card.className = 'cart-item-card';
+            const total = (item.unitPrice * item.qty).toFixed(2);
+            const carrierDisplay = item.lock ? item.lock.charAt(0).toUpperCase() + item.lock.slice(1) : item.lock;
+            card.innerHTML = `
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <div class="font-bold text-slate-900">${item.modelName}</div>
+                        <div class="text-xs text-slate-500 mt-1">${item.storage} • ${carrierDisplay}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold text-slate-900">$${total}</div>
+                        <button class="cart-remove-btn mt-1" data-action="remove" data-index="${index}">Remove</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between mt-3">
+                    <div class="flex items-center gap-2">
+                        <button class="cart-qty-btn" data-action="decrease" data-index="${index}">-</button>
+                        <span class="text-sm font-bold">${item.qty}</span>
+                        <button class="cart-qty-btn" data-action="increase" data-index="${index}">+</button>
+                    </div>
+                    <select class="cart-condition-select" data-action="condition" data-index="${index}">
+                        ${Object.entries(CONDITION_LABELS).map(([key, label]) => `
+                            <option value="${key}" ${conditionKey === key ? 'selected' : ''}>${label}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div class="text-xs text-slate-500 mt-2">Condition: ${CONDITION_LABELS[conditionKey] || conditionKey}</div>
+            `;
+            cartContainer.appendChild(card);
+        });
+        updateSummary();
+    };
+    const applyCartChange = (index, action, value = null) => {
+        const item = cartItems[index];
+        if (!item) return;
+        if (action === 'increase') item.qty += 1;
+        if (action === 'decrease') item.qty = Math.max(item.qty - 1, 1);
+        if (action === 'remove') cartItems.splice(index, 1);
+        if (action === 'condition') {
+            const nextCondition = CONDITION_LABELS[value] ? value : ensureCartCondition(item);
+            item.condition = nextCondition;
+            const newPrice = Number(item.conditionPrices?.[nextCondition] || item.unitPrice);
+            item.unitPrice = newPrice;
+        }
+        saveCart(cartItems);
+        renderCart();
+    };
+    const addItemToCart = (item) => {
+        const key = [
+            item.brand,
+            item.model,
+            item.storage,
+            item.lock,
+            item.condition
+        ].join('|');
+        const existing = cartItems.find(cartItem => cartItem.key === key);
+        if (existing) {
+            existing.qty += item.qty;
+        } else {
+            cartItems.push({ ...item, key });
+        }
+        saveCart(cartItems);
+    };
+
     const init = async () => {
+        cartItems = getCart();
+
         const b = params.get('brand');
         const m = params.get('model'); 
         const s = params.get('storage');
@@ -408,24 +547,27 @@
         const qty = parseInt(params.get('qty') || '1');
 
         try {
-            if (!b || !m || !s || !l || !c) return;
-
-            const docRef = doc(db, "devices", b, "models", m);
-            const snap = await getDoc(docRef);
-            if (snap.exists()) {
-                const data = snap.data();
-                deviceName = data.name;
-                const getVal = (obj, key) => obj[key] || obj[key.toLowerCase()] || obj[key.toUpperCase()];
-                const storageMap = getVal(data.prices, s) || {};
-                const lockMap = getVal(storageMap, l) || {};
-                unitPrice = lockMap[c] || 0;
-                
-                const carrierDisplay = l ? l.charAt(0).toUpperCase() + l.slice(1) : l;
-
-                document.getElementById('sum-device').textContent = data.name;
-                document.getElementById('sum-specs').textContent = `${s} • ${carrierDisplay}`;
-                document.getElementById('sum-qty').textContent = qty;
-                updateSummary();
+            if (b && m && s && l && c) {
+                const docRef = doc(db, "devices", b, "models", m);
+                const snap = await getDoc(docRef);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const getVal = (obj, key) => obj[key] || obj[key.toLowerCase()] || obj[key.toUpperCase()];
+                    const storageMap = getVal(data.prices, s) || {};
+                    const lockMap = getVal(storageMap, l) || {};
+                    const unitPrice = lockMap[c] || 0;
+                    addItemToCart({
+                        brand: b,
+                        model: m,
+                        modelName: data.name,
+                        storage: s,
+                        lock: l,
+                        condition: c,
+                        qty: qty,
+                        unitPrice: unitPrice,
+                        conditionPrices: lockMap
+                    });
+                }
             }
         } catch (err) { console.error(err); }
 
@@ -453,16 +595,23 @@
             document.getElementById('terms-container').classList.remove('error-highlight');
             document.getElementById('terms-error').style.display = 'none';
         });
-    };
 
-    const updateSummary = () => {
-        const isKit = document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit';
-        const qty = parseInt(document.getElementById('sum-qty').textContent);
-        const fee = isKit ? 10 : 0;
-        const total = Math.max((unitPrice * qty) - fee, 0);
-        
-        document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
-        document.getElementById('sum-total').textContent = `$${total.toFixed(2)}`;
+        document.getElementById('summary-content').addEventListener('click', (event) => {
+            const target = event.target;
+            const index = parseInt(target.dataset.index || '-1');
+            const action = target.dataset.action;
+            if (!action || Number.isNaN(index)) return;
+            applyCartChange(index, action);
+        });
+        document.getElementById('summary-content').addEventListener('change', (event) => {
+            const target = event.target;
+            const index = parseInt(target.dataset.index || '-1');
+            if (target.dataset.action === 'condition' && !Number.isNaN(index)) {
+                applyCartChange(index, 'condition', target.value);
+            }
+        });
+
+        renderCart();
     };
 
     const updatePaymentFields = () => {
@@ -476,6 +625,33 @@
         document.getElementById('payment-label').textContent = labels[selectedMethod];
         document.getElementById('payoutIdentifier').placeholder = selectedMethod === 'cashapp' ? '$cashtag' : '';
     };
+
+    const initAutocomplete = () => {
+        const input = document.getElementById('streetAddress');
+        if (!input || !window.google || !google.maps?.places) return;
+        const autocomplete = new google.maps.places.Autocomplete(input, {
+            types: ['address'],
+            fields: ['address_components']
+        });
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            const components = place.address_components || [];
+            const findComponent = (type) => components.find(comp => comp.types.includes(type)) || {};
+            const streetNumber = findComponent('street_number').long_name || '';
+            const route = findComponent('route').long_name || '';
+            const city = findComponent('locality').long_name || findComponent('sublocality').long_name || '';
+            const state = findComponent('administrative_area_level_1').short_name || '';
+            const zip = findComponent('postal_code').long_name || '';
+            const country = findComponent('country').short_name || 'US';
+
+            document.getElementById('streetAddress').value = `${streetNumber} ${route}`.trim();
+            document.getElementById('city').value = city;
+            document.getElementById('state').value = state;
+            document.getElementById('zip').value = zip;
+            document.getElementById('country').value = country;
+        });
+    };
+    window.initAutocomplete = initAutocomplete;
 
     document.querySelectorAll('input[name="shipping_preference"]').forEach(r => r.onchange = updateSummary);
     document.querySelectorAll('input[name="payment_method"]').forEach(r => r.onchange = updatePaymentFields);
@@ -523,7 +699,6 @@
         const btn = document.getElementById('submitOrderBtn');
         const pref = document.querySelector('input[name="shipping_preference"]:checked').value;
         const method = document.querySelector('input[name="payment_method"]:checked').value;
-        const qty = parseInt(document.getElementById('sum-qty').textContent);
         const finalPayout = parseFloat(document.getElementById('sum-total').textContent.replace('$', ''));
 
         btn.disabled = true;
@@ -539,6 +714,7 @@
             state: document.getElementById('state').value,
             zipCode: document.getElementById('zip').value,
             zip: document.getElementById('zip').value,
+            country: document.getElementById('country').value,
             shippingPreference: pref
         };
 
@@ -548,66 +724,110 @@
             } catch (e) { console.error("Error saving address:", e); }
         }
 
-        const condKey = params.get('condition');
-        const orderData = {
-            device: deviceName,
-            brand: params.get('brand'),
-            modelId: params.get('model'),
-            modelName: deviceName,
-            storage: params.get('storage'),
-            carrier: params.get('lock'),
-            lock: params.get('lock'),
-            condition: condKey,
-            condition_power_on: condKey === 'noPower' ? 'No' : 'Yes',
-            condition_functional: (condKey === 'broken' || condKey === 'noPower') ? 'No' : 'Yes',
-            condition_cracks: condKey === 'broken' ? 'Yes' : 'No',
-            condition_cosmetic: condKey,
-            qty: qty,
-            totalPayout: finalPayout,
-            estimatedQuote: finalPayout,
-            shippingPreference: pref === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested',
-            shippingInfo: shippingInfo,
-            paymentMethod: method,
-            paymentIdentifier: document.getElementById('payoutIdentifier').value,
-            createdAt: new Date().toISOString()
-        };
-
         try {
+            if (!cartItems.length) {
+                alert('Please add at least one device.');
+                btn.disabled = false;
+                btn.textContent = "SUBMIT MY TRADE-IN";
+                return;
+            }
+
+            const isKit = pref === 'ship_kit';
+            const totalQty = cartItems.reduce((sum, item) => sum + item.qty, 0);
+            const firstItem = cartItems[0];
+            const itemsPayload = cartItems.map((item) => {
+                const itemTotal = item.unitPrice * item.qty;
+                const condKey = item.condition;
+                return {
+                    device: item.modelName,
+                    brand: item.brand,
+                    modelId: item.model,
+                    modelName: item.modelName,
+                    storage: item.storage,
+                    carrier: item.lock,
+                    lock: item.lock,
+                    condition: condKey,
+                    condition_power_on: condKey === 'noPower' ? 'No' : 'Yes',
+                    condition_functional: (condKey === 'broken' || condKey === 'noPower') ? 'No' : 'Yes',
+                    condition_cracks: condKey === 'broken' ? 'Yes' : 'No',
+                    condition_cosmetic: condKey,
+                    qty: item.qty,
+                    unitPrice: item.unitPrice,
+                    totalPayout: itemTotal,
+                    estimatedQuote: itemTotal
+                };
+            });
+
+            const summaryDevice = cartItems.length > 1
+                ? `${firstItem.modelName} + ${cartItems.length - 1} more`
+                : firstItem.modelName;
+
+            const orderData = {
+                device: summaryDevice,
+                brand: firstItem.brand,
+                modelId: firstItem.model,
+                modelName: firstItem.modelName,
+                storage: firstItem.storage,
+                carrier: firstItem.lock,
+                lock: firstItem.lock,
+                condition: firstItem.condition,
+                condition_power_on: firstItem.condition === 'noPower' ? 'No' : 'Yes',
+                condition_functional: (firstItem.condition === 'broken' || firstItem.condition === 'noPower') ? 'No' : 'Yes',
+                condition_cracks: firstItem.condition === 'broken' ? 'Yes' : 'No',
+                condition_cosmetic: firstItem.condition,
+                qty: totalQty,
+                items: itemsPayload,
+                totalPayout: finalPayout,
+                estimatedQuote: finalPayout,
+                shippingPreference: isKit ? 'Shipping Kit Requested' : 'Email Label Requested',
+                shippingKitFee: isKit ? 10 : 0,
+                shippingInfo: shippingInfo,
+                paymentMethod: method,
+                paymentIdentifier: document.getElementById('payoutIdentifier').value,
+                createdAt: new Date().toISOString()
+            };
+
             const res = await fetch('https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(orderData)
             });
             const result = await res.json();
-            if (res.ok) {
-                const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
-                const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
+            if (!res.ok) {
+                alert("Submission failed: " + result.error);
+                btn.disabled = false;
+                btn.textContent = "SUBMIT MY TRADE-IN";
+                return;
+            }
 
-                const successUrl = new URL('/order-submitted.html', window.location.origin);
-                successUrl.searchParams.set('id', result.orderId);
-                successUrl.searchParams.set('price', finalPayout.toFixed(2));
-                successUrl.searchParams.set('device', deviceName);
-                successUrl.searchParams.set('qty', qty);
-                successUrl.searchParams.set('name', shippingInfo.fullName);
-                successUrl.searchParams.set('street', shippingInfo.streetAddress);
-                successUrl.searchParams.set('unit', shippingInfo.addressUnit);
-                successUrl.searchParams.set('city', shippingInfo.city);
-                successUrl.searchParams.set('state', shippingInfo.state);
-                successUrl.searchParams.set('zip', shippingInfo.zipCode);
-                successUrl.searchParams.set('payMethod', method);
-                successUrl.searchParams.set('shipping', pref);
-                
-                if (labelUrl) successUrl.searchParams.set('labelUrl', labelUrl);
-                if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);
-                
-                window.location.href = successUrl.toString();
-            } else { alert("Submission failed: " + result.error); }
+            const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
+            const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
+
+            const successUrl = new URL('/order-submitted.html', window.location.origin);
+            successUrl.searchParams.set('id', result.orderId);
+            successUrl.searchParams.set('price', finalPayout.toFixed(2));
+            successUrl.searchParams.set('device', cartItems.length > 1 ? 'Multiple devices' : cartItems[0].modelName);
+            successUrl.searchParams.set('qty', totalQty);
+            successUrl.searchParams.set('name', shippingInfo.fullName);
+            successUrl.searchParams.set('street', shippingInfo.streetAddress);
+            successUrl.searchParams.set('unit', shippingInfo.addressUnit);
+            successUrl.searchParams.set('city', shippingInfo.city);
+            successUrl.searchParams.set('state', shippingInfo.state);
+            successUrl.searchParams.set('zip', shippingInfo.zipCode);
+            successUrl.searchParams.set('payMethod', method);
+            successUrl.searchParams.set('shipping', pref);
+            
+            if (labelUrl) successUrl.searchParams.set('labelUrl', labelUrl);
+            if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);
+            
+            window.location.href = successUrl.toString();
         } catch (e) { alert("Server error."); } finally { btn.disabled = false; btn.textContent = "SUBMIT MY TRADE-IN"; }
     };
 
     init();
 </script>
 
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvU0S58N4TVxJ5Ag4l7B-r534hng4BxVw&libraries=places&callback=initAutocomplete" defer></script>
 <script src="/assets/js/ship48-banner.js" defer></script>
 </body>
 </html>

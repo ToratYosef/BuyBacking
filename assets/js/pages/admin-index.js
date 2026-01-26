@@ -576,6 +576,9 @@ const modalCustomerPhone = document.getElementById('modal-customer-phone');
 const modalItem = document.getElementById('modal-item');
 const modalStorage = document.getElementById('modal-storage');
 const modalCarrier = document.getElementById('modal-carrier');
+const modalItemsSection = document.getElementById('modal-items-section');
+const modalItemsCount = document.getElementById('modal-items-count');
+const modalItemsList = document.getElementById('modal-items-list');
 const modalPrice = document.getElementById('modal-price');
 const modalPaymentMethod = document.getElementById('modal-payment-method');
 
@@ -2822,6 +2825,116 @@ return numeric;
 }
 
 return 0;
+}
+
+function getOrderItems(order) {
+if (!order || typeof order !== 'object') {
+return [];
+}
+if (Array.isArray(order.items) && order.items.length) {
+return order.items;
+}
+if (order.device || order.modelName || order.modelId) {
+return [{
+device: order.device,
+modelName: order.modelName,
+modelId: order.modelId,
+storage: order.storage,
+carrier: order.carrier || order.lock,
+qty: Number(order.qty) || 1
+}];
+}
+return [];
+}
+
+function formatOrderItemLabel(item = {}) {
+const name = item.modelName || item.device || 'Device';
+const storage = item.storage ? ` ${item.storage}` : '';
+return `${name}${storage}`.trim();
+}
+
+function getOrderItemsSummary(order) {
+const items = getOrderItems(order);
+if (!items.length) {
+return 'Device';
+}
+const labels = items.map(formatOrderItemLabel);
+if (labels.length === 1) {
+return labels[0];
+}
+return `${labels[0]} + ${labels.length - 1} more`;
+}
+
+function getOrderItemsSearchText(order) {
+const items = getOrderItems(order);
+return items.map((item) => {
+return [
+item.modelName,
+item.device,
+item.storage,
+item.carrier,
+item.lock
+].filter(Boolean).join(' ');
+}).join(' ').toLowerCase();
+}
+
+function resolveOrderItemCarrier(item = {}) {
+return item.carrier || item.lock || '';
+}
+
+function resolveOrderItemCondition(item = {}, fallback = {}) {
+return {
+powerOn: item.condition_power_on || fallback.condition_power_on || '',
+functional: item.condition_functional || fallback.condition_functional || '',
+cracks: item.condition_cracks || fallback.condition_cracks || '',
+cosmetic: item.condition_cosmetic || item.condition || fallback.condition_cosmetic || fallback.condition || '',
+};
+}
+
+function renderModalItemDetails(item, order) {
+if (!item) return;
+modalItem.textContent = formatOrderItemLabel(item);
+modalStorage.textContent = item.storage || order.storage || '';
+modalCarrier.textContent = resolveOrderItemCarrier(item) || order.carrier || '';
+const resolved = resolveOrderItemCondition(item, order);
+modalConditionPowerOn.textContent = resolved.powerOn ? formatCondition(resolved.powerOn) : 'N/A';
+modalConditionFunctional.textContent = resolved.functional ? formatCondition(resolved.functional) : 'N/A';
+modalConditionCracks.textContent = resolved.cracks ? formatCondition(resolved.cracks) : 'N/A';
+modalConditionCosmetic.textContent = resolved.cosmetic ? formatCondition(resolved.cosmetic) : 'N/A';
+}
+
+function renderOrderItemsList(order) {
+if (!modalItemsList || !modalItemsCount) return;
+const items = getOrderItems(order);
+modalItemsCount.textContent = `${items.length} device${items.length === 1 ? '' : 's'}`;
+modalItemsList.innerHTML = '';
+if (!items.length) {
+modalItemsList.innerHTML = '<div class="text-xs text-slate-500">No device details available.</div>';
+return;
+}
+items.forEach((item, index) => {
+const carrier = resolveOrderItemCarrier(item);
+const conditionLabel = item.condition || item.condition_cosmetic || '';
+const qtyLabel = item.qty ? `Qty ${item.qty}` : '';
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'w-full text-left rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition hover:border-sky-300 hover:bg-white';
+button.innerHTML = `
+  <div class="flex items-center justify-between gap-2">
+    <div class="font-semibold text-slate-900">${formatOrderItemLabel(item)}</div>
+    <div class="text-xs font-semibold text-slate-500">${qtyLabel}</div>
+  </div>
+  <div class="text-xs text-slate-500 mt-1">${[item.storage, carrier].filter(Boolean).join(' • ')}</div>
+  <div class="text-xs text-slate-500 mt-1">Condition: ${conditionLabel ? formatCondition(conditionLabel) : 'N/A'}</div>
+`;
+button.addEventListener('click', () => {
+renderModalItemDetails(item, order);
+});
+modalItemsList.appendChild(button);
+if (index === 0) {
+renderModalItemDetails(item, order);
+}
+});
 }
 
 function normalizeFeedKey(value) {
@@ -5443,12 +5556,35 @@ sendKitReminderBtn.onclick = null;
 }
 }
 
+function buildExpandedOrderRows(orders = []) {
+return orders.flatMap((order) => {
+const items = getOrderItems(order);
+if (!items.length) {
+return [{ order, item: null, isPrimary: true, index: 0 }];
+}
+const rows = [];
+items.forEach((item) => {
+const qty = Number(item.qty) || 1;
+for (let idx = 0; idx < qty; idx += 1) {
+rows.push({
+order,
+item,
+isPrimary: rows.length === 0,
+index: rows.length,
+});
+}
+});
+return rows;
+});
+}
+
 function renderOrders() {
 if (!ordersTableBody) {
 return;
 }
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-const total = source.length;
+const expandedRowsSource = buildExpandedOrderRows(source);
+const total = expandedRowsSource.length;
 ordersTableBody.innerHTML = '';
 
 if (!total) {
@@ -5475,15 +5611,14 @@ currentPage = totalPages;
 
 const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
 const endIndex = startIndex + ORDERS_PER_PAGE;
-const ordersToDisplay = source.slice(startIndex, endIndex);
+const expandedRows = expandedRowsSource.slice(startIndex, endIndex);
 
-lastRenderedOrderIds = ordersToDisplay.map(order => order.id);
+lastRenderedOrderIds = expandedRows.map(row => row.order.id);
 
-ordersToDisplay.forEach(order => {
+expandedRows.forEach(({ order, item, isPrimary }) => {
 const row = document.createElement('tr');
 row.className = 'transition-colors duration-200';
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-const itemDescription = `${order.device || 'Device'} ${order.storage || ''}`.trim();
 const orderDate = formatDate(order.createdAt);
 const orderAge = formatOrderAge(order.createdAt);
 const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
@@ -5505,10 +5640,21 @@ const trackingCellContent = trackingNumber
 : 'N/A';
 
 const isSelected = selectedOrderIds.has(order.id);
+const deviceLabel = item ? formatOrderItemLabel(item) : getOrderItemsSummary(order);
+const carrierLabel = resolveOrderItemCarrier(item || {}) || order.carrier || '';
+const conditionLabel = item?.condition || item?.condition_cosmetic || order.condition || '';
+const perDeviceQuote = (() => {
+  if (item?.unitPrice) return Number(item.unitPrice);
+  if (item?.totalPayout && item?.qty) return Number(item.totalPayout) / Number(item.qty);
+  if (order.totalPayout && order.qty) return Number(order.totalPayout) / Number(order.qty);
+  return null;
+})();
+const quoteText = Number.isFinite(perDeviceQuote) ? `$${perDeviceQuote.toFixed(2)}` : 'N/A';
+const itemDetails = [item?.storage || order.storage, carrierLabel].filter(Boolean).join(' • ');
 
 row.innerHTML = `
 <td class="select-column">
-  <input type="checkbox" class="order-select-checkbox" data-order-id="${order.id}" aria-label="Select order ${order.id}" ${isSelected ? 'checked' : ''}>
+  ${isPrimary ? `<input type="checkbox" class="order-select-checkbox" data-order-id="${order.id}" aria-label="Select order ${order.id}" ${isSelected ? 'checked' : ''}>` : ''}
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${order.id}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
@@ -5517,7 +5663,13 @@ row.innerHTML = `
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}${promoBadgeHtml}</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
+  <div class="font-semibold text-slate-900">${deviceLabel}</div>
+  <div class="text-xs text-slate-500 mt-1">${itemDetails}</div>
+  <div class="text-xs text-slate-500 mt-1">Condition: ${conditionLabel ? formatCondition(conditionLabel) : 'N/A'}</div>
+  <div class="text-xs text-slate-500 mt-1">Quote: ${quoteText}</div>
+  ${isPrimary ? promoBadgeHtml : ''}
+</td>
 <td class="px-3 py-4 whitespace-normal text-sm">
   <span class="${getStatusClass(order.status)}">
     <span class="status-bubble-text">${statusText}</span>
@@ -5527,9 +5679,9 @@ row.innerHTML = `
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
 <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
-  <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
+  ${isPrimary ? `<button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
     View Details
-  </button>
+  </button>` : ''}
 </td>
 `;
 
@@ -5577,8 +5729,8 @@ return;
 }
 
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-const total = source.length;
-const totalPages = Math.max(1, Math.ceil(Math.max(total, 0) / ORDERS_PER_PAGE));
+const totalRows = buildExpandedOrderRows(source).length;
+const totalPages = Math.max(1, Math.ceil(Math.max(totalRows, 0) / ORDERS_PER_PAGE));
 lastKnownTotalPages = totalPages;
 
 if (totalPages <= 1) {
@@ -6324,13 +6476,23 @@ function parseShippingAddressEditorValue(rawValue = '') {
   const zipCode = stateZipMatch[2];
   const beforeStateZip = normalized.slice(0, stateZipMatch.index).replace(/,\s*$/, '').trim();
 
-  const lastCommaIndex = beforeStateZip.lastIndexOf(',');
-  if (lastCommaIndex === -1) {
-    throw new Error('Separate the street and city with commas (e.g., "123 Main St, Brooklyn, NY 11230").');
-  }
+  let streetAddress = '';
+  let city = '';
 
-  const city = beforeStateZip.slice(lastCommaIndex + 1).trim();
-  const streetAddress = beforeStateZip.slice(0, lastCommaIndex).trim();
+  const lastCommaIndex = beforeStateZip.lastIndexOf(',');
+  if (lastCommaIndex !== -1) {
+    city = beforeStateZip.slice(lastCommaIndex + 1).trim();
+    streetAddress = beforeStateZip.slice(0, lastCommaIndex).trim();
+  } else {
+    const parts = beforeStateZip.split(/\s+/).filter(Boolean);
+    if (parts.length >= 4) {
+      city = parts.slice(-2).join(' ');
+      streetAddress = parts.slice(0, -2).join(' ');
+    } else if (parts.length >= 2) {
+      city = parts.slice(-1).join(' ');
+      streetAddress = parts.slice(0, -1).join(' ');
+    }
+  }
 
   if (!streetAddress) {
     throw new Error('Add the street address before the city.');
@@ -6481,9 +6643,7 @@ throw new Error(`Failed to fetch order details: ${response.status} - ${errorText
 modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
 modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
 modalCustomerPhone.textContent = order.shippingInfo ? order.shippingInfo.phone : 'N/A';
-modalItem.textContent = order.device;
-modalStorage.textContent = order.storage;
-modalCarrier.textContent = order.carrier;
+renderOrderItemsList(order);
 const payoutAmount = getOrderPayout(order);
 modalPrice.textContent = payoutAmount.toFixed(2);
 
@@ -8028,13 +8188,15 @@ function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options =
       const shippingName = (order.shippingInfo?.fullName || '').toLowerCase();
       const deviceName = (order.device || '').toLowerCase();
       const storageName = (order.storage || '').toLowerCase();
+      const itemsText = getOrderItemsSearchText(order);
       const trackingNumber = (order.trackingNumber || '').toLowerCase();
       const orderId = (order.id || '').toLowerCase();
       return orderId.includes(lowerCaseSearchTerm) ||
         shippingName.includes(lowerCaseSearchTerm) ||
         deviceName.includes(lowerCaseSearchTerm) ||
         storageName.includes(lowerCaseSearchTerm) ||
-        trackingNumber.includes(lowerCaseSearchTerm);
+        trackingNumber.includes(lowerCaseSearchTerm) ||
+        itemsText.includes(lowerCaseSearchTerm);
     });
   }
 
@@ -8049,7 +8211,7 @@ return dateB - dateA;
 });
 
 currentFilteredOrders = filtered;
-const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
+const totalPages = Math.max(1, Math.ceil(buildExpandedOrderRows(filtered).length / ORDERS_PER_PAGE));
 if (preservePage) {
 currentPage = Math.min(Math.max(previousPage, 1), totalPages);
 } else {
@@ -8138,4 +8300,3 @@ notificationBadge.style.display = 'block';
 notificationBadge.style.display = 'none';
 }
 }
-
