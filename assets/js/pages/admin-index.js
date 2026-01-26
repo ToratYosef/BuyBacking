@@ -498,8 +498,8 @@ function refreshPromoFilterOptions() {
   currentPromoFilter = nextValue;
 }
 
-const selectedOrderIds = new Set();
-let lastRenderedOrderIds = [];
+const selectedDeviceKeys = new Set();
+let lastRenderedDeviceKeys = [];
 let isBulkLabelGenerationInProgress = false;
 
 // Insight metric elements
@@ -576,6 +576,9 @@ const modalCustomerPhone = document.getElementById('modal-customer-phone');
 const modalItem = document.getElementById('modal-item');
 const modalStorage = document.getElementById('modal-storage');
 const modalCarrier = document.getElementById('modal-carrier');
+const modalItemsSection = document.getElementById('modal-items-section');
+const modalItemsCount = document.getElementById('modal-items-count');
+const modalItemsList = document.getElementById('modal-items-list');
 const modalPrice = document.getElementById('modal-price');
 const modalPaymentMethod = document.getElementById('modal-payment-method');
 
@@ -813,20 +816,20 @@ function syncRowSelectionCheckboxes() {
   }
   const checkboxes = ordersTableBody.querySelectorAll('.order-select-checkbox');
   checkboxes.forEach((checkbox) => {
-    const orderId = checkbox.dataset.orderId;
-    if (!orderId) {
+    const deviceKey = checkbox.dataset.deviceKey;
+    if (!deviceKey) {
       return;
     }
-    checkbox.checked = selectedOrderIds.has(orderId);
+    checkbox.checked = selectedDeviceKeys.has(deviceKey);
   });
 }
 
 function updateBulkSelectionUI() {
-  const selectedCount = selectedOrderIds.size;
+  const selectedCount = selectedDeviceKeys.size;
   if (bulkSelectionCount) {
     bulkSelectionCount.textContent = selectedCount
-      ? `${selectedCount} order${selectedCount === 1 ? '' : 's'} selected`
-      : 'No orders selected';
+      ? `${selectedCount} device${selectedCount === 1 ? '' : 's'} selected`
+      : 'No devices selected';
   }
 
   if (bulkStatusApplyBtn) {
@@ -845,12 +848,12 @@ function updateBulkSelectionUI() {
   }
 
   if (selectAllOrdersCheckbox) {
-    if (!lastRenderedOrderIds.length) {
+    if (!lastRenderedDeviceKeys.length) {
       selectAllOrdersCheckbox.checked = false;
       selectAllOrdersCheckbox.indeterminate = false;
     } else {
-      const selectedOnPage = lastRenderedOrderIds.filter((id) => selectedOrderIds.has(id)).length;
-      const allOnPageSelected = selectedOnPage === lastRenderedOrderIds.length && lastRenderedOrderIds.length > 0;
+      const selectedOnPage = lastRenderedDeviceKeys.filter((id) => selectedDeviceKeys.has(id)).length;
+      const allOnPageSelected = selectedOnPage === lastRenderedDeviceKeys.length && lastRenderedDeviceKeys.length > 0;
       selectAllOrdersCheckbox.checked = allOnPageSelected;
       selectAllOrdersCheckbox.indeterminate = selectedOnPage > 0 && !allOnPageSelected;
     }
@@ -865,9 +868,9 @@ async function handleBulkStatusUpdate() {
   }
 
   const status = bulkStatusSelect.value;
-  const orderIds = Array.from(selectedOrderIds);
+  const deviceKeys = Array.from(selectedDeviceKeys);
 
-  if (!status || !orderIds.length) {
+  if (!status || !deviceKeys.length) {
     updateBulkSelectionUI();
     return;
   }
@@ -879,23 +882,28 @@ async function handleBulkStatusUpdate() {
   let successCount = 0;
   const failed = [];
 
-  for (const orderId of orderIds) {
+  for (const deviceKey of deviceKeys) {
+    const { orderId } = parseOrderDeviceKey(deviceKey);
+    if (!orderId) {
+      failed.push(deviceKey);
+      continue;
+    }
     try {
       await updateOrderStatusInline(orderId, status, { notifyCustomer: false });
       successCount += 1;
     } catch (error) {
-      console.error(`Bulk status update failed for ${orderId}:`, error);
-      failed.push(orderId);
+      console.error(`Bulk status update failed for ${deviceKey}:`, error);
+      failed.push(deviceKey);
     }
   }
 
   if (failed.length) {
-    alert(`⚠️ Updated ${successCount} order${successCount === 1 ? '' : 's'}. Failed: ${failed.join(', ')}. Check console for details.`);
-    selectedOrderIds.clear();
-    failed.forEach((id) => selectedOrderIds.add(id));
+    alert(`⚠️ Updated ${successCount} device${successCount === 1 ? '' : 's'}. Failed: ${failed.join(', ')}. Check console for details.`);
+    selectedDeviceKeys.clear();
+    failed.forEach((id) => selectedDeviceKeys.add(id));
   } else {
-    alert(`✅ Updated ${successCount} order${successCount === 1 ? '' : 's'} to ${getStatusLabelText(status)}.`);
-    selectedOrderIds.clear();
+    alert(`✅ Updated ${successCount} device${successCount === 1 ? '' : 's'} to ${getStatusLabelText(status)}.`);
+    selectedDeviceKeys.clear();
     bulkStatusSelect.value = '';
   }
 
@@ -907,8 +915,8 @@ async function handleBulkLabelGeneration() {
     return;
   }
 
-  const orderIds = Array.from(selectedOrderIds);
-  if (!orderIds.length) {
+  const deviceKeys = Array.from(selectedDeviceKeys);
+  if (!deviceKeys.length) {
     updateBulkSelectionUI();
     return;
   }
@@ -919,7 +927,12 @@ async function handleBulkLabelGeneration() {
   let successCount = 0;
   const failed = [];
 
-  for (const orderId of orderIds) {
+  for (const deviceKey of deviceKeys) {
+    const { orderId } = parseOrderDeviceKey(deviceKey);
+    if (!orderId) {
+      failed.push(deviceKey);
+      continue;
+    }
     try {
       const response = await fetch(`${BACKEND_BASE_URL}/generate-label/${orderId}`, {
         method: 'POST',
@@ -944,18 +957,18 @@ async function handleBulkLabelGeneration() {
 
       successCount += 1;
     } catch (error) {
-      console.error(`Bulk label generation failed for ${orderId}:`, error);
-      failed.push(orderId);
+      console.error(`Bulk label generation failed for ${deviceKey}:`, error);
+      failed.push(deviceKey);
     }
   }
 
   if (failed.length) {
-    alert(`⚠️ Generated labels for ${successCount} order${successCount === 1 ? '' : 's'}. Failed: ${failed.join(', ')}.`);
-    selectedOrderIds.clear();
-    failed.forEach((id) => selectedOrderIds.add(id));
+    alert(`⚠️ Generated labels for ${successCount} device${successCount === 1 ? '' : 's'}. Failed: ${failed.join(', ')}.`);
+    selectedDeviceKeys.clear();
+    failed.forEach((id) => selectedDeviceKeys.add(id));
   } else {
-    alert(`✅ Generated labels for ${successCount} order${successCount === 1 ? '' : 's'}.`);
-    selectedOrderIds.clear();
+    alert(`✅ Generated labels for ${successCount} device${successCount === 1 ? '' : 's'}.`);
+    selectedDeviceKeys.clear();
   }
 
   isBulkLabelGenerationInProgress = false;
@@ -1085,16 +1098,16 @@ if (orderTextImportSubmit) {
 
 if (selectAllOrdersCheckbox) {
   selectAllOrdersCheckbox.addEventListener('change', (event) => {
-    if (!lastRenderedOrderIds.length) {
+    if (!lastRenderedDeviceKeys.length) {
       selectAllOrdersCheckbox.checked = false;
       selectAllOrdersCheckbox.indeterminate = false;
       return;
     }
 
     if (event.target.checked) {
-      lastRenderedOrderIds.forEach((id) => selectedOrderIds.add(id));
+      lastRenderedDeviceKeys.forEach((id) => selectedDeviceKeys.add(id));
     } else {
-      lastRenderedOrderIds.forEach((id) => selectedOrderIds.delete(id));
+      lastRenderedDeviceKeys.forEach((id) => selectedDeviceKeys.delete(id));
     }
 
     updateBulkSelectionUI();
@@ -2824,6 +2837,127 @@ return numeric;
 return 0;
 }
 
+function getOrderItems(order) {
+if (!order || typeof order !== 'object') {
+return [];
+}
+if (Array.isArray(order.items) && order.items.length) {
+return order.items;
+}
+if (order.device || order.modelName || order.modelId) {
+return [{
+device: order.device,
+modelName: order.modelName,
+modelId: order.modelId,
+storage: order.storage,
+carrier: order.carrier || order.lock,
+qty: Number(order.qty) || 1
+}];
+}
+return [];
+}
+
+function formatOrderItemLabel(item = {}) {
+const name = item.modelName || item.device || 'Device';
+const storage = item.storage ? ` ${item.storage}` : '';
+return `${name}${storage}`.trim();
+}
+
+function getOrderItemsSummary(order) {
+const items = getOrderItems(order);
+if (!items.length) {
+return 'Device';
+}
+const labels = items.map(formatOrderItemLabel);
+if (labels.length === 1) {
+return labels[0];
+}
+return `${labels[0]} + ${labels.length - 1} more`;
+}
+
+function getOrderItemsSearchText(order) {
+const items = getOrderItems(order);
+return items.map((item) => {
+return [
+item.modelName,
+item.device,
+item.storage,
+item.carrier,
+item.lock
+].filter(Boolean).join(' ');
+}).join(' ').toLowerCase();
+}
+
+function resolveOrderItemCarrier(item = {}) {
+return item.carrier || item.lock || '';
+}
+
+function resolveOrderItemCondition(item = {}, fallback = {}) {
+return {
+powerOn: item.condition_power_on || fallback.condition_power_on || '',
+functional: item.condition_functional || fallback.condition_functional || '',
+cracks: item.condition_cracks || fallback.condition_cracks || '',
+cosmetic: item.condition_cosmetic || item.condition || fallback.condition_cosmetic || fallback.condition || '',
+};
+}
+
+function renderModalItemDetails(item, order) {
+if (!item) return;
+modalItem.textContent = formatOrderItemLabel(item);
+modalStorage.textContent = item.storage || order.storage || '';
+modalCarrier.textContent = resolveOrderItemCarrier(item) || order.carrier || '';
+const resolved = resolveOrderItemCondition(item, order);
+modalConditionPowerOn.textContent = resolved.powerOn ? formatCondition(resolved.powerOn) : 'N/A';
+modalConditionFunctional.textContent = resolved.functional ? formatCondition(resolved.functional) : 'N/A';
+modalConditionCracks.textContent = resolved.cracks ? formatCondition(resolved.cracks) : 'N/A';
+modalConditionCosmetic.textContent = resolved.cosmetic ? formatCondition(resolved.cosmetic) : 'N/A';
+}
+
+function renderOrderItemsList(order, selectedIndex = 0) {
+if (!modalItemsList || !modalItemsCount) return;
+const deviceEntries = getOrderDeviceEntries(order);
+modalItemsCount.textContent = `${deviceEntries.length} device${deviceEntries.length === 1 ? '' : 's'}`;
+modalItemsList.innerHTML = '';
+if (!deviceEntries.length) {
+modalItemsList.innerHTML = '<div class="text-xs text-slate-500">No device details available.</div>';
+modalItemsList.dataset.selectedIndex = '0';
+return;
+}
+const applySelection = (index) => {
+const safeIndex = Math.max(0, Math.min(index, deviceEntries.length - 1));
+modalItemsList.dataset.selectedIndex = String(safeIndex);
+renderModalItemDetails(deviceEntries[safeIndex]?.item, order);
+};
+
+deviceEntries.forEach((entry, index) => {
+const item = entry.item;
+const carrier = resolveOrderItemCarrier(item || {});
+const conditionLabel = item?.condition || item?.condition_cosmetic || '';
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'w-full text-left rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm transition hover:border-sky-300 hover:bg-white';
+button.innerHTML = `
+  <div class="flex items-center justify-between gap-2">
+    <div class="font-semibold text-slate-900">${formatOrderItemLabel(item || {})}</div>
+    <div class="text-xs font-semibold text-slate-500">Device ${index + 1}</div>
+  </div>
+  <div class="text-xs text-slate-500 mt-1">${[item?.storage, carrier].filter(Boolean).join(' • ')}</div>
+  <div class="text-xs text-slate-500 mt-1">Condition: ${conditionLabel ? formatCondition(conditionLabel) : 'N/A'}</div>
+`;
+button.addEventListener('click', () => {
+applySelection(index);
+});
+modalItemsList.appendChild(button);
+});
+applySelection(selectedIndex);
+}
+
+function getModalSelectedDeviceIndex() {
+if (!modalItemsList) return 0;
+const parsed = Number.parseInt(modalItemsList.dataset.selectedIndex || '0', 10);
+return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function normalizeFeedKey(value) {
 if (!value && value !== 0) return '';
 return value.toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -4287,23 +4421,26 @@ reofferPricingMessage.classList.remove('hidden');
  * Generates a standalone packing slip for any order status.
  * @param {Object} order - The full order object.
  */
-async function printPackingSlip(order) {
+async function printPackingSlip(order, deviceIndex = 0) {
   modalLoadingMessage.classList.remove('hidden');
   modalActionButtons.classList.add('hidden');
   displayModalMessage('Generating packing slip...', 'info');
 
   try {
-    const packingSlipBytes = await createOrderInfoLabelPdf(order);
+    const entry = getOrderDeviceEntry(order, deviceIndex);
+    const deviceSnapshot = buildDeviceOrderSnapshot(order, entry.item, entry.index);
+    const packingSlipBytes = await createOrderInfoLabelPdf(deviceSnapshot);
     const blob = new Blob([packingSlipBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
 
-    const printWindow = window.open('', `packing-slip-${order.id}`, 'width=420,height=640');
+    const deviceTitleSuffix = deviceSnapshot.deviceInstanceLabel ? `-${deviceSnapshot.deviceInstanceLabel.replace(/\s+/g, '-')}` : '';
+    const printWindow = window.open('', `packing-slip-${order.id}${deviceTitleSuffix}`, 'width=420,height=640');
 
     if (printWindow) {
       printWindow.document.write(`<!DOCTYPE html>
 <html>
 <head>
-  <title>Packing Slip ${order.id}</title>
+  <title>Packing Slip ${order.id}${deviceSnapshot.deviceInstanceLabel ? ` (${deviceSnapshot.deviceInstanceLabel})` : ''}</title>
   <style>html,body{margin:0;height:100%;background:#0f172a;color:#fff;font-family:Arial, sans-serif;}iframe{width:100%;height:100%;border:0;}</style>
 </head>
 <body>
@@ -4325,7 +4462,7 @@ async function printPackingSlip(order) {
 </body>
 </html>`);
       printWindow.document.close();
-      displayModalMessage('Packing slip generated. Print dialog opened.', 'success');
+    displayModalMessage('Packing slip generated. Print dialog opened.', 'success');
     } else {
       displayModalMessage('Pop-up blocked. Opening packing slip in a new tab.', 'error');
       window.open(url, '_blank');
@@ -4346,7 +4483,7 @@ async function printPackingSlip(order) {
 * This function now uses the backend proxy to fetch PDF data.
 * @param {Object} order - The full order object.
 */
-async function generateAndMergeShippingDocument(order) {
+async function generateAndMergeShippingDocument(order, deviceIndex = 0) {
 const isKitOrder = order.shippingPreference === 'Shipping Kit Requested';
 const rawLabelUrls = [];
 
@@ -4403,7 +4540,9 @@ return bytes.buffer;
   const labelPdfBuffers = await Promise.all(labelUrls.map((url) => fetchPdfProxy(url)));
 
   // 2. Generate the custom info + bag labels client-side
-  const orderInfoLabelBytes = await createOrderInfoLabelPdf(order);
+  const entry = getOrderDeviceEntry(order, deviceIndex);
+  const deviceSnapshot = buildDeviceOrderSnapshot(order, entry.item, entry.index);
+  const orderInfoLabelBytes = await createOrderInfoLabelPdf(deviceSnapshot);
 
   // Merge shipping labels followed by the info and bag labels
   const mergedPdf = await PDFLib.PDFDocument.create();
@@ -5443,12 +5582,94 @@ sendKitReminderBtn.onclick = null;
 }
 }
 
+function buildOrderDeviceKey(orderId, deviceIndex = 0) {
+const safeOrderId = orderId ? String(orderId) : '';
+const safeIndex = Number.isFinite(deviceIndex) ? deviceIndex : 0;
+return `${safeOrderId}::${safeIndex}`;
+}
+
+function parseOrderDeviceKey(deviceKey = '') {
+const [orderId, indexRaw] = String(deviceKey || '').split('::');
+const parsedIndex = Number.parseInt(indexRaw, 10);
+return {
+orderId: orderId || null,
+deviceIndex: Number.isFinite(parsedIndex) ? parsedIndex : 0,
+};
+}
+
+function getOrderDeviceEntries(order) {
+const items = getOrderItems(order);
+if (!items.length) {
+return [{ item: null, index: 0, deviceKey: buildOrderDeviceKey(order?.id, 0) }];
+}
+const rows = [];
+items.forEach((item) => {
+const qty = Number(item.qty) || 1;
+for (let idx = 0; idx < qty; idx += 1) {
+const index = rows.length;
+rows.push({ item, index, deviceKey: buildOrderDeviceKey(order?.id, index) });
+}
+});
+return rows;
+}
+
+function getOrderDeviceEntry(order, deviceIndex = 0) {
+const entries = getOrderDeviceEntries(order);
+if (!entries.length) {
+return { item: null, index: 0, deviceKey: buildOrderDeviceKey(order?.id, 0) };
+}
+const safeIndex = Math.max(0, Math.min(deviceIndex, entries.length - 1));
+return entries[safeIndex];
+}
+
+function buildDeviceOrderSnapshot(order, item, deviceIndex = 0) {
+const snapshot = { ...order };
+if (item) {
+snapshot.brand = item.brand || item.make || snapshot.brand;
+snapshot.device = item.device || item.modelName || snapshot.device;
+snapshot.storage = item.storage || item.memory || snapshot.storage;
+snapshot.carrier = resolveOrderItemCarrier(item) || snapshot.carrier;
+const conditions = resolveOrderItemCondition(item, snapshot);
+snapshot.condition_power_on = conditions.powerOn || snapshot.condition_power_on;
+snapshot.condition_functional = conditions.functional || snapshot.condition_functional;
+snapshot.condition_cracks = conditions.cracks || snapshot.condition_cracks;
+snapshot.condition_cosmetic = conditions.cosmetic || snapshot.condition_cosmetic;
+const perDeviceQuote = (() => {
+  if (item.unitPrice) return Number(item.unitPrice);
+  if (item.totalPayout && item.qty) return Number(item.totalPayout) / Number(item.qty);
+  return null;
+})();
+if (Number.isFinite(perDeviceQuote)) {
+snapshot.estimatedQuote = perDeviceQuote;
+snapshot.quoteAmount = perDeviceQuote;
+}
+}
+snapshot.deviceInstanceLabel = Number.isFinite(deviceIndex)
+? `Device ${deviceIndex + 1}`
+: null;
+return snapshot;
+}
+
+function buildExpandedOrderRows(orders = []) {
+return orders.flatMap((order) => {
+const entries = getOrderDeviceEntries(order);
+return entries.map((entry, idx) => ({
+order,
+item: entry.item,
+deviceIndex: entry.index,
+deviceKey: entry.deviceKey,
+index: idx,
+}));
+});
+}
+
 function renderOrders() {
 if (!ordersTableBody) {
 return;
 }
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-const total = source.length;
+const expandedRowsSource = buildExpandedOrderRows(source);
+const total = expandedRowsSource.length;
 ordersTableBody.innerHTML = '';
 
 if (!total) {
@@ -5459,7 +5680,7 @@ ordersTableBody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-sl
 if (paginationControls) {
 paginationControls.classList.add('hidden');
 }
-lastRenderedOrderIds = [];
+lastRenderedDeviceKeys = [];
 updateBulkSelectionUI();
 return;
 }
@@ -5475,15 +5696,14 @@ currentPage = totalPages;
 
 const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
 const endIndex = startIndex + ORDERS_PER_PAGE;
-const ordersToDisplay = source.slice(startIndex, endIndex);
+const expandedRows = expandedRowsSource.slice(startIndex, endIndex);
 
-lastRenderedOrderIds = ordersToDisplay.map(order => order.id);
+lastRenderedDeviceKeys = expandedRows.map(row => row.deviceKey);
 
-ordersToDisplay.forEach(order => {
+expandedRows.forEach(({ order, item, deviceIndex, deviceKey }) => {
 const row = document.createElement('tr');
 row.className = 'transition-colors duration-200';
 const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-const itemDescription = `${order.device || 'Device'} ${order.storage || ''}`.trim();
 const orderDate = formatDate(order.createdAt);
 const orderAge = formatOrderAge(order.createdAt);
 const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
@@ -5504,11 +5724,23 @@ const trackingCellContent = trackingNumber
 ? `<a href="${USPS_TRACKING_URL}${trackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${trackingNumber}</a>`
 : 'N/A';
 
-const isSelected = selectedOrderIds.has(order.id);
+const isSelected = selectedDeviceKeys.has(deviceKey);
+const deviceLabel = item ? formatOrderItemLabel(item) : getOrderItemsSummary(order);
+const carrierLabel = resolveOrderItemCarrier(item || {}) || order.carrier || '';
+const conditionLabel = item?.condition || item?.condition_cosmetic || order.condition || '';
+const perDeviceQuote = (() => {
+  if (item?.unitPrice) return Number(item.unitPrice);
+  if (item?.totalPayout && item?.qty) return Number(item.totalPayout) / Number(item.qty);
+  if (order.totalPayout && order.qty) return Number(order.totalPayout) / Number(order.qty);
+  return null;
+})();
+const quoteText = Number.isFinite(perDeviceQuote) ? `$${perDeviceQuote.toFixed(2)}` : 'N/A';
+const itemDetails = [item?.storage || order.storage, carrierLabel].filter(Boolean).join(' • ');
+const deviceNumber = Number.isFinite(deviceIndex) ? deviceIndex + 1 : 1;
 
 row.innerHTML = `
 <td class="select-column">
-  <input type="checkbox" class="order-select-checkbox" data-order-id="${order.id}" aria-label="Select order ${order.id}" ${isSelected ? 'checked' : ''}>
+  <input type="checkbox" class="order-select-checkbox" data-device-key="${deviceKey}" data-order-id="${order.id}" aria-label="Select order ${order.id} device ${deviceNumber}" ${isSelected ? 'checked' : ''}>
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${order.id}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
@@ -5517,7 +5749,14 @@ row.innerHTML = `
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${itemDescription}${promoBadgeHtml}</td>
+<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
+  <div class="font-semibold text-slate-900">${deviceLabel}</div>
+  <div class="text-xs text-slate-500 mt-1">Device ${deviceNumber}</div>
+  <div class="text-xs text-slate-500 mt-1">${itemDetails}</div>
+  <div class="text-xs text-slate-500 mt-1">Condition: ${conditionLabel ? formatCondition(conditionLabel) : 'N/A'}</div>
+  <div class="text-xs text-slate-500 mt-1">Quote: ${quoteText}</div>
+  ${promoBadgeHtml}
+</td>
 <td class="px-3 py-4 whitespace-normal text-sm">
   <span class="${getStatusClass(order.status)}">
     <span class="status-bubble-text">${statusText}</span>
@@ -5527,8 +5766,14 @@ row.innerHTML = `
 </td>
 <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
 <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
-  <button data-order-id="${order.id}" class="view-details-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
-    View Details
+  <button data-order-id="${order.id}" data-device-index="${deviceIndex}" class="view-device-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
+    View Device
+  </button>
+  <button data-order-id="${order.id}" class="generate-label-btn text-emerald-600 hover:text-emerald-800 rounded-md py-1 px-3 border border-emerald-600 hover:border-emerald-800 transition-colors duration-200">
+    Label
+  </button>
+  <button data-order-id="${order.id}" class="packing-slip-btn text-purple-600 hover:text-purple-800 rounded-md py-1 px-3 border border-purple-600 hover:border-purple-800 transition-colors duration-200">
+    Packing Slip
   </button>
 </td>
 `;
@@ -5539,19 +5784,38 @@ const selectionCheckbox = row.querySelector('.order-select-checkbox');
 if (selectionCheckbox) {
 selectionCheckbox.addEventListener('change', (event) => {
 if (event.target.checked) {
-selectedOrderIds.add(order.id);
+selectedDeviceKeys.add(deviceKey);
 } else {
-selectedOrderIds.delete(order.id);
+selectedDeviceKeys.delete(deviceKey);
 }
 updateBulkSelectionUI();
 });
 }
 
-const detailsButton = row.querySelector('.view-details-btn');
-if (detailsButton) {
-detailsButton.addEventListener('click', (event) => {
+const viewDeviceButton = row.querySelector('.view-device-btn');
+if (viewDeviceButton) {
+viewDeviceButton.addEventListener('click', (event) => {
 event.preventDefault();
+const indexValue = Number(event.currentTarget.dataset.deviceIndex || 0);
+window.selectedOrderDeviceIndex = Number.isFinite(indexValue) ? indexValue : 0;
 openOrderDetailsModal(order.id);
+});
+}
+
+const labelButton = row.querySelector('.generate-label-btn');
+if (labelButton) {
+labelButton.addEventListener('click', (event) => {
+event.preventDefault();
+window.selectedOrderDeviceIndex = deviceIndex;
+handleAction(order.id, 'generateLabel');
+});
+}
+
+const packingSlipButton = row.querySelector('.packing-slip-btn');
+if (packingSlipButton) {
+packingSlipButton.addEventListener('click', (event) => {
+event.preventDefault();
+printPackingSlip(order, deviceIndex);
 });
 }
 });
@@ -5577,8 +5841,8 @@ return;
 }
 
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-const total = source.length;
-const totalPages = Math.max(1, Math.ceil(Math.max(total, 0) / ORDERS_PER_PAGE));
+const totalRows = buildExpandedOrderRows(source).length;
+const totalPages = Math.max(1, Math.ceil(Math.max(totalRows, 0) / ORDERS_PER_PAGE));
 lastKnownTotalPages = totalPages;
 
 if (totalPages <= 1) {
@@ -6324,13 +6588,23 @@ function parseShippingAddressEditorValue(rawValue = '') {
   const zipCode = stateZipMatch[2];
   const beforeStateZip = normalized.slice(0, stateZipMatch.index).replace(/,\s*$/, '').trim();
 
-  const lastCommaIndex = beforeStateZip.lastIndexOf(',');
-  if (lastCommaIndex === -1) {
-    throw new Error('Separate the street and city with commas (e.g., "123 Main St, Brooklyn, NY 11230").');
-  }
+  let streetAddress = '';
+  let city = '';
 
-  const city = beforeStateZip.slice(lastCommaIndex + 1).trim();
-  const streetAddress = beforeStateZip.slice(0, lastCommaIndex).trim();
+  const lastCommaIndex = beforeStateZip.lastIndexOf(',');
+  if (lastCommaIndex !== -1) {
+    city = beforeStateZip.slice(lastCommaIndex + 1).trim();
+    streetAddress = beforeStateZip.slice(0, lastCommaIndex).trim();
+  } else {
+    const parts = beforeStateZip.split(/\s+/).filter(Boolean);
+    if (parts.length >= 4) {
+      city = parts.slice(-2).join(' ');
+      streetAddress = parts.slice(0, -2).join(' ');
+    } else if (parts.length >= 2) {
+      city = parts.slice(-1).join(' ');
+      streetAddress = parts.slice(0, -1).join(' ');
+    }
+  }
 
   if (!streetAddress) {
     throw new Error('Add the street address before the city.');
@@ -6481,9 +6755,11 @@ throw new Error(`Failed to fetch order details: ${response.status} - ${errorText
 modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
 modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
 modalCustomerPhone.textContent = order.shippingInfo ? order.shippingInfo.phone : 'N/A';
-modalItem.textContent = order.device;
-modalStorage.textContent = order.storage;
-modalCarrier.textContent = order.carrier;
+const selectedDeviceIndex = typeof window.selectedOrderDeviceIndex === 'number'
+  ? window.selectedOrderDeviceIndex
+  : 0;
+renderOrderItemsList(order, selectedDeviceIndex);
+window.selectedOrderDeviceIndex = null;
 const payoutAmount = getOrderPayout(order);
 modalPrice.textContent = payoutAmount.toFixed(2);
 
@@ -6747,7 +7023,7 @@ function renderActionButtons(order) {
   );
 
   modalActionButtons.appendChild(
-    createButton('Print Packing Slip', () => printPackingSlip(order), 'bg-purple-600 hover:bg-purple-700')
+    createButton('Print Packing Slip', () => printPackingSlip(order, getModalSelectedDeviceIndex()), 'bg-purple-600 hover:bg-purple-700')
   );
 
   if (SHIPPING_STATUS_KEYS.has(normalizeStatusValueLocal(currentStatus)) && !isReceivedStatusValue(currentStatus)) {
@@ -6889,7 +7165,7 @@ const slipButtonText = order.shippingPreference === 'Shipping Kit Requested'
 : 'Print Document (Label + Bag Label)';
 
 // Create the button and insert it at the beginning of the action list
-const mergeButton = createButton(slipButtonText, () => generateAndMergeShippingDocument(order), 'bg-fuchsia-600 hover:bg-fuchsia-700');
+const mergeButton = createButton(slipButtonText, () => generateAndMergeShippingDocument(order, getModalSelectedDeviceIndex()), 'bg-fuchsia-600 hover:bg-fuchsia-700');
 
 // Get existing buttons, if any
 const existingButtons = Array.from(modalActionButtons.children);
@@ -7977,9 +8253,10 @@ allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       refreshPromoFilterOptions();
 
       const validIds = new Set(allOrders.map(order => order.id));
-      Array.from(selectedOrderIds).forEach((id) => {
-        if (!validIds.has(id)) {
-          selectedOrderIds.delete(id);
+      Array.from(selectedDeviceKeys).forEach((deviceKey) => {
+        const { orderId } = parseOrderDeviceKey(deviceKey);
+        if (!orderId || !validIds.has(orderId)) {
+          selectedDeviceKeys.delete(deviceKey);
         }
 });
 
@@ -8028,13 +8305,15 @@ function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options =
       const shippingName = (order.shippingInfo?.fullName || '').toLowerCase();
       const deviceName = (order.device || '').toLowerCase();
       const storageName = (order.storage || '').toLowerCase();
+      const itemsText = getOrderItemsSearchText(order);
       const trackingNumber = (order.trackingNumber || '').toLowerCase();
       const orderId = (order.id || '').toLowerCase();
       return orderId.includes(lowerCaseSearchTerm) ||
         shippingName.includes(lowerCaseSearchTerm) ||
         deviceName.includes(lowerCaseSearchTerm) ||
         storageName.includes(lowerCaseSearchTerm) ||
-        trackingNumber.includes(lowerCaseSearchTerm);
+        trackingNumber.includes(lowerCaseSearchTerm) ||
+        itemsText.includes(lowerCaseSearchTerm);
     });
   }
 
@@ -8049,7 +8328,7 @@ return dateB - dateA;
 });
 
 currentFilteredOrders = filtered;
-const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
+const totalPages = Math.max(1, Math.ceil(buildExpandedOrderRows(filtered).length / ORDERS_PER_PAGE));
 if (preservePage) {
 currentPage = Math.min(Math.max(previousPage, 1), totalPages);
 } else {
@@ -8138,4 +8417,3 @@ notificationBadge.style.display = 'block';
 notificationBadge.style.display = 'none';
 }
 }
-
