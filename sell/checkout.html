@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Tailwind CDN for testing reliability -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/css/tailwind.css">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecondHandCell - Checkout</title>
@@ -899,22 +898,22 @@
     };
 
     const initAutocomplete = () => {
-        const input = document.getElementById('streetAddress');
+        let input = document.getElementById('streetAddress');
         if (!input || !window.google || !google.maps?.places) return;
-        const autocomplete = new google.maps.places.Autocomplete(input, {
-            types: ['address'],
-            fields: ['address_components']
-        });
-        autocomplete.addListener('place_changed', () => {
-            const place = autocomplete.getPlace();
-            const components = place.address_components || [];
-            const findComponent = (type) => components.find(comp => comp.types.includes(type)) || {};
-            const streetNumber = findComponent('street_number').long_name || '';
-            const route = findComponent('route').long_name || '';
-            const city = findComponent('locality').long_name || findComponent('sublocality').long_name || '';
-            const state = findComponent('administrative_area_level_1').short_name || '';
-            const zip = findComponent('postal_code').long_name || '';
-            const country = findComponent('country').short_name || 'US';
+        const clearStreetErrors = () => {
+            input.classList.remove('error-highlight');
+            const errEl = document.getElementById('streetAddress-error');
+            if (errEl) errEl.style.display = 'none';
+            clearAddressVerifyError();
+        };
+        const applyComponents = (components) => {
+            const findComponent = (type) => components.find(comp => (comp.types || []).includes(type)) || {};
+            const streetNumber = findComponent('street_number').longText || findComponent('street_number').long_name || '';
+            const route = findComponent('route').longText || findComponent('route').long_name || '';
+            const city = findComponent('locality').longText || findComponent('locality').long_name || findComponent('sublocality').longText || findComponent('sublocality').long_name || '';
+            const state = findComponent('administrative_area_level_1').shortText || findComponent('administrative_area_level_1').short_name || '';
+            const zip = findComponent('postal_code').longText || findComponent('postal_code').long_name || '';
+            const country = findComponent('country').shortText || findComponent('country').short_name || 'US';
 
             document.getElementById('streetAddress').value = `${streetNumber} ${route}`.trim();
             document.getElementById('city').value = city;
@@ -922,6 +921,38 @@
             document.getElementById('zip').value = zip;
             document.getElementById('country').value = country;
             updateZipUI();
+        };
+
+        if (google.maps.places.PlaceAutocompleteElement) {
+            const placeAutocomplete = new google.maps.places.PlaceAutocompleteElement();
+            placeAutocomplete.id = 'streetAddress';
+            placeAutocomplete.className = input.className;
+            placeAutocomplete.setAttribute('placeholder', input.getAttribute('placeholder') || 'Street Address');
+            placeAutocomplete.value = input.value || '';
+            input.replaceWith(placeAutocomplete);
+            input = placeAutocomplete;
+
+            input.addEventListener('input', clearStreetErrors);
+            input.addEventListener('change', clearStreetErrors);
+
+            placeAutocomplete.addEventListener('gmp-placeselect', async (event) => {
+                const place = event.place;
+                if (!place) return;
+                await place.fetchFields({ fields: ['addressComponents'] });
+                const components = place.addressComponents || [];
+                applyComponents(components);
+            });
+            return;
+        }
+
+        const autocomplete = new google.maps.places.Autocomplete(input, {
+            types: ['address'],
+            fields: ['address_components']
+        });
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            const components = place.address_components || [];
+            applyComponents(components);
         });
     };
     window.initAutocomplete = initAutocomplete;
@@ -1039,7 +1070,7 @@
     init();
 </script>
 
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvU0S58N4TVxJ5Ag4l7B-r534hng4BxVw&libraries=places&callback=initAutocomplete" defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvU0S58N4TVxJ5Ag4l7B-r534hng4BxVw&libraries=places&callback=initAutocomplete&loading=async" async defer></script>
 <script src="/assets/js/ship48-banner.js" defer></script>
 <script type="module" src="/assets/js/global-auth.js" defer></script>
 </body>
