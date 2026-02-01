@@ -717,7 +717,7 @@ let allOrders = [];
 let currentFilteredOrders = [];
 let currentPage = 1;
 let lastKnownTotalPages = 1;
-const ORDERS_PER_PAGE = 10;
+const ORDERS_PER_PAGE = Number.MAX_SAFE_INTEGER;
 let currentActiveStatus = 'all';
 let currentPromoFilter = PROMO_FILTER_VALUES.ALL;
 let currentOrderDetails = null;
@@ -5687,7 +5687,7 @@ return;
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
 const expandedRowsSource = buildExpandedOrderRows(source);
 const total = expandedRowsSource.length;
-ordersTableBody.innerHTML = '';
+ordersTableBody.textContent = '';
 
 if (!total) {
 if (noOrdersMessage) {
@@ -5717,6 +5717,7 @@ const expandedRows = expandedRowsSource.slice(startIndex, endIndex);
 
 lastRenderedDeviceKeys = expandedRows.map(row => row.deviceKey);
 
+const fragment = document.createDocumentFragment();
 expandedRows.forEach(({ order, item, deviceIndex, deviceKey }) => {
 const row = document.createElement('tr');
 row.className = 'transition-colors duration-200';
@@ -5795,7 +5796,7 @@ row.innerHTML = `
 </td>
 `;
 
-ordersTableBody.appendChild(row);
+fragment.appendChild(row);
 
 const selectionCheckbox = row.querySelector('.order-select-checkbox');
 if (selectionCheckbox) {
@@ -5837,6 +5838,7 @@ printPackingSlip(order, deviceIndex);
 }
 });
 
+ordersTableBody.replaceChildren(fragment);
 updateBulkSelectionUI();
 }
 function buildPageSequence(totalPages, currentPage) {
@@ -8266,7 +8268,6 @@ currentUserId = user.uid;
 fetchAndRenderOrders();
 /* REMOVED NOTIFICATION LIST UPDATES - ONLY BADGE REMAINS FOR PERFORMANCE */
 /* updateNotifications(); */
-updateActiveChatsCount(); // <-- Moved here for safety
 if (IS_ANALYTICS_PAGE) {
 initializeAnalyticsDashboard();
 }
@@ -8404,46 +8405,6 @@ timeDisplay.textContent = timeDate;
 // Update time every minute
 updateTimeDate();
 setInterval(updateTimeDate, 60000);
-
-// Simulate fetching active chats count (in real implementation, fetch from Firebase)
-async function updateActiveChatsCount() {
-// Check if db is defined before trying to access collection
-if (!db) {
-console.warn('Firestore database not yet initialized for chat count.');
-return;
-}
-
-try {
-const chatsCollectionRef = collection(db, "chats");
-const q = query(chatsCollectionRef, where("status", "==", "active"));
-onSnapshot(q, (snapshot) => {
-const count = snapshot.size;
-const activeChatsEl = document.getElementById('active-chats-count');
-if (activeChatsEl) {
-activeChatsEl.textContent = count;
-}
-
-// Update floating button badge
-const floatingBadge = document.getElementById('floating-chat-badge');
-if (count > 0) {
-if (floatingBadge) {
-floatingBadge.textContent = count;
-floatingBadge.style.display = 'block';
-}
-} else {
-if (floatingBadge) {
-floatingBadge.style.display = 'none';
-}
-}
-});
-} catch (error) {
-console.log('Chats collection not available or error fetching:', error);
-const activeChatsEl = document.getElementById('active-chats-count');
-if (activeChatsEl) {
-activeChatsEl.textContent = '0';
-}
-}
-}
 
 // Update notification badge for new orders
 function updateNotificationBadge(orders) {
