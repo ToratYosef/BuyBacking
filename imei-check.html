@@ -143,6 +143,7 @@
       onSnapshot,
       setDoc
     } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+    import { apiPost } from "/public/js/apiClient.js";
 
     document.addEventListener('DOMContentLoaded', () => {
       const db = getFirestore(firebaseApp);
@@ -254,18 +255,11 @@
             imeiChecked: false
           }, { merge: true });
 
-          const response = await fetch('/checkImei', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deviceId, imei: imeiValue })
-          });
-
-          if (!response.ok) {
-            const error = await response.json().catch(() => ({ error: 'Failed to check IMEI.' }));
-            throw new Error(error.error || 'Failed to check IMEI.');
-          }
-
-          const payload = await response.json();
+          const payload = await apiPost(
+            '/checkImei',
+            { deviceId, imei: imeiValue },
+            { authRequired: true }
+          );
           if (payload.result) {
             renderResult(payload.result);
           }

@@ -1,13 +1,12 @@
 import { app, db } from "../firebase-config.js";
 import { getAuth, signOut, onAuthStateChanged, updateProfile, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { doc, setDoc, getDoc, collection, query, onSnapshot, where, addDoc, serverTimestamp, updateDoc, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { apiGet, apiPost } from "/public/js/apiClient.js";
 
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize Firebase
   const auth = getAuth(app);
 
-  // Backend URL for Cloud Functions
-  const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 
   // Get elements
   const loginNavBtn = document.getElementById('loginNavBtn');
@@ -602,12 +601,7 @@ document.addEventListener('DOMContentLoaded', () => {
   modalLoadingMessage.classList.remove('hidden');
 
   try {
-  const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}`);
-  if (!response.ok) {
-  const errorText = await response.text();
-  throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
-  }
-  const order = await response.json();
+  const order = await apiGet(`/orders/${orderId}`, { authRequired: true });
 
   modalOrderId.textContent = order.id;
   modalCustomerName.textContent = order.shippingInfo?.fullName || 'N/A';
@@ -729,26 +723,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   switch(actionType) {
   case 'acceptOffer':
-  url = `${BACKEND_BASE_URL}/accept-offer-action`;
+  url = `/accept-offer-action`;
   break;
   case 'returnPhone':
-  url = `${BACKEND_BASE_URL}/return-phone-action`;
+  url = `/return-phone-action`;
   break;
   default:
   throw new Error('Unknown action.');
   }
 
-  const response = await fetch(url, {
-  method: method,
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(body)
-  });
-
-  if (!response.ok) {
-  const errorText = await response.text();
-  throw new Error(errorText || `Failed to perform action: ${response.status} - ${errorText.substring(0, 100)}`);
-  }
-  const result = await response.json();
+  const result = await apiPost(url, body, { authRequired: true });
 
   displayModalMessage(result.message, 'success');
   openOrderDetailsModal(orderId);
