@@ -57,9 +57,11 @@ const limiter = rateLimit({
 app.use(limiter);
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 
-app.get('/health', (req, res) => {
-  res.json({ ok: true, status: 'healthy' });
+app.get('/', (req, res) => {
+  res.status(200).send('BuyBack API is running. Try /api/health');
 });
+
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 const apiBasePath = process.env.API_BASE_PATH || '/api';
 
@@ -91,6 +93,10 @@ const adminOnlyPaths = [
 ];
 
 apiRouter.use(adminOnlyPaths, requireAdmin);
+
+apiRouter.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
 
 apiRouter.use(profileRouter);
 apiRouter.use(remindersRouter);
