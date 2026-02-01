@@ -11,6 +11,7 @@ signInWithEmailAndPassword,
 createUserWithEmailAndPassword,
 updateProfile
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { apiGet, apiPost } from "/public/js/apiClient.js";
 
 // Your Firebase configuration
 
@@ -18,7 +19,6 @@ updateProfile
 const app = firebaseApp;
 const auth = getAuth(app);
 
-const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 let countdownInterval = null;
 let pendingAction = null;
@@ -159,11 +159,7 @@ replySection.classList.add('hidden');
 clearInterval(countdownInterval);
 
 try {
-const orderResponse = await fetch(`${BACKEND_URL}/orders/${orderId}`);
-if (!orderResponse.ok) {
-throw new Error(`Failed to fetch order details: ${orderResponse.statusText}`);
-}
-const currentOrderData = await orderResponse.json();
+const currentOrderData = await apiGet(`/orders/${orderId}`, { authRequired: true });
 
 orderIdDisplay.textContent = `#${orderId}`;
 newOfferPrice.textContent = `$${currentOrderData.reOffer?.newPrice?.toFixed(2) || currentOrderData.estimatedQuote?.toFixed(2) || 'N/A'}`;
@@ -228,17 +224,8 @@ clearInterval(countdownInterval);
 try {
 const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
-const actionEndpoint = `${BACKEND_URL}/${actionType}-action`;
-const response = await fetch(actionEndpoint, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ orderId: orderId })
-});
-
-if (!response.ok) {
-const errorData = await response.json();
-throw new Error(errorData.error || `Failed to ${actionType} offer.`);
-}
+const actionEndpoint = `/${actionType}-action`;
+await apiPost(actionEndpoint, { orderId: orderId }, { authRequired: true });
 
 await loadOfferDetails();
 
@@ -294,21 +281,11 @@ replyStatus.style.color = 'blue';
 try {
 const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
-const replyBackendUrl = `${BACKEND_URL}/orders/${orderId}/add-buyer-reply`;
-const replyResponse = await fetch(replyBackendUrl, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ replyMessage: message })
-});
-
-if (replyResponse.ok) {
+const replyBackendUrl = `/orders/${orderId}/add-buyer-reply`;
+await apiPost(replyBackendUrl, { replyMessage: message }, { authRequired: true });
 replyStatus.textContent = 'Reply sent successfully!';
 replyStatus.style.color = 'green';
 replyMessageInput.value = '';
-} else {
-const errorText = await replyResponse.text();
-throw new Error(errorText || 'Failed to send reply.');
-}
 } catch (error) {
 console.error('Error sending reply:', error);
 replyStatus.textContent = `Error sending reply: ${error.message}`;
