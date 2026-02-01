@@ -1424,8 +1424,9 @@ function startImeiListener(order) {
   const orderStatusValue = normalizeStatusValueLocal(order.status);
   const allowOrderEntry = ORDER_RECEIVED_STATUSES.has(orderStatusValue);
   const orderImeiMeta = extractOrderImeiData(order);
-
-  modalImeiSection.classList.remove('hidden');
+  const hasImeiResult = Boolean(orderImeiMeta.imeiCheckResult || orderImeiMeta.imeiCheckedAt || orderImeiMeta.imeiChecked);
+  const shouldHideInitially = !allowOrderEntry && !hasImeiResult;
+  modalImeiSection.classList.toggle('hidden', shouldHideInitially);
   if (modalImeiStatus) {
     modalImeiStatus.textContent = orderStatusValue || '';
   }
@@ -1441,6 +1442,9 @@ function startImeiListener(order) {
   }
   const deviceDocId = resolveDeviceDocumentId(order);
   if (!deviceDocId) {
+    if (shouldHideInitially) {
+      return;
+    }
     if (allowOrderEntry) {
       const allowInput = !orderImeiMeta.imeiChecked;
       if (modalImeiForm) {
@@ -1535,6 +1539,19 @@ function handleImeiSnapshot(snapshot) {
   const allowByDevice = isReceivedStatusValue(deviceStatusValue);
   const allowEntry = allowByDevice || allowOrderEntry;
   const imeiChecked = Boolean(data?.imeiChecked || orderImeiMeta.imeiChecked);
+  const hasImeiResult = Boolean(
+    data?.imeiCheckResult ||
+    data?.imeiCheckedAt ||
+    orderImeiMeta.imeiCheckResult ||
+    orderImeiMeta.imeiCheckedAt ||
+    imeiChecked
+  );
+  const shouldShowSection = allowEntry || hasImeiResult;
+  modalImeiSection.classList.toggle('hidden', !shouldShowSection);
+  if (!shouldShowSection) {
+    resetImeiSection();
+    return;
+  }
   const savedImei = (() => {
     if (typeof data?.imei === 'string' && data.imei.trim()) {
       return data.imei.trim();
@@ -7001,14 +7018,35 @@ function renderActionButtons(order) {
     button.onclick = onClick;
     return button;
   };
+  const createGroup = (title, items) => {
+    if (!items.length) {
+      return;
+    }
+    const group = document.createElement('div');
+    group.className = 'modal-action-group';
+    const heading = document.createElement('p');
+    heading.className = 'modal-action-title';
+    heading.textContent = title;
+    const grid = document.createElement('div');
+    grid.className = 'modal-action-grid';
+    items.forEach((item) => {
+      if (item) {
+        grid.appendChild(item);
+      }
+    });
+    group.appendChild(heading);
+    group.appendChild(grid);
+    modalActionButtons.appendChild(group);
+  };
 
+  let markReceivedButton = null;
   const appendMarkAsReceivedButton = () => {
-    const existingButton = modalActionButtons.querySelector('[data-role="mark-received"]');
-    if (existingButton) return existingButton;
-
+    if (markReceivedButton) {
+      return markReceivedButton;
+    }
     const markButton = createButton('Mark as Received', () => handleAction(order.id, 'markReceived'));
     markButton.dataset.role = 'mark-received';
-    modalActionButtons.appendChild(markButton);
+    markReceivedButton = markButton;
     return markButton;
   };
 
@@ -7022,21 +7060,23 @@ function renderActionButtons(order) {
     order.shipEngineLabelId
   );
 
-  modalActionButtons.appendChild(
-    createButton('Print Packing Slip', () => printPackingSlip(order, getModalSelectedDeviceIndex()), 'bg-purple-600 hover:bg-purple-700')
-  );
+  const primaryActions = [];
+  const shippingActions = [];
+  const receivedActions = [];
+  const utilityActions = [];
+  const adminActions = [];
 
   if (SHIPPING_STATUS_KEYS.has(normalizeStatusValueLocal(currentStatus)) && !isReceivedStatusValue(currentStatus)) {
-    appendMarkAsReceivedButton();
+    shippingActions.push(appendMarkAsReceivedButton());
   }
 
   const appendLabelGenerationActions = () => {
     if (order.shippingPreference === 'Shipping Kit Requested') {
-      modalActionButtons.appendChild(
+      shippingActions.push(
         createButton('Mark I Sent', () => handleAction(order.id, 'markKitSent'), 'bg-orange-600 hover:bg-orange-700')
       );
     }
-    appendMarkAsReceivedButton();
+    shippingActions.push(appendMarkAsReceivedButton());
   };
 
   const appendPostReceivedActions = () => {
@@ -7046,14 +7086,14 @@ function renderActionButtons(order) {
       { label: 'Email Lost/Stolen Notice', reason: 'stolen', className: 'bg-rose-600 hover:bg-rose-700' },
       { label: 'Email FMI / Activation Lock Notice', reason: 'fmi_active', className: 'bg-indigo-600 hover:bg-indigo-700' },
     ].forEach(({ label, reason, className }) => {
-      modalActionButtons.appendChild(
+      receivedActions.push(
         createButton(label, () => sendConditionEmail(order.id, reason, label), className)
       );
     });
-    modalActionButtons.appendChild(
+    receivedActions.push(
       createButton('Mark as Completed', () => handleAction(order.id, 'markCompleted', 'bg-gray-600 hover:bg-gray-700'))
     );
-    modalActionButtons.appendChild(
+    receivedActions.push(
       createButton('Propose Re-offer', () => showReofferForm(order.id), 'bg-orange-600 hover:bg-orange-700')
     );
   };
@@ -7063,20 +7103,20 @@ function renderActionButtons(order) {
     case 'kit_needs_printing':
     case 'needs_printing':
       if (!hasGeneratedLabels) {
-        modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
+        primaryActions.push(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
       }
-      modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
+      primaryActions.push(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
       break;
     case 'shipping_kit_requested':
       // ALWAYS show Generate USPS Label button for shipping_kit_requested status
-      modalActionButtons.appendChild(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
-      modalActionButtons.appendChild(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
+      primaryActions.push(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
+      primaryActions.push(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
       break;
     case 'kit_on_the_way_to_us':
-      appendMarkAsReceivedButton();
+      shippingActions.push(appendMarkAsReceivedButton());
       break;
     case 'kit_delivered':
-      appendMarkAsReceivedButton();
+      shippingActions.push(appendMarkAsReceivedButton());
       break;
     case 'label_generated':
       appendLabelGenerationActions();
@@ -7090,7 +7130,7 @@ function renderActionButtons(order) {
     break;
   case 'phone_on_the_way':
   case 'delivered_to_us':
-    appendMarkAsReceivedButton();
+    shippingActions.push(appendMarkAsReceivedButton());
     break;
     case 'received':
     case 'imei_checked':
@@ -7101,33 +7141,33 @@ function renderActionButtons(order) {
         const reOfferDiv = document.createElement('div');
         reOfferDiv.className = 'p-3 bg-gray-100 rounded-md w-full';
         reOfferDiv.innerHTML = `<p class="text-sm"><strong>Proposed New Price:</strong> $${order.reOffer.newPrice.toFixed(2)}</p><p class="text-sm"><strong>Reasons:</strong> ${order.reOffer.reasons.join(', ')}</p><p class="text-sm"><strong>Comments:</strong> ${order.reOffer.comments}</p>`;
-        modalActionButtons.appendChild(reOfferDiv);
+        primaryActions.push(reOfferDiv);
       }
       break;
     case 're-offered-accepted':
       if (order.paymentMethod === 'zelle') {
-        modalActionButtons.appendChild(
+        primaryActions.push(
           createButton('Mark Paid', () => handleAction(order.id, 'markCompleted'), 'bg-emerald-600 hover:bg-emerald-700')
         );
       } else {
-        modalActionButtons.appendChild(
+        primaryActions.push(
           createButton('Pay Now', () => handleAction(order.id, 'payNow', 'bg-teal-600 hover:bg-teal-700'))
         );
       }
       break;
     case 're-offered-declined':
-      modalActionButtons.appendChild(createButton('Send Return Label', () => handleAction(order.id, 'sendReturnLabel', 'bg-red-600 hover:bg-red-700')));
+      primaryActions.push(createButton('Send Return Label', () => handleAction(order.id, 'sendReturnLabel', 'bg-red-600 hover:bg-red-700')));
       break;
     case 'return-label-generated':
       break;
     case 'requote_accepted':
     case 'completed':
-      modalActionButtons.appendChild(createButton('Send Review Request Email', () => handleAction(order.id, 'sendReviewRequest'), 'bg-amber-600 hover:bg-amber-700'));
+      receivedActions.push(createButton('Send Review Request Email', () => handleAction(order.id, 'sendReviewRequest'), 'bg-amber-600 hover:bg-amber-700'));
       break;
   }
 
   if (isEligibleForAutoRequote(order)) {
-    modalActionButtons.appendChild(
+    receivedActions.push(
       createButton('Finalize 75% Reduced Payout', () => handleAction(order.id, 'autoRequote'), 'bg-rose-700 hover:bg-rose-800')
     );
   }
@@ -7138,7 +7178,7 @@ function renderActionButtons(order) {
     order.trackingNumber
   );
   if (hasKitTracking) {
-    modalActionButtons.appendChild(
+    utilityActions.push(
       createButton('Refresh Kit Tracking', () => handleAction(order.id, 'refreshKitTracking'), 'bg-sky-600 hover:bg-sky-700')
     );
   }
@@ -7148,7 +7188,7 @@ function renderActionButtons(order) {
     order.inboundTrackingNumber
   );
   if (hasEmailTracking) {
-    modalActionButtons.appendChild(
+    utilityActions.push(
       createButton('Refresh Email Label Tracking', () => handleAction(order.id, 'refreshEmailTracking'), 'bg-indigo-600 hover:bg-indigo-700')
     );
   }
@@ -7164,43 +7204,48 @@ const slipButtonText = order.shippingPreference === 'Shipping Kit Requested'
 ? 'Print Kit Docs (Labels + Bag Label)'
 : 'Print Document (Label + Bag Label)';
 
-// Create the button and insert it at the beginning of the action list
 const mergeButton = createButton(slipButtonText, () => generateAndMergeShippingDocument(order, getModalSelectedDeviceIndex()), 'bg-fuchsia-600 hover:bg-fuchsia-700');
-
-// Get existing buttons, if any
-const existingButtons = Array.from(modalActionButtons.children);
-modalActionButtons.innerHTML = '';
-modalActionButtons.appendChild(mergeButton);
-existingButtons.forEach(btn => modalActionButtons.appendChild(btn));
+utilityActions.unshift(mergeButton);
 }
 // --- END: PDF Merging Button Logic ---
 
 if (labelOptions.length > 0 && currentStatus !== 'cancelled') {
-modalActionButtons.appendChild(
+adminActions.push(
 createButton('Void Shipping Labels', () => showVoidLabelForm(order), 'bg-red-600 hover:bg-red-700')
 );
 }
 
 if (clearDataOptions.length > 0) {
-modalActionButtons.appendChild(
+adminActions.push(
 createButton('Clear Saved Shipping Data', () => showClearDataForm(order), 'bg-amber-600 hover:bg-amber-700')
 );
 }
 
 if (currentStatus !== 'cancelled') {
 if (hasVoidableLabels(order)) {
-modalActionButtons.appendChild(
+adminActions.push(
 createButton('Cancel Order & Void Labels', () => showCancelOrderForm(order), 'bg-rose-500 hover:bg-rose-600')
 );
 } else {
-modalActionButtons.appendChild(
+adminActions.push(
 createButton('Cancel Order', () => handleAction(order.id, 'cancelOrder'), 'bg-rose-500 hover:bg-rose-600')
 );
 }
 }
 
-// Always add Delete Button, visually separated
-modalActionButtons.appendChild(createButton('Delete Order', () => showDeleteConfirmation(order.id), 'bg-red-500 hover:bg-red-600'));
+utilityActions.push(
+  createButton('Print Packing Slip', () => printPackingSlip(order, getModalSelectedDeviceIndex()), 'bg-purple-600 hover:bg-purple-700')
+);
+
+adminActions.push(
+  createButton('Delete Order', () => showDeleteConfirmation(order.id), 'bg-red-500 hover:bg-red-600')
+);
+
+createGroup('Primary Actions', primaryActions);
+createGroup('Shipping & Intake', shippingActions);
+createGroup('Post-Receive', receivedActions);
+createGroup('Tracking & Documents', utilityActions);
+createGroup('Admin Controls', adminActions);
 }
 
 function showVoidLabelForm(order) {
