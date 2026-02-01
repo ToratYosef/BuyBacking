@@ -507,15 +507,17 @@
             if (el) el.classList.remove('error-highlight');
         });
     };
-    const showAddressVerifyError = (message) => {
+    const showAddressVerifyError = (message, { highlight = true } = {}) => {
         if (message) {
             addressVerifyError.textContent = message;
         }
         addressVerifyError.style.display = 'block';
-        ['streetAddress', 'city', 'state', 'zip'].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.classList.add('error-highlight');
-        });
+        if (highlight) {
+            ['streetAddress', 'city', 'state', 'zip'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('error-highlight');
+            });
+        }
     };
     const buildShippingInfo = () => ({
         fullName: document.getElementById('fullName').value,
@@ -1023,6 +1025,13 @@
             showAddressVerifyError();
         } catch (error) {
             console.error('Address validation failed:', error);
+            const allowFallback = !error?.status || error.status >= 500;
+            if (allowFallback) {
+                showAddressVerifyError("Address verification is temporarily unavailable. We'll use the address you entered.", { highlight: false });
+                submitOrderBtn.textContent = "Submitting order...";
+                await executeOrderSubmission(shippingInfo);
+                return;
+            }
             showAddressVerifyError();
         }
 
