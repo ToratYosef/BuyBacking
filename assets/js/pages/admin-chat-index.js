@@ -3,6 +3,7 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from
 import { getFirestore, collection, onSnapshot, query, where, orderBy, doc, updateDoc, addDoc, serverTimestamp, deleteDoc, getDocs, getDoc, writeBatch, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getDatabase, ref, onValue, set, serverTimestamp as dbServerTimestamp, onDisconnect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging.js";
+import { apiGet } from "/public/js/apiClient.js";
 
 // IMPORTANT: REPLACE THIS WITH YOUR OWN FIREBASE CONFIG
 
@@ -445,12 +446,8 @@ suggestedRepliesContainer.appendChild(button);
 
 // --- Order Modal Logic ---
 async function findOrderByIdentifier(identifier) {
-const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
-const url = `${baseUrl}/orders/find?identifier=${identifier}`; // Adjusted endpoint for clarity
 try {
-const response = await fetch(url);
-if (!response.ok) return null;
-return await response.json();
+return await apiGet(`/orders/find?identifier=${identifier}`, { authRequired: true });
 } catch (error) {
 console.error("Failed to fetch order:", error);
 return null;
@@ -458,12 +455,8 @@ return null;
 }
 
 async function fetchAllUserOrders(userId) {
-const baseUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
-const url = `${baseUrl}/orders/by-user/${userId}`;
 try {
-const response = await fetch(url);
-if (!response.ok) return [];
-return await response.json();
+return await apiGet(`/orders/by-user/${userId}`, { authRequired: true });
 } catch (error) {
 console.error("Failed to fetch user's orders:", error);
 return [];

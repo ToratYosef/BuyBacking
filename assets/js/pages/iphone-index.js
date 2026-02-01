@@ -1,6 +1,7 @@
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, signOut, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, addDoc, doc, onSnapshot, query, orderBy, serverTimestamp, updateDoc, setDoc, getDocs, where, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { apiPost } from "/public/js/apiClient.js";
 
 const app = firebaseApp;
 const auth = getAuth(app);
@@ -711,14 +712,8 @@ comments: document.getElementById('survey-comments')?.value || null
 };
 await setDoc(doc(db, `chats/${currentChatId}/survey/feedback`), { ...surveyData, submittedAt: serverTimestamp() });
 try {
-const cloudFunctionUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-chat-feedback';
-const response = await fetch(cloudFunctionUrl, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ chatId: currentChatId, surveyData: surveyData })
-});
-if (!response.ok) throw new Error(`Server responded with status: ${response.status}`);
-console.log('Feedback email sent successfully:', await response.json());
+const response = await apiPost('/submit-chat-feedback', { chatId: currentChatId, surveyData: surveyData }, { authRequired: false });
+console.log('Feedback email sent successfully:', response);
 } catch (error) { console.error("Error sending feedback email:", error); }
 surveyContainer.innerHTML = '<p class="text-center font-semibold text-green-600">Thank you for your feedback!</p>';
 });

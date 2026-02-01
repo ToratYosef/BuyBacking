@@ -2,13 +2,11 @@ import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
 import { getAuth, signInAnonymously, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, getDocs, doc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { apiPost } from "/public/js/apiClient.js";
 
 // --- Configuration and State ---
 setLogLevel('error');
 
-// ** API URL FOR BACKEND SUBMISSION **
-// This should point to your Firebase Cloud Functions HTTP endpoint (exports.api).
-const BACKEND_API_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
 
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
@@ -1059,19 +1057,7 @@ orderData.paymentDetails.paypalEmail = document.getElementById('paypalEmail').va
 
 // --- 3. Send to Backend ---
 try {
-const response = await fetch(`${BACKEND_API_URL}/submit-order`, {
-method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-},
-body: JSON.stringify(orderData),
-});
-
-const result = await response.json();
-
-if (!response.ok) {
-throw new Error(result.error || 'Failed to submit order. Server responded with error.');
-}
+const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
 const orderId = result.orderId || 'N/A';
 
