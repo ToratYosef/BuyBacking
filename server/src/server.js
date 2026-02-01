@@ -84,6 +84,9 @@ const apiBasePath = (() => {
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
     return '/';
   }
+  if (raw.includes('(') || raw.includes(')') || raw.includes('*') || raw.includes(':splat')) {
+    return '/';
+  }
   if (raw === ':' || raw === '/:') {
     return '/';
   }
