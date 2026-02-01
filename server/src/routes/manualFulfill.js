@@ -1,9 +1,10 @@
 const express = require('express');
 const { updateOrderBoth } = require('../../../functions/index.js');
+const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.post('/manual-fulfill/:id', async (req, res, next) => {
+router.post('/manual-fulfill/:id', requireAdmin, async (req, res, next) => {
   try {
     const orderId = req.params.id;
     const {

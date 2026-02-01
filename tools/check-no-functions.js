@@ -3,14 +3,29 @@ const path = require('path');
 
 const ROOT = process.cwd();
 
+const args = process.argv.slice(2);
+const includeFirestoreWrites = args.includes('--detect-firestore-writes');
+
 const forbiddenPatterns = [
-  /httpsCallable/g,
   /firebase\/functions/g,
-  /functions\.httpsCallable/g,
+  /getFunctions\s*\(/g,
+  /httpsCallable\s*\(/g,
+  /functions\(\)\.httpsCallable/g,
   /cloudfunctions\.net/g,
-  /getFunctions\(/g,
-  /us-central1-buyback-a0f05\.cloudfunctions\.net/g,
+  /us-central1-[a-z0-9-]+\.cloudfunctions\.net/g,
 ];
+
+const firestoreWritePatterns = [
+  /firebase\/firestore/g,
+  /\baddDoc\s*\(/g,
+  /\bsetDoc\s*\(/g,
+  /\bupdateDoc\s*\(/g,
+  /\bdeleteDoc\s*\(/g,
+];
+
+const activePatterns = includeFirestoreWrites
+  ? forbiddenPatterns.concat(firestoreWritePatterns)
+  : forbiddenPatterns;
 
 function shouldIgnoreDir(dirPath) {
   const relative = path.relative(ROOT, dirPath);
@@ -50,7 +65,7 @@ function checkFile(filePath) {
   const matches = [];
 
   lines.forEach((line, index) => {
-    forbiddenPatterns.forEach((pattern) => {
+    activePatterns.forEach((pattern) => {
       if (pattern.test(line)) {
         matches.push({
           line: index + 1,
@@ -88,6 +103,9 @@ function run() {
   }
 
   console.log('✅ No Firebase Functions usage detected.');
+  if (includeFirestoreWrites) {
+    console.log('✅ No Firestore client writes/imports detected.');
+  }
 }
 
 run();

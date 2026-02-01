@@ -4,7 +4,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-const { createAuthGate, requireAuth } = require('./middleware/auth');
+const { createAuthGate, requireAdmin } = require('./middleware/auth');
 const profileRouter = require('./routes/profile');
 const remindersRouter = require('./routes/reminders');
 const refreshTrackingRouter = require('./routes/refreshTracking');
@@ -17,6 +17,13 @@ const { expressApp } = require('../../functions/index.js');
 
 const app = express();
 
+const trustProxy = process.env.TRUST_PROXY;
+if (typeof trustProxy !== 'undefined') {
+  app.set('trust proxy', trustProxy);
+} else {
+  app.set('trust proxy', 1);
+}
+
 const corsOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
@@ -24,7 +31,13 @@ const corsOrigins = (process.env.CORS_ORIGIN || '')
 
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || corsOrigins.length === 0 || corsOrigins.includes(origin)) {
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (corsOrigins.length === 0) {
+      return callback(new Error('CORS origin not configured'));
+    }
+    if (corsOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
@@ -66,6 +79,18 @@ apiRouter.use(
     publicPaths,
   })
 );
+
+const adminOnlyPaths = [
+  /^\/orders\/needs-printing(\/|$)/,
+  /^\/merge-print(\/|$)/,
+  /^\/checkImei$/,
+  /^\/create-admin$/,
+  /^\/send-email$/,
+  /^\/labels\/print\/queue(\/|$)/,
+  /^\/admin\/reminders(\/|$)/,
+];
+
+apiRouter.use(adminOnlyPaths, requireAdmin);
 
 apiRouter.use(profileRouter);
 apiRouter.use(remindersRouter);

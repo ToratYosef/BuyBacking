@@ -1,19 +1,15 @@
 const express = require('express');
 const { admin, db } = require('../services/firestore');
+const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.post('/create-admin', async (req, res, next) => {
+router.post('/create-admin', requireAdmin, async (req, res, next) => {
   try {
     const { email, password, displayName } = req.body || {};
 
     if (!email || !password) {
       return res.status(400).json({ ok: false, error: 'Email and password are required.' });
-    }
-
-    const requesterDoc = await db.collection('admins').doc(req.user.uid).get();
-    if (!requesterDoc.exists) {
-      return res.status(403).json({ ok: false, error: 'Only admins can create new admins.' });
     }
 
     const userRecord = await admin.auth().createUser({

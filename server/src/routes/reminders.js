@@ -1,4 +1,5 @@
 const express = require('express');
+const { requireAdmin } = require('../middleware/auth');
 const {
   sendReminderEmail,
   sendExpiringReminderEmail,
@@ -6,6 +7,8 @@ const {
 } = require('../../../functions/index.js');
 
 const router = express.Router();
+
+router.use(requireAdmin);
 
 function mapCallableError(error) {
   if (!error || typeof error !== 'object') {

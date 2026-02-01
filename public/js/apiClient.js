@@ -28,9 +28,9 @@ async function getIdToken({ forceRefresh = false } = {}) {
   return user.getIdToken(forceRefresh);
 }
 
-async function apiRequest(method, path, data, options = {}) {
+async function requestWithAuth(method, path, data, options = {}, { forceRefresh = false } = {}) {
   const { authRequired = false, headers = {}, ...fetchOptions } = options;
-  const token = await getIdToken({ forceRefresh: true });
+  const token = await getIdToken({ forceRefresh });
 
   if (authRequired && !token) {
     throw new Error("Authentication required. Please sign in and try again.");
@@ -45,12 +45,20 @@ async function apiRequest(method, path, data, options = {}) {
     requestHeaders.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(resolveUrl(path), {
+  return fetch(resolveUrl(path), {
     method,
     headers: requestHeaders,
     body: data ? JSON.stringify(data) : undefined,
     ...fetchOptions,
   });
+}
+
+async function apiRequest(method, path, data, options = {}) {
+  let response = await requestWithAuth(method, path, data, options, { forceRefresh: false });
+
+  if (response.status === 401) {
+    response = await requestWithAuth(method, path, data, options, { forceRefresh: true });
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const payload = contentType.includes("application/json")
@@ -70,23 +78,31 @@ async function apiRequest(method, path, data, options = {}) {
 
 export async function apiRaw(path, options = {}) {
   const { authRequired = false, headers = {}, body, method = "GET", ...fetchOptions } = options;
-  const token = await getIdToken({ forceRefresh: true });
+  const makeRequest = async (forceRefresh = false) => {
+    const token = await getIdToken({ forceRefresh });
 
-  if (authRequired && !token) {
-    throw new Error("Authentication required. Please sign in and try again.");
+    if (authRequired && !token) {
+      throw new Error("Authentication required. Please sign in and try again.");
+    }
+
+    const requestHeaders = { ...headers };
+    if (token) {
+      requestHeaders.Authorization = `Bearer ${token}`;
+    }
+
+    return fetch(resolveUrl(path), {
+      method,
+      headers: requestHeaders,
+      body,
+      ...fetchOptions,
+    });
+  };
+
+  let response = await makeRequest(false);
+  if (response.status === 401) {
+    response = await makeRequest(true);
   }
-
-  const requestHeaders = { ...headers };
-  if (token) {
-    requestHeaders.Authorization = `Bearer ${token}`;
-  }
-
-  return fetch(resolveUrl(path), {
-    method,
-    headers: requestHeaders,
-    body,
-    ...fetchOptions,
-  });
+  return response;
 }
 
 export function apiGet(path, options) {
