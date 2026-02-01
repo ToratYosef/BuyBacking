@@ -95,6 +95,7 @@
         .summary-card { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); position: sticky; top: 20px; }
         .btn-submit { width: 100%; padding: 18px; background: var(--brand-gradient); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 20px; transition: 0.3s; }
         .btn-submit:hover { opacity: 0.9; transform: scale(1.01); }
+        .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
         .cart-item-card {
             border: 1px solid var(--border);
@@ -141,6 +142,16 @@
             background-color: white; border-radius: 0.375rem; padding: 0.5rem 0;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); z-index: 50;
         }
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.65);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 60;
+        }
+        .modal-overlay.active { display: flex; }
     </style>
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
 </head>
@@ -222,6 +233,7 @@
                     <label>Street Address</label>
                     <div id="streetAddress-error" class="field-error-msg">Error: Please complete required field</div>
                     <input type="text" id="streetAddress" class="input-field" placeholder="123 Main St">
+                    <p class="text-xs text-slate-500 mt-1">💡 We verify all addresses via USPS. Providing an accurate address ensures your package arrives safely and prevents order cancellation.</p>
                 </div>
                 <div class="input-group">
                     <label>Apartment / Suite / Unit (Optional)</label>
@@ -243,11 +255,12 @@
                     </div>
                     <div class="input-group">
                         <label>Zip Code</label>
-                        <div id="zip-error" class="field-error-msg">Error: Required</div>
-                        <input type="text" id="zip" class="input-field">
+                        <div id="zip-error" class="field-error-msg">Error: 5-digit ZIP required</div>
+                        <input type="text" id="zip" class="input-field" inputmode="numeric" pattern="\\d{5}" maxlength="5" autocomplete="postal-code" placeholder="12345">
                     </div>
                 </div>
                 <input type="hidden" id="country" value="US">
+                <div id="address-verify-error" class="field-error-msg md:col-span-2">We couldn't verify this address. Please provide a valid shipping location to continue.</div>
             </div>
         </div>
 
@@ -324,6 +337,32 @@
     </aside>
 </main>
 
+<div id="addressSuggestionModal" class="modal-overlay" aria-hidden="true">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <div class="flex items-start justify-between mb-4">
+            <h3 class="text-lg font-bold text-slate-900">Confirm your address</h3>
+            <button type="button" id="closeAddressModal" class="text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+        </div>
+        <p class="text-sm text-slate-600 mb-4">We found a more accurate version of your address. Which would you like to use?</p>
+        <div class="grid grid-cols-1 gap-4">
+            <div class="border rounded-lg p-4 bg-slate-50">
+                <p class="text-xs uppercase font-bold text-slate-500 mb-2">Suggested Address</p>
+                <p id="suggestedAddressText" class="text-sm text-slate-700"></p>
+            </div>
+            <div class="border rounded-lg p-4">
+                <p class="text-xs uppercase font-bold text-slate-500 mb-2">Your Address</p>
+                <p id="enteredAddressText" class="text-sm text-slate-700"></p>
+            </div>
+        </div>
+        <div class="mt-6 flex flex-col sm:flex-row gap-3">
+            <button type="button" id="useSuggestedAddressBtn" class="btn-submit sm:w-1/2">Use Suggested Address</button>
+            <button type="button" id="keepEnteredAddressBtn" class="sm:w-1/2 border border-slate-300 rounded-lg px-4 py-4 font-semibold text-slate-700 hover:bg-slate-100">Keep My Version</button>
+        </div>
+    </div>
+</div>
+
 <footer class="bg-slate-800 text-white mt-20">
     <div class="container mx-auto px-4 py-12">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -380,6 +419,17 @@
     const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken' };
     const CONDITION_KEYS = Object.keys(CONDITION_LABELS);
     let cartItems = [];
+    const zipInput = document.getElementById('zip');
+    const submitOrderBtn = document.getElementById('submitOrderBtn');
+    const addressVerifyError = document.getElementById('address-verify-error');
+    const addressSuggestionModal = document.getElementById('addressSuggestionModal');
+    const suggestedAddressText = document.getElementById('suggestedAddressText');
+    const enteredAddressText = document.getElementById('enteredAddressText');
+    const useSuggestedAddressBtn = document.getElementById('useSuggestedAddressBtn');
+    const keepEnteredAddressBtn = document.getElementById('keepEnteredAddressBtn');
+    const closeAddressModal = document.getElementById('closeAddressModal');
+    let pendingSuggestedAddress = null;
+    let pendingEnteredAddress = null;
 
     // AUTH LISTENER - LOAD SAVED ADDRESS & SET MONOGRAM
     onAuthStateChanged(auth, async (user) => {
@@ -421,6 +471,7 @@
                     if (data.city) document.getElementById('city').value = data.city;
                     if (data.state) document.getElementById('state').value = data.state;
                     if (data.zip) document.getElementById('zip').value = data.zip;
+                    updateZipUI();
                 }
             } catch (err) { console.error("Error fetching address:", err); }
         } else {
@@ -445,6 +496,111 @@
         const total = cartItems.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
         document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
         document.getElementById('sum-total').textContent = `$${Math.max(total - fee, 0).toFixed(2)}`;
+    };
+    const normalizeZip = (value) => value.replace(/\D/g, '').slice(0, 5);
+    const isZipValid = () => zipInput.value.length === 5;
+    const updateZipUI = ({ showError = false } = {}) => {
+        const zipError = document.getElementById('zip-error');
+        if (showError && !isZipValid()) {
+            zipInput.classList.add('error-highlight');
+            zipError.style.display = 'block';
+        } else if (isZipValid()) {
+            zipInput.classList.remove('error-highlight');
+            zipError.style.display = 'none';
+        }
+        submitOrderBtn.disabled = !isZipValid();
+    };
+    const clearAddressVerifyError = () => {
+        addressVerifyError.style.display = 'none';
+        ['streetAddress', 'city', 'state', 'zip'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('error-highlight');
+        });
+    };
+    const showAddressVerifyError = (message) => {
+        if (message) {
+            addressVerifyError.textContent = message;
+        }
+        addressVerifyError.style.display = 'block';
+        ['streetAddress', 'city', 'state', 'zip'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('error-highlight');
+        });
+    };
+    const buildShippingInfo = () => ({
+        fullName: document.getElementById('fullName').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        streetAddress: document.getElementById('streetAddress').value,
+        addressUnit: document.getElementById('addressUnit').value,
+        city: document.getElementById('city').value,
+        state: document.getElementById('state').value,
+        zipCode: document.getElementById('zip').value,
+        zip: document.getElementById('zip').value,
+        country: document.getElementById('country').value,
+        shippingPreference: document.querySelector('input[name="shipping_preference"]:checked').value
+    });
+    const mapShipEngineAddress = (address) => ({
+        address_line1: address.address_line1 || address.addressLine1 || address.streetAddress || '',
+        address_line2: address.address_line2 || address.addressLine2 || address.addressUnit || '',
+        city_locality: address.city_locality || address.cityLocality || address.city || '',
+        state_province: address.state_province || address.stateProvince || address.state || '',
+        postal_code: address.postal_code || address.postalCode || address.zip || address.zipCode || '',
+        country_code: address.country_code || address.countryCode || address.country || 'US'
+    });
+    const formatAddressLines = (address) => {
+        if (!address) return '';
+        const mapped = mapShipEngineAddress(address);
+        const line1 = mapped.address_line1;
+        const line2 = mapped.address_line2;
+        const cityStateZip = `${mapped.city_locality}, ${mapped.state_province} ${mapped.postal_code}`.trim();
+        return [line1, line2, cityStateZip].filter(Boolean).join('\n');
+    };
+    const applyAddressToForm = (address) => {
+        if (!address) return;
+        const mapped = mapShipEngineAddress(address);
+        document.getElementById('streetAddress').value = mapped.address_line1;
+        document.getElementById('addressUnit').value = mapped.address_line2;
+        document.getElementById('city').value = mapped.city_locality;
+        document.getElementById('state').value = mapped.state_province;
+        document.getElementById('zip').value = mapped.postal_code;
+        document.getElementById('country').value = mapped.country_code || 'US';
+        updateZipUI();
+    };
+    const showSuggestionModal = (suggested, entered) => {
+        pendingSuggestedAddress = suggested;
+        pendingEnteredAddress = entered;
+        suggestedAddressText.textContent = formatAddressLines(suggested);
+        enteredAddressText.textContent = formatAddressLines(entered);
+        addressSuggestionModal.classList.add('active');
+        addressSuggestionModal.setAttribute('aria-hidden', 'false');
+    };
+    const hideSuggestionModal = () => {
+        addressSuggestionModal.classList.remove('active');
+        addressSuggestionModal.setAttribute('aria-hidden', 'true');
+        pendingSuggestedAddress = null;
+        pendingEnteredAddress = null;
+    };
+    const verifyAddress = async (shippingInfo) => {
+        const response = await fetch('/api/verify-address', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                address: {
+                    streetAddress: shippingInfo.streetAddress,
+                    addressUnit: shippingInfo.addressUnit,
+                    city: shippingInfo.city,
+                    state: shippingInfo.state,
+                    zip: shippingInfo.zip,
+                    country: shippingInfo.country
+                }
+            })
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || 'Address validation failed');
+        }
+        return payload;
     };
     const ensureCartCondition = (item) => {
         const validKey = item.condition && CONDITION_LABELS[item.condition] ? item.condition : null;
@@ -580,15 +736,32 @@
                 el.addEventListener('input', () => {
                     el.classList.remove('error-highlight');
                     if (errEl) errEl.style.display = 'none';
+                    if (['streetAddress', 'city', 'state', 'zip'].includes(id)) {
+                        clearAddressVerifyError();
+                    }
                 });
                 if (el.tagName === 'SELECT') {
                     el.addEventListener('change', () => {
                         el.classList.remove('error-highlight');
                         if (errEl) errEl.style.display = 'none';
+                        if (['streetAddress', 'city', 'state', 'zip'].includes(id)) {
+                            clearAddressVerifyError();
+                        }
                     });
                 }
             }
         });
+
+        if (zipInput) {
+            zipInput.addEventListener('input', () => {
+                zipInput.value = normalizeZip(zipInput.value);
+                updateZipUI();
+            });
+            zipInput.addEventListener('blur', () => {
+                updateZipUI({ showError: true });
+            });
+            updateZipUI();
+        }
 
         const termsCheck = document.getElementById('terms');
         termsCheck.addEventListener('change', () => {
@@ -625,98 +798,15 @@
         document.getElementById('payment-label').textContent = labels[selectedMethod];
         document.getElementById('payoutIdentifier').placeholder = selectedMethod === 'cashapp' ? '$cashtag' : '';
     };
-
-    const initAutocomplete = () => {
-        const input = document.getElementById('streetAddress');
-        if (!input || !window.google || !google.maps?.places) return;
-        const autocomplete = new google.maps.places.Autocomplete(input, {
-            types: ['address'],
-            fields: ['address_components']
-        });
-        autocomplete.addListener('place_changed', () => {
-            const place = autocomplete.getPlace();
-            const components = place.address_components || [];
-            const findComponent = (type) => components.find(comp => comp.types.includes(type)) || {};
-            const streetNumber = findComponent('street_number').long_name || '';
-            const route = findComponent('route').long_name || '';
-            const city = findComponent('locality').long_name || findComponent('sublocality').long_name || '';
-            const state = findComponent('administrative_area_level_1').short_name || '';
-            const zip = findComponent('postal_code').long_name || '';
-            const country = findComponent('country').short_name || 'US';
-
-            document.getElementById('streetAddress').value = `${streetNumber} ${route}`.trim();
-            document.getElementById('city').value = city;
-            document.getElementById('state').value = state;
-            document.getElementById('zip').value = zip;
-            document.getElementById('country').value = country;
-        });
-    };
-    window.initAutocomplete = initAutocomplete;
-
-    document.querySelectorAll('input[name="shipping_preference"]').forEach(r => r.onchange = updateSummary);
-    document.querySelectorAll('input[name="payment_method"]').forEach(r => r.onchange = updatePaymentFields);
-
-    document.getElementById('submitOrderBtn').onclick = async () => {
-        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
-        let hasError = false;
-        let firstErrorEl = null;
-
-        requiredIds.forEach(id => {
-            document.getElementById(`${id}-error`).style.display = 'none';
-            document.getElementById(id).classList.remove('error-highlight');
-        });
-        document.getElementById('terms-error').style.display = 'none';
-        document.getElementById('terms-container').classList.remove('error-highlight');
-
-        requiredIds.forEach(id => {
-            const el = document.getElementById(id);
-            const errEl = document.getElementById(`${id}-error`);
-            if (!el.value) {
-                el.classList.add('error-highlight');
-                if (errEl) errEl.style.display = 'block';
-                hasError = true;
-                if (!firstErrorEl) firstErrorEl = el;
-            }
-        });
-
-        const termsCheck = document.getElementById('terms');
-        const termsContainer = document.getElementById('terms-container');
-        const termsError = document.getElementById('terms-error');
-        if (!termsCheck.checked) {
-            termsContainer.classList.add('error-highlight');
-            termsError.style.display = 'block';
-            hasError = true;
-            if (!firstErrorEl) firstErrorEl = termsContainer;
-        }
-
-        if (hasError) {
-            if (firstErrorEl) {
-                firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-            return;
-        }
-
-        const btn = document.getElementById('submitOrderBtn');
+    const executeOrderSubmission = async (shippingInfo) => {
+        const btn = submitOrderBtn;
         const pref = document.querySelector('input[name="shipping_preference"]:checked').value;
         const method = document.querySelector('input[name="payment_method"]:checked').value;
         const finalPayout = parseFloat(document.getElementById('sum-total').textContent.replace('$', ''));
 
+        shippingInfo.shippingPreference = pref;
         btn.disabled = true;
         btn.textContent = "Processing...";
-
-        const shippingInfo = {
-            fullName: document.getElementById('fullName').value,
-            email: document.getElementById('email').value,
-            phone: document.getElementById('phone').value,
-            streetAddress: document.getElementById('streetAddress').value,
-            addressUnit: document.getElementById('addressUnit').value,
-            city: document.getElementById('city').value,
-            state: document.getElementById('state').value,
-            zipCode: document.getElementById('zip').value,
-            zip: document.getElementById('zip').value,
-            country: document.getElementById('country').value,
-            shippingPreference: pref
-        };
 
         if (auth.currentUser) {
             try {
@@ -727,8 +817,6 @@
         try {
             if (!cartItems.length) {
                 alert('Please add at least one device.');
-                btn.disabled = false;
-                btn.textContent = "SUBMIT MY TRADE-IN";
                 return;
             }
 
@@ -795,8 +883,6 @@
             const result = await res.json();
             if (!res.ok) {
                 alert("Submission failed: " + result.error);
-                btn.disabled = false;
-                btn.textContent = "SUBMIT MY TRADE-IN";
                 return;
             }
 
@@ -821,8 +907,151 @@
             if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);
             
             window.location.href = successUrl.toString();
-        } catch (e) { alert("Server error."); } finally { btn.disabled = false; btn.textContent = "SUBMIT MY TRADE-IN"; }
+        } catch (e) {
+            alert("Server error.");
+        } finally {
+            btn.disabled = !isZipValid();
+            btn.textContent = "SUBMIT MY TRADE-IN";
+        }
     };
+
+    const initAutocomplete = () => {
+        const input = document.getElementById('streetAddress');
+        if (!input || !window.google || !google.maps?.places) return;
+        const autocomplete = new google.maps.places.Autocomplete(input, {
+            types: ['address'],
+            fields: ['address_components']
+        });
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            const components = place.address_components || [];
+            const findComponent = (type) => components.find(comp => comp.types.includes(type)) || {};
+            const streetNumber = findComponent('street_number').long_name || '';
+            const route = findComponent('route').long_name || '';
+            const city = findComponent('locality').long_name || findComponent('sublocality').long_name || '';
+            const state = findComponent('administrative_area_level_1').short_name || '';
+            const zip = findComponent('postal_code').long_name || '';
+            const country = findComponent('country').short_name || 'US';
+
+            document.getElementById('streetAddress').value = `${streetNumber} ${route}`.trim();
+            document.getElementById('city').value = city;
+            document.getElementById('state').value = state;
+            document.getElementById('zip').value = zip;
+            document.getElementById('country').value = country;
+            updateZipUI();
+        });
+    };
+    window.initAutocomplete = initAutocomplete;
+
+    document.querySelectorAll('input[name="shipping_preference"]').forEach(r => r.onchange = updateSummary);
+    document.querySelectorAll('input[name="payment_method"]').forEach(r => r.onchange = updatePaymentFields);
+
+    submitOrderBtn.onclick = async () => {
+        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        let hasError = false;
+        let firstErrorEl = null;
+
+        requiredIds.forEach(id => {
+            document.getElementById(`${id}-error`).style.display = 'none';
+            document.getElementById(id).classList.remove('error-highlight');
+        });
+        document.getElementById('terms-error').style.display = 'none';
+        document.getElementById('terms-container').classList.remove('error-highlight');
+        clearAddressVerifyError();
+
+        requiredIds.forEach(id => {
+            const el = document.getElementById(id);
+            const errEl = document.getElementById(`${id}-error`);
+            if (!el.value) {
+                el.classList.add('error-highlight');
+                if (errEl) errEl.style.display = 'block';
+                hasError = true;
+                if (!firstErrorEl) firstErrorEl = el;
+            }
+        });
+
+        if (!isZipValid()) {
+            updateZipUI({ showError: true });
+            hasError = true;
+            if (!firstErrorEl) firstErrorEl = zipInput;
+        }
+
+        const termsCheck = document.getElementById('terms');
+        const termsContainer = document.getElementById('terms-container');
+        const termsError = document.getElementById('terms-error');
+        if (!termsCheck.checked) {
+            termsContainer.classList.add('error-highlight');
+            termsError.style.display = 'block';
+            hasError = true;
+            if (!firstErrorEl) firstErrorEl = termsContainer;
+        }
+
+        if (hasError) {
+            if (firstErrorEl) {
+                firstErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+
+        const shippingInfo = buildShippingInfo();
+        submitOrderBtn.disabled = true;
+        submitOrderBtn.textContent = "Validating Address...";
+
+        try {
+            const validation = await verifyAddress(shippingInfo);
+            const status = (validation.status || '').toLowerCase();
+            const matchedAddress = validation.matchedAddress || validation.matched_address;
+
+            if (status === 'verified') {
+                if (matchedAddress) {
+                    applyAddressToForm(matchedAddress);
+                }
+                await executeOrderSubmission(buildShippingInfo());
+                return;
+            }
+
+            if (['ambiguous', 'warning', 'suggestion', 'suggested'].includes(status) || matchedAddress) {
+                showSuggestionModal(matchedAddress || shippingInfo, shippingInfo);
+                submitOrderBtn.textContent = "Awaiting confirmation...";
+                return;
+            }
+
+            showAddressVerifyError();
+        } catch (error) {
+            console.error('Address validation failed:', error);
+            showAddressVerifyError();
+        }
+
+        submitOrderBtn.disabled = !isZipValid();
+        submitOrderBtn.textContent = "SUBMIT MY TRADE-IN";
+    };
+
+    useSuggestedAddressBtn.addEventListener('click', async () => {
+        hideSuggestionModal();
+        if (pendingSuggestedAddress) {
+            applyAddressToForm(pendingSuggestedAddress);
+        }
+        await executeOrderSubmission(buildShippingInfo());
+    });
+
+    keepEnteredAddressBtn.addEventListener('click', async () => {
+        hideSuggestionModal();
+        await executeOrderSubmission(pendingEnteredAddress || buildShippingInfo());
+    });
+
+    closeAddressModal.addEventListener('click', () => {
+        hideSuggestionModal();
+        submitOrderBtn.disabled = !isZipValid();
+        submitOrderBtn.textContent = "SUBMIT MY TRADE-IN";
+    });
+
+    addressSuggestionModal.addEventListener('click', (event) => {
+        if (event.target === addressSuggestionModal) {
+            hideSuggestionModal();
+            submitOrderBtn.disabled = !isZipValid();
+            submitOrderBtn.textContent = "SUBMIT MY TRADE-IN";
+        }
+    });
 
     init();
 </script>
