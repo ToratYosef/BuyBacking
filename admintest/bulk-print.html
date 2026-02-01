@@ -438,8 +438,8 @@
     </section>
   </div>
 
-  <script>
-    const API_BASE = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+  <script type="module">
+    import { apiGet } from "/public/js/apiClient.js";
     const state = {
       orders: [],
       filtered: [],
@@ -626,11 +626,7 @@
       queueStateChip.dataset.state = 'loading';
       queueStateChip.querySelector('span').textContent = 'Refreshing…';
       try {
-        const response = await fetch(`${API_BASE}/orders/needs-printing`);
-        if (!response.ok) {
-          throw new Error(`Failed to load queue (${response.status})`);
-        }
-        const payload = await response.json();
+        const payload = await apiGet('/orders/needs-printing', { authRequired: true });
         const orders = Array.isArray(payload.orders) ? payload.orders : [];
         hydrateOrders(orders);
         logActivity(`Loaded ${orders.length} orders from Firestore.`);
