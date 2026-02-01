@@ -6198,6 +6198,8 @@ exports.notifyWholesaleOfferUpdated = functions.firestore
   });
 
 exports.api = functions.https.onRequest(app);
+exports.expressApp = app;
+exports.updateOrderBoth = updateOrderBoth;
 
 exports.refreshTracking = functions.runWith({ timeoutSeconds: 540, memory: '1GB' }).https.onRequest(
   async (req, res) => {

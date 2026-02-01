@@ -397,9 +397,7 @@
   const PROMO_STORAGE_KEY = 'shcSelectedPromoCode';
   const PROMO_DISMISS_KEY = 'shcShip48BannerDismissed';
   const SHIP48_START_KEY = 'shcShip48StartFlow';
-  const PROMO_API_BASE =
-    (typeof window !== 'undefined' && window.SHC_API_BASE_URL) ||
-    'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+  const apiClientPromise = import('/public/js/apiClient.js');
   let layoutBootstrapped = false;
 
   function createShip48Banner() {
@@ -450,13 +448,8 @@
     const statusEl = banner.querySelector('[data-ship48-status]');
     const ctaBtn = banner.querySelector('[data-ship48-cta]');
 
-    fetch(`${PROMO_API_BASE.replace(/\/$/, '')}/promo-codes/${PROMO_CODE}`)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Failed to load promo stats');
-        }
-        return response.json();
-      })
+    apiClientPromise
+      .then(({ apiGet }) => apiGet(`/promo-codes/${PROMO_CODE}`, { authRequired: false }))
       .then((data) => {
         const usesLeftRaw = Number(data.usesLeft ?? data.uses_left ?? 0);
         const maxUsesRaw = Number(data.maxUses ?? data.max_uses ?? 0);

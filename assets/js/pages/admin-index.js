@@ -1,54 +1,3 @@
-// === FETCH_SHIM_BEGIN ===
-(() => {
-  // Cloud Functions base for API
-  const CLOUD_FN_BASE = "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
-
-  // Keep a ref to the original fetch
-  const _fetch = window.fetch.bind(window);
-
-  function needsRewrite(u) {
-    try {
-      const url = new URL(u, window.location.href);
-      // Path might be: /api/..., /admin/api/..., or api/... (resolved to /admin/api/...)
-      const path = url.pathname.replace(/^\/+/, "/"); // collapse to leading single slash
-      return path === "/api" || path.startsWith("/api/") || path.startsWith("/admin/api/");
-    } catch {
-      return false;
-    }
-  }
-
-  function rewrite(u) {
-    const url = new URL(u, window.location.href);
-    // Strip any leading /admin in front of /api
-    let path = url.pathname.replace(/^\/+/, "/");
-    if (path.startsWith("/admin/api/")) path = path.replace("/admin/api/", "/api/");
-    if (path === "/admin/api") path = "/api";
-
-    // Build new URL against Cloud Functions base
-    const rest = path.replace(/^\/api/, "");
-    const rewritten = new URL(CLOUD_FN_BASE + rest, CLOUD_FN_BASE);
-    rewritten.search = url.search; // preserve query
-    rewritten.hash = url.hash;
-
-    return rewritten.toString();
-  }
-
-  window.fetch = (input, init) => {
-    try {
-      const u = typeof input === "string" ? input : (input && input.url) ? input.url : String(input);
-      if (needsRewrite(u)) {
-        const rewritten = rewrite(u);
-        // console.debug("[fetch shim] →", u, "⇒", rewritten);
-        if (typeof input === "string") return _fetch(rewritten, init);
-        // If Request object, clone with new URL
-        return _fetch(new Request(rewritten, input), init);
-      }
-    } catch (_) {}
-    return _fetch(input, init);
-  };
-})();
-// === FETCH_SHIM_END ===
-
 // Auto-open order modal if ?order=SHC-xxxxx is present in URL
 document.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(window.location.search);
@@ -68,9 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// Corrected to include the base path for Cloud Functions
-const BACKEND_BASE_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
-const REFRESH_TRACKING_FUNCTION_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/refreshTracking';
+const REFRESH_TRACKING_FUNCTION_URL = '/refresh-tracking';
 const FEED_PRICING_URL = '/feeds/feed.xml';
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTO_REQUOTE_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
@@ -269,41 +216,12 @@ function resolveReminderStatusKey(order = {}) {
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+import { apiGet, apiPost, apiPut, apiDelete, apiRaw } from "/public/js/apiClient.js";
 import { createOrderInfoLabelPdf } from "/assets/js/pdf/order-labels.js";
-/* --- API BASE URL FIX: Redirect /api/* to Cloud Functions base --- */
-(function () {
-  try {
-    const BASE =
-      (typeof window !== "undefined" && window.API_BASE) ||
-      (typeof BACKEND_BASE_URL !== "undefined" && BACKEND_BASE_URL) ||
-      "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
-    const ORIG_FETCH = window.fetch.bind(window);
-    window.fetch = function (input, init) {
-      const url = typeof input === "string" ? input : (input && input.url) || "";
-      if (
-        url &&
-        (url.startsWith("/api") || /:\/\/buyback-a0f05\.web\.app\/api\b/i.test(url))
-      ) {
-        const rewritten = url
-          .replace(/^https?:\/\/[^/]+\/api/i, BASE)
-          .replace(/^\/api\b/i, BASE);
-        if (typeof input === "string") return ORIG_FETCH(rewritten, init);
-        const req = new Request(rewritten, input);
-        return ORIG_FETCH(req, init);
-      }
-      return ORIG_FETCH(input, init);
-    };
-  } catch (e) {
-    console.warn("API base shim failed", e);
-  }
-})();
-/* --- END API BASE URL FIX --- */
 
 
 let db;
 let auth;
-let functions;
 let currentUserId = 'anonymous_user';
 let currentDeviceDocId = null;
 let currentDeviceDocHasSnapshot = false;
@@ -934,27 +852,7 @@ async function handleBulkLabelGeneration() {
       continue;
     }
     try {
-      const response = await fetch(`${BACKEND_BASE_URL}/generate-label/${orderId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        let details = '';
-        try {
-          const parsed = JSON.parse(errorText);
-          details = parsed?.details || parsed?.error || '';
-        } catch (parseError) {
-          details = errorText;
-        }
-
-        const message = details
-          ? `Label generation failed (${response.status}): ${details}`
-          : `Label generation failed (${response.status}).`;
-        throw new Error(message);
-      }
-
+      await apiPost(`/generate-label/${orderId}`, {}, { authRequired: true });
       successCount += 1;
     } catch (error) {
       console.error(`Bulk label generation failed for ${deviceKey}:`, error);
@@ -1873,22 +1771,7 @@ async function handleImeiSubmit() {
         undefined,
     };
 
-    const response = await fetch('/api/checkImei', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      let message = `IMEI check failed with status ${response.status}.`;
-      try {
-        const errorBody = await response.json();
-        if (errorBody && errorBody.error) {
-          message = errorBody.error;
-        }
-      } catch (_) {}
-      throw new Error(message);
-    }
+    await apiPost('/checkImei', payload, { authRequired: true });
 
 
     completed = true;
@@ -2255,33 +2138,11 @@ return wrapper;
 }
 
 async function requestVoidLabels(orderId, selections) {
-const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/void-label`, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ labels: selections }),
-});
-
-if (!response.ok) {
-const errorText = await response.text();
-throw new Error(errorText || `Failed to void labels: ${response.status}`);
-}
-
-return response.json();
+return apiPost(`/orders/${orderId}/void-label`, { labels: selections }, { authRequired: true });
 }
 
 async function requestClearOrderData(orderId, selections) {
-const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/clear-data`, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ selections }),
-});
-
-if (!response.ok) {
-const errorText = await response.text();
-throw new Error(errorText || `Failed to clear data: ${response.status}`);
-}
-
-return response.json();
+return apiPost(`/orders/${orderId}/clear-data`, { selections }, { authRequired: true });
 }
 
 function summarizeVoidResults(result) {
@@ -4531,19 +4392,7 @@ try {
 // Function to fetch PDF data as ArrayBuffer via the Cloud Function proxy
 const fetchPdfProxy = async (url) => {
 if (!url) throw new Error("URL is null or empty.");
-
-const response = await fetch(`${BACKEND_BASE_URL}/fetch-pdf`, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ url: url })
-});
-
-if (!response.ok) {
-const errorData = await response.json();
-throw new Error(errorData.error || `Failed to fetch PDF from proxy. Status: ${response.status}`);
-}
-
-const result = await response.json();
+const result = await apiPost('/fetch-pdf', { url }, { authRequired: true });
 // Decode Base64 back to ArrayBuffer
 const binaryString = atob(result.base64);
 const bytes = new Uint8Array(binaryString.length);
@@ -5469,17 +5318,7 @@ async function refreshTrackingForOrders(type, button) {
     console.log(`refreshing ${logLabel}`);
 
     try {
-      const response = await fetch(REFRESH_TRACKING_FUNCTION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: order.id, type }),
-      });
-
-      const payload = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(payload?.error || response.statusText || 'Request failed');
-      }
+      const payload = await apiPost(REFRESH_TRACKING_FUNCTION_URL, { orderId: order.id, type }, { authRequired: true });
 
       if (payload && payload.skipped) {
         skippedCount += 1;
@@ -6077,26 +5916,7 @@ async function updateOrderStatusInline(orderId, status, options = {}) {
       Object.assign(payload, options.body);
     }
 
-    const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/status`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const rawBody = await response.text();
-    let data = {};
-    if (rawBody) {
-      try {
-        data = JSON.parse(rawBody);
-      } catch {
-        data = { message: rawBody };
-      }
-    }
-
-    if (!response.ok) {
-      const errorMessage = data.error || data.message || `Failed to update order status to ${status}.`;
-      throw new Error(errorMessage);
-    }
+    const data = await apiPut(`/orders/${orderId}/status`, payload, { authRequired: true });
 
     return data;
   } catch (error) {
@@ -6653,24 +6473,7 @@ async function handleShippingAddressSave() {
   setShippingAddressSavingState(true);
 
   try {
-    const response = await fetch(`${BACKEND_BASE_URL}/orders/${currentOrderDetails.id}/shipping-info`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-
-    let responseData = null;
-    try {
-      responseData = await response.json();
-    } catch (parseError) {
-      responseData = null;
-    }
-
-    if (!response.ok) {
-      const message = responseData?.error || 'Failed to save the shipping address.';
-      throw new Error(message);
-    }
-
+    const responseData = await apiPut(`/orders/${currentOrderDetails.id}/shipping-info`, payload, { authRequired: true });
     const updatedShippingInfo = responseData?.shippingInfo || payload;
 
     if (currentOrderDetails) {
@@ -6756,16 +6559,8 @@ orderDetailsModal.classList.remove('hidden');
 
 try {
 modalLoadingMessage.classList.remove('hidden');
-const url = `${BACKEND_BASE_URL}/orders/${orderId}`;
-console.log("Fetching order details from:", url);
-const response = await fetch(url);
-
-if (!response.ok) {
-const errorText = await response.text();
-console.error("Backend error response:", response.status, errorText);
-throw new Error(`Failed to fetch order details: ${response.status} - ${errorText.substring(0, 100)}`);
-}
-    const order = await response.json();
+console.log("Fetching order details from:", `/orders/${orderId}`);
+    const order = await apiGet(`/orders/${orderId}`, { authRequired: true });
     currentOrderDetails = order;
     resetShippingAddressEditor({ restoreFromOrder: true });
     startImeiListener(order);
@@ -7529,25 +7324,16 @@ manualFulfillmentFormContainer.classList.add('hidden');
 modalMessage.classList.add('hidden');
 
 try {
-const url = `${BACKEND_BASE_URL}/manual-fulfill/${orderId}`;
-console.log("Submitting manual fulfillment to:", url);
-const response = await fetch(url, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
-outboundTrackingNumber: isKitOrder ? outboundTracking : null,
-inboundTrackingNumber: inboundTracking,
-// Provide a placeholder URL if not given, as the backend needs a value
-inboundLabelUrl: labelUrl || 'https://placehold.co/1x1/ffffff/fff?text=N/A',
-})
-});
-
-if (!response.ok) {
-const errorText = await response.text();
-console.error("Backend error response for manual fulfillment:", response.status, errorText);
-throw new Error(errorText || `Failed to manually fulfill order: ${response.status} - ${errorText.substring(0, 100)}`);
-}
-const result = await response.json();
+const result = await apiPost(
+  `/manual-fulfill/${orderId}`,
+  {
+    outboundTrackingNumber: isKitOrder ? outboundTracking : null,
+    inboundTrackingNumber: inboundTracking,
+    // Provide a placeholder URL if not given, as the backend needs a value
+    inboundLabelUrl: labelUrl || 'https://placehold.co/1x1/ffffff/fff?text=N/A',
+  },
+  { authRequired: true }
+);
 
 displayModalMessage(result.message, 'success');
 openOrderDetailsModal(orderId);
@@ -7587,20 +7373,7 @@ reofferFormContainer.classList.add('hidden');
 modalMessage.classList.add('hidden');
 
 try {
-const url = `${BACKEND_BASE_URL}/orders/${orderId}/re-offer`;
-console.log("Submitting re-offer to:", url);
-const response = await fetch(url, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({ newPrice: parseFloat(newPrice), reasons, comments })
-});
-
-if (!response.ok) {
-const errorText = await response.text();
-console.error("Backend error response for re-offer:", response.status, errorText);
-throw new Error(errorText || `Failed to send re-offer: ${response.status} - ${errorText.substring(0, 100)}`);
-}
-const result = await response.json();
+const result = await apiPost(`/orders/${orderId}/re-offer`, { newPrice: parseFloat(newPrice), reasons, comments }, { authRequired: true });
 
 displayModalMessage(result.message, 'success');
 openOrderDetailsModal(orderId);
@@ -7635,23 +7408,15 @@ modalMessage.classList.add('hidden');
 modalLoadingMessage.classList.remove('hidden');
 
 try {
-const response = await fetch(`${BACKEND_BASE_URL}/orders/${orderId}/send-condition-email`, {
-method: 'POST',
-headers: { 'Content-Type': 'application/json' },
-body: JSON.stringify({
-reason: reasonKey,
-notes: additionalNotes.trim() ? additionalNotes.trim() : undefined,
-label: labelText,
-}),
-});
-
-if (!response.ok) {
-const errorData = await response.json().catch(() => null);
-const errorMessage = errorData?.error || `Failed to send email (${response.status}).`;
-throw new Error(errorMessage);
-}
-
-const result = await response.json().catch(() => ({}));
+const result = await apiPost(
+  `/orders/${orderId}/send-condition-email`,
+  {
+    reason: reasonKey,
+    notes: additionalNotes.trim() ? additionalNotes.trim() : undefined,
+    label: labelText,
+  },
+  { authRequired: true }
+);
 displayModalMessage(result.message || 'Email sent successfully.', 'success');
 openOrderDetailsModal(orderId);
 } catch (error) {
@@ -7700,15 +7465,15 @@ let method = 'PUT';
 
 switch(actionType) {
 case 'generateLabel':
-url = `${BACKEND_BASE_URL}/generate-label/${orderId}`;
+url = `/generate-label/${orderId}`;
 method = 'POST';
 break;
 case 'markReceived':
-url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
+url = `/orders/${orderId}/status`;
 body = { status: 'received' };
 break;
 case 'markCompleted':
-url = `${BACKEND_BASE_URL}/orders/${orderId}/status`;
+url = `/orders/${orderId}/status`;
 body = { status: 'completed' };
 break;
 case 'payNow':
@@ -7728,19 +7493,19 @@ modalActionButtons.classList.remove('hidden');
 updateReminderButtons(targetOrder);
 return;
 case 'sendReturnLabel':
-url = `${BACKEND_BASE_URL}/orders/${orderId}/return-label`;
+url = `/orders/${orderId}/return-label`;
 method = 'POST';
 break;
 case 'markKitSent':
-url = `${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-sent`;
+url = `/orders/${orderId}/mark-kit-sent`;
 method = 'POST';
 break;
 case 'sendReviewRequest':
-url = `${BACKEND_BASE_URL}/orders/${orderId}/send-review-request`;
+url = `/orders/${orderId}/send-review-request`;
 method = 'POST';
 break;
 case 'autoRequote':
-url = `${BACKEND_BASE_URL}/orders/${orderId}/auto-requote`;
+url = `/orders/${orderId}/auto-requote`;
 method = 'POST';
 if (body === null) {
 body = {};
@@ -7757,14 +7522,14 @@ break;
     body = { orderId, type: 'email' };
     break;
   case 'cancelOrder':
-    url = `${BACKEND_BASE_URL}/orders/${orderId}/cancel`;
+    url = `/orders/${orderId}/cancel`;
     method = 'POST';
     if (body === null) {
       body = {};
 }
 break;
 case 'deleteOrder': // NEW: Delete Order Logic
-url = `${BACKEND_BASE_URL}/orders/${orderId}`;
+url = `/orders/${orderId}`;
 method = 'DELETE';
 break;
 default:
@@ -7772,18 +7537,18 @@ throw new Error('Unknown action.');
 }
 
 console.log(`Performing action ${actionType} to:`, url);
-const response = await fetch(url, {
-method: method,
-headers: { 'Content-Type': 'application/json' },
-body: method === 'GET' || method === 'HEAD' ? null : (body ? JSON.stringify(body) : null)
-});
-
-if (!response.ok) {
-const errorText = await response.text();
-console.error("Backend error response for action:", response.status, errorText);
-throw new Error(errorText || `Failed to perform action: ${response.status} - ${errorText.substring(0, 100)}`);
+let result;
+if (method === 'GET') {
+result = await apiGet(url, { authRequired: true });
+} else if (method === 'POST') {
+result = await apiPost(url, body || {}, { authRequired: true });
+} else if (method === 'PUT') {
+result = await apiPut(url, body || {}, { authRequired: true });
+} else if (method === 'DELETE') {
+result = await apiDelete(url, body || {}, { authRequired: true });
+} else {
+throw new Error(`Unsupported method ${method}`);
 }
-const result = await response.json();
 
 displayModalMessage(result.message, 'success');
 
@@ -7850,11 +7615,11 @@ updateReminderButtons(order);
 async function markKitAsPrinted(orderId) {
 const endpoints = [
 {
-url: `${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-printed`,
+url: `/orders/${orderId}/mark-kit-printed`,
 fallbackMessage: 'Order marked as kit sent after printing.'
 },
 {
-url: `${BACKEND_BASE_URL}/orders/${orderId}/mark-kit-sent`,
+url: `/orders/${orderId}/mark-kit-sent`,
 fallbackMessage: 'Order marked as kit sent.'
 }
 ];
@@ -7865,32 +7630,7 @@ for (let index = 0; index < endpoints.length; index++) {
 const { url, fallbackMessage } = endpoints[index];
 
 try {
-const response = await fetch(url, {
-method: 'POST'
-});
-
-const rawBody = await response.text();
-let result = {};
-
-if (rawBody) {
-try {
-result = JSON.parse(rawBody);
-} catch (parseError) {
-result = { message: rawBody };
-}
-}
-
-if (!response.ok) {
-const errorMessage = result.error || result.message || 'Failed to update kit status';
-
-if (response.status === 404 && index < endpoints.length - 1) {
-lastError = new Error(errorMessage);
-continue;
-}
-
-throw new Error(errorMessage);
-}
-
+const result = await apiPost(url, {}, { authRequired: true });
 const successMessage = result.message || fallbackMessage;
 
 if (!orderDetailsModal.classList.contains('hidden') && modalOrderId.textContent === orderId) {
@@ -7901,6 +7641,9 @@ openOrderDetailsModal(orderId);
 return true;
 } catch (error) {
 lastError = error;
+if (error?.status === 404 && index < endpoints.length - 1) {
+continue;
+}
 console.error('Failed to mark kit as printed via', url, error);
 }
 }
@@ -7930,8 +7673,7 @@ sendReminderBtn.disabled = true;
 sendReminderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending...</span>';
 modalMessage.classList.add('hidden');
 
-const sendReminderEmail = httpsCallable(functions, 'sendReminderEmail');
-const result = await sendReminderEmail({ orderId });
+const result = await apiPost('/admin/reminders/send', { orderId }, { authRequired: true });
 
 displayModalMessage('Reminder email sent successfully!', 'success');
 sendReminderBtn.innerHTML = '<i class="fas fa-check"></i><span>Email Sent!</span>';
@@ -7957,8 +7699,7 @@ sendExpiringReminderBtn.disabled = true;
 sendExpiringReminderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending...</span>';
 modalMessage.classList.add('hidden');
 
-const sendExpiringReminderEmail = httpsCallable(functions, 'sendExpiringReminderEmail');
-await sendExpiringReminderEmail({ orderId });
+await apiPost('/admin/reminders/send-expiring', { orderId }, { authRequired: true });
 
 displayModalMessage('Expiration reminder email sent successfully!', 'success');
 sendExpiringReminderBtn.innerHTML = '<i class="fas fa-check"></i><span>Email Sent!</span>';
@@ -7984,8 +7725,7 @@ sendKitReminderBtn.disabled = true;
 sendKitReminderBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending...</span>';
 modalMessage.classList.add('hidden');
 
-const sendKitReminderEmail = httpsCallable(functions, 'sendKitReminderEmail');
-await sendKitReminderEmail({ orderId });
+await apiPost('/admin/reminders/send-kit', { orderId }, { authRequired: true });
 
 displayModalMessage('Kit follow-up email sent successfully!', 'success');
 sendKitReminderBtn.innerHTML = '<i class="fas fa-check"></i><span>Email Sent!</span>';
@@ -8206,7 +7946,6 @@ try {
 const app = firebaseApp;
 db = getFirestore(app);
 auth = getAuth(app);
-functions = getFunctions(app);
 if (pendingImeiOrder) {
   const orderNeedingImeiListener = pendingImeiOrder;
   pendingImeiOrder = null;

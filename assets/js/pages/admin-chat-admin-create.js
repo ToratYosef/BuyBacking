@@ -2,6 +2,7 @@
 
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { apiPost } from "/public/js/apiClient.js";
 
 // --- IMPORTANT: PASTE YOUR FIREBASE CONFIGURATION OBJECT HERE ---
 
@@ -97,28 +98,7 @@ submitBtn.innerHTML = `
 formMessage.textContent = '';
 
 try {
-// Get the ID token from the logged-in admin. This token is the proof
-// that an authorized user is making this request.
-const idToken = await currentUser.getIdToken();
-
-// The URL of your secure backend Cloud Function
-const cloudFunctionUrl = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api/create-admin';
-
-const response = await fetch(cloudFunctionUrl, {
-method: 'POST',
-headers: {
-'Content-Type': 'application/json',
-// The Authorization header is what your backend middleware will check.
-'Authorization': `Bearer ${idToken}`
-},
-body: JSON.stringify({ email, password, displayName })
-});
-
-const result = await response.json();
-
-if (!response.ok) {
-throw new Error(result.error || 'An unknown error occurred.');
-}
+const result = await apiPost('/create-admin', { email, password, displayName }, { authRequired: true });
 
 formMessage.textContent = `Successfully created admin: ${result.email}`;
 formMessage.className = "text-sm text-center text-green-600";

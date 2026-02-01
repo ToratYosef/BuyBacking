@@ -140,8 +140,8 @@
             <button id="retryBtn" type="button">Try Again</button>
         </div>
     </main>
-    <script>
-        const BACKEND_URL = 'https://us-central1-buyback-a0f05.cloudfunctions.net/api';
+    <script type="module">
+        import { apiGet, apiPost, apiRaw } from "/public/js/apiClient.js";
         const urlParams = new URLSearchParams(window.location.search);
         const orderId = urlParams.get('orderId');
 
@@ -183,13 +183,7 @@
             if (!latestOrder) return;
             toggleSyncButton(true);
             try {
-                const response = await fetch(`${BACKEND_URL}/orders/${latestOrder.id}/sync-outbound-tracking`, {
-                    method: 'POST',
-                });
-                if (!response.ok) {
-                    throw new Error(`Sync failed (${response.status})`);
-                }
-                const payload = await response.json();
+                const payload = await apiPost(`/orders/${latestOrder.id}/sync-outbound-tracking`, {}, { authRequired: true });
                 updateOrderSummary(payload.tracking, payload.status);
                 setStatus('Tracking refreshed');
             } catch (error) {
@@ -223,11 +217,7 @@
         }
 
         async function fetchOrder(id) {
-            const response = await fetch(`${BACKEND_URL}/orders/${encodeURIComponent(id)}`);
-            if (!response.ok) {
-                throw new Error(`Failed to load order (${response.status})`);
-            }
-            return response.json();
+            return apiGet(`/orders/${encodeURIComponent(id)}`, { authRequired: true });
         }
 
         async function hydrateOutboundLabel(order) {
@@ -253,11 +243,10 @@
                 currentBundleUrl = null;
             }
 
-            const response = await fetch(`${BACKEND_URL}/print-bundle/${encodeURIComponent(id)}`);
+            const response = await apiRaw(`/print-bundle/${encodeURIComponent(id)}`, { authRequired: true });
             if (!response.ok) {
                 throw new Error(`Print bundle failed to generate (${response.status})`);
             }
-
             const blob = await response.blob();
             currentBundleUrl = URL.createObjectURL(blob);
             pdfFrame.src = currentBundleUrl;
@@ -315,12 +304,7 @@
         async function markKitAsSent() {
             try {
                 setStatus('Marking kit as sent…');
-                const response = await fetch(`${BACKEND_URL}/orders/${encodeURIComponent(latestOrder.id)}/mark-kit-sent`, {
-                    method: 'POST',
-                });
-                if (!response.ok) {
-                    throw new Error(`Failed with status ${response.status}`);
-                }
+                await apiPost(`/orders/${encodeURIComponent(latestOrder.id)}/mark-kit-sent`, {}, { authRequired: true });
                 latestOrder.status = 'kit_sent';
                 updateOrderSummary(null, latestOrder.status);
                 setStatus('Kit marked as sent');
