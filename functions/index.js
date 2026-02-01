@@ -561,7 +561,7 @@ app.use((req, res, next) => {
   return cors(corsOptions)(req, res, next);
 });
 
-app.options("*", cors(corsOptions));
+app.options(cors(corsOptions));
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
 
