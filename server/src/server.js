@@ -27,8 +27,10 @@ const app = express();
 const trustProxy = process.env.TRUST_PROXY;
 if (typeof trustProxy !== 'undefined') {
   app.set('trust proxy', trustProxy);
-} else {
+} else if (isServerless) {
   app.set('trust proxy', 1);
+} else {
+  app.set('trust proxy', false);
 }
 
 const corsOrigins = (process.env.CORS_ORIGIN || '')
@@ -53,6 +55,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.options((req, res) => res.sendStatus(204));
 
 const shouldRateLimit =
   !isServerless || String(process.env.RATE_LIMIT_ENABLE || '').toLowerCase() === 'true';
@@ -84,7 +87,7 @@ const apiBasePath = (() => {
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
     return '/';
   }
-  if (raw.includes('(') || raw.includes(')') || raw.includes('*') || raw.includes(':splat')) {
+  if (raw.includes('(') || raw.includes(')') || raw.includes('*') || raw.includes(':splat') || raw.includes('/:')) {
     return '/';
   }
   if (raw === ':' || raw === '/:') {
