@@ -565,7 +565,7 @@ app.options("*", cors(corsOptions));
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
 
-app.post("/verify-address", async (req, res) => {
+const handleVerifyAddress = async (req, res) => {
   const {
     streetAddress,
     addressUnit,
@@ -623,7 +623,10 @@ app.post("/verify-address", async (req, res) => {
       detail: error.response?.data || error.message,
     });
   }
-});
+};
+
+app.post("/verify-address", handleVerifyAddress);
+app.post("/api/verify-address", handleVerifyAddress);
 
 app.post("/checkImei", async (req, res) => {
   const {
