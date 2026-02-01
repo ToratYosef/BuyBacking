@@ -7,7 +7,7 @@ const { adminsCollection } = require('../helpers/db');
 // Authentication Middleware
 const verifyFirebaseToken = async (req, res, next) => {
     // The /submit-order route is public, so we bypass the check for it.
-    if (req.originalUrl === '/api/submit-order') {
+    if (req.originalUrl.endsWith('/submit-order')) {
         return next();
     }
     
