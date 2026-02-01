@@ -626,7 +626,6 @@ const handleVerifyAddress = async (req, res) => {
 };
 
 app.post("/verify-address", handleVerifyAddress);
-app.post("/api/verify-address", handleVerifyAddress);
 
 app.post("/checkImei", async (req, res) => {
   const {
