@@ -69,12 +69,32 @@ if (shouldRateLimit) {
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 
 app.get('/', (req, res) => {
-  res.status(200).send('BuyBack API is running. Try /api/health');
+  res.status(200).json({ ok: true });
 });
 
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-const apiBasePath = process.env.API_BASE_PATH || '/api';
+const apiBasePath = (() => {
+  const raw = typeof process.env.API_BASE_PATH === 'string'
+    ? process.env.API_BASE_PATH.trim()
+    : '';
+  if (!raw) {
+    return '/';
+  }
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return '/';
+  }
+  if (raw.includes('(') || raw.includes(')') || raw.includes('*') || raw.includes(':splat')) {
+    return '/';
+  }
+  if (raw === ':' || raw === '/:') {
+    return '/';
+  }
+  if (!raw.startsWith('/')) {
+    return `/${raw}`;
+  }
+  return raw;
+})();
 
 const apiRouter = express.Router();
 
@@ -103,7 +123,13 @@ const adminOnlyPaths = [
   /^\/admin\/reminders(\/|$)/,
 ];
 
-apiRouter.use(adminOnlyPaths, requireAdmin);
+apiRouter.use((req, res, next) => {
+  const shouldRequireAdmin = adminOnlyPaths.some((matcher) => matcher.test(req.path));
+  if (!shouldRequireAdmin) {
+    return next();
+  }
+  return requireAdmin(req, res, next);
+});
 
 apiRouter.get('/health', (req, res) => {
   res.json({ ok: true });
@@ -118,7 +144,8 @@ apiRouter.use(supportRouter);
 
 apiRouter.use(expressApp);
 
-app.use(apiBasePath, apiRouter);
+const mountPath = isServerless && apiBasePath === '/api' ? '/' : apiBasePath;
+app.use(mountPath, apiRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
