@@ -1,6 +1,7 @@
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { apiPost } from "/public/js/apiClient.js";
 
 // Firebase init
 const app = firebaseApp;
@@ -210,30 +211,19 @@ sendBatchBtn.addEventListener("click", async () => {
     return;
   }
 
-  const functionsUrl =
-    "https://us-central1-buyback-a0f05.cloudfunctions.net/api/send-email";
-
   try {
-    const response = await fetch(functionsUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    await apiPost(
+      "/send-email",
+      {
         to: toAddress,
         bcc: batch,
         subject,
         html: htmlContent,
-      }),
-    });
-
-    if (response.ok) {
-      statusMessage.textContent = `Batch ${currentBatchIndex + 1} sent (${batch.length} recipients).`;
-      statusMessage.style.color = "green";
-    } else {
-      const txt = await response.text();
-      console.error("Failed to send batch:", txt);
-      statusMessage.textContent = `Failed to send batch. Error: ${txt}`;
-      statusMessage.style.color = "red";
-    }
+      },
+      { authRequired: true }
+    );
+    statusMessage.textContent = `Batch ${currentBatchIndex + 1} sent (${batch.length} recipients).`;
+    statusMessage.style.color = "green";
   } catch (err) {
     console.error("Network/server error:", err);
     statusMessage.textContent = "Network error sending batch. Check console.";

@@ -398,6 +398,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { apiPost } from "/public/js/apiClient.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
@@ -582,25 +583,16 @@
         pendingEnteredAddress = null;
     };
     const verifyAddress = async (shippingInfo) => {
-        const response = await fetch('/api/verify-address', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                address: {
-                    streetAddress: shippingInfo.streetAddress,
-                    addressUnit: shippingInfo.addressUnit,
-                    city: shippingInfo.city,
-                    state: shippingInfo.state,
-                    zip: shippingInfo.zip,
-                    country: shippingInfo.country
-                }
-            })
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-            throw new Error(payload.error || 'Address validation failed');
-        }
-        return payload;
+        return apiPost('/verify-address', {
+            address: {
+                streetAddress: shippingInfo.streetAddress,
+                addressUnit: shippingInfo.addressUnit,
+                city: shippingInfo.city,
+                state: shippingInfo.state,
+                zip: shippingInfo.zip,
+                country: shippingInfo.country
+            }
+        }, { authRequired: false });
     };
     const ensureCartCondition = (item) => {
         const validKey = item.condition && CONDITION_LABELS[item.condition] ? item.condition : null;
@@ -875,16 +867,7 @@
                 createdAt: new Date().toISOString()
             };
 
-            const res = await fetch('https://us-central1-buyback-a0f05.cloudfunctions.net/api/submit-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(orderData)
-            });
-            const result = await res.json();
-            if (!res.ok) {
-                alert("Submission failed: " + result.error);
-                return;
-            }
+            const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
             const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
             const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';

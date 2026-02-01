@@ -1,24 +1,9 @@
 import { app, db } from "../firebase-config.js";
 import { gatherOrderLabelUrls, serialiseQueueOrder } from "/assets/js/pdf/order-labels.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { apiRaw } from "/public/js/apiClient.js";
 
 const auth = getAuth(app);
-
-function resolveBackendBaseUrl() {
-  if (typeof window !== "undefined" && window.location?.origin) {
-    const { origin } = window.location;
-
-    if (origin.includes("localhost")) {
-      return "http://localhost:5001/buyback-a0f05/us-central1/api";
-    }
-
-    return `${origin}/api`;
-  }
-
-  return "https://us-central1-buyback-a0f05.cloudfunctions.net/api";
-}
-
-const BACKEND_BASE_URL = resolveBackendBaseUrl();
 
 const PRINT_QUEUE_STATUSES = ["shipping_kit_requested", "kit_needs_printing", "needs_printing"];
 
@@ -381,33 +366,13 @@ function parseHeaderJson(value) {
 }
 
 async function authorisedFetch(path, options = {}) {
-  const user = auth.currentUser;
-  const headers = new Headers(options.headers || {});
-  if (user) {
-    try {
-      const token = await user.getIdToken();
-      headers.set("Authorization", `Bearer ${token}`);
-    } catch (error) {
-      console.error("Failed to resolve ID token for request:", error);
-    }
-  }
-
-  const isSameOriginApi =
-    typeof window !== "undefined" && BACKEND_BASE_URL.startsWith(window.location.origin);
-
-  const finalOptions = {
-    method: options.method || "GET",
-    headers,
-    body: options.body,
-    mode: isSameOriginApi ? "same-origin" : "cors",
-    // Use same-origin credentials when hitting the hosting rewrite to avoid
-    // cross-site preflight requirements; otherwise omit credentials to prevent
-    // Access-Control-Allow-Credentials failures against the Cloud Functions domain.
-    credentials: isSameOriginApi ? "same-origin" : "omit",
-  };
-
   try {
-    return await fetch(`${BACKEND_BASE_URL}${path}`, finalOptions);
+    return await apiRaw(path, {
+      method: options.method || "GET",
+      headers: options.headers || {},
+      body: options.body,
+      authRequired: true,
+    });
   } catch (error) {
     console.error("Network request failed:", { path, error });
     throw error;
