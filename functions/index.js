@@ -561,7 +561,7 @@ app.use((req, res, next) => {
   return cors(corsOptions)(req, res, next);
 });
 
-app.options("*", cors(corsOptions));
+app.options(cors(corsOptions));
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
 
@@ -626,7 +626,6 @@ const handleVerifyAddress = async (req, res) => {
 };
 
 app.post("/verify-address", handleVerifyAddress);
-app.post("/api/verify-address", handleVerifyAddress);
 
 app.post("/checkImei", async (req, res) => {
   const {
