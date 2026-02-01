@@ -11,7 +11,7 @@ if (!isServerless) {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 }
 
-const { createAuthGate, requireAdmin } = require('./middleware/auth');
+const { requireAuth, optionalAuth, requireAdmin } = require('./middleware/auth');
 const profileRouter = require('./routes/profile');
 const remindersRouter = require('./routes/reminders');
 const refreshTrackingRouter = require('./routes/refreshTracking');
@@ -27,8 +27,10 @@ const app = express();
 const trustProxy = process.env.TRUST_PROXY;
 if (typeof trustProxy !== 'undefined') {
   app.set('trust proxy', trustProxy);
-} else {
+} else if (isServerless) {
   app.set('trust proxy', 1);
+} else {
+  app.set('trust proxy', false);
 }
 
 const corsOrigins = (process.env.CORS_ORIGIN || '')
@@ -53,6 +55,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  return next();
+});
 
 const shouldRateLimit =
   !isServerless || String(process.env.RATE_LIMIT_ENABLE || '').toLowerCase() === 'true';
@@ -69,41 +77,79 @@ if (shouldRateLimit) {
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 
 app.get('/', (req, res) => {
-  res.status(200).send('BuyBack API is running. Try /api/health');
+  res.status(200).json({ ok: true });
 });
 
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-const apiBasePath = process.env.API_BASE_PATH || '/api';
+const apiBasePath = (() => {
+  const raw = typeof process.env.API_BASE_PATH === 'string'
+    ? process.env.API_BASE_PATH.trim()
+    : '';
+  if (!raw) {
+    return '/';
+  }
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    return '/';
+  }
+  if (raw.includes('(') || raw.includes(')') || raw.includes('*') || raw.includes(':splat') || raw.includes('/:')) {
+    return '/';
+  }
+  if (raw === ':' || raw === '/:') {
+    return '/';
+  }
+  if (!raw.startsWith('/')) {
+    return `/${raw}`;
+  }
+  return raw;
+})();
 
 const apiRouter = express.Router();
 
-const publicPaths = [
-  /^\/verify-address$/,
-  /^\/submit-order$/,
-  /^\/email-support$/,
-  /^\/submit-chat-feedback$/,
-  /^\/promo-codes\/[^/]+$/,
-  /^\/wholesale(\/|$)/,
+const publicExactPaths = new Set([
+  '/verify-address',
+  '/submit-order',
+  '/email-support',
+  '/submit-chat-feedback',
+]);
+const publicPrefixPaths = ['/promo-codes/', '/wholesale'];
+
+apiRouter.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  const path = req.path;
+  const isPublic =
+    publicExactPaths.has(path) ||
+    publicPrefixPaths.some((prefix) => path.startsWith(prefix));
+  if (isPublic) {
+    return optionalAuth(req, res, next);
+  }
+  return requireAuth(req, res, next);
+});
+
+const adminExactPaths = new Set([
+  '/checkImei',
+  '/create-admin',
+  '/send-email',
+]);
+const adminPrefixPaths = [
+  '/orders/needs-printing',
+  '/merge-print',
+  '/labels/print/queue',
+  '/admin/reminders',
 ];
 
-apiRouter.use(
-  createAuthGate({
-    publicPaths,
-  })
-);
-
-const adminOnlyPaths = [
-  /^\/orders\/needs-printing(\/|$)/,
-  /^\/merge-print(\/|$)/,
-  /^\/checkImei$/,
-  /^\/create-admin$/,
-  /^\/send-email$/,
-  /^\/labels\/print\/queue(\/|$)/,
-  /^\/admin\/reminders(\/|$)/,
-];
-
-apiRouter.use(adminOnlyPaths, requireAdmin);
+apiRouter.use((req, res, next) => {
+  const path = req.path;
+  const shouldRequireAdmin =
+    adminExactPaths.has(path) ||
+    adminPrefixPaths.some((prefix) => path.startsWith(prefix));
+  if (!shouldRequireAdmin) {
+    return next();
+  }
+  return requireAdmin(req, res, next);
+});
 
 apiRouter.get('/health', (req, res) => {
   res.json({ ok: true });
@@ -118,7 +164,8 @@ apiRouter.use(supportRouter);
 
 apiRouter.use(expressApp);
 
-app.use(apiBasePath, apiRouter);
+const mountPath = isServerless && apiBasePath === '/api' ? '/' : apiBasePath;
+app.use(mountPath, apiRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
