@@ -11,7 +11,7 @@ if (!isServerless) {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 }
 
-const { createAuthGate, requireAdmin } = require('./middleware/auth');
+const { requireAuth, optionalAuth, requireAdmin } = require('./middleware/auth');
 const profileRouter = require('./routes/profile');
 const remindersRouter = require('./routes/reminders');
 const refreshTrackingRouter = require('./routes/refreshTracking');
@@ -106,33 +106,45 @@ const apiBasePath = (() => {
 
 const apiRouter = express.Router();
 
-const publicPaths = [
-  /^\/verify-address$/,
-  /^\/submit-order$/,
-  /^\/email-support$/,
-  /^\/submit-chat-feedback$/,
-  /^\/promo-codes\/[^/]+$/,
-  /^\/wholesale(\/|$)/,
-];
+const publicExactPaths = new Set([
+  '/verify-address',
+  '/submit-order',
+  '/email-support',
+  '/submit-chat-feedback',
+]);
+const publicPrefixPaths = ['/promo-codes/', '/wholesale'];
 
-apiRouter.use(
-  createAuthGate({
-    publicPaths,
-  })
-);
+apiRouter.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  const path = req.path;
+  const isPublic =
+    publicExactPaths.has(path) ||
+    publicPrefixPaths.some((prefix) => path.startsWith(prefix));
+  if (isPublic) {
+    return optionalAuth(req, res, next);
+  }
+  return requireAuth(req, res, next);
+});
 
-const adminOnlyPaths = [
-  /^\/orders\/needs-printing(\/|$)/,
-  /^\/merge-print(\/|$)/,
-  /^\/checkImei$/,
-  /^\/create-admin$/,
-  /^\/send-email$/,
-  /^\/labels\/print\/queue(\/|$)/,
-  /^\/admin\/reminders(\/|$)/,
+const adminExactPaths = new Set([
+  '/checkImei',
+  '/create-admin',
+  '/send-email',
+]);
+const adminPrefixPaths = [
+  '/orders/needs-printing',
+  '/merge-print',
+  '/labels/print/queue',
+  '/admin/reminders',
 ];
 
 apiRouter.use((req, res, next) => {
-  const shouldRequireAdmin = adminOnlyPaths.some((matcher) => matcher.test(req.path));
+  const path = req.path;
+  const shouldRequireAdmin =
+    adminExactPaths.has(path) ||
+    adminPrefixPaths.some((prefix) => path.startsWith(prefix));
   if (!shouldRequireAdmin) {
     return next();
   }
