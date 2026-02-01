@@ -55,7 +55,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options((req, res) => res.sendStatus(204));
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  return next();
+});
 
 const shouldRateLimit =
   !isServerless || String(process.env.RATE_LIMIT_ENABLE || '').toLowerCase() === 'true';
