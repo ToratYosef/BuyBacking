@@ -565,6 +565,69 @@ app.options("*", cors(corsOptions));
 app.use(express.json());
 app.use('/wholesale', wholesaleRouter);
 
+const handleVerifyAddress = async (req, res) => {
+  const {
+    streetAddress,
+    addressUnit,
+    city,
+    state,
+    zip,
+    country,
+  } = req.body?.address || {};
+
+  if (!streetAddress || !city || !state || !zip) {
+    return res.status(400).json({ error: "Missing required address fields." });
+  }
+
+  const shipengineKey = getShipEngineApiKey();
+  if (!shipengineKey) {
+    return res.status(500).json({ error: "ShipEngine API key not configured." });
+  }
+
+  const payload = [
+    {
+      address_line1: streetAddress,
+      address_line2: addressUnit || "",
+      city_locality: city,
+      state_province: state,
+      postal_code: zip,
+      country_code: country || "US",
+    },
+  ];
+
+  try {
+    const response = await axios.post(
+      `${SHIPENGINE_API_BASE_URL}/addresses/validate`,
+      payload,
+      { headers: { "API-Key": shipengineKey } }
+    );
+
+    const result = Array.isArray(response.data) ? response.data[0] : response.data;
+    const status = String(
+      result?.status || result?.status_code || result?.validation_status || ""
+    ).toLowerCase();
+
+    return res.json({
+      status,
+      originalAddress: result?.original_address || payload[0],
+      matchedAddress: result?.matched_address || null,
+      messages: result?.messages || [],
+    });
+  } catch (error) {
+    console.error(
+      "ShipEngine address validation failed:",
+      error.response?.data || error.message
+    );
+    return res.status(502).json({
+      error: "Address validation failed.",
+      detail: error.response?.data || error.message,
+    });
+  }
+};
+
+app.post("/verify-address", handleVerifyAddress);
+app.post("/api/verify-address", handleVerifyAddress);
+
 app.post("/checkImei", async (req, res) => {
   const {
     orderId: requestOrderId,
