@@ -123,7 +123,13 @@ const adminOnlyPaths = [
   /^\/admin\/reminders(\/|$)/,
 ];
 
-apiRouter.use(adminOnlyPaths, requireAdmin);
+apiRouter.use((req, res, next) => {
+  const shouldRequireAdmin = adminOnlyPaths.some((matcher) => matcher.test(req.path));
+  if (!shouldRequireAdmin) {
+    return next();
+  }
+  return requireAdmin(req, res, next);
+});
 
 apiRouter.get('/health', (req, res) => {
   res.json({ ok: true });
