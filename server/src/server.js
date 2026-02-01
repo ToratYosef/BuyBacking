@@ -2,7 +2,14 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+
+const isServerless = Boolean(
+  process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME
+);
+
+if (!isServerless) {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+}
 
 const { createAuthGate, requireAdmin } = require('./middleware/auth');
 const profileRouter = require('./routes/profile');
@@ -47,19 +54,25 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-const limiter = rateLimit({
-  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 900000),
-  max: Number(process.env.RATE_LIMIT_MAX || 300),
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const shouldRateLimit =
+  !isServerless || String(process.env.RATE_LIMIT_ENABLE || '').toLowerCase() === 'true';
+if (shouldRateLimit) {
+  const limiter = rateLimit({
+    windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 900000),
+    max: Number(process.env.RATE_LIMIT_MAX || 300),
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
 
-app.use(limiter);
+  app.use(limiter);
+}
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 
-app.get('/health', (req, res) => {
-  res.json({ ok: true, status: 'healthy' });
+app.get('/', (req, res) => {
+  res.status(200).send('BuyBack API is running. Try /api/health');
 });
+
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 const apiBasePath = process.env.API_BASE_PATH || '/api';
 
@@ -92,6 +105,10 @@ const adminOnlyPaths = [
 
 apiRouter.use(adminOnlyPaths, requireAdmin);
 
+apiRouter.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
+
 apiRouter.use(profileRouter);
 apiRouter.use(remindersRouter);
 apiRouter.use(refreshTrackingRouter);
@@ -106,7 +123,11 @@ app.use(apiBasePath, apiRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-const port = Number(process.env.PORT || 3001);
-app.listen(port, () => {
-  console.log(`API server listening on port ${port}`);
-});
+if (!isServerless && require.main === module) {
+  const port = Number(process.env.PORT || 3001);
+  app.listen(port, () => {
+    console.log(`API server listening on port ${port}`);
+  });
+}
+
+module.exports = app;
