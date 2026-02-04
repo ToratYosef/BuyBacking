@@ -531,9 +531,20 @@ const allowedOrigins = [
   "https://www.secondhandcell.com",
 ];
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  try {
+    const parsed = new URL(origin);
+    return parsed.hostname.endsWith(".netlify.app");
+  } catch (error) {
+    return false;
+  }
+};
+
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
     return callback(new Error("Not allowed by CORS"));
@@ -544,7 +555,7 @@ const corsOptions = {
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     res.header("Access-Control-Allow-Origin", origin);
   }
   res.header("Vary", "Origin");
