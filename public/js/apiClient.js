@@ -3,10 +3,15 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth
 
 const auth = getAuth(firebaseApp);
 
+const defaultApiBase =
+  typeof window !== "undefined" && window.location.hostname.endsWith("netlify.app")
+    ? "/.netlify/functions/api"
+    : "/api";
+
 let apiBase =
   (typeof window !== "undefined" &&
     (window.SHC_API_BASE_URL || window.API_BASE_URL || window.API_BASE)) ||
-  "/api";
+  defaultApiBase;
 
 export function setApiBase(nextBase) {
   if (nextBase) {
