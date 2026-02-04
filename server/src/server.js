@@ -3,9 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
-const isServerless = Boolean(
-  process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME
-);
+const isServerless = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
 
 if (!isServerless) {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
