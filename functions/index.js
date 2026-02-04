@@ -534,12 +534,7 @@ const allowedOrigins = [
 const isAllowedOrigin = (origin) => {
   if (!origin) return true;
   if (allowedOrigins.includes(origin)) return true;
-  try {
-    const parsed = new URL(origin);
-    return parsed.hostname.endsWith(".netlify.app");
-  } catch (error) {
-    return false;
-  }
+  return false;
 };
 
 const corsOptions = {
