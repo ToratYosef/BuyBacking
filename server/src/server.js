@@ -3,7 +3,9 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
-const isServerless = Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+const isServerless = Boolean(
+  process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME
+);
 
 if (!isServerless) {
   require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -18,30 +20,60 @@ const adminUsersRouter = require('./routes/adminUsers');
 const supportRouter = require('./routes/support');
 const { notFoundHandler, errorHandler } = require('./utils/errors');
 
-const { expressApp } = require('../../functions/index.js');
+const { expressApp } = require('../functions/index.js');
 
 const app = express();
 
-const trustProxy = process.env.TRUST_PROXY;
+function normalizeTrustProxy(value) {
+  if (typeof value === 'undefined') {
+    return undefined;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+  if (['false', '0', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+  if (['true', '1', 'yes', 'on'].includes(normalized)) {
+    return 1;
+  }
+  if (/^\d+$/.test(normalized)) {
+    return Number(normalized);
+  }
+  return value;
+}
+
+const trustProxy = normalizeTrustProxy(process.env.TRUST_PROXY);
 if (typeof trustProxy !== 'undefined') {
   app.set('trust proxy', trustProxy);
 } else if (isServerless) {
   app.set('trust proxy', 1);
 } else {
-  app.set('trust proxy', false);
+  app.set('trust proxy', 1);
 }
+
+const defaultCorsOrigins = [
+  'https://secondhandcell.com',
+  'https://www.secondhandcell.com',
+];
 
 const corsOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const allowedCorsOrigins = new Set([
+  ...defaultCorsOrigins,
+  ...corsOrigins,
+]);
+
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) {
       return callback(null, true);
     }
-    if (corsOrigins.length === 0 || corsOrigins.includes(origin)) {
+    if (allowedCorsOrigins.has(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
@@ -65,6 +97,13 @@ if (shouldRateLimit) {
     max: Number(process.env.RATE_LIMIT_MAX || 300),
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => {
+      const trustProxySetting = app.get('trust proxy');
+      if (trustProxySetting) {
+        return req.ip;
+      }
+      return req.socket?.remoteAddress || req.ip || 'unknown';
+    },
   });
 
   app.use(limiter);
@@ -82,16 +121,16 @@ const apiBasePath = (() => {
     ? process.env.API_BASE_PATH.trim()
     : '';
   if (!raw) {
-    return '/';
+    return '/server';
   }
   if (raw.startsWith('http://') || raw.startsWith('https://')) {
-    return '/';
+    return '/server';
   }
   if (raw.includes('(') || raw.includes(')') || raw.includes('*') || raw.includes(':splat') || raw.includes('/:')) {
-    return '/';
+    return '/server';
   }
   if (raw === ':' || raw === '/:') {
-    return '/';
+    return '/server';
   }
   if (!raw.startsWith('/')) {
     return `/${raw}`;

@@ -1,7 +1,7 @@
 const functions = require("firebase-functions/v1");
 const express = require("express");
 const cors = require("cors");
-const admin = require("firebase-admin"); // <-- Required here
+const { admin, initFirebaseAdmin } = require("./helpers/firebaseAdmin");
 const axios = require("axios");
 const nodemailer = require("nodemailer");
 const { randomUUID } = require("crypto");
@@ -29,9 +29,7 @@ const wholesaleRouter = require('./routes/wholesale'); // <-- wholesale.js is lo
 const createEmailsRouter = require('./routes/emails');
 const createOrdersRouter = require('./routes/orders');
 
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+initFirebaseAdmin();
 const {
   reserveFakeProfiles,
   buildFakeOrderPayload,
@@ -1841,28 +1839,20 @@ const stateAbbreviations = {
 
 async function generateNextOrderNumber() {
   const counterRef = db.collection("counters").doc("orders");
+  const incrementByOne = admin.firestore.FieldValue.increment(1);
 
   try {
-    const newOrderNumber = await db.runTransaction(async (transaction) => {
-      const counterDoc = await transaction.get(counterRef);
+    await counterRef.set({ currentNumber: incrementByOne }, { merge: true });
 
-      const currentNumber = counterDoc.exists
-        ? counterDoc.data().currentNumber ?? 0
-        : 0;
+    const counterDoc = await counterRef.get();
+    const nextNumberRaw = Number(counterDoc.data()?.currentNumber);
+    const nextNumber = Number.isFinite(nextNumberRaw) ? nextNumberRaw : 1;
+    const currentNumber = Math.max(0, nextNumber - 1);
+    const paddedNumber = String(currentNumber).padStart(5, "0");
 
-      transaction.set(
-        counterRef,
-        { currentNumber: currentNumber + 1 },
-        { merge: true }
-      );
-
-      const paddedNumber = String(currentNumber).padStart(5, "0");
-      return `SHC-${paddedNumber}`;
-    });
-
-    return newOrderNumber;
+    return `SHC-${paddedNumber}`;
   } catch (e) {
-    console.error("Transaction to generate order number failed:", e);
+    console.error("Failed to generate order number:", e);
     throw new Error("Failed to generate a unique order number. Please try again.");
   }
 }
@@ -2751,59 +2741,10 @@ function getReturnCountdownStartMillis(order = {}) {
 
 // Custom function to send FCM push notification to a specific token or list of tokens
 async function sendPushNotification(tokens, title, body, data = {}) {
-  try {
-    const tokenList = Array.isArray(tokens) ? tokens : [tokens];
-    if (!tokenList.length) return;
-
-    // Send data-only message (no notification field) to prevent duplicate notifications
-    // The service worker will handle displaying the notification with proper icon
-    const message = {
-      data: stringifyData({ 
-        ...data, 
-        title: title, 
-        body: body 
-      }), // Include title and body in data payload
-      tokens: tokenList,
-    };
-
-    const response = await admin.messaging().sendEachForMulticast(message);
-    console.log(
-      "Successfully sent FCM messages:",
-      response.successCount,
-      "failures:",
-      response.failureCount
-    );
-
-    const tokensToRemove = [];
-    if (response.failureCount > 0) {
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          console.error(
-            `Failed to send FCM to token ${tokenList[idx]}: ${resp.error}`
-          );
-          // Check for token invalidation errors (e.g., 'messaging/registration-token-not-registered')
-          if (resp.error?.code === 'messaging/registration-token-not-registered' || 
-              resp.error?.code === 'messaging/invalid-argument') {
-            tokensToRemove.push(tokenList[idx]);
-          }
-        }
-      });
-    }
-
-    // Prune invalid tokens from Firestore
-    if (tokensToRemove.length > 0) {
-      console.log(`Pruning ${tokensToRemove.length} invalid FCM tokens.`);
-      await admin.messaging().deleteRegistrationTokens(tokensToRemove);
-      
-      // OPTIONAL: Also delete token documents from the 'fcmTokens' subcollection
-      // This part requires knowing the Admin UID, which we don't have here. 
-      // The FCM deleteRegistrationTokens call cleans up the backend registration, which is essential.
-    }
-
-    return response;
-  } catch (error) {
-    console.error("Error sending FCM push notification:", error);
-  }
+  console.warn(
+    'Skipping Firebase push notification send; Firebase notifications are disabled.'
+  );
+  return null;
 }
 
 async function sendLabelReminderEmail(order, { tier = 1 } = {}) {
@@ -2856,38 +2797,10 @@ async function sendLabelReminderEmail(order, { tier = 1 } = {}) {
 
 // Re-using and slightly updating the old sendAdminPushNotification to fetch ALL admin tokens.
 async function sendAdminPushNotification(title, body, data = {}) {
-  try {
-    const adminsSnapshot = await adminsCollection.get();
-    let allTokens = [];
-
-    for (const adminDoc of adminsSnapshot.docs) {
-      const adminUid = adminDoc.id;
-      const fcmTokensRef = adminsCollection.doc(adminUid).collection("fcmTokens");
-      const tokensSnapshot = await fcmTokensRef.get();
-      
-      // FIX: Safely retrieve the token, checking doc.data().token or using doc.id
-      tokensSnapshot.forEach((doc) => {
-        const d = doc.data() || {};
-        // The token is stored either as the document ID or explicitly in a 'token' field.
-        const token = d.token || doc.id; 
-        if (token && typeof token === 'string') {
-            allTokens.push(token);
-        }
-      });
-    }
-
-    if (allTokens.length === 0) {
-      console.log(
-        "No FCM tokens found for any admin. Cannot send push notification."
-      );
-      return;
-    }
-    
-    return await sendPushNotification(allTokens, title, body, data);
-    
-  } catch (error) {
-    console.error("Error sending FCM push notification to all admins:", error);
-  }
+  console.warn(
+    'Skipping Firebase admin push notification; Firebase notifications are disabled.'
+  );
+  return null;
 }
 
 async function addAdminFirestoreNotification(
@@ -2897,27 +2810,10 @@ async function addAdminFirestoreNotification(
   relatedDocId = null,
   relatedUserId = null
 ) {
-  try {
-    const notificationsCollectionRef = db.collection(
-      `admins/${adminUid}/notifications`
-    );
-    await notificationsCollectionRef.add({
-      message: message,
-      isRead: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      relatedDocType: relatedDocType,
-      relatedDocId: relatedDocId,
-      relatedUserId: relatedUserId,
-    });
-    console.log(
-      `Firestore notification added for admin ${adminUid}: ${message}`
-    );
-  } catch (error) {
-    console.error(
-      `Error adding Firestore notification for admin ${adminUid}:`,
-      error
-    );
-  }
+  console.warn(
+    'Skipping Firebase Firestore notification; Firebase notifications are disabled.'
+  );
+  return null;
 }
 
 async function createShipEngineLabel(fromAddress, toAddress, labelReference, packageData) {
