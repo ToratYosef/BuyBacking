@@ -7133,7 +7133,7 @@ function renderActionButtons(order) {
 
   const appendPostReceivedActions = () => {
     receivedActions.push(
-      createButton('Start QC Intake', () => openQcModal(order), 'bg-sky-600 hover:bg-sky-700')
+      createButton('Start QC', () => openQcModal(order), 'bg-sky-600 hover:bg-sky-700')
     );
     [
       { label: 'Email Outstanding Balance Notice', reason: 'outstanding_balance', className: 'bg-amber-600 hover:bg-amber-700' },
