@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin New - Route & Action Control Center</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --card: #121932;
+      --card2: #1a2447;
+      --text: #e8edff;
+      --muted: #9db0ec;
+      --line: #2b396b;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --accent: #60a5fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(180deg, #070b17 0%, var(--bg) 100%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1300px; margin: 0 auto; padding: 24px; }
+    .hero {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(160deg, #111a36, #0f1730);
+      margin-bottom: 16px;
+    }
+    h1 { margin: 0 0 8px; font-size: 30px; }
+    p { margin: 0; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 960px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .card h2 { margin: 0 0 10px; font-size: 18px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+    .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+    button {
+      border: 1px solid #37509b;
+      color: #eaf0ff;
+      background: #1e2c58;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover { background: #273b76; }
+    .muted { background: #18234a; }
+    .warn { border-color: #895f0b; background: #3a2a0c; }
+    .danger { border-color: #93343f; background: #3e1318; }
+    .ok { border-color: #2a7f44; background: #133020; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    input, select, textarea {
+      width: 100%;
+      background: var(--card2);
+      border: 1px solid var(--line);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 13px;
+    }
+    textarea { min-height: 80px; resize: vertical; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 8px; }
+    th { color: #b8c7f8; font-weight: 600; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
+    .log {
+      margin-top: 14px;
+      background: #060b19;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      min-height: 140px;
+      max-height: 260px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    .footnote { margin-top: 10px; color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>Admin New: Clean Rebuild Starter</h1>
+      <p>Single-page control center that includes all documented admin routes and all admin order-page buttons so you can rebuild flows cleanly from scratch.</p>
+    </section>
+
+    <section class="card" style="margin-bottom:16px;">
+      <h2>Quick Test Payload</h2>
+      <div class="row">
+        <input id="orderId" placeholder="order id (e.g. A1001)" value="ORDER_ID" />
+        <input id="userId" placeholder="user id" value="USER_ID" />
+      </div>
+      <div class="row">
+        <input id="identifier" placeholder="order/email/phone identifier" value="test@example.com" />
+        <input id="apiBase" placeholder="api base" value="/api" />
+      </div>
+      <div class="row">
+        <select id="statusSelect">
+          <option>order_pending</option><option>kit_needs_printing</option><option>kit_sent</option><option>kit_delivered</option>
+          <option>label_generated</option><option>phone_on_the_way</option><option>received</option><option>completed</option>
+          <option>re-offered-pending</option><option>return-label-generated</option><option>cancelled</option>
+        </select>
+        <input id="routeParam" placeholder="generic route param" value="VALUE" />
+      </div>
+      <textarea id="jsonBody" placeholder="JSON body for generic route tests">{"status":"received"}</textarea>
+      <div class="btns" style="margin-top:8px">
+        <button class="ok" id="clearLog">Clear log</button>
+      </div>
+      <div class="log" id="log"></div>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Top-Level / Static Admin Buttons</h2>
+        <p class="sub">Equivalent to banner/filter/bulk/pagination controls from existing admin page.</p>
+        <div class="btns">
+          <button data-ui="apply-ship48">Apply SHIP48</button>
+          <button data-ui="start-quote">Start my quote now</button>
+          <button data-ui="dismiss-ship48" class="muted">Dismiss banner</button>
+          <button data-ui="filter-all">Filter: All</button>
+          <button data-ui="filter-order_pending">Filter: Order Pending</button>
+          <button data-ui="filter-kit_needs_printing">Filter: Needs Printing</button>
+          <button data-ui="filter-kit_sent">Filter: Kit Sent</button>
+          <button data-ui="filter-kit_delivered">Filter: Kit Delivered</button>
+          <button data-ui="filter-label_generated">Filter: Label Generated</button>
+          <button data-ui="filter-phone_on_the_way">Filter: Phone On The Way</button>
+          <button data-ui="filter-received">Filter: Received</button>
+          <button data-ui="filter-completed">Filter: Completed</button>
+          <button data-ui="filter-reoffered">Filter: Reoffer Pending</button>
+          <button data-ui="filter-return-label">Filter: Return Label</button>
+          <button data-ui="filter-cancelled">Filter: Canceled</button>
+          <button data-route="/refresh-tracking" data-method="POST" data-body='{"orderId":"{orderId}","type":"kit"}'>Refresh all kit tracking</button>
+          <button data-ui="separate-kit-orders">Separate kit orders</button>
+          <button data-route="/refresh-tracking" data-method="POST" data-body='{"orderId":"{orderId}","type":"email"}'>Refresh all email tracking</button>
+          <button data-route="/generate-label/{orderId}" data-method="POST" data-body='{}'>Bulk Generate Labels</button>
+          <button data-ui="open-text-import">Create Order from Text</button>
+          <button data-route="/orders/{orderId}/status" data-method="PUT" data-body='{"status":"{status}"}'>Apply bulk status</button>
+          <button data-ui="page-first">Page First</button>
+          <button data-ui="page-prev">Page Prev</button>
+          <button data-ui="page-next">Page Next</button>
+          <button data-ui="page-last">Page Last</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Order Details Modal: Fixed Buttons</h2>
+        <p class="sub">Core modal controls that are always present.</p>
+        <div class="btns">
+          <button data-ui="close-modal">Close modal</button>
+          <button data-ui="shipping-edit">Shipping Edit</button>
+          <button data-ui="shipping-add">Shipping Add Address</button>
+          <button data-route="/orders/{orderId}/shipping-info" data-method="PUT" data-body='{"fullName":"Test User","address1":"123 Test St","city":"Miami","state":"FL","zip":"33101"}'>Shipping Save</button>
+          <button data-ui="shipping-cancel" class="muted">Shipping Cancel</button>
+          <button data-route="/checkImei" data-method="POST" data-body='{"orderId":"{orderId}","imei":"123456789012345"}'>Check IMEI</button>
+          <button data-route="/orders/{orderId}/status" data-method="PUT" data-body='{"status":"{status}"}'>Status button update</button>
+          <button data-route="/refresh-tracking" data-method="POST" data-body='{"orderId":"{orderId}","type":"kit"}'>Refresh tracking (single order)</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Dynamic Action Buttons (Primary / Shipping / Post-Receive)</h2>
+        <p class="sub">Actions from the current `renderActionButtons` behavior.</p>
+        <div class="btns">
+          <button data-route="/generate-label/{orderId}" data-method="POST" data-body='{}'>Generate USPS Label</button>
+          <button data-route="/manual-fulfill/{orderId}" data-method="POST" data-body='{"outboundTrackingNumber":"9400OUT","inboundTrackingNumber":"9400IN","inboundLabelUrl":"https://example.com/label.pdf"}'>Order Manually Fulfilled</button>
+          <button data-route="/orders/{orderId}/mark-kit-sent" data-method="POST" data-body='{}'>Mark I Sent</button>
+          <button data-route="/orders/{orderId}/mark-kit-printed" data-method="POST" data-body='{}'>Mark Kit Printed</button>
+          <button data-route="/orders/{orderId}/status" data-method="PUT" data-body='{"status":"received"}'>Mark as Received</button>
+          <button data-route="/orders/{orderId}/status" data-method="PUT" data-body='{"status":"completed"}'>Mark as Completed</button>
+          <button data-route="/orders/{orderId}/re-offer" data-method="POST" data-body='{"newPrice":80,"reasons":["Condition lower than expected"],"comments":"Screen burn-in"}'>Propose Re-offer</button>
+          <button data-ui="pay-now">Pay Now</button>
+          <button data-ui="mark-paid">Mark Paid</button>
+          <button data-route="/orders/{orderId}/return-label" data-method="POST" data-body='{}'>Send Return Label</button>
+          <button data-route="/orders/{orderId}/send-review-request" data-method="POST" data-body='{}'>Send Review Request Email</button>
+          <button data-route="/orders/{orderId}/auto-requote" data-method="POST" data-body='{}'>Finalize 75% Reduced Payout</button>
+          <button data-route="/refresh-tracking" data-method="POST" data-body='{"orderId":"{orderId}","type":"kit"}'>Refresh Kit Tracking</button>
+          <button data-route="/refresh-tracking" data-method="POST" data-body='{"orderId":"{orderId}","type":"email"}'>Refresh Email Label Tracking</button>
+          <button data-route="/print-bundle/{orderId}" data-method="GET">Print Kit Docs / Print Document</button>
+          <button data-route="/fetch-pdf" data-method="POST" data-body='{"url":"https://example.com/label.pdf"}'>Print Packing Slip helper (fetch PDF)</button>
+          <button data-route="/orders/{orderId}/void-label" data-method="POST" data-body='{"labels":["primary"]}'>Void Shipping Labels</button>
+          <button data-route="/orders/{orderId}/clear-data" data-method="POST" data-body='{"selections":["trackingNumber"]}'>Clear Saved Shipping Data</button>
+          <button data-route="/orders/{orderId}/cancel" data-method="POST" data-body='{}' class="warn">Cancel Order</button>
+          <button data-route="/orders/{orderId}/cancel" data-method="POST" data-body='{"voidLabels":true}' class="warn">Cancel Order & Void Labels</button>
+          <button data-route="/orders/{orderId}" data-method="DELETE" data-body='{}' class="danger">Delete Order</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Condition Email Buttons</h2>
+        <p class="sub">All condition/problem email actions route through the same endpoint.</p>
+        <div class="btns">
+          <button data-route="/orders/{orderId}/send-condition-email" data-method="POST" data-body='{"reason":"outstanding_balance","label":"Email Outstanding Balance Notice"}'>Email Outstanding Balance Notice</button>
+          <button data-route="/orders/{orderId}/send-condition-email" data-method="POST" data-body='{"reason":"password_locked","label":"Email Password Lock Notice"}'>Email Password Lock Notice</button>
+          <button data-route="/orders/{orderId}/send-condition-email" data-method="POST" data-body='{"reason":"stolen","label":"Email Lost/Stolen Notice"}'>Email Lost/Stolen Notice</button>
+          <button data-route="/orders/{orderId}/send-condition-email" data-method="POST" data-body='{"reason":"fmi_active","label":"Email FMI / Activation Lock Notice"}'>Email FMI / Activation Lock Notice</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Reminder Buttons</h2>
+        <p class="sub">Reminder actions shown in current admin modal.</p>
+        <div class="btns">
+          <button data-route="/admin/reminders/send" data-method="POST" data-body='{"orderId":"{orderId}"}'>Send Reminder</button>
+          <button data-route="/admin/reminders/send-expiring" data-method="POST" data-body='{"orderId":"{orderId}"}'>Send Urgent Reminder</button>
+          <button data-route="/admin/reminders/send-kit" data-method="POST" data-body='{"orderId":"{orderId}"}'>Send Kit Reminder</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Other Admin Surface Routes</h2>
+        <p class="sub">Routes from print-label, print-queue, chat, and admin-create tools.</p>
+        <div class="btns" style="margin-bottom: 12px;">
+          <button data-route="/orders/{orderId}" data-method="GET">Get order by ID</button>
+          <button data-route="/orders/{orderId}/sync-outbound-tracking" data-method="POST" data-body='{}'>Sync outbound tracking</button>
+          <button data-route="/orders/needs-printing/bundle" data-method="GET">Print queue bundle</button>
+          <button data-route="/orders/find?identifier={identifier}" data-method="GET">Find order by identifier</button>
+          <button data-route="/orders/by-user/{userId}" data-method="GET">Orders by user</button>
+          <button data-route="/create-admin" data-method="POST" data-body='{"email":"newadmin@example.com","password":"TempPass123!","displayName":"Admin"}'>Create admin</button>
+          <button data-route="/send-email" data-method="POST" data-body='{"to":"test@example.com","subject":"Hello","body":"Test email"}'>Send email</button>
+          <button data-route="/feeds/feed.xml" data-method="GET">Fetch feed.xml</button>
+        </div>
+        <table>
+          <thead><tr><th>Area</th><th>Route</th><th>Method</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><span class="pill">Orders</span></td><td>/generate-label/:id</td><td>POST</td><td>Generate labels</td></tr>
+            <tr><td><span class="pill">Orders</span></td><td>/orders/:id/status</td><td>PUT</td><td>Status changes</td></tr>
+            <tr><td><span class="pill">Orders</span></td><td>/orders/:id/void-label</td><td>POST</td><td>Void labels</td></tr>
+            <tr><td><span class="pill">Orders</span></td><td>/orders/:id/clear-data</td><td>POST</td><td>Clear saved shipment data</td></tr>
+            <tr><td><span class="pill">Orders</span></td><td>/orders/:id/re-offer</td><td>POST</td><td>Re-offer workflow</td></tr>
+            <tr><td><span class="pill">Orders</span></td><td>/orders/:id/cancel</td><td>POST</td><td>Cancel flow</td></tr>
+            <tr><td><span class="pill">Orders</span></td><td>/orders/:id</td><td>DELETE</td><td>Delete order</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <p class="footnote">Tip: this page is intentionally route-complete and button-complete to speed up replacing the old admin UX with a cleaner architecture.</p>
+  </div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const orderIdEl = document.getElementById('orderId');
+    const userIdEl = document.getElementById('userId');
+    const identifierEl = document.getElementById('identifier');
+    const statusEl = document.getElementById('statusSelect');
+    const routeParamEl = document.getElementById('routeParam');
+    const jsonBodyEl = document.getElementById('jsonBody');
+    const apiBaseEl = document.getElementById('apiBase');
+
+    const log = (msg) => {
+      const t = new Date().toISOString().split('T')[1].slice(0,8);
+      logEl.textContent += `[${t}] ${msg}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    document.getElementById('clearLog').onclick = () => (logEl.textContent = '');
+
+    const applyTokens = (str) => String(str)
+      .replaceAll('{orderId}', orderIdEl.value.trim())
+      .replaceAll('{userId}', userIdEl.value.trim())
+      .replaceAll('{identifier}', encodeURIComponent(identifierEl.value.trim()))
+      .replaceAll('{status}', statusEl.value)
+      .replaceAll('{value}', routeParamEl.value.trim());
+
+    async function runRoute(route, method, bodyTemplate) {
+      const base = apiBaseEl.value.trim().replace(/\/$/, '');
+      const path = applyTokens(route);
+      const url = `${base}${path}`;
+      let body = null;
+
+      if (bodyTemplate) {
+        body = JSON.parse(applyTokens(bodyTemplate));
+      }
+
+      log(`→ ${method} ${url}`);
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: method === 'GET' ? undefined : JSON.stringify(body || {})
+        });
+        const ct = res.headers.get('content-type') || '';
+        const out = ct.includes('application/json') ? await res.json() : await res.text();
+        log(`← ${res.status} ${res.statusText}`);
+        log(typeof out === 'string' ? out.slice(0, 500) : JSON.stringify(out).slice(0, 500));
+      } catch (err) {
+        log(`✖ ${err.message}`);
+      }
+    }
+
+    document.querySelectorAll('button[data-route]').forEach((btn) => {
+      btn.addEventListener('click', () => runRoute(btn.dataset.route, btn.dataset.method || 'GET', btn.dataset.body || ''));
+    });
+
+    document.querySelectorAll('button[data-ui]').forEach((btn) => {
+      btn.addEventListener('click', () => log(`UI action clicked: ${btn.dataset.ui}`));
+    });
+
+    jsonBodyEl.addEventListener('blur', () => {
+      if (!jsonBodyEl.value.trim()) return;
+      try {
+        JSON.parse(jsonBodyEl.value);
+      } catch {
+        log('⚠ JSON Body box is not valid JSON.');
+      }
+    });
+
+    log('Admin New loaded. All documented routes + buttons are present.');
+  </script>
+</body>
+</html>
