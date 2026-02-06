@@ -579,6 +579,21 @@ const modalMessage = document.getElementById('modal-message');
 const modalActivityLog = document.getElementById('modal-activity-log');
 const modalActivityLogList = document.getElementById('modal-activity-log-list');
 
+const qcModal = document.getElementById('qc-modal');
+const qcModalOrderId = document.getElementById('qc-modal-order-id');
+const qcModalClose = document.getElementById('qc-modal-close');
+const qcPrevBtn = document.getElementById('qc-prev-btn');
+const qcNextBtn = document.getElementById('qc-next-btn');
+const qcSubmitBtn = document.getElementById('qc-submit-btn');
+const qcStepTitle = document.getElementById('qc-step-title');
+const qcSteps = qcModal ? Array.from(qcModal.querySelectorAll('[data-qc-step]')) : [];
+const qcLockedCarrierWrapper = document.getElementById('qc-locked-carrier-wrapper');
+const qcLockedCarrierSelect = document.getElementById('qc-locked-carrier');
+const qcEmailBalance = document.getElementById('qc-email-balance');
+const qcEmailFmi = document.getElementById('qc-email-fmi');
+const qcEmailPassword = document.getElementById('qc-email-password');
+const qcEmailStolen = document.getElementById('qc-email-stolen');
+
 const reofferFormContainer = document.getElementById('reoffer-form-container');
 const reofferNewPrice = document.getElementById('reoffer-new-price');
 const reofferComments = document.getElementById('reoffer-comments');
@@ -6806,6 +6821,246 @@ modalLoadingMessage.classList.add('hidden');
 }
 }
 
+let qcCurrentStep = 0;
+
+function resetQcForm() {
+if (!qcModal) return;
+qcModal.querySelectorAll('input[type="radio"]').forEach((input) => {
+input.checked = false;
+});
+qcModal.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+input.checked = false;
+});
+if (qcLockedCarrierSelect) {
+qcLockedCarrierSelect.value = '';
+}
+if (qcLockedCarrierWrapper) {
+qcLockedCarrierWrapper.classList.add('hidden');
+}
+}
+
+function updateQcStep(index) {
+if (!qcSteps.length) return;
+qcCurrentStep = Math.max(0, Math.min(index, qcSteps.length - 1));
+qcSteps.forEach((step, stepIndex) => {
+step.classList.toggle('active', stepIndex === qcCurrentStep);
+});
+if (qcStepTitle) {
+qcStepTitle.textContent = `Step ${qcCurrentStep + 1} of ${qcSteps.length}`;
+}
+if (qcPrevBtn) {
+qcPrevBtn.disabled = qcCurrentStep === 0;
+}
+if (qcNextBtn) {
+qcNextBtn.classList.toggle('hidden', qcCurrentStep === qcSteps.length - 1);
+}
+if (qcSubmitBtn) {
+qcSubmitBtn.classList.toggle('hidden', qcCurrentStep !== qcSteps.length - 1);
+}
+}
+
+function getQcRadioValue(name) {
+const selected = qcModal ? qcModal.querySelector(`input[name="${name}"]:checked`) : null;
+return selected ? selected.value : '';
+}
+
+function getCustomerQcSnapshot(order) {
+const cosmetic = resolveCosmeticCondition(order);
+const lockedCarrier = normalizeCarrierChoice(order?.carrier || '');
+return {
+overall: cosmetic ? cosmetic.toString().trim().toLowerCase() : '',
+cracked: order?.condition_cracks ? normalizeYesNo(order.condition_cracks).toString().toLowerCase() : '',
+functional: order?.condition_functional ? normalizeYesNo(order.condition_functional).toString().toLowerCase() : '',
+locked: lockedCarrier && lockedCarrier !== 'unlocked' ? 'yes' : 'no',
+lockedCarrier
+};
+}
+
+function normalizeCarrierChoice(value) {
+if (!value) return '';
+const normalized = value.toString().trim().toLowerCase();
+if (!normalized) return '';
+if (normalized.includes('att') || normalized.includes('at&t')) return 'att';
+if (normalized.includes('verizon')) return 'verizon';
+if (normalized.includes('tmobile') || normalized.includes('t-mobile')) return 'tmobile';
+if (normalized.includes('sprint')) return 'sprint';
+if (normalized.includes('other')) return 'other';
+if (normalized.includes('unlock')) return 'unlocked';
+return normalized.replace(/\s+/g, '');
+}
+
+function getQcConditionKey(conditionMap, qcResult) {
+if (!conditionMap) return '';
+const availableKeys = Object.keys(conditionMap);
+if (!availableKeys.length) return '';
+
+const degradeMap = {
+flawless: 'good',
+good: 'fair',
+fair: 'damaged',
+damaged: 'damaged'
+};
+let conditionKey = qcResult.overall || 'good';
+if (qcResult.defects === 'yes') {
+conditionKey = degradeMap[conditionKey] || conditionKey;
+}
+
+const candidates = [];
+if (qcResult.functional === 'no') {
+candidates.push('nopower', 'nonfunctional', 'damaged');
+}
+if (qcResult.cracked === 'yes') {
+candidates.push('cracked', 'crack', 'damaged');
+}
+candidates.push(conditionKey, 'good', 'fair', 'damaged');
+
+const normalizedCandidates = candidates.map((entry) => entry && entry.toLowerCase());
+for (const candidate of normalizedCandidates) {
+const match = availableKeys.find((key) => key.toLowerCase() === candidate);
+if (match) return match;
+}
+return availableKeys[0];
+}
+
+async function getQcSuggestedPrice(order, qcResult) {
+if (!order) return null;
+try {
+const pricingData = await loadFeedPricingData();
+const entry = getPricingEntryForOrder(pricingData, order);
+if (!entry) return null;
+
+const storageCandidates = [];
+if (order.storage) {
+storageCandidates.push(normalizeStorageKey(order.storage));
+const numericMatch = order.storage.match(/\d+/);
+if (numericMatch) {
+storageCandidates.push(normalizeStorageKey(`${numericMatch[0]}GB`));
+}
+}
+
+let storageEntry = null;
+for (const candidate of storageCandidates) {
+if (candidate && entry.storageMap[candidate]) {
+storageEntry = entry.storageMap[candidate];
+break;
+}
+}
+if (!storageEntry) return null;
+
+const carriers = storageEntry.carriers || {};
+const qcCarrierKey = qcResult.locked === 'yes'
+? (normalizeCarrierChoice(qcResult.lockedCarrier) || 'locked')
+: 'unlocked';
+const fallbackCarrierKey = normalizeCarrierChoice(order.carrier) || deriveCarrierKey(order.carrier);
+const carrierMap = carriers[qcCarrierKey] || carriers[fallbackCarrierKey] || carriers[Object.keys(carriers)[0]];
+if (!carrierMap) return null;
+
+const conditionKey = getQcConditionKey(carrierMap, qcResult);
+const suggestedPrice = carrierMap[conditionKey];
+return Number.isFinite(suggestedPrice) ? suggestedPrice : null;
+} catch (error) {
+console.error('Failed to compute QC suggested price:', error);
+return null;
+}
+}
+
+async function submitQcResults() {
+if (!qcModal || !currentOrderDetails) return;
+const qcResult = {
+overall: getQcRadioValue('qc-overall'),
+cracked: getQcRadioValue('qc-cracked'),
+defects: getQcRadioValue('qc-defects'),
+locked: getQcRadioValue('qc-locked'),
+lockedCarrier: qcLockedCarrierSelect?.value || '',
+balance: getQcRadioValue('qc-balance'),
+functional: getQcRadioValue('qc-functional'),
+fmi: getQcRadioValue('qc-fmi')
+};
+
+const requiredFields = ['overall', 'cracked', 'defects', 'locked', 'balance', 'functional', 'fmi'];
+const missing = requiredFields.filter((key) => !qcResult[key]);
+if (missing.length) {
+alert('Please answer all QC questions before finishing.');
+return;
+}
+
+if (qcResult.locked === 'yes' && !qcResult.lockedCarrier) {
+alert('Select the locked carrier before finishing QC.');
+return;
+}
+
+const customerSnapshot = getCustomerQcSnapshot(currentOrderDetails);
+const mismatches = [];
+if (customerSnapshot.overall && qcResult.overall && customerSnapshot.overall !== qcResult.overall) {
+mismatches.push('condition');
+}
+if (customerSnapshot.cracked && qcResult.cracked && customerSnapshot.cracked !== qcResult.cracked) {
+mismatches.push('cracks');
+}
+if (customerSnapshot.functional && qcResult.functional && customerSnapshot.functional !== qcResult.functional) {
+mismatches.push('functionality');
+}
+if (customerSnapshot.locked && qcResult.locked && customerSnapshot.locked !== qcResult.locked) {
+mismatches.push('carrier lock');
+}
+if (qcResult.locked === 'yes' && customerSnapshot.lockedCarrier && qcResult.lockedCarrier && customerSnapshot.lockedCarrier !== normalizeCarrierChoice(qcResult.lockedCarrier)) {
+mismatches.push('locked carrier');
+}
+
+if (qcEmailBalance?.checked) {
+sendConditionEmail(currentOrderDetails.id, 'outstanding_balance', 'Outstanding balance notice');
+}
+if (qcEmailFmi?.checked) {
+sendConditionEmail(currentOrderDetails.id, 'fmi_active', 'FMI / Activation lock notice');
+}
+if (qcEmailPassword?.checked) {
+sendConditionEmail(currentOrderDetails.id, 'password_locked', 'Password lock notice');
+}
+if (qcEmailStolen?.checked) {
+sendConditionEmail(currentOrderDetails.id, 'stolen', 'Lost/Stolen notice');
+}
+
+qcModal.classList.add('hidden');
+
+if (mismatches.length) {
+showReofferForm(currentOrderDetails.id);
+const suggestedPrice = await getQcSuggestedPrice(currentOrderDetails, qcResult);
+if (suggestedPrice !== null && reofferNewPrice) {
+reofferNewPrice.value = suggestedPrice.toFixed(2);
+}
+const summaryParts = [
+`QC condition: ${qcResult.overall}`,
+`Cracked: ${qcResult.cracked}`,
+`Screen defects: ${qcResult.defects}`,
+`Locked: ${qcResult.locked}${qcResult.lockedCarrier ? ` (${qcResult.lockedCarrier})` : ''}`,
+`Balance: ${qcResult.balance}`,
+`Functional: ${qcResult.functional}`,
+`FMI: ${qcResult.fmi}`
+];
+if (reofferComments) {
+reofferComments.value = `QC results differ from customer submission.\n${summaryParts.join('\n')}`;
+}
+displayModalMessage('QC differs from customer submission. Review the suggested re-offer below.', 'info');
+} else {
+displayModalMessage('QC checklist saved. No mismatch with customer submission.', 'success');
+}
+}
+
+function openQcModal(order) {
+if (!qcModal || !order) return;
+if (qcModalOrderId) {
+qcModalOrderId.textContent = `Order ${order.id}`;
+}
+resetQcForm();
+updateQcStep(0);
+qcModal.classList.remove('hidden');
+}
+
+function closeQcModal() {
+if (!qcModal) return;
+qcModal.classList.add('hidden');
+}
+
 function renderActionButtons(order) {
   modalActionButtons.innerHTML = '';
   const createButton = (text, onClick, className = 'bg-blue-600 hover:bg-blue-700') => {
@@ -6877,6 +7132,9 @@ function renderActionButtons(order) {
   };
 
   const appendPostReceivedActions = () => {
+    receivedActions.push(
+      createButton('Start QC Intake', () => openQcModal(order), 'bg-sky-600 hover:bg-sky-700')
+    );
     [
       { label: 'Email Outstanding Balance Notice', reason: 'outstanding_balance', className: 'bg-amber-600 hover:bg-amber-700' },
       { label: 'Email Password Lock Notice', reason: 'password_locked', className: 'bg-slate-700 hover:bg-slate-800' },
@@ -7239,9 +7497,8 @@ if (reofferPricingMessage) {
 reofferPricingMessage.textContent = '';
 reofferPricingMessage.classList.add('hidden');
 }
-const modalContent = orderDetailsModal?.querySelector('.space-y-4');
-const modalShell = orderDetailsModal?.querySelector('.relative');
-[orderDetailsModal, modalShell, modalContent].forEach((node) => {
+const modalContent = orderDetailsModal?.querySelector('.order-modal-body');
+[orderDetailsModal, modalContent].forEach((node) => {
   if (!node) return;
   if (typeof node.scrollTo === 'function') {
     node.scrollTo({ top: 0, behavior: 'smooth' });
@@ -7917,6 +8174,40 @@ lastRefreshAt.textContent = `Updated ${now.toLocaleTimeString([], { hour: 'numer
 
 if (closeModalButton) {
 closeModalButton.addEventListener('click', closeOrderDetailsModal);
+}
+
+if (qcModalClose) {
+qcModalClose.addEventListener('click', closeQcModal);
+}
+
+if (qcPrevBtn) {
+qcPrevBtn.addEventListener('click', () => updateQcStep(qcCurrentStep - 1));
+}
+
+if (qcNextBtn) {
+qcNextBtn.addEventListener('click', () => updateQcStep(qcCurrentStep + 1));
+}
+
+if (qcSubmitBtn) {
+qcSubmitBtn.addEventListener('click', submitQcResults);
+}
+
+if (qcModal) {
+qcModal.addEventListener('click', (event) => {
+if (event.target === qcModal) {
+closeQcModal();
+}
+});
+}
+
+if (qcModal) {
+qcModal.querySelectorAll('input[name="qc-locked"]').forEach((input) => {
+input.addEventListener('change', () => {
+if (!qcLockedCarrierWrapper) return;
+const lockedValue = getQcRadioValue('qc-locked');
+qcLockedCarrierWrapper.classList.toggle('hidden', lockedValue !== 'yes');
+});
+});
 }
 
 if (modalImeiButton) {
