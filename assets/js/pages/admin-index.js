@@ -582,7 +582,6 @@ const qcModal = document.getElementById('qc-modal');
 const qcModalOrderId = document.getElementById('qc-modal-order-id');
 const qcModalClose = document.getElementById('qc-modal-close');
 const qcPrevBtn = document.getElementById('qc-prev-btn');
-const qcNextBtn = document.getElementById('qc-next-btn');
 const qcSubmitBtn = document.getElementById('qc-submit-btn');
 const qcStepTitle = document.getElementById('qc-step-title');
 const qcSteps = qcModal ? Array.from(qcModal.querySelectorAll('[data-qc-step]')) : [];
@@ -6878,9 +6877,6 @@ qcStepTitle.textContent = `Step ${qcCurrentStep + 1} of ${sequence.length}`;
 if (qcPrevBtn) {
 qcPrevBtn.disabled = qcCurrentStep === 0;
 }
-if (qcNextBtn) {
-qcNextBtn.classList.toggle('hidden', qcCurrentStep === sequence.length - 1);
-}
 if (qcSubmitBtn) {
 qcSubmitBtn.classList.toggle('hidden', qcCurrentStep !== sequence.length - 1);
 }
@@ -8282,10 +8278,6 @@ if (qcPrevBtn) {
 qcPrevBtn.addEventListener('click', () => updateQcStep(qcCurrentStep - 1));
 }
 
-if (qcNextBtn) {
-qcNextBtn.addEventListener('click', () => updateQcStep(qcCurrentStep + 1));
-}
-
 if (qcSubmitBtn) {
 qcSubmitBtn.addEventListener('click', submitQcResults);
 }
@@ -8304,6 +8296,7 @@ input.addEventListener('change', () => {
 if (!qcLockedCarrierWrapper) return;
 const lockedValue = getQcRadioValue('qc-locked');
 qcLockedCarrierWrapper.classList.toggle('hidden', lockedValue !== 'yes');
+updateQcStep(qcCurrentStep);
 });
 });
 }
@@ -8316,9 +8309,58 @@ updateQcStep(qcCurrentStep);
 });
 }
 
+if (qcModal) {
+qcModal.querySelectorAll('input[type="radio"]').forEach((input) => {
+input.addEventListener('change', () => {
+updateQcStep(qcCurrentStep + 1);
+});
+});
+}
+
 if (qcImeiInput) {
 qcImeiInput.addEventListener('input', () => {
 qcImeiInput.value = qcImeiInput.value.replace(/[^0-9]/g, '');
+});
+}
+
+const advanceIfFilled = (value) => {
+if (value && value.trim()) {
+updateQcStep(qcCurrentStep + 1);
+}
+};
+
+if (qcDeviceInput) {
+qcDeviceInput.addEventListener('keydown', (event) => {
+if (event.key === 'Enter') {
+event.preventDefault();
+advanceIfFilled(qcDeviceInput.value);
+}
+});
+}
+
+if (qcStorageSelect) {
+qcStorageSelect.addEventListener('change', () => {
+advanceIfFilled(qcStorageSelect.value);
+});
+}
+
+if (qcColorInput) {
+qcColorInput.addEventListener('keydown', (event) => {
+if (event.key === 'Enter') {
+event.preventDefault();
+advanceIfFilled(qcColorInput.value);
+}
+});
+}
+
+if (qcImeiInput) {
+qcImeiInput.addEventListener('keydown', (event) => {
+if (event.key === 'Enter') {
+event.preventDefault();
+if (!qcImeiInput.value || /^\d{15}$/.test(qcImeiInput.value)) {
+updateQcStep(qcCurrentStep + 1);
+}
+}
 });
 }
 
