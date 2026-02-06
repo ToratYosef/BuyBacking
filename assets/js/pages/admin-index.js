@@ -227,7 +227,6 @@ let currentDeviceDocId = null;
 let currentDeviceDocHasSnapshot = false;
 let imeiUnsubscribe = null;
 let isImeiChecking = false;
-let pendingImeiOrder = null;
 
 const ADMIN_PAGE = document.body?.dataset?.adminPage || 'orders';
 const IS_ORDERS_PAGE = ADMIN_PAGE === 'orders';
@@ -587,6 +586,13 @@ const qcNextBtn = document.getElementById('qc-next-btn');
 const qcSubmitBtn = document.getElementById('qc-submit-btn');
 const qcStepTitle = document.getElementById('qc-step-title');
 const qcSteps = qcModal ? Array.from(qcModal.querySelectorAll('[data-qc-step]')) : [];
+const qcDeviceName = document.getElementById('qc-device-name');
+const qcDeviceStorage = document.getElementById('qc-device-storage');
+const qcDeviceInput = document.getElementById('qc-device-input');
+const qcStorageSelect = document.getElementById('qc-storage-select');
+const qcColorInput = document.getElementById('qc-color-input');
+const qcImeiInput = document.getElementById('qc-imei-input');
+const qcReofferToggle = document.getElementById('qc-reoffer-toggle');
 const qcLockedCarrierWrapper = document.getElementById('qc-locked-carrier-wrapper');
 const qcLockedCarrierSelect = document.getElementById('qc-locked-carrier');
 const qcEmailBalance = document.getElementById('qc-email-balance');
@@ -1350,7 +1356,6 @@ function startImeiListener(order) {
     modalImeiInput.value = orderImeiMeta.imei;
   }
   if (!db) {
-    pendingImeiOrder = order;
     return;
   }
   const deviceDocId = resolveDeviceDocumentId(order);
@@ -6512,8 +6517,6 @@ async function openOrderDetailsModal(orderId) {
   if (!orderDetailsModal) {
     return;
   }
-  resetImeiSection();
-  teardownImeiListener();
   resetShippingAddressEditor({ restoreFromOrder: false });
   // Hide all action/form containers
   modalActionButtons.innerHTML = '';
@@ -6578,8 +6581,6 @@ console.log("Fetching order details from:", `/orders/${orderId}`);
     const order = await apiGet(`/orders/${orderId}`, { authRequired: true });
     currentOrderDetails = order;
     resetShippingAddressEditor({ restoreFromOrder: true });
-    startImeiListener(order);
-
     modalOrderId.textContent = order.id;
 modalCustomerName.textContent = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
 modalCustomerEmail.textContent = order.shippingInfo ? order.shippingInfo.email : 'N/A';
@@ -6831,6 +6832,18 @@ input.checked = false;
 qcModal.querySelectorAll('input[type="checkbox"]').forEach((input) => {
 input.checked = false;
 });
+if (qcDeviceInput) {
+qcDeviceInput.value = '';
+}
+if (qcStorageSelect) {
+qcStorageSelect.value = '';
+}
+if (qcColorInput) {
+qcColorInput.value = '';
+}
+if (qcImeiInput) {
+qcImeiInput.value = '';
+}
 if (qcLockedCarrierSelect) {
 qcLockedCarrierSelect.value = '';
 }
@@ -6839,23 +6852,37 @@ qcLockedCarrierWrapper.classList.add('hidden');
 }
 }
 
-function updateQcStep(index) {
-if (!qcSteps.length) return;
-qcCurrentStep = Math.max(0, Math.min(index, qcSteps.length - 1));
-qcSteps.forEach((step, stepIndex) => {
-step.classList.toggle('active', stepIndex === qcCurrentStep);
+function getQcStepSequence() {
+if (!qcSteps.length) return [];
+const deviceMatchValue = getQcRadioValue('qc-device-match');
+return qcSteps.filter((step) => {
+const requires = step.dataset.qcRequires;
+if (requires === 'device-mismatch') {
+return deviceMatchValue === 'no';
+}
+return true;
 });
+}
+
+function updateQcStep(index) {
+const sequence = getQcStepSequence();
+if (!sequence.length) return;
+qcCurrentStep = Math.max(0, Math.min(index, sequence.length - 1));
+qcSteps.forEach((step) => {
+step.classList.remove('active');
+});
+sequence[qcCurrentStep].classList.add('active');
 if (qcStepTitle) {
-qcStepTitle.textContent = `Step ${qcCurrentStep + 1} of ${qcSteps.length}`;
+qcStepTitle.textContent = `Step ${qcCurrentStep + 1} of ${sequence.length}`;
 }
 if (qcPrevBtn) {
 qcPrevBtn.disabled = qcCurrentStep === 0;
 }
 if (qcNextBtn) {
-qcNextBtn.classList.toggle('hidden', qcCurrentStep === qcSteps.length - 1);
+qcNextBtn.classList.toggle('hidden', qcCurrentStep === sequence.length - 1);
 }
 if (qcSubmitBtn) {
-qcSubmitBtn.classList.toggle('hidden', qcCurrentStep !== qcSteps.length - 1);
+qcSubmitBtn.classList.toggle('hidden', qcCurrentStep !== sequence.length - 1);
 }
 }
 
@@ -6925,14 +6952,19 @@ return availableKeys[0];
 async function getQcSuggestedPrice(order, qcResult) {
 if (!order) return null;
 try {
+const pricingOrder = {
+...order,
+device: qcResult.deviceName || order.device,
+storage: qcResult.storage || order.storage
+};
 const pricingData = await loadFeedPricingData();
-const entry = getPricingEntryForOrder(pricingData, order);
+const entry = getPricingEntryForOrder(pricingData, pricingOrder);
 if (!entry) return null;
 
 const storageCandidates = [];
-if (order.storage) {
-storageCandidates.push(normalizeStorageKey(order.storage));
-const numericMatch = order.storage.match(/\d+/);
+if (pricingOrder.storage) {
+storageCandidates.push(normalizeStorageKey(pricingOrder.storage));
+const numericMatch = pricingOrder.storage.match(/\d+/);
 if (numericMatch) {
 storageCandidates.push(normalizeStorageKey(`${numericMatch[0]}GB`));
 }
@@ -6967,6 +6999,11 @@ return null;
 async function submitQcResults() {
 if (!qcModal || !currentOrderDetails) return;
 const qcResult = {
+deviceMatch: getQcRadioValue('qc-device-match'),
+deviceName: qcDeviceInput?.value.trim() || '',
+storage: qcStorageSelect?.value || '',
+color: qcColorInput?.value.trim() || '',
+imei: qcImeiInput?.value.trim() || '',
 overall: getQcRadioValue('qc-overall'),
 cracked: getQcRadioValue('qc-cracked'),
 defects: getQcRadioValue('qc-defects'),
@@ -6977,10 +7014,30 @@ functional: getQcRadioValue('qc-functional'),
 fmi: getQcRadioValue('qc-fmi')
 };
 
-const requiredFields = ['overall', 'cracked', 'defects', 'locked', 'balance', 'functional', 'fmi'];
+const requiredFields = ['deviceMatch', 'overall', 'cracked', 'defects', 'locked', 'balance', 'functional', 'fmi'];
 const missing = requiredFields.filter((key) => !qcResult[key]);
 if (missing.length) {
 alert('Please answer all QC questions before finishing.');
+return;
+}
+
+if (qcResult.deviceMatch === 'no') {
+if (!qcResult.deviceName) {
+alert('Enter the correct device name before finishing QC.');
+return;
+}
+if (!qcResult.storage) {
+alert('Select the correct storage before finishing QC.');
+return;
+}
+if (!qcResult.color) {
+alert('Enter the device color before finishing QC.');
+return;
+}
+}
+
+if (qcResult.imei && !/^\d{15}$/.test(qcResult.imei)) {
+alert('Enter a valid 15-digit IMEI or leave it blank.');
 return;
 }
 
@@ -6991,6 +7048,18 @@ return;
 
 const customerSnapshot = getCustomerQcSnapshot(currentOrderDetails);
 const mismatches = [];
+if (qcResult.deviceMatch === 'no') {
+mismatches.push('device');
+} else if (qcResult.deviceMatch === 'yes') {
+const deviceLabel = currentOrderDetails.device || currentOrderDetails.modelSlug || '';
+const storageLabel = currentOrderDetails.storage || '';
+if (qcResult.deviceName && deviceLabel && qcResult.deviceName.toLowerCase() !== deviceLabel.toLowerCase()) {
+mismatches.push('device');
+}
+if (qcResult.storage && storageLabel && qcResult.storage.toLowerCase() !== storageLabel.toLowerCase()) {
+mismatches.push('storage');
+}
+}
 if (customerSnapshot.overall && qcResult.overall && customerSnapshot.overall !== qcResult.overall) {
 mismatches.push('condition');
 }
@@ -7020,15 +7089,40 @@ if (qcEmailStolen?.checked) {
 sendConditionEmail(currentOrderDetails.id, 'stolen', 'Lost/Stolen notice');
 }
 
+try {
+const orderRef = doc(db, 'orders', currentOrderDetails.id);
+const payload = {
+qcDeviceMatch: qcResult.deviceMatch,
+qcCompletedAt: serverTimestamp()
+};
+if (qcResult.deviceMatch === 'no') {
+payload.qcDeviceName = qcResult.deviceName;
+payload.qcStorage = qcResult.storage;
+payload.qcColor = qcResult.color;
+}
+if (qcResult.imei) {
+payload.imei = qcResult.imei;
+}
+await setDoc(orderRef, payload, { merge: true });
+currentOrderDetails.imei = qcResult.imei || currentOrderDetails.imei;
+} catch (error) {
+console.error('Failed to save QC intake fields:', error);
+}
+
 qcModal.classList.add('hidden');
 
-if (mismatches.length) {
+if (mismatches.length && qcReofferToggle?.checked !== false) {
 showReofferForm(currentOrderDetails.id);
 const suggestedPrice = await getQcSuggestedPrice(currentOrderDetails, qcResult);
 if (suggestedPrice !== null && reofferNewPrice) {
 reofferNewPrice.value = suggestedPrice.toFixed(2);
 }
 const summaryParts = [
+`Device match: ${qcResult.deviceMatch === 'yes' ? 'Matches customer' : 'Different device'}`,
+qcResult.deviceName ? `Device name: ${qcResult.deviceName}` : null,
+qcResult.storage ? `Storage: ${qcResult.storage}` : null,
+qcResult.color ? `Color: ${qcResult.color}` : null,
+qcResult.imei ? `IMEI: ${qcResult.imei}` : null,
 `QC condition: ${qcResult.overall}`,
 `Cracked: ${qcResult.cracked}`,
 `Screen defects: ${qcResult.defects}`,
@@ -7036,7 +7130,7 @@ const summaryParts = [
 `Balance: ${qcResult.balance}`,
 `Functional: ${qcResult.functional}`,
 `FMI: ${qcResult.fmi}`
-];
+].filter(Boolean);
 if (reofferComments) {
 reofferComments.value = `QC results differ from customer submission.\n${summaryParts.join('\n')}`;
 }
@@ -7050,6 +7144,12 @@ function openQcModal(order) {
 if (!qcModal || !order) return;
 if (qcModalOrderId) {
 qcModalOrderId.textContent = `Order ${order.id}`;
+}
+if (qcDeviceName) {
+qcDeviceName.textContent = order.device || order.modelSlug || 'Unknown device';
+}
+if (qcDeviceStorage) {
+qcDeviceStorage.textContent = order.storage || 'Storage not listed';
 }
 resetQcForm();
 updateQcStep(0);
@@ -8016,8 +8116,6 @@ function closeOrderDetailsModal() {
 if (!orderDetailsModal) {
 return;
 }
-teardownImeiListener();
-resetImeiSection();
 closeStatusDropdown();
 orderDetailsModal.classList.add('hidden');
 if (cancelOrderFormContainer) {
@@ -8210,25 +8308,18 @@ qcLockedCarrierWrapper.classList.toggle('hidden', lockedValue !== 'yes');
 });
 }
 
-if (modalImeiButton) {
-  modalImeiButton.addEventListener('click', handleImeiSubmit);
+if (qcModal) {
+qcModal.querySelectorAll('input[name="qc-device-match"]').forEach((input) => {
+input.addEventListener('change', () => {
+updateQcStep(qcCurrentStep);
+});
+});
 }
 
-if (modalImeiInput) {
-  modalImeiInput.addEventListener('input', () => {
-    const digitsOnly = modalImeiInput.value.replace(/[^0-9]/g, '');
-    if (digitsOnly !== modalImeiInput.value) {
-      modalImeiInput.value = digitsOnly;
-    }
-  });
-  modalImeiInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      if (modalImeiButton && !modalImeiButton.disabled) {
-        handleImeiSubmit();
-      }
-    }
-  });
+if (qcImeiInput) {
+qcImeiInput.addEventListener('input', () => {
+qcImeiInput.value = qcImeiInput.value.replace(/[^0-9]/g, '');
+});
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -8237,11 +8328,6 @@ try {
 const app = firebaseApp;
 db = getFirestore(app);
 auth = getAuth(app);
-if (pendingImeiOrder) {
-  const orderNeedingImeiListener = pendingImeiOrder;
-  pendingImeiOrder = null;
-  startImeiListener(orderNeedingImeiListener);
-}
 
 const authLoadingScreen = document.getElementById('auth-loading-screen');
 
