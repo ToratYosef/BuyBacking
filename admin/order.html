@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+      window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
+    </script>
+    <link rel="stylesheet" href="/assets/css/tailwind.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Detail - Admin</title>
+    <link rel="icon" href="/favicon/favicon.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        :root {
+            --admin-bg: #0b1120;
+            --admin-panel: #111827;
+            --admin-panel-alt: #0f172a;
+            --admin-border: rgba(148, 163, 184, 0.2);
+            --admin-text: #e2e8f0;
+            --admin-muted: #94a3b8;
+            --admin-accent: #38bdf8;
+            --admin-accent-strong: #0ea5e9;
+            --admin-highlight: #6366f1;
+        }
+
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            background: radial-gradient(circle at top, rgba(56, 189, 248, 0.2), transparent 45%),
+                        linear-gradient(135deg, #0b1120 0%, #0f172a 50%, #0b1120 100%);
+            color: var(--admin-text);
+            margin: 0;
+        }
+
+        .order-shell {
+            display: grid;
+            grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+            min-height: 100vh;
+            gap: 0;
+        }
+
+        .order-sidebar {
+            padding: 28px 22px;
+            background: linear-gradient(160deg, #111827 0%, #0b1120 100%);
+            border-right: 1px solid var(--admin-border);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .order-sidebar a {
+            color: #cbd5f5;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .order-main {
+            padding: 32px 36px 48px;
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .order-title {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .order-meta {
+            color: var(--admin-muted);
+            font-size: 13px;
+        }
+
+        .order-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+            gap: 24px;
+        }
+
+        .order-card {
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid var(--admin-border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 40px -35px rgba(15, 23, 42, 0.6);
+        }
+
+        .order-card h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .order-field {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+            padding: 8px 0;
+            border-bottom: 1px dashed rgba(148, 163, 184, 0.2);
+        }
+
+        .order-field:last-child {
+            border-bottom: none;
+        }
+
+        .order-field span {
+            color: var(--admin-muted);
+        }
+
+        .order-actions button,
+        .order-actions select {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .action-btn {
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: none;
+            font-weight: 700;
+            background: linear-gradient(135deg, #38bdf8, #6366f1);
+            color: #0b1120;
+            cursor: pointer;
+        }
+
+        .action-secondary {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            color: #f8fafc;
+        }
+
+        .admin-login-screen {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.92);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 9998;
+        }
+
+        .admin-login-screen.hidden {
+            display: none;
+        }
+
+        .admin-login-card {
+            width: min(420px, 100%);
+            border-radius: 20px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            box-shadow: 0 30px 60px -40px rgba(15, 23, 42, 0.8);
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            color: #f8fafc;
+        }
+    </style>
+</head>
+<body data-admin-page="order">
+    <div id="admin-login-screen" class="admin-login-screen hidden">
+        <div class="admin-login-card">
+            <h2 class="text-xl font-bold">Admin sign in</h2>
+            <form id="admin-login-form" class="space-y-4">
+                <div class="flex flex-col gap-2">
+                    <label for="admin-login-email">Email</label>
+                    <input id="admin-login-email" type="email" autocomplete="email" placeholder="admin@buyback.com" required class="rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-slate-100">
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="admin-login-password">Password</label>
+                    <input id="admin-login-password" type="password" autocomplete="current-password" placeholder="••••••••" required class="rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-slate-100">
+                </div>
+                <p id="admin-login-error" class="text-xs text-red-300 hidden"></p>
+                <button type="submit" class="action-btn">Sign in</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="order-shell">
+        <aside class="order-sidebar">
+            <div>
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Admin</div>
+                <div class="text-lg font-bold text-slate-100">Order detail</div>
+            </div>
+            <a href="/admin/index.html"><i class="fas fa-arrow-left"></i> Back to orders</a>
+            <div class="text-sm text-slate-400">Review a single order, update status, and generate labels in one place.</div>
+            <button type="button" id="logout-btn" class="action-btn action-secondary">Sign out</button>
+        </aside>
+        <main class="order-main">
+            <header class="order-header">
+                <div>
+                    <div class="order-title" id="order-title">Order —</div>
+                    <div class="order-meta" id="order-meta">Loading order details...</div>
+                </div>
+                <div class="text-sm text-slate-400">Last updated: <span id="order-updated">—</span></div>
+            </header>
+
+            <div class="order-grid">
+                <section class="order-card">
+                    <h3>Order summary</h3>
+                    <div id="order-summary"></div>
+                </section>
+                <aside class="order-card order-actions">
+                    <h3>Actions</h3>
+                    <select id="order-status-select" class="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-100">
+                        <option value="">Update status…</option>
+                    </select>
+                    <button type="button" id="order-status-submit" class="action-btn">Apply status</button>
+                    <button type="button" id="order-label-btn" class="action-btn action-secondary">Generate label</button>
+                    <button type="button" id="order-packing-slip-btn" class="action-btn action-secondary">Print packing slip</button>
+                    <p id="order-action-feedback" class="text-xs text-slate-400"></p>
+                </aside>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/assets/js/pages/admin-order.js"></script>
+</body>
+</html>
