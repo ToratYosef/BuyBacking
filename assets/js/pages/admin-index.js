@@ -1,22 +1,3 @@
-// Auto-open order modal if ?order=SHC-xxxxx is present in URL
-document.addEventListener('DOMContentLoaded', () => {
-  const params = new URLSearchParams(window.location.search);
-  const orderId = params.get('order');
-  if (orderId && /^SHC-\d+$/i.test(orderId)) {
-    // Wait for modal and DOM to be ready, then open
-    if (typeof openOrderDetailsModal === 'function') {
-      openOrderDetailsModal(orderId);
-    } else {
-      // Fallback: try again after short delay
-      setTimeout(() => {
-        if (typeof openOrderDetailsModal === 'function') {
-          openOrderDetailsModal(orderId);
-        }
-      }, 500);
-    }
-  }
-});
-
 document.addEventListener('DOMContentLoaded', () => {
   const adminShell = document.querySelector('.admin-shell');
   const sidebarToggle = document.getElementById('sidebar-toggle');
@@ -251,7 +232,7 @@ function resolveReminderStatusKey(order = {}) {
 }
 
 import { firebaseApp } from "/assets/js/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, onSnapshot, collection, query, where, orderBy, limit, setDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { apiGet, apiPost, apiPut, apiDelete, apiRaw } from "/public/js/apiClient.js";
 import { createOrderInfoLabelPdf } from "/assets/js/pdf/order-labels.js";
@@ -312,6 +293,11 @@ const orderTextImportFeedback = document.getElementById('order-text-import-feedb
 const orderTextImportSubmit = document.getElementById('submit-order-text-import');
 const orderTextImportClose = document.getElementById('close-order-text-import');
 const orderTextImportCancel = document.getElementById('cancel-order-text-import');
+const loginScreen = document.getElementById('admin-login-screen');
+const loginForm = document.getElementById('admin-login-form');
+const loginEmailInput = document.getElementById('admin-login-email');
+const loginPasswordInput = document.getElementById('admin-login-password');
+const loginError = document.getElementById('admin-login-error');
 
 const KIT_STATUS_HINTS = new Set([
   'shipping_kit_requested',
@@ -5763,7 +5749,7 @@ ordersPage.forEach((order) => {
         event.preventDefault();
         const indexValue = Number(event.currentTarget.dataset.deviceIndex || 0);
         window.selectedOrderDeviceIndex = Number.isFinite(indexValue) ? indexValue : 0;
-        openOrderDetailsModal(order.id);
+        window.location.href = `/admin/order.html?order=${encodeURIComponent(order.id)}&device=${encodeURIComponent(window.selectedOrderDeviceIndex)}`;
       });
     }
 
@@ -8452,16 +8438,41 @@ db = getFirestore(app);
 auth = getAuth(app);
 
 const authLoadingScreen = document.getElementById('auth-loading-screen');
+if (loginForm) {
+loginForm.addEventListener('submit', async (event) => {
+event.preventDefault();
+if (loginError) {
+loginError.textContent = '';
+loginError.classList.add('hidden');
+}
+const email = loginEmailInput?.value?.trim();
+const password = loginPasswordInput?.value || '';
+if (!email || !password) {
+if (loginError) {
+loginError.textContent = 'Enter your email and password to continue.';
+loginError.classList.remove('hidden');
+}
+return;
+}
+try {
+await signInWithEmailAndPassword(auth, email, password);
+} catch (error) {
+console.error('Admin login failed:', error);
+if (loginError) {
+loginError.textContent = 'Login failed. Check your credentials and try again.';
+loginError.classList.remove('hidden');
+}
+}
+});
+}
 
 // Logout functionality - added AFTER auth is initialized
-const logoutBtn = document.getElementById('logout-btn');
+const logoutBtn = document.getElementById('logout-btn') || document.querySelector('.logout-btn');
 if (logoutBtn) {
 logoutBtn.addEventListener('click', async () => {
 try {
 await signOut(auth);
 console.log('User signed out successfully');
-// Redirect to the login page (assuming index.html is the login page)
-window.location.href = '/index.html';
 } catch (error) {
 console.error('Error signing out:', error);
 // Using console.error instead of alert()
@@ -8491,13 +8502,18 @@ notificationDropdown.classList.remove('show');
 onAuthStateChanged(auth, (user) => {
 if (!user || user.isAnonymous) {
 console.log('Auth state changed: No authenticated user or anonymous user detected, redirecting...');
-// Redirect to the login page (assuming index.html is the login page)
-window.location.href = '/index.html';
+authLoadingScreen?.classList.add('hidden');
+if (loginScreen) {
+loginScreen.classList.remove('hidden');
+}
 return;
 }
 
 console.log('Auth state changed: User logged in, UID:', user.uid);
 authLoadingScreen?.classList.add('hidden');
+if (loginScreen) {
+loginScreen.classList.add('hidden');
+}
 
 currentUserId = user.uid;
 /* REMOVED SIDEBAR USER ID DISPLAY, NOW JUST LOGGED IN */
