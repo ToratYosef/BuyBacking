@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const url = require("url");
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const ROOT = path.resolve(".");
 const ENABLE_DIR_LISTING = process.env.DIR_LISTING === "1"; // enable to see folders if no index.html
 const SPA_FALLBACK = process.env.SPA_FALLBACK === "1";       // for React/Next/Vite SPAs
