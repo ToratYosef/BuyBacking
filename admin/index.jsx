@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, Package, Truck, FileText, Settings, LogOut, 
   Search, Bell, Filter, RefreshCw, Plus, ChevronRight, CheckCircle, 
   AlertCircle, X, DollarSign, User, MapPin, Printer, Smartphone, 
   CreditCard, Mail, Phone, Calendar, Clock, Tag, Edit2, Save, 
   MoreHorizontal, ChevronDown, ExternalLink, ShieldCheck, 
-  AlertTriangle, Play, Lock, Trash2, Ban, Copy
+  AlertTriangle, Play, Lock, Trash2, Ban, Copy, Send, RotateCcw
 } from 'lucide-react';
 import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, query, orderBy } from 'firebase/firestore';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 
 // --- CONFIGURATION & HELPERS ---
@@ -33,7 +33,7 @@ const db = getFirestore(app);
 // Ensure this global is set in your index.html or environment
 const API_BASE_URL = window.SHC_API_BASE_URL || "https://api.secondhandcell.com/server";
 
-// Helper for API Calls (Replaces apiClient.js)
+// Helper for API Calls
 const apiCall = async (endpoint, method = 'GET', body = null, authInstance) => {
   try {
     const user = authInstance?.currentUser;
@@ -63,7 +63,6 @@ const apiCall = async (endpoint, method = 'GET', body = null, authInstance) => {
 // Date Formatter
 const formatDate = (timestamp) => {
   if (!timestamp) return 'N/A';
-  // Handle Firestore Timestamp or Date string
   const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
   if (isNaN(date.getTime())) return 'Invalid Date';
   return new Intl.DateTimeFormat('en-US', { 
@@ -72,7 +71,6 @@ const formatDate = (timestamp) => {
   }).format(date);
 };
 
-// Order Age Calculator
 const getOrderAge = (timestamp) => {
   if (!timestamp) return '0 days';
   const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
@@ -89,10 +87,12 @@ const formatStatusLabel = (status) => {
 
 const getStatusColor = (status) => {
   const s = (status || '').toLowerCase();
-  if (s.includes('pending') || s.includes('needs')) return 'bg-amber-100 text-amber-800 border-amber-200';
-  if (s.includes('paid') || s.includes('completed') || s.includes('received')) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+  if (s.includes('pending') || s.includes('requested')) return 'bg-amber-100 text-amber-800 border-amber-200';
+  if (s.includes('label') || s.includes('transit') || s.includes('sent')) return 'bg-blue-100 text-blue-800 border-blue-200';
+  if (s.includes('received') || s.includes('qc') || s.includes('checked')) return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+  if (s.includes('paid') || s.includes('completed')) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
   if (s.includes('cancel') || s.includes('void')) return 'bg-slate-100 text-slate-600 border-slate-200';
-  if (s.includes('kit') || s.includes('label') || s.includes('transit')) return 'bg-blue-100 text-blue-800 border-blue-200';
+  if (s.includes('re-offer') || s.includes('requote')) return 'bg-purple-100 text-purple-800 border-purple-200';
   return 'bg-slate-100 text-slate-800 border-slate-200';
 };
 
@@ -105,7 +105,7 @@ const StatusBadge = ({ status }) => (
   </span>
 );
 
-// 2. Sidebar Navigation
+// 2. Sidebar
 const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
   const navItems = [
     { id: 'orders', label: 'Orders', icon: Package },
@@ -157,7 +157,7 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
   );
 };
 
-// 3. Login Screen Component
+// 3. Login Screen
 const LoginScreen = ({ auth }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -189,84 +189,46 @@ const LoginScreen = ({ auth }) => {
         <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-slate-900">
           Admin Sign In
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-600">
-          Access the Order Management Console
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow-xl shadow-slate-200 border border-slate-100 sm:rounded-xl sm:px-10">
           <form className="space-y-6" onSubmit={handleLogin}>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-                Email address
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full pl-10 sm:text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 py-2.5"
-                  placeholder="admin@example.com"
-                />
-              </div>
+              <label className="block text-sm font-medium text-slate-700">Email address</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full pl-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-                Password
-              </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-slate-400" />
-                </div>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 sm:text-sm border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 py-2.5"
-                  placeholder="••••••••"
-                />
-              </div>
+              <label className="block text-sm font-medium text-slate-700">Password</label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 block w-full pl-3 py-2 border border-slate-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              />
             </div>
 
             {error && (
               <div className="rounded-md bg-rose-50 p-4">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <AlertCircle className="h-5 w-5 text-rose-400" aria-hidden="true" />
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-rose-800">{error}</h3>
-                  </div>
-                </div>
+                <p className="text-sm font-medium text-rose-800">{error}</p>
               </div>
             )}
 
-            <div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 transition-all"
-              >
-                {loading ? (
-                  <RefreshCw className="h-5 w-5 animate-spin" />
-                ) : (
-                  'Sign in'
-                )}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 transition-all"
+            >
+              {loading ? <RefreshCw className="h-5 w-5 animate-spin" /> : 'Sign in'}
+            </button>
           </form>
         </div>
       </div>
@@ -274,7 +236,7 @@ const LoginScreen = ({ auth }) => {
   );
 };
 
-// 4. QC Intake Wizard Component
+// 4. QC Intake Wizard
 const QCModal = ({ isOpen, onClose, order, onSubmit }) => {
   const [step, setStep] = useState(1);
   const [data, setData] = useState({
@@ -479,10 +441,78 @@ const QCModal = ({ isOpen, onClose, order, onSubmit }) => {
   );
 };
 
-// 5. Drawer Component (Order Details)
-const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
+// 5. Workflow Stepper
+const WorkflowStepper = ({ status, hasLabel, hasQc }) => {
+  let activeStep = 0;
+  
+  if (status === 'completed' || status === 'paid') {
+    activeStep = 4;
+  } else if (hasQc || status === 'received') {
+    activeStep = 2; // QC/Received
+  } else if (hasLabel || status.includes('label') || status.includes('transit')) {
+    activeStep = 1; // In Transit
+  } else if (status === 'order_pending') {
+    activeStep = 0; // Pending
+  } else if (status === 'cancelled') {
+    activeStep = -1; // Cancelled
+  }
+
+  const steps = [
+    { label: 'Pending', icon: Clock },
+    { label: 'Label / Transit', icon: Truck },
+    { label: 'Received / QC', icon: ShieldCheck },
+    { label: 'Paid & Done', icon: CheckCircle }
+  ];
+
+  if (activeStep === -1) {
+    return (
+      <div className="px-6 py-3 bg-rose-50 border-b border-rose-100 flex items-center justify-center gap-2 text-rose-700 font-medium text-sm">
+        <Ban size={16} /> This order has been cancelled.
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-200">
+      <div className="relative flex items-center justify-between w-full max-w-sm mx-auto">
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-slate-200 -z-0"></div>
+        <div 
+          className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-indigo-600 -z-0 transition-all duration-500"
+          style={{ width: `${(activeStep / (steps.length - 1)) * 100}%` }}
+        ></div>
+
+        {steps.map((step, index) => {
+           const isActive = index <= activeStep;
+           const isCurrent = index === activeStep;
+           
+           return (
+             <div key={index} className="relative z-10 flex flex-col items-center gap-2">
+               <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                 isActive 
+                  ? 'bg-indigo-600 border-indigo-600 text-white' 
+                  : 'bg-white border-slate-300 text-slate-400'
+               }`}>
+                 <step.icon size={14} />
+               </div>
+               <span className={`text-[10px] uppercase font-bold tracking-wider absolute -bottom-6 whitespace-nowrap ${
+                 isCurrent ? 'text-indigo-700' : 'text-slate-400'
+               }`}>
+                 {step.label}
+               </span>
+             </div>
+           );
+        })}
+      </div>
+      <div className="h-4"></div> 
+    </div>
+  );
+};
+
+// 6. Drawer Component (Order Details)
+const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const isCancelled = order.status === 'cancelled';
+  const status = order.status || '';
 
   // Tabs Configuration
   const tabs = [
@@ -492,19 +522,257 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
     { id: 'logs', label: 'Activity Logs', icon: FileText },
   ];
 
+  // --- BUTTON RENDER LOGIC (BASED ON STEPS) ---
+  const renderActionButtons = () => {
+    // Shared Button Styles
+    const btnPrimary = "flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-sm";
+    const btnSecondary = "flex-1 bg-white border border-slate-300 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm";
+    const btnDanger = "px-4 py-3 bg-white border border-rose-200 text-rose-600 font-bold rounded-xl hover:bg-rose-50 transition-colors shadow-sm text-sm";
+
+    // --- STEP 1: Pending / Needs Printing ---
+    if (['order_pending', 'kit_needs_printing', 'needs_printing'].includes(status)) {
+      return (
+        <div className="flex flex-col gap-3 w-full">
+           <div className="flex gap-3 w-full">
+            {!order.trackingNumber && (
+              <button onClick={() => onAction(order.id, 'generateLabel')} className={btnPrimary}>
+                <Tag size={16} /> Generate Label
+              </button>
+            )}
+             <button onClick={() => onAction(order.id, 'markManuallyFulfilled')} className={btnSecondary}>
+               <CheckCircle size={16} /> Mark Fulfilled
+             </button>
+           </div>
+           <div className="flex gap-3 w-full">
+             <button onClick={() => onAction(order.id, 'printPackingSlip')} className={btnSecondary}>
+               <Printer size={16} /> Packing Slip
+             </button>
+             <button onClick={() => onAction(order.id, 'cancelOrder')} className={btnDanger}>
+               Cancel
+             </button>
+             <button onClick={() => onAction(order.id, 'deleteOrder')} className={btnDanger}>
+               <Trash2 size={16} />
+             </button>
+           </div>
+        </div>
+      );
+    }
+
+    // --- STEP 2: Shipping Kit Requested ---
+    if (status === 'shipping_kit_requested') {
+      return (
+        <div className="flex flex-col gap-3 w-full">
+           <div className="flex gap-3 w-full">
+             <button onClick={() => onAction(order.id, 'generateLabel')} className={btnPrimary}>
+                <Tag size={16} /> Generate Label
+             </button>
+             <button onClick={() => onAction(order.id, 'markSent')} className={btnSecondary}>
+               <Truck size={16} /> Mark I Sent
+             </button>
+           </div>
+           <div className="flex gap-3 w-full">
+             <button onClick={() => onAction(order.id, 'markReceived')} className={btnSecondary}>
+               <Package size={16} /> Mark Received
+             </button>
+             <button onClick={() => onAction(order.id, 'printPackingSlip')} className={btnSecondary}>
+               <Printer size={16} /> Slip
+             </button>
+             <button onClick={() => onAction(order.id, 'cancelOrder')} className={btnDanger}>
+               Cancel
+             </button>
+           </div>
+        </div>
+      );
+    }
+
+    // --- STEP 3: Label Generated ---
+    if (status === 'label_generated' || status === 'emailed') {
+      const isKit = order.shippingMethod === 'kit' || order.shippingPreference === 'Shipping Kit';
+      return (
+        <div className="flex flex-col gap-3 w-full">
+           <div className="flex gap-3 w-full">
+             {isKit && (
+               <button onClick={() => onAction(order.id, 'markSent')} className={btnSecondary}>
+                 <Truck size={16} /> Mark I Sent
+               </button>
+             )}
+             <button onClick={() => onAction(order.id, 'markReceived')} className={btnPrimary}>
+               <Package size={16} /> Mark Received
+             </button>
+           </div>
+           <div className="flex gap-3 w-full">
+             <button onClick={() => onAction(order.id, 'printPackingSlip')} className={btnSecondary}>
+               <Printer size={16} /> Print Slip
+             </button>
+             <button onClick={() => onAction(order.id, 'cancelOrder')} className={btnDanger}>
+               Cancel
+             </button>
+           </div>
+        </div>
+      );
+    }
+
+    // --- STEP 4: In Transit / Delivered ---
+    if (['kit_on_the_way_to_us', 'kit_delivered', 'phone_on_the_way', 'delivered_to_us'].includes(status)) {
+       return (
+        <div className="flex flex-col gap-3 w-full">
+           <button onClick={() => onAction(order.id, 'markReceived')} className={btnPrimary}>
+             <Package size={16} /> Mark Received
+           </button>
+           <div className="flex gap-3 w-full">
+             <button onClick={() => onAction(order.id, 'printPackingSlip')} className={btnSecondary}>
+               <Printer size={16} /> Slip
+             </button>
+             <button onClick={() => onAction(order.id, 'cancelOrder')} className={btnDanger}>
+               Cancel
+             </button>
+           </div>
+        </div>
+      );
+    }
+
+    // --- STEP 5: Received / Processing ---
+    if (['received', 'imei_checked'].includes(status)) {
+      return (
+        <div className="flex flex-col gap-3 w-full">
+           <div className="flex gap-3 w-full">
+              <button onClick={onOpenQc} className={btnPrimary}>
+                <ShieldCheck size={16} /> {order.qcData ? 'Re-Do QC' : 'Start QC'}
+              </button>
+              <button onClick={() => onAction(order.id, 'markCompleted')} className={btnSecondary}>
+                 <DollarSign size={16} /> Mark Completed
+              </button>
+           </div>
+           
+           <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => onAction(order.id, 'emailBalance')} className="px-2 py-2 bg-amber-50 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-100 border border-amber-200">
+                Email Balance Notice
+              </button>
+              <button onClick={() => onAction(order.id, 'emailPasswordLock')} className="px-2 py-2 bg-rose-50 text-rose-700 rounded-lg text-xs font-medium hover:bg-rose-100 border border-rose-200">
+                Email Lock Notice
+              </button>
+               <button onClick={() => onAction(order.id, 'proposeReoffer')} className="px-2 py-2 bg-purple-50 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-100 border border-purple-200">
+                Propose Re-offer
+              </button>
+              <button onClick={() => onAction(order.id, 'finalizeReducedPayout')} className="px-2 py-2 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100 border border-blue-200">
+                Auto-Requote (75%)
+              </button>
+           </div>
+
+           <div className="flex gap-3 w-full mt-2">
+             <button onClick={() => onAction(order.id, 'printPackingSlip')} className={btnSecondary}>
+               <Printer size={16} /> Slip
+             </button>
+             <button onClick={() => onAction(order.id, 'deleteOrder')} className={btnDanger}>
+               <Trash2 size={16} />
+             </button>
+           </div>
+        </div>
+      );
+    }
+
+    // --- STEP 6: Re-Offer Steps ---
+    if (status === 're-offered-pending') {
+      return (
+         <div className="flex gap-3 w-full">
+            <button onClick={() => onAction(order.id, 'finalizeReducedPayout')} className={btnPrimary}>
+              Finalize Reduced Payout
+            </button>
+         </div>
+      );
+    }
+
+    if (status === 're-offered-accepted') {
+       return (
+         <div className="flex gap-3 w-full">
+            <button onClick={() => onAction(order.id, 'markCompleted')} className={btnPrimary}>
+               <DollarSign size={16} /> Pay Now
+            </button>
+         </div>
+      );
+    }
+    
+    if (status === 're-offered-declined') {
+       return (
+         <div className="flex gap-3 w-full">
+            <button onClick={() => onAction(order.id, 'sendReturnLabel')} className={btnPrimary}>
+               <RotateCcw size={16} /> Send Return Label
+            </button>
+         </div>
+      );
+    }
+
+    // --- STEP 7: Completed ---
+    if (['completed', 'requote_accepted', 'paid'].includes(status)) {
+      return (
+        <div className="flex flex-col gap-3 w-full">
+           <div className="w-full bg-emerald-50 text-emerald-700 font-bold py-3 rounded-xl border border-emerald-100 flex items-center justify-center gap-2">
+             <CheckCircle size={18} /> Order Completed
+           </div>
+           <div className="flex gap-3 w-full">
+             <button onClick={() => onAction(order.id, 'sendReviewRequest')} className={btnSecondary}>
+               <CheckCircle size={16} /> Send Review Request
+             </button>
+             <button onClick={() => onAction(order.id, 'printPackingSlip')} className={btnSecondary}>
+               <Printer size={16} /> Print Slip
+             </button>
+             <button onClick={() => onAction(order.id, 'deleteOrder')} className={btnDanger}>
+               <Trash2 size={16} />
+             </button>
+           </div>
+        </div>
+      );
+    }
+
+    // --- DEFAULT FALLBACK / CANCELLED ---
+    if (isCancelled) {
+      return (
+        <div className="w-full bg-slate-100 text-slate-500 font-medium py-3 rounded-xl text-center flex items-center justify-center gap-2">
+           <Ban size={18} /> Order Cancelled
+        </div>
+      );
+    }
+
+    return <div className="text-center text-slate-400">Status unknown</div>;
+  };
+
+  // --- Universal Buttons (Conditional) ---
+  const renderUniversalActions = () => {
+    return (
+       <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2">
+          {/* Tracking Refresh */}
+          {(order.shippingPreference === 'Shipping Kit' && order.trackingNumber) && (
+            <button onClick={() => onAction(order.id, 'refreshTracking')} className="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1 justify-center py-2">
+              <RefreshCw size={12} /> Refresh Kit Tracking
+            </button>
+          )}
+          {(order.shippingPreference === 'Email Label' && order.trackingNumber) && (
+            <button onClick={() => onAction(order.id, 'refreshTracking')} className="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1 justify-center py-2">
+              <RefreshCw size={12} /> Refresh Label Tracking
+            </button>
+          )}
+          
+          {/* Admin Tools */}
+          <button onClick={() => onAction(order.id, 'clearShippingData')} className="text-xs text-slate-400 hover:text-rose-600 flex items-center gap-1 justify-center py-2">
+            <Ban size={12} /> Clear Shipping Data
+          </button>
+           <button onClick={() => onAction(order.id, 'voidLabels')} className="text-xs text-slate-400 hover:text-rose-600 flex items-center gap-1 justify-center py-2">
+            <Trash2 size={12} /> Void Labels
+          </button>
+       </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
-      {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-slate-900/30 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       ></div>
 
-      {/* Drawer Content */}
       <div className="relative w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
         
-        {/* Header */}
-        <div className="sticky top-0 bg-white z-10 border-b border-slate-200 px-6 py-4 flex justify-between items-start">
+        <div className="bg-white z-10 px-6 py-4 flex justify-between items-start">
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h2 className="text-2xl font-bold text-slate-900">#{order.id}</h2>
@@ -519,7 +787,8 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
           </button>
         </div>
 
-        {/* Tab Navigation */}
+        <WorkflowStepper status={order.status} hasLabel={!!order.trackingNumber} hasQc={!!order.qcData} />
+
         <div className="px-6 border-b border-slate-200 bg-slate-50/50 flex space-x-6 overflow-x-auto scrollbar-hide">
           {tabs.map(tab => (
             <button
@@ -537,13 +806,10 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
           ))}
         </div>
 
-        {/* Tab Content Area */}
         <div className="p-6 space-y-6 flex-1 overflow-y-auto bg-slate-50/30">
           
-          {/* OVERVIEW TAB */}
           {activeTab === 'overview' && (
             <div className="space-y-6 animate-in fade-in duration-300">
-              {/* Device Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                 <div className="p-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/50">
                    <h3 className="font-semibold text-slate-700 flex items-center gap-2">
@@ -569,7 +835,6 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
                 </div>
               </div>
 
-              {/* Customer Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                   <h3 className="font-semibold text-slate-700 flex items-center gap-2">
@@ -595,7 +860,6 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
                 </div>
               </div>
 
-               {/* Payment Card */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                    <h3 className="font-semibold text-slate-700 flex items-center gap-2">
@@ -617,28 +881,13 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
                         </div>
                       </div>
                   </div>
-                  {!isCancelled && (
-                    <button 
-                      onClick={() => onAction(order.id, 'markCompleted')}
-                      disabled={order.status === 'completed'}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        order.status === 'completed' 
-                          ? 'bg-green-100 text-green-800 cursor-default' 
-                          : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {order.status === 'completed' ? 'Paid' : 'Mark as Paid'}
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* SHIPPING TAB */}
           {activeTab === 'shipping' && (
             <div className="space-y-6 animate-in fade-in duration-300">
-               {/* Address Card */}
                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                   <h3 className="font-semibold text-slate-700 flex items-center gap-2">
@@ -656,7 +905,6 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
                 </div>
               </div>
 
-              {/* Tracking Info */}
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                  <div className="p-4 border-b border-slate-100 bg-slate-50/50">
                   <h3 className="font-semibold text-slate-700 flex items-center gap-2">
@@ -685,29 +933,11 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
                        )}
                     </div>
                   </div>
-
-                  {!isCancelled && (
-                    <div className="pt-4 border-t border-slate-100 flex gap-3">
-                      <button 
-                        onClick={() => onAction(order.id, 'generateLabel')}
-                        className="flex-1 bg-indigo-600 text-white font-medium py-2 rounded-lg text-sm shadow-sm hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                         <Tag size={16} /> Generate Label
-                      </button>
-                      <button 
-                         onClick={() => onAction(order.id, 'emailLabel')}
-                         className="flex-1 bg-white border border-slate-300 text-slate-700 font-medium py-2 rounded-lg text-sm shadow-sm hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
-                      >
-                         <Mail size={16} /> Email Label
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* QC TAB */}
           {activeTab === 'qc' && (
             <div className="space-y-6 animate-in fade-in duration-300">
               <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -772,15 +1002,6 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
                           <p className="text-sm text-slate-700 bg-amber-50 p-3 rounded-lg border border-amber-100">{order.qcData.notes}</p>
                         </div>
                       )}
-                      
-                      {!isCancelled && (
-                         <button 
-                          onClick={onOpenQc}
-                          className="w-full mt-2 bg-white border border-slate-300 text-slate-700 font-medium py-2 rounded-lg text-sm shadow-sm hover:bg-slate-50 transition-colors"
-                         >
-                           Re-Do Inspection
-                         </button>
-                       )}
                     </div>
                   )}
                 </div>
@@ -788,7 +1009,6 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
             </div>
           )}
 
-          {/* LOGS TAB */}
           {activeTab === 'logs' && (
              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm animate-in fade-in duration-300">
                <div className="p-4 border-b border-slate-100 bg-slate-50/50">
@@ -818,37 +1038,9 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
 
         </div>
 
-        {/* Footer Actions (Sticky) */}
-        <div className="border-t border-slate-200 p-6 bg-white flex gap-3 z-10">
-          {!isCancelled ? (
-            <>
-              <button 
-                 onClick={() => onAction(order.id, 'cancelOrder')}
-                 className="px-4 py-3 bg-white border border-rose-200 text-rose-600 font-bold rounded-xl hover:bg-rose-50 transition-colors shadow-sm"
-              >
-                Cancel
-              </button>
-              <div className="flex-1 flex gap-3">
-                 <button 
-                  onClick={() => onAction(order.id, 'generateLabel')}
-                  className="flex-1 bg-white border border-slate-300 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-50 transition-colors shadow-sm"
-                >
-                  Get Label
-                </button>
-                <button 
-                  onClick={() => onAction(order.id, 'markReceived')}
-                  disabled={order.status === 'received' || order.status === 'completed'}
-                  className="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Package size={18} /> {order.status === 'received' ? 'Received' : 'Mark Received'}
-                </button>
-              </div>
-            </>
-          ) : (
-             <div className="w-full bg-slate-100 text-slate-500 font-medium py-3 rounded-xl text-center flex items-center justify-center gap-2">
-               <Ban size={18} /> Order Cancelled
-             </div>
-          )}
+        <div className="border-t border-slate-200 p-6 bg-white z-10">
+          {renderActionButtons()}
+          {renderUniversalActions()}
         </div>
 
       </div>
@@ -856,9 +1048,8 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc, db }) => {
   );
 };
 
-// 6. Main Admin Dashboard Component
+// 7. Main Dashboard
 const AdminDashboard = () => {
-  // State
   const [activeTab, setActiveTab] = useState('orders');
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -879,24 +1070,19 @@ const AdminDashboard = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. Orders Realtime Listener
+  // 2. Orders Listener
   useEffect(() => {
     if (!db || !user) return;
 
     const ordersRef = collection(db, 'orders');
-    // NOTE: Simple query for all orders. Indexing required for complex filtering.
-    // We filter client-side for "All Orders" view to preserve flexibility.
-    const unsubscribe = onSnapshot(ordersRef, (snapshot) => {
+    const q = query(ordersRef, orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const ordersData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        // Normalize date for sorting
         createdAtMillis: doc.data().createdAt?.seconds ? doc.data().createdAt.seconds * 1000 : 0
       }));
-      
-      // Sort by newest first
-      ordersData.sort((a, b) => b.createdAtMillis - a.createdAtMillis);
-      
       setOrders(ordersData);
       setLoading(false);
     }, (error) => {
@@ -910,62 +1096,120 @@ const AdminDashboard = () => {
   // 3. Filter Logic
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
-      // Status Filter
       if (statusFilter !== 'all') {
-        // Simple mapping for demonstration
-        if (statusFilter === 'pending' && order.status !== 'order_pending') return false;
-        if (statusFilter === 'completed' && order.status !== 'completed') return false;
+        if (statusFilter === 'pending' && !order.status.includes('pending')) return false;
+        if (statusFilter === 'completed' && !order.status.includes('completed')) return false;
         if (statusFilter === 'cancelled' && order.status !== 'cancelled') return false;
+        if (statusFilter === 'received' && order.status !== 'received') return false;
       }
-
-      // Search Filter
       if (searchTerm) {
         const lowerTerm = searchTerm.toLowerCase();
-        const matchesId = order.id.toLowerCase().includes(lowerTerm);
-        const matchesCustomer = order.shippingInfo?.fullName?.toLowerCase().includes(lowerTerm);
-        const matchesDevice = order.device?.toLowerCase().includes(lowerTerm);
-        const matchesEmail = order.shippingInfo?.email?.toLowerCase().includes(lowerTerm);
-        
-        return matchesId || matchesCustomer || matchesDevice || matchesEmail;
+        return (
+          order.id.toLowerCase().includes(lowerTerm) ||
+          order.shippingInfo?.fullName?.toLowerCase().includes(lowerTerm) ||
+          order.device?.toLowerCase().includes(lowerTerm) ||
+          order.shippingInfo?.email?.toLowerCase().includes(lowerTerm)
+        );
       }
-
       return true;
     });
   }, [orders, statusFilter, searchTerm]);
 
-  // 4. Actions
+  // 4. ACTION HANDLER MAPPED TO API
   const handleAction = async (orderId, actionType, payload = {}) => {
     if (!user) return;
     
-    // Optimistic UI updates could go here
     try {
       let endpoint = '';
       let method = 'POST';
+      let body = payload;
 
       switch (actionType) {
+        // --- Status Updates ---
+        case 'markManuallyFulfilled':
+          endpoint = `/orders/${orderId}/status`;
+          method = 'PUT';
+          body = { status: 'shipping_kit_requested' }; // Assuming logic
+          break;
+        case 'markSent':
+          endpoint = `/orders/${orderId}/status`;
+          method = 'PUT';
+          body = { status: 'kit_sent' };
+          break;
         case 'markReceived':
           endpoint = `/orders/${orderId}/status`;
           method = 'PUT';
-          payload = { status: 'received' };
+          body = { status: 'received' };
           break;
         case 'markCompleted':
           endpoint = `/orders/${orderId}/status`;
           method = 'PUT';
-          payload = { status: 'completed' };
+          body = { status: 'completed' };
           break;
+          
+        // --- Label & Shipping ---
         case 'generateLabel':
           endpoint = `/generate-label/${orderId}`;
           break;
+        case 'sendReturnLabel':
+          endpoint = `/orders/${orderId}/return-label`;
+          break;
+        case 'printPackingSlip':
+           // This usually opens a PDF in new tab, not just an API call
+           window.open(`${API_BASE_URL}/orders/${orderId}/packing-slip`, '_blank');
+           return; 
+        case 'refreshTracking':
+           endpoint = `/orders/${orderId}/refresh-tracking`;
+           break;
+        case 'voidLabels':
+           endpoint = `/orders/${orderId}/void-label`;
+           break;
+        case 'clearShippingData':
+           endpoint = `/orders/${orderId}/clear-shipping`;
+           break;
+
+        // --- Emails & Notifications ---
+        case 'emailBalance':
+           endpoint = `/orders/${orderId}/email/balance`;
+           break;
+        case 'emailPasswordLock':
+           endpoint = `/orders/${orderId}/email/lock-notice`;
+           break;
+        case 'emailLostStolen':
+           endpoint = `/orders/${orderId}/email/lost-stolen`;
+           break;
+        case 'emailFMI':
+           endpoint = `/orders/${orderId}/email/fmi-lock`;
+           break;
+        case 'sendReviewRequest':
+           endpoint = `/orders/${orderId}/email/review-request`;
+           break;
+        
+        // --- Re-Quotes & Admin ---
+        case 'proposeReoffer':
+           // Likely opens a different modal in a real app, here we simulate API trigger
+           endpoint = `/orders/${orderId}/reoffer/propose`; 
+           break;
+        case 'finalizeReducedPayout':
+           endpoint = `/orders/${orderId}/reoffer/finalize-75`;
+           break;
         case 'cancelOrder':
           endpoint = `/orders/${orderId}/cancel`;
           break;
+        case 'deleteOrder':
+           endpoint = `/orders/${orderId}`;
+           method = 'DELETE';
+           break;
+
         default:
+          console.warn("Unknown Action Type:", actionType);
           return;
       }
 
-      await apiCall(endpoint, method, payload, auth);
-      // Toast success here ideally
+      await apiCall(endpoint, method, body, auth);
       console.log(`Action ${actionType} successful`);
+      // Optional: Add toast notification here
+      
     } catch (error) {
       alert(`Action failed: ${error.message}`);
     }
@@ -975,44 +1219,35 @@ const AdminDashboard = () => {
     if (!db) return;
     try {
         const orderRef = doc(db, 'orders', orderId);
-        // We update Firestore directly for QC data to be instant
-        // The backend might also have a listener or we can call an endpoint
         await setDoc(orderRef, {
             qcData: qcData,
-            status: 'received', // Auto-move to received if not already
+            status: 'received',
             qcCompletedAt: new Date()
         }, { merge: true });
         
-        // If there's a mismatch, maybe trigger a re-offer flow (API call)
-        if (qcData.deviceMatch === 'no' || qcData.isFunctional === 'no') {
-            // Trigger internal flag or backend process
-        }
+        // Trigger backend processing for QC if needed
+        await apiCall(`/orders/${orderId}/qc-complete`, 'POST', qcData, auth);
     } catch(e) {
         console.error("QC Save Failed", e);
         alert("Failed to save QC data");
     }
   };
 
-  // --- RENDER HELPERS ---
-
   if (authLoading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
   if (!user) return <LoginScreen auth={auth} />;
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex">
-      {/* Sidebar */}
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => signOut(auth)} />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col lg:ml-64 transition-all duration-300">
         
-        {/* Top Navbar */}
         <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between">
           <div className="flex items-center gap-4 flex-1">
             <Search className="text-slate-400" size={20} />
             <input 
               type="text" 
-              placeholder="Search orders by ID, Customer, or Device..." 
+              placeholder="Search orders..." 
               className="bg-transparent border-none outline-none text-sm w-full placeholder:text-slate-400"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -1021,7 +1256,6 @@ const AdminDashboard = () => {
           <div className="flex items-center gap-4">
             <button className="relative p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors">
               <Bell size={20} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
             </button>
             <div className="h-8 w-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-xs font-bold text-indigo-700">
               {user.email ? user.email.charAt(0).toUpperCase() : 'A'}
@@ -1029,67 +1263,14 @@ const AdminDashboard = () => {
           </div>
         </header>
 
-        {/* Dashboard Content */}
         <main className="flex-1 p-4 sm:p-8 overflow-y-auto">
-          
-          {/* Header & Stats */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
             <div>
               <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Order Management</h2>
               <p className="text-sm text-slate-500 mt-1">Overview of all buyback requests and fulfillment status.</p>
             </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => handleAction(null, 'refreshKitTracking')} // Placeholder action
-                className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition-all"
-              >
-                <RefreshCw size={16} /> Refresh Tracking
-              </button>
-              <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-md shadow-indigo-200 transition-all">
-                <Plus size={16} /> Create Order
-              </button>
-            </div>
           </div>
 
-          {/* Quick Stats Row */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Pending</span>
-              <div className="flex items-end justify-between">
-                <span className="text-2xl font-bold text-slate-900">{orders.filter(o => o.status === 'order_pending').length}</span>
-                <span className="bg-amber-50 text-amber-700 text-xs px-2 py-1 rounded-full font-medium">Action Needed</span>
-              </div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Received Today</span>
-              <div className="flex items-end justify-between">
-                <span className="text-2xl font-bold text-slate-900">
-                  {orders.filter(o => {
-                    if (o.status !== 'received') return false;
-                    const date = o.lastStatusUpdateAt?.seconds ? new Date(o.lastStatusUpdateAt.seconds * 1000) : new Date();
-                    return date.toDateString() === new Date().toDateString();
-                  }).length}
-                </span>
-                <span className="bg-emerald-50 text-emerald-700 text-xs px-2 py-1 rounded-full font-medium">+12% vs yest</span>
-              </div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Payouts Pending</span>
-              <div className="flex items-end justify-between">
-                <span className="text-2xl font-bold text-slate-900">$4,250</span>
-                <span className="bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full font-medium">8 Orders</span>
-              </div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase">Total Completed</span>
-              <div className="flex items-end justify-between">
-                <span className="text-2xl font-bold text-slate-900">{orders.filter(o => o.status === 'completed').length}</span>
-                <span className="text-slate-400 text-xs">Lifetime</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Filters Bar */}
           <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
             {['all', 'pending', 'received', 'completed', 'cancelled'].map(filter => (
               <button
@@ -1106,7 +1287,6 @@ const AdminDashboard = () => {
             ))}
           </div>
 
-          {/* Orders Table */}
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -1163,9 +1343,7 @@ const AdminDashboard = () => {
                           {formatDate(order.createdAt)}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button className="text-slate-400 hover:text-indigo-600 p-2 rounded-full hover:bg-indigo-50 transition-all">
-                            <ChevronRight size={18} />
-                          </button>
+                          <ChevronRight size={18} className="text-slate-400" />
                         </td>
                       </tr>
                     ))
@@ -1173,38 +1351,24 @@ const AdminDashboard = () => {
                 </tbody>
               </table>
             </div>
-            
-            {/* Pagination Placeholder */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-              <span className="text-xs text-slate-500">Showing {filteredOrders.length} orders</span>
-              <div className="flex gap-2">
-                <button className="px-3 py-1 border border-slate-300 bg-white rounded text-xs font-medium hover:bg-slate-50 disabled:opacity-50" disabled>Prev</button>
-                <button className="px-3 py-1 border border-slate-300 bg-white rounded text-xs font-medium hover:bg-slate-50">Next</button>
-              </div>
-            </div>
           </div>
-
         </main>
       </div>
 
-      {/* Order Detail Drawer */}
       {selectedOrder && (
         <OrderDrawer 
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
           onAction={handleAction}
           onOpenQc={() => setQcModalOpen(true)}
-          db={db}
         />
       )}
 
-      {/* QC Modal Overlay */}
       {selectedOrder && (
         <QCModal 
           isOpen={qcModalOpen} 
           onClose={() => setQcModalOpen(false)} 
           order={selectedOrder}
-          auth={auth}
           onSubmit={handleQcSubmit}
         />
       )}
