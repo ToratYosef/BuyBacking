@@ -10,8 +10,7 @@ let apiBase =
     (window.SHC_API_BASE_URL || window.API_BASE_URL || window.API_BASE)) ||
   defaultApiBase;
 
-const API_ORIGIN = "https://api.secondhandcell.com";
-const API_FUNCTION_BASE = `${API_ORIGIN}/api`;
+const RAILWAY_API_ORIGIN = "https://api.secondhandcell.com";
 
 function normalizeApiBase(base) {
   if (typeof base !== "string") {
@@ -19,11 +18,8 @@ function normalizeApiBase(base) {
   }
 
   const trimmed = base.trim().replace(/\/$/, "");
-  if (trimmed === API_ORIGIN) {
-    return API_FUNCTION_BASE;
-  }
-  if (trimmed === `${API_ORIGIN}/server`) {
-    return API_FUNCTION_BASE;
+  if (trimmed === RAILWAY_API_ORIGIN) {
+    return `${trimmed}/server`;
   }
 
   return trimmed;
