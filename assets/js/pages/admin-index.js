@@ -17,6 +17,43 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+document.addEventListener('DOMContentLoaded', () => {
+  const adminShell = document.querySelector('.admin-shell');
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebarOverlay = document.getElementById('sidebar-overlay');
+  if (!adminShell || !sidebarToggle) {
+    return;
+  }
+
+  const setExpandedState = (expanded) => {
+    adminShell.classList.toggle('sidebar-expanded', expanded);
+    adminShell.classList.toggle('sidebar-collapsed', !expanded);
+    sidebarToggle.setAttribute('aria-expanded', String(expanded));
+    if (sidebarOverlay) {
+      sidebarOverlay.classList.toggle('is-visible', expanded && window.innerWidth <= 1024);
+    }
+  };
+
+  const mediaQuery = window.matchMedia('(max-width: 1024px)');
+  const handleMediaChange = (event) => {
+    setExpandedState(!event.matches);
+  };
+
+  handleMediaChange(mediaQuery);
+  mediaQuery.addEventListener('change', handleMediaChange);
+
+  sidebarToggle.addEventListener('click', () => {
+    const isExpanded = adminShell.classList.contains('sidebar-expanded');
+    setExpandedState(!isExpanded);
+  });
+
+  if (sidebarOverlay) {
+    sidebarOverlay.addEventListener('click', () => {
+      setExpandedState(false);
+    });
+  }
+});
+
 const REFRESH_TRACKING_FUNCTION_URL = '/refresh-tracking';
 const FEED_PRICING_URL = '/feeds/feed.xml';
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -5543,15 +5580,14 @@ if (!ordersTableBody) {
 return;
 }
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-const expandedRowsSource = buildExpandedOrderRows(source);
-const total = expandedRowsSource.length;
+const total = source.length;
 ordersTableBody.textContent = '';
 
 if (!total) {
 if (noOrdersMessage) {
 noOrdersMessage.classList.remove('hidden');
 }
-ordersTableBody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
+ordersTableBody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-500">No orders found for this status.</td></tr>`;
 if (paginationControls) {
 paginationControls.classList.add('hidden');
 }
@@ -5571,129 +5607,172 @@ currentPage = totalPages;
 
 const startIndex = (currentPage - 1) * ORDERS_PER_PAGE;
 const endIndex = startIndex + ORDERS_PER_PAGE;
-const expandedRows = expandedRowsSource.slice(startIndex, endIndex);
+const ordersPage = source.slice(startIndex, endIndex);
 
-lastRenderedDeviceKeys = expandedRows.map(row => row.deviceKey);
+lastRenderedDeviceKeys = [];
 
 const fragment = document.createDocumentFragment();
-expandedRows.forEach(({ order, item, deviceIndex, deviceKey }) => {
-const row = document.createElement('tr');
-row.className = 'transition-colors duration-200';
-const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
-const orderDate = formatDate(order.createdAt);
-const orderAge = formatOrderAge(order.createdAt);
-const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
-const lastUpdatedDate = formatDateTime(lastUpdatedRaw);
-const reofferTimer = formatAutoAcceptTimer(order);
-const statusText = formatStatus(order);
-const labelStatus = formatLabelStatus(order);
-const promoCode = extractOrderPromoCode(order);
-const promoBonusValue = Number(order.promoBonusAmount ?? order.promo_bonus ?? 0);
-const promoBadgeHtml = promoCode
-  ? `<div class="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">Promo ${escapeHtml(promoCode)}${
-      promoBonusValue > 0 ? ` (+$${promoBonusValue.toFixed(2)})` : ''
-    }</div>`
-  : '';
+ordersPage.forEach((order) => {
+  const orderRow = document.createElement('tr');
+  orderRow.className = 'order-parent-row';
+  const customerName = order.shippingInfo ? order.shippingInfo.fullName : 'N/A';
+  const orderDate = formatDate(order.createdAt);
+  const orderAge = formatOrderAge(order.createdAt);
+  const lastUpdatedRaw = order.lastStatusUpdateAt || order.updatedAt || order.updated_at || order.statusUpdatedAt || order.lastUpdatedAt;
+  const lastUpdatedDate = formatDateTime(lastUpdatedRaw);
+  const reofferTimer = formatAutoAcceptTimer(order);
+  const statusText = formatStatus(order);
+  const labelStatus = formatLabelStatus(order);
+  const promoCode = extractOrderPromoCode(order);
+  const promoBonusValue = Number(order.promoBonusAmount ?? order.promo_bonus ?? 0);
+  const promoBadgeHtml = promoCode
+    ? `<div class="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">Promo ${escapeHtml(promoCode)}${
+        promoBonusValue > 0 ? ` (+$${promoBonusValue.toFixed(2)})` : ''
+      }</div>`
+    : '';
 
-const trackingNumber = order.trackingNumber;
-const trackingCellContent = trackingNumber
-? `<a href="${USPS_TRACKING_URL}${trackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${trackingNumber}</a>`
-: 'N/A';
+  const trackingNumber = order.trackingNumber;
+  const trackingCellContent = trackingNumber
+    ? `<a href="${USPS_TRACKING_URL}${trackingNumber}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${trackingNumber}</a>`
+    : 'N/A';
 
-const isSelected = selectedDeviceKeys.has(deviceKey);
-const deviceLabel = item ? formatOrderItemLabel(item) : getOrderItemsSummary(order);
-const carrierLabel = resolveOrderItemCarrier(item || {}) || order.carrier || '';
-const conditionLabel = item?.condition || item?.condition_cosmetic || order.condition || '';
-const perDeviceQuote = (() => {
-  if (item?.unitPrice) return Number(item.unitPrice);
-  if (item?.totalPayout && item?.qty) return Number(item.totalPayout) / Number(item.qty);
-  if (order.totalPayout && order.qty) return Number(order.totalPayout) / Number(order.qty);
-  return null;
-})();
-const quoteText = Number.isFinite(perDeviceQuote) ? `$${perDeviceQuote.toFixed(2)}` : 'N/A';
-const itemDetails = [item?.storage || order.storage, carrierLabel].filter(Boolean).join(' • ');
-const deviceNumber = Number.isFinite(deviceIndex) ? deviceIndex + 1 : 1;
+  orderRow.innerHTML = `
+    <td class="select-column"></td>
+    <td class="px-3 py-4 whitespace-normal text-sm text-slate-700">
+      <div class="font-semibold text-slate-900">${order.id}</div>
+      <div class="text-xs text-slate-500 mt-1">${orderDate} • ${orderAge}</div>
+      <div class="text-xs text-slate-500 mt-1">Last update: ${lastUpdatedDate}</div>
+      <div class="text-xs text-slate-500 mt-1">${customerName}</div>
+      ${promoBadgeHtml}
+    </td>
+    <td class="px-3 py-4 whitespace-normal text-sm">
+      <span class="${getStatusClass(order.status)}">
+        <span class="status-bubble-text">${statusText}</span>
+        ${labelStatus ? `<span class="status-bubble-subtext">${labelStatus}</span>` : ''}
+        ${reofferTimer}
+      </span>
+    </td>
+    <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
+    <td class="px-3 py-4 whitespace-normal text-sm">
+      <div class="order-controls">
+        <button type="button" class="order-control-button" data-order-id="${order.id}" data-order-action="markReceived">Mark received</button>
+        <button type="button" class="order-control-button" data-order-id="${order.id}" data-order-action="markCompleted">Mark completed</button>
+        <button type="button" class="order-control-button" data-order-id="${order.id}" data-order-action="sendReviewRequest">Send review</button>
+      </div>
+    </td>
+  `;
 
-row.innerHTML = `
-<td class="select-column">
-  <input type="checkbox" class="order-select-checkbox" data-device-key="${deviceKey}" data-order-id="${order.id}" aria-label="Select order ${order.id} device ${deviceNumber}" ${isSelected ? 'checked' : ''}>
-</td>
-<td class="px-3 py-4 whitespace-normal text-sm font-medium text-slate-900">${order.id}</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
-  <div>${orderDate}</div>
-  <div class="text-xs text-slate-400">${orderAge}</div>
-</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-500">${lastUpdatedDate}</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${customerName}</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
-  <div class="font-semibold text-slate-900">${deviceLabel}</div>
-  <div class="text-xs text-slate-500 mt-1">Device ${deviceNumber}</div>
-  <div class="text-xs text-slate-500 mt-1">${itemDetails}</div>
-  <div class="text-xs text-slate-500 mt-1">Condition: ${conditionLabel ? formatCondition(conditionLabel) : 'N/A'}</div>
-  <div class="text-xs text-slate-500 mt-1">Quote: ${quoteText}</div>
-  ${promoBadgeHtml}
-</td>
-<td class="px-3 py-4 whitespace-normal text-sm">
-  <span class="${getStatusClass(order.status)}">
-    <span class="status-bubble-text">${statusText}</span>
-    ${labelStatus ? `<span class="status-bubble-subtext">${labelStatus}</span>` : ''}
-    ${reofferTimer}
-  </span>
-</td>
-<td class="px-3 py-4 whitespace-normal text-sm text-slate-600">${trackingCellContent}</td>
-<td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
-  <button data-order-id="${order.id}" data-device-index="${deviceIndex}" class="view-device-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
-    View Device
-  </button>
-  <button data-order-id="${order.id}" class="generate-label-btn text-emerald-600 hover:text-emerald-800 rounded-md py-1 px-3 border border-emerald-600 hover:border-emerald-800 transition-colors duration-200">
-    Label
-  </button>
-  <button data-order-id="${order.id}" class="packing-slip-btn text-purple-600 hover:text-purple-800 rounded-md py-1 px-3 border border-purple-600 hover:border-purple-800 transition-colors duration-200">
-    Packing Slip
-  </button>
-</td>
-`;
+  fragment.appendChild(orderRow);
 
-fragment.appendChild(row);
+  orderRow.querySelectorAll('.order-control-button').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      const actionType = event.currentTarget.dataset.orderAction;
+      if (!actionType) return;
+      handleAction(order.id, actionType);
+    });
+  });
 
-const selectionCheckbox = row.querySelector('.order-select-checkbox');
-if (selectionCheckbox) {
-selectionCheckbox.addEventListener('change', (event) => {
-if (event.target.checked) {
-selectedDeviceKeys.add(deviceKey);
-} else {
-selectedDeviceKeys.delete(deviceKey);
-}
-updateBulkSelectionUI();
-});
-}
+  const entries = getOrderDeviceEntries(order);
+  if (!entries.length) {
+    const emptyRow = document.createElement('tr');
+    emptyRow.className = 'order-device-row';
+    emptyRow.innerHTML = `
+      <td class="select-column"></td>
+      <td class="px-3 py-4 whitespace-normal text-sm text-slate-500" colspan="4">No device details available.</td>
+    `;
+    fragment.appendChild(emptyRow);
+    return;
+  }
 
-const viewDeviceButton = row.querySelector('.view-device-btn');
-if (viewDeviceButton) {
-viewDeviceButton.addEventListener('click', (event) => {
-event.preventDefault();
-const indexValue = Number(event.currentTarget.dataset.deviceIndex || 0);
-window.selectedOrderDeviceIndex = Number.isFinite(indexValue) ? indexValue : 0;
-openOrderDetailsModal(order.id);
-});
-}
+  entries.forEach((entry, idx) => {
+    const { item, index: deviceIndex, deviceKey } = entry;
+    const deviceRow = document.createElement('tr');
+    deviceRow.className = 'order-device-row transition-colors duration-200';
 
-const labelButton = row.querySelector('.generate-label-btn');
-if (labelButton) {
-labelButton.addEventListener('click', (event) => {
-event.preventDefault();
-window.selectedOrderDeviceIndex = deviceIndex;
-handleAction(order.id, 'generateLabel');
-});
-}
+    const isSelected = selectedDeviceKeys.has(deviceKey);
+    const deviceLabel = item ? formatOrderItemLabel(item) : getOrderItemsSummary(order);
+    const carrierLabel = resolveOrderItemCarrier(item || {}) || order.carrier || '';
+    const conditionLabel = item?.condition || item?.condition_cosmetic || order.condition || '';
+    const perDeviceQuote = (() => {
+      if (item?.unitPrice) return Number(item.unitPrice);
+      if (item?.totalPayout && item?.qty) return Number(item.totalPayout) / Number(item.qty);
+      if (order.totalPayout && order.qty) return Number(order.totalPayout) / Number(order.qty);
+      return null;
+    })();
+    const quoteText = Number.isFinite(perDeviceQuote) ? `$${perDeviceQuote.toFixed(2)}` : 'N/A';
+    const itemDetails = [item?.storage || order.storage, carrierLabel].filter(Boolean).join(' • ');
+    const deviceNumber = Number.isFinite(deviceIndex) ? deviceIndex + 1 : idx + 1;
 
-const packingSlipButton = row.querySelector('.packing-slip-btn');
-if (packingSlipButton) {
-packingSlipButton.addEventListener('click', (event) => {
-event.preventDefault();
-printPackingSlip(order, deviceIndex);
-});
-}
+    deviceRow.innerHTML = `
+      <td class="select-column">
+        <input type="checkbox" class="order-select-checkbox" data-device-key="${deviceKey}" data-order-id="${order.id}" aria-label="Select order ${order.id} device ${deviceNumber}" ${isSelected ? 'checked' : ''}>
+      </td>
+      <td class="px-3 py-4 whitespace-normal text-sm text-slate-600">
+        <div class="font-semibold text-slate-900">${deviceLabel}</div>
+        <div class="text-xs text-slate-500 mt-1">Device ${deviceNumber}</div>
+        <div class="text-xs text-slate-500 mt-1">${itemDetails}</div>
+      </td>
+      <td class="px-3 py-4 whitespace-normal text-xs text-slate-600">
+        <div>Condition: ${conditionLabel ? formatCondition(conditionLabel) : 'N/A'}</div>
+        <div>Quote: ${quoteText}</div>
+      </td>
+      <td class="px-3 py-4 whitespace-normal text-sm text-slate-400">—</td>
+      <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
+        <button data-order-id="${order.id}" data-device-index="${deviceIndex}" class="view-device-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
+          View details
+        </button>
+        <button data-order-id="${order.id}" class="generate-label-btn text-emerald-600 hover:text-emerald-800 rounded-md py-1 px-3 border border-emerald-600 hover:border-emerald-800 transition-colors duration-200">
+          Label
+        </button>
+        <button data-order-id="${order.id}" class="packing-slip-btn text-purple-600 hover:text-purple-800 rounded-md py-1 px-3 border border-purple-600 hover:border-purple-800 transition-colors duration-200">
+          Packing Slip
+        </button>
+      </td>
+    `;
+
+    fragment.appendChild(deviceRow);
+    lastRenderedDeviceKeys.push(deviceKey);
+
+    const selectionCheckbox = deviceRow.querySelector('.order-select-checkbox');
+    if (selectionCheckbox) {
+      selectionCheckbox.addEventListener('change', (event) => {
+        if (event.target.checked) {
+          selectedDeviceKeys.add(deviceKey);
+        } else {
+          selectedDeviceKeys.delete(deviceKey);
+        }
+        updateBulkSelectionUI();
+      });
+    }
+
+    const labelButton = deviceRow.querySelector('.generate-label-btn');
+    if (labelButton) {
+      labelButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        window.selectedOrderDeviceIndex = deviceIndex;
+        handleAction(order.id, 'generateLabel');
+      });
+    }
+
+    const viewDeviceButton = deviceRow.querySelector('.view-device-btn');
+    if (viewDeviceButton) {
+      viewDeviceButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        const indexValue = Number(event.currentTarget.dataset.deviceIndex || 0);
+        window.selectedOrderDeviceIndex = Number.isFinite(indexValue) ? indexValue : 0;
+        openOrderDetailsModal(order.id);
+      });
+    }
+
+    const packingSlipButton = deviceRow.querySelector('.packing-slip-btn');
+    if (packingSlipButton) {
+      packingSlipButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        printPackingSlip(order, deviceIndex);
+      });
+    }
+  });
 });
 
 ordersTableBody.replaceChildren(fragment);
@@ -5718,8 +5797,7 @@ return;
 }
 
 const source = currentFilteredOrders.length ? currentFilteredOrders : allOrders;
-const totalRows = buildExpandedOrderRows(source).length;
-const totalPages = Math.max(1, Math.ceil(Math.max(totalRows, 0) / ORDERS_PER_PAGE));
+const totalPages = Math.max(1, Math.ceil(Math.max(source.length, 0) / ORDERS_PER_PAGE));
 lastKnownTotalPages = totalPages;
 
 if (totalPages <= 1) {
@@ -8532,7 +8610,7 @@ return dateB - dateA;
 });
 
 currentFilteredOrders = filtered;
-const totalPages = Math.max(1, Math.ceil(buildExpandedOrderRows(filtered).length / ORDERS_PER_PAGE));
+const totalPages = Math.max(1, Math.ceil(filtered.length / ORDERS_PER_PAGE));
 if (preservePage) {
 currentPage = Math.min(Math.max(previousPage, 1), totalPages);
 } else {
