@@ -5749,7 +5749,7 @@ ordersPage.forEach((order) => {
         event.preventDefault();
         const indexValue = Number(event.currentTarget.dataset.deviceIndex || 0);
         window.selectedOrderDeviceIndex = Number.isFinite(indexValue) ? indexValue : 0;
-        openOrderDetailsModal(order.id);
+        window.location.href = `/admin/order.html?order=${encodeURIComponent(order.id)}&device=${encodeURIComponent(window.selectedOrderDeviceIndex)}`;
       });
     }
 
