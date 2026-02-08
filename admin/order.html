@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+      window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
+    </script>
+    <link rel="stylesheet" href="/assets/css/tailwind.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Detail - Admin</title>
+    <link rel="icon" href="/favicon/favicon.ico">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        :root {
+            --admin-bg: #f8fafc;
+            --admin-panel: #ffffff;
+            --admin-panel-alt: #f1f5f9;
+            --admin-border: #e2e8f0;
+            --admin-text: #0f172a;
+            --admin-muted: #64748b;
+            --admin-accent: #4f46e5;
+            --admin-accent-strong: #4338ca;
+            --admin-highlight: #6366f1;
+        }
+
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+            background: var(--admin-bg);
+            color: var(--admin-text);
+            margin: 0;
+        }
+
+        .order-shell {
+            display: grid;
+            grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+            min-height: 100vh;
+            gap: 0;
+        }
+
+        .order-sidebar {
+            padding: 28px 22px;
+            background: var(--admin-panel);
+            border-right: 1px solid var(--admin-border);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .order-sidebar a {
+            color: #475569;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .order-main {
+            padding: 32px 36px 48px;
+        }
+
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .order-title {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .order-meta {
+            color: var(--admin-muted);
+            font-size: 13px;
+        }
+
+        .order-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+            gap: 24px;
+        }
+
+        .order-card {
+            background: var(--admin-panel);
+            border: 1px solid var(--admin-border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 40px -35px rgba(15, 23, 42, 0.25);
+        }
+
+        .order-card h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .order-field {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+            padding: 8px 0;
+            border-bottom: 1px dashed rgba(148, 163, 184, 0.2);
+        }
+
+        .order-field:last-child {
+            border-bottom: none;
+        }
+
+        .order-field span {
+            color: var(--admin-muted);
+        }
+
+        .order-actions button,
+        .order-actions select {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .action-btn {
+            padding: 10px 14px;
+            border-radius: 12px;
+            border: none;
+            font-weight: 700;
+            background: #4f46e5;
+            color: #ffffff;
+            cursor: pointer;
+        }
+
+        .action-secondary {
+            background: #ffffff;
+            border: 1px solid var(--admin-border);
+            color: var(--admin-text);
+        }
+
+        .admin-login-screen {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            z-index: 9998;
+        }
+
+        .admin-login-screen.hidden {
+            display: none;
+        }
+
+        .admin-login-card {
+            width: min(420px, 100%);
+            border-radius: 20px;
+            background: #ffffff;
+            border: 1px solid var(--admin-border);
+            box-shadow: 0 30px 60px -40px rgba(15, 23, 42, 0.3);
+            padding: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            color: var(--admin-text);
+        }
+    </style>
+</head>
+<body data-admin-page="order">
+    <div id="admin-login-screen" class="admin-login-screen hidden">
+        <div class="admin-login-card">
+            <h2 class="text-xl font-bold">Admin sign in</h2>
+            <form id="admin-login-form" class="space-y-4">
+                <div class="flex flex-col gap-2">
+                    <label for="admin-login-email">Email</label>
+                    <input id="admin-login-email" type="email" autocomplete="email" placeholder="admin@buyback.com" required class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900">
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="admin-login-password">Password</label>
+                    <input id="admin-login-password" type="password" autocomplete="current-password" placeholder="••••••••" required class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900">
+                </div>
+                <p id="admin-login-error" class="text-xs text-red-300 hidden"></p>
+                <button type="submit" class="action-btn">Sign in</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="order-shell">
+        <aside class="order-sidebar">
+            <div>
+                <div class="text-xs uppercase tracking-[0.2em] text-slate-500">Admin</div>
+                <div class="text-lg font-bold text-slate-100">Order detail</div>
+            </div>
+            <a href="/admin/index.html"><i class="fas fa-arrow-left"></i> Back to orders</a>
+            <div class="text-sm text-slate-500">Review a single order, update status, and generate labels in one place.</div>
+            <button type="button" id="logout-btn" class="action-btn action-secondary">Sign out</button>
+        </aside>
+        <main class="order-main">
+            <header class="order-header">
+                <div>
+                    <div class="order-title" id="order-title">Order —</div>
+                    <div class="order-meta" id="order-meta">Loading order details...</div>
+                </div>
+                <div class="text-sm text-slate-400">Last updated: <span id="order-updated">—</span></div>
+            </header>
+
+            <div class="order-grid">
+                <section class="order-card">
+                    <h3>Order summary</h3>
+                    <div id="order-summary"></div>
+                </section>
+                <aside class="order-card order-actions">
+                    <h3>Actions</h3>
+                    <select id="order-status-select" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900">
+                        <option value="">Update status…</option>
+                    </select>
+                    <button type="button" id="order-status-submit" class="action-btn">Apply status</button>
+                    <button type="button" id="order-label-btn" class="action-btn action-secondary">Generate label</button>
+                    <button type="button" id="order-packing-slip-btn" class="action-btn action-secondary">Print packing slip</button>
+                    <button type="button" id="order-qc-btn" class="action-btn action-secondary">Start QC</button>
+                    <p id="order-action-feedback" class="text-xs text-slate-500"></p>
+                </aside>
+            </div>
+        </main>
+    </div>
+
+    <div id="qc-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white w-full max-w-3xl rounded-2xl shadow-xl border border-slate-200 p-6">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-900">QC Checklist</h3>
+                    <p id="qc-modal-order-id" class="text-sm text-slate-500"></p>
+                </div>
+                <button type="button" id="qc-modal-close" class="text-slate-500 hover:text-slate-700 text-xl">&times;</button>
+            </div>
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Device info</p>
+                    <div class="space-y-3">
+                        <input id="qc-device-input" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900" placeholder="Device name">
+                        <select id="qc-storage-select" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900">
+                            <option value="">Storage</option>
+                            <option>64GB</option>
+                            <option>128GB</option>
+                            <option>256GB</option>
+                            <option>512GB</option>
+                            <option>1TB</option>
+                        </select>
+                        <input id="qc-color-input" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900" placeholder="Color">
+                        <input id="qc-imei-input" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900" placeholder="IMEI (optional)">
+                    </div>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">QC answers</p>
+                    <div class="space-y-3 text-sm text-slate-600">
+                        <div>
+                            <span class="font-medium text-slate-900">Device matches?</span>
+                            <div class="flex gap-3 mt-1">
+                                <label><input type="radio" name="qc-device-match" value="yes"> Yes</label>
+                                <label><input type="radio" name="qc-device-match" value="no"> No</label>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="font-medium text-slate-900">Overall condition</span>
+                            <div class="flex gap-3 mt-1">
+                                <label><input type="radio" name="qc-overall" value="flawless"> Flawless</label>
+                                <label><input type="radio" name="qc-overall" value="good"> Good</label>
+                                <label><input type="radio" name="qc-overall" value="fair"> Fair</label>
+                                <label><input type="radio" name="qc-overall" value="broken"> Broken</label>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="font-medium text-slate-900">Cracked?</span>
+                            <div class="flex gap-3 mt-1">
+                                <label><input type="radio" name="qc-cracked" value="yes"> Yes</label>
+                                <label><input type="radio" name="qc-cracked" value="no"> No</label>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="font-medium text-slate-900">Screen defects?</span>
+                            <div class="flex gap-3 mt-1">
+                                <label><input type="radio" name="qc-defects" value="yes"> Yes</label>
+                                <label><input type="radio" name="qc-defects" value="no"> No</label>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="font-medium text-slate-900">Carrier locked?</span>
+                            <div class="flex gap-3 mt-1">
+                                <label><input type="radio" name="qc-locked" value="yes"> Yes</label>
+                                <label><input type="radio" name="qc-locked" value="no"> No</label>
+                            </div>
+                            <select id="qc-locked-carrier" class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 mt-2">
+                                <option value="">Locked carrier</option>
+                                <option>AT&T</option>
+                                <option>Verizon</option>
+                                <option>T-Mobile</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <span class="font-medium text-slate-900">Outstanding balance?</span>
+                            <div class="flex gap-3 mt-1">
+                                <label><input type="radio" name="qc-balance" value="yes"> Yes</label>
+                                <label><input type="radio" name="qc-balance" value="no"> No</label>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="font-medium text-slate-900">Fully functional?</span>
+                            <div class="flex gap-3 mt-1">
+                                <label><input type="radio" name="qc-functional" value="yes"> Yes</label>
+                                <label><input type="radio" name="qc-functional" value="no"> No</label>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="font-medium text-slate-900">FMI / Activation lock?</span>
+                            <div class="flex gap-3 mt-1">
+                                <label><input type="radio" name="qc-fmi" value="yes"> Yes</label>
+                                <label><input type="radio" name="qc-fmi" value="no"> No</label>
+                            </div>
+                        </div>
+                        <div class="border-t border-slate-200 pt-3">
+                            <p class="font-medium text-slate-900 mb-2">Notify customer</p>
+                            <label class="block"><input type="checkbox" id="qc-email-balance"> Outstanding balance</label>
+                            <label class="block"><input type="checkbox" id="qc-email-fmi"> FMI active</label>
+                            <label class="block"><input type="checkbox" id="qc-email-password"> Password locked</label>
+                            <label class="block"><input type="checkbox" id="qc-email-stolen"> Lost/stolen</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button type="button" id="qc-cancel-btn" class="action-btn action-secondary">Cancel</button>
+                <button type="button" id="qc-submit-btn" class="action-btn">Save QC</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/assets/js/pages/admin-order.js"></script>
+</body>
+</html>
