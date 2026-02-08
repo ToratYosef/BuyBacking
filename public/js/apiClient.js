@@ -10,7 +10,7 @@ let apiBase =
     (window.SHC_API_BASE_URL || window.API_BASE_URL || window.API_BASE)) ||
   defaultApiBase;
 
-const RAILWAY_API_ORIGIN = "https://shc33.up.railway.app";
+const RAILWAY_API_ORIGIN = "https://api.secondhandcell.com";
 
 function normalizeApiBase(base) {
   if (typeof base !== "string") {
@@ -85,7 +85,11 @@ async function apiRequest(method, path, data, options = {}) {
     : await response.text();
 
   if (!response.ok) {
-    const message = payload?.error || payload?.message || response.statusText;
+    const message =
+      (typeof payload === "string" && payload.trim() ? payload.trim() : null) ||
+      payload?.error ||
+      payload?.message ||
+      response.statusText;
     const error = new Error(message || "API request failed.");
     error.status = response.status;
     error.payload = payload;
