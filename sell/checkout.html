@@ -687,9 +687,10 @@
         const l = params.get('lock');
         const c = params.get('condition');
         const qty = parseInt(params.get('qty') || '1');
+        const shouldHydrateFromUrl = cartItems.length === 0;
 
         try {
-            if (b && m && s && l && c) {
+            if (b && m && s && l && c && shouldHydrateFromUrl) {
                 const docRef = doc(db, "devices", b, "models", m);
                 const snap = await getDoc(docRef);
                 if (snap.exists()) {
@@ -882,7 +883,9 @@
             
             if (labelUrl) successUrl.searchParams.set('labelUrl', labelUrl);
             if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);
-            
+
+            cartItems = [];
+            saveCart(cartItems);
             window.location.href = successUrl.toString();
         } catch (e) {
             alert("Server error.");
