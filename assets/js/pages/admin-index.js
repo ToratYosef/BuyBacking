@@ -5547,6 +5547,7 @@ snapshot.condition_functional = conditions.functional || snapshot.condition_func
 snapshot.condition_cracks = conditions.cracks || snapshot.condition_cracks;
 snapshot.condition_cosmetic = conditions.cosmetic || snapshot.condition_cosmetic;
 const perDeviceQuote = (() => {
+  if (item.perDevicePrice) return Number(item.perDevicePrice);
   if (item.unitPrice) return Number(item.unitPrice);
   if (item.totalPayout && item.qty) return Number(item.totalPayout) / Number(item.qty);
   return null;
@@ -5695,6 +5696,7 @@ ordersPage.forEach((order) => {
     const carrierLabel = resolveOrderItemCarrier(item || {}) || order.carrier || '';
     const conditionLabel = item?.condition || item?.condition_cosmetic || order.condition || '';
     const perDeviceQuote = (() => {
+      if (item?.perDevicePrice) return Number(item.perDevicePrice);
       if (item?.unitPrice) return Number(item.unitPrice);
       if (item?.totalPayout && item?.qty) return Number(item.totalPayout) / Number(item.qty);
       if (order.totalPayout && order.qty) return Number(order.totalPayout) / Number(order.qty);
