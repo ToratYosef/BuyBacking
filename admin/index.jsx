@@ -5,7 +5,8 @@ import {
   AlertCircle, X, DollarSign, User, MapPin, Printer, Smartphone, 
   CreditCard, Mail, Phone, Calendar, Clock, Tag, Edit2, Save, 
   MoreHorizontal, ChevronDown, ExternalLink, ShieldCheck, 
-  AlertTriangle, Play, Lock, Trash2, Ban, Copy, Send, RotateCcw
+  AlertTriangle, Play, Lock, Trash2, Ban, Copy, Send, RotateCcw,
+  Menu // Added Menu icon for mobile sidebar
 } from 'lucide-react';
 import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, query, orderBy } from 'firebase/firestore';
@@ -60,6 +61,165 @@ const apiCall = async (endpoint, method = 'GET', body = null, authInstance) => {
   }
 };
 
+// --- CONSTANTS & MAPS ---
+
+// 11. Canonical Status Map
+const STATUS = {
+  ORDER_PENDING: 'order_pending',
+  KIT_NEEDS_PRINTING: 'kit_needs_printing',
+  NEEDS_PRINTING: 'needs_printing',
+  SHIPPING_KIT_REQUESTED: 'shipping_kit_requested',
+  LABEL_GENERATED: 'label_generated',
+  EMAILED: 'emailed',
+  KIT_SENT: 'kit_sent',
+  KIT_TRANSIT: 'kit_on_the_way_to_us',
+  KIT_DELIVERED: 'kit_delivered',
+  PHONE_TRANSIT: 'phone_on_the_way',
+  DELIVERED_US: 'delivered_to_us',
+  RECEIVED: 'received',
+  IMEI_CHECKED: 'imei_checked',
+  REOFFER_PENDING: 're-offered-pending',
+  REOFFER_ACCEPTED: 're-offered-accepted',
+  REOFFER_DECLINED: 're-offered-declined',
+  REQUOTE_ACCEPTED: 'requote_accepted',
+  COMPLETED: 'completed',
+  PAID: 'paid',
+  CANCELLED: 'cancelled',
+};
+
+// Action Map (Strictly matched to OG HTML)
+const ACTION_MAP = {
+  // ─────────────────────────────
+  // LABEL & SHIPPING
+  // ─────────────────────────────
+  generateLabel: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/generate-label/${orderId}`,
+  },
+
+  refreshTracking: {
+    method: 'POST',
+    endpoint: () => `/refresh-tracking`,
+    body: ({ orderId, type }) => ({ orderId, type }) // type = 'kit' | 'email'
+  },
+
+  sendReturnLabel: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/return-label`,
+  },
+
+  markKitSent: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/mark-kit-sent`,
+    body: ({ orderId }) => ({ orderId }),
+  },
+
+  markReceived: {
+    method: 'PUT',
+    endpoint: ({ orderId }) => `/orders/${orderId}/status`,
+    body: () => ({ status: 'received' }),
+  },
+
+  // ─────────────────────────────
+  // ORDER STATUS
+  // ─────────────────────────────
+  markCompleted: {
+    method: 'PUT',
+    endpoint: ({ orderId }) => `/orders/${orderId}/status`,
+    body: () => ({ status: 'completed' }),
+  },
+  
+  markManuallyFulfilled: {
+     method: 'PUT',
+     endpoint: ({ orderId }) => `/orders/${orderId}/status`,
+     body: () => ({ status: 'shipping_kit_requested' }),
+  },
+
+  cancelOrder: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/cancel`,
+  },
+
+  deleteOrder: {
+    method: 'DELETE',
+    endpoint: ({ orderId }) => `/orders/${orderId}`,
+  },
+
+  // ─────────────────────────────
+  // QC / REQUOTE
+  // ─────────────────────────────
+  autoRequote: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/auto-requote`,
+    body: () => ({}),
+  },
+
+  proposeReoffer: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/re-offer`,
+    body: ({ newPrice, reasons, comments }) => ({
+      newPrice,
+      reasons,
+      comments,
+    }),
+  },
+
+  // ─────────────────────────────
+  // EMAILS
+  // ─────────────────────────────
+  sendConditionEmail: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/send-condition-email`,
+    body: ({ reason, notes, label }) => ({
+      reason,
+      notes,
+      label,
+    }),
+  },
+
+  sendReviewRequest: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/send-review-request`,
+    body: ({ orderId }) => ({ orderId }), 
+  },
+
+  // ─────────────────────────────
+  // ADMIN / MAINTENANCE
+  // ─────────────────────────────
+  clearData: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/clear-data`,
+    body: ({ selections }) => ({ selections }),
+  },
+
+  voidLabels: {
+    method: 'POST',
+    endpoint: ({ orderId }) => `/orders/${orderId}/void-label`,
+    body: ({ labels }) => ({ labels }),
+  },
+
+  // ─────────────────────────────
+  // REMINDERS (ADMIN)
+  // ─────────────────────────────
+  sendReminder: {
+    method: 'POST',
+    endpoint: () => `/admin/reminders/send`,
+    body: ({ orderId }) => ({ orderId }),
+  },
+
+  sendExpiringReminder: {
+    method: 'POST',
+    endpoint: () => `/admin/reminders/send-expiring`,
+    body: ({ orderId }) => ({ orderId }),
+  },
+
+  sendKitReminder: {
+    method: 'POST',
+    endpoint: () => `/admin/reminders/send-kit`,
+    body: ({ orderId }) => ({ orderId }),
+  },
+};
+
 // Date Formatter
 const formatDate = (timestamp) => {
   if (!timestamp) return 'N/A';
@@ -87,8 +247,8 @@ const formatStatusLabel = (status) => {
 
 const getStatusColor = (status) => {
   const s = (status || '').toLowerCase();
-  if (s.includes('pending') || s.includes('requested')) return 'bg-amber-100 text-amber-800 border-amber-200';
-  if (s.includes('label') || s.includes('transit') || s.includes('sent')) return 'bg-blue-100 text-blue-800 border-blue-200';
+  if (s.includes('pending') || s.includes('requested') || s.includes('needs')) return 'bg-amber-100 text-amber-800 border-amber-200';
+  if (s.includes('label') || s.includes('transit') || s.includes('sent') || s.includes('way')) return 'bg-blue-100 text-blue-800 border-blue-200';
   if (s.includes('received') || s.includes('qc') || s.includes('checked')) return 'bg-indigo-100 text-indigo-800 border-indigo-200';
   if (s.includes('paid') || s.includes('completed')) return 'bg-emerald-100 text-emerald-800 border-emerald-200';
   if (s.includes('cancel') || s.includes('void')) return 'bg-slate-100 text-slate-600 border-slate-200';
@@ -106,7 +266,7 @@ const StatusBadge = ({ status }) => (
 );
 
 // 2. Sidebar
-const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
+const Sidebar = ({ activeTab, setActiveTab, onLogout, isOpen, setIsOpen }) => {
   const navItems = [
     { id: 'orders', label: 'Orders', icon: Package },
     { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
@@ -115,45 +275,67 @@ const Sidebar = ({ activeTab, setActiveTab, onLogout }) => {
   ];
 
   return (
-    <div className="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-20 hidden lg:flex">
-      <div className="p-6 flex items-center gap-3">
-        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shadow-indigo-200">
-          BB
-        </div>
-        <div>
-          <h1 className="font-bold text-slate-900 leading-tight">BuyBacking</h1>
-          <p className="text-xs text-slate-500 font-medium">Admin Console</p>
-        </div>
-      </div>
-
-      <nav className="flex-1 px-4 space-y-1 mt-4">
-        <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Workspace</div>
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveTab(item.id)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-              activeTab === item.id 
-                ? 'bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-200' 
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-            }`}
-          >
-            <item.icon size={18} className={activeTab === item.id ? 'text-indigo-600' : 'text-slate-400'} />
-            {item.label}
+    <>
+      {/* Mobile Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-30 lg:hidden backdrop-blur-sm"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      
+      {/* Sidebar Content */}
+      <div className={`
+        w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-40 transition-transform duration-300
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+        <div className="p-6 flex items-center justify-between lg:justify-start gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shadow-indigo-200">
+              BB
+            </div>
+            <div>
+              <h1 className="font-bold text-slate-900 leading-tight">BuyBacking</h1>
+              <p className="text-xs text-slate-500 font-medium">Admin Console</p>
+            </div>
+          </div>
+          <button onClick={() => setIsOpen(false)} className="lg:hidden text-slate-400">
+            <X size={20} />
           </button>
-        ))}
-      </nav>
+        </div>
 
-      <div className="p-4 border-t border-slate-100">
-        <button 
-          onClick={onLogout}
-          className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-        >
-          <LogOut size={16} />
-          Sign Out
-        </button>
+        <nav className="flex-1 px-4 space-y-1 mt-4">
+          <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Workspace</div>
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => {
+                setActiveTab(item.id);
+                setIsOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                activeTab === item.id 
+                  ? 'bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-200' 
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <item.icon size={18} className={activeTab === item.id ? 'text-indigo-600' : 'text-slate-400'} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-slate-100">
+          <button 
+            onClick={onLogout}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+          >
+            <LogOut size={16} />
+            Sign Out
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
@@ -339,25 +521,26 @@ const QCModal = ({ isOpen, onClose, order, onSubmit }) => {
       title: "Locks & Security",
       content: (
         <div className="space-y-4">
-           <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+           {/* Recreated Toggle CSS logic with Tailwind since classes were missing */}
+           <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer group">
             <div className="flex items-center gap-3">
               <ShieldCheck className={data.isLocked === 'yes' ? "text-rose-500" : "text-slate-400"} />
               <span className="text-sm font-medium text-slate-900">iCloud / Google Locked?</span>
             </div>
-            <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-              <input type="checkbox" name="toggle" checked={data.isLocked === 'yes'} onChange={(e) => setData({...data, isLocked: e.target.checked ? 'yes' : 'no'})} className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300 checked:right-0 checked:border-rose-600"/>
-              <label className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${data.isLocked === 'yes' ? 'bg-rose-600' : 'bg-slate-300'}`}></label>
+            <div className="relative inline-flex items-center cursor-pointer">
+               <input type="checkbox" className="sr-only peer" checked={data.isLocked === 'yes'} onChange={(e) => setData({...data, isLocked: e.target.checked ? 'yes' : 'no'})} />
+               <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-rose-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-600"></div>
             </div>
           </label>
 
-           <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+           <label className="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer group">
             <div className="flex items-center gap-3">
               <DollarSign className={data.hasBalance === 'yes' ? "text-amber-500" : "text-slate-400"} />
               <span className="text-sm font-medium text-slate-900">Finance / Balance Owed?</span>
             </div>
-            <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-              <input type="checkbox" name="toggle" checked={data.hasBalance === 'yes'} onChange={(e) => setData({...data, hasBalance: e.target.checked ? 'yes' : 'no'})} className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer border-slate-300 checked:right-0 checked:border-amber-500"/>
-              <label className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer ${data.hasBalance === 'yes' ? 'bg-amber-500' : 'bg-slate-300'}`}></label>
+            <div className="relative inline-flex items-center cursor-pointer">
+               <input type="checkbox" className="sr-only peer" checked={data.hasBalance === 'yes'} onChange={(e) => setData({...data, hasBalance: e.target.checked ? 'yes' : 'no'})} />
+               <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-amber-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
             </div>
           </label>
 
@@ -441,20 +624,67 @@ const QCModal = ({ isOpen, onClose, order, onSubmit }) => {
   );
 };
 
-// 5. Workflow Stepper
+// 5. Re-Offer Modal
+const ReofferModal = ({ isOpen, onClose, order, onSubmit }) => {
+  const [newPrice, setNewPrice] = useState('');
+  const [reasons, setReasons] = useState('');
+  const [comments, setComments] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit(order.id, 'proposeReoffer', {
+      newPrice: parseFloat(newPrice),
+      reasons: reasons.split(',').map(s => s.trim()), // Simple CSV parsing for now
+      comments
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+         <div className="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+            <h3 className="text-lg font-bold text-slate-900">Propose Re-offer</h3>
+            <button onClick={onClose}><X size={20} className="text-slate-400"/></button>
+         </div>
+         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">New Offer Amount ($)</label>
+              <input type="number" step="0.01" required value={newPrice} onChange={e => setNewPrice(e.target.value)} className="w-full border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Reasons (comma separated)</label>
+              <input type="text" placeholder="Cracked Screen, Bad LCD..." required value={reasons} onChange={e => setReasons(e.target.value)} className="w-full border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Customer Comments</label>
+              <textarea value={comments} onChange={e => setComments(e.target.value)} className="w-full border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 h-24"></textarea>
+            </div>
+            <div className="pt-2">
+              <button type="submit" className="w-full bg-purple-600 text-white font-bold py-2.5 rounded-lg hover:bg-purple-700 transition-colors">Send Re-offer</button>
+            </div>
+         </form>
+      </div>
+    </div>
+  );
+};
+
+// 6. Workflow Stepper
 const WorkflowStepper = ({ status, hasLabel, hasQc }) => {
   let activeStep = 0;
   
-  if (status === 'completed' || status === 'paid') {
+  if ([STATUS.COMPLETED, STATUS.PAID, STATUS.REQUOTE_ACCEPTED].includes(status)) {
     activeStep = 4;
-  } else if (hasQc || status === 'received') {
-    activeStep = 2; // QC/Received
-  } else if (hasLabel || status.includes('label') || status.includes('transit')) {
-    activeStep = 1; // In Transit
-  } else if (status === 'order_pending') {
-    activeStep = 0; // Pending
-  } else if (status === 'cancelled') {
-    activeStep = -1; // Cancelled
+  } else if (hasQc || [STATUS.RECEIVED, STATUS.IMEI_CHECKED].includes(status)) {
+    activeStep = 2; 
+  } else if (hasLabel || [STATUS.KIT_SENT, STATUS.KIT_TRANSIT, STATUS.KIT_DELIVERED, STATUS.PHONE_TRANSIT, STATUS.DELIVERED_US].includes(status)) {
+    activeStep = 1;
+  } else if (status === STATUS.ORDER_PENDING || status === STATUS.SHIPPING_KIT_REQUESTED) {
+    activeStep = 0;
+  } else if (status === STATUS.CANCELLED) {
+    activeStep = -1;
   }
 
   const steps = [
@@ -508,13 +738,12 @@ const WorkflowStepper = ({ status, hasLabel, hasQc }) => {
   );
 };
 
-// 6. Drawer Component (Order Details)
-const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
+// 7. Drawer Component (Order Details)
+const OrderDrawer = ({ order, onClose, onAction, onOpenQc, onOpenReoffer }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const isCancelled = order.status === 'cancelled';
+  const isCancelled = order.status === STATUS.CANCELLED;
   const status = order.status || '';
 
-  // Tabs Configuration
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'shipping', label: 'Shipping & Tracking', icon: Truck },
@@ -524,13 +753,12 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
 
   // --- BUTTON RENDER LOGIC (BASED ON STEPS) ---
   const renderActionButtons = () => {
-    // Shared Button Styles
     const btnPrimary = "flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 text-sm";
     const btnSecondary = "flex-1 bg-white border border-slate-300 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-50 transition-colors shadow-sm flex items-center justify-center gap-2 text-sm";
     const btnDanger = "px-4 py-3 bg-white border border-rose-200 text-rose-600 font-bold rounded-xl hover:bg-rose-50 transition-colors shadow-sm text-sm";
 
-    // --- STEP 1: Pending / Needs Printing ---
-    if (['order_pending', 'kit_needs_printing', 'needs_printing'].includes(status)) {
+    // STEP 1: Pending
+    if ([STATUS.ORDER_PENDING, STATUS.KIT_NEEDS_PRINTING, STATUS.NEEDS_PRINTING].includes(status)) {
       return (
         <div className="flex flex-col gap-3 w-full">
            <div className="flex gap-3 w-full">
@@ -558,15 +786,15 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
       );
     }
 
-    // --- STEP 2: Shipping Kit Requested ---
-    if (status === 'shipping_kit_requested') {
+    // STEP 2: Shipping Kit Requested
+    if (status === STATUS.SHIPPING_KIT_REQUESTED) {
       return (
         <div className="flex flex-col gap-3 w-full">
            <div className="flex gap-3 w-full">
              <button onClick={() => onAction(order.id, 'generateLabel')} className={btnPrimary}>
                 <Tag size={16} /> Generate Label
              </button>
-             <button onClick={() => onAction(order.id, 'markSent')} className={btnSecondary}>
+             <button onClick={() => onAction(order.id, 'markKitSent')} className={btnSecondary}>
                <Truck size={16} /> Mark I Sent
              </button>
            </div>
@@ -585,14 +813,14 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
       );
     }
 
-    // --- STEP 3: Label Generated ---
-    if (status === 'label_generated' || status === 'emailed') {
+    // STEP 3: Label Generated
+    if ([STATUS.LABEL_GENERATED, STATUS.EMAILED].includes(status)) {
       const isKit = order.shippingMethod === 'kit' || order.shippingPreference === 'Shipping Kit';
       return (
         <div className="flex flex-col gap-3 w-full">
            <div className="flex gap-3 w-full">
              {isKit && (
-               <button onClick={() => onAction(order.id, 'markSent')} className={btnSecondary}>
+               <button onClick={() => onAction(order.id, 'markKitSent')} className={btnSecondary}>
                  <Truck size={16} /> Mark I Sent
                </button>
              )}
@@ -612,8 +840,8 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
       );
     }
 
-    // --- STEP 4: In Transit / Delivered ---
-    if (['kit_on_the_way_to_us', 'kit_delivered', 'phone_on_the_way', 'delivered_to_us'].includes(status)) {
+    // STEP 4: In Transit
+    if ([STATUS.KIT_TRANSIT, STATUS.KIT_DELIVERED, STATUS.PHONE_TRANSIT, STATUS.DELIVERED_US, STATUS.KIT_SENT].includes(status)) {
        return (
         <div className="flex flex-col gap-3 w-full">
            <button onClick={() => onAction(order.id, 'markReceived')} className={btnPrimary}>
@@ -631,8 +859,8 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
       );
     }
 
-    // --- STEP 5: Received / Processing ---
-    if (['received', 'imei_checked'].includes(status)) {
+    // STEP 5: Received / Processing
+    if ([STATUS.RECEIVED, STATUS.IMEI_CHECKED].includes(status)) {
       return (
         <div className="flex flex-col gap-3 w-full">
            <div className="flex gap-3 w-full">
@@ -645,16 +873,16 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
            </div>
            
            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => onAction(order.id, 'emailBalance')} className="px-2 py-2 bg-amber-50 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-100 border border-amber-200">
+              <button onClick={() => onAction(order.id, 'sendConditionEmail', { reason: 'balance', label: 'Balance Owed' })} className="px-2 py-2 bg-amber-50 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-100 border border-amber-200">
                 Email Balance Notice
               </button>
-              <button onClick={() => onAction(order.id, 'emailPasswordLock')} className="px-2 py-2 bg-rose-50 text-rose-700 rounded-lg text-xs font-medium hover:bg-rose-100 border border-rose-200">
+              <button onClick={() => onAction(order.id, 'sendConditionEmail', { reason: 'locked', label: 'Device Locked' })} className="px-2 py-2 bg-rose-50 text-rose-700 rounded-lg text-xs font-medium hover:bg-rose-100 border border-rose-200">
                 Email Lock Notice
               </button>
-               <button onClick={() => onAction(order.id, 'proposeReoffer')} className="px-2 py-2 bg-purple-50 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-100 border border-purple-200">
+               <button onClick={onOpenReoffer} className="px-2 py-2 bg-purple-50 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-100 border border-purple-200">
                 Propose Re-offer
               </button>
-              <button onClick={() => onAction(order.id, 'finalizeReducedPayout')} className="px-2 py-2 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100 border border-blue-200">
+              <button onClick={() => onAction(order.id, 'autoRequote')} className="px-2 py-2 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100 border border-blue-200">
                 Auto-Requote (75%)
               </button>
            </div>
@@ -671,18 +899,18 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
       );
     }
 
-    // --- STEP 6: Re-Offer Steps ---
-    if (status === 're-offered-pending') {
+    // STEP 6: Re-Offer Steps
+    if (status === STATUS.REOFFER_PENDING) {
       return (
          <div className="flex gap-3 w-full">
-            <button onClick={() => onAction(order.id, 'finalizeReducedPayout')} className={btnPrimary}>
-              Finalize Reduced Payout
+            <button onClick={() => onAction(order.id, 'autoRequote')} className={btnPrimary}>
+              Finalize Reduced Payout (Auto)
             </button>
          </div>
       );
     }
 
-    if (status === 're-offered-accepted') {
+    if (status === STATUS.REOFFER_ACCEPTED) {
        return (
          <div className="flex gap-3 w-full">
             <button onClick={() => onAction(order.id, 'markCompleted')} className={btnPrimary}>
@@ -692,7 +920,7 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
       );
     }
     
-    if (status === 're-offered-declined') {
+    if (status === STATUS.REOFFER_DECLINED) {
        return (
          <div className="flex gap-3 w-full">
             <button onClick={() => onAction(order.id, 'sendReturnLabel')} className={btnPrimary}>
@@ -702,8 +930,8 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
       );
     }
 
-    // --- STEP 7: Completed ---
-    if (['completed', 'requote_accepted', 'paid'].includes(status)) {
+    // STEP 7: Completed
+    if ([STATUS.COMPLETED, STATUS.REQUOTE_ACCEPTED, STATUS.PAID].includes(status)) {
       return (
         <div className="flex flex-col gap-3 w-full">
            <div className="w-full bg-emerald-50 text-emerald-700 font-bold py-3 rounded-xl border border-emerald-100 flex items-center justify-center gap-2">
@@ -724,7 +952,6 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
       );
     }
 
-    // --- DEFAULT FALLBACK / CANCELLED ---
     if (isCancelled) {
       return (
         <div className="w-full bg-slate-100 text-slate-500 font-medium py-3 rounded-xl text-center flex items-center justify-center gap-2">
@@ -753,11 +980,22 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
           )}
           
           {/* Admin Tools */}
-          <button onClick={() => onAction(order.id, 'clearShippingData')} className="text-xs text-slate-400 hover:text-rose-600 flex items-center gap-1 justify-center py-2">
+          <button onClick={() => onAction(order.id, 'clearData', { selections: ['shipping'] })} className="text-xs text-slate-400 hover:text-rose-600 flex items-center gap-1 justify-center py-2">
             <Ban size={12} /> Clear Shipping Data
           </button>
-           <button onClick={() => onAction(order.id, 'voidLabels')} className="text-xs text-slate-400 hover:text-rose-600 flex items-center gap-1 justify-center py-2">
+           <button onClick={() => onAction(order.id, 'voidLabels', { labels: ['all'] })} className="text-xs text-slate-400 hover:text-rose-600 flex items-center gap-1 justify-center py-2">
             <Trash2 size={12} /> Void Labels
+          </button>
+          
+          {/* Reminders */}
+           <button onClick={() => onAction(order.id, 'sendReminder')} className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1 justify-center py-2">
+            <Bell size={12} /> Standard Reminder
+          </button>
+           <button onClick={() => onAction(order.id, 'sendExpiringReminder')} className="text-xs text-slate-400 hover:text-rose-600 flex items-center gap-1 justify-center py-2">
+            <AlertTriangle size={12} /> Expiring Notice
+          </button>
+           <button onClick={() => onAction(order.id, 'sendKitReminder')} className="text-xs text-slate-400 hover:text-indigo-600 flex items-center gap-1 justify-center py-2">
+            <Truck size={12} /> Kit Reminder
           </button>
        </div>
     );
@@ -1048,7 +1286,7 @@ const OrderDrawer = ({ order, onClose, onAction, onOpenQc }) => {
   );
 };
 
-// 7. Main Dashboard
+// 8. Main Dashboard
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('orders');
   const [orders, setOrders] = useState([]);
@@ -1057,6 +1295,8 @@ const AdminDashboard = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [qcModalOpen, setQcModalOpen] = useState(false);
+  const [reofferModalOpen, setReofferModalOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
@@ -1093,14 +1333,14 @@ const AdminDashboard = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // 3. Filter Logic
+  // 3. Filter Logic (Using STATUS constant)
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
       if (statusFilter !== 'all') {
-        if (statusFilter === 'pending' && !order.status.includes('pending')) return false;
-        if (statusFilter === 'completed' && !order.status.includes('completed')) return false;
-        if (statusFilter === 'cancelled' && order.status !== 'cancelled') return false;
-        if (statusFilter === 'received' && order.status !== 'received') return false;
+        if (statusFilter === 'pending' && !(order.status === STATUS.ORDER_PENDING || order.status === STATUS.KIT_NEEDS_PRINTING)) return false;
+        if (statusFilter === 'completed' && !(order.status === STATUS.COMPLETED || order.status === STATUS.PAID)) return false;
+        if (statusFilter === 'cancelled' && order.status !== STATUS.CANCELLED) return false;
+        if (statusFilter === 'received' && order.status !== STATUS.RECEIVED) return false;
       }
       if (searchTerm) {
         const lowerTerm = searchTerm.toLowerCase();
@@ -1115,100 +1355,46 @@ const AdminDashboard = () => {
     });
   }, [orders, statusFilter, searchTerm]);
 
-  // 4. ACTION HANDLER MAPPED TO API
+  // 4. ACTION HANDLER (Refactored to use ACTION_MAP)
   const handleAction = async (orderId, actionType, payload = {}) => {
     if (!user) return;
-    
+
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    if (actionType === 'printPackingSlip') {
+        window.open(`${API_BASE_URL}/orders/${orderId}/packing-slip`, '_blank');
+        return;
+    }
+
+    const actionConfig = ACTION_MAP[actionType];
+    if (!actionConfig) {
+      console.warn("Unknown Action Type:", actionType);
+      return;
+    }
+
     try {
-      let endpoint = '';
-      let method = 'POST';
-      let body = payload;
+      const { method, endpoint, body } = actionConfig;
 
-      switch (actionType) {
-        // --- Status Updates ---
-        case 'markManuallyFulfilled':
-          endpoint = `/orders/${orderId}/status`;
-          method = 'PUT';
-          body = { status: 'shipping_kit_requested' }; // Assuming logic
-          break;
-        case 'markSent':
-          endpoint = `/orders/${orderId}/status`;
-          method = 'PUT';
-          body = { status: 'kit_sent' };
-          break;
-        case 'markReceived':
-          endpoint = `/orders/${orderId}/status`;
-          method = 'PUT';
-          body = { status: 'received' };
-          break;
-        case 'markCompleted':
-          endpoint = `/orders/${orderId}/status`;
-          method = 'PUT';
-          body = { status: 'completed' };
-          break;
-          
-        // --- Label & Shipping ---
-        case 'generateLabel':
-          endpoint = `/generate-label/${orderId}`;
-          break;
-        case 'sendReturnLabel':
-          endpoint = `/orders/${orderId}/return-label`;
-          break;
-        case 'printPackingSlip':
-           // This usually opens a PDF in new tab, not just an API call
-           window.open(`${API_BASE_URL}/orders/${orderId}/packing-slip`, '_blank');
-           return; 
-        case 'refreshTracking':
-           endpoint = `/orders/${orderId}/refresh-tracking`;
-           break;
-        case 'voidLabels':
-           endpoint = `/orders/${orderId}/void-label`;
-           break;
-        case 'clearShippingData':
-           endpoint = `/orders/${orderId}/clear-shipping`;
-           break;
+      // Resolve endpoint
+      const url = typeof endpoint === 'function' 
+        ? endpoint({ orderId, ...payload }) 
+        : endpoint;
 
-        // --- Emails & Notifications ---
-        case 'emailBalance':
-           endpoint = `/orders/${orderId}/email/balance`;
-           break;
-        case 'emailPasswordLock':
-           endpoint = `/orders/${orderId}/email/lock-notice`;
-           break;
-        case 'emailLostStolen':
-           endpoint = `/orders/${orderId}/email/lost-stolen`;
-           break;
-        case 'emailFMI':
-           endpoint = `/orders/${orderId}/email/fmi-lock`;
-           break;
-        case 'sendReviewRequest':
-           endpoint = `/orders/${orderId}/email/review-request`;
-           break;
-        
-        // --- Re-Quotes & Admin ---
-        case 'proposeReoffer':
-           // Likely opens a different modal in a real app, here we simulate API trigger
-           endpoint = `/orders/${orderId}/reoffer/propose`; 
-           break;
-        case 'finalizeReducedPayout':
-           endpoint = `/orders/${orderId}/reoffer/finalize-75`;
-           break;
-        case 'cancelOrder':
-          endpoint = `/orders/${orderId}/cancel`;
-          break;
-        case 'deleteOrder':
-           endpoint = `/orders/${orderId}`;
-           method = 'DELETE';
-           break;
-
-        default:
-          console.warn("Unknown Action Type:", actionType);
-          return;
+      // Resolve body
+      let bodyData = null;
+      if (body) {
+        // Special logic for refreshTracking which needs order object context
+        if (actionType === 'refreshTracking') {
+             const type = (order.shippingPreference === 'Shipping Kit' || order.shippingMethod === 'kit') ? 'kit' : 'email';
+             bodyData = { orderId, type };
+        } else {
+             bodyData = typeof body === 'function' ? body({ orderId, ...payload }) : body;
+        }
       }
 
-      await apiCall(endpoint, method, body, auth);
+      await apiCall(url, method, bodyData, auth);
       console.log(`Action ${actionType} successful`);
-      // Optional: Add toast notification here
       
     } catch (error) {
       alert(`Action failed: ${error.message}`);
@@ -1225,8 +1411,7 @@ const AdminDashboard = () => {
             qcCompletedAt: new Date()
         }, { merge: true });
         
-        // Trigger backend processing for QC if needed
-        await apiCall(`/orders/${orderId}/qc-complete`, 'POST', qcData, auth);
+        // Removed backend call as per request "QC should update Firestore (instant)"
     } catch(e) {
         console.error("QC Save Failed", e);
         alert("Failed to save QC data");
@@ -1238,13 +1423,22 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => signOut(auth)} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onLogout={() => signOut(auth)} 
+        isOpen={sidebarOpen}
+        setIsOpen={setSidebarOpen}
+      />
 
       <div className="flex-1 flex flex-col lg:ml-64 transition-all duration-300">
         
         <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between">
           <div className="flex items-center gap-4 flex-1">
-            <Search className="text-slate-400" size={20} />
+            <button className="lg:hidden text-slate-500 hover:text-slate-700" onClick={() => setSidebarOpen(true)}>
+              <Menu size={24} />
+            </button>
+            <Search className="text-slate-400 hidden sm:block" size={20} />
             <input 
               type="text" 
               placeholder="Search orders..." 
@@ -1361,6 +1555,7 @@ const AdminDashboard = () => {
           onClose={() => setSelectedOrder(null)}
           onAction={handleAction}
           onOpenQc={() => setQcModalOpen(true)}
+          onOpenReoffer={() => setReofferModalOpen(true)}
         />
       )}
 
@@ -1370,6 +1565,15 @@ const AdminDashboard = () => {
           onClose={() => setQcModalOpen(false)} 
           order={selectedOrder}
           onSubmit={handleQcSubmit}
+        />
+      )}
+
+      {selectedOrder && (
+        <ReofferModal
+          isOpen={reofferModalOpen}
+          onClose={() => setReofferModalOpen(false)}
+          order={selectedOrder}
+          onSubmit={handleAction}
         />
       )}
 
