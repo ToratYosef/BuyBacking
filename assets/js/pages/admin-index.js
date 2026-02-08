@@ -5719,6 +5719,9 @@ ordersPage.forEach((order) => {
       </td>
       <td class="px-3 py-4 whitespace-normal text-sm text-slate-400">—</td>
       <td class="px-3 py-4 whitespace-normal text-sm font-medium flex flex-wrap items-center gap-2">
+        <button data-order-id="${order.id}" data-device-index="${deviceIndex}" class="view-device-btn text-blue-600 hover:text-blue-900 rounded-md py-1 px-3 border border-blue-600 hover:border-blue-900 transition-colors duration-200">
+          View details
+        </button>
         <button data-order-id="${order.id}" class="generate-label-btn text-emerald-600 hover:text-emerald-800 rounded-md py-1 px-3 border border-emerald-600 hover:border-emerald-800 transition-colors duration-200">
           Label
         </button>
@@ -5749,6 +5752,16 @@ ordersPage.forEach((order) => {
         event.preventDefault();
         window.selectedOrderDeviceIndex = deviceIndex;
         handleAction(order.id, 'generateLabel');
+      });
+    }
+
+    const viewDeviceButton = deviceRow.querySelector('.view-device-btn');
+    if (viewDeviceButton) {
+      viewDeviceButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        const indexValue = Number(event.currentTarget.dataset.deviceIndex || 0);
+        window.selectedOrderDeviceIndex = Number.isFinite(indexValue) ? indexValue : 0;
+        openOrderDetailsModal(order.id);
       });
     }
 
