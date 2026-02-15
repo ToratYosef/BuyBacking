@@ -415,6 +415,7 @@
       reofferData: null,
       qcModelCache: {},
       qcStorageCache: {},
+      viewDelegationBound: false,
       // status dropdown (modal)
       statusDropdownOpen: false,
       // order text import (placeholder modal)
@@ -1577,7 +1578,7 @@
             <td class="px-4 py-3 align-top">
               <div class="flex flex-wrap gap-2 justify-end">
                 <span class="text-xs text-slate-400">Click row to open</span>
-                <button data-view-order="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
+                <button type="button" data-view-order="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
                   View
                 </button>
               </div>
@@ -1616,7 +1617,7 @@
               <td class="px-4 py-3 align-top"><span class="text-sm text-slate-300">—</span></td>
               <td class="px-4 py-3 align-top">
                 <div class="flex flex-wrap gap-2 justify-end">
-                  <button data-view-device="${esc(deviceKey)}"
+                  <button type="button" data-view-device="${esc(deviceKey)}"
                     class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
                     View
                   </button>
@@ -2528,6 +2529,51 @@
     // EVENTS
     // ----------------------------
     function bindAppEvents() {
+      if (!state.viewDelegationBound) {
+        document.addEventListener("click", (event) => {
+          const orderBtn = event.target.closest("[data-view-order]");
+          if (orderBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const orderId = orderBtn.getAttribute("data-view-order");
+            if (!orderId) return;
+            state.selectedOrderId = orderId;
+            state.selectedDeviceKey = null;
+            state.qcDeviceKey = null;
+            state.drawerTab = "overview";
+            state.statusDropdownOpen = false;
+            state.qcOpen = false;
+            state.qcStep = 1;
+            state.qcData = null;
+            state.reofferOpen = false;
+            state.reofferData = null;
+            render();
+            return;
+          }
+
+          const deviceBtn = event.target.closest("[data-view-device]");
+          if (deviceBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const deviceKey = deviceBtn.getAttribute("data-view-device");
+            if (!deviceKey) return;
+            const parsed = parseOrderDeviceKey(deviceKey);
+            state.selectedOrderId = parsed.orderId;
+            state.selectedDeviceKey = deviceKey;
+            state.qcDeviceKey = deviceKey;
+            state.drawerTab = "qc";
+            state.statusDropdownOpen = false;
+            state.qcOpen = false;
+            state.qcStep = 1;
+            state.qcData = null;
+            state.reofferOpen = false;
+            state.reofferData = null;
+            render();
+          }
+        });
+        state.viewDelegationBound = true;
+      }
+
       // Logout
       const logoutBtn = document.getElementById("logoutBtn");
       if (logoutBtn) logoutBtn.addEventListener("click", () => signOut(auth));
@@ -2631,47 +2677,7 @@
         });
       });
 
-      document.querySelectorAll("[data-view-order]").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const orderId = btn.getAttribute("data-view-order");
-          if (!orderId) return;
-          state.selectedOrderId = orderId;
-          state.selectedDeviceKey = null;
-          state.qcDeviceKey = null;
-          state.drawerTab = "overview";
-          state.statusDropdownOpen = false;
-          state.qcOpen = false;
-          state.qcStep = 1;
-          state.qcData = null;
-          state.reofferOpen = false;
-          state.reofferData = null;
-          render();
-        });
-      });
-
-      // per-device view button (opens drawer focused on one device)
-      document.querySelectorAll("[data-view-device]").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const deviceKey = btn.getAttribute("data-view-device");
-          if (!deviceKey) return;
-          const parsed = parseOrderDeviceKey(deviceKey);
-          state.selectedOrderId = parsed.orderId;
-          state.selectedDeviceKey = deviceKey;
-          state.qcDeviceKey = deviceKey;
-          state.drawerTab = "qc";
-          state.statusDropdownOpen = false;
-          state.qcOpen = false;
-          state.qcStep = 1;
-          state.qcData = null;
-          state.reofferOpen = false;
-          state.reofferData = null;
-          render();
-        });
-      });
+      // per-order and per-device View buttons are handled by delegated click binding above.
       const btnGen = document.getElementById("bulk-generate-labels");
       if (btnGen) btnGen.addEventListener("click", () => handleBulkLabelGeneration());
       const btnDelete = document.getElementById("bulk-delete-orders");
@@ -2828,9 +2834,6 @@
               }
               render();
             });
-          });
-          document.querySelectorAll('input[name="storageMatch"]').forEach(r => {
-            r.addEventListener("change", () => { state.qcData.storageMatch = r.value; });
           });
           const devName = document.getElementById("qcDeviceName");
           if (devName) devName.addEventListener("input", () => state.qcData.deviceName = devName.value);
