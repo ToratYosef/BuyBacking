@@ -1921,6 +1921,13 @@
       tabs.splice(2, 0, { id: "qc", label: "QC & Intake", icon: "shield-check" });
       const visibleEntries = entries;
       function overviewHTML() {
+        const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
+        const reofferAccepted = isAcceptedReofferStatus(order?.status);
+        const acceptedTotal = getAcceptedReofferPayout(order);
+        const originalTotal = getOriginalPayout(order);
+        const acceptedPerDevice = Number.isFinite(acceptedTotal) ? (acceptedTotal / totalDeviceCount) : null;
+        const originalPerDevice = Number.isFinite(originalTotal) ? (originalTotal / totalDeviceCount) : null;
+
         const devices = visibleEntries.map((entry) => {
           const item = entry.item || {};
           const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
