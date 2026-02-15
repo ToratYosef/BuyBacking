@@ -112,8 +112,32 @@ if (!window[INIT_FLAG]) {
 
   const toggleModal = (modal, isVisible) => {
     if (!modal) return;
+    const isStandardModal = modal.classList.contains("modal");
+    if (isStandardModal) {
+      if (isVisible) {
+        modal.classList.remove("is-hiding");
+        modal.classList.remove("is-visible");
+        modal.setAttribute("aria-hidden", "false");
+        void modal.offsetWidth;
+        requestAnimationFrame(() => modal.classList.add("is-visible"));
+      } else {
+        modal.classList.add("is-hiding");
+        modal.setAttribute("aria-hidden", "true");
+        const onTransitionEnd = (event) => {
+          if (event.target !== modal) return;
+          modal.classList.remove("is-visible", "is-hiding");
+          modal.removeEventListener("transitionend", onTransitionEnd);
+        };
+        modal.addEventListener("transitionend", onTransitionEnd);
+        setTimeout(() => {
+          modal.classList.remove("is-visible", "is-hiding");
+        }, 350);
+      }
+      return;
+    }
     modal.style.display = isVisible ? "flex" : "none";
     modal.classList.toggle("is-visible", isVisible);
+    modal.setAttribute("aria-hidden", isVisible ? "false" : "true");
   };
 
   const showMessage = (messageEl, message, isError = false) => {
@@ -136,12 +160,23 @@ if (!window[INIT_FLAG]) {
     const loginForm = document.getElementById("loginForm");
     const signupForm = document.getElementById("signupForm");
     if (!loginTabBtn || !signupTabBtn || !loginForm || !signupForm) return;
+    const loginModal = document.getElementById("loginModal");
+    const isStandardModal = loginModal?.classList.contains("modal");
 
     const isLogin = tab === "login";
     loginTabBtn.classList.toggle("is-active", isLogin);
     signupTabBtn.classList.toggle("is-active", !isLogin);
     loginForm.classList.toggle("is-visible", isLogin);
     signupForm.classList.toggle("is-visible", !isLogin);
+
+    if (isStandardModal) {
+      loginForm.classList.toggle("hidden", !isLogin);
+      signupForm.classList.toggle("hidden", isLogin);
+      loginTabBtn.classList.toggle("border-blue-600", isLogin);
+      loginTabBtn.classList.toggle("text-blue-600", isLogin);
+      signupTabBtn.classList.toggle("border-blue-600", !isLogin);
+      signupTabBtn.classList.toggle("text-blue-600", !isLogin);
+    }
   };
 
   const bindAuthUi = () => {
@@ -152,7 +187,7 @@ if (!window[INIT_FLAG]) {
     const authDropdown = document.getElementById("authDropdown");
     const logoutBtn = document.getElementById("logoutBtn");
     const authMessage = document.getElementById("authMessage");
-    const closeBtn = modal.querySelector(".shc-auth-close");
+    const closeBtn = modal.querySelector(".shc-auth-close") || modal.querySelector(".close-modal-btn");
     const signupSwitch = document.getElementById("switchToLogin");
     const forgotPassword = document.getElementById("forgotPasswordLink");
     const loginForm = document.getElementById("loginForm");
