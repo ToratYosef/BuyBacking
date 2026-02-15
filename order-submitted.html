@@ -93,11 +93,17 @@
             </p>
 
             <!-- Conditional Label Card (Only for Email Label) -->
-            <div id="emailLabelCard" class="hidden mb-8 p-6 rounded-2xl border border-emerald-200 bg-emerald-50 text-left">
-                <h3 class="text-xl font-bold text-emerald-900 mb-2">Download your prepaid USPS label</h3>
-                <p class="text-sm text-emerald-800 mb-4" id="labelStatusMessage">Download your label and ship within 48 hours to lock in your payout.</p>
-                <div class="flex flex-col gap-3 sm:flex-row">
-                    <a id="labelDownloadLink" href="#" target="_blank" rel="noopener" class="inline-flex items-center justify-center px-5 py-3 rounded-xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition-colors">Download Label (PDF)</a>
+            <div id="emailLabelCard" class="hidden mb-8 p-6 rounded-2xl border border-emerald-200 bg-emerald-50 text-center">
+                <h3 class="text-2xl font-extrabold text-emerald-900 mb-2">Download your prepaid USPS label</h3>
+                <p class="text-sm text-emerald-800 mb-4 max-w-2xl mx-auto" id="labelStatusMessage">Download your label and ship within 48 hours to lock in your payout.</p>
+                <div class="bg-white border border-emerald-200 rounded-2xl p-3 shadow-inner mb-4">
+                    <iframe id="labelPdfFrame" title="USPS Label PDF" class="w-full h-[520px] rounded-xl hidden"></iframe>
+                    <p id="labelPdfFallback" class="text-sm text-slate-600 py-8">Label preview will appear here once available.</p>
+                </div>
+                <div class="flex flex-col gap-3 sm:flex-row sm:justify-center">
+                    <button id="printLabelButton" type="button" class="inline-flex items-center justify-center px-5 py-3 rounded-xl bg-emerald-600 text-white font-semibold shadow hover:bg-emerald-700 transition-colors">
+                        <i class="fa-solid fa-print mr-2"></i> Print Label PDF
+                    </button>
                     <button id="copyLabelLinkButton" type="button" class="inline-flex items-center justify-center px-5 py-3 rounded-xl border border-emerald-400 text-emerald-800 font-semibold hover:bg-emerald-100 transition-colors">Copy Link</button>
                 </div>
                 <p class="text-sm text-emerald-700 mt-3" id="labelTrackingDisplay"></p>
@@ -132,6 +138,14 @@
                         <dd id="summaryFullAddress" class="mt-1 text-slate-900 leading-relaxed">Address details on file</dd>
                     </div>
                 </dl>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 text-left mb-8 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold text-slate-800">Device &amp; payout breakdown</h2>
+                    <span id="deviceCountBadge" class="text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full bg-slate-100 text-slate-700">0 devices</span>
+                </div>
+                <div id="deviceBreakdownList" class="space-y-3"></div>
             </div>
 
             <!-- Dynamic Shipping Path Instructions -->
@@ -243,6 +257,9 @@
             } catch (e) {}
 
             const getV = (key) => urlParams.get(key) || sessionSummary?.[key] || '';
+            const normalizeCondition = (value) => (value || '').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'N/A';
+            const currency = (value) => `$${Number(value || 0).toFixed(2)}`;
+            const esc = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
             // Data extraction
             const orderId = getV('id') || getV('orderId') || 'Pending';
@@ -281,6 +298,44 @@
             document.getElementById('summaryPaymentMethod').textContent = displayMethod;
             document.getElementById('summaryFullAddress').innerHTML = fullAddressHtml;
 
+            const rawItems = Array.isArray(sessionSummary?.items) ? sessionSummary.items : [];
+            const deviceItems = rawItems.length ? rawItems : [{
+                modelName: device,
+                brand: '',
+                storage: '',
+                carrier: '',
+                condition: '',
+                qty: Number(getV('qty') || 1),
+                unitPrice: priceVal
+            }];
+            const listEl = document.getElementById('deviceBreakdownList');
+            const badgeEl = document.getElementById('deviceCountBadge');
+            const expanded = [];
+            deviceItems.forEach((item) => {
+                const qty = Math.max(1, Number(item.qty || 1));
+                for (let i = 0; i < qty; i += 1) expanded.push(item);
+            });
+            badgeEl.textContent = `${expanded.length} device${expanded.length === 1 ? '' : 's'}`;
+            listEl.innerHTML = expanded.map((item, idx) => `
+                <div class="rounded-xl border border-slate-200 p-4 bg-slate-50">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <p class="text-xs uppercase tracking-wider text-slate-500 font-bold">Device ${idx + 1}</p>
+                            <p class="text-base font-bold text-slate-900">${esc(item.modelName || item.model || 'Device on file')}</p>
+                            <p class="text-sm text-slate-600 mt-1">${esc([item.brand, item.storage, item.carrier].filter(Boolean).join(' • ') || 'Specs on file')}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs uppercase tracking-wider text-slate-500 font-bold">Payout</p>
+                            <p class="text-lg font-extrabold text-emerald-700">${currency(item.unitPrice || 0)}</p>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-sm text-slate-700 flex flex-wrap gap-2">
+                        <span class="px-2 py-1 rounded-full bg-white border border-slate-200"><strong>Condition:</strong> ${esc(normalizeCondition(item.condition))}</span>
+                        <span class="px-2 py-1 rounded-full bg-white border border-slate-200"><strong>Payment:</strong> ${esc(displayMethod)}</span>
+                    </div>
+                </div>
+            `).join('');
+
             // Handle Instruction Card Visibility (Only show chosen option)
             if (shippingPref === 'ship_kit' || shippingPref === 'ship kit requested') {
                 document.getElementById('kitOptionCard').classList.remove('hidden');
@@ -293,7 +348,31 @@
                 const labelUrl = getV('labelUrl');
                 if (labelUrl) {
                     document.getElementById('emailLabelCard').classList.remove('hidden');
-                    document.getElementById('labelDownloadLink').href = labelUrl;
+                    const frame = document.getElementById('labelPdfFrame');
+                    const frameFallback = document.getElementById('labelPdfFallback');
+                    frame.src = labelUrl;
+                    frame.classList.remove('hidden');
+                    frameFallback.classList.add('hidden');
+                    const printBtn = document.getElementById('printLabelButton');
+                    printBtn.onclick = () => {
+                        const win = window.open(labelUrl, '_blank', 'noopener');
+                        if (win) {
+                            win.focus();
+                            setTimeout(() => {
+                                try { win.print(); } catch (e) {}
+                            }, 500);
+                        }
+                    };
+                    const copyBtn = document.getElementById('copyLabelLinkButton');
+                    copyBtn.onclick = async () => {
+                        try {
+                            await navigator.clipboard.writeText(labelUrl);
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(() => { copyBtn.textContent = 'Copy Link'; }, 1500);
+                        } catch (e) {
+                            window.prompt('Copy this label URL:', labelUrl);
+                        }
+                    };
                     const tracking = getV('trackingNumber');
                     if (tracking) {
                         document.getElementById('labelTrackingDisplay').innerHTML = `Tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${tracking}" target="_blank" class="underline font-bold">${tracking}</a>`;
