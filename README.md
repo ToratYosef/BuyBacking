@@ -171,6 +171,17 @@ firebase deploy --only functions
 
 - Run `npm run check:no-functions` before shipping static-page updates to ensure no page still references Firebase Functions endpoints directly; this helps keep non-dynamic pages fully static and cache-friendly.【F:tools/check-no-functions.js†L1-L52】【F:package.json†L6-L14】
 
+### Quick pre-deploy sanity pass
+
+Before creating a release candidate, run this short sequence from the repository root:
+
+```bash
+npm run build
+npm run check:no-functions
+```
+
+`npm run build` refreshes Tailwind/admin CSS assets, while `npm run check:no-functions` verifies that static pages stay free of hard-coded Cloud Functions URLs.
+
 ## Promo codes (including email-label-only offers)
 
 Promo codes live in the Firestore collection `promo_codes`, with each document ID set to the uppercase code (for example, `SHIP48`). Populate the document with:
