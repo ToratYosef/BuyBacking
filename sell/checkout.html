@@ -316,7 +316,7 @@
             </div>
         </div>
 
-        <div class="section-card">
+        <div class="section-card" id="terms-submit-section">
             <label id="terms-container" class="checkbox-container flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" id="terms" class="w-5 h-5 accent-green-700">
                 <span class="text-sm text-slate-600 font-bold">I certify this device is not lost/stolen and I accept the terms & conditions.</span>
@@ -327,7 +327,7 @@
     </div>
 
     <!-- Sidebar Summary -->
-    <aside>
+    <aside id="checkout-summary-aside">
         <div class="summary-card">
             <div class="flex items-center justify-between mb-4 border-b pb-2">
                 <h3 class="text-lg font-bold">Trade-in Summary</h3>
@@ -424,6 +424,23 @@
     let cartItems = [];
     const zipInput = document.getElementById('zip');
     const submitOrderBtn = document.getElementById('submitOrderBtn');
+    const checkoutWrapper = document.querySelector('.checkout-wrapper');
+    const checkoutForm = document.getElementById('checkout-form');
+    const checkoutSummaryAside = document.getElementById('checkout-summary-aside');
+    const termsSubmitSection = document.getElementById('terms-submit-section');
+
+    const placeSummaryByViewport = () => {
+        if (!checkoutWrapper || !checkoutForm || !checkoutSummaryAside || !termsSubmitSection) return;
+        if (window.matchMedia('(max-width: 640px)').matches) {
+            if (checkoutSummaryAside.parentElement !== checkoutForm) {
+                checkoutForm.insertBefore(checkoutSummaryAside, termsSubmitSection);
+            }
+            return;
+        }
+        if (checkoutSummaryAside.parentElement !== checkoutWrapper) {
+            checkoutWrapper.appendChild(checkoutSummaryAside);
+        }
+    };
     const addressVerifyError = document.getElementById('address-verify-error');
     const addressSuggestionModal = document.getElementById('addressSuggestionModal');
     const suggestedAddressText = document.getElementById('suggestedAddressText');
@@ -492,6 +509,22 @@
     };
     const saveCart = (cart) => {
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+    };
+    const getTotalQty = () => cartItems.reduce((sum, item) => sum + Math.max(1, Math.floor(Number(item.qty || 1))), 0);
+    const syncQtyParamToUrl = () => {
+        const url = new URL(window.location.href);
+        const totalQty = getTotalQty();
+        if (totalQty > 0) {
+            url.searchParams.set('qty', String(totalQty));
+        } else {
+            url.searchParams.delete('qty');
+        }
+        window.history.replaceState({}, '', url);
+    };
+    const redirectToSellIfCartEmpty = () => {
+        if (cartItems.length) return false;
+        window.location.href = '/sell/index.html';
+        return true;
     };
     const updateSummary = () => {
         const isKit = document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit';
@@ -660,6 +693,8 @@
         if (action === 'decrease') item.qty = Math.max(item.qty - 1, 1);
         if (action === 'remove') cartItems.splice(index, 1);
         saveCart(cartItems);
+        syncQtyParamToUrl();
+        if (redirectToSellIfCartEmpty()) return;
         renderCart();
     };
     const addItemToCart = (item) => {
@@ -672,7 +707,7 @@
         ].join('|');
         const existing = cartItems.find(cartItem => cartItem.key === key);
         if (existing) {
-            existing.qty += item.qty;
+            existing.qty = Math.max(1, Math.floor(Number(item.qty || 1)));
         } else {
             cartItems.push({ ...item, key });
         }
@@ -681,6 +716,7 @@
 
     const init = async () => {
         cartItems = getCart();
+        placeSummaryByViewport();
 
         const b = params.get('brand');
         const m = params.get('model'); 
@@ -688,6 +724,12 @@
         const l = params.get('lock');
         const c = params.get('condition');
         const qty = parseInt(params.get('qty') || '1');
+        const normalizedQty = Math.max(1, Number.isFinite(qty) ? qty : 1);
+
+        if (!b && !m && !s && !l && !c && cartItems.length === 1 && params.has('qty')) {
+            cartItems[0].qty = normalizedQty;
+            saveCart(cartItems);
+        }
 
         try {
             if (b && m && s && l && c) {
@@ -706,13 +748,15 @@
                         storage: s,
                         lock: l,
                         condition: c,
-                        qty: qty,
+                        qty: normalizedQty,
                         unitPrice: unitPrice,
                         conditionPrices: lockMap
                     });
                 }
             }
         } catch (err) { console.error(err); }
+
+        if (redirectToSellIfCartEmpty()) return;
 
         // AUTO-REMOVE ERROR HIGHLIGHT ON INPUT
         const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
@@ -765,6 +809,7 @@
         });
         // Condition is locked from the quote; no checkout dropdown.
 
+        syncQtyParamToUrl();
         renderCart();
     };
 
@@ -1069,6 +1114,7 @@
         }
     });
 
+    window.addEventListener('resize', placeSummaryByViewport);
     init();
 </script>
 
