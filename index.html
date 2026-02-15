@@ -287,6 +287,9 @@
             overscroll-behavior: contain;
             touch-action: pan-x;
         }
+        .testimonial-carousel.is-locked-user-scroll {
+            touch-action: none;
+        }
 
         .testimonial-carousel:focus { outline: none; }
 
@@ -338,6 +341,16 @@
         @media (prefers-reduced-motion: reduce) {
             .testimonial-carousel { scroll-behavior: auto; }
             .testimonial-card { transition: none; }
+        }
+
+        @media (max-width: 640px) {
+            .hero-section { padding-top: 1rem; }
+            .hero-content h1 { font-size: 2rem !important; line-height: 1.15 !important; }
+            .hero-content p { font-size: .96rem !important; }
+            .testimonial-card { padding: 1.2rem; border-radius: 1rem; }
+            .testimonial-slide { flex-basis: 92%; }
+            #popular .homepage-card-inner { padding: 1rem; }
+            #popular .h-48 { height: 9rem; }
         }
 
     </style>
@@ -1204,15 +1217,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Customer Reviews Carousel (center highlight + auto-scroll every 3s)
     const customerReviewsTrack = document.getElementById('customerReviewsTrack');
     if (customerReviewsTrack) {
+        customerReviewsTrack.classList.add('is-locked-user-scroll');
     const customerReviewsSection = document.getElementById('customer-reviews');
-    if (customerReviewsSection && customerReviewsTrack) {
-        customerReviewsSection.addEventListener('wheel', (event) => {
-            if (Math.abs(event.deltaY) < 1 && Math.abs(event.deltaX) < 1) return;
-            const el = event.target;
-            if (el && (el.closest('#customerReviewsTrack') || el.closest('a,button,input,textarea,select'))) return;
-            event.preventDefault();
-            customerReviewsTrack.scrollLeft += Math.abs(event.deltaX) > 0 ? event.deltaX : event.deltaY;
-        }, { passive: false });
+    const lockUserScroll = (event) => {
+        event.preventDefault();
+    };
+    customerReviewsTrack.addEventListener('wheel', lockUserScroll, { passive: false });
+    customerReviewsTrack.addEventListener('touchmove', lockUserScroll, { passive: false });
+    if (customerReviewsSection) {
+        customerReviewsSection.addEventListener('wheel', lockUserScroll, { passive: false });
+        customerReviewsSection.addEventListener('touchmove', lockUserScroll, { passive: false });
     }
 
 
@@ -1423,15 +1437,11 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         customerReviewsTrack.addEventListener('scroll', onTrackScroll, { passive: true });
-        customerReviewsTrack.addEventListener('wheel', onTrackWheel, { passive: false });
-        customerReviewsTrack.addEventListener('touchstart', () => pauseTemporarily(), { passive: true });
-        customerReviewsTrack.addEventListener('pointerdown', () => pauseTemporarily(), { passive: true });
+        customerReviewsTrack.removeEventListener('wheel', onTrackWheel);
 
         customerReviewsTrack.addEventListener('keydown', (event) => {
             if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
             event.preventDefault();
-            pauseTemporarily();
-            scrollToIndex(currentIndex + (event.key === 'ArrowRight' ? 1 : -1));
         });
 
         window.addEventListener('resize', () => syncCenterFromScroll(), { passive: true });
