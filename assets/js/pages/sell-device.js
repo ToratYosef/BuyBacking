@@ -502,7 +502,7 @@ device: '',
 deviceSlug: '',
 storage: '',
 carrier: 'unlocked',
-conditions: { power: null, functionality: null, quality: null },
+conditions: { power: null, functionality: null },
 deviceData: null,
 setContinueState(enabled) {
 if (!continueBtn) return;
@@ -516,7 +516,7 @@ this.device = '';
 this.deviceSlug = '';
 this.storage = '';
 this.carrier = 'unlocked';
-this.conditions = { power: null, functionality: null, quality: null };
+this.conditions = { power: null, functionality: null };
 
 if (brandSelect) brandSelect.value = '';
 if (deviceSelect) {
@@ -629,7 +629,7 @@ this.checkComplete();
 },
 checkComplete() {
 const ready = this.brand && this.device && this.storage &&
-this.conditions.power && this.conditions.functionality && this.conditions.quality;
+this.conditions.power && this.conditions.functionality;
 
 if (!ready) {
 modalPriceEstimate.classList.add('hidden');
@@ -653,10 +653,6 @@ let conditionKey = 'good';
 if (this.conditions.power === 'no') {
 conditionKey = 'noPower';
 } else if (this.conditions.functionality === 'not-working') {
-conditionKey = 'broken';
-} else if (this.conditions.quality === 'flawless') {
-conditionKey = 'flawless';
-} else if (this.conditions.quality === 'damaged') {
 conditionKey = 'broken';
 }
 
@@ -730,7 +726,6 @@ storage: pricingModal.storage,
 carrier: pricingModal.carrier,
 power: pricingModal.conditions.power,
 functionality: pricingModal.conditions.functionality,
-quality: pricingModal.conditions.quality,
 price: modalEstimatedPrice.textContent
 });
 

@@ -279,12 +279,26 @@
         ""
       );
     }
+    function getShipEngineLabelEntries(order) {
+      const labels = order?.shipEngineLabels;
+      if (!labels) return [];
+      if (Array.isArray(labels)) {
+        return labels
+          .map((value, index) => ({ key: String(value?.key || `label_${index + 1}`), value }))
+          .filter((entry) => entry.value && typeof entry.value === "object");
+      }
+      if (typeof labels === "object") {
+        return Object.entries(labels)
+          .filter(([, value]) => value && typeof value === "object")
+          .map(([key, value]) => ({ key, value }));
+      }
+      return [];
+    }
     function shipEngineLabelTrackings(order) {
-      const arr = Array.isArray(order?.shipEngineLabels) ? order.shipEngineLabels : [];
       const nums = [];
-      for (const l of arr) {
-        if (l?.trackingNumber) nums.push(l.trackingNumber);
-        if (l?.tracking_number) nums.push(l.tracking_number);
+      for (const { value } of getShipEngineLabelEntries(order)) {
+        if (value?.trackingNumber) nums.push(value.trackingNumber);
+        if (value?.tracking_number) nums.push(value.tracking_number);
       }
       return nums.filter(Boolean);
     }
@@ -375,7 +389,8 @@
       ORDERS_PER_PAGE: 20,
       currentPage: 1,
       // bulk selection
-      selectedDeviceKeys: new Set(),
+      selectedOrderIds: new Set(),
+      expandedOrderIds: new Set(),
       lastRenderedDeviceKeys: [],
       // density
       compactDensity: false,
@@ -583,18 +598,19 @@
       render();
     }
     // ----------------------------
-    // SPEC: BULK SELECTION (deviceKey)
+    // SPEC: BULK SELECTION (order)
     // ----------------------------
-    function setDeviceKeySelected(deviceKey, checked) {
-      if (checked) state.selectedDeviceKeys.add(deviceKey);
-      else state.selectedDeviceKeys.delete(deviceKey);
+    function setOrderSelected(orderId, checked) {
+      if (checked) state.selectedOrderIds.add(orderId);
+      else state.selectedOrderIds.delete(orderId);
     }
     function computeSelectAllState() {
-      const pageKeys = state.lastRenderedDeviceKeys;
-      const selectedOnPage = pageKeys.filter(k => state.selectedDeviceKeys.has(k)).length;
-      const allSelected = pageKeys.length > 0 && selectedOnPage === pageKeys.length;
+      const pageKeys = state.lastRenderedDeviceKeys.map(k => parseOrderDeviceKey(k).orderId);
+      const uniquePageOrderIds = Array.from(new Set(pageKeys));
+      const selectedOnPage = uniquePageOrderIds.filter(k => state.selectedOrderIds.has(k)).length;
+      const allSelected = uniquePageOrderIds.length > 0 && selectedOnPage === uniquePageOrderIds.length;
       const noneSelected = selectedOnPage === 0;
-      return { allSelected, noneSelected, selectedOnPage, totalOnPage: pageKeys.length };
+      return { allSelected, noneSelected, selectedOnPage, totalOnPage: uniquePageOrderIds.length };
     }
     function updateSelectAllCheckboxUI() {
       const cb = document.getElementById("select-all-orders");
@@ -615,12 +631,12 @@
       const sel = document.getElementById("bulkStatusSelect");
       const newStatus = sel?.value || "";
       if (!newStatus) return;
-      if (state.selectedDeviceKeys.size === 0) return;
-      const keys = Array.from(state.selectedDeviceKeys);
+      if (state.selectedOrderIds.size === 0) return;
+      const keys = Array.from(state.selectedOrderIds);
       const failures = [];
       let ok = 0;
       for (const k of keys) {
-        const { orderId } = parseOrderDeviceKey(k);
+        const orderId = k;
         try {
           await updateOrderStatusInline(orderId, newStatus, { notifyCustomer: false });
           ok++;
@@ -631,24 +647,24 @@
       if (failures.length) {
         toast(`Bulk status: ${ok} ok, ${failures.length} failed`, "error");
         // keep only failed selected
-        state.selectedDeviceKeys = new Set(failures.map(f => f.k));
+        state.selectedOrderIds = new Set(failures.map(f => f.k));
       } else {
         toast(`Bulk status updated (${ok})`, "success");
-        state.selectedDeviceKeys.clear();
+        state.selectedOrderIds.clear();
         if (sel) sel.value = "";
       }
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
     }
     async function handleBulkLabelGeneration() {
       if (state.isBulkLabelGenerationInProgress) return;
-      if (state.selectedDeviceKeys.size === 0) return;
+      if (state.selectedOrderIds.size === 0) return;
       state.isBulkLabelGenerationInProgress = true;
       render();
-      const keys = Array.from(state.selectedDeviceKeys);
+      const keys = Array.from(state.selectedOrderIds);
       const failures = [];
       let ok = 0;
       for (const k of keys) {
-        const { orderId } = parseOrderDeviceKey(k);
+        const orderId = k;
         try {
           await apiPost(`/generate-label/${orderId}`, {});
           ok++;
@@ -659,10 +675,10 @@
       state.isBulkLabelGenerationInProgress = false;
       if (failures.length) {
         toast(`Generate labels: ${ok} ok, ${failures.length} failed`, "error");
-        state.selectedDeviceKeys = new Set(failures.map(f => f.k));
+        state.selectedOrderIds = new Set(failures.map(f => f.k));
       } else {
         toast(`Generated labels (${ok})`, "success");
-        state.selectedDeviceKeys.clear();
+        state.selectedOrderIds.clear();
       }
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
     }
@@ -674,8 +690,8 @@
       if (locked.has(s)) return false;
       // ">=2 kit label identifiers" heuristic based on fields commonly present
       const ids = new Set();
-      const labels = Array.isArray(order?.shipEngineLabels) ? order.shipEngineLabels : [];
-      for (const l of labels) {
+      const labels = getShipEngineLabelEntries(order);
+      for (const { value: l } of labels) {
         if (l?.labelId) ids.add(String(l.labelId));
         if (l?.label_id) ids.add(String(l.label_id));
         if (l?.id) ids.add(String(l.id));
@@ -777,16 +793,24 @@
     function getLabelOptions(order) {
       // Returns array of { key, id, label }
       const opts = [];
-      const labels = Array.isArray(order?.shipEngineLabels) ? order.shipEngineLabels : [];
-      for (const l of labels) {
-        const id = l?.labelId || l?.label_id || l?.id;
-        if (!id) continue;
-        const tracking = l?.trackingNumber || l?.tracking_number || "";
-        opts.push({ key: "shipengine", id: String(id), label: `ShipEngine ${tracking ? `(${tracking})` : String(id)}` });
+      const seenIds = new Set();
+      for (const { key, value } of getShipEngineLabelEntries(order)) {
+        const status = String(value?.voidStatus || value?.status || value?.state || "active").toLowerCase();
+        if (status === "voided" || value?.voidedAt) continue;
+        const id = value?.labelId || value?.label_id || value?.id;
+        if (!id || seenIds.has(String(id))) continue;
+        seenIds.add(String(id));
+        const tracking = value?.trackingNumber || value?.tracking_number || "";
+        const display = value?.displayName || key || "ShipEngine Label";
+        opts.push({ key: String(key), id: String(id), label: `${display}${tracking ? ` (${tracking})` : ""}` });
       }
-      // If you store a primary label id somewhere:
-      if (order?.shippingLabelId) opts.push({ key: "primary", id: String(order.shippingLabelId), label: "Primary Label" });
-      if (order?.easypostLabelId) opts.push({ key: "easypost", id: String(order.easypostLabelId), label: "EasyPost Label" });
+      if (order?.shippingLabelId && !seenIds.has(String(order.shippingLabelId))) {
+        opts.push({ key: "primary", id: String(order.shippingLabelId), label: "Primary Label" });
+        seenIds.add(String(order.shippingLabelId));
+      }
+      if (order?.easypostLabelId && !seenIds.has(String(order.easypostLabelId))) {
+        opts.push({ key: "easypost", id: String(order.easypostLabelId), label: "EasyPost Label" });
+      }
       return opts;
     }
     async function requestVoidLabels(orderId, selections) {
@@ -825,6 +849,20 @@
     // ----------------------------
     // SPEC: MODAL ACTION SWITCH (exact endpoints)
     // ----------------------------
+    async function printPackingSlip(orderId) {
+      const user = auth.currentUser;
+      const token = user ? await user.getIdToken() : null;
+      const res = await fetch(`${API_BASE_URL}/packing-slip/${orderId}`, {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to generate packing slip");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+
     async function handleAction(orderId, actionType, options = {}) {
       try {
         // tracking guard
@@ -945,8 +983,10 @@
             body = { status: "completed" };
             break;
           case "printDocs":
+            toast("Print Kit Docs is not available in this view", "info");
+            return;
           case "printPacking":
-            toast("Printing not implemented in demo environment", "info");
+            await printPackingSlip(orderId);
             return;
           case "voidLabels":
               // Just a UI trigger to switch tab, no API call here directly unless submitted
@@ -1007,13 +1047,8 @@
         <div class="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
           <div class="sm:mx-auto sm:w-full sm:max-w-md">
             <div class="flex justify-center">
-              <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-200">
-                BB
-              </div>
+              <div class="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-200">BB</div>
             </div>
-        <div class="fixed inset-0 bg-slate-900/50 z-30 lg:hidden ${isOpen ? "" : "hidden"}" data-sidebar-overlay></div>
-        <div class="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-40 transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0">
-          <div class="p-6 flex items-center justify-between gap-3">
           </div>
           <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
             <div class="bg-white py-8 px-4 shadow-xl shadow-slate-200 border border-slate-100 sm:rounded-xl sm:px-10">
@@ -1021,9 +1056,6 @@
                 <div>
                   <label class="block text-sm font-medium text-slate-700">Email address</label>
                   <div class="mt-1 relative rounded-md shadow-sm">
-            <button class="lg:hidden text-slate-400 hover:text-slate-600" data-sidebar-close aria-label="Close sidebar">
-              <i data-lucide="x" style="width:20px;height:20px"></i>
-            </button>
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <i data-lucide="mail" class="h-5 w-5 text-slate-400"></i>
                     </div>
@@ -1090,55 +1122,13 @@
     // ----------------------------
     // RENDER: APP SHELL
     // ----------------------------
-    function renderSidebar() {
-      const items = [
-        { id: "orders", label: "Orders", icon: "package" },
-        { id: "analytics", label: "Analytics", icon: "layout-dashboard" },
-        { id: "print", label: "Print Queue", icon: "printer" },
-        { id: "settings", label: "Pricing", icon: "tag" },
-      ];
-      return `
-        <div class="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-20 hidden lg:flex">
-          <div class="p-6 flex items-center gap-3">
-            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shadow-indigo-200">BB</div>
-            <div>
-              <h1 class="font-bold text-slate-900 leading-tight">BuyBacking</h1>
-              <p class="text-xs text-slate-500 font-medium">${IS_AGING_PAGE ? "Aging Console" : "Admin Console"}</p>
-            </div>
-          </div>
-          <nav class="flex-1 px-4 space-y-1 mt-4">
-            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Workspace</div>
-            ${items.map(it => `
-              <button data-nav="${it.id}"
-                class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  state.activeTab === it.id
-                    ? "bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-200"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                }">
-                <i data-lucide="${it.icon}" class="${state.activeTab === it.id ? "text-indigo-600" : "text-slate-400"}" style="width:18px;height:18px"></i>
-                ${esc(it.label)}
-              </button>
-            `).join("")}
-          </nav>
-          <div class="p-4 border-t border-slate-100">
-            <button id="logoutBtn"
-              class="w-full flex items-center gap-2 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
-              <i data-lucide="log-out" style="width:16px;height:16px"></i>
-              Sign Out
-            </button>
-          </div>
-        </div>
-      `;
-    }
+    function renderSidebar() { return ""; }
     function renderTopbar() {
       const initial = state.user?.email ? state.user.email.charAt(0).toUpperCase() : "A";
       return `
         <header class="h-16 bg-white border-b border-slate-200 sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between gap-4">
           <div class="flex items-center gap-3 flex-1">
-            <button id="sidebarToggle" class="lg:hidden p-2 rounded-full text-slate-500 hover:bg-slate-100" aria-label="Open sidebar">
-              <i data-lucide="menu" style="width:20px;height:20px"></i>
-            </button>
-            <i data-lucide="search" class="text-slate-400" style="width:20px;height:20px"></i>
+                        <i data-lucide="search" class="text-slate-400" style="width:20px;height:20px"></i>
             <input id="searchInput" type="text"
               placeholder="Search by ID, customer, device, storage, tracking…"
               class="bg-transparent border-none outline-none text-sm w-full placeholder:text-slate-400"
@@ -1160,9 +1150,8 @@
             </div>
           </div>
           <div class="flex items-center gap-4">
-            <button class="relative p-2 text-slate-400 hover:bg-slate-50 rounded-full transition-colors" title="Notifications (placeholder)">
-              <i data-lucide="bell" style="width:20px;height:20px"></i>
-              <span class="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+            <button id="logoutBtn" class="p-2 text-rose-600 hover:bg-rose-50 rounded-full transition-colors" title="Sign out">
+              <i data-lucide="log-out" style="width:18px;height:18px"></i>
             </button>
             <div class="h-8 w-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-xs font-bold text-indigo-700">
               ${esc(initial)}
@@ -1329,14 +1318,15 @@
             <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
               <button id="bulk-generate-labels"
                 class="px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${
-                  (state.selectedDeviceKeys.size > 0 && !state.isBulkLabelGenerationInProgress)
+                  (state.selectedOrderIds.size > 0 && !state.isBulkLabelGenerationInProgress)
                     ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200"
                     : "bg-slate-100 text-slate-400 cursor-not-allowed"
                 }"
-                ${!(state.selectedDeviceKeys.size > 0 && !state.isBulkLabelGenerationInProgress) ? "disabled" : ""}>
+                ${!(state.selectedOrderIds.size > 0 && !state.isBulkLabelGenerationInProgress) ? "disabled" : ""}>
                 <i data-lucide="${state.isBulkLabelGenerationInProgress ? "loader" : "tag"}" class="${state.isBulkLabelGenerationInProgress ? "animate-spin" : ""}" style="width:16px;height:16px"></i>
                 ${state.isBulkLabelGenerationInProgress ? "Generating…" : "Generate Labels For Selected"}
               </button>
+              <button id="bulk-delete-orders" class="px-3 py-2 rounded-lg text-sm font-semibold ${state.selectedOrderIds.size > 0 ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed"}" ${state.selectedOrderIds.size > 0 ? "" : "disabled"}>Delete Selected Orders</button>
               <div class="flex items-center gap-2">
                 <select id="bulkStatusSelect" class="border border-slate-200 rounded-lg px-2 py-2 text-sm bg-white">
                   <option value="">Bulk update status…</option>
@@ -1344,16 +1334,16 @@
                 </select>
                 <button id="bulk-status-apply"
                   class="px-3 py-2 rounded-lg text-sm font-semibold ${
-                    (state.selectedDeviceKeys.size > 0) ? "bg-slate-900 hover:bg-slate-800 text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    (state.selectedOrderIds.size > 0) ? "bg-slate-900 hover:bg-slate-800 text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed"
                   }"
-                  ${state.selectedDeviceKeys.size > 0 ? "" : "disabled"}>
+                  ${state.selectedOrderIds.size > 0 ? "" : "disabled"}>
                   Update
                 </button>
               </div>
             </div>
           </div>
           <div class="mt-3 text-xs text-slate-500 flex items-center justify-between">
-            <div>Selected devices: <span class="font-semibold text-slate-700">${state.selectedDeviceKeys.size}</span></div>
+            <div>Selected orders: <span class="font-semibold text-slate-700">${state.selectedOrderIds.size}</span></div>
             ${IS_AGING_PAGE ? `<div class="text-amber-700 font-semibold">Aging mode ON (min age: ${Math.round(MIN_AGING_MS / (1000*60*60*24))}d)</div>` : `<div></div>`}
           </div>
         </div>
@@ -1397,19 +1387,21 @@
         const trackingLink = trackingNumber ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNumber)}` : "";
         const statusExtra = labelStatusExtraHTML(order);
         const payoutTotal = getOrderPayoutTotal(order);
+        state.lastRenderedDeviceKeys.push(buildOrderDeviceKey(order.id, 0));
 
         // Order summary row
         rowHtml.push(`
-          <tr class="bg-slate-50/70 border-t border-slate-200">
+          <tr class="bg-slate-50/70 border-t border-slate-200 cursor-pointer" data-order-row="${esc(order.id)}">
             <td class="px-4 py-3 align-top">
-              <span class="inline-block w-1.5 h-8 rounded-full ${getStatusAccentBgClass(order.status)}" aria-hidden="true"></span>
+              <div class="flex items-start gap-3">
+                <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
+                <span class="inline-block w-1.5 h-8 rounded-full ${getStatusAccentBgClass(order.status)}" aria-hidden="true"></span>
+              </div>
             </td>
             <td class="px-4 py-3 align-top">
               <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <button data-open-order="${esc(order.id)}" class="font-bold text-slate-900 hover:text-indigo-700">
-                    #${esc(order.id)}
-                  </button>
+                  <span class="font-bold text-slate-900">#${esc(order.id)}</span>
                   <span class="text-xs text-slate-500">${esc(formatDate(createdAt))}</span>
                   <span class="text-xs text-slate-400">•</span>
                   <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
@@ -1438,24 +1430,14 @@
             </td>
             <td class="px-4 py-3 align-top">
               <div class="flex flex-wrap gap-2 justify-end">
-                <button data-open-order="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50">
-                  Open
-                </button>
-                <button data-quick="${esc(order.id)}" data-quick-type="generateLabel"
-                  class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700">
-                  Label
-                </button>
-                <button data-quick="${esc(order.id)}" data-quick-type="refreshEmailTracking"
-                  class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50">
-                  Refresh
-                </button>
+                <span class="text-xs text-slate-400">Click row to open</span>
               </div>
             </td>
           </tr>
         `);
 
         // Device rows
-        for (const entry of entries) {
+        if (state.expandedOrderIds.has(order.id)) for (const entry of entries) {
           const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
           state.lastRenderedDeviceKeys.push(deviceKey);
           const item = entry.item || {};
@@ -1471,10 +1453,7 @@
               <td class="px-4 py-3 align-top">
                 <div class="flex items-center gap-3">
                   <span class="w-6 text-slate-300 font-black" aria-hidden="true">↳</span>
-                  <input type="checkbox"
-                    data-device-checkbox="${esc(deviceKey)}"
-                    class="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                    ${state.selectedDeviceKeys.has(deviceKey) ? "checked" : ""} />
+
                 </div>
               </td>
               <td class="px-4 py-3 align-top">
@@ -1628,7 +1607,7 @@
       const open = state.statusDropdownOpen;
       if (!open) return "";
       return `
-        <div class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-[1010]">
+        <div class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-[1300]">
           <div class="p-2 max-h-72 overflow-y-auto">
             ${STATUS_DROPDOWN_OPTIONS.map(s => `
               <button data-set-status="${esc(s)}"
@@ -1751,8 +1730,6 @@
                   </div>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <button data-action="refreshKitTracking" class="px-3 py-2 rounded-lg text-sm font-semibold bg-white border border-slate-200 hover:bg-slate-50">Refresh Kit Tracking</button>
-                  <button data-action="refreshEmailTracking" class="px-3 py-2 rounded-lg text-sm font-semibold bg-white border border-slate-200 hover:bg-slate-50">Refresh Label Tracking</button>
                   <button data-action="generateLabel" class="px-3 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Generate Label</button>
                 </div>
                 <div class="pt-3 border-t border-slate-100">
@@ -1872,7 +1849,7 @@
               <div class="relative">
                 <div class="flex items-center gap-3 mb-1">
                   <h2 class="text-2xl font-bold text-slate-900">#${esc(order.id)}</h2>
-                  <div class="relative z-[1010]" id="modalStatusWrapper">
+                  <div class="relative z-[1300]" id="modalStatusWrapper">
                     <button id="modalStatusBtn" class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(order.status)} hover:opacity-90">
                       ${esc(formatStatusLabel(order.status))}
                       <i data-lucide="chevron-down" style="width:14px;height:14px"></i>
@@ -1923,7 +1900,7 @@
             admin: []
         };
         // Helpers
-        const hasLabels = !!(getAnyTrackingNumber(order) || (order.shipEngineLabels && order.shipEngineLabels.length));
+        const hasLabels = !!(getAnyTrackingNumber(order) || getShipEngineLabelEntries(order).length);
         const isKitReq = order.shippingPreference === "Shipping Kit Requested";
         const isEmailReq = order.shippingPreference === "Email Label Requested";
         const isBalance = isBalanceEmailStatus(order);
@@ -1996,12 +1973,6 @@
         }
 
         // Tracking
-        if (isKitReq && (order.outboundTrackingNumber || order.inboundTrackingNumber || order.trackingNumber)) {
-            groups.tracking.push({ label: "Refresh Kit Tracking", action: "refreshKitTracking", class: "bg-white border-slate-200" });
-        }
-        if (isEmailReq && (order.trackingNumber || order.inboundTrackingNumber)) {
-            groups.tracking.push({ label: "Refresh Label Tracking", action: "refreshEmailTracking", class: "bg-white border-slate-200" });
-        }
         // Print docs (mock check for URL)
         if (order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent"].includes(status)) {
              groups.tracking.unshift({ label: "Print Kit Docs", action: "printDocs", class: "bg-white border-slate-200" });
@@ -2262,7 +2233,7 @@
       return `
         <div class="min-h-screen bg-slate-50 font-sans text-slate-900 flex">
           ${renderSidebar()}
-          <div class="flex-1 flex flex-col lg:ml-64 transition-all duration-300">
+          <div class="flex-1 flex flex-col transition-all duration-300">
             ${renderTopbar()}
             ${state.activeTab === "orders" ? renderOrdersPage() : `
               <main class="flex-1 p-8">
@@ -2311,35 +2282,6 @@
     // EVENTS
     // ----------------------------
     function bindAppEvents() {
-      const sidebarToggle = document.getElementById("sidebarToggle");
-      if (sidebarToggle) {
-        sidebarToggle.addEventListener("click", () => {
-          state.sidebarOpen = true;
-          render();
-        });
-      }
-      const sidebarOverlay = document.querySelector("[data-sidebar-overlay]");
-      if (sidebarOverlay) {
-        sidebarOverlay.addEventListener("click", () => {
-          state.sidebarOpen = false;
-          render();
-        });
-      }
-      const sidebarClose = document.querySelector("[data-sidebar-close]");
-      if (sidebarClose) {
-        sidebarClose.addEventListener("click", () => {
-          state.sidebarOpen = false;
-          render();
-        });
-      }
-      // Sidebar nav
-      document.querySelectorAll("[data-nav]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          state.activeTab = btn.getAttribute("data-nav");
-          state.sidebarOpen = false;
-          render();
-        });
-      });
       // Logout
       const logoutBtn = document.getElementById("logoutBtn");
       if (logoutBtn) logoutBtn.addEventListener("click", () => signOut(auth));
@@ -2416,34 +2358,29 @@
         updateSelectAllCheckboxUI();
         selectAll.addEventListener("change", () => {
           const checked = selectAll.checked;
-          state.lastRenderedDeviceKeys.forEach(k => setDeviceKeySelected(k, checked));
+          Array.from(new Set(state.lastRenderedDeviceKeys.map(k => parseOrderDeviceKey(k).orderId))).forEach(k => setOrderSelected(k, checked));
           render();
         });
       }
-      // per-device selection checkbox
-      document.querySelectorAll("[data-device-checkbox]").forEach(cb => {
+      // per-order selection checkbox
+      document.querySelectorAll("[data-order-checkbox]").forEach(cb => {
+        cb.addEventListener("click", (evt) => evt.stopPropagation());
         cb.addEventListener("change", () => {
-          const key = cb.getAttribute("data-device-checkbox");
-          setDeviceKeySelected(key, cb.checked);
+          const key = cb.getAttribute("data-order-checkbox");
+          setOrderSelected(key, cb.checked);
           updateSelectAllCheckboxUI();
-          // only update bulk bar quickly
-          const selCount = document.querySelector("#bulkSelectedCount");
-          if (selCount) selCount.textContent = String(state.selectedDeviceKeys.size);
         });
       });
-      // open order drawer buttons
-      document.querySelectorAll("[data-open-order]").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          state.selectedOrderId = btn.getAttribute("data-open-order");
-          state.selectedDeviceKey = null;
-          state.qcDeviceKey = null;
-          state.drawerTab = "overview";
-          state.statusDropdownOpen = false;
-          state.qcOpen = false;
-          state.qcStep = 1;
-          state.qcData = null;
+      // open order drawer + hierarchy by clicking order row
+      document.querySelectorAll("[data-order-row]").forEach(row => {
+        row.addEventListener("click", (e) => {
+          if (e.target.closest("a,button,input,label,[data-view-device]")) return;
+          const orderId = row.getAttribute("data-order-row");
+          if (!orderId) return;
+          if (state.expandedOrderIds.has(orderId)) state.expandedOrderIds.delete(orderId);
+          else state.expandedOrderIds.add(orderId);
+          // Per UX request: clicking order rows should only expand/collapse hierarchy,
+          // not open the order drawer popup.
           render();
         });
       });
@@ -2467,23 +2404,22 @@
           render();
         });
       });
-      // quick actions in table
-      document.querySelectorAll("[data-quick]").forEach(btn => {
-        btn.addEventListener("click", async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const orderId = btn.getAttribute("data-quick");
-          const type = btn.getAttribute("data-quick-type");
-          await handleAction(orderId, type);
-        });
-      });
-      // Bulk buttons
-      const btnKit = document.getElementById("refresh-all-kit-tracking");
-      if (btnKit) btnKit.addEventListener("click", () => refreshTrackingForOrders("kit", btnKit));
-      const btnEmail = document.getElementById("refresh-all-email-tracking");
-      if (btnEmail) btnEmail.addEventListener("click", () => refreshTrackingForOrders("email", btnEmail));
       const btnGen = document.getElementById("bulk-generate-labels");
       if (btnGen) btnGen.addEventListener("click", () => handleBulkLabelGeneration());
+      const btnDelete = document.getElementById("bulk-delete-orders");
+      if (btnDelete) btnDelete.addEventListener("click", async () => {
+        const ids = Array.from(state.selectedOrderIds);
+        if (!ids.length) return;
+        if (!confirm(`Delete ${ids.length} selected order(s)? This cannot be undone.`)) return;
+        let ok = 0;
+        const failed = [];
+        for (const id of ids) {
+          try { await handleAction(id, "deleteOrder"); ok++; } catch (e) { failed.push(id); }
+        }
+        state.selectedOrderIds = new Set(failed);
+        toast(`Deleted ${ok} order(s).${failed.length ? ` ${failed.length} failed.` : ""}`, failed.length ? "error" : "success");
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      });
       const btnBulkApply = document.getElementById("bulk-status-apply");
       if (btnBulkApply) btnBulkApply.addEventListener("click", () => handleBulkStatusUpdate());
       const btnSep = document.getElementById("separate-kit-orders");
@@ -2674,7 +2610,7 @@
         state.currentActiveStatus = "all";
         state.currentSearchTerm = "";
         state.currentPromoFilter = PROMO_FILTER.ALL;
-        state.selectedDeviceKeys.clear();
+        state.selectedOrderIds.clear();
         state.lastRenderedDeviceKeys = [];
         state.selectedOrderId = null;
         state.statusDropdownOpen = false;

@@ -1,4 +1,5 @@
 const express = require('express');
+const { resolveLabelServiceAndWeight } = require('../helpers/label-shipping-rule');
 // Updated: Added DELETE endpoint for shipping address
 
 function createOrdersRouter({
@@ -67,11 +68,9 @@ function createOrdersRouter({
   };
 
   const EMAIL_LABEL_PACKAGE_DATA = {
-    service_code: 'usps_first_class_mail',
     dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
-    weight: { ounces: 8, unit: 'ounce' },
+    weight: { ounces: 15.9, unit: 'ounce' },
   };
-  const BASE_LABEL_OUNCES = 8;
 
   function resolveOrderDeviceCount(order = {}) {
     const items = Array.isArray(order.items) ? order.items : [];
@@ -187,17 +186,40 @@ function createOrdersRouter({
     };
 
     const deviceCount = resolveOrderDeviceCount(orderData);
+    const shippingDecision = resolveLabelServiceAndWeight(deviceCount);
     const packageData = {
       ...EMAIL_LABEL_PACKAGE_DATA,
-      weight: { ounces: BASE_LABEL_OUNCES * deviceCount, unit: 'ounce' },
+      service_code: shippingDecision.chosenService,
+      weight: { ounces: shippingDecision.weightOz, unit: 'ounce' },
     };
+    console.log('[ShipEngine] Label decision', {
+      orderId,
+      deviceCount,
+      chosenService: shippingDecision.chosenService,
+      weightOz: shippingDecision.weightOz,
+      blocks: shippingDecision.blocks,
+    });
     const labelReference = `${orderId}-INBOUND-DEVICE`;
-    const labelData = await createShipEngineLabel(
-      buyerAddress,
-      SWIFT_BUYBACK_ADDRESS,
-      labelReference,
-      packageData
-    );
+    let labelData;
+    try {
+      labelData = await createShipEngineLabel(
+        buyerAddress,
+        SWIFT_BUYBACK_ADDRESS,
+        labelReference,
+        packageData
+      );
+    } catch (error) {
+      const requestId = error?.responseData?.request_id || error?.request_id || 'unknown';
+      console.error('[ShipEngine] Label generation failed', {
+        orderId,
+        deviceCount,
+        chosenService: shippingDecision.chosenService,
+        weightOz: shippingDecision.weightOz,
+        blocks: shippingDecision.blocks,
+        request_id: requestId,
+      });
+      throw error;
+    }
 
     const labelDownloadLink = labelData.label_download?.pdf;
     if (!labelDownloadLink) {
@@ -1474,17 +1496,26 @@ function createOrdersRouter({
           ? 'needs_printing'
           : 'label_generated';
 
+      const shippingDecision = resolveLabelServiceAndWeight(deviceCount);
       const outboundPackageData = {
-        service_code: 'usps_first_class_mail',
+        service_code: shippingDecision.chosenService,
         dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
-        weight: { ounces: 4, unit: 'ounce' },
+        weight: { ounces: shippingDecision.weightOz, unit: 'ounce' },
       };
 
       const inboundPackageData = {
-        service_code: 'usps_first_class_mail',
+        service_code: shippingDecision.chosenService,
         dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
-        weight: { ounces: BASE_LABEL_OUNCES * deviceCount, unit: 'ounce' },
+        weight: { ounces: shippingDecision.weightOz, unit: 'ounce' },
       };
+
+      console.log('[ShipEngine] Label decision', {
+        orderId: order.id,
+        deviceCount,
+        chosenService: shippingDecision.chosenService,
+        weightOz: shippingDecision.weightOz,
+        blocks: shippingDecision.blocks,
+      });
 
       const swiftBuyBackAddress = {
         name: 'SHC Returns',
@@ -1521,19 +1552,34 @@ function createOrdersRouter({
       let customerMailOptions;
 
       if (order.shippingPreference === 'Shipping Kit Requested') {
-        const outboundLabelData = await createShipEngineLabel(
-          swiftBuyBackAddress,
-          buyerAddress,
-          `${orderIdForLabel}-OUTBOUND-KIT`,
-          outboundPackageData
-        );
+        let outboundLabelData;
+        let inboundLabelData;
+        try {
+          outboundLabelData = await createShipEngineLabel(
+            swiftBuyBackAddress,
+            buyerAddress,
+            `${orderIdForLabel}-OUTBOUND-KIT`,
+            outboundPackageData
+          );
 
-        const inboundLabelData = await createShipEngineLabel(
-          buyerAddress,
-          swiftBuyBackAddress,
-          `${orderIdForLabel}-INBOUND-DEVICE`,
-          inboundPackageData
-        );
+          inboundLabelData = await createShipEngineLabel(
+            buyerAddress,
+            swiftBuyBackAddress,
+            `${orderIdForLabel}-INBOUND-DEVICE`,
+            inboundPackageData
+          );
+        } catch (error) {
+          const requestId = error?.responseData?.request_id || error?.request_id || 'unknown';
+          console.error('[ShipEngine] Label generation failed', {
+            orderId: order.id,
+            deviceCount,
+            chosenService: shippingDecision.chosenService,
+            weightOz: shippingDecision.weightOz,
+            blocks: shippingDecision.blocks,
+            request_id: requestId,
+          });
+          throw error;
+        }
 
         customerLabelData = outboundLabelData;
 
@@ -1613,12 +1659,25 @@ function createOrdersRouter({
           html: customerEmailHtml,
         };
       } else if (order.shippingPreference === 'Email Label Requested') {
-        customerLabelData = await createShipEngineLabel(
-          buyerAddress,
-          swiftBuyBackAddress,
-          `${orderIdForLabel}-INBOUND-DEVICE`,
-          inboundPackageData
-        );
+        try {
+          customerLabelData = await createShipEngineLabel(
+            buyerAddress,
+            swiftBuyBackAddress,
+            `${orderIdForLabel}-INBOUND-DEVICE`,
+            inboundPackageData
+          );
+        } catch (error) {
+          const requestId = error?.responseData?.request_id || error?.request_id || 'unknown';
+          console.error('[ShipEngine] Label generation failed', {
+            orderId: order.id,
+            deviceCount,
+            chosenService: shippingDecision.chosenService,
+            weightOz: shippingDecision.weightOz,
+            blocks: shippingDecision.blocks,
+            request_id: requestId,
+          });
+          throw error;
+        }
 
         const labelDownloadLink = customerLabelData.label_download?.pdf;
         if (!labelDownloadLink) {
