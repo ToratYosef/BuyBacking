@@ -30,6 +30,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
   <div id="root"></div>
+  <div id="runtimeErrors" class="fixed bottom-4 right-4 z-[99999] w-[92vw] max-w-xl hidden"></div>
   <!-- Lucide icons (vanilla) -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script type="module">
@@ -60,6 +61,38 @@
     // DOM HELPERS
     // ----------------------------
     const $root = document.getElementById("root");
+    const $runtimeErrors = document.getElementById("runtimeErrors");
+    function reportUiError(message, meta = "") {
+      if (!$runtimeErrors) return;
+      const line = document.createElement("div");
+      line.className = "mb-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2 text-xs shadow";
+      const ts = new Date().toLocaleTimeString();
+      line.textContent = `[${ts}] ${String(message || "Unknown error")}${meta ? ` — ${meta}` : ""}`;
+      $runtimeErrors.prepend(line);
+      $runtimeErrors.classList.remove("hidden");
+      while ($runtimeErrors.children.length > 6) $runtimeErrors.removeChild($runtimeErrors.lastChild);
+    }
+
+    const originalConsoleError = console.error.bind(console);
+    console.error = (...args) => {
+      originalConsoleError(...args);
+      const msg = args.map(a => {
+        if (a instanceof Error) return a.message;
+        if (typeof a === "object") {
+          try { return JSON.stringify(a); } catch { return String(a); }
+        }
+        return String(a);
+      }).join(" ");
+      reportUiError(msg);
+    };
+
+    window.addEventListener("error", (event) => {
+      reportUiError(event.message || "Unhandled runtime error", `${event.filename || ""}:${event.lineno || ""}`);
+    });
+    window.addEventListener("unhandledrejection", (event) => {
+      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason || "Promise rejected");
+      reportUiError(reason, "Unhandled Promise rejection");
+    });
     function esc(s) {
       return String(s ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[m]));
     }
