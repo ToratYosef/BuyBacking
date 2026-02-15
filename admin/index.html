@@ -1917,7 +1917,7 @@
       const entries = getOrderDeviceEntries(order);
       const focused = getFocusedDevice(order);
       const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
-      if (focused.isFocused) tabs.splice(2, 0, { id: "qc", label: "QC & Intake", icon: "shield-check" });
+      tabs.splice(2, 0, { id: "qc", label: "QC & Intake", icon: "shield-check" });
       const visibleEntries = entries;
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
@@ -1931,12 +1931,11 @@
           const item = entry.item || {};
           const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
           const deviceStatus = getDeviceStatus(order, deviceKey);
-          const isSelected = focused.isFocused && focused.deviceKey === deviceKey;
           const offer = getPerDeviceOffer(item, order);
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const showAcceptedOfferSwap = isAcceptedReofferStatus(deviceStatus) && Number.isFinite(acceptedDeviceOffer);
           return `
-            <div class="p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors ${isSelected ? 'ring-2 ring-indigo-200 bg-indigo-50/40' : ''}">
+            <div class="p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors">
               <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
                 <i data-lucide="smartphone" style="width:24px;height:24px"></i>
               </div>
@@ -1957,11 +1956,6 @@
                 ` : `
                   <div class="text-lg font-bold text-green-600">$${esc(Number(offer || 0).toFixed(2))}</div>
                 `}
-              </div>
-              <div class="self-end pl-2">
-                <button type="button" data-select-device="${esc(deviceKey)}" class="px-2.5 py-1 rounded-md text-[11px] font-semibold ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
-                  ${isSelected ? 'Selected' : 'Select Device'}
-                </button>
               </div>
             </div>
           `;
@@ -2068,54 +2062,45 @@
         `;
       }
       function qcHTML() {
-        const deviceKey = focused.isFocused ? focused.deviceKey : buildOrderDeviceKey(order.id, 0);
-        const qcForDevice = (order?.qcDataByDevice && deviceKey) ? order.qcDataByDevice[deviceKey] : null;
-        const legacy = (!qcForDevice && String(deviceKey).endsWith("::0")) ? order.qcData : null;
-        const qc = qcForDevice || legacy;
-        const hasQcData = !!qc;
+        const selectedKey = focused.isFocused ? focused.deviceKey : null;
+        const deviceCards = entries.map((entry) => {
+          const item = entry.item || {};
+          const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+          const qcForDevice = order?.qcDataByDevice?.[deviceKey] || null;
+          const legacy = (!qcForDevice && entry.deviceIndex === 0) ? (order.qcData || null) : null;
+          const qc = qcForDevice || legacy;
+          const hasQcData = !!qc;
+          const selected = selectedKey === deviceKey;
+          return `
+            <button type="button" data-qc-select-device="${esc(deviceKey)}"
+              class="w-full text-left border rounded-xl p-4 transition ${selected ? 'border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Device ${entry.deviceIndex + 1}</div>
+                  <div class="text-sm font-semibold text-slate-900 mt-1">${esc(item.device || order.device || 'Unknown device')}</div>
+                  <div class="text-xs text-slate-500 mt-1">${esc([item.storage || order.storage || '', formatCarrierLabel(item.carrier || order.carrier || ''), item.condition || order.condition || ''].filter(Boolean).join(' • '))}</div>
+                </div>
+                <div class="text-right">
+                  ${statusBadgeHTML(getDeviceStatus(order, deviceKey))}
+                  ${hasQcData ? `<div class="mt-1 text-[11px] font-semibold text-emerald-700">QC Completed</div>` : `<div class="mt-1 text-[11px] font-semibold text-amber-700">QC Pending</div>`}
+                </div>
+              </div>
+              <div class="mt-3 text-[11px] font-semibold ${selected ? 'text-indigo-700' : 'text-slate-500'}">${selected ? 'Selected • click to open checklist' : 'Select this device to open QC checklist'}</div>
+            </button>
+          `;
+        }).join('');
         return `
           <div class="space-y-6">
             <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
               <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                 <h3 class="font-semibold text-slate-700 flex items-center gap-2">
                   <i data-lucide="shield-check" class="text-slate-400" style="width:18px;height:18px"></i>
-                  QC Status ${focused.isFocused ? `<span class="text-xs text-slate-400 font-bold">• ${esc(focused.label)}</span>` : ""}
+                  Choose Device For QC
                 </h3>
-                ${hasQcData ? `<span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-medium">Completed</span>` : ""}
               </div>
-              <div class="p-5">
-                ${!hasQcData ? `
-                  <div class="text-center py-8">
-                    <div class="h-12 w-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <i data-lucide="search" style="width:24px;height:24px"></i>
-                    </div>
-                    <h4 class="text-slate-900 font-medium mb-1">Inspection Required</h4>
-                    <p class="text-sm text-slate-500 mb-4">No quality control data has been recorded for this device yet.</p>
-                  </div>
-                ` : `
-                  <div class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                      <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <span class="text-xs text-slate-400 uppercase block">Device Match</span>
-                        <span class="text-sm font-bold ${qc.deviceMatch === "yes" ? "text-emerald-600" : "text-rose-600"}">
-                          ${qc.deviceMatch === "yes" ? "Match" : "Mismatch"}
-                        </span>
-                      </div>
-                      <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <span class="text-xs text-slate-400 uppercase block">Functional</span>
-                        <span class="text-sm font-bold ${qc.isFunctional === "yes" ? "text-emerald-600" : "text-rose-600"}">
-                          ${qc.isFunctional === "yes" ? "Yes" : "No"}
-                        </span>
-                      </div>
-                    </div>
-                    ${qc.notes ? `
-                      <div class="mt-4 pt-4 border-t border-slate-100">
-                        <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Inspector Notes</label>
-                        <p class="text-sm text-slate-700 bg-amber-50 p-3 rounded-lg border border-amber-100">${esc(qc.notes)}</p>
-                      </div>
-                    ` : ""}
-                  </div>
-                `}
+              <div class="p-5 space-y-3">
+                <p class="text-sm text-slate-600">Select which device you inspected. This will automatically open the QC checklist modal for that specific device.</p>
+                ${deviceCards}
               </div>
             </div>
           </div>
@@ -2924,14 +2909,19 @@
           render();
         });
       });
-      document.querySelectorAll("[data-select-device]").forEach(btn => {
+      document.querySelectorAll("[data-qc-select-device]").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const deviceKey = btn.getAttribute("data-select-device");
+          const deviceKey = btn.getAttribute("data-qc-select-device");
           if (!deviceKey) return;
           state.selectedDeviceKey = deviceKey;
           state.qcDeviceKey = deviceKey;
+          state.drawerTab = "qc";
+          state.qcOpen = true;
+          state.modalScrollTop.qc = 0;
+          state.qcStep = 1;
+          state.qcData = null;
           render();
         });
       });
