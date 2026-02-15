@@ -167,6 +167,10 @@ firebase deploy --only functions
 - The admin console (`/admin`) can be deployed as a separate service (Heroku, Cloud Run, etc.) because it is a standalone Express application. Ensure the same environment variables and service account file are present in the deployment environment.【F:admin/index.js†L1-L114】
 - Keep ShipEngine, Stripe, and email secrets in a secure secret manager or CI environment variables. Avoid committing `.env` files.
 
+## Useful maintenance checks
+
+- Run `npm run check:no-functions` before shipping static-page updates to ensure no page still references Firebase Functions endpoints directly; this helps keep non-dynamic pages fully static and cache-friendly.【F:tools/check-no-functions.js†L1-L52】【F:package.json†L6-L14】
+
 ## Promo codes (including email-label-only offers)
 
 Promo codes live in the Firestore collection `promo_codes`, with each document ID set to the uppercase code (for example, `SHIP48`). Populate the document with:

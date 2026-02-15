@@ -262,6 +262,7 @@
 
         /* Testimonials */
         .testimonial-section { position: relative; background: #f0f9ff; overflow: hidden; }
+        .testimonial-cover { position:absolute; inset:0; pointer-events:none; background: linear-gradient(90deg, rgba(240,249,255,.95) 0%, rgba(240,249,255,0) 10%, rgba(240,249,255,0) 90%, rgba(240,249,255,.95) 100%); z-index:1; }
         .testimonial-card {
             background: white; border-radius: 1.5rem;
             padding: 2rem; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
@@ -285,6 +286,9 @@
             -ms-overflow-style: none; /* IE/Edge legacy */
             overscroll-behavior: contain;
             touch-action: pan-x;
+        }
+        .testimonial-carousel.is-locked-user-scroll {
+            touch-action: none;
         }
 
         .testimonial-carousel:focus { outline: none; }
@@ -337,6 +341,16 @@
         @media (prefers-reduced-motion: reduce) {
             .testimonial-carousel { scroll-behavior: auto; }
             .testimonial-card { transition: none; }
+        }
+
+        @media (max-width: 640px) {
+            .hero-section { padding-top: 1rem; }
+            .hero-content h1 { font-size: 2rem !important; line-height: 1.15 !important; }
+            .hero-content p { font-size: .96rem !important; }
+            .testimonial-card { padding: 1.2rem; border-radius: 1rem; }
+            .testimonial-slide { flex-basis: 92%; }
+            #popular .homepage-card-inner { padding: 1rem; }
+            #popular .h-48 { height: 9rem; }
         }
 
     </style>
@@ -541,6 +555,7 @@
 
         <!-- Testimonials -->
         <section id="customer-reviews" class="testimonial-section py-24">
+            <div class="testimonial-cover" aria-hidden="true"></div>
             <div class="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
                 <div class="text-center max-w-3xl mx-auto mb-12">
                     <span class="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-sm font-semibold uppercase tracking-wider text-blue-800 bg-blue-100 mb-4">Trusted by 100,000+</span>
@@ -1202,6 +1217,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Customer Reviews Carousel (center highlight + auto-scroll every 3s)
     const customerReviewsTrack = document.getElementById('customerReviewsTrack');
     if (customerReviewsTrack) {
+        customerReviewsTrack.classList.add('is-locked-user-scroll');
+    const customerReviewsSection = document.getElementById('customer-reviews');
+    const lockUserScroll = (event) => {
+        event.preventDefault();
+    };
+    customerReviewsTrack.addEventListener('wheel', lockUserScroll, { passive: false });
+    customerReviewsTrack.addEventListener('touchmove', lockUserScroll, { passive: false });
+    if (customerReviewsSection) {
+        customerReviewsSection.addEventListener('wheel', lockUserScroll, { passive: false });
+        customerReviewsSection.addEventListener('touchmove', lockUserScroll, { passive: false });
+    }
+
+
         const testimonialData = [
             {
                 name: 'Michael Rodriguez',
@@ -1409,15 +1437,11 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         customerReviewsTrack.addEventListener('scroll', onTrackScroll, { passive: true });
-        customerReviewsTrack.addEventListener('wheel', onTrackWheel, { passive: false });
-        customerReviewsTrack.addEventListener('touchstart', () => pauseTemporarily(), { passive: true });
-        customerReviewsTrack.addEventListener('pointerdown', () => pauseTemporarily(), { passive: true });
+        customerReviewsTrack.removeEventListener('wheel', onTrackWheel);
 
         customerReviewsTrack.addEventListener('keydown', (event) => {
             if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
             event.preventDefault();
-            pauseTemporarily();
-            scrollToIndex(currentIndex + (event.key === 'ArrowRight' ? 1 : -1));
         });
 
         window.addEventListener('resize', () => syncCenterFromScroll(), { passive: true });
