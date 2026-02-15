@@ -927,6 +927,40 @@
             
             if (labelUrl) successUrl.searchParams.set('labelUrl', labelUrl);
             if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);
+
+            try {
+                const itemSummary = cartItems.map((item) => ({
+                    modelName: item.modelName || item.model || 'Device',
+                    brand: item.brand || '',
+                    storage: item.storage || '',
+                    carrier: item.lock || '',
+                    condition: item.condition || '',
+                    qty: Math.max(1, Math.floor(Number(item.qty || 1))),
+                    unitPrice: Number(item.unitPrice || 0)
+                }));
+                sessionStorage.setItem('shcOrderSummary', JSON.stringify({
+                    id: result.orderId,
+                    price: finalPayout.toFixed(2),
+                    device: cartItems.length > 1 ? 'Multiple devices' : cartItems[0].modelName,
+                    qty: totalQty,
+                    name: shippingInfo.fullName,
+                    street: shippingInfo.streetAddress,
+                    unit: shippingInfo.addressUnit,
+                    city: shippingInfo.city,
+                    state: shippingInfo.state,
+                    zip: shippingInfo.zipCode,
+                    payMethod: method,
+                    shipping: pref,
+                    labelUrl,
+                    trackingNumber,
+                    email: shippingInfo.email,
+                    phone: shippingInfo.phone,
+                    payoutIdentifier: document.getElementById('payoutIdentifier').value,
+                    items: itemSummary
+                }));
+            } catch (e) {
+                console.error('Failed to persist order summary payload', e);
+            }
             
             window.location.href = successUrl.toString();
         } catch (e) {
