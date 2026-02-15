@@ -1828,15 +1828,28 @@
             <div class="p-5">
               ${logs.length ? `
                 <ul class="space-y-6">
-                  ${logs.map((log) => `
-                    <li class="relative pl-6 border-l-2 border-slate-200 last:border-0 pb-1">
-                      <div class="absolute -left-[9px] top-0 h-4 w-4 rounded-full bg-slate-200 border-2 border-white ring-1 ring-slate-100"></div>
+                  ${logs.map((log) => {
+                    const t = String(log?.type || '').toLowerCase();
+                    const palette = t.includes('error')
+                      ? { border: '#fecdd3', dot: '#fda4af', text: '#9f1239', sub: '#be123c' }
+                      : t.includes('status')
+                        ? { border: '#c7d2fe', dot: '#a5b4fc', text: '#312e81', sub: '#4338ca' }
+                        : t.includes('payment')
+                          ? { border: '#bbf7d0', dot: '#86efac', text: '#14532d', sub: '#15803d' }
+                          : t.includes('label')
+                            ? { border: '#bfdbfe', dot: '#93c5fd', text: '#1e3a8a', sub: '#1d4ed8' }
+                            : t.includes('email')
+                              ? { border: '#fde68a', dot: '#fcd34d', text: '#92400e', sub: '#b45309' }
+                              : { border: '#e2e8f0', dot: '#cbd5e1', text: '#0f172a', sub: '#475569' };
+                    return `
+                    <li class="relative pl-6 border-l-2 last:border-0 pb-1" style="border-color:${palette.border}">
+                      <div class="absolute -left-[9px] top-0 h-4 w-4 rounded-full border-2 border-white ring-1" style="background:${palette.dot}; box-shadow: 0 0 0 1px ${palette.border}"></div>
                       <div class="flex flex-col">
-                        <span class="text-sm font-medium text-slate-900">${esc(log.message || "")}</span>
-                        <span class="text-xs text-slate-500 mt-0.5">${esc(formatDate(log.at))}</span>
+                        <span class="text-sm font-medium" style="color:${palette.text}">${esc(log.message || "")}</span>
+                        <span class="text-xs mt-0.5" style="color:${palette.sub}">${esc((log.type ? `[${log.type}] ` : '') + formatDate(log.at))}</span>
                       </div>
                     </li>
-                  `).join("")}
+                  `;}).join("")}
                 </ul>
               ` : `
                 <p class="italic text-center py-4 text-slate-500 text-sm">No activity recorded yet.</p>
@@ -1912,7 +1925,6 @@
         const hasLabels = !!(getAnyTrackingNumber(order) || getShipEngineLabelEntries(order).length);
         const isKitReq = order.shippingPreference === "Shipping Kit Requested";
         const isEmailReq = order.shippingPreference === "Email Label Requested";
-        const isBalance = isBalanceEmailStatus(order);
 
         // --- Status Logic ---
         if (["order_pending", "kit_needs_printing", "needs_printing"].includes(status)) {
@@ -1931,23 +1943,7 @@
             if (isKitReq) groups.shipping.push({ label: "Mark Kit Sent", action: "markKitSent", class: "bg-white border-slate-200 text-slate-700" });
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
         }
-        else if (status === "emailed") {
-            if (isBalance) {
-                // Post receive actions
-                groups.postReceive.push({ label: "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
-                groups.postReceive.push({ label: "Email Outstanding Balance", action: "emailBalance", class: "bg-white border-slate-200" });
-                groups.postReceive.push({ label: "Email Password Lock", action: "emailLocked", class: "bg-white border-slate-200" });
-                 groups.postReceive.push({ label: "Email Lost/Stolen", action: "emailStolen", class: "bg-white border-slate-200" });
-                groups.postReceive.push({ label: "Email FMI Lock", action: "emailFmi", class: "bg-white border-slate-200" });
-                groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
-                groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
-            } else {
-                // Normal emailed
-                if (isKitReq) groups.shipping.push({ label: "Mark Kit Sent", action: "markKitSent", class: "bg-white border-slate-200 text-slate-700" });
-                groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
-            }
-        }
-        else if (["received", "imei_checked"].includes(status)) {
+        else if (["emailed", "received", "imei_checked"].includes(status)) {
             groups.postReceive.push({ label: "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
             groups.postReceive.push({ label: "Email Outstanding Balance", action: "emailBalance", class: "bg-white border-slate-200" });
             groups.postReceive.push({ label: "Email Password Lock", action: "emailLocked", class: "bg-white border-slate-200" });
@@ -1977,7 +1973,7 @@
         // Auto requote button
         // Logic not strictly defined, assuming if not completed and maybe received? 
         // Spec says "Post-Receive > Status Independent". I'll add if status is received/imei_checked/emailed(balance)
-        if (["received", "imei_checked"].includes(status) || (status === "emailed" && isBalance)) {
+        if (["emailed", "received", "imei_checked"].includes(status)) {
              groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
         }
 
@@ -1989,12 +1985,7 @@
         groups.tracking.push({ label: "Print Packing Slip", action: "printPacking", class: "bg-white border-slate-200" });
 
         // Admin
-        const voidable = getLabelOptions(order).length > 0;
-        if (voidable && status !== 'cancelled') {
-            groups.admin.push({ label: "Void Shipping Labels", action: "voidLabels", class: "text-slate-600 hover:bg-slate-50" });
-        }
         if (status !== 'cancelled') {
-            groups.admin.push({ label: "Clear Saved Data", action: "clearData", class: "text-slate-600 hover:bg-slate-50" });
              groups.admin.push({ label: "Cancel Order", action: "cancelOrder", class: "text-rose-600 hover:bg-rose-50" });
         }
         groups.admin.push({ label: "Delete Order", action: "deleteOrder", class: "text-rose-600 hover:bg-rose-50" });
