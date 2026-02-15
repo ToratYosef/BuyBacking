@@ -44,6 +44,26 @@ const chatsCollection = db.collection("chats");
 const devicesCollection = db.collection("devices");
 const supportTicketsCollection = db.collection("support_tickets");
 
+function firebaseNotificationsEnabled() {
+  const raw = String(process.env.FIREBASE_NOTIFICATIONS_ENABLED || 'true').trim().toLowerCase();
+  return !['0', 'false', 'off', 'no'].includes(raw);
+}
+
+function isAuthDisabled() {
+  const raw = String(process.env.DISABLE_AUTH || '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(raw);
+}
+
+function getCallableAuth(context) {
+  if (context?.auth) {
+    return context.auth;
+  }
+  if (isAuthDisabled()) {
+    return { uid: 'public', token: { email: 'public@localhost' } };
+  }
+  return null;
+}
+
 const FAKE_ORDER_TARGET_PER_DAY = Number(process.env.FAKE_ORDER_TARGET_PER_DAY || 20);
 const FAKE_ORDER_MAX_PER_RUN = Number(process.env.FAKE_ORDER_MAX_PER_RUN || 3);
 const FAKE_ORDER_TZ_OFFSET_MINUTES = Number(process.env.FAKE_ORDER_TZ_OFFSET_MINUTES ?? -300);
@@ -527,6 +547,8 @@ const allowedOrigins = [
   "https://buyback-a0f05.web.app",
   "https://secondhandcell.com",
   "https://www.secondhandcell.com",
+  "https://admin.secondhandcell.com",
+  "http://admin.secondhandcell.com",
 ];
 
 const isAllowedOrigin = (origin) => {
@@ -2740,11 +2762,53 @@ function getReturnCountdownStartMillis(order = {}) {
 }
 
 // Custom function to send FCM push notification to a specific token or list of tokens
-async function sendPushNotification(tokens, title, body, data = {}) {
-  console.warn(
-    'Skipping Firebase push notification send; Firebase notifications are disabled.'
+function isInvalidFcmToken(error) {
+  const code = error?.code || error?.errorInfo?.code;
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    code === 'messaging/registration-token-not-registered' ||
+    code === 'messaging/invalid-registration-token' ||
+    message.includes('notregistered') ||
+    message.includes('requested entity was not found')
   );
-  return null;
+}
+
+async function sendPushNotification(tokens, title, body, data = {}, options = {}) {
+  if (!firebaseNotificationsEnabled()) {
+    console.warn('Skipping Firebase push notification send; FIREBASE_NOTIFICATIONS_ENABLED is false.');
+    return null;
+  }
+
+  const normalizedTokens = Array.isArray(tokens)
+    ? tokens.filter(Boolean)
+    : (tokens ? [tokens] : []);
+
+  if (!normalizedTokens.length) {
+    return null;
+  }
+
+  const response = await admin.messaging().sendEachForMulticast({
+    notification: { title, body },
+    data: stringifyData(data),
+    tokens: normalizedTokens,
+  });
+
+  if (response.failureCount > 0) {
+    response.responses.forEach((resp, idx) => {
+      if (!resp.success) {
+        console.error(`Failed to send FCM to token ${normalizedTokens[idx]}:`, resp.error?.message || resp.error);
+        if (options.tokenRefs?.[idx] && isInvalidFcmToken(resp.error)) {
+          options.tokenRefs[idx]
+            .delete()
+            .catch((deleteError) => {
+              console.error('Failed to delete invalid FCM token document:', deleteError);
+            });
+        }
+      }
+    });
+  }
+
+  return response;
 }
 
 async function sendLabelReminderEmail(order, { tier = 1 } = {}) {
@@ -2797,10 +2861,32 @@ async function sendLabelReminderEmail(order, { tier = 1 } = {}) {
 
 // Re-using and slightly updating the old sendAdminPushNotification to fetch ALL admin tokens.
 async function sendAdminPushNotification(title, body, data = {}) {
-  console.warn(
-    'Skipping Firebase admin push notification; Firebase notifications are disabled.'
-  );
-  return null;
+  if (!firebaseNotificationsEnabled()) {
+    console.warn('Skipping Firebase admin push notification; FIREBASE_NOTIFICATIONS_ENABLED is false.');
+    return null;
+  }
+
+  const adminsSnapshot = await adminsCollection.get();
+  const allTokens = [];
+
+  for (const adminDoc of adminsSnapshot.docs) {
+    const tokensSnapshot = await adminsCollection
+      .doc(adminDoc.id)
+      .collection('fcmTokens')
+      .get();
+
+    tokensSnapshot.forEach((tokenDoc) => {
+      if (tokenDoc.id) {
+        allTokens.push(tokenDoc.id);
+      }
+    });
+  }
+
+  if (!allTokens.length) {
+    return null;
+  }
+
+  return sendPushNotification(allTokens, title, body, data);
 }
 
 async function addAdminFirestoreNotification(
@@ -2810,10 +2896,31 @@ async function addAdminFirestoreNotification(
   relatedDocId = null,
   relatedUserId = null
 ) {
-  console.warn(
-    'Skipping Firebase Firestore notification; Firebase notifications are disabled.'
+  if (!firebaseNotificationsEnabled()) {
+    console.warn('Skipping Firebase Firestore notification; FIREBASE_NOTIFICATIONS_ENABLED is false.');
+    return null;
+  }
+
+  const payload = {
+    message,
+    isRead: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    relatedDocType,
+    relatedDocId,
+    relatedUserId,
+  };
+
+  if (adminUid) {
+    await adminsCollection.doc(adminUid).collection('notifications').add(payload);
+    return 1;
+  }
+
+  const adminsSnapshot = await adminsCollection.get();
+  const writes = adminsSnapshot.docs.map((adminDoc) =>
+    adminsCollection.doc(adminDoc.id).collection('notifications').add(payload)
   );
-  return null;
+  await Promise.all(writes);
+  return writes.length;
 }
 
 async function createShipEngineLabel(fromAddress, toAddress, labelReference, packageData) {
@@ -4070,7 +4177,7 @@ app.post('/orders/:id/sync-label-tracking', async (req, res) => {
 
 app.post("/orders/:id/re-offer", async (req, res) => {
   try {
-    const { newPrice, reasons, comments, deviceKey } = req.body;
+    const { newPrice, reasons, comments } = req.body;
     const orderId = req.params.id;
 
     if (!newPrice || !reasons || !Array.isArray(reasons) || reasons.length === 0) {
@@ -4085,26 +4192,16 @@ app.post("/orders/:id/re-offer", async (req, res) => {
 
     const order = { id: orderDoc.id, ...orderDoc.data() };
 
-    const safeDeviceKey = typeof deviceKey === 'string' && deviceKey.trim() ? deviceKey.trim() : null;
-    const reOfferPayload = {
-      newPrice,
-      reasons,
-      comments,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    };
-    const updatePayload = {
-      reOffer: reOfferPayload,
-    };
-
-    if (safeDeviceKey) {
-      updatePayload[`reOfferByDevice.${safeDeviceKey}`] = reOfferPayload;
-      updatePayload[`deviceStatusByKey.${safeDeviceKey}`] = 're-offered-pending';
-    } else {
-      updatePayload.status = 're-offered-pending';
-    }
-
-    await updateOrderBoth(orderId, updatePayload);
+    await updateOrderBoth(orderId, {
+      reOffer: {
+        newPrice,
+        reasons,
+        comments,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+      status: "re-offered-pending",
+    });
 
     let reasonString = reasons.join(", ");
     if (comments) reasonString += `; ${comments}`;
@@ -4156,7 +4253,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
       }
     );
 
-    res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id, deviceKey: safeDeviceKey });
+    res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
   } catch (err) {
     console.error("Error submitting re-offer:", err);
     res.status(500).json({ error: "Failed to submit re-offer" });
@@ -4201,48 +4298,20 @@ app.post("/orders/:id/return-label", async (req, res) => {
       ? buyerAddress
       : secondHandCellAddress;
 
-    const items = Array.isArray(order.items) ? order.items : [];
-    const deviceCount = Math.max(1, items.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0) || Number(order.qty) || 1);
-    const blocks = Math.ceil(deviceCount / 4);
-    const isPriority = deviceCount >= 5;
-    const chosenService = isPriority ? "usps_priority_mail" : "usps_first_class_mail";
-    const weightOz = isPriority ? blocks * 16 : 15.9;
-
-    // Package data for the return label
-    console.log('[ShipEngine] Label decision', {
-      orderId: order.id,
-      deviceCount,
-      chosenService,
-      weightOz,
-      blocks: isPriority ? blocks : null,
-    });
-
+    // Package data for the return label (phone inside kit)
     const returnPackageData = {
-      service_code: chosenService,
+      service_code: "usps_ground_advantage",
       dimensions: { unit: "inch", height: 2, width: 4, length: 6 },
-      weight: { ounces: weightOz, unit: "ounce" },
+      weight: { ounces: 8, unit: "ounce" }, // Phone weighs 8oz
     };
 
-    let returnLabelData;
-    try {
-      returnLabelData = await createShipEngineLabel(
-        shipFromAddress,
-        shipToAddress,
-        `${orderIdForLabel}-RETURN`,
-        returnPackageData
-      );
-    } catch (error) {
-      const requestId = error?.responseData?.request_id || error?.request_id || 'unknown';
-      console.error('[ShipEngine] Label generation failed', {
-        orderId: order.id,
-        deviceCount,
-        chosenService,
-        weightOz,
-        blocks: isPriority ? blocks : null,
-        request_id: requestId,
-      });
-      throw error;
-    }
+
+    const returnLabelData = await createShipEngineLabel(
+      shipFromAddress,
+      shipToAddress,
+      `${orderIdForLabel}-RETURN`,
+      returnPackageData
+    );
 
     const returnTrackingNumber = returnLabelData.tracking_number;
 
@@ -4471,7 +4540,7 @@ app.post("/orders/:id/cancel", async (req, res) => {
 
 app.post("/accept-offer-action", async (req, res) => {
   try {
-    const { orderId, deviceKey } = req.body;
+    const { orderId } = req.body;
     if (!orderId) {
       return res.status(400).json({ error: "Order ID is required" });
     }
@@ -4482,29 +4551,16 @@ app.post("/accept-offer-action", async (req, res) => {
     }
 
     const orderData = { id: doc.id, ...doc.data() };
-    const safeDeviceKey = typeof deviceKey === 'string' && deviceKey.trim() ? deviceKey.trim() : null;
-
-    if (safeDeviceKey) {
-      const currentDeviceStatus = String(orderData?.deviceStatusByKey?.[safeDeviceKey] || '').trim();
-      if (currentDeviceStatus !== 're-offered-pending') {
-        return res.status(409).json({ error: "This device re-offer has already been accepted or declined." });
-      }
-      await updateOrderBoth(orderId, {
-        [`deviceStatusByKey.${safeDeviceKey}`]: "re-offered-accepted",
-        [`reOfferByDevice.${safeDeviceKey}.acceptedAt`]: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    } else {
-      if (orderData.status !== "re-offered-pending") {
-        return res
-          .status(409)
-          .json({ error: "This offer has already been accepted or declined." });
-      }
-
-      await updateOrderBoth(orderId, {
-        status: "re-offered-accepted",
-        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+    if (orderData.status !== "re-offered-pending") {
+      return res
+        .status(409)
+        .json({ error: "This offer has already been accepted or declined." });
     }
+
+    await updateOrderBoth(orderId, {
+      status: "re-offered-accepted",
+      acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     const customerHtmlBody = `
       <p>Thank you for accepting the revised offer for Order <strong>#${orderData.id}</strong>.</p>
@@ -4521,10 +4577,10 @@ app.post("/accept-offer-action", async (req, res) => {
     await recordCustomerEmail(
       orderId,
       'Re-offer acceptance confirmation email sent to customer.',
-      { status: 're-offered-accepted', ...(safeDeviceKey ? { deviceKey: safeDeviceKey } : {}) }
+      { status: 're-offered-accepted' }
     );
 
-    res.json({ message: "Offer accepted successfully.", orderId: orderData.id, ...(safeDeviceKey ? { deviceKey: safeDeviceKey } : {}) });
+    res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
   } catch (err) {
     console.error("Error accepting offer:", err);
     res.status(500).json({ error: "Failed to accept offer" });
@@ -4533,7 +4589,7 @@ app.post("/accept-offer-action", async (req, res) => {
 
 app.post("/return-phone-action", async (req, res) => {
   try {
-    const { orderId, deviceKey } = req.body;
+    const { orderId } = req.body;
     if (!orderId) {
       return res.status(400).json({ error: "Order ID is required" });
     }
@@ -4544,29 +4600,16 @@ app.post("/return-phone-action", async (req, res) => {
     }
 
     const orderData = { id: doc.id, ...doc.data() };
-    const safeDeviceKey = typeof deviceKey === 'string' && deviceKey.trim() ? deviceKey.trim() : null;
-
-    if (safeDeviceKey) {
-      const currentDeviceStatus = String(orderData?.deviceStatusByKey?.[safeDeviceKey] || '').trim();
-      if (currentDeviceStatus !== 're-offered-pending') {
-        return res.status(409).json({ error: "This device re-offer has already been accepted or declined." });
-      }
-      await updateOrderBoth(orderId, {
-        [`deviceStatusByKey.${safeDeviceKey}`]: "re-offered-declined",
-        [`reOfferByDevice.${safeDeviceKey}.declinedAt`]: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    } else {
-      if (orderData.status !== "re-offered-pending") {
-        return res
-          .status(409)
-          .json({ error: "This offer has already been accepted or declined." });
-      }
-
-      await updateOrderBoth(orderId, {
-        status: "re-offered-declined",
-        declinedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+    if (orderData.status !== "re-offered-pending") {
+      return res
+        .status(409)
+        .json({ error: "This offer has already been accepted or declined." });
     }
+
+    await updateOrderBoth(orderId, {
+      status: "re-offered-declined",
+      declinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     const customerHtmlBody = `
       <p>We have received your request to decline the revised offer and have your device returned. We are now processing your request and will send a return shipping label to your email shortly.</p>
@@ -4582,10 +4625,10 @@ app.post("/return-phone-action", async (req, res) => {
     await recordCustomerEmail(
       orderId,
       'Return request confirmation email sent to customer.',
-      { status: 're-offered-declined', ...(safeDeviceKey ? { deviceKey: safeDeviceKey } : {}) }
+      { status: 're-offered-declined' }
     );
 
-    res.json({ message: "Return requested successfully.", orderId: orderData.id, ...(safeDeviceKey ? { deviceKey: safeDeviceKey } : {}) });
+    res.json({ message: "Return requested successfully.", orderId: orderData.id });
   } catch (err) {
     console.error("Error requesting return:", err);
     res.status(500).json({ error: "Failed to request return" });
@@ -4915,17 +4958,22 @@ exports.autoSendLabelReminderEmails = functions.pubsub
 
 // Send Reminder Email for label_generated orders
 exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
+  let authContext = null;
   try {
+    authContext = getCallableAuth(context);
+
     // 1. Verify user is authenticated
-    if (!context.auth) {
+    if (!authContext) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
     }
 
     // 2. Verify user is an admin by checking admins collection
-    const adminDoc = await adminsCollection.doc(context.auth.uid).get();
-    if (!adminDoc.exists) {
-      console.warn(`Unauthorized reminder email attempt by user: ${context.auth.uid}`);
-      throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+    if (!isAuthDisabled()) {
+      const adminDoc = await adminsCollection.doc(authContext.uid).get();
+      if (!adminDoc.exists) {
+        console.warn(`Unauthorized reminder email attempt by user: ${authContext.uid}`);
+        throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+      }
     }
 
     const { orderId } = data;
@@ -4985,8 +5033,8 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
     // 8. Log admin action for audit trail
     const auditLog = {
       action: 'send_reminder_email',
-      adminUid: context.auth.uid,
-      adminEmail: context.auth.token.email || 'unknown',
+      adminUid: authContext.uid,
+      adminEmail: authContext.token?.email || 'unknown',
       orderId: sanitizedOrderId,
       orderStatus: order.status,
       recipientEmail: order.shippingInfo?.email,
@@ -4996,7 +5044,7 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
     
     await db.collection('adminAuditLogs').add(auditLog);
     
-    console.log(`[AUDIT] Admin ${context.auth.uid} sent reminder email for order ${sanitizedOrderId} to ${order.shippingInfo?.email}`);
+    console.log(`[AUDIT] Admin ${authContext.uid} sent reminder email for order ${sanitizedOrderId} to ${order.shippingInfo?.email}`);
     
     return { 
       success: true, 
@@ -5006,12 +5054,12 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
     console.error('Error sending reminder email:', error);
     
     // Log failed attempts for security monitoring
-    if (context?.auth) {
+    if (authContext) {
       try {
         await db.collection('adminAuditLogs').add({
           action: 'send_reminder_email',
-          adminUid: context.auth.uid,
-          adminEmail: context.auth.token?.email || 'unknown',
+          adminUid: authContext.uid,
+          adminEmail: authContext.token?.email || 'unknown',
           orderId: data?.orderId || 'unknown',
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           success: false,
@@ -5032,14 +5080,18 @@ exports.sendReminderEmail = functions.https.onCall(async (data, context) => {
 });
 
 exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context) => {
+  let authContext = null;
   try {
-    if (!context.auth) {
+    authContext = getCallableAuth(context);
+    if (!authContext) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
     }
 
-    const adminDoc = await adminsCollection.doc(context.auth.uid).get();
-    if (!adminDoc.exists) {
-      throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+    if (!isAuthDisabled()) {
+      const adminDoc = await adminsCollection.doc(authContext.uid).get();
+      if (!adminDoc.exists) {
+        throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+      }
     }
 
     const { orderId } = data || {};
@@ -5200,8 +5252,8 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
 
     await db.collection('adminAuditLogs').add({
       action: 'send_expiring_reminder_email',
-      adminUid: context.auth.uid,
-      adminEmail: context.auth.token?.email || 'unknown',
+      adminUid: authContext.uid,
+      adminEmail: authContext.token?.email || 'unknown',
       orderId: sanitizedOrderId,
       orderStatus: order.status,
       recipientEmail: customerEmail,
@@ -5213,12 +5265,12 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
   } catch (error) {
     console.error('Error sending expiring reminder email:', error);
 
-    if (context?.auth) {
+    if (authContext) {
       try {
         await db.collection('adminAuditLogs').add({
           action: 'send_expiring_reminder_email',
-          adminUid: context.auth.uid,
-          adminEmail: context.auth.token?.email || 'unknown',
+          adminUid: authContext.uid,
+          adminEmail: authContext.token?.email || 'unknown',
           orderId: data?.orderId || 'unknown',
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           success: false,
@@ -5239,14 +5291,18 @@ exports.sendExpiringReminderEmail = functions.https.onCall(async (data, context)
 });
 
 exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
+  let authContext = null;
   try {
-    if (!context.auth) {
+    authContext = getCallableAuth(context);
+    if (!authContext) {
       throw new functions.https.HttpsError('unauthenticated', 'User must be logged in');
     }
 
-    const adminDoc = await adminsCollection.doc(context.auth.uid).get();
-    if (!adminDoc.exists) {
-      throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+    if (!isAuthDisabled()) {
+      const adminDoc = await adminsCollection.doc(authContext.uid).get();
+      if (!adminDoc.exists) {
+        throw new functions.https.HttpsError('permission-denied', 'Only admins can send reminder emails');
+      }
     }
 
     const { orderId } = data || {};
@@ -5366,8 +5422,8 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
 
     await db.collection('adminAuditLogs').add({
       action: 'send_kit_reminder_email',
-      adminUid: context.auth.uid,
-      adminEmail: context.auth.token?.email || 'unknown',
+      adminUid: authContext.uid,
+      adminEmail: authContext.token?.email || 'unknown',
       orderId: sanitizedOrderId,
       orderStatus: order.status,
       recipientEmail: customerEmail,
@@ -5379,12 +5435,12 @@ exports.sendKitReminderEmail = functions.https.onCall(async (data, context) => {
   } catch (error) {
     console.error('Error sending kit reminder email:', error);
 
-    if (context?.auth) {
+    if (authContext) {
       try {
         await db.collection('adminAuditLogs').add({
           action: 'send_kit_reminder_email',
-          adminUid: context.auth.uid,
-          adminEmail: context.auth.token?.email || 'unknown',
+          adminUid: authContext.uid,
+          adminEmail: authContext.token?.email || 'unknown',
           orderId: data?.orderId || 'unknown',
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           success: false,
@@ -5459,17 +5515,20 @@ exports.onNewChatOpened = functions.firestore
     if (assignedAdminUid) {
       // Chat is assigned - send to specific admin only
       const adminTokenSnapshot = await db.collection(`admins/${assignedAdminUid}/fcmTokens`).get();
-      const adminTokens = adminTokenSnapshot.docs.map(doc => {
+      const adminTokenEntries = adminTokenSnapshot.docs.map((doc) => {
         const d = doc.data() || {};
-        return d.token || doc.id;
-      }).filter(token => token && typeof token === 'string');
+        const token = d.token || doc.id;
+        return { token, ref: doc.ref };
+      }).filter((entry) => entry.token && typeof entry.token === 'string');
+      const adminTokens = adminTokenEntries.map((entry) => entry.token);
       
       if (adminTokens.length > 0) {
         await sendPushNotification(
           adminTokens,
           "💬 New Chat Message",
           `Message from ${userIdentifier}: "${truncatedMessage}"`,
-          notificationData
+          notificationData,
+          { tokenRefs: adminTokenEntries.map((entry) => entry.ref) }
         ).catch((e) => console.error("FCM Send Error (Assigned Chat):", e));
       }
       
