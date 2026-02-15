@@ -504,6 +504,11 @@
         }
         window.history.replaceState({}, '', url);
     };
+    const redirectToSellIfCartEmpty = () => {
+        if (cartItems.length) return false;
+        window.location.href = '/sell/index.html';
+        return true;
+    };
     const updateSummary = () => {
         const isKit = document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit';
         const fee = isKit ? 10 : 0;
@@ -672,6 +677,7 @@
         if (action === 'remove') cartItems.splice(index, 1);
         saveCart(cartItems);
         syncQtyParamToUrl();
+        if (redirectToSellIfCartEmpty()) return;
         renderCart();
     };
     const addItemToCart = (item) => {
@@ -731,6 +737,8 @@
                 }
             }
         } catch (err) { console.error(err); }
+
+        if (redirectToSellIfCartEmpty()) return;
 
         // AUTO-REMOVE ERROR HIGHLIGHT ON INPUT
         const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
