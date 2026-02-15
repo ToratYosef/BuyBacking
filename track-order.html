@@ -205,6 +205,8 @@
     .reoffer-meta { margin-top: 10px; color: #7c2d12; font-size: 14px; }
     .reoffer-meta ul { margin: 6px 0 0; padding-left: 18px; }
     .reoffer-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .reoffer-device-card { border: 1px solid #fed7aa; background: #fff7ed; border-radius: 12px; padding: 10px; margin-top: 10px; width: 100%; }
+    .reoffer-device-title { font-weight: 800; color: #9a3412; margin-bottom: 6px; }
     .action-btn {
       border: 0;
       border-radius: 10px;
@@ -378,10 +380,7 @@
             <strong>Reasoning from inspection:</strong>
             <ul id="reofferReasonsList"></ul>
           </div>
-          <div id="reofferActions" class="reoffer-actions hidden">
-            <button id="acceptReofferBtn" type="button" class="action-btn accept">Accept offer</button>
-            <button id="declineReofferBtn" type="button" class="action-btn decline">Decline and return my device</button>
-          </div>
+          <div id="reofferActions" class="reoffer-actions hidden"></div>
           <p id="reofferNote" class="reoffer-note"></p>
         </div>
 
@@ -517,8 +516,6 @@
     const reofferMeta = document.getElementById('reofferMeta');
     const reofferReasonsList = document.getElementById('reofferReasonsList');
     const reofferActions = document.getElementById('reofferActions');
-    const acceptReofferBtn = document.getElementById('acceptReofferBtn');
-    const declineReofferBtn = document.getElementById('declineReofferBtn');
     const reofferNote = document.getElementById('reofferNote');
 
     let currentOrder = null;
@@ -647,6 +644,32 @@
       };
     }
 
+    function getDeviceReofferEntries(order = {}) {
+      const byDevice = order?.reOfferByDevice || order?.reofferByDevice || {};
+      const statusByKey = order?.deviceStatusByKey || {};
+      const entries = Object.entries(byDevice).map(([deviceKey, offer]) => {
+        const rawPrice = offer?.newPrice ?? offer?.price ?? null;
+        const parsedPrice = Number(rawPrice);
+        return {
+          deviceKey,
+          label: `Device ${(String(deviceKey).split('::')[1] || '0') * 1 + 1}`,
+          status: normalize(statusByKey?.[deviceKey] || order?.status || ''),
+          price: Number.isFinite(parsedPrice) ? parsedPrice : null,
+          reasons: Array.isArray(offer?.reasons) ? offer.reasons.filter(Boolean) : []
+        };
+      });
+      if (entries.length) return entries;
+      const orderLevel = getReofferPayload(order);
+      if (!orderLevel) return [];
+      return [{
+        deviceKey: null,
+        label: 'Order offer',
+        status: normalize(order?.status || ''),
+        price: orderLevel.price,
+        reasons: orderLevel.reasons,
+      }];
+    }
+
     function resetReofferPanel() {
       reofferPanel.classList.add('hidden');
       reofferMeta.classList.add('hidden');
@@ -655,60 +678,96 @@
       reofferMessage.textContent = '';
       reofferPrice.textContent = '—';
       reofferNote.textContent = '';
-      acceptReofferBtn.disabled = false;
-      declineReofferBtn.disabled = false;
-      acceptReofferBtn.textContent = 'Accept offer';
-      declineReofferBtn.textContent = 'Decline and return my device';
+      reofferActions.innerHTML = '';
     }
 
     function renderReofferPanel(order) {
       resetReofferPanel();
       const statusKey = normalize(order?.status);
-      const reoffer = getReofferPayload(order);
-      const hasReofferContext = statusKey.includes('re-offered') || statusKey.includes('reoffer') || !!reoffer;
+      const deviceOffers = getDeviceReofferEntries(order);
+      const hasReofferContext = statusKey.includes('re-offered') || statusKey.includes('reoffer') || deviceOffers.length > 0;
       if (!hasReofferContext) return;
 
       reofferPanel.classList.remove('hidden');
-      if (statusKey === 're-offered-pending' || statusKey === 're_offered_pending') {
-        reofferMessage.textContent = 'Please review your updated payout from our QC inspection.';
-        reofferPrice.textContent = reoffer?.price != null ? formatCurrency(reoffer.price) : 'Updated price available';
-        if (reoffer?.reasons?.length) {
-          reofferMeta.classList.remove('hidden');
-          reoffer.reasons.forEach((reason) => {
-            const li = document.createElement('li');
-            li.textContent = reason;
-            reofferReasonsList.appendChild(li);
-          });
-        }
+      const pendingOffers = deviceOffers.filter((entry) => entry.status === 're-offered-pending' || entry.status === 're_offered_pending');
+
+      if (pendingOffers.length) {
+        reofferMessage.textContent = pendingOffers.length > 1
+          ? 'Please review each device re-offer from QC below.'
+          : 'Please review your updated payout from our QC inspection.';
+        reofferPrice.textContent = pendingOffers.length === 1 && pendingOffers[0].price != null
+          ? formatCurrency(pendingOffers[0].price)
+          : `${pendingOffers.length} pending re-offer${pendingOffers.length === 1 ? '' : 's'}`;
         reofferActions.classList.remove('hidden');
-        reofferNote.textContent = 'Once you choose, this action is final.';
+        reofferNote.textContent = 'Please respond to each device offer. Each decision is final.';
+
+        pendingOffers.forEach((entry) => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'reoffer-device-card';
+
+          const title = document.createElement('div');
+          title.className = 'reoffer-device-title';
+          title.textContent = entry.label;
+          wrapper.appendChild(title);
+
+          const summary = document.createElement('p');
+          summary.className = 'reoffer-copy';
+          summary.innerHTML = `Updated offer: <strong>${entry.price != null ? formatCurrency(entry.price) : 'Updated price available'}</strong>`;
+          wrapper.appendChild(summary);
+
+          if (entry.reasons.length) {
+            const meta = document.createElement('div');
+            meta.className = 'reoffer-meta';
+            const reasonTitle = document.createElement('strong');
+            reasonTitle.textContent = 'Reasoning from inspection:';
+            meta.appendChild(reasonTitle);
+            const ul = document.createElement('ul');
+            entry.reasons.forEach((reason) => {
+              const li = document.createElement('li');
+              li.textContent = reason;
+              ul.appendChild(li);
+            });
+            meta.appendChild(ul);
+            wrapper.appendChild(meta);
+          }
+
+          const actions = document.createElement('div');
+          actions.className = 'reoffer-actions';
+          actions.innerHTML = `
+            <button type="button" class="action-btn accept" data-reoffer-action="accept" data-device-key="${entry.deviceKey || ''}">Accept offer</button>
+            <button type="button" class="action-btn decline" data-reoffer-action="decline" data-device-key="${entry.deviceKey || ''}">Decline and return my device</button>
+          `;
+          wrapper.appendChild(actions);
+          reofferActions.appendChild(wrapper);
+        });
         return;
       }
 
-      if (statusKey === 're-offered-accepted' || statusKey === 're_offered_accepted' || statusKey === 're-offered-auto-accepted' || statusKey === 're_offered_auto_accepted' || statusKey === 'requote_accepted') {
-        reofferMessage.textContent = 'Your updated offer has been accepted.';
-        reofferPrice.textContent = reoffer?.price != null ? formatCurrency(reoffer.price) : 'Accepted';
-        reofferNote.textContent = 'We are finalizing your payout now.';
+      if (deviceOffers.some((entry) => ['re-offered-accepted','re_offered_accepted','re-offered-auto-accepted','re_offered_auto_accepted','requote_accepted'].includes(entry.status))) {
+        reofferMessage.textContent = 'One or more updated offers have been accepted.';
+        reofferPrice.textContent = 'Accepted';
+        reofferNote.textContent = 'We are finalizing payout for accepted devices.';
         return;
       }
 
-      if (statusKey === 're-offered-declined' || statusKey === 're_offered_declined') {
-        reofferMessage.textContent = 'You declined the updated offer.';
-        reofferPrice.textContent = reoffer?.price != null ? formatCurrency(reoffer.price) : 'Declined';
-        reofferNote.textContent = 'We are preparing the return process for your device.';
+      if (deviceOffers.some((entry) => entry.status === 're-offered-declined' || entry.status === 're_offered_declined')) {
+        reofferMessage.textContent = 'One or more updated offers were declined.';
+        reofferPrice.textContent = 'Declined';
+        reofferNote.textContent = 'Return processing will be prepared for declined devices.';
       }
     }
 
-    async function submitReofferDecision(action) {
+    async function submitReofferDecision(action, deviceKey = null, triggerButton = null) {
       if (!currentOrder?.id) return;
       const isAccept = action === 'accept';
-      const button = isAccept ? acceptReofferBtn : declineReofferBtn;
-      const originalText = button.textContent;
+      const button = triggerButton;
+      const originalText = button ? button.textContent : '';
       try {
-        acceptReofferBtn.disabled = true;
-        declineReofferBtn.disabled = true;
-        button.textContent = isAccept ? 'Accepting…' : 'Declining…';
-        await apiPost(isAccept ? '/accept-offer-action' : '/return-phone-action', { orderId: currentOrder.id });
+        if (button) {
+          button.disabled = true;
+          button.textContent = isAccept ? 'Accepting…' : 'Declining…';
+        }
+        await apiPost(isAccept ? '/accept-offer-action' : '/return-phone-action', { orderId: currentOrder.id, deviceKey: deviceKey || null });
         const refreshed = await fetchOrder(currentOrder.id, customerEmailInput.value.trim());
         currentOrder = refreshed;
         displayOrder(refreshed);
@@ -716,9 +775,10 @@
         formError.textContent = error?.message || 'Unable to update your re-offer decision right now.';
         formError.classList.remove('hidden');
       } finally {
-        button.textContent = originalText;
-        acceptReofferBtn.disabled = false;
-        declineReofferBtn.disabled = false;
+        if (button) {
+          button.textContent = originalText;
+          button.disabled = false;
+        }
       }
     }
 
@@ -755,8 +815,11 @@
       resetReofferPanel();
     }
 
-    acceptReofferBtn.addEventListener('click', () => submitReofferDecision('accept'));
-    declineReofferBtn.addEventListener('click', () => submitReofferDecision('decline'));
+    reofferActions.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-reoffer-action]');
+      if (!btn) return;
+      submitReofferDecision(btn.dataset.reofferAction, btn.dataset.deviceKey || null, btn);
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();

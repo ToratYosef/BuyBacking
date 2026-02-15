@@ -4070,7 +4070,7 @@ app.post('/orders/:id/sync-label-tracking', async (req, res) => {
 
 app.post("/orders/:id/re-offer", async (req, res) => {
   try {
-    const { newPrice, reasons, comments } = req.body;
+    const { newPrice, reasons, comments, deviceKey } = req.body;
     const orderId = req.params.id;
 
     if (!newPrice || !reasons || !Array.isArray(reasons) || reasons.length === 0) {
@@ -4085,16 +4085,26 @@ app.post("/orders/:id/re-offer", async (req, res) => {
 
     const order = { id: orderDoc.id, ...orderDoc.data() };
 
-    await updateOrderBoth(orderId, {
-      reOffer: {
-        newPrice,
-        reasons,
-        comments,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-      status: "re-offered-pending",
-    });
+    const safeDeviceKey = typeof deviceKey === 'string' && deviceKey.trim() ? deviceKey.trim() : null;
+    const reOfferPayload = {
+      newPrice,
+      reasons,
+      comments,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    };
+    const updatePayload = {
+      reOffer: reOfferPayload,
+    };
+
+    if (safeDeviceKey) {
+      updatePayload[`reOfferByDevice.${safeDeviceKey}`] = reOfferPayload;
+      updatePayload[`deviceStatusByKey.${safeDeviceKey}`] = 're-offered-pending';
+    } else {
+      updatePayload.status = 're-offered-pending';
+    }
+
+    await updateOrderBoth(orderId, updatePayload);
 
     let reasonString = reasons.join(", ");
     if (comments) reasonString += `; ${comments}`;
@@ -4146,7 +4156,7 @@ app.post("/orders/:id/re-offer", async (req, res) => {
       }
     );
 
-    res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id });
+    res.json({ message: "Re-offer submitted successfully", newPrice, orderId: order.id, deviceKey: safeDeviceKey });
   } catch (err) {
     console.error("Error submitting re-offer:", err);
     res.status(500).json({ error: "Failed to submit re-offer" });
@@ -4461,7 +4471,7 @@ app.post("/orders/:id/cancel", async (req, res) => {
 
 app.post("/accept-offer-action", async (req, res) => {
   try {
-    const { orderId } = req.body;
+    const { orderId, deviceKey } = req.body;
     if (!orderId) {
       return res.status(400).json({ error: "Order ID is required" });
     }
@@ -4472,16 +4482,29 @@ app.post("/accept-offer-action", async (req, res) => {
     }
 
     const orderData = { id: doc.id, ...doc.data() };
-    if (orderData.status !== "re-offered-pending") {
-      return res
-        .status(409)
-        .json({ error: "This offer has already been accepted or declined." });
-    }
+    const safeDeviceKey = typeof deviceKey === 'string' && deviceKey.trim() ? deviceKey.trim() : null;
 
-    await updateOrderBoth(orderId, {
-      status: "re-offered-accepted",
-      acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    if (safeDeviceKey) {
+      const currentDeviceStatus = String(orderData?.deviceStatusByKey?.[safeDeviceKey] || '').trim();
+      if (currentDeviceStatus !== 're-offered-pending') {
+        return res.status(409).json({ error: "This device re-offer has already been accepted or declined." });
+      }
+      await updateOrderBoth(orderId, {
+        [`deviceStatusByKey.${safeDeviceKey}`]: "re-offered-accepted",
+        [`reOfferByDevice.${safeDeviceKey}.acceptedAt`]: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      if (orderData.status !== "re-offered-pending") {
+        return res
+          .status(409)
+          .json({ error: "This offer has already been accepted or declined." });
+      }
+
+      await updateOrderBoth(orderId, {
+        status: "re-offered-accepted",
+        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
 
     const customerHtmlBody = `
       <p>Thank you for accepting the revised offer for Order <strong>#${orderData.id}</strong>.</p>
@@ -4498,10 +4521,10 @@ app.post("/accept-offer-action", async (req, res) => {
     await recordCustomerEmail(
       orderId,
       'Re-offer acceptance confirmation email sent to customer.',
-      { status: 're-offered-accepted' }
+      { status: 're-offered-accepted', ...(safeDeviceKey ? { deviceKey: safeDeviceKey } : {}) }
     );
 
-    res.json({ message: "Offer accepted successfully.", orderId: orderData.id });
+    res.json({ message: "Offer accepted successfully.", orderId: orderData.id, ...(safeDeviceKey ? { deviceKey: safeDeviceKey } : {}) });
   } catch (err) {
     console.error("Error accepting offer:", err);
     res.status(500).json({ error: "Failed to accept offer" });
@@ -4510,7 +4533,7 @@ app.post("/accept-offer-action", async (req, res) => {
 
 app.post("/return-phone-action", async (req, res) => {
   try {
-    const { orderId } = req.body;
+    const { orderId, deviceKey } = req.body;
     if (!orderId) {
       return res.status(400).json({ error: "Order ID is required" });
     }
@@ -4521,16 +4544,29 @@ app.post("/return-phone-action", async (req, res) => {
     }
 
     const orderData = { id: doc.id, ...doc.data() };
-    if (orderData.status !== "re-offered-pending") {
-      return res
-        .status(409)
-        .json({ error: "This offer has already been accepted or declined." });
-    }
+    const safeDeviceKey = typeof deviceKey === 'string' && deviceKey.trim() ? deviceKey.trim() : null;
 
-    await updateOrderBoth(orderId, {
-      status: "re-offered-declined",
-      declinedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    if (safeDeviceKey) {
+      const currentDeviceStatus = String(orderData?.deviceStatusByKey?.[safeDeviceKey] || '').trim();
+      if (currentDeviceStatus !== 're-offered-pending') {
+        return res.status(409).json({ error: "This device re-offer has already been accepted or declined." });
+      }
+      await updateOrderBoth(orderId, {
+        [`deviceStatusByKey.${safeDeviceKey}`]: "re-offered-declined",
+        [`reOfferByDevice.${safeDeviceKey}.declinedAt`]: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      if (orderData.status !== "re-offered-pending") {
+        return res
+          .status(409)
+          .json({ error: "This offer has already been accepted or declined." });
+      }
+
+      await updateOrderBoth(orderId, {
+        status: "re-offered-declined",
+        declinedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
 
     const customerHtmlBody = `
       <p>We have received your request to decline the revised offer and have your device returned. We are now processing your request and will send a return shipping label to your email shortly.</p>
@@ -4546,10 +4582,10 @@ app.post("/return-phone-action", async (req, res) => {
     await recordCustomerEmail(
       orderId,
       'Return request confirmation email sent to customer.',
-      { status: 're-offered-declined' }
+      { status: 're-offered-declined', ...(safeDeviceKey ? { deviceKey: safeDeviceKey } : {}) }
     );
 
-    res.json({ message: "Return requested successfully.", orderId: orderData.id });
+    res.json({ message: "Return requested successfully.", orderId: orderData.id, ...(safeDeviceKey ? { deviceKey: safeDeviceKey } : {}) });
   } catch (err) {
     console.error("Error requesting return:", err);
     res.status(500).json({ error: "Failed to request return" });

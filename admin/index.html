@@ -661,6 +661,7 @@
       const finalPrice = Number.isFinite(computedPrice) ? computedPrice : fallbackPrice;
       const reasons = composeReofferReasoning(order, qcData, computedPrice);
       state.reofferData = {
+        deviceKey: state.qcDeviceKey || state.selectedDeviceKey || null,
         newPrice: Number(finalPrice || 0).toFixed(2),
         reasons: reasons.join('\n'),
         comments: qcData?.deviceMatch === 'no' ? `Device mismatch: ${qcData?.deviceName || 'updated in QC'}` : '',
@@ -3153,7 +3154,14 @@
           const carrier = (document.getElementById("reofferCarrier")?.value || "").trim();
           const condition = (document.getElementById("reofferCondition")?.value || "").trim();
           await handleAction(order.id, "reOffer", {
-            body: { newPrice: price, reasons: reasons ? reasons.split(/\n+/).map(x => x.trim()).filter(Boolean) : [], comments, carrier, condition }
+            body: {
+              newPrice: price,
+              reasons: reasons ? reasons.split(/\n+/).map(x => x.trim()).filter(Boolean) : [],
+              comments,
+              carrier,
+              condition,
+              deviceKey: state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null
+            }
           });
           state.reofferOpen = false;
           state.reofferData = null;
