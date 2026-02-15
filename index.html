@@ -262,6 +262,7 @@
 
         /* Testimonials */
         .testimonial-section { position: relative; background: #f0f9ff; overflow: hidden; }
+        .testimonial-cover { position:absolute; inset:0; pointer-events:none; background: linear-gradient(90deg, rgba(240,249,255,.95) 0%, rgba(240,249,255,0) 10%, rgba(240,249,255,0) 90%, rgba(240,249,255,.95) 100%); z-index:1; }
         .testimonial-card {
             background: white; border-radius: 1.5rem;
             padding: 2rem; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
@@ -541,6 +542,7 @@
 
         <!-- Testimonials -->
         <section id="customer-reviews" class="testimonial-section py-24">
+            <div class="testimonial-cover" aria-hidden="true"></div>
             <div class="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
                 <div class="text-center max-w-3xl mx-auto mb-12">
                     <span class="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-sm font-semibold uppercase tracking-wider text-blue-800 bg-blue-100 mb-4">Trusted by 100,000+</span>
@@ -1202,6 +1204,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Customer Reviews Carousel (center highlight + auto-scroll every 3s)
     const customerReviewsTrack = document.getElementById('customerReviewsTrack');
     if (customerReviewsTrack) {
+    const customerReviewsSection = document.getElementById('customer-reviews');
+    if (customerReviewsSection && customerReviewsTrack) {
+        customerReviewsSection.addEventListener('wheel', (event) => {
+            if (Math.abs(event.deltaY) < 1 && Math.abs(event.deltaX) < 1) return;
+            const el = event.target;
+            if (el && (el.closest('#customerReviewsTrack') || el.closest('a,button,input,textarea,select'))) return;
+            event.preventDefault();
+            customerReviewsTrack.scrollLeft += Math.abs(event.deltaX) > 0 ? event.deltaX : event.deltaY;
+        }, { passive: false });
+    }
+
+
         const testimonialData = [
             {
                 name: 'Michael Rodriguez',
