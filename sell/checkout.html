@@ -493,6 +493,22 @@
     const saveCart = (cart) => {
         localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
     };
+    const getTotalQty = () => cartItems.reduce((sum, item) => sum + Math.max(1, Math.floor(Number(item.qty || 1))), 0);
+    const syncQtyParamToUrl = () => {
+        const url = new URL(window.location.href);
+        const totalQty = getTotalQty();
+        if (totalQty > 0) {
+            url.searchParams.set('qty', String(totalQty));
+        } else {
+            url.searchParams.delete('qty');
+        }
+        window.history.replaceState({}, '', url);
+    };
+    const redirectToSellIfCartEmpty = () => {
+        if (cartItems.length) return false;
+        window.location.href = '/sell/index.html';
+        return true;
+    };
     const updateSummary = () => {
         const isKit = document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit';
         const fee = isKit ? 10 : 0;
@@ -660,6 +676,8 @@
         if (action === 'decrease') item.qty = Math.max(item.qty - 1, 1);
         if (action === 'remove') cartItems.splice(index, 1);
         saveCart(cartItems);
+        syncQtyParamToUrl();
+        if (redirectToSellIfCartEmpty()) return;
         renderCart();
     };
     const addItemToCart = (item) => {
@@ -672,7 +690,7 @@
         ].join('|');
         const existing = cartItems.find(cartItem => cartItem.key === key);
         if (existing) {
-            existing.qty += item.qty;
+            existing.qty = Math.max(1, Math.floor(Number(item.qty || 1)));
         } else {
             cartItems.push({ ...item, key });
         }
@@ -688,6 +706,12 @@
         const l = params.get('lock');
         const c = params.get('condition');
         const qty = parseInt(params.get('qty') || '1');
+        const normalizedQty = Math.max(1, Number.isFinite(qty) ? qty : 1);
+
+        if (!b && !m && !s && !l && !c && cartItems.length === 1 && params.has('qty')) {
+            cartItems[0].qty = normalizedQty;
+            saveCart(cartItems);
+        }
 
         try {
             if (b && m && s && l && c) {
@@ -706,13 +730,15 @@
                         storage: s,
                         lock: l,
                         condition: c,
-                        qty: qty,
+                        qty: normalizedQty,
                         unitPrice: unitPrice,
                         conditionPrices: lockMap
                     });
                 }
             }
         } catch (err) { console.error(err); }
+
+        if (redirectToSellIfCartEmpty()) return;
 
         // AUTO-REMOVE ERROR HIGHLIGHT ON INPUT
         const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
@@ -765,6 +791,7 @@
         });
         // Condition is locked from the quote; no checkout dropdown.
 
+        syncQtyParamToUrl();
         renderCart();
     };
 
