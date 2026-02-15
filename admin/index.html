@@ -279,12 +279,26 @@
         ""
       );
     }
+    function getShipEngineLabelEntries(order) {
+      const labels = order?.shipEngineLabels;
+      if (!labels) return [];
+      if (Array.isArray(labels)) {
+        return labels
+          .map((value, index) => ({ key: String(value?.key || `label_${index + 1}`), value }))
+          .filter((entry) => entry.value && typeof entry.value === "object");
+      }
+      if (typeof labels === "object") {
+        return Object.entries(labels)
+          .filter(([, value]) => value && typeof value === "object")
+          .map(([key, value]) => ({ key, value }));
+      }
+      return [];
+    }
     function shipEngineLabelTrackings(order) {
-      const arr = Array.isArray(order?.shipEngineLabels) ? order.shipEngineLabels : [];
       const nums = [];
-      for (const l of arr) {
-        if (l?.trackingNumber) nums.push(l.trackingNumber);
-        if (l?.tracking_number) nums.push(l.tracking_number);
+      for (const { value } of getShipEngineLabelEntries(order)) {
+        if (value?.trackingNumber) nums.push(value.trackingNumber);
+        if (value?.tracking_number) nums.push(value.tracking_number);
       }
       return nums.filter(Boolean);
     }
@@ -676,8 +690,8 @@
       if (locked.has(s)) return false;
       // ">=2 kit label identifiers" heuristic based on fields commonly present
       const ids = new Set();
-      const labels = Array.isArray(order?.shipEngineLabels) ? order.shipEngineLabels : [];
-      for (const l of labels) {
+      const labels = getShipEngineLabelEntries(order);
+      for (const { value: l } of labels) {
         if (l?.labelId) ids.add(String(l.labelId));
         if (l?.label_id) ids.add(String(l.label_id));
         if (l?.id) ids.add(String(l.id));
@@ -779,16 +793,24 @@
     function getLabelOptions(order) {
       // Returns array of { key, id, label }
       const opts = [];
-      const labels = Array.isArray(order?.shipEngineLabels) ? order.shipEngineLabels : [];
-      for (const l of labels) {
-        const id = l?.labelId || l?.label_id || l?.id;
-        if (!id) continue;
-        const tracking = l?.trackingNumber || l?.tracking_number || "";
-        opts.push({ key: "shipengine", id: String(id), label: `ShipEngine ${tracking ? `(${tracking})` : String(id)}` });
+      const seenIds = new Set();
+      for (const { key, value } of getShipEngineLabelEntries(order)) {
+        const status = String(value?.voidStatus || value?.status || value?.state || "active").toLowerCase();
+        if (status === "voided" || value?.voidedAt) continue;
+        const id = value?.labelId || value?.label_id || value?.id;
+        if (!id || seenIds.has(String(id))) continue;
+        seenIds.add(String(id));
+        const tracking = value?.trackingNumber || value?.tracking_number || "";
+        const display = value?.displayName || key || "ShipEngine Label";
+        opts.push({ key: String(key), id: String(id), label: `${display}${tracking ? ` (${tracking})` : ""}` });
       }
-      // If you store a primary label id somewhere:
-      if (order?.shippingLabelId) opts.push({ key: "primary", id: String(order.shippingLabelId), label: "Primary Label" });
-      if (order?.easypostLabelId) opts.push({ key: "easypost", id: String(order.easypostLabelId), label: "EasyPost Label" });
+      if (order?.shippingLabelId && !seenIds.has(String(order.shippingLabelId))) {
+        opts.push({ key: "primary", id: String(order.shippingLabelId), label: "Primary Label" });
+        seenIds.add(String(order.shippingLabelId));
+      }
+      if (order?.easypostLabelId && !seenIds.has(String(order.easypostLabelId))) {
+        opts.push({ key: "easypost", id: String(order.easypostLabelId), label: "EasyPost Label" });
+      }
       return opts;
     }
     async function requestVoidLabels(orderId, selections) {
@@ -1369,7 +1391,7 @@
 
         // Order summary row
         rowHtml.push(`
-          <tr class="bg-slate-50/70 border-t border-slate-200">
+          <tr class="bg-slate-50/70 border-t border-slate-200 cursor-pointer" data-order-row="${esc(order.id)}">
             <td class="px-4 py-3 align-top">
               <div class="flex items-start gap-3">
                 <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
@@ -1379,9 +1401,7 @@
             <td class="px-4 py-3 align-top">
               <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <button data-open-order="${esc(order.id)}" class="font-bold text-slate-900 hover:text-indigo-700">
-                    #${esc(order.id)}
-                  </button>
+                  <span class="font-bold text-slate-900">#${esc(order.id)}</span>
                   <span class="text-xs text-slate-500">${esc(formatDate(createdAt))}</span>
                   <span class="text-xs text-slate-400">•</span>
                   <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
@@ -1410,9 +1430,7 @@
             </td>
             <td class="px-4 py-3 align-top">
               <div class="flex flex-wrap gap-2 justify-end">
-                <button data-open-order="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50">
-                  Open
-                </button>
+                <span class="text-xs text-slate-400">Click row to open</span>
               </div>
             </td>
           </tr>
@@ -1882,7 +1900,7 @@
             admin: []
         };
         // Helpers
-        const hasLabels = !!(getAnyTrackingNumber(order) || (order.shipEngineLabels && order.shipEngineLabels.length));
+        const hasLabels = !!(getAnyTrackingNumber(order) || getShipEngineLabelEntries(order).length);
         const isKitReq = order.shippingPreference === "Shipping Kit Requested";
         const isEmailReq = order.shippingPreference === "Email Label Requested";
         const isBalance = isBalanceEmailStatus(order);
@@ -2346,18 +2364,19 @@
       }
       // per-order selection checkbox
       document.querySelectorAll("[data-order-checkbox]").forEach(cb => {
+        cb.addEventListener("click", (evt) => evt.stopPropagation());
         cb.addEventListener("change", () => {
           const key = cb.getAttribute("data-order-checkbox");
           setOrderSelected(key, cb.checked);
           updateSelectAllCheckboxUI();
         });
       });
-      // open order drawer buttons
-      document.querySelectorAll("[data-open-order]").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const orderId = btn.getAttribute("data-open-order");
+      // open order drawer + hierarchy by clicking order row
+      document.querySelectorAll("[data-order-row]").forEach(row => {
+        row.addEventListener("click", (e) => {
+          if (e.target.closest("a,button,input,label,[data-view-device]")) return;
+          const orderId = row.getAttribute("data-order-row");
+          if (!orderId) return;
           if (state.expandedOrderIds.has(orderId)) state.expandedOrderIds.delete(orderId);
           else state.expandedOrderIds.add(orderId);
           state.selectedOrderId = orderId;
