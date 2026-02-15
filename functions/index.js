@@ -4191,20 +4191,48 @@ app.post("/orders/:id/return-label", async (req, res) => {
       ? buyerAddress
       : secondHandCellAddress;
 
-    // Package data for the return label (phone inside kit)
+    const items = Array.isArray(order.items) ? order.items : [];
+    const deviceCount = Math.max(1, items.reduce((sum, item) => sum + (Number(item?.qty) || 0), 0) || Number(order.qty) || 1);
+    const blocks = Math.ceil(deviceCount / 4);
+    const isPriority = deviceCount >= 5;
+    const chosenService = isPriority ? "usps_priority_mail" : "usps_first_class_mail";
+    const weightOz = isPriority ? blocks * 16 : 15.9;
+
+    // Package data for the return label
+    console.log('[ShipEngine] Label decision', {
+      orderId: order.id,
+      deviceCount,
+      chosenService,
+      weightOz,
+      blocks: isPriority ? blocks : null,
+    });
+
     const returnPackageData = {
-      service_code: "usps_ground_advantage",
+      service_code: chosenService,
       dimensions: { unit: "inch", height: 2, width: 4, length: 6 },
-      weight: { ounces: 8, unit: "ounce" }, // Phone weighs 8oz
+      weight: { ounces: weightOz, unit: "ounce" },
     };
 
-
-    const returnLabelData = await createShipEngineLabel(
-      shipFromAddress,
-      shipToAddress,
-      `${orderIdForLabel}-RETURN`,
-      returnPackageData
-    );
+    let returnLabelData;
+    try {
+      returnLabelData = await createShipEngineLabel(
+        shipFromAddress,
+        shipToAddress,
+        `${orderIdForLabel}-RETURN`,
+        returnPackageData
+      );
+    } catch (error) {
+      const requestId = error?.responseData?.request_id || error?.request_id || 'unknown';
+      console.error('[ShipEngine] Label generation failed', {
+        orderId: order.id,
+        deviceCount,
+        chosenService,
+        weightOz,
+        blocks: isPriority ? blocks : null,
+        request_id: requestId,
+      });
+      throw error;
+    }
 
     const returnTrackingNumber = returnLabelData.tracking_number;
 
