@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BuyBacking Admin (No Build)</title>
-  <link rel="stylesheet" href="/assets/css/admin-tailwind.css?v=20260215-3">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .animate-in { animation: fadeIn .18s ease-out; }
     @keyframes fadeIn { from { opacity:0; transform: translateY(4px);} to {opacity:1; transform:none;} }
@@ -1115,6 +1115,30 @@
         toast("Failed to save QC", "error");
       }
     }
+
+    async function processQcOutcome(order, qcData) {
+      const emailActions = [];
+      if (qcData?.isLocked === "yes") emailActions.push("emailLocked");
+      if (qcData?.hasFmi === "yes") emailActions.push("emailFmi");
+      if (qcData?.hasBalance === "yes") emailActions.push("emailBalance");
+
+      for (const action of emailActions) {
+        try {
+          await handleAction(order.id, action);
+        } catch (err) {
+          console.error("QC auto-email failed", action, err);
+        }
+      }
+
+      if (emailActions.length) {
+        await updateOrderStatusInline(order.id, "emailed", {
+          notifyCustomer: false,
+          body: { qcAwaitingResponse: true }
+        });
+      }
+
+      return { sentEmails: emailActions.length > 0 };
+    }
     // ----------------------------
     // RENDER: LOGIN
     // ----------------------------
@@ -2013,14 +2037,16 @@
             if (isKitReq) groups.shipping.push({ label: "Mark Kit Sent", action: "markKitSent", class: "bg-white border-slate-200 text-slate-700" });
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
         }
-        else if (["emailed", "received", "imei_checked"].includes(status)) {
-            groups.postReceive.push({ label: "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
-            groups.postReceive.push({ label: "Email Outstanding Balance", action: "emailBalance", class: "bg-white border-slate-200" });
-            groups.postReceive.push({ label: "Email Password Lock", action: "emailLocked", class: "bg-white border-slate-200" });
-            groups.postReceive.push({ label: "Email Lost/Stolen", action: "emailStolen", class: "bg-white border-slate-200" });
-            groups.postReceive.push({ label: "Email FMI Lock", action: "emailFmi", class: "bg-white border-slate-200" });
+        else if (["received", "imei_checked"].includes(status)) {
+            groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
             groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
             groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
+        }
+        else if (status === "emailed") {
+            groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
+            groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
+            groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
+            groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
         }
         else if (status === "re-offered-pending") {
              groups.primary.push({ label: "Re-offer Pending (View Info)", type: "info", class: "bg-slate-100 text-slate-500 cursor-default" });
@@ -2043,7 +2069,7 @@
         // Auto requote button
         // Logic not strictly defined, assuming if not completed and maybe received? 
         // Spec says "Post-Receive > Status Independent". I'll add if status is received/imei_checked/emailed(balance)
-        if (["emailed", "received", "imei_checked"].includes(status)) {
+        if (["received", "imei_checked"].includes(status)) {
              groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
         }
 
@@ -2111,7 +2137,6 @@
           imei: currentItem.imei || order.imei || "",
           condition: currentItem.condition || order.condition || "good",
           carrier: currentItem.carrier || currentItem.lock || order.carrier || order.lock || "unlocked",
-
           storageMatch: "yes",
           isFunctional: "yes",
           hasDamage: "no",
@@ -2769,11 +2794,16 @@
           syncStepInputs();
           const qcSnapshot = { ...(state.qcData || {}) };
           await saveQc(order.id, state.qcDeviceKey || buildOrderDeviceKey(order.id, 0), qcSnapshot);
+          const qcOutcome = await processQcOutcome(order, qcSnapshot);
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
           state.qcDeviceKey = null;
-          await openReofferModal(order, qcSnapshot);
+          if (!qcOutcome.sentEmails) {
+            await openReofferModal(order, qcSnapshot);
+          } else {
+            toast("QC saved. Required customer emails sent. Waiting for response.", "info");
+          }
           render();
         });
         syncStepInputs();
