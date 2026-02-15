@@ -319,6 +319,21 @@
       if (c === 'unlocked') return 'Unlocked';
       return c.replace(/\b\w/g, (m) => m.toUpperCase());
     }
+    function getPayoutInfoDisplay(order) {
+      const method = normalizeStatusKey(order?.paymentMethod || '');
+      const d = order?.paymentDetails || {};
+      const identifier = String(order?.paymentIdentifier || '').trim();
+      const cashTag = String(d?.cashappTag || d?.cashAppTag || identifier || '').trim();
+      if (method === 'cashapp') {
+        if (!cashTag) return 'N/A';
+        return cashTag.startsWith('$') ? cashTag : `$${cashTag}`;
+      }
+      if (method === 'paypal') return String(d?.paypalEmail || identifier || '').trim() || 'N/A';
+      if (method === 'zelle') return String(d?.zelleIdentifier || d?.zelleEmail || d?.zellePhone || identifier || '').trim() || 'N/A';
+      if (method === 'check') return String(d?.checkPayableTo || 'Check via mail').trim();
+      if (method === 'echeck') return String(d?.accountHolderName || d?.accountName || d?.email || identifier || 'E-Check details on file').trim();
+      return identifier || String(d?.username || d?.handle || d?.email || '').trim() || 'N/A';
+    }
     function getOrderItemsSearchText(order) {
       // Used by search pipeline
       const entries = getOrderDeviceEntries(order);
@@ -638,6 +653,18 @@
       const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
       const label = `Device ${entry.deviceIndex + 1} of ${entries.length}`;
       return { isFocused: true, deviceKey, entry, entries, label };
+    }
+    function getDeviceStatus(order, deviceKey) {
+      if (!order || !deviceKey) return normalizeStatusKey(order?.status || 'order_pending');
+      return normalizeStatusKey(order?.deviceStatusByKey?.[deviceKey] || order?.status || 'order_pending');
+    }
+    async function updateDeviceStatusInline(orderId, deviceKey, newStatus) {
+      if (!orderId || !deviceKey || !newStatus) return;
+      const orderRef = doc(db, 'orders', orderId);
+      await updateDoc(orderRef, {
+        [`deviceStatusByKey.${deviceKey}`]: newStatus,
+        updatedAt: new Date()
+      });
     }
     function getLastUpdateTimestamp(order) {
       return (
@@ -1680,7 +1707,7 @@
                   ${deviceSub ? `<div class="text-xs text-slate-500 truncate">${esc(deviceSub)}</div>` : ""}
                 </div>
               </td>
-              <td class="px-4 py-3 align-top"><span class="text-sm text-slate-300">—</span></td>
+              <td class="px-4 py-3 align-top">${statusBadgeHTML(getDeviceStatus(order, deviceKey))}</td>
               <td class="px-4 py-3 align-top"><span class="text-sm text-slate-300">—</span></td>
               <td class="px-4 py-3 align-top">
                 <div class="flex flex-wrap gap-2 justify-end">
@@ -1823,13 +1850,16 @@
     function renderStatusDropdown(order) {
       const open = state.statusDropdownOpen;
       if (!open) return "";
+      const focused = getFocusedDevice(order);
+      const isDeviceScoped = focused.isFocused && focused.deviceKey;
+      const activeStatus = isDeviceScoped ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
       return `
         <div class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-[1300]">
           <div class="p-2 max-h-72 overflow-y-auto">
             ${STATUS_DROPDOWN_OPTIONS.map(s => `
-              <button data-set-status="${esc(s)}"
+              <button ${isDeviceScoped ? `data-set-device-status="${esc(s)}"` : `data-set-status="${esc(s)}"`}
                 class="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold ${
-                  normalizeStatusKey(order.status) === normalizeStatusKey(s) ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-700"
+                  activeStatus === normalizeStatusKey(s) ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-700"
                 }">
                 ${esc(formatStatusLabel(s))}
               </button>
@@ -1846,6 +1876,7 @@
       ];
       const entries = getOrderDeviceEntries(order);
       const focused = getFocusedDevice(order);
+      const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
       if (focused.isFocused) tabs.splice(2, 0, { id: "qc", label: "QC & Intake", icon: "shield-check" });
       const visibleEntries = focused.isFocused ? [focused.entry] : entries;
       function overviewHTML() {
@@ -1926,18 +1957,9 @@
                 <div>
                   <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Payout Method</label>
                   <div class="text-sm font-medium text-slate-900 capitalize">${esc(String(order.paymentMethod || "N/A").replace(/[_-]+/g, " "))}</div>
-                  <div class="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                    <div>
-                      <label class="text-[11px] font-medium text-slate-400 uppercase block">Payout Info</label>
-                    </div>
-                    <div class="flex items-center justify-between text-sm">
-                      <span class="text-slate-500">Quoted Payout</span>
-                      <span class="font-semibold text-slate-900">$${esc(Number(getOrderPayoutTotal(order) || 0).toFixed(2))}</span>
-                    </div>
-                    <div class="flex items-center justify-between text-sm">
-                      <span class="text-slate-500">Current Offer</span>
-                      <span class="font-semibold text-emerald-700">$${esc(Number((order.reOffer?.newPrice ?? order.finalPayoutAmount ?? getOrderPayoutTotal(order)) || 0).toFixed(2))}</span>
-                    </div>
+                  <div class="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                    <label class="text-[11px] font-medium text-slate-400 uppercase block mb-1">Payout Info</label>
+                    <div class="text-sm font-semibold text-slate-900 break-all">${esc(getPayoutInfoDisplay(order))}</div>
                   </div>
                 </div>
               </div>
@@ -2107,8 +2129,8 @@
                 <div class="flex items-center gap-3 mb-1">
                   <h2 class="text-2xl font-bold text-slate-900">#${esc(order.id)}</h2>
                   <div class="relative z-[1300]" id="modalStatusWrapper">
-                    <button id="modalStatusBtn" class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(order.status)} hover:opacity-90">
-                      ${esc(formatStatusLabel(order.status))}
+                    <button id="modalStatusBtn" class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(headerStatus)} hover:opacity-90">
+                      ${esc(formatStatusLabel(headerStatus))}
                       <i data-lucide="chevron-down" style="width:14px;height:14px"></i>
                     </button>
                     ${renderStatusDropdown(order)}
@@ -2148,8 +2170,9 @@
       `;
     }
     function renderDrawerFooter(order) {
-        const status = normalizeStatusKey(order.status || "order_pending");
-        const hasQc = !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length));
+        const focused = getFocusedDevice(order);
+        const status = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status || "order_pending");
+        const hasQc = focused.isFocused ? !!(order?.qcDataByDevice?.[focused.deviceKey]) : !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length));
         const groups = {
             primary: [],
             shipping: [],
@@ -2876,6 +2899,19 @@
           toast(`Status updated to ${formatStatusLabel(newStatus)}`, "success");
         });
       });
+      document.querySelectorAll("[data-set-device-status]").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const order = getSelectedOrder();
+          if (!order || !state.selectedDeviceKey) return;
+          const newStatus = btn.getAttribute("data-set-device-status");
+          state.statusDropdownOpen = false;
+          render();
+          await updateDeviceStatusInline(order.id, state.selectedDeviceKey, newStatus);
+          toast(`Device status updated to ${formatStatusLabel(newStatus)}`, "success");
+        });
+      });
       // outside click closes status dropdown (best-effort)
       document.addEventListener("click", () => {
         if (!state.statusDropdownOpen) return;
@@ -2905,6 +2941,12 @@
             if (action === "reOffer") {
               await openReofferModal(order, state.qcData);
               render();
+              return;
+            }
+            if (state.selectedDeviceKey && (action === "markReceived" || action === "markCompleted")) {
+              const nextDeviceStatus = action === "markCompleted" ? "completed" : "received";
+              await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
+              toast(`Device status updated to ${formatStatusLabel(nextDeviceStatus)}`, "success");
               return;
             }
             await handleAction(order.id, action);
