@@ -4,7 +4,7 @@
     <script>
       window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
     </script>
-<link rel="stylesheet" href="/assets/css/tailwind.css">
+<script src="https://cdn.tailwindcss.com"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SecondHandCell - Checkout</title>
@@ -53,9 +53,9 @@
             z-index: 100;
         }
 
-        .checkout-wrapper { max-width: 1100px; margin: 40px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 380px; gap: 30px; }
+        .checkout-wrapper { max-width: 1100px; margin: 32px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 380px; gap: 28px; }
         @media (max-width: 900px) { .checkout-wrapper { grid-template-columns: 1fr; } }
-        .section-card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); margin-bottom: 20px; }
+        .section-card { background: white; padding: 28px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 18px; }
         .input-group { margin-bottom: 15px; }
         .input-group label { display: block; font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 5px; text-transform: uppercase; }
         .input-field { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; outline: none; transition: 0.2s; }
@@ -94,7 +94,7 @@
         .option-label { cursor: pointer; border: 2px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
         .option-pill:checked + .option-label { border-color: var(--brand-primary); background-color: #f0fdf4; box-shadow: 0 4px 12px rgba(21, 128, 61, 0.1); }
 
-        .summary-card { background: white; padding: 25px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid var(--border); position: sticky; top: 20px; }
+        .summary-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid var(--border); position: sticky; top: 20px; }
         .btn-submit { width: 100%; padding: 18px; background: var(--brand-gradient); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 20px; transition: 0.3s; }
         .btn-submit:hover { opacity: 0.9; transform: scale(1.01); }
         .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
@@ -123,14 +123,16 @@
             font-weight: 700;
             color: #dc2626;
         }
-        .cart-condition-select {
-            border: 1px solid var(--border);
-            border-radius: 8px;
+        .cart-condition-badge {
+            display: inline-flex;
+            align-items: center;
             padding: 6px 10px;
-            font-size: 12px;
-            font-weight: 700;
-            color: #334155;
+            border-radius: 999px;
+            border: 1px solid var(--border);
             background: #fff;
+            font-size: 12px;
+            font-weight: 800;
+            color: #334155;
         }
 
         .user-monogram {
@@ -622,6 +624,9 @@
                     <div>
                         <div class="font-bold text-slate-900">${item.modelName}</div>
                         <div class="text-xs text-slate-500 mt-1">${item.storage} • ${carrierDisplay}</div>
+                        <div class="mt-2">
+                            <span class="cart-condition-badge" title="Condition locked from your quote">Condition: ${CONDITION_LABELS[conditionKey] || conditionKey}</span>
+                        </div>
                     </div>
                     <div class="text-right">
                         <div class="text-sm font-bold text-slate-900">$${total}</div>
@@ -634,13 +639,7 @@
                         <span class="text-sm font-bold">${item.qty}</span>
                         <button class="cart-qty-btn" data-action="increase" data-index="${index}">+</button>
                     </div>
-                    <select class="cart-condition-select" data-action="condition" data-index="${index}">
-                        ${Object.entries(CONDITION_LABELS).map(([key, label]) => `
-                            <option value="${key}" ${conditionKey === key ? 'selected' : ''}>${label}</option>
-                        `).join('')}
-                    </select>
                 </div>
-                <div class="text-xs text-slate-500 mt-2">Condition: ${CONDITION_LABELS[conditionKey] || conditionKey}</div>
             `;
             cartContainer.appendChild(card);
         });
@@ -652,12 +651,6 @@
         if (action === 'increase') item.qty += 1;
         if (action === 'decrease') item.qty = Math.max(item.qty - 1, 1);
         if (action === 'remove') cartItems.splice(index, 1);
-        if (action === 'condition') {
-            const nextCondition = CONDITION_LABELS[value] ? value : ensureCartCondition(item);
-            item.condition = nextCondition;
-            const newPrice = Number(item.conditionPrices?.[nextCondition] || item.unitPrice);
-            item.unitPrice = newPrice;
-        }
         saveCart(cartItems);
         renderCart();
     };
@@ -762,13 +755,7 @@
             if (!action || Number.isNaN(index)) return;
             applyCartChange(index, action);
         });
-        document.getElementById('summary-content').addEventListener('change', (event) => {
-            const target = event.target;
-            const index = parseInt(target.dataset.index || '-1');
-            if (target.dataset.action === 'condition' && !Number.isNaN(index)) {
-                applyCartChange(index, 'condition', target.value);
-            }
-        });
+        // Condition is locked from the quote; no checkout dropdown.
 
         renderCart();
     };
