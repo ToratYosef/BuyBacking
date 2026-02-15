@@ -411,6 +411,8 @@
       qcStep: 1,
       qcData: null,
       qcDeviceKey: null,
+      reofferOpen: false,
+      reofferData: null,
       // status dropdown (modal)
       statusDropdownOpen: false,
       // order text import (placeholder modal)
@@ -439,6 +441,18 @@
         sum += (Number.isFinite(unit) ? unit : 0) * qty;
       }
       return sum;
+    }
+
+    function openReofferModal(order, qcData = null) {
+      const currentPayout = getOrderPayoutTotal(order);
+      state.reofferData = {
+        newPrice: Number(currentPayout || 0).toFixed(2),
+        reasons: qcData?.notes || '',
+        comments: qcData?.deviceMatch === 'no' ? `Device mismatch: ${qcData?.deviceName || 'updated in QC'}` : '',
+        carrier: qcData?.carrier || order?.carrier || order?.lock || '',
+        condition: qcData?.condition || order?.condition || 'good'
+      };
+      state.reofferOpen = true;
     }
 
     function getFocusedDevice(order) {
@@ -2040,6 +2054,7 @@
           storage: currentItem.storage || order.storage || "",
           imei: currentItem.imei || order.imei || "",
           condition: currentItem.condition || order.condition || "good",
+          carrier: currentItem.carrier || currentItem.lock || order.carrier || order.lock || "unlocked",
           isFunctional: "yes",
           hasCracks: "no",
           isLocked: "no",
@@ -2057,6 +2072,7 @@
       function step1() {
         return `
           <div class="space-y-4">
+            <img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=60" alt="Phone inspection" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
             <p class="text-sm text-slate-600">Customer declared: <strong>${esc(currentItem.device)} (${esc(currentItem.storage)})</strong></p>
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Does the device match?</label>
@@ -2079,12 +2095,19 @@
                   placeholder="e.g. iPhone 14 Pro" />
               </div>
             ` : ""}
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Carrier (if any)</label>
+              <select id="qcCarrier" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                ${["unlocked","att","tmobile","verizon","other"].map(v => `<option value="${v}" ${state.qcData.carrier === v ? "selected" : ""}>${v === "unlocked" ? "Unlocked" : v === "att" ? "AT&T" : v === "tmobile" ? "T-Mobile" : v === "verizon" ? "Verizon" : "Other"}</option>`).join("")}
+              </select>
+            </div>
           </div>
         `;
       }
       function step2() {
         return `
           <div class="space-y-4">
+            <img src="https://images.unsplash.com/photo-1526570207772-784d36084510?auto=format&fit=crop&w=900&q=60" alt="Cracked phone screen" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Functional Check</label>
               <div class="grid grid-cols-2 gap-3">
@@ -2120,6 +2143,7 @@
         const balance = state.qcData.hasBalance === "yes";
         return `
           <div class="space-y-4">
+            <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=900&q=60" alt="Phone lock security" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
                 <i data-lucide="shield-check" class="${locked ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
@@ -2196,6 +2220,52 @@
         </div>
       `;
     }
+    function renderReofferModal(order) {
+      if (!state.reofferOpen || !state.reofferData || !order) return "";
+      const d = state.reofferData;
+      return `
+        <div class="fixed inset-0 z-[5100] flex items-center justify-center p-4 bg-slate-900/55 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden border border-slate-200">
+            <div class="bg-purple-50 px-6 py-4 border-b border-purple-100 flex justify-between items-center">
+              <div>
+                <h3 class="text-lg font-bold text-slate-900">Propose Re-offer</h3>
+                <p class="text-xs text-slate-500">Order ${esc(order.id)} • Prefilled from QC</p>
+              </div>
+              <button id="reofferCloseBtn" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Updated Price ($)</label>
+                <input id="reofferPrice" type="number" min="0" step="0.01" value="${esc(d.newPrice)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Carrier</label>
+                  <input id="reofferCarrier" type="text" value="${esc(d.carrier)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Condition</label>
+                  <input id="reofferCondition" type="text" value="${esc(d.condition)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Reason(s)</label>
+                <textarea id="reofferReasons" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm h-20">${esc(d.reasons)}</textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Comments</label>
+                <textarea id="reofferComments" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm h-20">${esc(d.comments)}</textarea>
+              </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button id="reofferCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold">Cancel</button>
+              <button id="reofferSubmitBtn" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold">Send Re-offer</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     // ----------------------------
     // ORDER TEXT IMPORT MODAL (placeholder; spec says implementation exists elsewhere)
     // ----------------------------
@@ -2244,6 +2314,7 @@
           </div>
           ${getSelectedOrder() ? renderDrawer(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderQcModal(getSelectedOrder()) : ""}
+          ${getSelectedOrder() ? renderReofferModal(getSelectedOrder()) : ""}
           ${renderOrderTextImportModal()}
         </div>
       `;
@@ -2398,6 +2469,8 @@
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
+          state.reofferOpen = false;
+          state.reofferData = null;
           render();
         });
       });
@@ -2418,6 +2491,8 @@
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
+          state.reofferOpen = false;
+          state.reofferData = null;
           render();
         });
       });
@@ -2453,6 +2528,8 @@
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
+          state.reofferOpen = false;
+          state.reofferData = null;
           render();
         });
       });
@@ -2512,6 +2589,11 @@
               render();
               return;
             }
+            if (action === "reOffer") {
+              openReofferModal(order, state.qcData);
+              render();
+              return;
+            }
             await handleAction(order.id, action);
           });
         });
@@ -2568,6 +2650,8 @@
           });
           const cond = document.getElementById("qcCondition");
           if (cond) cond.addEventListener("change", () => state.qcData.condition = cond.value);
+          const carrier = document.getElementById("qcCarrier");
+          if (carrier) carrier.addEventListener("change", () => state.qcData.carrier = carrier.value);
           const cracks = document.getElementById("qcHasCracks");
           if (cracks) cracks.addEventListener("change", () => state.qcData.hasCracks = cracks.checked ? "yes" : "no");
           const locked = document.getElementById("qcIsLocked");
@@ -2591,14 +2675,34 @@
         if (nextBtn) nextBtn.addEventListener("click", () => { state.qcStep += 1; render(); });
         if (finishBtn) finishBtn.addEventListener("click", async () => {
           syncStepInputs();
-          await saveQc(order.id, state.qcDeviceKey || buildOrderDeviceKey(order.id, 0), state.qcData);
+          const qcSnapshot = { ...(state.qcData || {}) };
+          await saveQc(order.id, state.qcDeviceKey || buildOrderDeviceKey(order.id, 0), qcSnapshot);
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
           state.qcDeviceKey = null;
+          openReofferModal(order, qcSnapshot);
           render();
         });
         syncStepInputs();
+      }
+      if (state.reofferOpen && order) {
+        const closeReoffer = () => { state.reofferOpen = false; state.reofferData = null; render(); };
+        document.getElementById("reofferCloseBtn")?.addEventListener("click", closeReoffer);
+        document.getElementById("reofferCancelBtn")?.addEventListener("click", closeReoffer);
+        document.getElementById("reofferSubmitBtn")?.addEventListener("click", async () => {
+          const price = Number(document.getElementById("reofferPrice")?.value || 0);
+          const reasons = (document.getElementById("reofferReasons")?.value || "").trim();
+          const comments = (document.getElementById("reofferComments")?.value || "").trim();
+          const carrier = (document.getElementById("reofferCarrier")?.value || "").trim();
+          const condition = (document.getElementById("reofferCondition")?.value || "").trim();
+          await handleAction(order.id, "reOffer", {
+            body: { newPrice: price, reasons: reasons ? [reasons] : [], comments, carrier, condition }
+          });
+          state.reofferOpen = false;
+          state.reofferData = null;
+          render();
+        });
       }
       // Order text import modal controls
       if (state.orderTextImportOpen) {
@@ -2638,6 +2742,8 @@
         state.qcOpen = false;
         state.qcStep = 1;
         state.qcData = null;
+        state.reofferOpen = false;
+        state.reofferData = null;
         state.orderTextImportOpen = false;
         state.sidebarOpen = false;
       }
