@@ -4,8 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BuyBacking Admin (No Build)</title>
-  <!-- Tailwind CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/admin-tailwind.css?v=20260215-3">
   <style>
     .animate-in { animation: fadeIn .18s ease-out; }
     @keyframes fadeIn { from { opacity:0; transform: translateY(4px);} to {opacity:1; transform:none;} }
@@ -66,14 +65,11 @@
     }
     function formatDate(ts) {
       const d = toDateAny(ts);
-      const focused = getFocusedDevice(order);
-      const allEntries = focused.entries;
-      const focusedEntry = focused.entry;
-      const focusedEntries = (focused.isFocused && focusedEntry) ? [focusedEntry] : allEntries;
+      if (!d) return "N/A";
       return new Intl.DateTimeFormat("en-US", {
-        const devices = focusedEntries.map((entry) => {
-          const item = entry.item || {};
-          const offer = Number.parseFloat(item.price || item.payout || 0);
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
       }).format(d);
     }
     function formatTimeOnly(ts) {
@@ -81,7 +77,6 @@
       if (!d) return "N/A";
       return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(d);
     }
-                <div class="text-xs text-slate-500 mt-0.5">${esc(focused.isFocused ? focused.label : `Device ${entry.deviceIndex + 1} of ${allEntries.length}`)}</div>
     function getOrderAge(ts) {
       const d = toDateAny(ts);
       if (!d) return "0 days";
@@ -90,7 +85,6 @@
       return `${diffDays} day${diffDays !== 1 ? "s" : ""} old`;
     }
     function formatStatusLabel(status) {
-                <div class="text-xl font-bold text-green-600">$${esc((Number.isFinite(offer) ? offer : 0).toFixed(2))}</div>
       return String(status).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     }
     // ----------------------------
@@ -101,7 +95,6 @@
       "shipping_kit_requested",
       "kit_needs_printing",
       "needs_printing",
-                  ${focused.isFocused ? `Device (1) • ${esc(focused.label)}` : `Devices (${allEntries.length})`}
       "kit_on_the_way_to_customer",
       "kit_delivered",
       "kit_on_the_way_to_us",
@@ -356,7 +349,7 @@
     const apiDelete = (p) => apiCall(p, "DELETE", null);
     function toast(msg, type="info") {
       const el = document.createElement("div");
-      el.className = `fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 rounded-lg text-sm font-medium shadow-lg border ${
+      el.className = `fixed bottom-4 left-1/2 -translate-x-1/2 z-[1002] px-4 py-2 rounded-lg text-sm font-medium shadow-lg border ${
         type === "error" ? "bg-rose-50 text-rose-800 border-rose-200"
         : type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200"
         : "bg-white text-slate-800 border-slate-200"
@@ -701,7 +694,9 @@
         toast("No eligible kit orders found", "info");
         return;
       }
-      const ok = confirm(`Separate Kit Orders: mark ${eligible.length} as kit_sent (no customer email)?`);
+      const ok = confirm(
+        `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_sent" and will NOT notify customers.`
+      );
       if (!ok) return;
       let success = 0, failed = 0;
       for (const o of eligible) {
@@ -1233,6 +1228,7 @@
       `;
     }
     function getStatusPillClasses(key, isActive) {
+      // NOTE: Keep these class strings static so Tailwind can detect them during build.
       const s = normalizeStatusKey(key);
       if (s === "all") {
         return {
@@ -1240,25 +1236,39 @@
           count: isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
         };
       }
-      const map = {
-        order_pending: "amber",
-        kit_needs_printing: "amber",
-        label_generated: "blue",
-        emailed: "indigo",
-        received: "indigo",
-        completed: "emerald",
-        cancelled: "slate"
-      };
-      const color = map[s] || "slate";
-      if (color === "slate") {
+      if (s === "cancelled") {
         return {
           pill: isActive ? "bg-slate-700 text-white shadow-md" : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200",
           count: isActive ? "bg-white/15 text-white" : "bg-white/70 text-slate-600"
         };
       }
+      if (s === "order_pending" || s === "kit_needs_printing") {
+        return {
+          pill: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-amber-100 text-amber-700"
+        };
+      }
+      if (s === "label_generated") {
+        return {
+          pill: isActive ? "bg-blue-500 text-white shadow-md" : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
+        };
+      }
+      if (s === "emailed" || s === "received") {
+        return {
+          pill: isActive ? "bg-indigo-500 text-white shadow-md" : "bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-indigo-100 text-indigo-700"
+        };
+      }
+      if (s === "completed") {
+        return {
+          pill: isActive ? "bg-emerald-500 text-white shadow-md" : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-emerald-100 text-emerald-700"
+        };
+      }
       return {
-        pill: isActive ? `bg-${color}-500 text-white shadow-md` : `bg-${color}-50 text-${color}-700 border border-${color}-200 hover:bg-${color}-100`,
-        count: isActive ? "bg-white/15 text-white" : `bg-${color}-100 text-${color}-700`
+        pill: isActive ? "bg-slate-700 text-white shadow-md" : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200",
+        count: isActive ? "bg-white/15 text-white" : "bg-white/70 text-slate-600"
       };
     }
     function renderStatusBreakdown() {
@@ -1564,7 +1574,7 @@
     function workflowStepperHTML(order) {
       const status = order.status || "order_pending";
       const hasLabel = !!getAnyTrackingNumber(order) || String(order.status || "").includes("label");
-      const hasQc = !!order.qcData;
+      const hasQc = !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length));
       let activeStep = 0;
       const s = String(status).toLowerCase();
       if (s.includes("completed") || s.includes("paid") || s.includes("re-offered-accepted")) activeStep = 4;
@@ -1591,8 +1601,8 @@
       return `
         <div class="px-6 py-4 bg-slate-50/50 border-b border-slate-200">
           <div class="relative flex items-center justify-between w-full max-w-lg mx-auto">
-            <div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-slate-200 -z-0"></div>
-            <div class="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-indigo-600 -z-0 transition-all duration-500" style="width:${pct}%"></div>
+            <div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-0.5 bg-slate-200 -z-10"></div>
+            <div class="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-indigo-600 -z-10 transition-all duration-500" style="width:${pct}%"></div>
             ${steps.map((st, idx) => {
               const isActive = idx <= activeStep;
               const isCurrent = idx === activeStep;
@@ -1618,7 +1628,7 @@
       const open = state.statusDropdownOpen;
       if (!open) return "";
       return `
-        <div class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
+        <div class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-[1010]">
           <div class="p-2 max-h-72 overflow-y-auto">
             ${STATUS_DROPDOWN_OPTIONS.map(s => `
               <button data-set-status="${esc(s)}"
@@ -1640,8 +1650,10 @@
         { id: "logs", label: "Activity Logs", icon: "file-text" },
       ];
       const entries = getOrderDeviceEntries(order);
+      const focused = getFocusedDevice(order);
+      const visibleEntries = focused.isFocused ? [focused.entry] : entries;
       function overviewHTML() {
-        const devices = entries.map((entry) => {
+        const devices = visibleEntries.map((entry) => {
           const item = entry.item || {};
           const offer = getPerDeviceOffer(item, order);
           return `
@@ -1670,7 +1682,7 @@
               <div class="p-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/50">
                 <h3 class="font-semibold text-slate-700 flex items-center gap-2">
                   <i data-lucide="smartphone" class="text-slate-400" style="width:18px;height:18px"></i>
-                  Devices (${entries.length})
+                  ${focused.isFocused ? `Device (1 of ${entries.length}) <span class="text-xs text-slate-400 font-bold">• ${esc(focused.label)}</span>` : `Devices (${entries.length})`}
                 </h3>
                 ${promoBadgeHTML(order)}
               </div>
@@ -1853,14 +1865,14 @@
         : state.drawerTab === "qc" ? qcHTML()
         : logsHTML();
       return `
-        <div class="fixed inset-0 z-40 flex justify-end">
+        <div class="fixed inset-0 z-[1002] flex justify-end">
           <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-sm transition-opacity" data-close-drawer="1"></div>
           <div class="relative w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col animate-in">
-            <div class="bg-white z-10 px-6 py-4 flex justify-between items-start">
+            <div class="relative bg-white z-[1009] px-6 py-4 flex justify-between items-start">
               <div class="relative">
                 <div class="flex items-center gap-3 mb-1">
                   <h2 class="text-2xl font-bold text-slate-900">#${esc(order.id)}</h2>
-                  <div class="relative" id="modalStatusWrapper">
+                  <div class="relative z-[1010]" id="modalStatusWrapper">
                     <button id="modalStatusBtn" class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(order.status)} hover:opacity-90">
                       ${esc(formatStatusLabel(order.status))}
                       <i data-lucide="chevron-down" style="width:14px;height:14px"></i>
@@ -2042,20 +2054,28 @@
     // ----------------------------
     function renderQcModal(order) {
       if (!state.qcOpen) return "";
-      const items = (order.items && order.items.length > 0) ? order.items : [order];
-      const currentItem = items[0];
-      if (!state.qcData) {
+      const entries = getOrderDeviceEntries(order);
+      const modalDeviceKey = state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
+      const parsed = parseOrderDeviceKey(modalDeviceKey);
+      const entry = entries.find(e => e.deviceIndex === parsed.deviceIndex) || entries[0] || { deviceIndex: 0, item: order, qtyIndex: 0 };
+      const currentItem = entry.item || order;
+      const qcForDevice = order?.qcDataByDevice?.[modalDeviceKey] || null;
+      const legacy = (!qcForDevice && parsed.deviceIndex === 0) ? (order.qcData || null) : null;
+      const existing = qcForDevice || legacy;
+      if (!state.qcData || state.qcDeviceKey !== modalDeviceKey) {
+        state.qcDeviceKey = modalDeviceKey;
         state.qcData = {
           deviceMatch: "yes",
-          deviceName: currentItem.device || "",
-          storage: currentItem.storage || "",
-          imei: currentItem.imei || "",
-          condition: "good",
+          deviceName: currentItem.device || order.device || "",
+          storage: currentItem.storage || order.storage || "",
+          imei: currentItem.imei || order.imei || "",
+          condition: currentItem.condition || order.condition || "good",
           isFunctional: "yes",
           hasCracks: "no",
           isLocked: "no",
           hasBalance: "no",
-          notes: ""
+          notes: "",
+          ...(existing || {})
         };
       }
       const steps = [
@@ -2417,7 +2437,29 @@
           e.preventDefault();
           e.stopPropagation();
           state.selectedOrderId = btn.getAttribute("data-open-order");
+          state.selectedDeviceKey = null;
+          state.qcDeviceKey = null;
           state.drawerTab = "overview";
+          state.statusDropdownOpen = false;
+          state.qcOpen = false;
+          state.qcStep = 1;
+          state.qcData = null;
+          render();
+        });
+      });
+
+      // per-device view button (opens drawer focused on one device)
+      document.querySelectorAll("[data-view-device]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const deviceKey = btn.getAttribute("data-view-device");
+          if (!deviceKey) return;
+          const parsed = parseOrderDeviceKey(deviceKey);
+          state.selectedOrderId = parsed.orderId;
+          state.selectedDeviceKey = deviceKey;
+          state.qcDeviceKey = deviceKey;
+          state.drawerTab = "qc";
           state.statusDropdownOpen = false;
           state.qcOpen = false;
           state.qcStep = 1;
@@ -2452,6 +2494,8 @@
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
         el.addEventListener("click", () => {
           state.selectedOrderId = null;
+          state.selectedDeviceKey = null;
+          state.qcDeviceKey = null;
           state.statusDropdownOpen = false;
           state.qcOpen = false;
           state.qcStep = 1;
@@ -2546,6 +2590,7 @@
         if (openQcBtn) {
           openQcBtn.addEventListener("click", (e) => {
             e.stopPropagation();
+            state.qcDeviceKey = state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
             state.qcOpen = true;
             state.qcStep = 1;
             state.qcData = null;
@@ -2581,18 +2626,19 @@
           const notes = document.getElementById("qcNotes");
           if (notes) notes.addEventListener("input", () => state.qcData.notes = notes.value);
         };
-        if (closeBtn) closeBtn.addEventListener("click", () => { state.qcOpen = false; state.qcStep = 1; state.qcData = null; render(); });
+        if (closeBtn) closeBtn.addEventListener("click", () => { state.qcOpen = false; state.qcStep = 1; state.qcData = null; state.qcDeviceKey = null; render(); });
         if (backBtn) backBtn.addEventListener("click", () => {
-          if (state.qcStep === 1) { state.qcOpen = false; state.qcStep = 1; state.qcData = null; render(); }
+          if (state.qcStep === 1) { state.qcOpen = false; state.qcStep = 1; state.qcData = null; state.qcDeviceKey = null; render(); }
           else { state.qcStep -= 1; render(); }
         });
         if (nextBtn) nextBtn.addEventListener("click", () => { state.qcStep += 1; render(); });
         if (finishBtn) finishBtn.addEventListener("click", async () => {
           syncStepInputs();
-          await saveQc(order.id, state.qcData);
+          await saveQc(order.id, state.qcDeviceKey || buildOrderDeviceKey(order.id, 0), state.qcData);
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
+          state.qcDeviceKey = null;
           render();
         });
         syncStepInputs();

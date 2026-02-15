@@ -404,6 +404,23 @@
             </div>
             <p class="logo-tagline">Turn Your Old <span>Phone Into Cash!</span></p>
         </div>
+
+        <button type="button" class="site-header__toggle" data-site-nav-toggle aria-controls="siteNav" aria-expanded="false">
+            <span class="site-header__toggle-line" aria-hidden="true"></span>
+            <span class="site-header__toggle-line" aria-hidden="true"></span>
+            <span class="site-header__toggle-line" aria-hidden="true"></span>
+            <span class="site-header__toggle-label">Menu</span>
+        </button>
+
+        <nav id="siteNav" class="site-nav" aria-label="Site navigation">
+            <a href="#features">Why Us</a>
+            <a href="#customer-reviews">Reviews</a>
+            <a href="#popular">Popular</a>
+            <a href="/support.html">Support</a>
+            <a href="/track-order.html">Track</a>
+            <a class="site-nav__cta" href="/sell/">Sell Now</a>
+        </nav>
+
         <nav class="header-auth-nav" aria-label="Account navigation">
             <div id="authStatusContainer" class="site-header__auth-wrapper">
                 <a href="#" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
@@ -1404,16 +1421,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const canScrollHorizontally = () => customerReviewsTrack.scrollWidth > customerReviewsTrack.clientWidth + 2;
 
         const onTrackWheel = (event) => {
+            // Allow normal page scrolling when hovering the reviews.
+            // Only hijack wheel when the user is explicitly trying to scroll horizontally.
             pauseTemporarily();
             if (!canScrollHorizontally()) return;
 
             const { deltaX, deltaY } = event;
-            const isMostlyVertical = Math.abs(deltaY) > Math.abs(deltaX);
-            if (!isMostlyVertical) return;
+            const wantsHorizontal = event.shiftKey || Math.abs(deltaX) > Math.abs(deltaY);
+            if (!wantsHorizontal) return;
 
-            // Prevent the page from scrolling vertically while the wheel is over the carousel.
             event.preventDefault();
-            customerReviewsTrack.scrollLeft += deltaY;
+            customerReviewsTrack.scrollLeft += (Math.abs(deltaX) > 0 ? deltaX : deltaY);
         };
 
         customerReviewsTrack.addEventListener('scroll', onTrackScroll, { passive: true });
