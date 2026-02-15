@@ -437,6 +437,7 @@
       activeTab: "orders",
       // drawer / modal
       selectedOrderId: null,
+      selectedOrderSnapshot: null,
       selectedDeviceKey: null,
       drawerTab: "overview",
       // QC modal (your existing)
@@ -459,7 +460,12 @@
     };
     function getSelectedOrder() {
       if (!state.selectedOrderId) return null;
-      return state.allOrders.find(o => o.id === state.selectedOrderId) || null;
+      const liveOrder = state.allOrders.find(o => o.id === state.selectedOrderId) || null;
+      if (liveOrder) {
+        state.selectedOrderSnapshot = liveOrder;
+        return liveOrder;
+      }
+      return state.selectedOrderSnapshot || null;
     }
 
     function getOrderPayoutTotal(order) {
@@ -632,11 +638,9 @@
         // keep promo filter options in sync
         // (call after render since select exists only on orders tab; but safe to call now too)
         // We'll call in bindAppEvents as well.
-        // If selected order disappeared, close drawer
-        if (state.selectedOrderId && !ordersData.some(o => o.id === state.selectedOrderId)) {
-          state.selectedOrderId = null;
-          state.qcOpen = false;
-        }
+        // Keep drawer open until admin explicitly closes it.
+        // If a selected order is temporarily missing from the live snapshot,
+        // render falls back to the last selectedOrderSnapshot.
         // Re-run filter pipeline to keep pagination + selection consistent
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }, (err) => {
@@ -2572,6 +2576,7 @@
             const orderId = orderBtn.getAttribute("data-view-order");
             if (!orderId) return;
             state.selectedOrderId = orderId;
+            state.selectedOrderSnapshot = state.allOrders.find(o => o.id === orderId) || state.selectedOrderSnapshot || null;
             state.selectedDeviceKey = null;
             state.qcDeviceKey = null;
             state.drawerTab = "overview";
@@ -2593,6 +2598,7 @@
             if (!deviceKey) return;
             const parsed = parseOrderDeviceKey(deviceKey);
             state.selectedOrderId = parsed.orderId;
+            state.selectedOrderSnapshot = state.allOrders.find(o => o.id === parsed.orderId) || state.selectedOrderSnapshot || null;
             state.selectedDeviceKey = deviceKey;
             state.qcDeviceKey = deviceKey;
             state.drawerTab = "qc";
@@ -2738,6 +2744,7 @@
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
         el.addEventListener("click", () => {
           state.selectedOrderId = null;
+          state.selectedOrderSnapshot = null;
           state.selectedDeviceKey = null;
           state.qcDeviceKey = null;
           state.statusDropdownOpen = false;
@@ -2802,6 +2809,12 @@
               if (!ok) return;
               await handleAction(order.id, "deleteOrder");
               state.selectedOrderId = null;
+              state.selectedOrderSnapshot = null;
+              render();
+              return;
+            }
+            if (action === "reOffer") {
+              await openReofferModal(order, state.qcData);
               render();
               return;
             }
@@ -3004,6 +3017,7 @@
         state.selectedOrderIds.clear();
         state.lastRenderedDeviceKeys = [];
         state.selectedOrderId = null;
+        state.selectedOrderSnapshot = null;
         state.statusDropdownOpen = false;
         state.qcOpen = false;
         state.qcStep = 1;
