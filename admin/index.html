@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BuyBacking Admin (No Build)</title>
-  <link rel="stylesheet" href="/assets/css/admin-tailwind.css?v=20260215-3">
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
     .animate-in { animation: fadeIn .18s ease-out; }
     @keyframes fadeIn { from { opacity:0; transform: translateY(4px);} to {opacity:1; transform:none;} }
@@ -411,6 +411,8 @@
       qcStep: 1,
       qcData: null,
       qcDeviceKey: null,
+      reofferOpen: false,
+      reofferData: null,
       // status dropdown (modal)
       statusDropdownOpen: false,
       // order text import (placeholder modal)
@@ -439,6 +441,74 @@
         sum += (Number.isFinite(unit) ? unit : 0) * qty;
       }
       return sum;
+    }
+
+    function normalizeCarrierForPricing(value) {
+      const v = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!v) return 'unlocked';
+      if (v.includes('tmobile') || v === 'tmo') return 'tmobile';
+      if (v.includes('att')) return 'att';
+      if (v.includes('verizon')) return 'verizon';
+      if (v.includes('unlock')) return 'unlocked';
+      if (v.includes('other')) return 'other';
+      return v;
+    }
+
+    async function getQcOfferFromDb(order, qcData = null) {
+      const focused = getFocusedDevice(order);
+      const item = focused?.entry?.item || order || {};
+      const brand = item.brand || order.brand;
+      const modelId = item.modelId || item.model || order.modelId || order.model;
+      const storage = String(qcData?.storage || item.storage || order.storage || '');
+      const carrier = normalizeCarrierForPricing(qcData?.carrier || item.carrier || item.lock || order.carrier || order.lock || 'unlocked');
+      const conditionRaw = String(qcData?.condition || item.condition || order.condition || 'good').toLowerCase();
+      const condition = conditionRaw === 'damaged' ? 'broken' : conditionRaw;
+      if (!brand || !modelId || !storage) return null;
+      try {
+        const snap = await getDoc(doc(db, 'devices', brand, 'models', modelId));
+        if (!snap.exists()) return null;
+        const data = snap.data() || {};
+        const prices = data.prices || {};
+        const storageMap = prices[storage] || prices[String(storage).toUpperCase()] || prices[String(storage).toLowerCase()];
+        if (!storageMap) return null;
+        const carrierMap = storageMap[carrier] || storageMap.unlocked || storageMap.other;
+        if (!carrierMap) return null;
+        const offer = Number(carrierMap[condition] || 0);
+        return Number.isFinite(offer) ? offer : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function composeReofferReasoning(order, qcData = null, computedPrice = null) {
+      const reasons = [];
+      if (!qcData) return reasons;
+      if (qcData.deviceMatch === 'no') reasons.push('Device received does not match the original model selection.');
+      if (qcData.storageMatch === 'no') reasons.push('Storage/GB amount differs from what was quoted.');
+      if (qcData.hasDamage === 'yes') reasons.push('Physical damage beyond normal wear was found in inspection.');
+      if (qcData.hasCracks === 'yes') reasons.push('Cracked glass/back lowers the device value.');
+      if (qcData.isFunctional === 'no') reasons.push('Device is not fully functional during testing.');
+      if (qcData.isLocked === 'yes') reasons.push('Activation/carrier lock is still active.');
+      if (qcData.hasFmi === 'yes') reasons.push('Find My iPhone (FMI) is still active.');
+      if (qcData.hasBalance === 'yes') reasons.push('Outstanding carrier/financing balance is present.');
+      if (Number.isFinite(computedPrice)) reasons.push('Updated offer uses current live pricing based on verified condition, carrier, and storage.');
+      if (qcData.notes) reasons.push(`Inspector notes: ${qcData.notes}`);
+      return reasons;
+    }
+
+    async function openReofferModal(order, qcData = null) {
+      const fallbackPrice = getOrderPayoutTotal(order);
+      const computedPrice = await getQcOfferFromDb(order, qcData);
+      const finalPrice = Number.isFinite(computedPrice) ? computedPrice : fallbackPrice;
+      const reasons = composeReofferReasoning(order, qcData, computedPrice);
+      state.reofferData = {
+        newPrice: Number(finalPrice || 0).toFixed(2),
+        reasons: reasons.join('\n'),
+        comments: qcData?.deviceMatch === 'no' ? `Device mismatch: ${qcData?.deviceName || 'updated in QC'}` : '',
+        carrier: qcData?.carrier || order?.carrier || order?.lock || '',
+        condition: qcData?.condition || order?.condition || 'good'
+      };
+      state.reofferOpen = true;
     }
 
     function getFocusedDevice(order) {
@@ -1044,6 +1114,30 @@
         console.error(e);
         toast("Failed to save QC", "error");
       }
+    }
+
+    async function processQcOutcome(order, qcData) {
+      const emailActions = [];
+      if (qcData?.isLocked === "yes") emailActions.push("emailLocked");
+      if (qcData?.hasFmi === "yes") emailActions.push("emailFmi");
+      if (qcData?.hasBalance === "yes") emailActions.push("emailBalance");
+
+      for (const action of emailActions) {
+        try {
+          await handleAction(order.id, action);
+        } catch (err) {
+          console.error("QC auto-email failed", action, err);
+        }
+      }
+
+      if (emailActions.length) {
+        await updateOrderStatusInline(order.id, "emailed", {
+          notifyCustomer: false,
+          body: { qcAwaitingResponse: true }
+        });
+      }
+
+      return { sentEmails: emailActions.length > 0 };
     }
     // ----------------------------
     // RENDER: LOGIN
@@ -1943,14 +2037,16 @@
             if (isKitReq) groups.shipping.push({ label: "Mark Kit Sent", action: "markKitSent", class: "bg-white border-slate-200 text-slate-700" });
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
         }
-        else if (["emailed", "received", "imei_checked"].includes(status)) {
-            groups.postReceive.push({ label: "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
-            groups.postReceive.push({ label: "Email Outstanding Balance", action: "emailBalance", class: "bg-white border-slate-200" });
-            groups.postReceive.push({ label: "Email Password Lock", action: "emailLocked", class: "bg-white border-slate-200" });
-            groups.postReceive.push({ label: "Email Lost/Stolen", action: "emailStolen", class: "bg-white border-slate-200" });
-            groups.postReceive.push({ label: "Email FMI Lock", action: "emailFmi", class: "bg-white border-slate-200" });
+        else if (["received", "imei_checked"].includes(status)) {
+            groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
             groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
             groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
+        }
+        else if (status === "emailed") {
+            groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
+            groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
+            groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
+            groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
         }
         else if (status === "re-offered-pending") {
              groups.primary.push({ label: "Re-offer Pending (View Info)", type: "info", class: "bg-slate-100 text-slate-500 cursor-default" });
@@ -1973,7 +2069,7 @@
         // Auto requote button
         // Logic not strictly defined, assuming if not completed and maybe received? 
         // Spec says "Post-Receive > Status Independent". I'll add if status is received/imei_checked/emailed(balance)
-        if (["emailed", "received", "imei_checked"].includes(status)) {
+        if (["received", "imei_checked"].includes(status)) {
              groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
         }
 
@@ -2040,9 +2136,13 @@
           storage: currentItem.storage || order.storage || "",
           imei: currentItem.imei || order.imei || "",
           condition: currentItem.condition || order.condition || "good",
+          carrier: currentItem.carrier || currentItem.lock || order.carrier || order.lock || "unlocked",
+          storageMatch: "yes",
           isFunctional: "yes",
+          hasDamage: "no",
           hasCracks: "no",
           isLocked: "no",
+          hasFmi: "no",
           hasBalance: "no",
           notes: "",
           ...(existing || {})
@@ -2050,24 +2150,25 @@
       }
       const steps = [
         { title: "Device Verification" },
-        { title: "Condition Assessment" },
-        { title: "Locks & Security" }
+        { title: "Condition & Grade" },
+        { title: "Functionality & Locks" }
       ];
       const pct = Math.round((state.qcStep / steps.length) * 100);
       function step1() {
         return `
           <div class="space-y-4">
+            <img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=60" alt="Phone inspection" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
             <p class="text-sm text-slate-600">Customer declared: <strong>${esc(currentItem.device)} (${esc(currentItem.storage)})</strong></p>
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Does the device match?</label>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Is this the proper device (model)?</label>
               <div class="flex gap-4">
                 <label class="flex items-center gap-2 border p-3 rounded-lg flex-1 cursor-pointer hover:bg-slate-50">
                   <input type="radio" name="deviceMatch" value="yes" ${state.qcData.deviceMatch === "yes" ? "checked" : ""} class="text-indigo-600" />
-                  <span class="text-sm font-medium">Yes, Match</span>
+                  <span class="text-sm font-medium">Yes</span>
                 </label>
                 <label class="flex items-center gap-2 border p-3 rounded-lg flex-1 cursor-pointer hover:bg-slate-50">
                   <input type="radio" name="deviceMatch" value="no" ${state.qcData.deviceMatch === "no" ? "checked" : ""} class="text-indigo-600" />
-                  <span class="text-sm font-medium">No, Mismatch</span>
+                  <span class="text-sm font-medium">No</span>
                 </label>
               </div>
             </div>
@@ -2079,64 +2180,97 @@
                   placeholder="e.g. iPhone 14 Pro" />
               </div>
             ` : ""}
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Is the storage / gigabyte amount correct?</label>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 border p-3 rounded-lg flex-1 cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="storageMatch" value="yes" ${state.qcData.storageMatch === "yes" ? "checked" : ""} class="text-indigo-600" />
+                  <span class="text-sm font-medium">Yes</span>
+                </label>
+                <label class="flex items-center gap-2 border p-3 rounded-lg flex-1 cursor-pointer hover:bg-slate-50">
+                  <input type="radio" name="storageMatch" value="no" ${state.qcData.storageMatch === "no" ? "checked" : ""} class="text-indigo-600" />
+                  <span class="text-sm font-medium">No</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Carrier / lock status</label>
+              <select id="qcCarrier" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                ${["unlocked","att","tmobile","verizon","other"].map(v => `<option value="${v}" ${state.qcData.carrier === v ? "selected" : ""}>${v === "unlocked" ? "Unlocked" : v === "att" ? "AT&T" : v === "tmobile" ? "T-Mobile" : v === "verizon" ? "Verizon" : "Other"}</option>`).join("")}
+              </select>
+            </div>
           </div>
         `;
       }
       function step2() {
         return `
           <div class="space-y-4">
+            <img src="https://images.unsplash.com/photo-1526570207772-784d36084510?auto=format&fit=crop&w=900&q=60" alt="Cracked phone screen" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Functional Check</label>
-              <div class="grid grid-cols-2 gap-3">
-                <label class="flex items-center justify-center p-3 border rounded-lg cursor-pointer ${state.qcData.isFunctional === "yes" ? "bg-green-50 border-green-200 text-green-700 ring-1 ring-green-500" : "hover:bg-slate-50"}">
-                  <input type="radio" class="sr-only" name="isFunctional" value="yes" ${state.qcData.isFunctional === "yes" ? "checked" : ""} />
-                  <span class="text-sm font-bold flex items-center gap-2"><i data-lucide="check-circle" style="width:16px;height:16px"></i> Functional</span>
-                </label>
-                <label class="flex items-center justify-center p-3 border rounded-lg cursor-pointer ${state.qcData.isFunctional === "no" ? "bg-red-50 border-red-200 text-red-700 ring-1 ring-red-500" : "hover:bg-slate-50"}">
-                  <input type="radio" class="sr-only" name="isFunctional" value="no" ${state.qcData.isFunctional === "no" ? "checked" : ""} />
-                  <span class="text-sm font-bold flex items-center gap-2"><i data-lucide="x" style="width:16px;height:16px"></i> Issues</span>
-                </label>
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Physical Condition</label>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Quality / condition grade</label>
               <select id="qcCondition" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
-                ${["flawless","good","fair","damaged"].map(v => `
+                ${["flawless","good","fair","broken"].map(v => `
                   <option value="${v}" ${state.qcData.condition === v ? "selected" : ""}>
-                    ${v === "flawless" ? "Flawless (Mint)" : v === "good" ? "Good (Normal Wear)" : v === "fair" ? "Fair (Heavy Wear)" : "Damaged (Cracks/Broken)"}
+                    ${v === "flawless" ? "Flawless" : v === "good" ? "Good" : v === "fair" ? "Fair" : "Broken"}
                   </option>
                 `).join("")}
               </select>
             </div>
-            <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <input id="qcHasCracks" type="checkbox" ${state.qcData.hasCracks === "yes" ? "checked" : ""} class="h-4 w-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500" />
-              <span class="text-sm text-slate-700">Cracked Screen or Back?</span>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <span class="text-sm text-slate-700">Visible damage beyond normal wear?</span>
+              <input id="qcHasDamage" type="checkbox" ${state.qcData.hasDamage === "yes" ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
             </label>
           </div>
         `;
       }
       function step3() {
         const locked = state.qcData.isLocked === "yes";
+        const fmi = state.qcData.hasFmi === "yes";
         const balance = state.qcData.hasBalance === "yes";
         return `
           <div class="space-y-4">
+            <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=900&q=60" alt="Phone lock security" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Functionality</label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex items-center justify-center p-3 border rounded-lg cursor-pointer ${state.qcData.isFunctional === "yes" ? "bg-green-50 border-green-200 text-green-700 ring-1 ring-green-500" : "hover:bg-slate-50"}">
+                  <input type="radio" class="sr-only" name="isFunctional" value="yes" ${state.qcData.isFunctional === "yes" ? "checked" : ""} />
+                  <span class="text-sm font-bold">Fully Functional</span>
+                </label>
+                <label class="flex items-center justify-center p-3 border rounded-lg cursor-pointer ${state.qcData.isFunctional === "no" ? "bg-red-50 border-red-200 text-red-700 ring-1 ring-red-500" : "hover:bg-slate-50"}">
+                  <input type="radio" class="sr-only" name="isFunctional" value="no" ${state.qcData.isFunctional === "no" ? "checked" : ""} />
+                  <span class="text-sm font-bold">Not Functional</span>
+                </label>
+              </div>
+            </div>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <span class="text-sm font-medium text-slate-900">Cracked screen or back?</span>
+              <input id="qcHasCracks" type="checkbox" ${state.qcData.hasCracks === "yes" ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
+            </label>
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
                 <i data-lucide="shield-check" class="${locked ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
-                <span class="text-sm font-medium text-slate-900">iCloud / Google Locked?</span>
+                <span class="text-sm font-medium text-slate-900">iCloud / Google / carrier lock active?</span>
               </div>
               <input id="qcIsLocked" type="checkbox" ${locked ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
             </label>
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
+                <i data-lucide="key-round" class="${fmi ? "text-amber-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
+                <span class="text-sm font-medium text-slate-900">FMI / Find My iPhone active?</span>
+              </div>
+              <input id="qcHasFmi" type="checkbox" ${fmi ? "checked" : ""} class="h-5 w-5 accent-amber-500" />
+            </label>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <div class="flex items-center gap-3">
                 <i data-lucide="dollar-sign" class="${balance ? "text-amber-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
-                <span class="text-sm font-medium text-slate-900">Finance / Balance Owed?</span>
+                <span class="text-sm font-medium text-slate-900">Finance / balance owed?</span>
               </div>
               <input id="qcHasBalance" type="checkbox" ${balance ? "checked" : ""} class="h-5 w-5 accent-amber-500" />
             </label>
             <div>
               <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Device IMEI (Optional)</label>
-              <input id="qcImei" type="text" value="${esc(state.qcData.imei)}"
+              <input id="qcImei" type="text" value="${esc(state.qcData.imei)}" inputmode="numeric" maxlength="15"
                 class="w-full border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono px-3 py-2"
                 placeholder="Enter 15-digit IMEI" />
             </div>
@@ -2151,7 +2285,7 @@
       }
       const content = state.qcStep === 1 ? step1() : state.qcStep === 2 ? step2() : step3();
       return `
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+        <div class="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" style="z-index:5000;">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200">
             <div class="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <div>
@@ -2196,6 +2330,52 @@
         </div>
       `;
     }
+    function renderReofferModal(order) {
+      if (!state.reofferOpen || !state.reofferData || !order) return "";
+      const d = state.reofferData;
+      return `
+        <div class="fixed inset-0 z-[5100] flex items-center justify-center p-4 bg-slate-900/55 backdrop-blur-sm" style="z-index:99999;">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden border border-slate-200">
+            <div class="bg-purple-50 px-6 py-4 border-b border-purple-100 flex justify-between items-center">
+              <div>
+                <h3 class="text-lg font-bold text-slate-900">Propose Re-offer</h3>
+                <p class="text-xs text-slate-500">Order ${esc(order.id)} • Prefilled from QC</p>
+              </div>
+              <button id="reofferCloseBtn" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" style="width:20px;height:20px"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Updated Price ($)</label>
+                <input id="reofferPrice" type="number" min="0" step="0.01" value="${esc(d.newPrice)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Carrier</label>
+                  <input id="reofferCarrier" type="text" value="${esc(d.carrier)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Condition</label>
+                  <input id="reofferCondition" type="text" value="${esc(d.condition)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Reason(s)</label>
+                <textarea id="reofferReasons" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm h-20">${esc(d.reasons)}</textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Comments</label>
+                <textarea id="reofferComments" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm h-20">${esc(d.comments)}</textarea>
+              </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button id="reofferCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold">Cancel</button>
+              <button id="reofferSubmitBtn" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold">Send Re-offer</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     // ----------------------------
     // ORDER TEXT IMPORT MODAL (placeholder; spec says implementation exists elsewhere)
     // ----------------------------
@@ -2244,6 +2424,7 @@
           </div>
           ${getSelectedOrder() ? renderDrawer(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderQcModal(getSelectedOrder()) : ""}
+          ${getSelectedOrder() ? renderReofferModal(getSelectedOrder()) : ""}
           ${renderOrderTextImportModal()}
         </div>
       `;
@@ -2398,6 +2579,8 @@
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
+          state.reofferOpen = false;
+          state.reofferData = null;
           render();
         });
       });
@@ -2418,6 +2601,8 @@
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
+          state.reofferOpen = false;
+          state.reofferData = null;
           render();
         });
       });
@@ -2453,6 +2638,8 @@
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
+          state.reofferOpen = false;
+          state.reofferData = null;
           render();
         });
       });
@@ -2512,6 +2699,11 @@
               render();
               return;
             }
+            if (action === "reOffer") {
+              await openReofferModal(order, state.qcData);
+              render();
+              return;
+            }
             await handleAction(order.id, action);
           });
         });
@@ -2561,6 +2753,9 @@
           document.querySelectorAll('input[name="deviceMatch"]').forEach(r => {
             r.addEventListener("change", () => { state.qcData.deviceMatch = r.value; render(); });
           });
+          document.querySelectorAll('input[name="storageMatch"]').forEach(r => {
+            r.addEventListener("change", () => { state.qcData.storageMatch = r.value; });
+          });
           const devName = document.getElementById("qcDeviceName");
           if (devName) devName.addEventListener("input", () => state.qcData.deviceName = devName.value);
           document.querySelectorAll('input[name="isFunctional"]').forEach(r => {
@@ -2568,14 +2763,24 @@
           });
           const cond = document.getElementById("qcCondition");
           if (cond) cond.addEventListener("change", () => state.qcData.condition = cond.value);
+          const carrier = document.getElementById("qcCarrier");
+          if (carrier) carrier.addEventListener("change", () => state.qcData.carrier = carrier.value);
+          const damage = document.getElementById("qcHasDamage");
+          if (damage) damage.addEventListener("change", () => state.qcData.hasDamage = damage.checked ? "yes" : "no");
           const cracks = document.getElementById("qcHasCracks");
           if (cracks) cracks.addEventListener("change", () => state.qcData.hasCracks = cracks.checked ? "yes" : "no");
           const locked = document.getElementById("qcIsLocked");
           if (locked) locked.addEventListener("change", () => state.qcData.isLocked = locked.checked ? "yes" : "no");
+          const fmi = document.getElementById("qcHasFmi");
+          if (fmi) fmi.addEventListener("change", () => state.qcData.hasFmi = fmi.checked ? "yes" : "no");
           const bal = document.getElementById("qcHasBalance");
           if (bal) bal.addEventListener("change", () => state.qcData.hasBalance = bal.checked ? "yes" : "no");
           const imei = document.getElementById("qcImei");
-          if (imei) imei.addEventListener("input", () => state.qcData.imei = imei.value);
+          if (imei) imei.addEventListener("input", () => {
+            const digitsOnly = imei.value.replace(/\D/g, "").slice(0, 15);
+            imei.value = digitsOnly;
+            state.qcData.imei = digitsOnly;
+          });
           const notes = document.getElementById("qcNotes");
           if (notes) notes.addEventListener("input", () => state.qcData.notes = notes.value);
         };
@@ -2587,14 +2792,39 @@
         if (nextBtn) nextBtn.addEventListener("click", () => { state.qcStep += 1; render(); });
         if (finishBtn) finishBtn.addEventListener("click", async () => {
           syncStepInputs();
-          await saveQc(order.id, state.qcDeviceKey || buildOrderDeviceKey(order.id, 0), state.qcData);
+          const qcSnapshot = { ...(state.qcData || {}) };
+          await saveQc(order.id, state.qcDeviceKey || buildOrderDeviceKey(order.id, 0), qcSnapshot);
+          const qcOutcome = await processQcOutcome(order, qcSnapshot);
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
           state.qcDeviceKey = null;
+          if (!qcOutcome.sentEmails) {
+            await openReofferModal(order, qcSnapshot);
+          } else {
+            toast("QC saved. Required customer emails sent. Waiting for response.", "info");
+          }
           render();
         });
         syncStepInputs();
+      }
+      if (state.reofferOpen && order) {
+        const closeReoffer = () => { state.reofferOpen = false; state.reofferData = null; render(); };
+        document.getElementById("reofferCloseBtn")?.addEventListener("click", closeReoffer);
+        document.getElementById("reofferCancelBtn")?.addEventListener("click", closeReoffer);
+        document.getElementById("reofferSubmitBtn")?.addEventListener("click", async () => {
+          const price = Number(document.getElementById("reofferPrice")?.value || 0);
+          const reasons = (document.getElementById("reofferReasons")?.value || "").trim();
+          const comments = (document.getElementById("reofferComments")?.value || "").trim();
+          const carrier = (document.getElementById("reofferCarrier")?.value || "").trim();
+          const condition = (document.getElementById("reofferCondition")?.value || "").trim();
+          await handleAction(order.id, "reOffer", {
+            body: { newPrice: price, reasons: reasons ? reasons.split(/\n+/).map(x => x.trim()).filter(Boolean) : [], comments, carrier, condition }
+          });
+          state.reofferOpen = false;
+          state.reofferData = null;
+          render();
+        });
       }
       // Order text import modal controls
       if (state.orderTextImportOpen) {
@@ -2634,6 +2864,8 @@
         state.qcOpen = false;
         state.qcStep = 1;
         state.qcData = null;
+        state.reofferOpen = false;
+        state.reofferData = null;
         state.orderTextImportOpen = false;
         state.sidebarOpen = false;
       }
