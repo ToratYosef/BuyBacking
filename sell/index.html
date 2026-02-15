@@ -107,6 +107,14 @@
         @media (min-width: 640px) { .step-title { font-size: 26px; margin-bottom: 26px; } }
         
         .selection-grid { display: grid; gap: 15px; }
+        @media (max-width: 639px) {
+            .brand-grid-three .select-card:nth-child(3) {
+                grid-column: 1 / -1;
+                justify-self: center;
+                width: 100%;
+                max-width: calc((100% - 15px) / 2);
+            }
+        }
         .select-card {
             background: var(--white);
             border: 1px solid var(--border);
@@ -117,6 +125,7 @@
             transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
             font-weight: 800;
             display: flex;
+            min-width: 0;
             flex-direction: column;
             align-items: center;
             justify-content: center;
@@ -306,12 +315,8 @@
             #final-quote-action-card { padding: 18px !important; }
             #continueToCheckoutBtn,
             #startCheckoutBtn { width: 100%; }
-            #offer-view { padding-bottom: 360px; }
-            #offer-view .lg\:sticky { position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 60; padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px); background: linear-gradient(to top, rgba(248,250,252,.98), rgba(248,250,252,.92)); border-top: 1px solid #e2e8f0; box-shadow: 0 -10px 35px rgba(2,6,23,.16); }
-            #offer-view #final-quote-action-card { margin: 0; border-radius: 16px; padding: 14px !important; }
-            #offer-view #condition-requirements-box { display: none !important; }
-            #mobile-requirements-box { display: block !important; text-align:left; margin-bottom: 12px; padding: 10px; border-radius: 12px; border: 1px solid #d1fae5; background: #f0fdf4; max-height: 120px; overflow: auto; }
-            #offer-view .price-val { margin-bottom: 12px !important; }
+            #offer-view .lg\:sticky { position: static; }
+            #mobile-requirements-box { display: none !important; }
         }
         
         .user-monogram {
@@ -347,7 +352,8 @@
                 <div id="userMonogram" class="user-monogram hidden"></div>
                 <div id="authDropdown" class="auth-dropdown hidden">
                     <a href="/my-account.html" class="auth-dropdown__link">My Account</a>
-                    <button id="logoutBtn" type="button" class="auth-dropdown__button">Logout</button>
+                    <a href="/track-order.html" class="auth-dropdown__link">Track an Order</a>
+                    <button id="logoutBtn" type="button" class="auth-dropdown__button text-red-600">Sign Out</button>
                 </div>
             </div>
         </nav>
@@ -521,6 +527,24 @@
         <div class="space-y-3">
             <button class="btn-primary py-5" id="confirmDeviceYesBtn">Yes, Continue</button>
             <button class="w-full py-3 border-2 border-slate-200 rounded-xl text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors" id="confirmDeviceNoBtn">No, Go Back</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="condition-info-modal" aria-hidden="true">
+    <div class="modal-card text-left">
+        <h3 class="text-2xl font-black text-slate-900 mb-3 text-center" id="condition-modal-title">Condition details</h3>
+        <ul id="condition-modal-details" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed mb-6"></ul>
+        <div class="border-t border-slate-200 pt-4">
+            <div class="bg-green-50 border-2 border-green-200 rounded-2xl py-4 px-4 mb-4 text-center shadow-sm">
+                <div class="text-xs font-black text-green-700 uppercase tracking-widest mb-1">Your Final Offer:</div>
+                <div class="price-val mb-0 text-green-700 drop-shadow-sm" id="condition-modal-price">--</div>
+            </div>
+            <div class="space-y-3">
+                <input type="email" id="condition-modal-email" class="form-control" placeholder="Enter email to save quote">
+                <button class="btn-primary" id="conditionModalCheckoutBtn">GET PAID INSTANTLY</button>
+                <button class="w-full py-3 border-2 border-slate-200 rounded-xl text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors" id="conditionModalCloseBtn">Close</button>
+            </div>
         </div>
     </div>
 </div>
@@ -913,10 +937,10 @@
     };
 
     const applyGridCols = (grid, count) => {
-        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'md:grid-cols-4', 'max-w-[280px]', 'max-w-[500px]', 'max-w-[700px]', 'mx-auto');
+        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'sm:grid-cols-3', 'md:grid-cols-4', 'max-w-[280px]', 'max-w-[500px]', 'max-w-[700px]', 'mx-auto');
         if (count === 1) grid.classList.add('grid-cols-1', 'max-w-[280px]', 'mx-auto');
         else if (count === 2) grid.classList.add('grid-cols-2', 'max-w-[500px]', 'mx-auto');
-        else if (count === 3) grid.classList.add('grid-cols-3', 'max-w-[700px]', 'mx-auto');
+        else if (count === 3) grid.classList.add('grid-cols-2', 'sm:grid-cols-3', 'max-w-[700px]', 'mx-auto');
         else grid.classList.add('grid-cols-2', 'md:grid-cols-4');
     };
 
@@ -925,6 +949,7 @@
         const title = document.getElementById('step-name');
         const helpBox = document.getElementById('condition-help-box');
         grid.innerHTML = '';
+        grid.classList.remove('brand-grid-three');
         updateCrumbs();
         updateProgressBar();
 
@@ -932,6 +957,7 @@
             title.textContent = "Select Brand";
             BRAND_OPTIONS.forEach(b => createCard(grid, b.label, b.key));
             applyGridCols(grid, BRAND_OPTIONS.length);
+            if (BRAND_OPTIONS.length === 3) grid.classList.add('brand-grid-three');
         } 
         else if (state.currentStep === 'model') {
             title.textContent = `Select Model`;
@@ -1207,6 +1233,32 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    const isSmallScreen = () => window.matchMedia('(max-width: 640px)').matches;
+
+    const openConditionModal = () => {
+        const overlay = document.getElementById('condition-info-modal');
+        const titleEl = document.getElementById('condition-modal-title');
+        const detailsEl = document.getElementById('condition-modal-details');
+        const priceEl = document.getElementById('condition-modal-price');
+        const emailInput = document.getElementById('condition-modal-email');
+        const cond = CONDITION_DEFS.find(c => c.key === state.selections.condition);
+        const priceMap = state.deviceData?.prices?.[state.selections.storage]?.[state.selections.lock] || {};
+        const price = Number(priceMap[state.selections.condition] || 0);
+        if (titleEl) titleEl.textContent = `${cond?.name || 'Condition'} Requirements`;
+        if (detailsEl) detailsEl.innerHTML = (cond?.desc || []).map(d => `<li>${d}</li>`).join('');
+        if (priceEl) priceEl.textContent = `$${price}`;
+        if (emailInput) {
+            const sourceEmail = document.getElementById('user-email')?.value || getStoredEmail();
+            emailInput.value = sourceEmail;
+        }
+        if (overlay) overlay.style.display = 'flex';
+    };
+
+    const closeConditionModal = () => {
+        const overlay = document.getElementById('condition-info-modal');
+        if (overlay) overlay.style.display = 'none';
+    };
+
     const renderConditionGrid = () => {
         const grid = document.getElementById('final-condition-grid');
         grid.innerHTML = '';
@@ -1214,7 +1266,13 @@
             const card = document.createElement('div');
             card.className = `select-card ${state.selections.condition === c.key ? 'active' : ''}`;
             card.textContent = c.name;
-            card.onclick = () => { state.selections.condition = c.key; updateURL(); renderConditionGrid(); updatePrice(); };
+            card.onclick = () => {
+                state.selections.condition = c.key;
+                updateURL();
+                renderConditionGrid();
+                updatePrice();
+                if (isSmallScreen()) openConditionModal();
+            };
             grid.appendChild(card);
         });
         applyGridCols(grid, CONDITION_DEFS.length);
@@ -1225,8 +1283,6 @@
         const titleEl = document.getElementById('condition-title-display');
         const detailsEl = document.getElementById('condition-details');
         const reqBox = document.getElementById('condition-requirements-box');
-        const mobileTitleEl = document.getElementById('mobile-condition-title');
-        const mobileDetailsEl = document.getElementById('mobile-condition-details');
         const checkoutBtn = document.getElementById('startCheckoutBtn');
 
         if (!state.selections.condition) {
@@ -1234,7 +1290,6 @@
             if (titleEl) titleEl.textContent = '--';
             if (detailsEl) detailsEl.innerHTML = '';
             if (reqBox) reqBox.classList.add('hidden');
-            if (mobileDetailsEl) mobileDetailsEl.innerHTML = '';
             if (checkoutBtn) {
                 checkoutBtn.disabled = true;
                 checkoutBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -1277,6 +1332,27 @@
         }
 
         setStoredEmail(email);
+        document.getElementById('qty-modal').style.display = 'flex';
+    };
+
+    document.getElementById('conditionModalCloseBtn').onclick = () => closeConditionModal();
+    document.getElementById('condition-info-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'condition-info-modal') closeConditionModal();
+    });
+    document.getElementById('conditionModalCheckoutBtn').onclick = () => {
+        const modalEmail = document.getElementById('condition-modal-email');
+        const email = (modalEmail?.value || '').trim();
+        if (!email.includes('@') || !email.includes('.')) {
+            modalEmail?.classList.add('error-highlight');
+            return;
+        }
+        const mainEmailInput = document.getElementById('user-email');
+        if (mainEmailInput) {
+            mainEmailInput.value = email;
+            mainEmailInput.classList.remove('error-highlight');
+        }
+        setStoredEmail(email);
+        closeConditionModal();
         document.getElementById('qty-modal').style.display = 'flex';
     };
 
