@@ -310,6 +310,34 @@
       }
       return null;
     }
+    function getDeviceAcceptedReofferPayout(order, deviceKey, fallbackOffer = null) {
+      const byKey =
+        order?.reOfferByDevice?.[deviceKey]?.newPrice ??
+        order?.reofferByDevice?.[deviceKey]?.newPrice ??
+        order?.deviceReofferByKey?.[deviceKey]?.newPrice ??
+        order?.deviceReOfferByKey?.[deviceKey]?.newPrice;
+      const direct = Number(byKey);
+      if (Number.isFinite(direct) && direct > 0) return direct;
+      const totalDevices = getOrderDeviceEntries(order).length;
+      if (totalDevices === 1) {
+        const orderLevel = Number(getAcceptedReofferPayout(order));
+        if (Number.isFinite(orderLevel) && orderLevel > 0) return orderLevel;
+      }
+      const fb = Number(fallbackOffer);
+      return Number.isFinite(fb) && fb > 0 ? fb : null;
+    }
+    function getDeviceSummary(order) {
+      const entries = getOrderDeviceEntries(order);
+      const allKeys = entries.map((entry) => buildOrderDeviceKey(order.id, entry.deviceIndex));
+      const qcMap = order?.qcDataByDevice || {};
+      const qcCompletedCount = allKeys.filter((k) => !!qcMap[k]).length;
+      const allQcCompleted = allKeys.length > 0 && qcCompletedCount === allKeys.length;
+      const declinedCount = allKeys.filter((k) => {
+        const s = getDeviceStatus(order, k);
+        return s === 're-offered-declined' || s === 're_offered_declined';
+      }).length;
+      return { allKeys, allQcCompleted, qcCompletedCount, totalDevices: allKeys.length, declinedCount };
+    }
     function formatCarrierLabel(carrierRaw) {
       const c = String(carrierRaw || '').trim().toLowerCase();
       if (!c) return 'N/A';
@@ -1108,6 +1136,18 @@
             body = { status: "completed", ...(options?.body || {}) };
             break;
           case "sendReturnLabel":
+            if (order) {
+              const summary = getDeviceSummary(order);
+              if (!summary.allQcCompleted) {
+                toast(`Return label blocked: QC must be completed for all devices (${summary.qcCompletedCount}/${summary.totalDevices}).`, "error");
+                return;
+              }
+              const mailClass = summary.declinedCount >= 5 ? "priority" : "first_class";
+              endpoint = `/orders/${orderId}/return-label`;
+              method = "POST";
+              body = { mailClass, declinedDeviceCount: summary.declinedCount };
+              break;
+            }
             endpoint = `/orders/${orderId}/return-label`;
             method = "POST";
             body = {};
@@ -1681,7 +1721,7 @@
         `);
 
         // Device rows
-        if (state.expandedOrderIds.has(order.id)) for (const entry of entries) {
+        if (false) for (const entry of entries) {
           const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
           state.lastRenderedDeviceKeys.push(deviceKey);
           const item = entry.item || {};
@@ -1878,7 +1918,7 @@
       const focused = getFocusedDevice(order);
       const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
       if (focused.isFocused) tabs.splice(2, 0, { id: "qc", label: "QC & Intake", icon: "shield-check" });
-      const visibleEntries = focused.isFocused ? [focused.entry] : entries;
+      const visibleEntries = entries;
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
         const reofferAccepted = isAcceptedReofferStatus(order?.status);
@@ -1889,10 +1929,14 @@
 
         const devices = visibleEntries.map((entry) => {
           const item = entry.item || {};
+          const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+          const deviceStatus = getDeviceStatus(order, deviceKey);
+          const isSelected = focused.isFocused && focused.deviceKey === deviceKey;
           const offer = getPerDeviceOffer(item, order);
-          const showAcceptedOfferSwap = reofferAccepted && Number.isFinite(acceptedPerDevice) && Number.isFinite(originalPerDevice);
+          const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
+          const showAcceptedOfferSwap = isAcceptedReofferStatus(deviceStatus) && Number.isFinite(acceptedDeviceOffer);
           return `
-            <div class="p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors">
+            <div class="p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors ${isSelected ? 'ring-2 ring-indigo-200 bg-indigo-50/40' : ''}">
               <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
                 <i data-lucide="smartphone" style="width:24px;height:24px"></i>
               </div>
@@ -1907,12 +1951,17 @@
               <div class="text-right">
                 <div class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Offer</div>
                 ${showAcceptedOfferSwap ? `
-                  <div class="text-sm font-bold text-rose-600 line-through decoration-2 decoration-rose-500">$${esc(Number(originalPerDevice || 0).toFixed(2))}</div>
+                  <div class="text-sm font-bold text-rose-600 line-through decoration-2 decoration-rose-500">$${esc(Number(offer || 0).toFixed(2))}</div>
                   <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 mt-1">New Accepted Offer</div>
-                  <div class="text-xl font-extrabold text-emerald-600">$${esc(Number(acceptedPerDevice || 0).toFixed(2))}</div>
+                  <div class="text-xl font-extrabold text-emerald-600">$${esc(Number(acceptedDeviceOffer || 0).toFixed(2))}</div>
                 ` : `
                   <div class="text-lg font-bold text-green-600">$${esc(Number(offer || 0).toFixed(2))}</div>
                 `}
+              </div>
+              <div class="self-end pl-2">
+                <button type="button" data-select-device="${esc(deviceKey)}" class="px-2.5 py-1 rounded-md text-[11px] font-semibold ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                  ${isSelected ? 'Selected' : 'Select Device'}
+                </button>
               </div>
             </div>
           `;
@@ -1923,7 +1972,7 @@
               <div class="p-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/50">
                 <h3 class="font-semibold text-slate-700 flex items-center gap-2">
                   <i data-lucide="smartphone" class="text-slate-400" style="width:18px;height:18px"></i>
-                  ${focused.isFocused ? `Device (1 of ${entries.length}) <span class="text-xs text-slate-400 font-bold">• ${esc(focused.label)}</span>` : `Devices (${entries.length})`}
+                  Devices (${entries.length})
                 </h3>
                 ${promoBadgeHTML(order)}
               </div>
@@ -2813,16 +2862,16 @@
           updateSelectAllCheckboxUI();
         });
       });
-      // open order drawer + hierarchy by clicking order row
+      // open order drawer by clicking order row
       document.querySelectorAll("[data-order-row]").forEach(row => {
         row.addEventListener("click", (e) => {
           if (e.target.closest("a,button,input,label,[data-view-device]")) return;
           const orderId = row.getAttribute("data-order-row");
           if (!orderId) return;
-          if (state.expandedOrderIds.has(orderId)) state.expandedOrderIds.delete(orderId);
-          else state.expandedOrderIds.add(orderId);
-          // Per UX request: clicking order rows should only expand/collapse hierarchy,
-          // not open the order drawer popup.
+          state.selectedOrderId = orderId;
+          state.selectedOrderSnapshot = state.allOrders.find(o => o.id === orderId) || state.selectedOrderSnapshot || null;
+          state.selectedDeviceKey = null;
+          state.drawerTab = "overview";
           render();
         });
       });
@@ -2872,6 +2921,17 @@
       document.querySelectorAll("[data-drawer-tab]").forEach(btn => {
         btn.addEventListener("click", () => {
           state.drawerTab = btn.getAttribute("data-drawer-tab");
+          render();
+        });
+      });
+      document.querySelectorAll("[data-select-device]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const deviceKey = btn.getAttribute("data-select-device");
+          if (!deviceKey) return;
+          state.selectedDeviceKey = deviceKey;
+          state.qcDeviceKey = deviceKey;
           render();
         });
       });
