@@ -390,7 +390,7 @@
             <a href="https://www.sellcell.com/" target="_blank" rel="noopener">
                 <img src="https://c9ac71a8282e1fecd95e-f07dbcddcacf0d4c572ea7178ee6902d.ssl.cf2.rackcdn.com/assets/images/share/sellcell-accredited-buyer.png" class="h-16 grayscale hover:grayscale-0 transition" alt="SellCell Accredited Buyer">
             </a>
-            <img src="/assets/stars-5.svg" class="h-10" alt="Trustpilot 5 Star">
+            <img src="/assets/stars-4.svg" class="h-10" alt="Trustpilot 5 Star">
         </div>
         <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm"><p>&copy; 2025 SecondHandCell. All rights reserved.</p></div>
     </div>
@@ -809,10 +809,11 @@
             const isKit = pref === 'ship_kit';
             const totalQty = cartItems.reduce((sum, item) => sum + item.qty, 0);
             const firstItem = cartItems[0];
-            const itemsPayload = cartItems.map((item) => {
-                const itemTotal = item.unitPrice * item.qty;
+            const itemsPayload = cartItems.flatMap((item) => {
+                const qty = Math.max(1, Math.floor(Number(item.qty || 1)));
                 const condKey = item.condition;
-                return {
+                const unitPrice = Number(item.unitPrice || 0);
+                const base = {
                     device: item.modelName,
                     brand: item.brand,
                     modelId: item.model,
@@ -824,12 +825,16 @@
                     condition_power_on: condKey === 'noPower' ? 'No' : 'Yes',
                     condition_functional: (condKey === 'broken' || condKey === 'noPower') ? 'No' : 'Yes',
                     condition_cracks: condKey === 'broken' ? 'Yes' : 'No',
-                    condition_cosmetic: condKey,
-                    qty: item.qty,
-                    unitPrice: item.unitPrice,
-                    totalPayout: itemTotal,
-                    estimatedQuote: itemTotal
+                    condition_cosmetic: condKey
                 };
+                return Array.from({ length: qty }, (_, index) => ({
+                    ...base,
+                    qty: 1,
+                    unitPrice,
+                    totalPayout: unitPrice,
+                    estimatedQuote: unitPrice,
+                    lineIndex: index + 1
+                }));
             });
 
             const summaryDevice = cartItems.length > 1

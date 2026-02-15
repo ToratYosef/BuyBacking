@@ -13,6 +13,8 @@
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
     .density-compact tr td { padding-top: .4rem !important; padding-bottom: .4rem !important; }
     .density-compact .order-meta { gap: .25rem !important; }
+    /* Tighter default density (still readable) */
+    .density-default tr td { padding-top: .65rem !important; padding-bottom: .65rem !important; }
   </style>
   <script>
     // Optional override:
@@ -28,7 +30,7 @@
   <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
     // ----------------------------
     // CONFIG
     // ----------------------------
@@ -64,10 +66,14 @@
     }
     function formatDate(ts) {
       const d = toDateAny(ts);
-      if (!d) return "N/A";
+      const focused = getFocusedDevice(order);
+      const allEntries = focused.entries;
+      const focusedEntry = focused.entry;
+      const focusedEntries = (focused.isFocused && focusedEntry) ? [focusedEntry] : allEntries;
       return new Intl.DateTimeFormat("en-US", {
-        month: "short", day: "numeric", year: "numeric",
-        hour: "numeric", minute: "2-digit"
+        const devices = focusedEntries.map((entry) => {
+          const item = entry.item || {};
+          const offer = Number.parseFloat(item.price || item.payout || 0);
       }).format(d);
     }
     function formatTimeOnly(ts) {
@@ -75,6 +81,7 @@
       if (!d) return "N/A";
       return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(d);
     }
+                <div class="text-xs text-slate-500 mt-0.5">${esc(focused.isFocused ? focused.label : `Device ${entry.deviceIndex + 1} of ${allEntries.length}`)}</div>
     function getOrderAge(ts) {
       const d = toDateAny(ts);
       if (!d) return "0 days";
@@ -83,7 +90,7 @@
       return `${diffDays} day${diffDays !== 1 ? "s" : ""} old`;
     }
     function formatStatusLabel(status) {
-      if (!status) return "Unknown";
+                <div class="text-xl font-bold text-green-600">$${esc((Number.isFinite(offer) ? offer : 0).toFixed(2))}</div>
       return String(status).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     }
     // ----------------------------
@@ -94,7 +101,7 @@
       "shipping_kit_requested",
       "kit_needs_printing",
       "needs_printing",
-      "kit_sent",
+                  ${focused.isFocused ? `Device (1) • ${esc(focused.label)}` : `Devices (${allEntries.length})`}
       "kit_on_the_way_to_customer",
       "kit_delivered",
       "kit_on_the_way_to_us",
@@ -141,6 +148,17 @@
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-100 text-emerald-800 border-emerald-200";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-100 text-purple-800 border-purple-200";
       return "bg-slate-100 text-slate-800 border-slate-200";
+    }
+    function getStatusAccentBgClass(status) {
+      const s = normalizeStatusKey(status);
+      if (!s || s === "unknown") return "bg-slate-300";
+      if (s.includes("cancel")) return "bg-slate-300";
+      if (s.includes("pending") || s.includes("needs_printing") || s.includes("kit_needs_printing")) return "bg-amber-400";
+      if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-500";
+      if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-500";
+      if (s.includes("completed") || s.includes("paid")) return "bg-emerald-500";
+      if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-500";
+      return "bg-slate-300";
     }
     function statusBadgeHTML(status, extra = "") {
       return `
@@ -231,6 +249,14 @@
         }
       }
       return out.length ? out : [{ deviceIndex: 0, item: order, qtyIndex: 0 }];
+    }
+    function getPerDeviceOffer(item, order) {
+      const qty = normalizeQty(item?.qty ?? item?.quantity ?? 1);
+      const direct = Number(item?.unitPrice ?? item?.price ?? item?.payout ?? item?.offerAmount ?? item?.estimatedQuote);
+      if (Number.isFinite(direct)) return direct;
+      const total = Number(item?.totalPayout ?? item?.estimatedQuote ?? order?.totalPayout ?? order?.estimatedQuote ?? order?.originalQuote);
+      if (Number.isFinite(total)) return qty > 1 ? (total / qty) : total;
+      return 0;
     }
     function getOrderItemsSearchText(order) {
       // Used by search pipeline
@@ -345,6 +371,7 @@
     const state = {
       user: null,
       authLoading: true,
+      sidebarOpen: false,
       // orders master + filtered
       allOrders: [],
       currentFilteredOrders: [],
@@ -363,11 +390,13 @@
       activeTab: "orders",
       // drawer / modal
       selectedOrderId: null,
+      selectedDeviceKey: null,
       drawerTab: "overview",
       // QC modal (your existing)
       qcOpen: false,
       qcStep: 1,
       qcData: null,
+      qcDeviceKey: null,
       // status dropdown (modal)
       statusDropdownOpen: false,
       // order text import (placeholder modal)
@@ -379,6 +408,36 @@
     function getSelectedOrder() {
       if (!state.selectedOrderId) return null;
       return state.allOrders.find(o => o.id === state.selectedOrderId) || null;
+    }
+
+    function getOrderPayoutTotal(order) {
+      const explicit = Number(order?.totalPayout ?? order?.total_payout ?? order?.payoutTotal ?? order?.payout_total ?? NaN);
+      if (Number.isFinite(explicit)) return explicit;
+      const items = Array.isArray(order?.items) ? order.items : [];
+      if (!items.length) {
+        const single = Number(order?.price ?? order?.payout ?? 0);
+        return Number.isFinite(single) ? single : 0;
+      }
+      let sum = 0;
+      for (const it of items) {
+        const qty = normalizeQty(it?.qty ?? it?.quantity ?? 1);
+        const unit = Number.parseFloat(it?.price ?? it?.payout ?? 0);
+        sum += (Number.isFinite(unit) ? unit : 0) * qty;
+      }
+      return sum;
+    }
+
+    function getFocusedDevice(order) {
+      const entries = getOrderDeviceEntries(order);
+      const fallbackEntry = entries[0] || { deviceIndex: 0, item: order, qtyIndex: 0 };
+      const key = state.selectedDeviceKey;
+      if (!key) return { isFocused: false, deviceKey: null, entry: null, entries, label: `Devices (${entries.length})` };
+      const parsed = parseOrderDeviceKey(key);
+      if (parsed.orderId !== order?.id) return { isFocused: false, deviceKey: null, entry: null, entries, label: `Devices (${entries.length})` };
+      const entry = entries.find(e => e.deviceIndex === parsed.deviceIndex) || fallbackEntry;
+      const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+      const label = `Device ${entry.deviceIndex + 1} of ${entries.length}`;
+      return { isFocused: true, deviceKey, entry, entries, label };
     }
     function getLastUpdateTimestamp(order) {
       return (
@@ -920,14 +979,25 @@
         toast(`Action failed: ${e.message}`, "error");
       }
     }
-    async function saveQc(orderId, qcData) {
+    async function saveQc(orderId, deviceKey, qcData) {
       try {
         const orderRef = doc(db, "orders", orderId);
-        await setDoc(orderRef, {
-          qcData,
-          status: "received",
-          qcCompletedAt: new Date()
-        }, { merge: true });
+        const safeDeviceKey = deviceKey || buildOrderDeviceKey(orderId, 0);
+        try {
+          await updateDoc(orderRef, {
+            [`qcDataByDevice.${safeDeviceKey}`]: qcData,
+            ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
+            status: "received",
+            qcCompletedAt: new Date()
+          });
+        } catch (e) {
+          await setDoc(orderRef, {
+            qcDataByDevice: { [safeDeviceKey]: qcData },
+            ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
+            status: "received",
+            qcCompletedAt: new Date()
+          }, { merge: true });
+        }
         toast("QC saved", "success");
       } catch (e) {
         console.error(e);
@@ -946,8 +1016,9 @@
                 BB
               </div>
             </div>
-            <h2 class="mt-6 text-center text-3xl font-bold tracking-tight text-slate-900">Admin Sign In</h2>
-            <p class="mt-2 text-center text-sm text-slate-600">Access the Order Management Console</p>
+        <div class="fixed inset-0 bg-slate-900/50 z-30 lg:hidden ${isOpen ? "" : "hidden"}" data-sidebar-overlay></div>
+        <div class="w-64 bg-white border-r border-slate-200 flex flex-col h-screen fixed left-0 top-0 z-40 transform transition-transform duration-300 ${isOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0">
+          <div class="p-6 flex items-center justify-between gap-3">
           </div>
           <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
             <div class="bg-white py-8 px-4 shadow-xl shadow-slate-200 border border-slate-100 sm:rounded-xl sm:px-10">
@@ -955,6 +1026,9 @@
                 <div>
                   <label class="block text-sm font-medium text-slate-700">Email address</label>
                   <div class="mt-1 relative rounded-md shadow-sm">
+            <button class="lg:hidden text-slate-400 hover:text-slate-600" data-sidebar-close aria-label="Close sidebar">
+              <i data-lucide="x" style="width:20px;height:20px"></i>
+            </button>
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <i data-lucide="mail" class="h-5 w-5 text-slate-400"></i>
                     </div>
@@ -1066,6 +1140,9 @@
       return `
         <header class="h-16 bg-white border-b border-slate-200 sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between gap-4">
           <div class="flex items-center gap-3 flex-1">
+            <button id="sidebarToggle" class="lg:hidden p-2 rounded-full text-slate-500 hover:bg-slate-100" aria-label="Open sidebar">
+              <i data-lucide="menu" style="width:20px;height:20px"></i>
+            </button>
             <i data-lucide="search" class="text-slate-400" style="width:20px;height:20px"></i>
             <input id="searchInput" type="text"
               placeholder="Search by ID, customer, device, storage, tracking…"
@@ -1116,19 +1193,20 @@
         const s = normalizeStatusKey(o?.status);
         return s !== "completed" && s !== "return-label-generated";
       }).length;
-      return { statusCounts, statusCountAll, cancelledCount, liveOrders };
+      return { statusCounts, statusCountAll, cancelledCount, liveOrders, visible };
     }
     function updateGlassMetricsHTML() {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const ordersToday = state.allOrders.filter(o => (toDateAny(o?.createdAt)?.getTime() || 0) >= todayStart).length;
-      const initialOrderCount = state.allOrders.filter(o => Number(o?.estimatedQuote || 0) > 0).length;
-      const completedOrdersCount = state.allOrders.filter(o => {
+      const { visible } = splitCancelled(state.allOrders);
+      const ordersToday = visible.filter(o => (toDateAny(o?.createdAt)?.getTime() || 0) >= todayStart).length;
+      const initialOrderCount = visible.filter(o => Number(o?.estimatedQuote || 0) > 0).length;
+      const completedOrdersCount = visible.filter(o => {
         const s = normalizeStatusKey(o?.status);
         return s === "completed" || s === "re-offered-accepted";
       }).length;
       const conversionRate = initialOrderCount ? Math.round((completedOrdersCount / initialOrderCount) * 100) : 0;
-      const receivedDevicesCount = state.allOrders.filter(o => isReceivedStatusValue(o?.status)).length;
+      const receivedDevicesCount = visible.filter(o => isReceivedStatusValue(o?.status)).length;
       return `
         <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -1154,32 +1232,61 @@
         </div>
       `;
     }
+    function getStatusPillClasses(key, isActive) {
+      const s = normalizeStatusKey(key);
+      if (s === "all") {
+        return {
+          pill: isActive ? "bg-slate-900 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50",
+          count: isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
+        };
+      }
+      const map = {
+        order_pending: "amber",
+        kit_needs_printing: "amber",
+        label_generated: "blue",
+        emailed: "indigo",
+        received: "indigo",
+        completed: "emerald",
+        cancelled: "slate"
+      };
+      const color = map[s] || "slate";
+      if (color === "slate") {
+        return {
+          pill: isActive ? "bg-slate-700 text-white shadow-md" : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200",
+          count: isActive ? "bg-white/15 text-white" : "bg-white/70 text-slate-600"
+        };
+      }
+      return {
+        pill: isActive ? `bg-${color}-500 text-white shadow-md` : `bg-${color}-50 text-${color}-700 border border-${color}-200 hover:bg-${color}-100`,
+        count: isActive ? "bg-white/15 text-white" : `bg-${color}-100 text-${color}-700`
+      };
+    }
     function renderStatusBreakdown() {
-      const { statusCounts, statusCountAll, cancelledCount } = computeStatusCounts();
+      const { statusCounts, statusCountAll, cancelledCount, visible } = computeStatusCounts();
       const items = [
         { key: "all", label: "All", count: statusCountAll },
-        { key: "kit_needs_printing", label: "Kit Needs Printing", count: Array.from(state.allOrders).filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
-        { key: "label_generated", label: "Label Generated", count: Array.from(state.allOrders).filter(isLabelGenerationStage).length },
-        { key: "emailed", label: "Emailed", count: Array.from(state.allOrders).filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
-        { key: "received", label: "Received", count: Array.from(state.allOrders).filter(o => isReceivedStatusValue(o?.status)).length },
+        { key: "order_pending", label: "Order Pending", count: statusCounts.get("order_pending") || 0 },
+        { key: "kit_needs_printing", label: "Kit Needs Printing", count: visible.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
+        { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
+        { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
+        { key: "received", label: "Received", count: visible.filter(o => isReceivedStatusValue(o?.status)).length },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
       return `
         <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide mb-4">
           ${items.map(it => `
+            ${(() => {
+              const classes = getStatusPillClasses(it.key, state.currentActiveStatus === it.key);
+              return `
             <button data-status-tab="${esc(it.key)}"
-              class="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
-                state.currentActiveStatus === it.key
-                  ? "bg-slate-900 text-white shadow-md"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-              }"
+              class="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${classes.pill}"
               role="button" tabindex="0">
               ${esc(it.label)}
-              <span class="ml-2 inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs ${
-                state.currentActiveStatus === it.key ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
-              }">${it.count}</span>
+              <span class="ml-2 inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs ${classes.count}">${it.count}</span>
             </button>
+              `;
+            })()}
           `).join("")}
         </div>
       `;
@@ -1274,91 +1381,117 @@
       const rowHtml = [];
       for (const order of pageOrders) {
         const entries = getOrderDeviceEntries(order);
-        entries.forEach((entry) => {
+        const createdAt = order?.createdAt;
+        const lastUp = getLastUpdateTimestamp(order);
+        const trackingNumber = getAnyTrackingNumber(order) || "";
+        const trackingLink = trackingNumber ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNumber)}` : "";
+        const statusExtra = labelStatusExtraHTML(order);
+        const payoutTotal = getOrderPayoutTotal(order);
+
+        // Order summary row
+        rowHtml.push(`
+          <tr class="bg-slate-50/70 border-t border-slate-200">
+            <td class="px-4 py-3 align-top">
+              <span class="inline-block w-1.5 h-8 rounded-full ${getStatusAccentBgClass(order.status)}" aria-hidden="true"></span>
+            </td>
+            <td class="px-4 py-3 align-top">
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button data-open-order="${esc(order.id)}" class="font-bold text-slate-900 hover:text-indigo-700">
+                    #${esc(order.id)}
+                  </button>
+                  <span class="text-xs text-slate-500">${esc(formatDate(createdAt))}</span>
+                  <span class="text-xs text-slate-400">•</span>
+                  <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
+                  ${promoBadgeHTML(order)}
+                </div>
+                <div class="text-xs text-slate-500">
+                  <span class="font-semibold text-slate-700">${esc(order?.shippingInfo?.fullName || "Guest")}</span>
+                  ${order?.shippingInfo?.phone ? ` • <span>${esc(order.shippingInfo.phone)}</span>` : ""}
+                  ${order?.shippingInfo?.email ? ` • <span>${esc(order.shippingInfo.email)}</span>` : ""}
+                </div>
+                <div class="text-sm text-slate-800 font-semibold mt-1">
+                  ${esc(entries.length)} device${entries.length === 1 ? "" : "s"} • Payout <span class="text-emerald-700">$${esc(Number(payoutTotal || 0).toFixed(2))}</span>
+                </div>
+                ${lastUp ? `<div class="text-[11px] text-slate-400">Last update: ${esc(formatDate(lastUp))}</div>` : ""}
+              </div>
+            </td>
+            <td class="px-4 py-3 align-top">
+              ${statusBadgeHTML(order.status, statusExtra)}
+            </td>
+            <td class="px-4 py-3 align-top">
+              ${trackingNumber ? `
+                <a class="text-sm font-semibold text-indigo-700 hover:underline" href="${trackingLink}" target="_blank" rel="noreferrer">
+                  ${esc(trackingNumber)}
+                </a>
+              ` : `<span class="text-sm text-slate-400">N/A</span>`}
+            </td>
+            <td class="px-4 py-3 align-top">
+              <div class="flex flex-wrap gap-2 justify-end">
+                <button data-open-order="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50">
+                  Open
+                </button>
+                <button data-quick="${esc(order.id)}" data-quick-type="generateLabel"
+                  class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700">
+                  Label
+                </button>
+                <button data-quick="${esc(order.id)}" data-quick-type="refreshEmailTracking"
+                  class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50">
+                  Refresh
+                </button>
+              </div>
+            </td>
+          </tr>
+        `);
+
+        // Device rows
+        for (const entry of entries) {
           const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
           state.lastRenderedDeviceKeys.push(deviceKey);
           const item = entry.item || {};
-          const createdAt = order?.createdAt;
-          const lastUp = getLastUpdateTimestamp(order);
-          const trackingNumber = getAnyTrackingNumber(order) || "";
-          const trackingLink = trackingNumber ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNumber)}` : "";
           const deviceTitle = item.device || order.device || "(Unknown device)";
           const deviceSub = [
+            item.model || order.model || "",
             item.storage || order.storage || "",
             item.carrier || order.carrier || "",
             item.condition || order.condition || ""
           ].filter(Boolean).join(" • ");
-          const statusExtra = labelStatusExtraHTML(order);
           rowHtml.push(`
             <tr class="hover:bg-slate-50 transition-colors">
-              <!-- Select -->
-              <td class="px-4 py-4 align-top">
-                <input type="checkbox"
-                  data-device-checkbox="${esc(deviceKey)}"
-                  class="h-4 w-4 rounded border-slate-300 text-indigo-600"
-                  ${state.selectedDeviceKeys.has(deviceKey) ? "checked" : ""} />
-              </td>
-              <!-- Order / Device -->
-              <td class="px-4 py-4 align-top">
-                <div class="flex flex-col gap-2 order-meta">
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <button data-open-order="${esc(order.id)}" class="font-bold text-slate-900 hover:text-indigo-700">
-                          #${esc(order.id)}
-                        </button>
-                        <span class="text-xs text-slate-500">${esc(formatDate(createdAt))}</span>
-                        <span class="text-xs text-slate-400">•</span>
-                        <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
-                        ${promoBadgeHTML(order)}
-                      </div>
-                      <div class="text-xs text-slate-500 mt-1">
-                        <span class="font-semibold text-slate-700">${esc(order?.shippingInfo?.fullName || "Guest")}</span>
-                        ${order?.shippingInfo?.email ? ` • <span class="text-slate-500">${esc(order.shippingInfo.email)}</span>` : ""}
-                      </div>
-                      <div class="text-sm text-slate-900 mt-2 font-semibold truncate">${esc(deviceTitle)}</div>
-                      ${deviceSub ? `<div class="text-xs text-slate-500 truncate">${esc(deviceSub)}</div>` : ""}
-                      ${lastUp ? `<div class="text-[11px] text-slate-400 mt-1">Last update: ${esc(formatDate(lastUp))}</div>` : ""}
-                    </div>
-                  </div>
+              <td class="px-4 py-3 align-top">
+                <div class="flex items-center gap-3">
+                  <span class="w-6 text-slate-300 font-black" aria-hidden="true">↳</span>
+                  <input type="checkbox"
+                    data-device-checkbox="${esc(deviceKey)}"
+                    class="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                    ${state.selectedDeviceKeys.has(deviceKey) ? "checked" : ""} />
                 </div>
               </td>
-              <!-- Status -->
-              <td class="px-4 py-4 align-top">
-                ${statusBadgeHTML(order.status, statusExtra)}
+              <td class="px-4 py-3 align-top">
+                <div class="min-w-0">
+                  <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Device ${esc(entry.deviceIndex + 1)}</div>
+                  <div class="text-sm text-slate-900 mt-1 font-semibold truncate">${esc(deviceTitle)}</div>
+                  ${deviceSub ? `<div class="text-xs text-slate-500 truncate">${esc(deviceSub)}</div>` : ""}
+                </div>
               </td>
-              <!-- Tracking -->
-              <td class="px-4 py-4 align-top">
-                ${trackingNumber ? `
-                  <a class="text-sm font-semibold text-indigo-700 hover:underline" href="${trackingLink}" target="_blank" rel="noreferrer">
-                    ${esc(trackingNumber)}
-                  </a>
-                ` : `<span class="text-sm text-slate-400">N/A</span>`}
-              </td>
-              <!-- Actions -->
-              <td class="px-4 py-4 align-top">
+              <td class="px-4 py-3 align-top"><span class="text-sm text-slate-300">—</span></td>
+              <td class="px-4 py-3 align-top"><span class="text-sm text-slate-300">—</span></td>
+              <td class="px-4 py-3 align-top">
                 <div class="flex flex-wrap gap-2 justify-end">
-                  <button data-open-order="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50">
-                    Open
-                  </button>
-                  <button data-quick="${esc(order.id)}" data-quick-type="generateLabel"
-                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700">
-                    Label
-                  </button>
-                  <button data-quick="${esc(order.id)}" data-quick-type="refreshEmailTracking"
-                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50">
-                    Refresh
+                  <button data-view-device="${esc(deviceKey)}"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
+                    View
                   </button>
                 </div>
               </td>
             </tr>
           `);
-        });
+        }
       }
       const body = rowHtml.length
         ? rowHtml.join("")
         : `<tr><td colspan="5" class="px-6 py-10 text-center text-slate-500">No orders found.</td></tr>`;
-      const densityClass = state.compactDensity ? "density-compact" : "";
+      const densityClass = state.compactDensity ? "density-compact" : "density-default";
       return `
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           <div class="overflow-x-auto">
@@ -1395,8 +1528,8 @@
     }
     function renderOrdersPage() {
       return `
-        <main class="flex-1 p-4 sm:p-8 overflow-y-auto">
-          <div class="flex flex-col gap-6">
+        <main class="flex-1 p-4 sm:p-6 overflow-y-auto">
+          <div class="flex flex-col gap-5">
             <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
                 <h2 class="text-2xl font-bold text-slate-900 tracking-tight">${IS_AGING_PAGE ? "Aging Orders" : "Order Management"}</h2>
@@ -1506,10 +1639,11 @@
         { id: "qc", label: "QC & Intake", icon: "shield-check" },
         { id: "logs", label: "Activity Logs", icon: "file-text" },
       ];
-      const items = (order.items && order.items.length > 0) ? order.items : [order];
+      const entries = getOrderDeviceEntries(order);
       function overviewHTML() {
-        const devices = items.map((item) => {
-          const offer = Number.parseFloat(item.price || item.payout || order.totalPayout || 0);
+        const devices = entries.map((entry) => {
+          const item = entry.item || {};
+          const offer = getPerDeviceOffer(item, order);
           return `
             <div class="p-5 flex items-start gap-4 hover:bg-slate-50 transition-colors">
               <div class="h-16 w-16 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
@@ -1525,7 +1659,7 @@
               </div>
               <div class="text-right">
                 <div class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Offer</div>
-                <div class="text-xl font-bold text-green-600">$${esc(offer.toFixed(2))}</div>
+                <div class="text-xl font-bold text-green-600">$${esc(Number(offer || 0).toFixed(2))}</div>
               </div>
             </div>
           `;
@@ -1536,7 +1670,7 @@
               <div class="p-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/50">
                 <h3 class="font-semibold text-slate-700 flex items-center gap-2">
                   <i data-lucide="smartphone" class="text-slate-400" style="width:18px;height:18px"></i>
-                  Devices (${items.length})
+                  Devices (${entries.length})
                 </h3>
                 ${promoBadgeHTML(order)}
               </div>
@@ -1630,14 +1764,18 @@
         `;
       }
       function qcHTML() {
-        const hasQcData = !!order.qcData;
+        const deviceKey = focused.isFocused ? focused.deviceKey : buildOrderDeviceKey(order.id, 0);
+        const qcForDevice = (order?.qcDataByDevice && deviceKey) ? order.qcDataByDevice[deviceKey] : null;
+        const legacy = (!qcForDevice && String(deviceKey).endsWith("::0")) ? order.qcData : null;
+        const qc = qcForDevice || legacy;
+        const hasQcData = !!qc;
         return `
           <div class="space-y-6 animate-in">
             <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
               <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                 <h3 class="font-semibold text-slate-700 flex items-center gap-2">
                   <i data-lucide="shield-check" class="text-slate-400" style="width:18px;height:18px"></i>
-                  QC Status
+                  QC Status ${focused.isFocused ? `<span class="text-xs text-slate-400 font-bold">• ${esc(focused.label)}</span>` : ""}
                 </h3>
                 ${hasQcData ? `<span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-medium">Completed</span>` : ""}
               </div>
@@ -1648,28 +1786,28 @@
                       <i data-lucide="search" style="width:24px;height:24px"></i>
                     </div>
                     <h4 class="text-slate-900 font-medium mb-1">Inspection Required</h4>
-                    <p class="text-sm text-slate-500 mb-4">No quality control data has been recorded for this order yet.</p>
+                    <p class="text-sm text-slate-500 mb-4">No quality control data has been recorded for this device yet.</p>
                   </div>
                 ` : `
                   <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-4">
                       <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <span class="text-xs text-slate-400 uppercase block">Device Match</span>
-                        <span class="text-sm font-bold ${order.qcData.deviceMatch === "yes" ? "text-emerald-600" : "text-rose-600"}">
-                          ${order.qcData.deviceMatch === "yes" ? "Match" : "Mismatch"}
+                        <span class="text-sm font-bold ${qc.deviceMatch === "yes" ? "text-emerald-600" : "text-rose-600"}">
+                          ${qc.deviceMatch === "yes" ? "Match" : "Mismatch"}
                         </span>
                       </div>
                       <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
                         <span class="text-xs text-slate-400 uppercase block">Functional</span>
-                        <span class="text-sm font-bold ${order.qcData.isFunctional === "yes" ? "text-emerald-600" : "text-rose-600"}">
-                          ${order.qcData.isFunctional === "yes" ? "Yes" : "No"}
+                        <span class="text-sm font-bold ${qc.isFunctional === "yes" ? "text-emerald-600" : "text-rose-600"}">
+                          ${qc.isFunctional === "yes" ? "Yes" : "No"}
                         </span>
                       </div>
                     </div>
-                    ${order.qcData.notes ? `
+                    ${qc.notes ? `
                       <div class="mt-4 pt-4 border-t border-slate-100">
                         <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Inspector Notes</label>
-                        <p class="text-sm text-slate-700 bg-amber-50 p-3 rounded-lg border border-amber-100">${esc(order.qcData.notes)}</p>
+                        <p class="text-sm text-slate-700 bg-amber-50 p-3 rounded-lg border border-amber-100">${esc(qc.notes)}</p>
                       </div>
                     ` : ""}
                   </div>
@@ -2153,10 +2291,32 @@
     // EVENTS
     // ----------------------------
     function bindAppEvents() {
+      const sidebarToggle = document.getElementById("sidebarToggle");
+      if (sidebarToggle) {
+        sidebarToggle.addEventListener("click", () => {
+          state.sidebarOpen = true;
+          render();
+        });
+      }
+      const sidebarOverlay = document.querySelector("[data-sidebar-overlay]");
+      if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", () => {
+          state.sidebarOpen = false;
+          render();
+        });
+      }
+      const sidebarClose = document.querySelector("[data-sidebar-close]");
+      if (sidebarClose) {
+        sidebarClose.addEventListener("click", () => {
+          state.sidebarOpen = false;
+          render();
+        });
+      }
       // Sidebar nav
       document.querySelectorAll("[data-nav]").forEach(btn => {
         btn.addEventListener("click", () => {
           state.activeTab = btn.getAttribute("data-nav");
+          state.sidebarOpen = false;
           render();
         });
       });
@@ -2476,6 +2636,7 @@
         state.qcStep = 1;
         state.qcData = null;
         state.orderTextImportOpen = false;
+        state.sidebarOpen = false;
       }
       // initial filter
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });

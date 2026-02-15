@@ -286,8 +286,77 @@
             padding: 2rem; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             border: 1px solid #e2e8f0;
+            transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), filter 0.45s cubic-bezier(0.4, 0, 0.2, 1);
         }
         .testimonial-avatar { width: 3.5rem; height: 3.5rem; border-radius: 9999px; object-fit: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        /* Testimonials carousel (center card emphasized, sides fogged) */
+        .testimonial-carousel {
+            display: flex;
+            gap: 2rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scroll-snap-type: x mandatory;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+            padding: 0.5rem 0.5rem;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge legacy */
+            overscroll-behavior: contain;
+            touch-action: pan-x;
+        }
+
+        .testimonial-carousel:focus { outline: none; }
+
+        .testimonial-carousel::-webkit-scrollbar { display: none; }
+
+        .testimonial-spacer {
+            flex: 0 0 clamp(0px, calc((100% - 520px) / 2), 40vw);
+        }
+
+        .testimonial-slide {
+            flex: 0 0 85%;
+            max-width: 520px;
+            scroll-snap-align: center;
+            opacity: 0.22;
+            filter: blur(3.5px);
+            transform: scale(0.88);
+            will-change: transform, opacity, filter;
+        }
+
+        @media (min-width: 768px) {
+            .testimonial-slide { flex-basis: 60%; }
+        }
+
+        @media (min-width: 1024px) {
+            .testimonial-slide { flex-basis: 33%; }
+        }
+
+        .testimonial-slide.is-near {
+            opacity: 0.55;
+            filter: blur(1.8px);
+            transform: scale(0.94);
+        }
+
+        .testimonial-slide.is-center {
+            opacity: 1;
+            filter: none;
+            transform: scale(1.06);
+            border-color: rgba(37, 99, 235, 0.35);
+            box-shadow: 0 24px 60px -20px rgba(2, 6, 23, 0.35), 0 0 0 1px rgba(37, 99, 235, 0.10);
+            animation: testimonialCenterPop 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes testimonialCenterPop {
+            0% { transform: scale(0.95); }
+            60% { transform: scale(1.075); }
+            100% { transform: scale(1.06); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .testimonial-carousel { scroll-behavior: auto; }
+            .testimonial-card { transition: none; }
+        }
 
     </style>
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
@@ -494,9 +563,9 @@
                     </div>
                 </div>
 
-                <div id="customerReviewsTrack" class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+                <div id="customerReviewsTrack" class="testimonial-carousel" role="region" aria-label="Customer reviews carousel" tabindex="0">
                     <!-- Javascript populates this, but default structure provided for fallback visuals -->
-                    <article class="testimonial-card">
+                    <article class="testimonial-card testimonial-slide is-center">
                         <div>
                             <div class="flex text-yellow-400 gap-1 mb-4"><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i></div>
                             <p class="text-slate-700 leading-relaxed italic">“SecondHandCell handled my iPhone trade-in in days. The shipping kit arrived quickly, inspection was honest, and the payout hit my account the same afternoon.”</p>
@@ -672,7 +741,7 @@
                         <img src="/assets/sellcell.webp" width="150" height="107" alt="SellCell Accredited Buyer" loading="lazy" class="h-20 w-auto object-contain">
                     </a>
                     <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
-                        <img src="/assets/stars-5.svg" alt="Trustpilot 5 star rating" loading="lazy" class="h-12 w-auto object-contain">
+                        <img src="/assets/stars-4.svg" alt="Trustpilot 5 star rating" loading="lazy" class="h-12 w-auto object-contain">
                     </a>
                 </div>
             </div>
@@ -1139,7 +1208,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Scroll animations
     setupScrollAnimations();
 
-    // Customer Reviews Rotation
+    // Customer Reviews Carousel (center highlight + auto-scroll every 3s)
     const customerReviewsTrack = document.getElementById('customerReviewsTrack');
     if (customerReviewsTrack) {
         const testimonialData = [
@@ -1208,8 +1277,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return stars.join('');
         };
 
-        const renderReviewCard = (testimonial) => `
-            <article class="testimonial-card">
+        const renderReviewCard = (testimonial, index) => `
+            <article class="testimonial-card testimonial-slide" data-review-index="${index}">
                 <div>
                     <div class="flex text-yellow-400 gap-1 mb-4 text-sm">
                         ${createStarMarkup(testimonial.rating)}
@@ -1226,27 +1295,87 @@ document.addEventListener('DOMContentLoaded', function() {
             </article>
         `;
 
-        let carouselIndex = 0;
-        const testimonialsPerSlide = 3;
+        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        const renderTestimonials = () => {
-            const cards = [];
-            for (let offset = 0; offset < testimonialsPerSlide; offset += 1) {
-                const data = testimonialData[(carouselIndex + offset) % testimonialData.length];
-                cards.push(renderReviewCard(data));
+        const cardsMarkup = testimonialData.map((t, index) => renderReviewCard(t, index)).join('');
+        customerReviewsTrack.innerHTML = [
+            '<div class="testimonial-spacer" aria-hidden="true"></div>',
+            cardsMarkup,
+            '<div class="testimonial-spacer" aria-hidden="true"></div>'
+        ].join('');
+
+        const slides = Array.from(customerReviewsTrack.querySelectorAll('.testimonial-slide'));
+        if (!slides.length) return;
+
+        let currentIndex = Math.min(1, slides.length - 1);
+        let scrollRaf = null;
+        let carouselTimer = null;
+        let resumeTimer = null;
+
+        const applySlideClasses = (centerIdx) => {
+            slides.forEach((slide, idx) => {
+                slide.classList.remove('is-center', 'is-near');
+                if (idx === centerIdx) {
+                    slide.classList.add('is-center');
+                } else if (Math.abs(idx - centerIdx) === 1) {
+                    slide.classList.add('is-near');
+                }
+            });
+        };
+
+        const getClosestIndexToCenter = () => {
+            const trackRect = customerReviewsTrack.getBoundingClientRect();
+            const trackCenter = trackRect.left + trackRect.width / 2;
+            let closestIndex = currentIndex;
+            let closestDistance = Number.POSITIVE_INFINITY;
+
+            slides.forEach((slide, idx) => {
+                const rect = slide.getBoundingClientRect();
+                const center = rect.left + rect.width / 2;
+                const distance = Math.abs(center - trackCenter);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = idx;
+                }
+            });
+
+            return closestIndex;
+        };
+
+        const getTargetScrollLeftForIndex = (idx) => {
+            const trackRect = customerReviewsTrack.getBoundingClientRect();
+            const trackCenter = trackRect.width / 2;
+            const slide = slides[idx];
+            const slideCenter = slide.offsetLeft + slide.offsetWidth / 2;
+            const target = slideCenter - trackCenter;
+            const maxLeft = Math.max(0, customerReviewsTrack.scrollWidth - customerReviewsTrack.clientWidth);
+            return Math.max(0, Math.min(maxLeft, target));
+        };
+
+        const scrollToIndex = (idx, behaviorOverride) => {
+            const clamped = ((idx % slides.length) + slides.length) % slides.length;
+            currentIndex = clamped;
+            applySlideClasses(currentIndex);
+
+            const left = getTargetScrollLeftForIndex(currentIndex);
+            customerReviewsTrack.scrollTo({
+                left,
+                behavior: behaviorOverride || (prefersReducedMotion ? 'auto' : 'smooth')
+            });
+        };
+
+        const syncCenterFromScroll = () => {
+            const closest = getClosestIndexToCenter();
+            if (closest !== currentIndex) {
+                currentIndex = closest;
+                applySlideClasses(currentIndex);
             }
-            customerReviewsTrack.innerHTML = cards.join('');
         };
 
-        const advanceCarousel = () => {
-            carouselIndex = (carouselIndex + testimonialsPerSlide) % testimonialData.length;
-            renderTestimonials();
+        const onTrackScroll = () => {
+            if (scrollRaf) window.cancelAnimationFrame(scrollRaf);
+            scrollRaf = window.requestAnimationFrame(syncCenterFromScroll);
         };
-
-        renderTestimonials();
-
-        const intervalDelay = 5000;
-        let carouselTimer = window.setInterval(advanceCarousel, intervalDelay);
 
         const pauseCarousel = () => {
             if (carouselTimer) {
@@ -1256,10 +1385,50 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         const startCarousel = () => {
-            if (!carouselTimer) {
-                carouselTimer = window.setInterval(advanceCarousel, intervalDelay);
-            }
+            if (carouselTimer || slides.length < 2) return;
+            const intervalDelay = 3000;
+            carouselTimer = window.setInterval(() => {
+                if (document.hidden) return;
+                scrollToIndex(currentIndex + 1);
+            }, intervalDelay);
         };
+
+        const pauseTemporarily = (ms = 6500) => {
+            pauseCarousel();
+            if (resumeTimer) window.clearTimeout(resumeTimer);
+            resumeTimer = window.setTimeout(() => {
+                if (!document.hidden) startCarousel();
+            }, ms);
+        };
+
+        const canScrollHorizontally = () => customerReviewsTrack.scrollWidth > customerReviewsTrack.clientWidth + 2;
+
+        const onTrackWheel = (event) => {
+            pauseTemporarily();
+            if (!canScrollHorizontally()) return;
+
+            const { deltaX, deltaY } = event;
+            const isMostlyVertical = Math.abs(deltaY) > Math.abs(deltaX);
+            if (!isMostlyVertical) return;
+
+            // Prevent the page from scrolling vertically while the wheel is over the carousel.
+            event.preventDefault();
+            customerReviewsTrack.scrollLeft += deltaY;
+        };
+
+        customerReviewsTrack.addEventListener('scroll', onTrackScroll, { passive: true });
+        customerReviewsTrack.addEventListener('wheel', onTrackWheel, { passive: false });
+        customerReviewsTrack.addEventListener('touchstart', () => pauseTemporarily(), { passive: true });
+        customerReviewsTrack.addEventListener('pointerdown', () => pauseTemporarily(), { passive: true });
+
+        customerReviewsTrack.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            pauseTemporarily();
+            scrollToIndex(currentIndex + (event.key === 'ArrowRight' ? 1 : -1));
+        });
+
+        window.addEventListener('resize', () => syncCenterFromScroll(), { passive: true });
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
@@ -1268,6 +1437,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 startCarousel();
             }
         });
+
+        // Initialize on the 2nd card so there are neighbors on both sides.
+        applySlideClasses(currentIndex);
+        window.requestAnimationFrame(() => scrollToIndex(currentIndex, 'auto'));
+        startCarousel();
     }
 });
 
