@@ -2447,7 +2447,7 @@
       const content = state.qcStep === 1 ? step1() : state.qcStep === 2 ? step2() : step3();
       return `
         <div class="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" style="z-index:5000;">
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] sm:max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
             <div class="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <div>
                 <h3 class="text-lg font-bold text-slate-900">QC Intake</h3>
@@ -2457,7 +2457,7 @@
                 <i data-lucide="x" style="width:20px;height:20px"></i>
               </button>
             </div>
-            <div class="px-6 py-6">
+            <div class="px-6 py-4 overflow-y-auto flex-1 min-h-0">
               <div class="mb-6">
                 <div class="flex items-center justify-between text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
                   <span>Step ${state.qcStep} of ${steps.length}</span>
@@ -2467,7 +2467,7 @@
                   <div class="h-full bg-indigo-600 transition-all duration-300 ease-out" style="width:${pct}%"></div>
                 </div>
               </div>
-              <h4 class="text-xl font-bold text-slate-900 mb-4">${esc(steps[state.qcStep-1].title)}</h4>
+              <h4 class="text-lg font-bold text-slate-900 mb-3">${esc(steps[state.qcStep-1].title)}</h4>
               ${content}
             </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
@@ -2496,7 +2496,7 @@
       const d = state.reofferData;
       return `
         <div class="fixed inset-0 z-[5100] flex items-center justify-center p-4 bg-slate-900/55 backdrop-blur-sm" style="z-index:99999;">
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden border border-slate-200">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
             <div class="bg-purple-50 px-6 py-4 border-b border-purple-100 flex justify-between items-center">
               <div>
                 <h3 class="text-lg font-bold text-slate-900">Propose Re-offer</h3>
@@ -2504,7 +2504,7 @@
               </div>
               <button id="reofferCloseBtn" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" style="width:20px;height:20px"></i></button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div>
                 <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Updated Price ($)</label>
                 <input id="reofferPrice" type="number" min="0" step="0.01" value="${esc(d.newPrice)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
@@ -2544,7 +2544,7 @@
       if (!state.orderTextImportOpen) return "";
       return `
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-slate-200">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
             <div class="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <div>
                 <h3 class="text-lg font-bold text-slate-900">Paste Order From Text</h3>
@@ -2554,7 +2554,7 @@
                 <i data-lucide="x" style="width:20px;height:20px"></i>
               </button>
             </div>
-            <div class="px-6 py-6 space-y-3">
+            <div class="px-6 py-6 space-y-3 overflow-y-auto flex-1 min-h-0">
               <textarea id="orderTextImportInput" class="w-full h-52 border border-slate-300 rounded-xl p-3 text-sm font-mono"
                 placeholder="Paste the raw order text here…"></textarea>
               <div class="flex justify-end gap-2">
@@ -2590,6 +2590,15 @@
         </div>
       `;
     }
+    function hasBlockingOverlayOpen() {
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen);
+    }
+    function syncBodyScrollLock() {
+      const lock = hasBlockingOverlayOpen();
+      document.documentElement.style.overflow = lock ? "hidden" : "";
+      document.body.style.overflow = lock ? "hidden" : "";
+    }
+
     function render() {
       if (state.authLoading) {
         $root.innerHTML = `
@@ -2597,12 +2606,14 @@
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
         `;
+        syncBodyScrollLock();
         return;
       }
       if (!state.user) {
         $root.innerHTML = renderLogin();
         lucide.createIcons();
         bindLogin();
+        syncBodyScrollLock();
         return;
       }
       $root.innerHTML = renderApp();
@@ -2618,6 +2629,7 @@
         mob.value = desk.value;
       }
       updateSelectAllCheckboxUI();
+      syncBodyScrollLock();
     }
     // ----------------------------
     // EVENTS
