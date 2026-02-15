@@ -2136,7 +2136,7 @@
             </label>
             <div>
               <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Device IMEI (Optional)</label>
-              <input id="qcImei" type="text" value="${esc(state.qcData.imei)}"
+              <input id="qcImei" type="text" value="${esc(state.qcData.imei)}" inputmode="numeric" maxlength="15"
                 class="w-full border border-slate-300 rounded-md text-sm focus:ring-indigo-500 focus:border-indigo-500 font-mono px-3 py-2"
                 placeholder="Enter 15-digit IMEI" />
             </div>
@@ -2575,7 +2575,11 @@
           const bal = document.getElementById("qcHasBalance");
           if (bal) bal.addEventListener("change", () => state.qcData.hasBalance = bal.checked ? "yes" : "no");
           const imei = document.getElementById("qcImei");
-          if (imei) imei.addEventListener("input", () => state.qcData.imei = imei.value);
+          if (imei) imei.addEventListener("input", () => {
+            const digitsOnly = imei.value.replace(/\D/g, "").slice(0, 15);
+            imei.value = digitsOnly;
+            state.qcData.imei = digitsOnly;
+          });
           const notes = document.getElementById("qcNotes");
           if (notes) notes.addEventListener("input", () => state.qcData.notes = notes.value);
         };
