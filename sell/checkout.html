@@ -316,7 +316,7 @@
             </div>
         </div>
 
-        <div class="section-card">
+        <div class="section-card" id="terms-submit-section">
             <label id="terms-container" class="checkbox-container flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" id="terms" class="w-5 h-5 accent-green-700">
                 <span class="text-sm text-slate-600 font-bold">I certify this device is not lost/stolen and I accept the terms & conditions.</span>
@@ -327,7 +327,7 @@
     </div>
 
     <!-- Sidebar Summary -->
-    <aside>
+    <aside id="checkout-summary-aside">
         <div class="summary-card">
             <div class="flex items-center justify-between mb-4 border-b pb-2">
                 <h3 class="text-lg font-bold">Trade-in Summary</h3>
@@ -424,6 +424,23 @@
     let cartItems = [];
     const zipInput = document.getElementById('zip');
     const submitOrderBtn = document.getElementById('submitOrderBtn');
+    const checkoutWrapper = document.querySelector('.checkout-wrapper');
+    const checkoutForm = document.getElementById('checkout-form');
+    const checkoutSummaryAside = document.getElementById('checkout-summary-aside');
+    const termsSubmitSection = document.getElementById('terms-submit-section');
+
+    const placeSummaryByViewport = () => {
+        if (!checkoutWrapper || !checkoutForm || !checkoutSummaryAside || !termsSubmitSection) return;
+        if (window.matchMedia('(max-width: 640px)').matches) {
+            if (checkoutSummaryAside.parentElement !== checkoutForm) {
+                checkoutForm.insertBefore(checkoutSummaryAside, termsSubmitSection);
+            }
+            return;
+        }
+        if (checkoutSummaryAside.parentElement !== checkoutWrapper) {
+            checkoutWrapper.appendChild(checkoutSummaryAside);
+        }
+    };
     const addressVerifyError = document.getElementById('address-verify-error');
     const addressSuggestionModal = document.getElementById('addressSuggestionModal');
     const suggestedAddressText = document.getElementById('suggestedAddressText');
@@ -699,6 +716,7 @@
 
     const init = async () => {
         cartItems = getCart();
+        placeSummaryByViewport();
 
         const b = params.get('brand');
         const m = params.get('model'); 
@@ -1096,6 +1114,7 @@
         }
     });
 
+    window.addEventListener('resize', placeSummaryByViewport);
     init();
 </script>
 
