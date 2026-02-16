@@ -1919,7 +1919,7 @@
       const focused = getFocusedDevice(order);
       const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
       tabs.splice(2, 0, { id: "qc", label: "QC & Intake", icon: "shield-check" });
-      tabs.splice(3, 0, { id: "price-history", label: "Price History", icon: "trending-down" });
+      tabs.splice(3, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
       const visibleEntries = entries;
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
@@ -2152,86 +2152,123 @@
         `;
       }
       function priceHistoryHTML() {
-        const selectedKey = focused.isFocused ? focused.deviceKey : null;
-        const priceHistory = selectedKey ? order?.priceHistoryByDevice?.[selectedKey] : order?.priceHistory;
-        
-        if (!priceHistory) {
+        const totalEntries = visibleEntries.length;
+        const cards = visibleEntries.map((entry) => {
+          const item = entry.item || {};
+          const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+          const perDeviceHistory = order?.priceHistoryByDevice?.[deviceKey];
+          const fallbackSingleHistory = totalEntries === 1 ? order?.priceHistory : null;
+          const history = perDeviceHistory || fallbackSingleHistory || {};
+          const qcData = order?.qcDataByDevice?.[deviceKey] || (totalEntries === 1 ? order?.qcData : null) || {};
+
+          const originalOffer = Number(getPerDeviceOffer(item, order) || 0);
+          const reoffer = Number(getDeviceAcceptedReofferPayout(order, deviceKey, originalOffer) || 0);
+
+          const original = {
+            device: history?.originalDevice?.device || item.device || order.device || 'Not provided',
+            model: history?.originalDevice?.model || item.model || order.model || '',
+            storage: history?.originalDevice?.storage || item.storage || order.storage || '',
+            carrier: history?.originalDevice?.carrier || item.carrier || order.carrier || '',
+            condition: history?.originalDevice?.condition || item.condition || order.condition || '',
+            price: Number(history?.originalDevice?.price ?? originalOffer ?? 0)
+          };
+          const postQc = {
+            device: history?.postQcDevice?.device || qcData.deviceName || original.device,
+            model: history?.postQcDevice?.model || (qcData.deviceMatch === 'no' ? qcData.actualModelId : original.model),
+            storage: history?.postQcDevice?.storage || (qcData.storageMatch === 'no' ? qcData.actualStorage : (qcData.storage || original.storage)),
+            carrier: history?.postQcDevice?.carrier || qcData.carrier || original.carrier,
+            condition: history?.postQcDevice?.condition || qcData.condition || original.condition,
+            price: Number(history?.postQcDevice?.price ?? reoffer ?? original.price ?? 0)
+          };
+
+          const originalPrice = Number(original.price || 0);
+          const postQcPrice = Number(postQc.price || 0);
+          const priceDiff = postQcPrice - originalPrice;
+          const priceDiffPercent = originalPrice > 0 ? ((priceDiff / originalPrice) * 100) : 0;
+          const hasQcInfo = !!(qcData && Object.keys(qcData).length);
+
           return `
             <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <div class="p-4 border-b border-slate-100 bg-slate-50/50">
-                <h3 class="font-semibold text-slate-700 flex items-center gap-2">
-                  <i data-lucide="trending-down" class="text-slate-400" style="width:18px;height:18px"></i>
-                  Price History
-                </h3>
+              <div class="p-3.5 flex items-start gap-3 border-b border-slate-100 bg-slate-50/40">
+                <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
+                  <i data-lucide="smartphone" style="width:24px;height:24px"></i>
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(original.device)}</h4>
+                  <div class="flex flex-wrap gap-1.5 mt-1.5">
+                    ${original.storage ? `<span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(original.storage)}</span>` : ''}
+                    ${original.carrier ? `<span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(formatCarrierLabel(original.carrier))}</span>` : ''}
+                    ${original.condition ? `<span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200 capitalize">${esc(original.condition)}</span>` : ''}
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-[11px] text-slate-500 font-semibold uppercase tracking-wide">Device ${entry.deviceIndex + 1}</div>
+                  <div class="text-xl font-extrabold text-slate-900">$${esc(originalPrice.toFixed(2))}</div>
+                </div>
               </div>
-              <div class="p-6 text-center text-slate-500">
-                <p class="text-sm">No price adjustments have been made to this device yet.</p>
+
+              <div class="p-4 sm:p-5 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Original Offer (Customer Input)</div>
+                    <div class="text-3xl font-bold text-slate-900">$${esc(originalPrice.toFixed(2))}</div>
+                    <div class="mt-3 space-y-1.5 text-sm text-slate-600">
+                      ${original.model ? `<p><span class="font-semibold text-slate-500">Model:</span> ${esc(original.model)}</p>` : ''}
+                      ${original.storage ? `<p><span class="font-semibold text-slate-500">Storage:</span> ${esc(original.storage)}</p>` : ''}
+                      ${original.carrier ? `<p><span class="font-semibold text-slate-500">Carrier:</span> ${esc(formatCarrierLabel(original.carrier))}</p>` : ''}
+                      ${original.condition ? `<p><span class="font-semibold text-slate-500">Condition:</span> ${esc(original.condition)}</p>` : ''}
+                    </div>
+                  </div>
+
+                  <div class="p-4 rounded-xl ${priceDiff < 0 ? 'bg-rose-50 border border-rose-200' : 'bg-emerald-50 border border-emerald-200'}">
+                    <div class="text-xs font-bold ${priceDiff < 0 ? 'text-rose-500' : 'text-emerald-500'} uppercase tracking-wider mb-2">Post-QC Reoffer</div>
+                    <div class="text-3xl font-bold ${priceDiff < 0 ? 'text-rose-900' : 'text-emerald-900'}">$${esc(postQcPrice.toFixed(2))}</div>
+                    <p class="text-xs ${priceDiff < 0 ? 'text-rose-700' : 'text-emerald-700'} mt-2">
+                      ${priceDiff < 0 ? '📉' : '📈'} ${priceDiff < 0 ? '-' : '+'}$${esc(Math.abs(priceDiff).toFixed(2))} (${priceDiffPercent > 0 ? '+' : ''}${esc(priceDiffPercent.toFixed(1))}%)
+                    </p>
+                    <div class="mt-3 space-y-1.5 text-sm ${priceDiff < 0 ? 'text-rose-800' : 'text-emerald-800'}">
+                      ${postQc.model ? `<p><span class="font-semibold">Model:</span> ${esc(postQc.model)}</p>` : ''}
+                      ${postQc.storage ? `<p><span class="font-semibold">Storage:</span> ${esc(postQc.storage)}</p>` : ''}
+                      ${postQc.carrier ? `<p><span class="font-semibold">Carrier:</span> ${esc(formatCarrierLabel(postQc.carrier))}</p>` : ''}
+                      ${postQc.condition ? `<p><span class="font-semibold">Condition:</span> ${esc(postQc.condition)}</p>` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                ${hasQcInfo ? `
+                  <div class="rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-sm text-slate-600">
+                    <span class="font-semibold text-slate-700">QC details:</span>
+                    ${esc([
+                      qcData.deviceMatch === 'no' ? 'Device mismatch' : 'Device matched',
+                      qcData.storageMatch === 'no' ? 'Storage updated in QC' : null,
+                      qcData.isFunctional === 'no' ? 'Non-functional' : 'Functional',
+                      qcData.hasDamage === 'yes' ? 'Damage noted' : null,
+                      qcData.hasCracks === 'yes' ? 'Cracks present' : null,
+                      qcData.isLocked === 'yes' ? 'Locked' : 'Unlocked'
+                    ].filter(Boolean).join(' • '))}
+                  </div>
+                ` : `
+                  <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                    QC inspection data has not been recorded for this device yet.
+                  </div>
+                `}
               </div>
             </div>
           `;
-        }
-        
-        const original = priceHistory.originalDevice || {};
-        const postQc = priceHistory.postQcDevice || {};
-        const originalPrice = Number(original.price || 0);
-        const postQcPrice = Number(postQc.price || 0);
-        const priceDiff = postQcPrice - originalPrice;
-        const priceDiffPercent = originalPrice > 0 ? ((priceDiff / originalPrice) * 100) : 0;
-        
+        }).join('');
+
         return `
           <div class="space-y-6">
             <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
               <div class="p-4 border-b border-slate-100 bg-slate-50/50">
                 <h3 class="font-semibold text-slate-700 flex items-center gap-2">
                   <i data-lucide="trending-down" class="text-slate-400" style="width:18px;height:18px"></i>
-                  Price Comparison
+                  Pricing Activity by Device
                 </h3>
+                <p class="text-sm text-slate-500 mt-1">Shows original customer-submitted details + quote, and the post-QC reoffer details + price for each device in this order.</p>
               </div>
-              <div class="p-6 space-y-4">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
-                    <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Original Offer</div>
-                    <div class="text-3xl font-bold text-slate-900">$${esc(Number(originalPrice).toFixed(2))}</div>
-                    <p class="text-xs text-slate-500 mt-2">Initial quote from customer</p>
-                  </div>
-                  <div class="p-4 rounded-xl ${priceDiff < 0 ? 'bg-rose-50 border border-rose-200' : 'bg-emerald-50 border border-emerald-200'}">
-                    <div class="text-xs font-bold ${priceDiff < 0 ? 'text-rose-400' : 'text-emerald-400'} uppercase tracking-wider mb-2">Post-QC Offer</div>
-                    <div class="text-3xl font-bold ${priceDiff < 0 ? 'text-rose-900' : 'text-emerald-900'}">$${esc(Number(postQcPrice).toFixed(2))}</div>
-                    <p class="text-xs ${priceDiff < 0 ? 'text-rose-600' : 'text-emerald-600'} mt-2">${priceDiff < 0 ? '📉' : '📈'} ${priceDiff < 0 ? '-' : '+'}$${esc(Math.abs(priceDiff).toFixed(2))} (${priceDiffPercent > 0 ? '+' : ''}${esc(priceDiffPercent.toFixed(1))}%)</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <div class="p-4 border-b border-slate-100 bg-slate-50/50">
-                <h3 class="font-semibold text-slate-700 flex items-center gap-2">
-                  <i data-lucide="info" class="text-slate-400" style="width:18px;height:18px"></i>
-                  Device Information
-                </h3>
-              </div>
-              <div class="p-6 space-y-6">
-                <div class="space-y-4">
-                  <h4 class="font-bold text-slate-900 text-sm uppercase tracking-wider">Original Submission</h4>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    ${original.device ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Device</label><p class="mt-1 text-sm font-medium text-slate-900">${esc(original.device)}</p></div>` : ''}
-                    ${original.model ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Model</label><p class="mt-1 text-sm font-medium text-slate-900">${esc(original.model)}</p></div>` : ''}
-                    ${original.storage ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Storage</label><p class="mt-1 text-sm font-medium text-slate-900">${esc(original.storage)}</p></div>` : ''}
-                    ${original.carrier ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Carrier</label><p class="mt-1 text-sm font-medium text-slate-900">${esc(formatCarrierLabel(original.carrier))}</p></div>` : ''}
-                    ${original.condition ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Condition</label><p class="mt-1 text-sm font-medium text-slate-900 capitalize">${esc(original.condition)}</p></div>` : ''}
-                  </div>
-                </div>
-                
-                <div class="border-t border-slate-100 pt-6 space-y-4">
-                  <h4 class="font-bold text-slate-900 text-sm uppercase tracking-wider">Post-QC Inspection</h4>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    ${postQc.device ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Device</label><p class="mt-1 text-sm font-medium text-slate-900">${esc(postQc.device)}</p></div>` : ''}
-                    ${postQc.model ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Model</label><p class="mt-1 text-sm font-medium text-slate-900">${esc(postQc.model)}</p></div>` : ''}
-                    ${postQc.storage ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Storage</label><p class="mt-1 text-sm font-medium text-slate-900">${esc(postQc.storage)}</p></div>` : ''}
-                    ${postQc.carrier ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Carrier</label><p class="mt-1 text-sm font-medium text-slate-900">${esc(formatCarrierLabel(postQc.carrier))}</p></div>` : ''}
-                    ${postQc.condition ? `<div><label class="text-xs font-semibold text-slate-400 uppercase">Condition</label><p class="mt-1 text-sm font-medium text-slate-900 capitalize">${esc(postQc.condition)}</p></div>` : ''}
-                  </div>
-                </div>
+              <div class="p-4 sm:p-6 space-y-4">
+                ${cards || `<p class="text-sm text-slate-500">No device pricing data available.</p>`}
               </div>
             </div>
           </div>
