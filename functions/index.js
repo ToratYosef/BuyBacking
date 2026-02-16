@@ -6088,7 +6088,7 @@ exports.notifyWholesaleOfferUpdated = functions.firestore
           label: "Proceed to checkout",
           url: `https://secondhandcell.com/buy/checkout.html?offer=${encodeURIComponent(offerId)}`,
         },
-        footer: "Payment is due within 24 hours to keep inventory reserved.",
+        footer: "Payment is due within 48 hours to keep inventory reserved.",
       });
       const text = `Offer ${offerId} has been accepted. Complete checkout at https://secondhandcell.com/buy/checkout.html?offer=${offerId}`;
       notifications.push(
