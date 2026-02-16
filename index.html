@@ -284,7 +284,6 @@
             padding: 0.5rem 0.5rem;
             scrollbar-width: none; /* Firefox */
             -ms-overflow-style: none; /* IE/Edge legacy */
-            overscroll-behavior: contain;
             touch-action: pan-x;
         }
         .testimonial-carousel.is-locked-user-scroll {
@@ -1426,6 +1425,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
         customerReviewsTrack.addEventListener('scroll', onTrackScroll, { passive: true });
         customerReviewsTrack.removeEventListener('wheel', onTrackWheel);
+
+        // Allow page scrolling while hovering over reviews - don't capture wheel events
+        customerReviewsTrack.addEventListener('wheel', (event) => {
+            const { deltaX, deltaY } = event;
+            // Only prevent default for horizontal scrolling, allow vertical to pass through
+            if (Math.abs(deltaY) > Math.abs(deltaX)) {
+                // Vertical scroll - don't prevent, let it scroll the page
+                return;
+            }
+            // Horizontal scroll - allow carousel to handle it
+        }, { passive: false });
 
         customerReviewsTrack.addEventListener('keydown', (event) => {
             if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
