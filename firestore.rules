@@ -1,11 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Anyone can read all documents.
-    match /{document=**} {
-      allow read: if true;
-      // Only signed-in users can write to all other collections.
-      allow write: if request.auth != null;
+    // Public newsletter signups (guest users allowed).
+    match /signed_up_emails/{docId} {
+      allow create: if request.resource.data.keys().hasOnly(['email', 'timestamp'])
+        && request.resource.data.email is string
+        && request.resource.data.email.matches('^[^@\s]+@[^@\s]+\.[^@\s]+$');
+      allow read, update, delete: if request.auth != null;
     }
 
     // This allows anyone to read and write chat messages.
@@ -18,14 +19,16 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // 💡 Add this new rule to allow anyone to write to device_clicks.
+    // Device click tracking can be written by anyone.
     match /device_clicks/{document=**} {
       allow write: if true;
+      allow read: if request.auth != null;
     }
-    
-    // 💡 Add this new rule to allow anyone to write to device_clicks.
-    match /device_clicks/{document=**} {
-      allow write: if true;
+
+    // Default policy for all other collections.
+    match /{document=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 }
