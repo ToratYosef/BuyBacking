@@ -1010,7 +1010,7 @@ const storageKey = this.storage;
 
 let conditionKey;
 if (this.conditions.power === 'no') {
-conditionKey = 'noPower';
+conditionKey = 'broken';
 } else if (this.conditions.functionality === 'not-working') {
 conditionKey = 'broken';
 } else if (this.conditions.quality === 'flawless') {

@@ -683,7 +683,7 @@ conditionDescription = 'Functional: Non-Functional/Defective';
 iconClass = 'fa-tools text-orange-400';
 }
 } else {
-calculatedPrice = basePrices.noPower || 0;
+calculatedPrice = basePrices.broken || 0;
 conditionDescription = 'Functional: Does Not Power On';
 iconClass = 'fa-power-off text-red-400';
 }

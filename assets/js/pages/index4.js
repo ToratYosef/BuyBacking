@@ -1193,9 +1193,7 @@ const storageKey = this.storage;
 const basePrices = resolveCarrierPricing(this.deviceData.prices?.[storageKey] || {}, this.carrier);
 
         let conditionKey = 'good';
-        if (this.conditions.power === 'no') {
-            conditionKey = 'noPower';
-        } else if (this.conditions.functionality === 'not-working') {
+        if (this.conditions.power === 'no' || this.conditions.functionality === 'not-working') {
             conditionKey = 'broken';
         } else {
             switch (this.conditions.quality) {

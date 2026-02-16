@@ -12,7 +12,7 @@ const db = getFirestore(app);
 let allDevices = [];
 let filteredDevices = [];
 const supportedBrands = ['iphone', 'samsung', 'ipad', 'macbook', 'other'];
-const conditions = ['flawless', 'good', 'fair', 'broken', 'noPower'];
+const conditions = ['flawless', 'good', 'fair', 'broken'];
 const exportConditions = ['flawless', 'good', 'fair', 'broken'];
 const primaryCarriers = ['att', 'verizon', 'tmobile', 'unlocked'];
 const connectivityMetadata = {
@@ -61,7 +61,6 @@ flawless: 'Flawless',
 good: 'Good',
 fair: 'Fair',
 broken: 'Broken',
-noPower: 'No Power',
 damaged: 'Damaged'
 };
 const usdFormatter = new Intl.NumberFormat('en-US', {
@@ -1487,8 +1486,7 @@ const conditionMap = {
 'Good': 'good',
 'Fair': 'fair',
 'Damaged': 'broken',
-'Broken': 'broken',
-'No Power': 'noPower'
+'Broken': 'broken'
 };
 const conditionHeaders = Object.keys(conditionMap);
 
