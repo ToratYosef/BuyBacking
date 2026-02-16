@@ -11,7 +11,7 @@ const db = getFirestore(app);
 // Global state
 let allDevices = [];
 let filteredDevices = [];
-const supportedBrands = ['iphone', 'samsung', 'google_pixel', 'ipad', 'macbook', 'other'];
+const supportedBrands = ['iphone', 'samsung', 'ipad', 'macbook', 'other'];
 const conditions = ['flawless', 'good', 'fair', 'broken', 'noPower'];
 const exportConditions = ['flawless', 'good', 'fair', 'broken'];
 const primaryCarriers = ['att', 'verizon', 'tmobile', 'unlocked'];
