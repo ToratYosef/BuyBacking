@@ -647,8 +647,8 @@
       if (qcData.hasDamage === 'yes') reasons.push('Physical damage beyond normal wear was found in inspection.');
       if (qcData.hasCracks === 'yes') reasons.push('Cracked glass/back lowers the device value.');
       if (qcData.isFunctional === 'no') reasons.push('Device is not fully functional during testing.');
-      if (qcData.isLocked === 'yes') reasons.push('Activation/carrier lock is still active.');
-      if (qcData.hasFmi === 'yes') reasons.push('Find My iPhone (FMI) is still active.');
+      if (qcData.isLocked === 'yes') reasons.push('Screen lock / passcode is still active.');
+      if (qcData.hasFmi === 'yes') reasons.push('FMI / iCloud / FRP / Google lock is still active.');
       if (qcData.hasBalance === 'yes') reasons.push('Outstanding carrier/financing balance is present.');
       if (Number.isFinite(computedPrice)) reasons.push('Updated offer uses current live pricing based on verified condition, carrier, and storage.');
       if (qcData.notes) reasons.push(`Inspector notes: ${qcData.notes}`);
@@ -2250,7 +2250,7 @@
                       qcData.isFunctional === 'no' ? 'Non-functional' : 'Functional',
                       qcData.hasDamage === 'yes' ? 'Damage noted' : null,
                       qcData.hasCracks === 'yes' ? 'Cracks present' : null,
-                      qcData.isLocked === 'yes' ? 'Locked' : 'Unlocked'
+                      qcData.isLocked === 'yes' ? 'Screen locked' : 'No screen lock'
                     ].filter(Boolean).join(' • '))}
                   </div>
                 ` : `
@@ -2547,7 +2547,7 @@
               ` : ""}
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Carrier / lock status</label>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Carrier status</label>
               <select id="qcCarrier" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
                 ${["unlocked","att","tmobile","verizon","other"].map(v => `<option value="${v}" ${state.qcData.carrier === v ? "selected" : ""}>${v === "unlocked" ? "Unlocked" : v === "att" ? "AT&T" : v === "tmobile" ? "T-Mobile" : v === "verizon" ? "Verizon" : "Other"}</option>`).join("")}
               </select>
@@ -2604,14 +2604,14 @@
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
                 <i data-lucide="shield-check" class="${locked ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
-                <span class="text-sm font-medium text-slate-900">iCloud / Google / carrier lock active?</span>
+                <span class="text-sm font-medium text-slate-900">Screen lock / passcode active?</span>
               </div>
               <input id="qcIsLocked" type="checkbox" ${locked ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
             </label>
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
                 <i data-lucide="key-round" class="${fmi ? "text-amber-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
-                <span class="text-sm font-medium text-slate-900">FMI / Find My iPhone active?</span>
+                <span class="text-sm font-medium text-slate-900">FMI / iCloud / FRP / Google lock active?</span>
               </div>
               <input id="qcHasFmi" type="checkbox" ${fmi ? "checked" : ""} class="h-5 w-5 accent-amber-500" />
             </label>
