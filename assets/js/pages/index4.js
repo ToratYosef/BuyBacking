@@ -202,7 +202,7 @@ const testimonialData = [
         name: 'Lisa Thompson',
         role: 'Teacher • Chicago, IL',
         rating: 5,
-        review: 'As a teacher with zero free time, I loved how transparent the process was. I chose an email label, shipped the same day, and had my Zelle transfer within 24 hours.',
+        review: 'As a teacher with zero free time, I loved how transparent the process was. I chose an email label, shipped the same day, and had my Zelle transfer within 48 hours.',
         avatar: 'https://thispersondoesnotexist.com/?id=shc3'
     },
     {

@@ -26,7 +26,7 @@ let isAuthReady = false;
 let finalQuote = 0.00; // Final calculated price
 let currentUserId = null; // New: to store user ID
 let pendingShippingUnlock = false;
-const SHIPPING_KIT_FEE = 10;
+const SHIPPING_KIT_FEE = 25;
 
 function formatCurrency(amount) {
     const numeric = Number(amount) || 0;

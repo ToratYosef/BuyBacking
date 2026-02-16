@@ -822,7 +822,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: 'Emily Thompson',
                 role: 'Teacher • Chicago, IL',
                 rating: 4.5,
-                review: 'As a teacher with zero free time, I loved how transparent the process was. I chose an email label, shipped the same day, and had my Zelle transfer within 24 hours.',
+                review: 'As a teacher with zero free time, I loved how transparent the process was. I chose an email label, shipped the same day, and had my Zelle transfer within 48 hours.',
                 avatar: '/assets/faces/7.webp'
             },
             {
