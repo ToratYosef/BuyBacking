@@ -1797,13 +1797,12 @@
                 }"
                 ${!(state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress) ? "disabled" : ""}>
                 <i data-lucide="${state.isBulkSlipPrintInProgress ? "loader" : "printer"}" class="${state.isBulkSlipPrintInProgress ? "animate-spin" : ""}" style="width:16px;height:16px"></i>
-                ${state.isBulkSlipPrintInProgress ? "Preparing PDF…" : "Bulk Print Slips"}
+                ${state.isBulkSlipPrintInProgress ? "Preparing Merged PDF…" : "Bulk Print Slips"}
               </button>
             </div>
           </div>
-          <div class="mt-3 text-xs text-slate-500 flex items-center justify-between">
+          <div class="mt-3 text-xs text-slate-500">
             <div>Selected orders: <span class="font-semibold text-slate-700">${state.selectedOrderIds.size}</span></div>
-            ${IS_AGING_PAGE ? `<div class="text-amber-700 font-semibold">Aging mode ON (min age: ${Math.round(MIN_AGING_MS / (1000*60*60*24))}d)</div>` : `<div></div>`}
           </div>
         </div>
       `;
@@ -2107,12 +2106,12 @@
       const tabs = [
         { id: "overview", label: "Overview", icon: "layout-dashboard" },
         { id: "shipping", label: "Shipping & Tracking", icon: "truck" },
+        { id: "price-history", label: "Pricing Activity", icon: "trending-down" },
         { id: "logs", label: "Activity Logs", icon: "file-text" },
       ];
       const entries = getOrderDeviceEntries(order);
       const focused = getFocusedDevice(order);
       const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
-      tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
       const visibleEntries = entries;
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
@@ -2130,13 +2129,18 @@
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const showAcceptedOfferSwap = isAcceptedReofferStatus(deviceStatus) && Number.isFinite(acceptedDeviceOffer);
           return `
-            <button type="button" data-open-qc-device="${esc(deviceKey)}" class="w-full p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors text-left">
+            <button type="button" data-open-qc-device="${esc(deviceKey)}" class="w-full p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors text-left border-l-4 ${getStatusClass(deviceStatus).split('bg-')[1] ? 'border-' + getStatusClass(deviceStatus).split('bg-')[1].split(' ')[0].replace('100', '400') : 'border-slate-200'}">
               <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
                 <i data-lucide="smartphone" style="width:24px;height:24px"></i>
               </div>
               <div class="flex-1">
-                <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(item.device || order.device || "")}</h4>
-                <div class="flex flex-wrap gap-1.5 mt-1.5">
+                <div class="flex items-center gap-2 mb-1">
+                  <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(item.device || order.device || "")}</h4>
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusClass(deviceStatus)}">
+                    ${esc(formatStatusLabel(deviceStatus))}
+                  </span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(item.storage || order.storage || "")}</span>
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(formatCarrierLabel(item.carrier || order.carrier || ""))}</span>
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200 capitalize">${esc(item.condition || order.condition || "")}</span>
@@ -2511,14 +2515,14 @@
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
         }
         else if (["received", "imei_checked"].includes(status)) {
-            groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
-            // Only show Mark Completed after QC is complete
+            // QC is now handled per-device from overview section
+            // Only show Mark Completed after all devices are QC'd
             if (hasQc) {
               groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
             }
         }
         else if (status === "emailed" || status === "issue_resolved") {
-            groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
+            // QC is now handled per-device from overview section
             groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
             groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
         }
@@ -3465,19 +3469,7 @@
             }
           });
         }
-        // Open QC
-        const openQcBtn = document.getElementById("openQcBtn");
-        if (openQcBtn) {
-          openQcBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            state.qcDeviceKey = state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
-            state.qcOpen = true;
-            state.modalScrollTop.qc = 0;
-            state.qcStep = 1;
-            state.qcData = null;
-            render();
-          });
-        }
+        // QC is now opened per-device from overview section clicks
       }
       // QC modal bindings
       if (state.qcOpen && order) {
