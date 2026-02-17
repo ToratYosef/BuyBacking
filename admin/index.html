@@ -3035,7 +3035,7 @@
       const deviceCapacity = item.capacity || item.storage || '';
       const deviceCondition = qcData.condition || item.condition || '';
       
-      return \`
+      return `
         <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" style="z-index: 999999;">
           <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 animate-in">
             <div class="px-6 py-5 border-b border-slate-100">
@@ -3045,8 +3045,8 @@
               <div class="mb-4">
                 <p class="text-sm font-semibold text-slate-700 mb-2">Device Information:</p>
                 <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                  <p class="text-sm text-slate-900 font-medium">\${esc(deviceName)} \${deviceCapacity ? esc(deviceCapacity) : ''}</p>
-                  <p class="text-xs text-slate-600 mt-1">Condition: \${esc(deviceCondition)}</p>
+                  <p class="text-sm text-slate-900 font-medium">${esc(deviceName)} ${deviceCapacity ? esc(deviceCapacity) : ''}</p>
+                  <p class="text-xs text-slate-600 mt-1">Condition: ${esc(deviceCondition)}</p>
                   <p class="text-xs text-slate-600">Device ${deviceIndex + 1} of ${entries.length}</p>
                 </div>
               </div>
@@ -3069,7 +3069,7 @@
             </div>
           </div>
         </div>
-      \`;
+      `;
     }
     
     // ----------------------------
@@ -3094,11 +3094,12 @@
           ${getSelectedOrder() ? renderReofferModal(getSelectedOrder()) : ""}
           ${renderOrderTextImportModal()}
           ${renderConfirmModal()}
+          ${renderPaymentConfirmModal()}
         </div>
       `;
     }
     function hasBlockingOverlayOpen() {
-      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen || state.confirmModalOpen);
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen || state.confirmModalOpen || state.paymentConfirmModalOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
@@ -3672,6 +3673,49 @@
         };
         if (confirmBtn) confirmBtn.addEventListener("click", () => closeModal(true));
         if (cancelBtn) cancelBtn.addEventListener("click", () => closeModal(false));
+      }
+      
+      // Payment Confirmation Modal Listeners
+      if (state.paymentConfirmModalOpen) {
+        const paymentCancelBtn = document.getElementById("paymentConfirmCancelBtn");
+        const paymentYesBtn = document.getElementById("paymentConfirmYesBtn");
+        const paymentInfo = document.getElementById("paymentInfoSection");
+        const payoutAmountEl = document.getElementById("payoutAmount");
+        
+        if (paymentCancelBtn) {
+          paymentCancelBtn.addEventListener("click", () => {
+            state.paymentConfirmModalOpen = false;
+            state.paymentConfirmDeviceKey = null;
+            render();
+          });
+        }
+        
+        if (paymentYesBtn && paymentInfo && payoutAmountEl) {
+          paymentYesBtn.addEventListener("click", async () => {
+            const order = getSelectedOrder();
+            if (!order) return;
+            
+            const deviceKey = state.paymentConfirmDeviceKey;
+            const qcData = order.qcDataByDevice?.[deviceKey];
+            
+            // Calculate payout
+            const computedPrice = await getQcOfferFromDb(order, qcData);
+            const fallbackPrice = getOrderPayoutTotal(order);
+            const finalPrice = Number.isFinite(computedPrice) ? computedPrice : fallbackPrice;
+            
+            // Show payment info
+            payoutAmountEl.textContent = `$${Number(finalPrice || 0).toFixed(2)}`;
+            paymentInfo.style.display = 'block';
+            
+            // Change button text
+            paymentYesBtn.textContent = 'Close';
+            paymentYesBtn.onclick = () => {
+              state.paymentConfirmModalOpen = false;
+              state.paymentConfirmDeviceKey = null;
+              render();
+            };
+          });
+        }
       }
     }
     // ----------------------------
