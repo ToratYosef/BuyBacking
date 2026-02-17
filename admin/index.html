@@ -680,6 +680,32 @@
       state.reofferOpen = true;
     }
 
+    function showConfirmation(title, message, onConfirm, options = {}) {
+      state.confirmationModal = {
+        isOpen: true,
+        title: title,
+        message: message,
+        confirmText: options.confirmText || 'Confirm',
+        cancelText: options.cancelText || 'Cancel',
+        onConfirm: onConfirm,
+        isDangerous: options.isDangerous || false
+      };
+      render();
+    }
+
+    function closeConfirmation() {
+      state.confirmationModal = {
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmText: 'Confirm',
+        cancelText: 'Cancel',
+        onConfirm: null,
+        isDangerous: false
+      };
+      render();
+    }
+
     function getFocusedDevice(order) {
       const entries = getOrderDeviceEntries(order);
       const fallbackEntry = entries[0] || { deviceIndex: 0, item: order, qtyIndex: 0 };
@@ -3058,27 +3084,74 @@
             e.stopPropagation();
             const action = btn.getAttribute("data-action");
             if (action === "cancelOrder") {
-              await handleCancelOrder(order);
+              showConfirmation(
+                'Cancel Order',
+                'Are you sure you want to cancel this order? This action cannot be undone.',
+                async () => {
+                  closeConfirmation();
+                  await handleCancelOrder(order);
+                },
+                { confirmText: 'Cancel Order', isDangerous: true }
+              );
               return;
             }
             if (action === "deleteOrder") {
-              const ok = confirm("Delete this order? This cannot be undone.");
-              if (!ok) return;
-              await handleAction(order.id, "deleteOrder");
-              state.selectedOrderId = null;
-              state.selectedOrderSnapshot = null;
-              render();
+              showConfirmation(
+                'Delete Order',
+                'Are you sure you want to delete this order? This action cannot be undone.',
+                async () => {
+                  closeConfirmation();
+                  await handleAction(order.id, "deleteOrder");
+                  state.selectedOrderId = null;
+                  state.selectedOrderSnapshot = null;
+                  render();
+                },
+                { confirmText: 'Delete', isDangerous: true }
+              );
               return;
             }
             if (action === "reOffer") {
-              await openReofferModal(order, state.qcData);
-              render();
+              showConfirmation(
+                'Propose Re-offer',
+                'Are you sure you want to propose a re-offer to the customer?',
+                async () => {
+                  closeConfirmation();
+                  await openReofferModal(order, state.qcData);
+                  render();
+                },
+                { confirmText: 'Continue', isDangerous: false }
+              );
+              return;
+            }
+            if (action === "autoRequote") {
+              showConfirmation(
+                'Finalize 75% Reduced Payout',
+                'Are you sure you want to finalize this order at 75% payout? This will complete the order.',
+                async () => {
+                  closeConfirmation();
+                  await handleAction(order.id, action);
+                },
+                { confirmText: 'Finalize', isDangerous: false }
+              );
               return;
             }
             if (state.selectedDeviceKey && (action === "markReceived" || action === "markCompleted")) {
               const nextDeviceStatus = action === "markCompleted" ? "completed" : "received";
-              await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
-              toast(`Device status updated to ${formatStatusLabel(nextDeviceStatus)}`, "success");
+              if (action === "markCompleted") {
+                showConfirmation(
+                  'Mark as Completed',
+                  'Are you sure you want to mark this order as completed? This indicates the order is fully processed.',
+                  async () => {
+                    closeConfirmation();
+                    await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
+                    toast(`Device status updated to ${formatStatusLabel(nextDeviceStatus)}`, "success");
+                  },
+                  { confirmText: 'Mark Completed', isDangerous: false }
+                );
+              } else {
+                await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
+                toast(`Device status updated to ${formatStatusLabel(nextDeviceStatus)}`, "success");
+              }
               return;
             }
             await handleAction(order.id, action);
@@ -3236,20 +3309,29 @@
           const comments = (document.getElementById("reofferComments")?.value || "").trim();
           const carrier = (document.getElementById("reofferCarrier")?.value || "").trim();
           const condition = (document.getElementById("reofferCondition")?.value || "").trim();
-          await handleAction(order.id, "reOffer", {
-            body: {
-              newPrice: price,
-              reasons: reasons ? reasons.split(/\n+/).map(x => x.trim()).filter(Boolean) : [],
-              comments,
-              carrier,
-              condition,
-              deviceKey: state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null
-            }
-          });
-          state.reofferOpen = false;
-          state.reofferData = null;
-          state.modalScrollTop.reoffer = 0;
-          render();
+          
+          showConfirmation(
+            'Send Re-offer',
+            'Are you sure you want to send this re-offer to the customer? They will be notified via email.',
+            async () => {
+              closeConfirmation();
+              await handleAction(order.id, "reOffer", {
+                body: {
+                  newPrice: price,
+                  reasons: reasons ? reasons.split(/\n+/).map(x => x.trim()).filter(Boolean) : [],
+                  comments,
+                  carrier,
+                  condition,
+                  deviceKey: state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null
+                }
+              });
+              state.reofferOpen = false;
+              state.reofferData = null;
+              state.modalScrollTop.reoffer = 0;
+              render();
+            },
+            { confirmText: 'Send Re-offer', isDangerous: false }
+          );
         });
       }
       // Order text import modal controls
@@ -3265,6 +3347,23 @@
           toast("Submit handler placeholder (drop in parser + API call)", "info");
           closeAll();
         });
+      }
+      // Confirmation modal handlers
+      if (state.confirmationModal.isOpen) {
+        const confirmBtn = document.getElementById("confirmModalConfirmBtn");
+        const cancelBtn = document.getElementById("confirmModalCancelBtn");
+        if (confirmBtn) {
+          confirmBtn.addEventListener("click", async () => {
+            if (state.confirmationModal.onConfirm) {
+              await state.confirmationModal.onConfirm();
+            }
+          });
+        }
+        if (cancelBtn) {
+          cancelBtn.addEventListener("click", () => {
+            closeConfirmation();
+          });
+        }
       }
     }
     // ----------------------------
