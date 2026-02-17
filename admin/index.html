@@ -527,6 +527,7 @@
       modalScrollTop: { qc: 0, reoffer: 0, import: 0 },
       // bulk states
       isBulkSlipPrintInProgress: false,
+      bulkTrackingRefreshInProgress: false,
       lastRefreshAt: null,
       lastTrackingRefreshMeta: null,
       trackingReportModalOpen: false,
@@ -829,6 +830,9 @@
         });
         ordersData.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
         state.allOrders = ordersData;
+        if (state.bulkTrackingRefreshInProgress) {
+          return;
+        }
         // Keep drawer open until admin explicitly closes it.
         // If a selected order is temporarily missing from the live snapshot,
         // render falls back to the last selectedOrderSnapshot.
@@ -1228,80 +1232,86 @@
       if (!ok) return;
 
       const originalText = buttonEl?.textContent;
+      state.bulkTrackingRefreshInProgress = true;
       if (buttonEl) {
         buttonEl.disabled = true;
         buttonEl.textContent = `Refreshing 0/${candidates.length}…`;
       }
+      try {
+        const queue = candidates.slice();
+        let success = 0;
+        let failed = 0;
+        let done = 0;
+        let statusChanged = 0;
+        const samples = { failed: [] };
+        const latestStatusByOrderId = new Map(candidates.map((o) => [o.id, normalizeStatusKey(o?.status)]));
 
-      const queue = candidates.slice();
-      let success = 0;
-      let failed = 0;
-      let done = 0;
-      let statusChanged = 0;
-      const samples = { failed: [] };
-      const latestStatusByOrderId = new Map(candidates.map((o) => [o.id, normalizeStatusKey(o?.status)]));
+        const updateProgressText = () => {
+          const liveBtn = document.getElementById("refresh-label-phone-tracking") || buttonEl;
+          if (liveBtn) {
+            liveBtn.disabled = true;
+            liveBtn.textContent = `Refreshing ${done}/${candidates.length}…`;
+          }
+        };
 
-      const updateProgressText = () => {
-        if (buttonEl) {
-          buttonEl.textContent = `Refreshing ${done}/${candidates.length}…`;
-        }
-      };
-
-      async function worker() {
-        while (queue.length) {
-          const order = queue.shift();
-          if (!order) return;
-          try {
-            const refreshType = matchesKitTrackingHints(order) ? "kit" : "email";
-            const res = await apiPost(`/refresh-tracking`, { orderId: order.id, type: refreshType });
-            const previousStatus = normalizeStatusKey(order?.status);
-            const nextStatus = normalizeStatusKey(res?.order?.status || order?.status);
-            latestStatusByOrderId.set(order.id, nextStatus);
-            if (nextStatus && previousStatus && nextStatus !== previousStatus) {
-              statusChanged++;
+        async function worker() {
+          while (queue.length) {
+            const order = queue.shift();
+            if (!order) return;
+            try {
+              const refreshType = matchesKitTrackingHints(order) ? "kit" : "email";
+              const res = await apiPost(`/refresh-tracking`, { orderId: order.id, type: refreshType });
+              const previousStatus = normalizeStatusKey(order?.status);
+              const nextStatus = normalizeStatusKey(res?.order?.status || order?.status);
+              latestStatusByOrderId.set(order.id, nextStatus);
+              if (nextStatus && previousStatus && nextStatus !== previousStatus) {
+                statusChanged++;
+              }
+              success++;
+            } catch (e) {
+              failed++;
+              if (samples.failed.length < 5) samples.failed.push(`#${order.id}: ${e?.message || "failed"}`);
+            } finally {
+              done++;
+              updateProgressText();
             }
-            success++;
-          } catch (e) {
-            failed++;
-            if (samples.failed.length < 5) samples.failed.push(`#${order.id}: ${e?.message || "failed"}`);
-          } finally {
-            done++;
-            updateProgressText();
           }
         }
+
+        const workers = Array.from({ length: Math.min(MAX_CONCURRENT_TRACKING_REQUESTS, candidates.length) }, () => worker());
+        await Promise.all(workers);
+
+        state.lastTrackingRefreshMeta = { at: new Date(), source: "admin_manual" };
+
+        const nowCounts = {
+          label_generated: 0,
+          phone_on_the_way: 0,
+          delivered_to_us: 0,
+        };
+        for (const value of latestStatusByOrderId.values()) {
+          if (value === "label_generated") nowCounts.label_generated++;
+          if (value === "phone_on_the_way") nowCounts.phone_on_the_way++;
+          if (value === "delivered_to_us") nowCounts.delivered_to_us++;
+        }
+
+        state.trackingReportData = {
+          processed: candidates.length,
+          refreshed: success,
+          statusChanged,
+          failed,
+          statusCounts: nowCounts,
+          completedAtLabel: `Completed ${formatTimeOnly(new Date())} (admin manual)`,
+        };
+        state.trackingReportModalOpen = true;
+      } finally {
+        state.bulkTrackingRefreshInProgress = false;
+        const liveBtn = document.getElementById("refresh-label-phone-tracking") || buttonEl;
+        if (liveBtn) {
+          liveBtn.disabled = false;
+          liveBtn.textContent = originalText || "Refresh";
+        }
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
-
-      const workers = Array.from({ length: Math.min(MAX_CONCURRENT_TRACKING_REQUESTS, candidates.length) }, () => worker());
-      await Promise.all(workers);
-
-      state.lastTrackingRefreshMeta = { at: new Date(), source: "admin_manual" };
-
-      const nowCounts = {
-        label_generated: 0,
-        phone_on_the_way: 0,
-        delivered_to_us: 0,
-      };
-      for (const value of latestStatusByOrderId.values()) {
-        if (value === "label_generated") nowCounts.label_generated++;
-        if (value === "phone_on_the_way") nowCounts.phone_on_the_way++;
-        if (value === "delivered_to_us") nowCounts.delivered_to_us++;
-      }
-
-      state.trackingReportData = {
-        processed: candidates.length,
-        refreshed: success,
-        statusChanged,
-        failed,
-        statusCounts: nowCounts,
-        completedAtLabel: `Completed ${formatTimeOnly(new Date())} (admin manual)`,
-      };
-      state.trackingReportModalOpen = true;
-
-      if (buttonEl) {
-        buttonEl.disabled = false;
-        buttonEl.textContent = originalText || "Refresh";
-      }
-      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
     }
     // ----------------------------
     // SPEC: VOID LABELS + CANCEL FLOW (best-effort implementation)
