@@ -140,6 +140,7 @@
       "delivered_to_us",
       "label_generated",
       "emailed",
+      "issue_resolved",
       "phone_on_the_way",
       "received",
       "completed",
@@ -177,6 +178,7 @@
       if (s.includes("pending") || s.includes("needs_printing") || s.includes("kit_needs_printing")) return "bg-amber-100 text-amber-800 border-amber-200";
       if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-100 text-blue-800 border-blue-200";
       if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-100 text-indigo-800 border-indigo-200";
+      if (s.includes("issue_resolved")) return "bg-teal-100 text-teal-800 border-teal-200";
       if (s.includes("pay_now") || s.includes("pay now")) return "bg-amber-100 text-amber-800 border-amber-200";
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-100 text-emerald-800 border-emerald-200";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-100 text-purple-800 border-purple-200";
@@ -190,6 +192,7 @@
       if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-500";
       if (s.includes("pay_now") || s.includes("pay now")) return "bg-amber-400";
       if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-500";
+      if (s.includes("issue_resolved")) return "bg-teal-500";
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-500";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-500";
       return "bg-slate-300";
@@ -1421,7 +1424,7 @@
             body = options?.body ?? {}; // { reason, notes?, label? }
             break;
           // re-offer (exact)
-          case "reOffer":
+          case "reOffer_disabled_legacy":
             endpoint = `/orders/${orderId}/re-offer`;
             method = "POST";
             body = options?.body ?? {}; // { newPrice, reasons, comments }
@@ -1765,6 +1768,12 @@
           count: isActive ? "bg-white/15 text-white" : "bg-indigo-100 text-indigo-700"
         };
       }
+      if (s === "issue_resolved") {
+        return {
+          pill: isActive ? "bg-teal-500 text-white shadow-md" : "bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-teal-100 text-teal-700"
+        };
+      }
       if (s === "pay_now") {
         return {
           pill: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100",
@@ -1790,6 +1799,7 @@
         { key: "kit_needs_printing", label: "Kit Needs Printing", count: visible.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
         { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
         { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
+        { key: "issue_resolved", label: "Issue Resolved", count: statusCounts.get("issue_resolved") || 0 },
         { key: "received", label: "Received", count: visible.filter(o => isReceivedStatusValue(o?.status)).length },
         { key: "pay_now", label: "Pay Now", count: statusCounts.get("pay_now") || 0 },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
@@ -2558,11 +2568,9 @@
             if (hasQc) {
               groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
             }
-            groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
         }
-        else if (status === "emailed") {
+        else if (status === "emailed" || status === "issue_resolved") {
             groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
-            groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
             groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
             groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
         }
