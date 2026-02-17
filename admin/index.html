@@ -2161,35 +2161,52 @@
               </span>`;
           
           return `
-            <button type="button" data-open-qc-device="${esc(deviceKey)}" class="w-full p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors text-left">
-              <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
-                <i data-lucide="smartphone" style="width:24px;height:24px"></i>
-              </div>
-              <div class="flex-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(item.device || order.device || "")}</h4>
-                  ${awaitingResponseBadgeForDevice(deviceStatus)}
+            <div class="flex items-start gap-2 hover:bg-slate-50 transition-colors p-3.5 group relative">
+              <button type="button" data-open-qc-device="${esc(deviceKey)}" class="flex-1 flex items-start gap-3 text-left">
+                <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
+                  <i data-lucide="smartphone" style="width:24px;height:24px"></i>
                 </div>
-                <div class="flex flex-wrap gap-1.5 mt-1.5">
-                  <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(item.storage || order.storage || "")}</span>
-                  <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(formatCarrierLabel(item.carrier || order.carrier || ""))}</span>
-                  <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200 capitalize">${esc(item.condition || order.condition || "")}</span>
+                <div class="flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(item.device || order.device || "")}</h4>
+                    ${awaitingResponseBadgeForDevice(deviceStatus)}
+                  </div>
+                  <div class="flex flex-wrap gap-1.5 mt-1.5">
+                    <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(item.storage || order.storage || "")}</span>
+                    <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(formatCarrierLabel(item.carrier || order.carrier || ""))}</span>
+                    <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200 capitalize">${esc(item.condition || order.condition || "")}</span>
+                  </div>
+                  <div class="mt-2">
+                    ${qcStatusBadge}
+                  </div>
                 </div>
-                <div class="mt-2">
-                  ${qcStatusBadge}
+                <div class="text-right">
+                  <div class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Offer</div>
+                  ${showAcceptedOfferSwap ? `
+                    <div class="text-sm font-bold text-rose-600 line-through decoration-2 decoration-rose-500">$${esc(Number(offer || 0).toFixed(2))}</div>
+                    <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 mt-1">New Accepted Offer</div>
+                    <div class="text-xl font-extrabold text-emerald-600">$${esc(Number(acceptedDeviceOffer || 0).toFixed(2))}</div>
+                  ` : `
+                    <div class="text-lg font-bold text-green-600">$${esc(Number(offer || 0).toFixed(2))}</div>
+                  `}
+                </div>
+              </button>
+              <div class="relative flex-shrink-0">
+                <button data-device-menu-btn="${esc(deviceKey)}" class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                  <i data-lucide="more-vertical" style="width:18px;height:18px"></i>
+                </button>
+                <div data-device-menu="${esc(deviceKey)}" class="absolute right-0 top-full mt-1 w-40 bg-white border border-slate-200 rounded-lg shadow-lg z-50 hidden">
+                  <button data-edit-qc-device="${esc(deviceKey)}" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-medium text-slate-700 border-b border-slate-100 flex items-center gap-2">
+                    <i data-lucide="edit" style="width:16px;height:16px"></i>
+                    Edit QC
+                  </button>
+                  <button data-close-menu="${esc(deviceKey)}" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-medium text-slate-600 flex items-center gap-2">
+                    <i data-lucide="x" style="width:16px;height:16px"></i>
+                    Close
+                  </button>
                 </div>
               </div>
-              <div class="text-right">
-                <div class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Offer</div>
-                ${showAcceptedOfferSwap ? `
-                  <div class="text-sm font-bold text-rose-600 line-through decoration-2 decoration-rose-500">$${esc(Number(offer || 0).toFixed(2))}</div>
-                  <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 mt-1">New Accepted Offer</div>
-                  <div class="text-xl font-extrabold text-emerald-600">$${esc(Number(acceptedDeviceOffer || 0).toFixed(2))}</div>
-                ` : `
-                  <div class="text-lg font-bold text-green-600">$${esc(Number(offer || 0).toFixed(2))}</div>
-                `}
-              </div>
-            </button>
+            </div>
           `;
         }).join("");
         return `
@@ -3370,6 +3387,61 @@
           }
           render();
         });
+      });
+      // Device menu buttons (3-dot menu)
+      document.querySelectorAll("[data-device-menu-btn]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const deviceKey = btn.getAttribute("data-device-menu-btn");
+          const menu = document.querySelector(`[data-device-menu="${CSS.escape(deviceKey)}"]`);
+          if (menu) {
+            const isHidden = menu.classList.contains("hidden");
+            // Close all other menus
+            document.querySelectorAll("[data-device-menu]").forEach(m => m.classList.add("hidden"));
+            // Toggle current menu
+            isHidden ? menu.classList.remove("hidden") : menu.classList.add("hidden");
+          }
+        });
+      });
+      // Edit QC from menu
+      document.querySelectorAll("[data-edit-qc-device]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const deviceKey = btn.getAttribute("data-edit-qc-device");
+          if (!deviceKey) return;
+          
+          const order = getSelectedOrder();
+          if (!order) return;
+          
+          // Close menu
+          const menu = document.querySelector(`[data-device-menu="${CSS.escape(deviceKey)}"]`);
+          if (menu) menu.classList.add("hidden");
+          
+          // Open QC modal for editing
+          state.selectedDeviceKey = deviceKey;
+          state.qcDeviceKey = deviceKey;
+          state.qcOpen = true;
+          state.modalScrollTop.qc = 0;
+          state.qcStep = 1;
+          // Keep existing QC data so user can edit it
+          render();
+        });
+      });
+      // Close menu button
+      document.querySelectorAll("[data-close-menu]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const deviceKey = btn.getAttribute("data-close-menu");
+          const menu = document.querySelector(`[data-device-menu="${CSS.escape(deviceKey)}"]`);
+          if (menu) menu.classList.add("hidden");
+        });
+      });
+      // Close menus when clicking outside
+      document.addEventListener("click", () => {
+        document.querySelectorAll("[data-device-menu]").forEach(m => m.classList.add("hidden"));
       });
       // Drawer status dropdown open/close + outside click
       const modalStatusBtn = document.getElementById("modalStatusBtn");
