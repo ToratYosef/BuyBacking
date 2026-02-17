@@ -768,13 +768,65 @@
       if (!order || !deviceKey) return normalizeStatusKey(order?.status || 'order_pending');
       return normalizeStatusKey(order?.deviceStatusByKey?.[deviceKey] || order?.status || 'order_pending');
     }
+
+    const DEVICE_TERMINAL_STATUSES = new Set([
+      'completed',
+      'returned',
+      'return_label_generated',
+      're-offered-accepted',
+      're_offered_accepted',
+      're-offered-auto-accepted',
+      're_offered_auto_accepted',
+      're-offered-declined',
+      're_offered_declined',
+      'requote_accepted'
+    ]);
+
+    function normalizeTerminalStatus(status) {
+      return normalizeStatusKey(status || '').replace(/-/g, '_');
+    }
+
+    function deriveOrderStatusFromDeviceStatuses(order, nextDeviceStatusByKey = {}) {
+      const entries = getOrderDeviceEntries(order);
+      if (!entries.length) return null;
+      const statuses = entries.map((entry) => {
+        const key = buildOrderDeviceKey(order.id, entry.deviceIndex);
+        return getDeviceStatus({ ...order, deviceStatusByKey: nextDeviceStatusByKey }, key);
+      });
+      if (!statuses.length || statuses.some((s) => !DEVICE_TERMINAL_STATUSES.has(s))) {
+        return null;
+      }
+
+      const normalized = statuses.map(normalizeTerminalStatus);
+      if (normalized.every((s) => s === 'returned' || s === 'return_label_generated' || s === 're_offered_declined')) {
+        return 'returned';
+      }
+      if (normalized.every((s) => s === 're_offered_accepted' || s === 're_offered_auto_accepted' || s === 'requote_accepted')) {
+        return 're-offered-accepted';
+      }
+      return 'completed';
+    }
+
     async function updateDeviceStatusInline(orderId, deviceKey, newStatus) {
       if (!orderId || !deviceKey || !newStatus) return;
+      const localOrder = state.allOrders.find((o) => o.id === orderId) || state.selectedOrderSnapshot;
+      const nextDeviceStatusByKey = {
+        ...(localOrder?.deviceStatusByKey || {}),
+        [deviceKey]: normalizeStatusKey(newStatus)
+      };
+      const aggregatedOrderStatus = localOrder
+        ? deriveOrderStatusFromDeviceStatuses(localOrder, nextDeviceStatusByKey)
+        : null;
+
       const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, {
-        [`deviceStatusByKey.${deviceKey}`]: newStatus,
+      const payload = {
+        deviceStatusByKey: nextDeviceStatusByKey,
         updatedAt: new Date()
-      });
+      };
+      if (aggregatedOrderStatus) {
+        payload.status = aggregatedOrderStatus;
+      }
+      await updateDoc(orderRef, payload);
     }
     function getLastUpdateTimestamp(order) {
       return (
@@ -3151,7 +3203,7 @@
             state.selectedOrderSnapshot = state.allOrders.find(o => o.id === parsed.orderId) || state.selectedOrderSnapshot || null;
             state.selectedDeviceKey = deviceKey;
             state.qcDeviceKey = deviceKey;
-            state.drawerTab = "qc";
+            state.drawerTab = "overview";
             state.statusDropdownOpen = false;
             state.qcOpen = false;
             state.qcStep = 1;
@@ -3611,13 +3663,13 @@
             // Show animation for 2 seconds then close
             await new Promise(resolve => setTimeout(resolve, 2000));
             state.qcCompletionAnimation = false;
+            const targetDeviceKey = state.selectedDeviceKey || state.qcDeviceKey || buildOrderDeviceKey(order.id, 0);
             state.qcOpen = false;
             state.qcStep = 1;
             state.qcData = null;
             state.qcDeviceKey = null;
-            // Set order to pay_now status
-            await updateOrderStatusInline(order.id, "pay_now", { notifyCustomer: false });
-            toast("QC completed! Order ready for payment.", "success");
+            await updateDeviceStatusInline(order.id, targetDeviceKey, "pay_now");
+            toast("QC completed for this device. Device is ready for payment.", "success");
             render();
           } else {
             // QC doesn't match or needs emails - proceed with reoffer/email flow
