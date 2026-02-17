@@ -3660,6 +3660,13 @@
           syncStepInputs();
           const qcSnapshot = { ...(state.qcData || {}) };
           
+          // Process QC outcome (send any necessary emails)
+          const qcOutcome = await processQcOutcome(order, qcSnapshot);
+          
+          // Save QC data to order
+          const targetDeviceKey = state.selectedDeviceKey || state.qcDeviceKey || buildOrderDeviceKey(order.id, 0);
+          await updateOrderField(order.id, `qcDataByDevice.${targetDeviceKey}`, qcSnapshot);
+          
           // Check if QC matches customer description
           const isMatch = qcMatchesCustomerDescription(order, qcSnapshot);
           
@@ -3671,7 +3678,6 @@
             // Show animation for 2 seconds then close
             await new Promise(resolve => setTimeout(resolve, 2000));
             state.qcCompletionAnimation = false;
-            const targetDeviceKey = state.selectedDeviceKey || state.qcDeviceKey || buildOrderDeviceKey(order.id, 0);
             state.qcOpen = false;
             state.qcStep = 1;
             state.qcData = null;
