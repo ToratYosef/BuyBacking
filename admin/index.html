@@ -365,6 +365,51 @@
       if (method === 'echeck') return String(d?.accountHolderName || d?.accountName || d?.email || identifier || 'E-Check details on file').trim();
       return identifier || String(d?.username || d?.handle || d?.email || '').trim() || 'N/A';
     }
+    function getPaymentDeepLink(order, amount) {
+      const method = normalizeStatusKey(order?.paymentMethod || '');
+      const d = order?.paymentDetails || {};
+      const identifierRaw = String(getPayoutInfoDisplay(order) || '').trim();
+      const identifier = identifierRaw.replace(/^\$/, '').trim();
+      const safeAmount = Number.isFinite(amount) ? Number(amount) : 0;
+      const amountFixed = safeAmount.toFixed(2);
+
+      if (method === 'cashapp' && identifier) {
+        const cashtag = identifier.startsWith('$') ? identifier : `$${identifier}`;
+        return {
+          url: `https://cash.app/${encodeURIComponent(cashtag)}/${amountFixed}`,
+          cta: 'Open Cash App',
+          note: 'Amount is prefilled.'
+        };
+      }
+
+      if (method === 'paypal') {
+        const paypalEmail = String(d?.paypalEmail || '').trim();
+        if (identifier && !identifier.includes('@')) {
+          return {
+            url: `https://www.paypal.com/paypalme/${encodeURIComponent(identifier)}/${amountFixed}`,
+            cta: 'Open PayPal',
+            note: 'Amount is prefilled.'
+          };
+        }
+        if (paypalEmail) {
+          return {
+            url: `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(paypalEmail)}&amount=${encodeURIComponent(amountFixed)}&currency_code=USD`,
+            cta: 'Open PayPal',
+            note: 'Recipient and amount are prefilled.'
+          };
+        }
+      }
+
+      if (method === 'zelle') {
+        return {
+          url: 'https://www.zellepay.com/',
+          cta: 'Open Zelle',
+          note: 'Zelle does not support reliable web prefills; send manually using the details shown.'
+        };
+      }
+
+      return null;
+    }
     function getOrderItemsSearchText(order) {
       // Used by search pipeline
       const entries = getOrderDeviceEntries(order);
@@ -2586,7 +2631,7 @@
             // QC is now opened only from overview section by clicking devices
             // Only show Mark Completed after QC is complete
             if (hasQc) {
-              groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
+              groups.postReceive.push({ label: "Pay Now", action: "payNow", class: "bg-emerald-600 text-white" });
             }
             // Reoffer button removed - only accessible via Finish QC
         }
@@ -2600,11 +2645,7 @@
              // No footer action button for re-offer pending per admin workflow request.
         }
         else if (status === "re-offered-accepted") {
-            if (order.paymentMethod === 'zelle') {
-                 groups.primary.push({ label: "Mark Paid", action: "markCompleted", class: "bg-emerald-600 text-white" });
-            } else {
-                 groups.primary.push({ label: "Pay Now", action: "payNow", class: "bg-emerald-600 text-white" });
-            }
+            groups.primary.push({ label: "Pay Now", action: "payNow", class: "bg-emerald-600 text-white" });
         }
         else if (status === "re-offered-declined") {
             groups.primary.push({ label: "Send Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
@@ -3094,6 +3135,12 @@
                   <p class="text-xs font-semibold text-emerald-800 mb-1">Account Details:</p>
                   <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
                 </div>
+                <div class="mt-4">
+                  <a id="paymentDeepLinkBtn" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center px-3 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700">
+                    Open Payment App
+                  </a>
+                  <p class="text-xs text-emerald-700 mt-2" id="paymentDeepLinkHint"></p>
+                </div>
               </div>
             </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
@@ -3101,7 +3148,7 @@
                 Close
               </button>
               <button id="paymentConfirmYesBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700">
-                Mark as Paid
+                Confirm Payment Sent
               </button>
             </div>
           </div>
@@ -3543,6 +3590,21 @@
               render();
               return;
             }
+            if (action === "payNow") {
+              const candidateDeviceKey =
+                state.selectedDeviceKey ||
+                Object.keys(order?.qcDataByDevice || {})[0] ||
+                buildOrderDeviceKey(order.id, 0);
+              const hasQcData = !!order?.qcDataByDevice?.[candidateDeviceKey];
+              if (!hasQcData) {
+                toast("Complete QC first before sending payment.", "error");
+                return;
+              }
+              state.paymentConfirmDeviceKey = candidateDeviceKey;
+              state.paymentConfirmModalOpen = true;
+              render();
+              return;
+            }
             if (state.selectedDeviceKey && (action === "markReceived" || action === "markCompleted")) {
               const nextDeviceStatus = action === "markCompleted" ? "completed" : "received";
               await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
@@ -3786,6 +3848,8 @@
         const paymentYesBtn = document.getElementById("paymentConfirmYesBtn");
         const paymentInfo = document.getElementById("paymentInfoSection");
         const payoutAmountEl = document.getElementById("payoutAmount");
+        const deepLinkBtn = document.getElementById("paymentDeepLinkBtn");
+        const deepLinkHint = document.getElementById("paymentDeepLinkHint");
         
         if (paymentCancelBtn) {
           paymentCancelBtn.addEventListener("click", () => {
@@ -3810,12 +3874,27 @@
             const paymentMethodRaw = currentOrder?.paymentMethod || 'N/A';
             const paymentMethodFormatted = String(paymentMethodRaw).replace(/[_-]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
             const paymentIdentifier = getPayoutInfoDisplay(currentOrder);
+            const deepLink = getPaymentDeepLink(currentOrder, finalPrice);
 
             payoutAmountEl.textContent = `$${Number(finalPrice || 0).toFixed(2)}`;
             const methodEl = document.getElementById('paymentMethod');
             const identifierEl = document.getElementById('paymentIdentifier');
             if (methodEl) methodEl.textContent = paymentMethodFormatted;
             if (identifierEl) identifierEl.textContent = paymentIdentifier;
+            if (deepLinkBtn) {
+              if (deepLink?.url) {
+                deepLinkBtn.href = deepLink.url;
+                deepLinkBtn.textContent = deepLink.cta || 'Open Payment App';
+                deepLinkBtn.style.display = 'inline-flex';
+              } else {
+                deepLinkBtn.href = '#';
+                deepLinkBtn.textContent = 'No payment link available';
+                deepLinkBtn.style.display = 'none';
+              }
+            }
+            if (deepLinkHint) {
+              deepLinkHint.textContent = deepLink?.note || 'Use the account details above to send payment.';
+            }
           })();
         }
         
