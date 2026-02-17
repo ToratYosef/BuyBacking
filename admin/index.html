@@ -926,8 +926,8 @@
       // Flatten to devices
       let allDevices = flattenOrdersToDevices(baseOrders);
       
-      // Filter by device status (only when no search term and not "all")
-      if (!term && s !== "all") {
+      // Filter by selected status first (search should run within selected status)
+      if (s !== "all") {
         if (s === "kit_needs_printing") {
           allDevices = allDevices.filter(d => KIT_PRINT_PENDING_STATUSES.has(d.deviceStatus));
         } else if (s === "label_generated") {
@@ -1947,9 +1947,18 @@
           </tr>
         `);
       }
-      const body = rowHtml.length
-        ? rowHtml.join("")
+      const showNoResults = !rowHtml.length;
+      const noResultsBody = state.currentSearchTerm
+        ? `<tr>
+            <td colspan="5" class="px-6 py-10 text-center text-slate-500">
+              <div class="space-y-3">
+                <div class="text-base font-semibold text-slate-700">No results found.</div>
+                <button id="clearSearchBtn" type="button" class="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Clear search</button>
+              </div>
+            </td>
+          </tr>`
         : `<tr><td colspan="5" class="px-6 py-10 text-center text-slate-500">No orders found.</td></tr>`;
+      const body = showNoResults ? noResultsBody : rowHtml.join("");
       const densityClass = state.compactDensity ? "density-compact" : "density-default";
       return `
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -1994,30 +2003,23 @@
                 <h2 class="text-2xl font-bold text-slate-900 tracking-tight">${IS_AGING_PAGE ? "Aging Orders" : "Order Management"}</h2>
                 <p class="text-sm text-slate-500 mt-1">Filter, bulk-process, and manage fulfillment without breaking backend routes.</p>
               </div>
-              <div class="hidden md:flex w-full max-w-xl items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 shadow-sm">
-                <i data-lucide="search" class="text-slate-400" style="width:18px;height:18px"></i>
-                <input id="searchInput" type="text" value="${esc(state.currentSearchTerm)}"
-                  placeholder="Search by ID, customer, device, storage, tracking…"
-                  class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
-              </div>
-              <div class="md:hidden flex flex-col gap-2">
-                <div class="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                  <i data-lucide="search" class="text-slate-400" style="width:18px;height:18px"></i>
-                  <input id="mobileSearchInput" type="text" value="${esc(state.currentSearchTerm)}"
-                    placeholder="Search orders…"
-                    class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
-                </div>
-                <div class="flex items-center gap-2">
-                  <label class="flex items-center gap-2 text-sm text-slate-600">
-                    <input id="compactDensityToggleMobile" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600" ${state.compactDensity ? "checked" : ""} />
-                    Compact
-                  </label>
-                </div>
+              <div class="flex items-center gap-2">
+                <label class="flex items-center gap-2 text-sm text-slate-600">
+                  <input id="compactDensityToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600" ${state.compactDensity ? "checked" : ""} />
+                  Compact
+                </label>
               </div>
             </div>
             ${updateGlassMetricsHTML()}
             ${renderStatusBreakdown()}
             ${renderBulkBar()}
+            <div class="w-full flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <i data-lucide="search" class="text-slate-400" style="width:18px;height:18px"></i>
+              <input id="searchInput" type="text" value="${esc(state.currentSearchTerm)}"
+                placeholder="Search by ID, customer, device, storage, tracking…"
+                class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
+              ${state.currentSearchTerm ? `<button id="clearSearchInlineBtn" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Clear</button>` : ""}
+            </div>
             ${renderOrdersTable()}
           </div>
         </main>
@@ -2130,7 +2132,13 @@
           // Check if QC has been completed for this device
           const qcData = order?.qcDataByDevice?.[deviceKey];
           const hasQcData = qcData && Object.keys(qcData).length > 0;
-          const qcStatusBadge = hasQcData 
+          const isAwaitingReQc = normalizeStatusKey(deviceStatus) === 'issue_resolved';
+          const qcStatusBadge = isAwaitingReQc
+            ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                <i data-lucide="rotate-ccw" style="width:11px;height:11px"></i>
+                Pending re-QC
+              </span>`
+            : hasQcData 
             ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <i data-lucide="check-square" style="width:11px;height:11px"></i>
                 QC Finished
@@ -3207,9 +3215,13 @@
       if (search) {
         search.addEventListener("input", () => applySearchTerm(search.value, "searchInput"));
       }
-      const mobileSearch = document.getElementById("mobileSearchInput");
-      if (mobileSearch) {
-        mobileSearch.addEventListener("input", () => applySearchTerm(mobileSearch.value, "mobileSearchInput"));
+      const clearSearchBtn = document.getElementById("clearSearchBtn");
+      if (clearSearchBtn) {
+        clearSearchBtn.addEventListener("click", () => applySearchTerm("", "searchInput"));
+      }
+      const clearSearchInlineBtn = document.getElementById("clearSearchInlineBtn");
+      if (clearSearchInlineBtn) {
+        clearSearchInlineBtn.addEventListener("click", () => applySearchTerm("", "searchInput"));
       }
       // Status breakdown clicks + keyboard enter/space
       document.querySelectorAll("[data-status-tab]").forEach(btn => {
@@ -3231,20 +3243,11 @@
           render();
         });
       }
-      const densityMobile = document.getElementById("compactDensityToggleMobile");
-      if (densityMobile) {
-        densityMobile.checked = !!state.compactDensity;
-        densityMobile.addEventListener("change", () => {
-          state.compactDensity = densityMobile.checked;
-          render();
-        });
-      }
       // Pagination
       document.querySelectorAll("[data-page]").forEach(btn => {
         btn.addEventListener("click", () => {
           const type = btn.getAttribute("data-page");
-          const src = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
-          const totalPages = Math.max(1, Math.ceil(src.length / state.ORDERS_PER_PAGE));
+          const totalPages = Math.max(1, Math.ceil((state.currentFilteredDevices?.length || 0) / state.ORDERS_PER_PAGE));
           if (type === "first") state.currentPage = 1;
           if (type === "prev") state.currentPage = Math.max(1, state.currentPage - 1);
           if (type === "next") state.currentPage = Math.min(totalPages, state.currentPage + 1);

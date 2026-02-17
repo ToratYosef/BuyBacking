@@ -282,7 +282,6 @@ const paginationInfo = document.getElementById('pagination-info');
 const searchInput = document.getElementById('search-orders');
 const mobileSearchInput = document.getElementById('mobile-search-orders');
 const statusFilterButtons = document.querySelectorAll('#status-filter-bar .filter-chip');
-const codeFilterSelect = document.getElementById('code-filter');
 const liveOrdersCount = document.getElementById('live-orders-count');
 const averagePayoutAmount = document.getElementById('average-payout-amount');
 const mobileLiveOrdersCount = document.getElementById('mobile-live-orders-count');
@@ -332,10 +331,6 @@ const EMAIL_STATUS_HINTS = new Set([
   'completed',
 ]);
 
-const CODE_FILTER_VALUES = Object.freeze({
-  ALL: 'all',
-});
-
 const TRACKING_POST_RECEIVED_STATUSES = new Set([
   'received',
   'imei_checked',
@@ -384,18 +379,6 @@ const TRACKING_POST_RECEIVED_STATUSES = new Set([
   'cancelled',
   'canceled',
 ]);
-
-function matchesCodeFilter(order) {
-  return true;
-}
-
-function refreshCodeFilterOptions() {
-  if (!codeFilterSelect) {
-    return;
-  }
-  codeFilterSelect.innerHTML = '<option value="all">All orders</option>';
-  codeFilterSelect.value = CODE_FILTER_VALUES.ALL;
-}
 
 const selectedDeviceKeys = new Set();
 let lastRenderedDeviceKeys = [];
@@ -639,7 +622,6 @@ let currentPage = 1;
 let lastKnownTotalPages = 1;
 const ORDERS_PER_PAGE = Number.MAX_SAFE_INTEGER;
 let currentActiveStatus = 'all';
-let currentCodeFilter = CODE_FILTER_VALUES.ALL;
 let currentOrderDetails = null;
 let feedPricingDataCache = null;
 let feedPricingDataPromise = null;
@@ -8168,13 +8150,6 @@ filterAndRenderOrders(currentActiveStatus, currentSearchTerm);
 
 updateStatusFilterHighlight(currentActiveStatus);
 
-if (codeFilterSelect) {
-  codeFilterSelect.addEventListener('change', (event) => {
-    currentCodeFilter = event.target.value || CODE_FILTER_VALUES.ALL;
-    filterAndRenderOrders(currentActiveStatus, currentSearchTerm, { preservePage: true });
-  });
-}
-
 if (modalStatus) {
   modalStatus.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -8470,8 +8445,6 @@ allOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         return dateB - dateA;
       });
 
-      refreshCodeFilterOptions();
-
       const validIds = new Set(allOrders.map(order => order.id));
       Array.from(selectedDeviceKeys).forEach((deviceKey) => {
         const { orderId } = parseOrderDeviceKey(deviceKey);
@@ -8516,8 +8489,6 @@ function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options =
       filtered = filtered.filter(order => order.status === status);
     }
   }
-
-  filtered = filtered.filter(matchesCodeFilter);
 
   if (hasSearchTerm) {
     const lowerCaseSearchTerm = currentSearchTerm.trim().toLowerCase();
