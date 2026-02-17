@@ -966,6 +966,10 @@
           allDevices = allDevices.filter(d => d.deviceStatus === "label_generated");
         } else if (s === "emailed") {
           allDevices = allDevices.filter(d => d.deviceStatus === "emailed");
+        } else if (s === "phone_on_the_way") {
+          allDevices = allDevices.filter(d => d.deviceStatus === "phone_on_the_way");
+        } else if (s === "delivered_to_us") {
+          allDevices = allDevices.filter(d => d.deviceStatus === "delivered_to_us");
         } else if (s === "received") {
           allDevices = allDevices.filter(d => isReceivedStatusValue(d.deviceStatus));
         } else {
@@ -1177,6 +1181,63 @@
       }
       alert(
         `Refresh ${t} tracking complete.\n\n` +
+        `Success: ${success}\n` +
+        `Failed: ${failed}\n\n` +
+        (samples.failed.length ? `Failed samples:\n- ${samples.failed.join("\n- ")}\n` : "")
+      );
+      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+    }
+    async function refreshLabelGeneratedAndPhoneOnWay(buttonEl) {
+      const base = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
+      const allowed = new Set(["label_generated", "phone_on_the_way"]);
+      const candidates = base.filter(o => {
+        const status = normalizeStatusKey(o?.status);
+        return allowed.has(status);
+      });
+
+      if (!candidates.length) {
+        toast("No label-generated / phone-on-the-way tracking candidates found", "info");
+        return;
+      }
+
+      const ok = confirm(`Refresh tracking for ${candidates.length} orders in Label Generated / Phone On The Way?`);
+      if (!ok) return;
+
+      const originalText = buttonEl?.textContent;
+      if (buttonEl) {
+        buttonEl.disabled = true;
+        buttonEl.textContent = "Refreshing…";
+      }
+
+      const queue = candidates.slice();
+      let success = 0;
+      let failed = 0;
+      const samples = { failed: [] };
+
+      async function worker() {
+        while (queue.length) {
+          const order = queue.shift();
+          if (!order) return;
+          try {
+            await apiPost(`/refresh-tracking`, { orderId: order.id, type: "email" });
+            success++;
+          } catch (e) {
+            failed++;
+            if (samples.failed.length < 5) samples.failed.push(`#${order.id}: ${e?.message || "failed"}`);
+          }
+        }
+      }
+
+      const workers = Array.from({ length: Math.min(MAX_CONCURRENT_TRACKING_REQUESTS, candidates.length) }, () => worker());
+      await Promise.all(workers);
+
+      if (buttonEl) {
+        buttonEl.disabled = false;
+        buttonEl.textContent = originalText || "Refresh";
+      }
+
+      alert(
+        `Refresh tracking complete.\n\n` +
         `Success: ${success}\n` +
         `Failed: ${failed}\n\n` +
         (samples.failed.length ? `Failed samples:\n- ${samples.failed.join("\n- ")}\n` : "")
@@ -1759,6 +1820,12 @@
           count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
         };
       }
+      if (s === "phone_on_the_way" || s === "delivered_to_us") {
+        return {
+          pill: isActive ? "bg-blue-500 text-white shadow-md" : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
+        };
+      }
       if (s === "emailed" || s === "received") {
         return {
           pill: isActive ? "bg-indigo-500 text-white shadow-md" : "bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100",
@@ -1783,6 +1850,8 @@
         { key: "order_pending", label: "Order Pending", count: statusCounts.get("order_pending") || 0 },
         { key: "kit_needs_printing", label: "Kit Needs Printing", count: visible.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
         { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
+        { key: "phone_on_the_way", label: "Phone On The Way To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "phone_on_the_way").length },
+        { key: "delivered_to_us", label: "Delivered", count: visible.filter(o => normalizeStatusKey(o?.status) === "delivered_to_us").length },
         { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
         { key: "issue_resolved", label: "Resolved", count: statusCounts.get("issue_resolved") || 0 },
         { key: "received", label: "Received", count: visible.filter(o => isReceivedStatusValue(o?.status)).length },
@@ -1824,6 +1893,11 @@
                 ${!(state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress) ? "disabled" : ""}>
                 <i data-lucide="${state.isBulkSlipPrintInProgress ? "loader" : "printer"}" class="${state.isBulkSlipPrintInProgress ? "animate-spin" : ""}" style="width:18px;height:18px"></i>
                 ${state.isBulkSlipPrintInProgress ? "Preparing PDF…" : "Bulk Print Packing Slips"}
+              </button>
+              <button id="refresh-label-phone-tracking"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200">
+                <i data-lucide="refresh-cw" style="width:18px;height:18px"></i>
+                Refresh Label + Phone Tracking
               </button>
             </div>
           </div>
@@ -3337,6 +3411,10 @@
       // per-order and per-device View buttons are handled by delegated click binding above.
       const btnBulkPrint = document.getElementById("bulk-print-slips");
       if (btnBulkPrint) btnBulkPrint.addEventListener("click", () => handleBulkPrintSlips());
+      const btnRefreshLabelPhoneTracking = document.getElementById("refresh-label-phone-tracking");
+      if (btnRefreshLabelPhoneTracking) {
+        btnRefreshLabelPhoneTracking.addEventListener("click", () => refreshLabelGeneratedAndPhoneOnWay(btnRefreshLabelPhoneTracking));
+      }
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
         el.addEventListener("click", () => {
