@@ -528,7 +528,7 @@
       orderTextImportOpen: false,
       modalScrollTop: { qc: 0, reoffer: 0, import: 0 },
       // bulk states
-      isBulkLabelGenerationInProgress: false,
+      isBulkSlipPrintInProgress: false,
       lastRefreshAt: null,
     };
     function getSelectedOrder() {
@@ -873,60 +873,38 @@
       if (options?.notifyCustomer === false) body.notifyCustomer = false;
       return apiPut(`/orders/${orderId}/status`, body);
     }
-    async function handleBulkStatusUpdate() {
-      const sel = document.getElementById("bulkStatusSelect");
-      const newStatus = sel?.value || "";
-      if (!newStatus) return;
+    async function handleBulkPrintSlips() {
+      if (state.isBulkSlipPrintInProgress) return;
       if (state.selectedOrderIds.size === 0) return;
-      const keys = Array.from(state.selectedOrderIds);
-      const failures = [];
-      let ok = 0;
-      for (const k of keys) {
-        const orderId = k;
-        try {
-          await updateOrderStatusInline(orderId, newStatus, { notifyCustomer: false });
-          ok++;
-        } catch (e) {
-          failures.push({ k, orderId, err: e?.message || String(e) });
-        }
-      }
-      if (failures.length) {
-        toast(`Bulk status: ${ok} ok, ${failures.length} failed`, "error");
-        // keep only failed selected
-        state.selectedOrderIds = new Set(failures.map(f => f.k));
-      } else {
-        toast(`Bulk status updated (${ok})`, "success");
-        state.selectedOrderIds.clear();
-        if (sel) sel.value = "";
-      }
-      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-    }
-    async function handleBulkLabelGeneration() {
-      if (state.isBulkLabelGenerationInProgress) return;
-      if (state.selectedOrderIds.size === 0) return;
-      state.isBulkLabelGenerationInProgress = true;
+      state.isBulkSlipPrintInProgress = true;
       render();
-      const keys = Array.from(state.selectedOrderIds);
-      const failures = [];
-      let ok = 0;
-      for (const k of keys) {
-        const orderId = k;
-        try {
-          await apiPost(`/generate-label/${orderId}`, {});
-          ok++;
-        } catch (e) {
-          failures.push({ k, orderId, err: e?.message || String(e) });
+      try {
+        const orderIds = Array.from(state.selectedOrderIds);
+        const token = await auth.currentUser.getIdToken();
+        const response = await fetch(`${API_BASE_URL}/merge-print`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ orderIds }),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText || 'Failed to create merged slip PDF');
         }
+
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank', 'noopener,noreferrer');
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+        toast(`Bulk print ready (${orderIds.length} order${orderIds.length === 1 ? '' : 's'})`, 'success');
+      } catch (error) {
+        toast(error?.message || 'Failed to bulk print slips', 'error');
+      } finally {
+        state.isBulkSlipPrintInProgress = false;
+        render();
       }
-      state.isBulkLabelGenerationInProgress = false;
-      if (failures.length) {
-        toast(`Generate labels: ${ok} ok, ${failures.length} failed`, "error");
-        state.selectedOrderIds = new Set(failures.map(f => f.k));
-      } else {
-        toast(`Generated labels (${ok})`, "success");
-        state.selectedOrderIds.clear();
-      }
-      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
     }
     function shouldAutoMarkKitSent(order) {
       // Spec: require >=2 kit label identifiers, not past received, not locked statuses
@@ -1594,40 +1572,18 @@
                 class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
                 <i data-lucide="refresh-cw" style="width:16px;height:16px"></i> Refresh All Email Tracking
               </button>
-              <button id="separate-kit-orders"
-                class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
-                <i data-lucide="split" style="width:16px;height:16px"></i> Separate Kit Orders
-              </button>
-              <button id="open-order-text-import"
-                class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
-                <i data-lucide="file-text" style="width:16px;height:16px"></i> Paste Order From Text
-              </button>
             </div>
             <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
-              <button id="bulk-generate-labels"
+              <button id="bulk-print-slips"
                 class="px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${
-                  (state.selectedOrderIds.size > 0 && !state.isBulkLabelGenerationInProgress)
+                  (state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress)
                     ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200"
                     : "bg-slate-100 text-slate-400 cursor-not-allowed"
                 }"
-                ${!(state.selectedOrderIds.size > 0 && !state.isBulkLabelGenerationInProgress) ? "disabled" : ""}>
-                <i data-lucide="${state.isBulkLabelGenerationInProgress ? "loader" : "tag"}" class="${state.isBulkLabelGenerationInProgress ? "animate-spin" : ""}" style="width:16px;height:16px"></i>
-                ${state.isBulkLabelGenerationInProgress ? "Generating…" : "Generate Labels For Selected"}
+                ${!(state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress) ? "disabled" : ""}>
+                <i data-lucide="${state.isBulkSlipPrintInProgress ? "loader" : "printer"}" class="${state.isBulkSlipPrintInProgress ? "animate-spin" : ""}" style="width:16px;height:16px"></i>
+                ${state.isBulkSlipPrintInProgress ? "Preparing PDF…" : "Bulk Print Slips"}
               </button>
-              <button id="bulk-delete-orders" class="px-3 py-2 rounded-lg text-sm font-semibold ${state.selectedOrderIds.size > 0 ? "bg-rose-600 hover:bg-rose-700 text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed"}" ${state.selectedOrderIds.size > 0 ? "" : "disabled"}>Delete Selected Orders</button>
-              <div class="flex items-center gap-2">
-                <select id="bulkStatusSelect" class="border border-slate-200 rounded-lg px-2 py-2 text-sm bg-white">
-                  <option value="">Bulk update status…</option>
-                  ${STATUS_DROPDOWN_OPTIONS.map(s => `<option value="${esc(s)}">${esc(formatStatusLabel(s))}</option>`).join("")}
-                </select>
-                <button id="bulk-status-apply"
-                  class="px-3 py-2 rounded-lg text-sm font-semibold ${
-                    (state.selectedOrderIds.size > 0) ? "bg-slate-900 hover:bg-slate-800 text-white" : "bg-slate-100 text-slate-400 cursor-not-allowed"
-                  }"
-                  ${state.selectedOrderIds.size > 0 ? "" : "disabled"}>
-                  Update
-                </button>
-              </div>
             </div>
           </div>
           <div class="mt-3 text-xs text-slate-500 flex items-center justify-between">
@@ -1924,8 +1880,7 @@
       const entries = getOrderDeviceEntries(order);
       const focused = getFocusedDevice(order);
       const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
-      tabs.splice(2, 0, { id: "qc", label: "QC & Intake", icon: "shield-check" });
-      tabs.splice(3, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
+      tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
       const visibleEntries = entries;
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
@@ -1943,7 +1898,7 @@
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const showAcceptedOfferSwap = isAcceptedReofferStatus(deviceStatus) && Number.isFinite(acceptedDeviceOffer);
           return `
-            <div class="p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors">
+            <button type="button" data-open-qc-device="${esc(deviceKey)}" class="w-full p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors text-left">
               <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
                 <i data-lucide="smartphone" style="width:24px;height:24px"></i>
               </div>
@@ -1965,7 +1920,7 @@
                   <div class="text-lg font-bold text-green-600">$${esc(Number(offer || 0).toFixed(2))}</div>
                 `}
               </div>
-            </div>
+            </button>
           `;
         }).join("");
         return `
@@ -2064,51 +2019,6 @@
                     </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        `;
-      }
-      function qcHTML() {
-        const selectedKey = focused.isFocused ? focused.deviceKey : null;
-        const deviceCards = entries.map((entry) => {
-          const item = entry.item || {};
-          const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
-          const qcForDevice = order?.qcDataByDevice?.[deviceKey] || null;
-          const legacy = (!qcForDevice && entry.deviceIndex === 0) ? (order.qcData || null) : null;
-          const qc = qcForDevice || legacy;
-          const hasQcData = !!qc;
-          const selected = selectedKey === deviceKey;
-          return `
-            <button type="button" data-qc-select-device="${esc(deviceKey)}"
-              class="w-full text-left border rounded-xl p-4 transition ${selected ? 'border-indigo-300 bg-indigo-50 ring-1 ring-indigo-200' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Device ${entry.deviceIndex + 1}</div>
-                  <div class="text-sm font-semibold text-slate-900 mt-1">${esc(item.device || order.device || 'Unknown device')}</div>
-                  <div class="text-xs text-slate-500 mt-1">${esc([item.storage || order.storage || '', formatCarrierLabel(item.carrier || order.carrier || ''), item.condition || order.condition || ''].filter(Boolean).join(' • '))}</div>
-                </div>
-                <div class="text-right">
-                  ${statusBadgeHTML(getDeviceStatus(order, deviceKey))}
-                  ${hasQcData ? `<div class="mt-1 text-[11px] font-semibold text-emerald-700">QC Completed</div>` : `<div class="mt-1 text-[11px] font-semibold text-amber-700">QC Pending</div>`}
-                </div>
-              </div>
-              <div class="mt-3 text-[11px] font-semibold ${selected ? 'text-indigo-700' : 'text-slate-500'}">${selected ? 'Selected • click to open checklist' : 'Select this device to open QC checklist'}</div>
-            </button>
-          `;
-        }).join('');
-        return `
-          <div class="space-y-6">
-            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                <h3 class="font-semibold text-slate-700 flex items-center gap-2">
-                  <i data-lucide="shield-check" class="text-slate-400" style="width:18px;height:18px"></i>
-                  Choose Device For QC
-                </h3>
-              </div>
-              <div class="p-5 space-y-3">
-                <p class="text-sm text-slate-600">Select which device you inspected. This will automatically open the QC checklist modal for that specific device.</p>
-                ${deviceCards}
               </div>
             </div>
           </div>
@@ -2284,7 +2194,6 @@
       const tabContent =
         state.drawerTab === "overview" ? overviewHTML()
         : state.drawerTab === "shipping" ? shippingHTML()
-        : state.drawerTab === "qc" ? qcHTML()
         : state.drawerTab === "price-history" ? priceHistoryHTML()
         : logsHTML();
       return `
@@ -3004,28 +2913,8 @@
       });
 
       // per-order and per-device View buttons are handled by delegated click binding above.
-      const btnGen = document.getElementById("bulk-generate-labels");
-      if (btnGen) btnGen.addEventListener("click", () => handleBulkLabelGeneration());
-      const btnDelete = document.getElementById("bulk-delete-orders");
-      if (btnDelete) btnDelete.addEventListener("click", async () => {
-        const ids = Array.from(state.selectedOrderIds);
-        if (!ids.length) return;
-        if (!confirm(`Delete ${ids.length} selected order(s)? This cannot be undone.`)) return;
-        let ok = 0;
-        const failed = [];
-        for (const id of ids) {
-          try { await handleAction(id, "deleteOrder"); ok++; } catch (e) { failed.push(id); }
-        }
-        state.selectedOrderIds = new Set(failed);
-        toast(`Deleted ${ok} order(s).${failed.length ? ` ${failed.length} failed.` : ""}`, failed.length ? "error" : "success");
-        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-      });
-      const btnBulkApply = document.getElementById("bulk-status-apply");
-      if (btnBulkApply) btnBulkApply.addEventListener("click", () => handleBulkStatusUpdate());
-      const btnSep = document.getElementById("separate-kit-orders");
-      if (btnSep) btnSep.addEventListener("click", () => handleSeparateKitOrders());
-      const btnImport = document.getElementById("open-order-text-import");
-      if (btnImport) btnImport.addEventListener("click", () => { state.orderTextImportOpen = true; state.modalScrollTop.import = 0; render(); });
+      const btnBulkPrint = document.getElementById("bulk-print-slips");
+      if (btnBulkPrint) btnBulkPrint.addEventListener("click", () => handleBulkPrintSlips());
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
         el.addEventListener("click", () => {
@@ -3051,15 +2940,14 @@
           render();
         });
       });
-      document.querySelectorAll("[data-qc-select-device]").forEach(btn => {
+      document.querySelectorAll("[data-open-qc-device]").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const deviceKey = btn.getAttribute("data-qc-select-device");
+          const deviceKey = btn.getAttribute("data-open-qc-device");
           if (!deviceKey) return;
           state.selectedDeviceKey = deviceKey;
           state.qcDeviceKey = deviceKey;
-          state.drawerTab = "qc";
           state.qcOpen = true;
           state.modalScrollTop.qc = 0;
           state.qcStep = 1;

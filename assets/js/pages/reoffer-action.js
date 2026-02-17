@@ -142,6 +142,7 @@ replySection.classList.remove('hidden');
 const loadOfferDetails = async () => {
 const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
+const selectedDeviceKey = urlParams.get('deviceKey');
 
 if (!orderId) {
 errorMessage.textContent = 'Error: Order ID is missing from the URL.';
@@ -160,17 +161,24 @@ clearInterval(countdownInterval);
 
 try {
 const currentOrderData = await apiGet(`/orders/${orderId}`, { authRequired: true });
+const deviceOffer = selectedDeviceKey
+? (currentOrderData?.reOfferByDevice?.[selectedDeviceKey] || currentOrderData?.reofferByDevice?.[selectedDeviceKey] || null)
+: null;
+const deviceStatus = selectedDeviceKey
+? (currentOrderData?.deviceStatusByKey?.[selectedDeviceKey] || currentOrderData?.status)
+: currentOrderData?.status;
 
 orderIdDisplay.textContent = `#${orderId}`;
-newOfferPrice.textContent = `$${currentOrderData.reOffer?.newPrice?.toFixed(2) || currentOrderData.estimatedQuote?.toFixed(2) || 'N/A'}`;
-reofferReason.textContent = currentOrderData.reOffer?.reasons?.join(', ') || 'N/A';
+const offerToDisplay = deviceOffer || currentOrderData.reOffer || null;
+newOfferPrice.textContent = `$${offerToDisplay?.newPrice?.toFixed(2) || currentOrderData.estimatedQuote?.toFixed(2) || 'N/A'}`;
+reofferReason.textContent = offerToDisplay?.reasons?.join(', ') || 'N/A';
 buyerNameSpan.textContent = currentOrderData.shippingInfo?.fullName || 'Customer';
 
 loadingState.classList.add('hidden');
 
 const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData);
 
-if (currentOrderData.status === 're-offered-pending' && autoAcceptDeadline) {
+if ((String(deviceStatus) === 're-offered-pending') && autoAcceptDeadline) {
 offerDetailsState.classList.remove('hidden');
 replySection.classList.remove('hidden');
 actionButtonsDiv.classList.remove('hidden');
@@ -191,15 +199,15 @@ countdownTimer.textContent = formatTimeRemaining(timeRemaining);
 
 updateCountdown();
 countdownInterval = setInterval(updateCountdown, 1000);
-} else if (currentOrderData.status === 're-offered-pending') {
+} else if (String(deviceStatus) === 're-offered-pending') {
 offerDetailsState.classList.remove('hidden');
 replySection.classList.remove('hidden');
 actionButtonsDiv.classList.remove('hidden');
 countdownContainer.classList.add('hidden');
 
-} else if (currentOrderData.status === 're-offered-accepted' || currentOrderData.status === 're-offered-auto-accepted') {
+} else if (String(deviceStatus) === 're-offered-accepted' || String(deviceStatus) === 're-offered-auto-accepted') {
 renderConfirmationState('re-offered-accepted', orderId);
-} else if (currentOrderData.status === 're-offered-declined') {
+} else if (String(deviceStatus) === 're-offered-declined') {
 renderConfirmationState('re-offered-declined', orderId);
 } else {
 errorMessage.textContent = 'No pending offer found for this order, or it has been processed already.';
@@ -224,8 +232,9 @@ clearInterval(countdownInterval);
 try {
 const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
+const deviceKey = urlParams.get('deviceKey');
 const actionEndpoint = `/${actionType}-action`;
-await apiPost(actionEndpoint, { orderId: orderId }, { authRequired: true });
+await apiPost(actionEndpoint, { orderId: orderId, deviceKey: deviceKey || null }, { authRequired: true });
 
 await loadOfferDetails();
 
