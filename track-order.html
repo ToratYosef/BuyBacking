@@ -536,6 +536,9 @@
     const reofferNote = document.getElementById('reofferNote');
 
     let currentOrder = null;
+    let autoScrollToReoffer = false;
+    let pendingActionFromLink = null;
+    let pendingDeviceKeyFromLink = null;
 
     function normalize(value) {
       return (value || '').trim().toLowerCase();
@@ -799,6 +802,29 @@
       }
     }
 
+    function maybeScrollToReofferPanel() {
+      if (!autoScrollToReoffer) return;
+      if (reofferPanel.classList.contains('hidden')) return;
+      autoScrollToReoffer = false;
+      reofferPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function maybeRunLinkAction() {
+      if (!pendingActionFromLink) return;
+      if (pendingActionFromLink !== 'accept' && pendingActionFromLink !== 'decline') return;
+
+      const selector = pendingDeviceKeyFromLink
+        ? `[data-reoffer-action="${pendingActionFromLink}"][data-device-key="${CSS.escape(pendingDeviceKeyFromLink)}"]`
+        : `[data-reoffer-action="${pendingActionFromLink}"]`;
+      const button = reofferActions.querySelector(selector);
+      if (!button) return;
+
+      const action = pendingActionFromLink;
+      pendingActionFromLink = null;
+      pendingDeviceKeyFromLink = null;
+      await submitReofferDecision(action, button.dataset.deviceKey || null, button);
+    }
+
     function displayOrder(order) {
       currentOrder = order;
       const statusKey = normalize(order.status) || 'order_pending';
@@ -818,6 +844,8 @@
       renderProgress(statusKey);
       renderReofferPanel(order);
       statusCard.classList.remove('hidden');
+      maybeScrollToReofferPanel();
+      maybeRunLinkAction().catch(() => {});
     }
 
     function setLoading(isLoading) {
@@ -865,6 +893,12 @@
       const params = new URLSearchParams(window.location.search);
       const idFromUrl = params.get('orderId') || params.get('id');
       const emailFromUrl = params.get('email');
+      const rawAction = normalize(params.get('action'));
+      const actionFromUrl = rawAction === 'accept' ? 'accept' : rawAction === 'decline' ? 'decline' : null;
+
+      autoScrollToReoffer = params.get('scrollToReoffer') === '1' || params.get('fromReofferLink') === '1';
+      pendingActionFromLink = actionFromUrl;
+      pendingDeviceKeyFromLink = params.get('deviceKey') || null;
 
       if (idFromUrl) {
         orderIdInput.value = idFromUrl;
