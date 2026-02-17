@@ -23,6 +23,34 @@ const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 let countdownInterval = null;
 let pendingAction = null;
 
+const redirectToTrackOrder = () => {
+const params = new URLSearchParams(window.location.search);
+const target = new URL('/track-order.html', window.location.origin);
+const orderId = params.get('orderId');
+const email = params.get('email');
+const deviceKey = params.get('deviceKey');
+const action = params.get('action');
+
+if (orderId) {
+target.searchParams.set('orderId', orderId);
+}
+if (email) {
+target.searchParams.set('email', email);
+}
+if (deviceKey) {
+target.searchParams.set('deviceKey', deviceKey);
+}
+if (action) {
+target.searchParams.set('action', action);
+}
+target.searchParams.set('fromReofferLink', '1');
+target.searchParams.set('scrollToReoffer', '1');
+
+window.location.replace(target.toString());
+};
+
+redirectToTrackOrder();
+
 const loadingState = document.getElementById('loadingState');
 const offerDetailsState = document.getElementById('offerDetailsState');
 const confirmationState = document.getElementById('confirmationState');
