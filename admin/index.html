@@ -1030,52 +1030,6 @@
         render();
       }
     }
-    function shouldAutoMarkKitSent(order) {
-      // Spec: require >=2 kit label identifiers, not past received, not locked statuses
-      const s = normalizeStatusKey(order?.status);
-      if (isStatusPastReceived(s)) return false;
-      const locked = new Set(["cancelled", "completed", "received"]);
-      if (locked.has(s)) return false;
-      // ">=2 kit label identifiers" heuristic based on fields commonly present
-      const ids = new Set();
-      const labels = getShipEngineLabelEntries(order);
-      for (const { value: l } of labels) {
-        if (l?.labelId) ids.add(String(l.labelId));
-        if (l?.label_id) ids.add(String(l.label_id));
-        if (l?.id) ids.add(String(l.id));
-        if (l?.trackingNumber) ids.add(String(l.trackingNumber));
-        if (l?.tracking_number) ids.add(String(l.tracking_number));
-      }
-      // also include explicit tracking fields
-      if (order?.outboundTrackingNumber) ids.add(String(order.outboundTrackingNumber));
-      if (order?.inboundTrackingNumber) ids.add(String(order.inboundTrackingNumber));
-      return ids.size >= 2;
-    }
-    async function handleSeparateKitOrders() {
-      const src = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
-      const eligible = src.filter(shouldAutoMarkKitSent);
-      if (!eligible.length) {
-        toast("No eligible kit orders found", "info");
-        return;
-      }
-      const ok = confirm(
-        `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_sent" and will NOT notify customers.`
-      );
-      if (!ok) return;
-      let success = 0, failed = 0;
-      for (const o of eligible) {
-        try {
-          await updateOrderStatusInline(o.id, "kit_sent", { notifyCustomer: false });
-          // keep local in sync (optimistic)
-          o.status = "kit_sent";
-          success++;
-        } catch (e) {
-          failed++;
-        }
-      }
-      toast(`Separate Kit Orders: ${success} ok, ${failed} failed`, failed ? "error" : "success");
-      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-    }
     // ----------------------------
     // SPEC: REFRESH ALL TRACKING (kit/email) with concurrency=4
     // ----------------------------
@@ -1371,11 +1325,11 @@
             method = "POST";
             body = options?.body ?? {}; // { reason, notes?, label? }
             break;
-          // re-offer (exact)
-          case "reOffer_disabled_legacy":
+          // re-offer (per-device)
+          case "reOffer":
             endpoint = `/orders/${orderId}/re-offer`;
             method = "POST";
-            body = options?.body ?? {}; // { newPrice, reasons, comments }
+            body = options?.body ?? {}; // { newPrice, reasons, comments, deviceKey }
             break;
           // New Actions from JSON Spec
           case "manualFulfill":
@@ -1775,6 +1729,7 @@
     // SPEC: ORDERS TABLE RENDER (with per-device rows + selection)
     // ----------------------------
     function renderBulkBar() {
+      if (state.selectedOrderIds.size === 0) return '';
       return `
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-4">
           <div class="flex flex-col sm:flex-row items-center gap-3 justify-between">
@@ -1783,11 +1738,11 @@
             </div>
             <button id="bulk-print-slips"
               class="px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${
-                (state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress)
+                !state.isBulkSlipPrintInProgress
                   ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200"
                   : "bg-slate-100 text-slate-400 cursor-not-allowed"
               }"
-              ${!(state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress) ? "disabled" : ""}>
+              ${state.isBulkSlipPrintInProgress ? "disabled" : ""}>
               <i data-lucide="${state.isBulkSlipPrintInProgress ? "loader" : "printer"}" class="${state.isBulkSlipPrintInProgress ? "animate-spin" : ""}" style="width:16px;height:16px"></i>
               ${state.isBulkSlipPrintInProgress ? "Preparing Merged PDF…" : "Bulk Print Packing Slips"}
             </button>
@@ -2973,35 +2928,6 @@
     }
 
     // ----------------------------
-    // ORDER TEXT IMPORT MODAL (placeholder; spec says implementation exists elsewhere)
-    // ----------------------------
-    function renderOrderTextImportModal() {
-      if (!state.orderTextImportOpen) return "";
-      return `
-        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
-            <div class="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-              <div>
-                <h3 class="text-lg font-bold text-slate-900">Paste Order From Text</h3>
-                <p class="text-xs text-slate-500">This is wired + ready — paste parsing/submit logic can be dropped in.</p>
-              </div>
-              <button id="orderTextImportCloseBtn" class="text-slate-400 hover:text-slate-600 transition-colors">
-                <i data-lucide="x" style="width:20px;height:20px"></i>
-              </button>
-            </div>
-            <div id="orderTextImportBody" class="px-6 py-6 space-y-3 overflow-y-auto flex-1 min-h-0">
-              <textarea id="orderTextImportInput" class="w-full h-52 border border-slate-300 rounded-xl p-3 text-sm font-mono"
-                placeholder="Paste the raw order text here…"></textarea>
-              <div class="flex justify-end gap-2">
-                <button id="orderTextImportCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-sm">Cancel</button>
-                <button id="orderTextImportSubmitBtn" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Submit</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    // ----------------------------
     // CONFIRMATION MODAL
     // ----------------------------
     function renderConfirmationModal() {
@@ -3049,13 +2975,12 @@
           ${getSelectedOrder() ? renderQcModal(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderReofferModal(getSelectedOrder()) : ""}
           ${renderQcCompletionAnimation()}
-          ${renderOrderTextImportModal()}
           ${renderConfirmationModal()}
         </div>
       `;
     }
     function hasBlockingOverlayOpen() {
-      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen);
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
@@ -3609,10 +3534,14 @@
             state.qcOpen = false;
             state.qcStep = 1;
             state.qcData = null;
+            const completedDeviceKey = state.qcDeviceKey;
             state.qcDeviceKey = null;
-            // Set order to pay_now status
-            await updateOrderStatusInline(order.id, "pay_now", { notifyCustomer: false });
-            toast("QC completed! Order ready for payment.", "success");
+            
+            // Set DEVICE status to pay_now (not order status)
+            if (completedDeviceKey) {
+              await updateDeviceStatusInline(order.id, completedDeviceKey, "pay_now");
+            }
+            toast("QC completed! Device ready for payment.", "success");
             render();
           } else {
             // QC doesn't match or needs emails - proceed with reoffer/email flow
@@ -3663,20 +3592,6 @@
             },
             { confirmText: 'Send Re-offer', isDangerous: false }
           );
-        });
-      }
-      // Order text import modal controls
-      if (state.orderTextImportOpen) {
-        const close = document.getElementById("orderTextImportCloseBtn");
-        const cancel = document.getElementById("orderTextImportCancelBtn");
-        const submit = document.getElementById("orderTextImportSubmitBtn");
-        const closeAll = () => { state.orderTextImportOpen = false; state.modalScrollTop.import = 0; render(); };
-        if (close) close.addEventListener("click", closeAll);
-        if (cancel) cancel.addEventListener("click", closeAll);
-        if (submit) submit.addEventListener("click", () => {
-          // placeholder: wire your real handleOrderTextImportSubmit here
-          toast("Submit handler placeholder (drop in parser + API call)", "info");
-          closeAll();
         });
       }
       // Confirmation modal handlers
