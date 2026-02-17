@@ -3010,6 +3010,68 @@
         render();
       });
     }
+    
+    // ----------------------------
+    // PAYMENT CONFIRMATION MODAL
+    // ----------------------------
+    function renderPaymentConfirmModal() {
+      if (!state.paymentConfirmModalOpen || !state.paymentConfirmDeviceKey) return "";
+      
+      const order = getSelectedOrder();
+      if (!order) return "";
+      
+      const deviceKey = state.paymentConfirmDeviceKey;
+      const qcData = order.qcDataByDevice?.[deviceKey];
+      if (!qcData) return "";
+      
+      // Parse device info from key
+      const parsed = parseOrderDeviceKey(deviceKey);
+      const deviceIndex = parsed.deviceIndex || 0;
+      const entries = getOrderDeviceEntries(order);
+      const entry = entries[deviceIndex] || entries[0];
+      const item = entry?.item || order;
+      
+      const deviceName = item.deviceName || item.model || 'Device';
+      const deviceCapacity = item.capacity || item.storage || '';
+      const deviceCondition = qcData.condition || item.condition || '';
+      
+      return \`
+        <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" style="z-index: 999999;">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 animate-in">
+            <div class="px-6 py-5 border-b border-slate-100">
+              <h3 class="text-lg font-bold text-slate-900">💰 Payment Confirmation</h3>
+            </div>
+            <div class="px-6 py-6">
+              <div class="mb-4">
+                <p class="text-sm font-semibold text-slate-700 mb-2">Device Information:</p>
+                <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <p class="text-sm text-slate-900 font-medium">\${esc(deviceName)} \${deviceCapacity ? esc(deviceCapacity) : ''}</p>
+                  <p class="text-xs text-slate-600 mt-1">Condition: \${esc(deviceCondition)}</p>
+                  <p class="text-xs text-slate-600">Device ${deviceIndex + 1} of ${entries.length}</p>
+                </div>
+              </div>
+              <p class="text-base text-slate-700 mb-4">
+                QC has been completed for this device. Would you like to proceed with payment?
+              </p>
+              <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4" id="paymentInfoSection" style="display: none;">
+                <p class="text-sm font-semibold text-emerald-900 mb-2">💵 Payout Information</p>
+                <p class="text-2xl font-bold text-emerald-700" id="payoutAmount">--</p>
+                <p class="text-xs text-emerald-700 mt-1">This amount will be paid to the customer</p>
+              </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button id="paymentConfirmCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700">
+                Close
+              </button>
+              <button id="paymentConfirmYesBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700">
+                Show Payment Info
+              </button>
+            </div>
+          </div>
+        </div>
+      \`;
+    }
+    
     // ----------------------------
     // MAIN RENDER
     // ----------------------------
