@@ -1219,7 +1219,8 @@
           const order = queue.shift();
           if (!order) return;
           try {
-            await apiPost(`/refresh-tracking`, { orderId: order.id, type: "email" });
+            const refreshType = matchesKitTrackingHints(order) ? "kit" : "email";
+            await apiPost(`/refresh-tracking`, { orderId: order.id, type: refreshType });
             success++;
           } catch (e) {
             failed++;
