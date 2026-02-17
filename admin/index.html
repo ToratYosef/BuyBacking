@@ -654,7 +654,6 @@
       if (!qcData) return reasons;
       if (qcData.deviceMatch === 'no') reasons.push('Device received does not match the original model selection.');
       if (qcData.storageMatch === 'no') reasons.push('Storage/GB amount differs from what was quoted.');
-      if (qcData.hasDamage === 'yes') reasons.push('Physical damage was found in inspection.');
       
       // Add broken issues if condition is broken
       if (qcData.condition === 'broken' && qcData.brokenIssues && qcData.brokenIssues.length > 0) {
@@ -2430,7 +2429,6 @@
                       qcData.deviceMatch === 'no' ? 'Device mismatch' : 'Device matched',
                       qcData.storageMatch === 'no' ? 'Storage updated in QC' : null,
                       qcData.isFunctional === 'no' ? 'Non-functional' : 'Functional',
-                      qcData.hasDamage === 'yes' ? 'Damage noted' : null,
                       qcData.hasCracks === 'yes' ? 'Cracks present' : null,
                       qcData.isLocked === 'yes' ? 'Screen locked' : 'No screen lock'
                     ].filter(Boolean).join(' • '))}
@@ -2658,7 +2656,6 @@
           actualStorage: currentItem.storage || order.storage || "",
           storageMatch: "yes",
           isFunctional: "yes",
-          hasDamage: "no",
           hasCracks: "no",
           isLocked: "no",
           hasFmi: "no",
@@ -2793,10 +2790,6 @@
                 </div>
               </div>
             ` : ''}
-            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <span class="text-sm text-slate-700">Physical damage?</span>
-              <input id="qcHasDamage" type="checkbox" ${state.qcData.hasDamage === "yes" ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
-            </label>
           </div>
         `;
       }
@@ -3538,8 +3531,6 @@
           });
           const otherIssue = document.getElementById("qcOtherIssue");
           if (otherIssue) otherIssue.addEventListener("input", () => state.qcData.otherIssue = otherIssue.value);
-          const damage = document.getElementById("qcHasDamage");
-          if (damage) damage.addEventListener("change", () => state.qcData.hasDamage = damage.checked ? "yes" : "no");
           const cracks = document.getElementById("qcHasCracks");
           if (cracks) cracks.addEventListener("change", () => state.qcData.hasCracks = cracks.checked ? "yes" : "no");
           const locked = document.getElementById("qcIsLocked");
