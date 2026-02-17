@@ -140,7 +140,6 @@
       "delivered_to_us",
       "label_generated",
       "emailed",
-      "issue_resolved",
       "phone_on_the_way",
       "received",
       "completed",
@@ -178,8 +177,6 @@
       if (s.includes("pending") || s.includes("needs_printing") || s.includes("kit_needs_printing")) return "bg-amber-100 text-amber-800 border-amber-200";
       if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-100 text-blue-800 border-blue-200";
       if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-100 text-indigo-800 border-indigo-200";
-      if (s.includes("issue_resolved")) return "bg-teal-100 text-teal-800 border-teal-200";
-      if (s.includes("pay_now") || s.includes("pay now")) return "bg-amber-100 text-amber-800 border-amber-200";
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-100 text-emerald-800 border-emerald-200";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-100 text-purple-800 border-purple-200";
       return "bg-slate-100 text-slate-800 border-slate-200";
@@ -190,9 +187,7 @@
       if (s.includes("cancel")) return "bg-slate-300";
       if (s.includes("pending") || s.includes("needs_printing") || s.includes("kit_needs_printing")) return "bg-amber-400";
       if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-500";
-      if (s.includes("pay_now") || s.includes("pay now")) return "bg-amber-400";
       if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-500";
-      if (s.includes("issue_resolved")) return "bg-teal-500";
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-500";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-500";
       return "bg-slate-300";
@@ -535,18 +530,6 @@
       // bulk states
       isBulkSlipPrintInProgress: false,
       lastRefreshAt: null,
-      // confirmation modal
-      confirmationModal: {
-        isOpen: false,
-        title: '',
-        message: '',
-        confirmText: 'Confirm',
-        cancelText: 'Cancel',
-        onConfirm: null,
-        isDangerous: false
-      },
-      // QC completion animation
-      qcCompletionAnimation: false
     };
     function getSelectedOrder() {
       if (!state.selectedOrderId) return null;
@@ -661,56 +644,14 @@
       if (!qcData) return reasons;
       if (qcData.deviceMatch === 'no') reasons.push('Device received does not match the original model selection.');
       if (qcData.storageMatch === 'no') reasons.push('Storage/GB amount differs from what was quoted.');
-      if (qcData.condition === 'broken' && qcData.brokenIssues && qcData.brokenIssues.length > 0) {
-        const issueLabels = {
-          'cracked_front': 'Cracked front glass',
-          'cracked_back': 'Cracked back glass',
-          'lcd_dead_spots': 'LCD has dead spots',
-          'screen_lines': 'Screen has lines/discoloration',
-          'touch_not_working': 'Touch screen not working',
-          'camera_front': 'Front camera malfunction',
-          'camera_back': 'Back camera malfunction',
-          'mic_issue': 'Microphone malfunction',
-          'speaker_issue': 'Speaker malfunction',
-          'earpiece_issue': 'Earpiece malfunction',
-          'volume_buttons': 'Volume buttons not working',
-          'power_button': 'Power button not working',
-          'home_button': 'Home button not working',
-          'charging_port': 'Charging port issue',
-          'battery_issue': 'Battery issue/won\'t hold charge',
-          'wifi_issue': 'WiFi not working',
-          'bluetooth_issue': 'Bluetooth not working',
-          'cellular_issue': 'Cellular/signal issue',
-          'face_id': 'Face ID not working',
-          'touch_id': 'Touch ID not working',
-          'water_damage': 'Water damage detected',
-          'bent_frame': 'Bent/warped frame'
-        };
-        const issueDescriptions = qcData.brokenIssues.map(id => issueLabels[id] || id).join(', ');
-        reasons.push(`Device has functional issues: ${issueDescriptions}.`);
-      }
-      if (qcData.brokenIssueOther && qcData.brokenIssueOther.trim()) {
-        reasons.push(`Additional issue: ${qcData.brokenIssueOther.trim()}`);
-      }
+      if (qcData.hasDamage === 'yes') reasons.push('Physical damage was found in inspection.');
+      if (qcData.hasCracks === 'yes') reasons.push('Cracked glass/back lowers the device value.');
+      if (qcData.isFunctional === 'no') reasons.push('Device is not fully functional during testing.');
       if (qcData.isLocked === 'yes') reasons.push('Screen lock / passcode is still active.');
       if (qcData.hasFmi === 'yes') reasons.push('FMI / iCloud / FRP / Google lock is still active.');
       if (qcData.hasBalance === 'yes') reasons.push('Outstanding carrier/financing balance is present.');
       if (qcData.notes) reasons.push(`Inspector notes: ${qcData.notes}`);
       return reasons;
-    }
-
-    function qcMatchesCustomerDescription(order, qcData) {
-      if (!qcData) return true;
-      // Check if any critical differences exist that would require a re-offer
-      const hasDeviceMismatch = qcData.deviceMatch === 'no';
-      const hasStorageMismatch = qcData.storageMatch === 'no';
-      const hasConditionChange = order.condition && qcData.condition && 
-        normalizeStatusKey(order.condition) !== normalizeStatusKey(qcData.condition);
-      const hasBrokenIssues = qcData.condition === 'broken' && qcData.brokenIssues && qcData.brokenIssues.length > 0;
-      const hasOtherIssue = qcData.brokenIssueOther && qcData.brokenIssueOther.trim();
-      
-      // If any mismatch exists, we need re-offer
-      return !(hasDeviceMismatch || hasStorageMismatch || hasConditionChange || hasBrokenIssues || hasOtherIssue);
     }
 
     async function openReofferModal(order, qcData = null) {
@@ -727,32 +668,6 @@
         condition: qcData?.condition || order?.condition || 'good'
       };
       state.reofferOpen = true;
-    }
-
-    function showConfirmation(title, message, onConfirm, options = {}) {
-      state.confirmationModal = {
-        isOpen: true,
-        title: title,
-        message: message,
-        confirmText: options.confirmText || 'Confirm',
-        cancelText: options.cancelText || 'Cancel',
-        onConfirm: onConfirm,
-        isDangerous: options.isDangerous || false
-      };
-      render();
-    }
-
-    function closeConfirmation() {
-      state.confirmationModal = {
-        isOpen: false,
-        title: '',
-        message: '',
-        confirmText: 'Confirm',
-        cancelText: 'Cancel',
-        onConfirm: null,
-        isDangerous: false
-      };
-      render();
     }
 
     function getFocusedDevice(order) {
@@ -925,47 +840,7 @@
       } else {
         state.currentPage = 1;
       }
-      // Instead of full render, update just the table to preserve search input focus
-      refreshOrdersTableOnly();
-    }
-    // ----------------------------
-    // SPEC: PARTIAL TABLE REFRESH
-    // ----------------------------
-    function refreshOrdersTableOnly() {
-      // Update only the orders table, status breakdown, and bulk bar without full re-render
-      // This preserves search input focus and allows multi-character typing
-      const statusBreakdownEl = document.querySelector('[data-status-breakdown]');
-      const bulkBarEl = document.querySelector('[data-bulk-bar]');
-      const ordersTableEl = document.querySelector('[data-orders-table]');
-      
-      if (statusBreakdownEl) {
-        statusBreakdownEl.outerHTML = renderStatusBreakdown();
-      }
-      if (bulkBarEl) {
-        bulkBarEl.outerHTML = renderBulkBar();
-      }
-      if (ordersTableEl) {
-        ordersTableEl.outerHTML = renderOrdersTable();
-      }
-      
-      // Re-bind events for the updated sections
-      lucide.createIcons();
-      updateSelectAllCheckboxUI();
-      
-      // Re-bind status breakdown clicks
-      document.querySelectorAll("[data-status-tab]").forEach(btn => {
-        const go = () => {
-          const key = btn.getAttribute("data-status-tab");
-          if (key) filterAndRenderOrders(key, state.currentSearchTerm, { preservePage: false });
-        };
-        btn.addEventListener("click", go);
-        btn.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            go();
-          }
-        });
-      });
+      render();
     }
     // ----------------------------
     // SPEC: BULK SELECTION (order)
@@ -1029,6 +904,52 @@
         state.isBulkSlipPrintInProgress = false;
         render();
       }
+    }
+    function shouldAutoMarkKitSent(order) {
+      // Spec: require >=2 kit label identifiers, not past received, not locked statuses
+      const s = normalizeStatusKey(order?.status);
+      if (isStatusPastReceived(s)) return false;
+      const locked = new Set(["cancelled", "completed", "received"]);
+      if (locked.has(s)) return false;
+      // ">=2 kit label identifiers" heuristic based on fields commonly present
+      const ids = new Set();
+      const labels = getShipEngineLabelEntries(order);
+      for (const { value: l } of labels) {
+        if (l?.labelId) ids.add(String(l.labelId));
+        if (l?.label_id) ids.add(String(l.label_id));
+        if (l?.id) ids.add(String(l.id));
+        if (l?.trackingNumber) ids.add(String(l.trackingNumber));
+        if (l?.tracking_number) ids.add(String(l.tracking_number));
+      }
+      // also include explicit tracking fields
+      if (order?.outboundTrackingNumber) ids.add(String(order.outboundTrackingNumber));
+      if (order?.inboundTrackingNumber) ids.add(String(order.inboundTrackingNumber));
+      return ids.size >= 2;
+    }
+    async function handleSeparateKitOrders() {
+      const src = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
+      const eligible = src.filter(shouldAutoMarkKitSent);
+      if (!eligible.length) {
+        toast("No eligible kit orders found", "info");
+        return;
+      }
+      const ok = confirm(
+        `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_sent" and will NOT notify customers.`
+      );
+      if (!ok) return;
+      let success = 0, failed = 0;
+      for (const o of eligible) {
+        try {
+          await updateOrderStatusInline(o.id, "kit_sent", { notifyCustomer: false });
+          // keep local in sync (optimistic)
+          o.status = "kit_sent";
+          success++;
+        } catch (e) {
+          failed++;
+        }
+      }
+      toast(`Separate Kit Orders: ${success} ok, ${failed} failed`, failed ? "error" : "success");
+      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
     }
     // ----------------------------
     // SPEC: REFRESH ALL TRACKING (kit/email) with concurrency=4
@@ -1176,69 +1097,6 @@
       };
     }
 
-    async function openPaymentLink(orderId) {
-      const order = state.allOrders.find(o => o.id === orderId);
-      if (!order) {
-        toast("Order not found", "error");
-        return;
-      }
-
-      const method = normalizeStatusKey(order.paymentMethod || '');
-      const details = order.paymentDetails || {};
-      const identifier = String(order.paymentIdentifier || '').trim();
-      const amount = getOrderPayoutTotal(order);
-
-      let url = '';
-      
-      switch (method) {
-        case 'cashapp':
-          const cashTag = String(details.cashappTag || details.cashAppTag || identifier || '').replace(/^\$/, '');
-          if (cashTag) {
-            // CashApp deeplink
-            url = `https://cash.app/$${cashTag}/${amount || ''}`;
-          } else {
-            url = 'https://cash.app/';
-          }
-          break;
-        
-        case 'paypal':
-          const paypalEmail = String(details.paypalEmail || identifier || '').trim();
-          if (paypalEmail) {
-            // PayPal.me link if available, otherwise standard PayPal
-            url = `https://www.paypal.com/paypalme/${paypalEmail}/${amount || ''}`;
-          } else {
-            url = 'https://www.paypal.com/';
-          }
-          break;
-        
-        case 'zelle':
-          const zelleId = String(details.zelleIdentifier || details.zelleEmail || details.zellePhone || identifier || '').trim();
-          // Zelle doesn't have deeplinks, just open website
-          url = 'https://www.zellepay.com/';
-          toast(`Zelle payment to: ${zelleId || 'N/A'}. Amount: $${amount || '0'}`, "info");
-          break;
-        
-        case 'venmo':
-          const venmoUser = String(details.venmoUsername || identifier || '').replace(/^@/, '');
-          if (venmoUser) {
-            // Venmo deeplink
-            url = `https://venmo.com/${venmoUser}?txn=pay&amount=${amount || ''}&note=Order ${orderId}`;
-          } else {
-            url = 'https://venmo.com/';
-          }
-          break;
-        
-        default:
-          toast(`Payment method: ${method}. Please process payment manually.`, "info");
-          return;
-      }
-
-      if (url) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        toast(`Payment window opened. Mark as completed after processing payment.`, "info");
-      }
-    }
-
     async function handleAction(orderId, actionType, options = {}) {
       try {
         // tracking guard
@@ -1325,11 +1183,11 @@
             method = "POST";
             body = options?.body ?? {}; // { reason, notes?, label? }
             break;
-          // re-offer (per-device)
+          // re-offer (exact)
           case "reOffer":
             endpoint = `/orders/${orderId}/re-offer`;
             method = "POST";
-            body = options?.body ?? {}; // { newPrice, reasons, comments, deviceKey }
+            body = options?.body ?? {}; // { newPrice, reasons, comments }
             break;
           // New Actions from JSON Spec
           case "manualFulfill":
@@ -1369,15 +1227,12 @@
             body = { reason: "fmi_active", label: "Email FMI / Activation Lock Notice" };
             break;
           case "markPaid":
-            // Mark as completed directly
+          case "payNow":
+            // Re-offered accepted payment flow
             endpoint = `/orders/${orderId}/status`;
             method = "PUT";
             body = { status: "completed" };
             break;
-          case "payNow":
-            // Open payment website/deeplink - don't mark as completed yet
-            await openPaymentLink(orderId);
-            return;
           case "printDocs":
             toast("Print Kit Docs is not available in this view", "info");
             return;
@@ -1670,18 +1525,6 @@
           count: isActive ? "bg-white/15 text-white" : "bg-indigo-100 text-indigo-700"
         };
       }
-      if (s === "issue_resolved") {
-        return {
-          pill: isActive ? "bg-teal-500 text-white shadow-md" : "bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100",
-          count: isActive ? "bg-white/15 text-white" : "bg-teal-100 text-teal-700"
-        };
-      }
-      if (s === "pay_now") {
-        return {
-          pill: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100",
-          count: isActive ? "bg-white/15 text-white" : "bg-amber-100 text-amber-700"
-        };
-      }
       if (s === "completed") {
         return {
           pill: isActive ? "bg-emerald-500 text-white shadow-md" : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100",
@@ -1701,9 +1544,7 @@
         { key: "kit_needs_printing", label: "Kit Needs Printing", count: visible.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
         { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
         { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
-        { key: "issue_resolved", label: "Issue Resolved", count: statusCounts.get("issue_resolved") || 0 },
         { key: "received", label: "Received", count: visible.filter(o => isReceivedStatusValue(o?.status)).length },
-        { key: "pay_now", label: "Pay Now", count: statusCounts.get("pay_now") || 0 },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
@@ -1729,23 +1570,35 @@
     // SPEC: ORDERS TABLE RENDER (with per-device rows + selection)
     // ----------------------------
     function renderBulkBar() {
-      if (state.selectedOrderIds.size === 0) return '';
       return `
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-4">
-          <div class="flex flex-col sm:flex-row items-center gap-3 justify-between">
-            <div class="text-sm text-slate-600">
-              <span class="font-semibold text-slate-700">${state.selectedOrderIds.size}</span> ${state.selectedOrderIds.size === 1 ? 'order' : 'orders'} selected
+          <div class="flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="refresh-all-kit-tracking"
+                class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+                <i data-lucide="refresh-cw" style="width:16px;height:16px"></i> Refresh All Kit Tracking
+              </button>
+              <button id="refresh-all-email-tracking"
+                class="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+                <i data-lucide="refresh-cw" style="width:16px;height:16px"></i> Refresh All Email Tracking
+              </button>
             </div>
-            <button id="bulk-print-slips"
-              class="px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${
-                !state.isBulkSlipPrintInProgress
-                  ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200"
-                  : "bg-slate-100 text-slate-400 cursor-not-allowed"
-              }"
-              ${state.isBulkSlipPrintInProgress ? "disabled" : ""}>
-              <i data-lucide="${state.isBulkSlipPrintInProgress ? "loader" : "printer"}" class="${state.isBulkSlipPrintInProgress ? "animate-spin" : ""}" style="width:16px;height:16px"></i>
-              ${state.isBulkSlipPrintInProgress ? "Preparing Merged PDF…" : "Bulk Print Packing Slips"}
-            </button>
+            <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <button id="bulk-print-slips"
+                class="px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 ${
+                  (state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress)
+                    ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                }"
+                ${!(state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress) ? "disabled" : ""}>
+                <i data-lucide="${state.isBulkSlipPrintInProgress ? "loader" : "printer"}" class="${state.isBulkSlipPrintInProgress ? "animate-spin" : ""}" style="width:16px;height:16px"></i>
+                ${state.isBulkSlipPrintInProgress ? "Preparing PDF…" : "Bulk Print Slips"}
+              </button>
+            </div>
+          </div>
+          <div class="mt-3 text-xs text-slate-500 flex items-center justify-between">
+            <div>Selected orders: <span class="font-semibold text-slate-700">${state.selectedOrderIds.size}</span></div>
+            ${IS_AGING_PAGE ? `<div class="text-amber-700 font-semibold">Aging mode ON (min age: ${Math.round(MIN_AGING_MS / (1000*60*60*24))}d)</div>` : `<div></div>`}
           </div>
         </div>
       `;
@@ -1769,21 +1622,6 @@
       if (labTN) parts.push(`Label: ${esc(labTN)}`);
       return parts.join(" • ");
     }
-    // ----------------------------
-    // SPEC: 14-DAY SHIPPING TIMER
-    // ----------------------------
-    function isLateShipment(order) {
-      const status = normalizeStatusKey(order?.status);
-      if (status !== "label_generated") return false;
-      
-      const lastUpdate = getLastUpdateTimestamp(order);
-      const timestamp = toDateAny(lastUpdate || order?.createdAt);
-      if (!timestamp) return false;
-      
-      const daysSince = (Date.now() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
-      return daysSince > 14;
-    }
-    
     function renderOrdersTable() {
       const source = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
       const total = source.length;
@@ -1803,7 +1641,6 @@
         const trackingLink = trackingNumber ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNumber)}` : "";
         const statusExtra = labelStatusExtraHTML(order);
         const payoutTotal = getOrderPayoutTotal(order);
-        const isLate = isLateShipment(order);
         state.lastRenderedDeviceKeys.push(buildOrderDeviceKey(order.id, 0));
 
         // Order summary row
@@ -1823,7 +1660,6 @@
                   <span class="text-xs text-slate-400">•</span>
                   <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
                   ${promoBadgeHTML(order)}
-                  ${isLate ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">⚠️ 14+ Days</span>' : ''}
                 </div>
                 <div class="text-xs text-slate-500">
                   <span class="font-semibold text-slate-700">${esc(order?.shippingInfo?.fullName || "Guest")}</span>
@@ -1961,9 +1797,9 @@
               </div>
             </div>
             ${updateGlassMetricsHTML()}
-            <div data-status-breakdown>${renderStatusBreakdown()}</div>
-            <div data-bulk-bar>${renderBulkBar()}</div>
-            <div data-orders-table>${renderOrdersTable()}</div>
+            ${renderStatusBreakdown()}
+            ${renderBulkBar()}
+            ${renderOrdersTable()}
           </div>
         </main>
       `;
@@ -2049,12 +1885,12 @@
       const tabs = [
         { id: "overview", label: "Overview", icon: "layout-dashboard" },
         { id: "shipping", label: "Shipping & Tracking", icon: "truck" },
-        { id: "price-history", label: "Pricing Activity", icon: "trending-down" },
         { id: "logs", label: "Activity Logs", icon: "file-text" },
       ];
       const entries = getOrderDeviceEntries(order);
       const focused = getFocusedDevice(order);
       const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
+      tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
       const visibleEntries = entries;
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
@@ -2072,18 +1908,13 @@
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const showAcceptedOfferSwap = isAcceptedReofferStatus(deviceStatus) && Number.isFinite(acceptedDeviceOffer);
           return `
-            <button type="button" data-open-qc-device="${esc(deviceKey)}" class="w-full p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors text-left border-l-4 ${getStatusClass(deviceStatus).split('bg-')[1] ? 'border-' + getStatusClass(deviceStatus).split('bg-')[1].split(' ')[0].replace('100', '400') : 'border-slate-200'}">
+            <button type="button" data-open-qc-device="${esc(deviceKey)}" class="w-full p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors text-left">
               <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
                 <i data-lucide="smartphone" style="width:24px;height:24px"></i>
               </div>
               <div class="flex-1">
-                <div class="flex items-center gap-2 mb-1">
-                  <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(item.device || order.device || "")}</h4>
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${getStatusClass(deviceStatus)}">
-                    ${esc(formatStatusLabel(deviceStatus))}
-                  </span>
-                </div>
-                <div class="flex flex-wrap gap-1.5">
+                <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(item.device || order.device || "")}</h4>
+                <div class="flex flex-wrap gap-1.5 mt-1.5">
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(item.storage || order.storage || "")}</span>
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(formatCarrierLabel(item.carrier || order.carrier || ""))}</span>
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200 capitalize">${esc(item.condition || order.condition || "")}</span>
@@ -2458,21 +2289,18 @@
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
         }
         else if (["received", "imei_checked"].includes(status)) {
-            // QC is now handled per-device from overview section
-            // Only show Mark Completed after all devices are QC'd
+            groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
+            // Only show Mark Completed after QC is complete
             if (hasQc) {
               groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
             }
+            groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
         }
-        else if (status === "emailed" || status === "issue_resolved") {
-            // QC is now handled per-device from overview section
+        else if (status === "emailed") {
+            groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
+            groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
             groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
             groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
-        }
-        else if (status === "pay_now") {
-            // QC completed successfully - ready for payment
-            groups.primary.push({ label: "Pay Now", action: "payNow", class: "bg-emerald-600 text-white" });
-            groups.primary.push({ label: "Mark as Completed", action: "markCompleted", class: "bg-slate-600 text-white" });
         }
         else if (status === "re-offered-pending") {
              // No footer action button for re-offer pending per admin workflow request.
@@ -2575,20 +2403,15 @@
           hasFmi: "no",
           hasBalance: "no",
           hasBlacklisted: "no",
-          brokenIssues: [],
-          brokenIssueOther: "",
           notes: "",
           ...(existing || {})
         };
       }
-      // Dynamic steps based on condition
-      const steps = [];
-      steps.push({ title: "Device Verification" });
-      steps.push({ title: "Condition & Grade" });
-      if (state.qcData.condition === "broken") {
-        steps.push({ title: "Device Issues" });
-      }
-      steps.push({ title: "Functionality & Locks" });
+      const steps = [
+        { title: "Device Verification" },
+        { title: "Condition & Grade" },
+        { title: "Functionality & Locks" }
+      ];
       const pct = Math.round((state.qcStep / steps.length) * 100);
       function step1() {
         return `
@@ -2656,24 +2479,9 @@
         `;
       }
       function step2() {
-        const customerCondition = currentItem.condition || order.condition || "N/A";
-        const customerCarrier = currentItem.carrier || currentItem.lock || order.carrier || order.lock || "N/A";
         return `
           <div class="space-y-4">
-            <img src="https://images.unsplash.com/photo-1526570207772-784d36084510?auto=format&fit=crop&w=900&q=60" alt="Device condition" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
-              <div class="text-xs font-semibold text-blue-700 uppercase tracking-wider">Customer's Original Selection</div>
-              <div class="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div class="text-xs text-blue-600 font-medium">Condition</div>
-                  <div class="text-slate-900 font-semibold capitalize">${esc(customerCondition)}</div>
-                </div>
-                <div>
-                  <div class="text-xs text-blue-600 font-medium">Carrier</div>
-                  <div class="text-slate-900 font-semibold capitalize">${esc(customerCarrier === "unlocked" ? "Unlocked" : customerCarrier === "att" ? "AT&T" : customerCarrier === "tmobile" ? "T-Mobile" : customerCarrier === "verizon" ? "Verizon" : customerCarrier)}</div>
-                </div>
-              </div>
-            </div>
+            <img src="https://images.unsplash.com/photo-1526570207772-784d36084510?auto=format&fit=crop&w=900&q=60" alt="Cracked phone screen" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Quality / condition grade</label>
               <select id="qcCondition" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
@@ -2684,57 +2492,14 @@
                 `).join("")}
               </select>
             </div>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <span class="text-sm text-slate-700">Physical damage?</span>
+              <input id="qcHasDamage" type="checkbox" ${state.qcData.hasDamage === "yes" ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
+            </label>
           </div>
         `;
       }
       function step3() {
-        // Broken device issues selection
-        const issueOptions = [
-          { id: 'cracked_front', label: 'Cracked Front Glass' },
-          { id: 'cracked_back', label: 'Cracked Back Glass' },
-          { id: 'lcd_dead_spots', label: 'LCD Dead Spots' },
-          { id: 'screen_lines', label: 'Screen Lines/Discoloration' },
-          { id: 'touch_not_working', label: 'Touch Not Working' },
-          { id: 'camera_front', label: 'Front Camera Issue' },
-          { id: 'camera_back', label: 'Back Camera Issue' },
-          { id: 'mic_issue', label: 'Microphone Issue' },
-          { id: 'speaker_issue', label: 'Speaker Issue' },
-          { id: 'earpiece_issue', label: 'Earpiece Issue' },
-          { id: 'volume_buttons', label: 'Volume Buttons Not Working' },
-          { id: 'power_button', label: 'Power Button Not Working' },
-          { id: 'home_button', label: 'Home Button Not Working' },
-          { id: 'charging_port', label: 'Charging Port Issue' },
-          { id: 'battery_issue', label: 'Battery Issue/Won\'t Hold Charge' },
-          { id: 'wifi_issue', label: 'WiFi Not Working' },
-          { id: 'bluetooth_issue', label: 'Bluetooth Not Working' },
-          { id: 'cellular_issue', label: 'Cellular/Signal Issue' },
-          { id: 'face_id', label: 'Face ID Not Working' },
-          { id: 'touch_id', label: 'Touch ID Not Working' },
-          { id: 'water_damage', label: 'Water Damage' },
-          { id: 'bent_frame', label: 'Bent/Warped Frame' }
-        ];
-        const checkedIssues = state.qcData.brokenIssues || [];
-        return `
-          <div class="space-y-4">
-            <img src="https://images.unsplash.com/photo-1621768216002-5ac171876625?auto=format&fit=crop&w=900&q=60" alt="Broken device" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
-            <p class="text-sm text-slate-600">Select all issues found with this device:</p>
-            <div class="space-y-2 max-h-64 overflow-y-auto">
-              ${issueOptions.map(opt => `
-                <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-                  <input type="checkbox" class="qc-broken-issue" data-issue="${opt.id}" ${checkedIssues.includes(opt.id) ? 'checked' : ''} class="h-4 w-4 accent-indigo-600" />
-                  <span class="text-sm text-slate-700">${opt.label}</span>
-                </label>
-              `).join('')}
-            </div>
-            <div class="mt-4">
-              <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Other Issue (Custom)</label>
-              <input id="qcBrokenIssueOther" type="text" value="${esc(state.qcData.brokenIssueOther || '')}" class="w-full border border-slate-300 rounded-md text-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Describe any other issue..." />
-            </div>
-          </div>
-        `;
-      }
-      function step4() {
-        // Old step3 is now step4
         const locked = state.qcData.isLocked === "yes";
         const fmi = state.qcData.hasFmi === "yes";
         const balance = state.qcData.hasBalance === "yes";
@@ -2742,6 +2507,23 @@
         return `
           <div class="space-y-4">
             <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=900&q=60" alt="Phone lock security" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Functionality</label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex items-center justify-center p-3 border rounded-lg cursor-pointer ${state.qcData.isFunctional === "yes" ? "bg-green-50 border-green-200 text-green-700 ring-1 ring-green-500" : "hover:bg-slate-50"}">
+                  <input type="radio" class="sr-only" name="isFunctional" value="yes" ${state.qcData.isFunctional === "yes" ? "checked" : ""} />
+                  <span class="text-sm font-bold">Fully Functional</span>
+                </label>
+                <label class="flex items-center justify-center p-3 border rounded-lg cursor-pointer ${state.qcData.isFunctional === "no" ? "bg-red-50 border-red-200 text-red-700 ring-1 ring-red-500" : "hover:bg-slate-50"}">
+                  <input type="radio" class="sr-only" name="isFunctional" value="no" ${state.qcData.isFunctional === "no" ? "checked" : ""} />
+                  <span class="text-sm font-bold">Not Functional</span>
+                </label>
+              </div>
+            </div>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <span class="text-sm font-medium text-slate-900">Cracked screen or back?</span>
+              <input id="qcHasCracks" type="checkbox" ${state.qcData.hasCracks === "yes" ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
+            </label>
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
                 <i data-lucide="shield-check" class="${locked ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
@@ -2785,19 +2567,7 @@
           </div>
         `;
       }
-      // Get the right step content based on current step and condition
-      let content;
-      if (state.qcStep === 1) {
-        content = step1();
-      } else if (state.qcStep === 2) {
-        content = step2();
-      } else if (state.qcStep === 3 && state.qcData.condition === "broken") {
-        content = step3();
-      } else if ((state.qcStep === 3 && state.qcData.condition !== "broken") || state.qcStep === 4) {
-        content = step4();
-      } else {
-        content = step1();
-      }
+      const content = state.qcStep === 1 ? step1() : state.qcStep === 2 ? step2() : step3();
       return `
         <div class="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" style="z-index:5000;">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] sm:max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
@@ -2842,43 +2612,6 @@
             </div>
           </div>
         </div>
-      `;
-    }
-    // ----------------------------
-    // QC COMPLETION ANIMATION MODAL
-    // ----------------------------
-    function renderQcCompletionAnimation() {
-      if (!state.qcCompletionAnimation) return "";
-      return `
-        <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
-            <div class="mb-6">
-              <div class="mx-auto w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center animate-pulse">
-                <svg class="w-16 h-16 text-emerald-600 animate-scale" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
-                </svg>
-              </div>
-            </div>
-            <h3 class="text-2xl font-bold text-slate-900 mb-2">QC Completed!</h3>
-            <p class="text-slate-600">Device matches customer description. Ready for payment.</p>
-            <div class="mt-4 h-2 bg-emerald-100 rounded-full overflow-hidden">
-              <div class="h-full bg-emerald-600 animate-fill" style="animation: fillBar 2s ease-out;"></div>
-            </div>
-          </div>
-        </div>
-        <style>
-          @keyframes fillBar {
-            from { width: 0%; }
-            to { width: 100%; }
-          }
-          @keyframes scale {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-          }
-          .animate-scale {
-            animation: scale 0.5s ease-in-out;
-          }
-        </style>
       `;
     }
     function renderReofferModal(order) {
@@ -2928,27 +2661,29 @@
     }
 
     // ----------------------------
-    // CONFIRMATION MODAL
+    // ORDER TEXT IMPORT MODAL (placeholder; spec says implementation exists elsewhere)
     // ----------------------------
-    function renderConfirmationModal() {
-      if (!state.confirmationModal.isOpen) return "";
-      const m = state.confirmationModal;
+    function renderOrderTextImportModal() {
+      if (!state.orderTextImportOpen) return "";
       return `
-        <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 overflow-hidden">
-            <div class="${m.isDangerous ? 'bg-rose-50' : 'bg-slate-50'} px-6 py-4 border-b ${m.isDangerous ? 'border-rose-100' : 'border-slate-100'}">
-              <h3 class="text-lg font-bold ${m.isDangerous ? 'text-rose-900' : 'text-slate-900'}">${esc(m.title)}</h3>
-            </div>
-            <div class="px-6 py-6">
-              <p class="text-sm text-slate-700">${esc(m.message)}</p>
-            </div>
-            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-              <button id="confirmModalCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors">
-                ${esc(m.cancelText)}
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
+            <div class="bg-slate-50 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 class="text-lg font-bold text-slate-900">Paste Order From Text</h3>
+                <p class="text-xs text-slate-500">This is wired + ready — paste parsing/submit logic can be dropped in.</p>
+              </div>
+              <button id="orderTextImportCloseBtn" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i data-lucide="x" style="width:20px;height:20px"></i>
               </button>
-              <button id="confirmModalConfirmBtn" class="px-4 py-2 rounded-lg ${m.isDangerous ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white text-sm font-semibold transition-colors">
-                ${esc(m.confirmText)}
-              </button>
+            </div>
+            <div id="orderTextImportBody" class="px-6 py-6 space-y-3 overflow-y-auto flex-1 min-h-0">
+              <textarea id="orderTextImportInput" class="w-full h-52 border border-slate-300 rounded-xl p-3 text-sm font-mono"
+                placeholder="Paste the raw order text here…"></textarea>
+              <div class="flex justify-end gap-2">
+                <button id="orderTextImportCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-sm">Cancel</button>
+                <button id="orderTextImportSubmitBtn" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Submit</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2974,13 +2709,12 @@
           ${getSelectedOrder() ? renderDrawer(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderQcModal(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderReofferModal(getSelectedOrder()) : ""}
-          ${renderQcCompletionAnimation()}
-          ${renderConfirmationModal()}
+          ${renderOrderTextImportModal()}
         </div>
       `;
     }
     function hasBlockingOverlayOpen() {
-      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen);
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
@@ -3286,74 +3020,27 @@
             e.stopPropagation();
             const action = btn.getAttribute("data-action");
             if (action === "cancelOrder") {
-              showConfirmation(
-                'Cancel Order',
-                'Are you sure you want to cancel this order? This action cannot be undone.',
-                async () => {
-                  closeConfirmation();
-                  await handleCancelOrder(order);
-                },
-                { confirmText: 'Cancel Order', isDangerous: true }
-              );
+              await handleCancelOrder(order);
               return;
             }
             if (action === "deleteOrder") {
-              showConfirmation(
-                'Delete Order',
-                'Are you sure you want to delete this order? This action cannot be undone.',
-                async () => {
-                  closeConfirmation();
-                  await handleAction(order.id, "deleteOrder");
-                  state.selectedOrderId = null;
-                  state.selectedOrderSnapshot = null;
-                  render();
-                },
-                { confirmText: 'Delete', isDangerous: true }
-              );
+              const ok = confirm("Delete this order? This cannot be undone.");
+              if (!ok) return;
+              await handleAction(order.id, "deleteOrder");
+              state.selectedOrderId = null;
+              state.selectedOrderSnapshot = null;
+              render();
               return;
             }
             if (action === "reOffer") {
-              showConfirmation(
-                'Propose Re-offer',
-                'Are you sure you want to propose a re-offer to the customer?',
-                async () => {
-                  closeConfirmation();
-                  await openReofferModal(order, state.qcData);
-                  render();
-                },
-                { confirmText: 'Continue', isDangerous: false }
-              );
-              return;
-            }
-            if (action === "autoRequote") {
-              showConfirmation(
-                'Finalize 75% Reduced Payout',
-                'Are you sure you want to finalize this order at 75% payout? This will complete the order.',
-                async () => {
-                  closeConfirmation();
-                  await handleAction(order.id, action);
-                },
-                { confirmText: 'Finalize', isDangerous: false }
-              );
+              await openReofferModal(order, state.qcData);
+              render();
               return;
             }
             if (state.selectedDeviceKey && (action === "markReceived" || action === "markCompleted")) {
               const nextDeviceStatus = action === "markCompleted" ? "completed" : "received";
-              if (action === "markCompleted") {
-                showConfirmation(
-                  'Mark as Completed',
-                  'Are you sure you want to mark this order as completed? This indicates the order is fully processed.',
-                  async () => {
-                    closeConfirmation();
-                    await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
-                    toast(`Device status updated to ${formatStatusLabel(nextDeviceStatus)}`, "success");
-                  },
-                  { confirmText: 'Mark Completed', isDangerous: false }
-                );
-              } else {
-                await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
-                toast(`Device status updated to ${formatStatusLabel(nextDeviceStatus)}`, "success");
-              }
+              await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
+              toast(`Device status updated to ${formatStatusLabel(nextDeviceStatus)}`, "success");
               return;
             }
             await handleAction(order.id, action);
@@ -3382,7 +3069,19 @@
             }
           });
         }
-        // QC is now opened per-device from overview section clicks
+        // Open QC
+        const openQcBtn = document.getElementById("openQcBtn");
+        if (openQcBtn) {
+          openQcBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            state.qcDeviceKey = state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
+            state.qcOpen = true;
+            state.modalScrollTop.qc = 0;
+            state.qcStep = 1;
+            state.qcData = null;
+            render();
+          });
+        }
       }
       // QC modal bindings
       if (state.qcOpen && order) {
@@ -3430,34 +3129,13 @@
             r.addEventListener("change", () => { state.qcData.isFunctional = r.value; render(); });
           });
           const cond = document.getElementById("qcCondition");
-          if (cond) cond.addEventListener("change", () => {
-            state.qcData.condition = cond.value;
-            // Initialize broken issues if switching to broken
-            if (cond.value === "broken" && !state.qcData.brokenIssues) {
-              state.qcData.brokenIssues = [];
-            }
-            render();
-          });
+          if (cond) cond.addEventListener("change", () => state.qcData.condition = cond.value);
           const carrier = document.getElementById("qcCarrier");
           if (carrier) carrier.addEventListener("change", () => state.qcData.carrier = carrier.value);
-          // Broken issues checkboxes
-          document.querySelectorAll('.qc-broken-issue').forEach(checkbox => {
-            checkbox.addEventListener("change", () => {
-              const issueId = checkbox.getAttribute('data-issue');
-              if (!state.qcData.brokenIssues) state.qcData.brokenIssues = [];
-              if (checkbox.checked) {
-                if (!state.qcData.brokenIssues.includes(issueId)) {
-                  state.qcData.brokenIssues.push(issueId);
-                }
-              } else {
-                state.qcData.brokenIssues = state.qcData.brokenIssues.filter(id => id !== issueId);
-              }
-            });
-          });
-          const brokenOther = document.getElementById("qcBrokenIssueOther");
-          if (brokenOther) brokenOther.addEventListener("input", () => {
-            state.qcData.brokenIssueOther = brokenOther.value;
-          });
+          const damage = document.getElementById("qcHasDamage");
+          if (damage) damage.addEventListener("change", () => state.qcData.hasDamage = damage.checked ? "yes" : "no");
+          const cracks = document.getElementById("qcHasCracks");
+          if (cracks) cracks.addEventListener("change", () => state.qcData.hasCracks = cracks.checked ? "yes" : "no");
           const locked = document.getElementById("qcIsLocked");
           if (locked) locked.addEventListener("change", () => state.qcData.isLocked = locked.checked ? "yes" : "no");
           const fmi = document.getElementById("qcHasFmi");
@@ -3477,27 +3155,10 @@
         };
         if (closeBtn) closeBtn.addEventListener("click", () => { state.qcOpen = false; state.qcStep = 1; state.qcData = null; state.qcDeviceKey = null; render(); });
         if (backBtn) backBtn.addEventListener("click", () => {
-          if (state.qcStep === 1) { 
-            state.qcOpen = false; state.qcStep = 1; state.qcData = null; state.qcDeviceKey = null; render(); 
-          } else { 
-            // If going back from step 4 and condition is not broken, skip step 3
-            if (state.qcStep === 4 && state.qcData.condition !== "broken") {
-              state.qcStep = 2;
-            } else {
-              state.qcStep -= 1;
-            }
-            render(); 
-          }
+          if (state.qcStep === 1) { state.qcOpen = false; state.qcStep = 1; state.qcData = null; state.qcDeviceKey = null; render(); }
+          else { state.qcStep -= 1; render(); }
         });
-        if (nextBtn) nextBtn.addEventListener("click", () => { 
-          // If on step 2 and condition is not broken, skip step 3 (broken issues)
-          if (state.qcStep === 2 && state.qcData.condition !== "broken") {
-            state.qcStep = 4;
-          } else {
-            state.qcStep += 1;
-          }
-          render(); 
-        });
+        if (nextBtn) nextBtn.addEventListener("click", () => { state.qcStep += 1; render(); });
         if ((state.qcData?.deviceMatch === 'no' || state.qcData?.storageMatch === 'no') && state.qcData?.actualBrand) {
           getModelsForBrand(state.qcData.actualBrand).then((models) => {
             if (!state.qcData.actualModelId) state.qcData.actualModelId = models[0]?.id || '';
@@ -3512,50 +3173,18 @@
         if (finishBtn) finishBtn.addEventListener("click", async () => {
           syncStepInputs();
           const qcSnapshot = { ...(state.qcData || {}) };
-          
-          // Process QC outcome (send any necessary emails)
+          await saveQc(order.id, state.qcDeviceKey || buildOrderDeviceKey(order.id, 0), qcSnapshot);
           const qcOutcome = await processQcOutcome(order, qcSnapshot);
-          
-          // Save QC data to order
-          const targetDeviceKey = state.selectedDeviceKey || state.qcDeviceKey || buildOrderDeviceKey(order.id, 0);
-          await updateOrderField(order.id, `qcDataByDevice.${targetDeviceKey}`, qcSnapshot);
-          
-          // Check if QC matches customer description
-          const isMatch = qcMatchesCustomerDescription(order, qcSnapshot);
-          
-          if (isMatch && !qcOutcome.sentEmails) {
-            // QC matches - show completion animation
-            state.qcCompletionAnimation = true;
-            render();
-            
-            // Show animation for 2 seconds then close
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            state.qcCompletionAnimation = false;
-            state.qcOpen = false;
-            state.qcStep = 1;
-            state.qcData = null;
-            const completedDeviceKey = state.qcDeviceKey;
-            state.qcDeviceKey = null;
-            
-            // Set DEVICE status to pay_now (not order status)
-            if (completedDeviceKey) {
-              await updateDeviceStatusInline(order.id, completedDeviceKey, "pay_now");
-            }
-            toast("QC completed! Device ready for payment.", "success");
-            render();
+          state.qcOpen = false;
+          state.qcStep = 1;
+          state.qcData = null;
+          state.qcDeviceKey = null;
+          if (!qcOutcome.sentEmails) {
+            await openReofferModal(order, qcSnapshot);
           } else {
-            // QC doesn't match or needs emails - proceed with reoffer/email flow
-            state.qcOpen = false;
-            state.qcStep = 1;
-            state.qcData = null;
-            state.qcDeviceKey = null;
-            if (!qcOutcome.sentEmails && !isMatch) {
-              await openReofferModal(order, qcSnapshot);
-            } else {
-              toast("QC saved. Required customer emails sent. Waiting for response.", "info");
-            }
-            render();
+            toast("QC saved. Required customer emails sent. Waiting for response.", "info");
           }
+          render();
         });
         syncStepInputs();
       }
@@ -3569,47 +3198,35 @@
           const comments = (document.getElementById("reofferComments")?.value || "").trim();
           const carrier = (document.getElementById("reofferCarrier")?.value || "").trim();
           const condition = (document.getElementById("reofferCondition")?.value || "").trim();
-          
-          showConfirmation(
-            'Send Re-offer',
-            'Are you sure you want to send this re-offer to the customer? They will be notified via email.',
-            async () => {
-              closeConfirmation();
-              await handleAction(order.id, "reOffer", {
-                body: {
-                  newPrice: price,
-                  reasons: reasons ? reasons.split(/\n+/).map(x => x.trim()).filter(Boolean) : [],
-                  comments,
-                  carrier,
-                  condition,
-                  deviceKey: state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null
-                }
-              });
-              state.reofferOpen = false;
-              state.reofferData = null;
-              state.modalScrollTop.reoffer = 0;
-              render();
-            },
-            { confirmText: 'Send Re-offer', isDangerous: false }
-          );
-        });
-      }
-      // Confirmation modal handlers
-      if (state.confirmationModal.isOpen) {
-        const confirmBtn = document.getElementById("confirmModalConfirmBtn");
-        const cancelBtn = document.getElementById("confirmModalCancelBtn");
-        if (confirmBtn) {
-          confirmBtn.addEventListener("click", async () => {
-            if (state.confirmationModal.onConfirm) {
-              await state.confirmationModal.onConfirm();
+          await handleAction(order.id, "reOffer", {
+            body: {
+              newPrice: price,
+              reasons: reasons ? reasons.split(/\n+/).map(x => x.trim()).filter(Boolean) : [],
+              comments,
+              carrier,
+              condition,
+              deviceKey: state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null
             }
           });
-        }
-        if (cancelBtn) {
-          cancelBtn.addEventListener("click", () => {
-            closeConfirmation();
-          });
-        }
+          state.reofferOpen = false;
+          state.reofferData = null;
+          state.modalScrollTop.reoffer = 0;
+          render();
+        });
+      }
+      // Order text import modal controls
+      if (state.orderTextImportOpen) {
+        const close = document.getElementById("orderTextImportCloseBtn");
+        const cancel = document.getElementById("orderTextImportCancelBtn");
+        const submit = document.getElementById("orderTextImportSubmitBtn");
+        const closeAll = () => { state.orderTextImportOpen = false; state.modalScrollTop.import = 0; render(); };
+        if (close) close.addEventListener("click", closeAll);
+        if (cancel) cancel.addEventListener("click", closeAll);
+        if (submit) submit.addEventListener("click", () => {
+          // placeholder: wire your real handleOrderTextImportSubmit here
+          toast("Submit handler placeholder (drop in parser + API call)", "info");
+          closeAll();
+        });
       }
     }
     // ----------------------------
