@@ -881,20 +881,24 @@
       if (a && a.value !== v) a.value = v;
       if (b && b.value !== v) b.value = v;
     }
-    function restoreSearchFocus(preferredInputId) {
+    function restoreSearchFocus(preferredInputId, selectionStart = null, selectionEnd = null) {
       requestAnimationFrame(() => {
         const fallbackId = preferredInputId === "mobileSearchInput" ? "searchInput" : "mobileSearchInput";
         const input = document.getElementById(preferredInputId) || document.getElementById(fallbackId);
         if (!input) return;
         input.focus();
-        const caret = input.value.length;
-        if (typeof input.setSelectionRange === "function") input.setSelectionRange(caret, caret);
+        if (typeof input.setSelectionRange === "function") {
+          const valueLength = input.value.length;
+          const start = Number.isInteger(selectionStart) ? Math.max(0, Math.min(selectionStart, valueLength)) : valueLength;
+          const end = Number.isInteger(selectionEnd) ? Math.max(start, Math.min(selectionEnd, valueLength)) : start;
+          input.setSelectionRange(start, end);
+        }
       });
     }
-    function applySearchTerm(v, preferredInputId = "searchInput") {
+    function applySearchTerm(v, preferredInputId = "searchInput", selectionStart = null, selectionEnd = null) {
       state.currentSearchTerm = v || "";
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
-      restoreSearchFocus(preferredInputId);
+      restoreSearchFocus(preferredInputId, selectionStart, selectionEnd);
     }
     // ----------------------------
     // SPEC: AGING PAGE FILTER
@@ -3213,7 +3217,7 @@
       // Search inputs
       const search = document.getElementById("searchInput");
       if (search) {
-        search.addEventListener("input", () => applySearchTerm(search.value, "searchInput"));
+        search.addEventListener("input", () => applySearchTerm(search.value, "searchInput", search.selectionStart, search.selectionEnd));
       }
       const clearSearchBtn = document.getElementById("clearSearchBtn");
       if (clearSearchBtn) {
