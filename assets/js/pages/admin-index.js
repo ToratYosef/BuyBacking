@@ -7315,11 +7315,7 @@ function renderActionButtons(order) {
       break;
   }
 
-  if (isEligibleForAutoRequote(order)) {
-    receivedActions.push(
-      createButton('Finalize 75% Reduced Payout', () => handleAction(order.id, 'autoRequote'), 'bg-rose-700 hover:bg-rose-800')
-    );
-  }
+  // 75% reduced payout finalization is automated after unresolved issue timeout.
 
   const hasKitTracking = order.shippingPreference === 'Shipping Kit Requested' && (
     order.outboundTrackingNumber ||
