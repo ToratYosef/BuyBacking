@@ -1764,6 +1764,26 @@
         </span>
       `;
     }
+    
+    function awaitingResponseBadgeHTML(order) {
+      // Show badge when we're waiting for customer response to an email we sent
+      const status = normalizeStatusKey(order?.status);
+      const isAwaitingResponse = order?.qcAwaitingResponse === true;
+      
+      // Check if status is emailed or if any device is in emailed status
+      const hasEmailedStatus = status === 'emailed' || status.includes('emailed');
+      const hasEmailedDevice = order?.deviceStatusByKey && Object.values(order.deviceStatusByKey).some(s => normalizeStatusKey(s) === 'emailed');
+      
+      if (!isAwaitingResponse && !hasEmailedStatus && !hasEmailedDevice) return "";
+      
+      return `
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+          <i data-lucide="mail" style="width:12px;height:12px"></i>
+          Awaiting Response
+        </span>
+      `;
+    }
+    
     function labelStatusExtraHTML(order) {
       // show small details about kit/label tracking statuses if present
       const kitTN = order?.kitTrackingStatus?.trackingNumber || order?.kitTrackingStatus?.tracking_number || "";
@@ -1812,6 +1832,7 @@
                   <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
                   ${promoBadgeHTML(order)}
                   ${past14DaysBadgeHTML(order)}
+                  ${awaitingResponseBadgeHTML(order)}
                 </div>
                 <div class="text-xs text-slate-500">
                   <span class="font-semibold text-slate-700">${esc(order?.shippingInfo?.fullName || "Guest")}</span>
@@ -2093,7 +2114,10 @@
                   <i data-lucide="smartphone" class="text-slate-400" style="width:18px;height:18px"></i>
                   Devices (${entries.length})
                 </h3>
-                ${promoBadgeHTML(order)}
+                <div class="flex items-center gap-2">
+                  ${promoBadgeHTML(order)}
+                  ${awaitingResponseBadgeHTML(order)}
+                </div>
               </div>
               <div class="divide-y divide-slate-100">
                 ${devices}
@@ -2366,6 +2390,7 @@
               <div class="relative">
                 <div class="flex items-center gap-3 mb-1">
                   <h2 class="text-2xl font-bold text-slate-900">#${esc(order.id)}</h2>
+                  ${awaitingResponseBadgeHTML(order)}
                   <div class="relative z-[1300]" id="modalStatusWrapper">
                     <button id="modalStatusBtn" class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(headerStatus)} hover:opacity-90">
                       ${esc(formatStatusLabel(headerStatus))}
