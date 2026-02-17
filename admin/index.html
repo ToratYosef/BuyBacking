@@ -528,6 +528,9 @@
       // bulk states
       isBulkSlipPrintInProgress: false,
       lastRefreshAt: null,
+      lastTrackingRefreshMeta: null,
+      trackingReportModalOpen: false,
+      trackingReportData: null,
       // confirmation modal
       confirmModalOpen: false,
       confirmModalData: null,
@@ -789,6 +792,27 @@
         order?.last_update_at ||
         null
       );
+    }
+    function getLatestTrackingRefreshMeta() {
+      const latestFromState = state.lastTrackingRefreshMeta;
+      let latestFromOrders = null;
+      for (const order of state.allOrders || []) {
+        const ts = toDateAny(order?.lastTrackingRefreshAt || order?.labelTrackingLastSyncedAt || order?.kitTrackingLastRefreshedAt);
+        if (!ts) continue;
+        const source = String(order?.lastTrackingRefreshSource || '').toLowerCase() || 'system_automatic';
+        if (!latestFromOrders || ts.getTime() > latestFromOrders.at.getTime()) {
+          latestFromOrders = { at: ts, source };
+        }
+      }
+      if (!latestFromState && !latestFromOrders) return null;
+      if (!latestFromState) return latestFromOrders;
+      if (!latestFromOrders) return latestFromState;
+      return latestFromState.at.getTime() >= latestFromOrders.at.getTime() ? latestFromState : latestFromOrders;
+    }
+    function getTrackingRefreshLabel(meta) {
+      if (!meta?.at) return "";
+      const sourceText = String(meta.source || '').includes('admin') ? 'admin manual' : 'system automatic';
+      return `Last tracking refresh: ${formatTimeOnly(meta.at)} (${sourceText})`;
     }
     // ----------------------------
     // FIRESTORE LISTENER
@@ -1206,13 +1230,22 @@
       const originalText = buttonEl?.textContent;
       if (buttonEl) {
         buttonEl.disabled = true;
-        buttonEl.textContent = "Refreshing…";
+        buttonEl.textContent = `Refreshing 0/${candidates.length}…`;
       }
 
       const queue = candidates.slice();
       let success = 0;
       let failed = 0;
+      let done = 0;
+      let statusChanged = 0;
       const samples = { failed: [] };
+      const latestStatusByOrderId = new Map(candidates.map((o) => [o.id, normalizeStatusKey(o?.status)]));
+
+      const updateProgressText = () => {
+        if (buttonEl) {
+          buttonEl.textContent = `Refreshing ${done}/${candidates.length}…`;
+        }
+      };
 
       async function worker() {
         while (queue.length) {
@@ -1220,11 +1253,20 @@
           if (!order) return;
           try {
             const refreshType = matchesKitTrackingHints(order) ? "kit" : "email";
-            await apiPost(`/refresh-tracking`, { orderId: order.id, type: refreshType });
+            const res = await apiPost(`/refresh-tracking`, { orderId: order.id, type: refreshType });
+            const previousStatus = normalizeStatusKey(order?.status);
+            const nextStatus = normalizeStatusKey(res?.order?.status || order?.status);
+            latestStatusByOrderId.set(order.id, nextStatus);
+            if (nextStatus && previousStatus && nextStatus !== previousStatus) {
+              statusChanged++;
+            }
             success++;
           } catch (e) {
             failed++;
             if (samples.failed.length < 5) samples.failed.push(`#${order.id}: ${e?.message || "failed"}`);
+          } finally {
+            done++;
+            updateProgressText();
           }
         }
       }
@@ -1232,17 +1274,33 @@
       const workers = Array.from({ length: Math.min(MAX_CONCURRENT_TRACKING_REQUESTS, candidates.length) }, () => worker());
       await Promise.all(workers);
 
+      state.lastTrackingRefreshMeta = { at: new Date(), source: "admin_manual" };
+
+      const nowCounts = {
+        label_generated: 0,
+        phone_on_the_way: 0,
+        delivered_to_us: 0,
+      };
+      for (const value of latestStatusByOrderId.values()) {
+        if (value === "label_generated") nowCounts.label_generated++;
+        if (value === "phone_on_the_way") nowCounts.phone_on_the_way++;
+        if (value === "delivered_to_us") nowCounts.delivered_to_us++;
+      }
+
+      state.trackingReportData = {
+        processed: candidates.length,
+        refreshed: success,
+        statusChanged,
+        failed,
+        statusCounts: nowCounts,
+        completedAtLabel: `Completed ${formatTimeOnly(new Date())} (admin manual)`,
+      };
+      state.trackingReportModalOpen = true;
+
       if (buttonEl) {
         buttonEl.disabled = false;
         buttonEl.textContent = originalText || "Refresh";
       }
-
-      alert(
-        `Refresh tracking complete.\n\n` +
-        `Success: ${success}\n` +
-        `Failed: ${failed}\n\n` +
-        (samples.failed.length ? `Failed samples:\n- ${samples.failed.join("\n- ")}\n` : "")
-      );
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
     }
     // ----------------------------
@@ -1699,6 +1757,7 @@
     function renderSidebar() { return ""; }
     function renderTopbar() {
       const initial = state.user?.email ? state.user.email.charAt(0).toUpperCase() : "A";
+      const trackingMeta = getLatestTrackingRefreshMeta();
       return `
         <header class="h-16 bg-white border-b border-slate-200 sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between gap-4">
           <div class="flex flex-col justify-center">
@@ -1711,7 +1770,7 @@
               Compact
             </label>
             <div class="text-xs text-slate-500">
-              ${state.lastRefreshAt ? `Updated ${esc(formatTimeOnly(state.lastRefreshAt))}` : ""}
+              ${trackingMeta ? esc(getTrackingRefreshLabel(trackingMeta)) : ""}
             </div>
           </div>
           <div class="flex items-center gap-4">
@@ -3124,6 +3183,45 @@
         render();
       });
     }
+    function renderTrackingReportModal() {
+      if (!state.trackingReportModalOpen || !state.trackingReportData) return "";
+      const d = state.trackingReportData;
+      const statusCounts = d.statusCounts || {};
+      return `
+        <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" style="z-index: 999999;" id="trackingReportOverlay">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 animate-in">
+            <div class="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-bold text-slate-900">Tracking Refresh Summary</h3>
+                <p class="text-xs text-slate-500 mt-1">${esc(d.completedAtLabel || '')}</p>
+              </div>
+              <button id="trackingReportCloseBtn" class="text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" style="width:20px;height:20px"></i>
+              </button>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+              <div class="grid grid-cols-2 gap-3 text-sm">
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3"><span class="text-slate-500">Processed</span><div class="font-bold text-slate-900">${Number(d.processed || 0)}</div></div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3"><span class="text-slate-500">Refreshed</span><div class="font-bold text-emerald-700">${Number(d.refreshed || 0)}</div></div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3"><span class="text-slate-500">Status Changed</span><div class="font-bold text-indigo-700">${Number(d.statusChanged || 0)}</div></div>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-3"><span class="text-slate-500">Failed</span><div class="font-bold text-rose-700">${Number(d.failed || 0)}</div></div>
+              </div>
+              <div>
+                <div class="text-xs font-semibold text-slate-500 uppercase mb-2">Current Status Counts</div>
+                <div class="grid grid-cols-3 gap-2 text-xs">
+                  <div class="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-800">Label Generated: <span class="font-bold">${Number(statusCounts.label_generated || 0)}</span></div>
+                  <div class="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-800">Phone On The Way: <span class="font-bold">${Number(statusCounts.phone_on_the_way || 0)}</span></div>
+                  <div class="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-800">Delivered To Us: <span class="font-bold">${Number(statusCounts.delivered_to_us || 0)}</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button id="trackingReportDoneBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">Done</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
     
     // ----------------------------
     // PAYMENT CONFIRMATION MODAL
@@ -3224,12 +3322,13 @@
           ${getSelectedOrder() ? renderReofferModal(getSelectedOrder()) : ""}
           ${renderOrderTextImportModal()}
           ${renderConfirmModal()}
+          ${renderTrackingReportModal()}
           ${renderPaymentConfirmModal()}
         </div>
       `;
     }
     function hasBlockingOverlayOpen() {
-      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen || state.confirmModalOpen || state.paymentConfirmModalOpen);
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
@@ -3874,6 +3973,24 @@
         };
         if (confirmBtn) confirmBtn.addEventListener("click", () => closeModal(true));
         if (cancelBtn) cancelBtn.addEventListener("click", () => closeModal(false));
+      }
+
+      if (state.trackingReportModalOpen) {
+        const closeBtn = document.getElementById("trackingReportCloseBtn");
+        const doneBtn = document.getElementById("trackingReportDoneBtn");
+        const overlay = document.getElementById("trackingReportOverlay");
+        const closeReport = () => {
+          state.trackingReportModalOpen = false;
+          state.trackingReportData = null;
+          render();
+        };
+        if (closeBtn) closeBtn.addEventListener("click", closeReport);
+        if (doneBtn) doneBtn.addEventListener("click", closeReport);
+        if (overlay) {
+          overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) closeReport();
+          });
+        }
       }
       
       // Payment Confirmation Modal Listeners
