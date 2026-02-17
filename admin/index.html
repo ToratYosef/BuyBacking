@@ -539,7 +539,9 @@
         cancelText: 'Cancel',
         onConfirm: null,
         isDangerous: false
-      }
+      },
+      // QC completion animation
+      qcCompletionAnimation: false
     };
     function getSelectedOrder() {
       if (!state.selectedOrderId) return null;
@@ -654,14 +656,56 @@
       if (!qcData) return reasons;
       if (qcData.deviceMatch === 'no') reasons.push('Device received does not match the original model selection.');
       if (qcData.storageMatch === 'no') reasons.push('Storage/GB amount differs from what was quoted.');
-      if (qcData.hasDamage === 'yes') reasons.push('Physical damage was found in inspection.');
-      if (qcData.hasCracks === 'yes') reasons.push('Cracked glass/back lowers the device value.');
-      if (qcData.isFunctional === 'no') reasons.push('Device is not fully functional during testing.');
+      if (qcData.condition === 'broken' && qcData.brokenIssues && qcData.brokenIssues.length > 0) {
+        const issueLabels = {
+          'cracked_front': 'Cracked front glass',
+          'cracked_back': 'Cracked back glass',
+          'lcd_dead_spots': 'LCD has dead spots',
+          'screen_lines': 'Screen has lines/discoloration',
+          'touch_not_working': 'Touch screen not working',
+          'camera_front': 'Front camera malfunction',
+          'camera_back': 'Back camera malfunction',
+          'mic_issue': 'Microphone malfunction',
+          'speaker_issue': 'Speaker malfunction',
+          'earpiece_issue': 'Earpiece malfunction',
+          'volume_buttons': 'Volume buttons not working',
+          'power_button': 'Power button not working',
+          'home_button': 'Home button not working',
+          'charging_port': 'Charging port issue',
+          'battery_issue': 'Battery issue/won\'t hold charge',
+          'wifi_issue': 'WiFi not working',
+          'bluetooth_issue': 'Bluetooth not working',
+          'cellular_issue': 'Cellular/signal issue',
+          'face_id': 'Face ID not working',
+          'touch_id': 'Touch ID not working',
+          'water_damage': 'Water damage detected',
+          'bent_frame': 'Bent/warped frame'
+        };
+        const issueDescriptions = qcData.brokenIssues.map(id => issueLabels[id] || id).join(', ');
+        reasons.push(`Device has functional issues: ${issueDescriptions}.`);
+      }
+      if (qcData.brokenIssueOther && qcData.brokenIssueOther.trim()) {
+        reasons.push(`Additional issue: ${qcData.brokenIssueOther.trim()}`);
+      }
       if (qcData.isLocked === 'yes') reasons.push('Screen lock / passcode is still active.');
       if (qcData.hasFmi === 'yes') reasons.push('FMI / iCloud / FRP / Google lock is still active.');
       if (qcData.hasBalance === 'yes') reasons.push('Outstanding carrier/financing balance is present.');
       if (qcData.notes) reasons.push(`Inspector notes: ${qcData.notes}`);
       return reasons;
+    }
+
+    function qcMatchesCustomerDescription(order, qcData) {
+      if (!qcData) return true;
+      // Check if any critical differences exist that would require a re-offer
+      const hasDeviceMismatch = qcData.deviceMatch === 'no';
+      const hasStorageMismatch = qcData.storageMatch === 'no';
+      const hasConditionChange = order.condition && qcData.condition && 
+        normalizeStatusKey(order.condition) !== normalizeStatusKey(qcData.condition);
+      const hasBrokenIssues = qcData.condition === 'broken' && qcData.brokenIssues && qcData.brokenIssues.length > 0;
+      const hasOtherIssue = qcData.brokenIssueOther && qcData.brokenIssueOther.trim();
+      
+      // If any mismatch exists, we need re-offer
+      return !(hasDeviceMismatch || hasStorageMismatch || hasConditionChange || hasBrokenIssues || hasOtherIssue);
     }
 
     async function openReofferModal(order, qcData = null) {
@@ -1133,6 +1177,69 @@
       };
     }
 
+    async function openPaymentLink(orderId) {
+      const order = state.allOrders.find(o => o.id === orderId);
+      if (!order) {
+        toast("Order not found", "error");
+        return;
+      }
+
+      const method = normalizeStatusKey(order.paymentMethod || '');
+      const details = order.paymentDetails || {};
+      const identifier = String(order.paymentIdentifier || '').trim();
+      const amount = getOrderPayoutTotal(order);
+
+      let url = '';
+      
+      switch (method) {
+        case 'cashapp':
+          const cashTag = String(details.cashappTag || details.cashAppTag || identifier || '').replace(/^\$/, '');
+          if (cashTag) {
+            // CashApp deeplink
+            url = `https://cash.app/$${cashTag}/${amount || ''}`;
+          } else {
+            url = 'https://cash.app/';
+          }
+          break;
+        
+        case 'paypal':
+          const paypalEmail = String(details.paypalEmail || identifier || '').trim();
+          if (paypalEmail) {
+            // PayPal.me link if available, otherwise standard PayPal
+            url = `https://www.paypal.com/paypalme/${paypalEmail}/${amount || ''}`;
+          } else {
+            url = 'https://www.paypal.com/';
+          }
+          break;
+        
+        case 'zelle':
+          const zelleId = String(details.zelleIdentifier || details.zelleEmail || details.zellePhone || identifier || '').trim();
+          // Zelle doesn't have deeplinks, just open website
+          url = 'https://www.zellepay.com/';
+          toast(`Zelle payment to: ${zelleId || 'N/A'}. Amount: $${amount || '0'}`, "info");
+          break;
+        
+        case 'venmo':
+          const venmoUser = String(details.venmoUsername || identifier || '').replace(/^@/, '');
+          if (venmoUser) {
+            // Venmo deeplink
+            url = `https://venmo.com/${venmoUser}?txn=pay&amount=${amount || ''}&note=Order ${orderId}`;
+          } else {
+            url = 'https://venmo.com/';
+          }
+          break;
+        
+        default:
+          toast(`Payment method: ${method}. Please process payment manually.`, "info");
+          return;
+      }
+
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        toast(`Payment window opened. Mark as completed after processing payment.`, "info");
+      }
+    }
+
     async function handleAction(orderId, actionType, options = {}) {
       try {
         // tracking guard
@@ -1263,12 +1370,15 @@
             body = { reason: "fmi_active", label: "Email FMI / Activation Lock Notice" };
             break;
           case "markPaid":
-          case "payNow":
-            // Re-offered accepted payment flow
+            // Mark as completed directly
             endpoint = `/orders/${orderId}/status`;
             method = "PUT";
             body = { status: "completed" };
             break;
+          case "payNow":
+            // Open payment website/deeplink - don't mark as completed yet
+            await openPaymentLink(orderId);
+            return;
           case "printDocs":
             toast("Print Kit Docs is not available in this view", "info");
             return;
@@ -2338,6 +2448,11 @@
             groups.postReceive.push({ label: "Finalize 75% Reduced Payout", action: "autoRequote", class: "bg-slate-100 text-slate-800" });
             groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
         }
+        else if (status === "pay_now") {
+            // QC completed successfully - ready for payment
+            groups.primary.push({ label: "Pay Now", action: "payNow", class: "bg-emerald-600 text-white" });
+            groups.primary.push({ label: "Mark as Completed", action: "markCompleted", class: "bg-slate-600 text-white" });
+        }
         else if (status === "re-offered-pending") {
              // No footer action button for re-offer pending per admin workflow request.
         }
@@ -2439,15 +2554,20 @@
           hasFmi: "no",
           hasBalance: "no",
           hasBlacklisted: "no",
+          brokenIssues: [],
+          brokenIssueOther: "",
           notes: "",
           ...(existing || {})
         };
       }
-      const steps = [
-        { title: "Device Verification" },
-        { title: "Condition & Grade" },
-        { title: "Functionality & Locks" }
-      ];
+      // Dynamic steps based on condition
+      const steps = [];
+      steps.push({ title: "Device Verification" });
+      steps.push({ title: "Condition & Grade" });
+      if (state.qcData.condition === "broken") {
+        steps.push({ title: "Device Issues" });
+      }
+      steps.push({ title: "Functionality & Locks" });
       const pct = Math.round((state.qcStep / steps.length) * 100);
       function step1() {
         return `
@@ -2517,7 +2637,7 @@
       function step2() {
         return `
           <div class="space-y-4">
-            <img src="https://images.unsplash.com/photo-1526570207772-784d36084510?auto=format&fit=crop&w=900&q=60" alt="Cracked phone screen" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
+            <img src="https://images.unsplash.com/photo-1526570207772-784d36084510?auto=format&fit=crop&w=900&q=60" alt="Device condition" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Quality / condition grade</label>
               <select id="qcCondition" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
@@ -2528,14 +2648,57 @@
                 `).join("")}
               </select>
             </div>
-            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <span class="text-sm text-slate-700">Physical damage?</span>
-              <input id="qcHasDamage" type="checkbox" ${state.qcData.hasDamage === "yes" ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
-            </label>
           </div>
         `;
       }
       function step3() {
+        // Broken device issues selection
+        const issueOptions = [
+          { id: 'cracked_front', label: 'Cracked Front Glass' },
+          { id: 'cracked_back', label: 'Cracked Back Glass' },
+          { id: 'lcd_dead_spots', label: 'LCD Dead Spots' },
+          { id: 'screen_lines', label: 'Screen Lines/Discoloration' },
+          { id: 'touch_not_working', label: 'Touch Not Working' },
+          { id: 'camera_front', label: 'Front Camera Issue' },
+          { id: 'camera_back', label: 'Back Camera Issue' },
+          { id: 'mic_issue', label: 'Microphone Issue' },
+          { id: 'speaker_issue', label: 'Speaker Issue' },
+          { id: 'earpiece_issue', label: 'Earpiece Issue' },
+          { id: 'volume_buttons', label: 'Volume Buttons Not Working' },
+          { id: 'power_button', label: 'Power Button Not Working' },
+          { id: 'home_button', label: 'Home Button Not Working' },
+          { id: 'charging_port', label: 'Charging Port Issue' },
+          { id: 'battery_issue', label: 'Battery Issue/Won\'t Hold Charge' },
+          { id: 'wifi_issue', label: 'WiFi Not Working' },
+          { id: 'bluetooth_issue', label: 'Bluetooth Not Working' },
+          { id: 'cellular_issue', label: 'Cellular/Signal Issue' },
+          { id: 'face_id', label: 'Face ID Not Working' },
+          { id: 'touch_id', label: 'Touch ID Not Working' },
+          { id: 'water_damage', label: 'Water Damage' },
+          { id: 'bent_frame', label: 'Bent/Warped Frame' }
+        ];
+        const checkedIssues = state.qcData.brokenIssues || [];
+        return `
+          <div class="space-y-4">
+            <img src="https://images.unsplash.com/photo-1621768216002-5ac171876625?auto=format&fit=crop&w=900&q=60" alt="Broken device" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
+            <p class="text-sm text-slate-600">Select all issues found with this device:</p>
+            <div class="space-y-2 max-h-64 overflow-y-auto">
+              ${issueOptions.map(opt => `
+                <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                  <input type="checkbox" class="qc-broken-issue" data-issue="${opt.id}" ${checkedIssues.includes(opt.id) ? 'checked' : ''} class="h-4 w-4 accent-indigo-600" />
+                  <span class="text-sm text-slate-700">${opt.label}</span>
+                </label>
+              `).join('')}
+            </div>
+            <div class="mt-4">
+              <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Other Issue (Custom)</label>
+              <input id="qcBrokenIssueOther" type="text" value="${esc(state.qcData.brokenIssueOther || '')}" class="w-full border border-slate-300 rounded-md text-sm py-2.5 px-3 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Describe any other issue..." />
+            </div>
+          </div>
+        `;
+      }
+      function step4() {
+        // Old step3 is now step4
         const locked = state.qcData.isLocked === "yes";
         const fmi = state.qcData.hasFmi === "yes";
         const balance = state.qcData.hasBalance === "yes";
@@ -2543,23 +2706,6 @@
         return `
           <div class="space-y-4">
             <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=900&q=60" alt="Phone lock security" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Functionality</label>
-              <div class="grid grid-cols-2 gap-3">
-                <label class="flex items-center justify-center p-3 border rounded-lg cursor-pointer ${state.qcData.isFunctional === "yes" ? "bg-green-50 border-green-200 text-green-700 ring-1 ring-green-500" : "hover:bg-slate-50"}">
-                  <input type="radio" class="sr-only" name="isFunctional" value="yes" ${state.qcData.isFunctional === "yes" ? "checked" : ""} />
-                  <span class="text-sm font-bold">Fully Functional</span>
-                </label>
-                <label class="flex items-center justify-center p-3 border rounded-lg cursor-pointer ${state.qcData.isFunctional === "no" ? "bg-red-50 border-red-200 text-red-700 ring-1 ring-red-500" : "hover:bg-slate-50"}">
-                  <input type="radio" class="sr-only" name="isFunctional" value="no" ${state.qcData.isFunctional === "no" ? "checked" : ""} />
-                  <span class="text-sm font-bold">Not Functional</span>
-                </label>
-              </div>
-            </div>
-            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <span class="text-sm font-medium text-slate-900">Cracked screen or back?</span>
-              <input id="qcHasCracks" type="checkbox" ${state.qcData.hasCracks === "yes" ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
-            </label>
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
                 <i data-lucide="shield-check" class="${locked ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
@@ -2603,7 +2749,19 @@
           </div>
         `;
       }
-      const content = state.qcStep === 1 ? step1() : state.qcStep === 2 ? step2() : step3();
+      // Get the right step content based on current step and condition
+      let content;
+      if (state.qcStep === 1) {
+        content = step1();
+      } else if (state.qcStep === 2) {
+        content = step2();
+      } else if (state.qcStep === 3 && state.qcData.condition === "broken") {
+        content = step3();
+      } else if ((state.qcStep === 3 && state.qcData.condition !== "broken") || state.qcStep === 4) {
+        content = step4();
+      } else {
+        content = step1();
+      }
       return `
         <div class="fixed inset-0 z-[1300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" style="z-index:5000;">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[88vh] sm:max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
@@ -2648,6 +2806,43 @@
             </div>
           </div>
         </div>
+      `;
+    }
+    // ----------------------------
+    // QC COMPLETION ANIMATION MODAL
+    // ----------------------------
+    function renderQcCompletionAnimation() {
+      if (!state.qcCompletionAnimation) return "";
+      return `
+        <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+            <div class="mb-6">
+              <div class="mx-auto w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center animate-pulse">
+                <svg class="w-16 h-16 text-emerald-600 animate-scale" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                </svg>
+              </div>
+            </div>
+            <h3 class="text-2xl font-bold text-slate-900 mb-2">QC Completed!</h3>
+            <p class="text-slate-600">Device matches customer description. Ready for payment.</p>
+            <div class="mt-4 h-2 bg-emerald-100 rounded-full overflow-hidden">
+              <div class="h-full bg-emerald-600 animate-fill" style="animation: fillBar 2s ease-out;"></div>
+            </div>
+          </div>
+        </div>
+        <style>
+          @keyframes fillBar {
+            from { width: 0%; }
+            to { width: 100%; }
+          }
+          @keyframes scale {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+          }
+          .animate-scale {
+            animation: scale 0.5s ease-in-out;
+          }
+        </style>
       `;
     }
     function renderReofferModal(order) {
@@ -2772,6 +2967,7 @@
           ${getSelectedOrder() ? renderDrawer(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderQcModal(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderReofferModal(getSelectedOrder()) : ""}
+          ${renderQcCompletionAnimation()}
           ${renderOrderTextImportModal()}
           ${renderConfirmationModal()}
         </div>
@@ -3240,13 +3436,34 @@
             r.addEventListener("change", () => { state.qcData.isFunctional = r.value; render(); });
           });
           const cond = document.getElementById("qcCondition");
-          if (cond) cond.addEventListener("change", () => state.qcData.condition = cond.value);
+          if (cond) cond.addEventListener("change", () => {
+            state.qcData.condition = cond.value;
+            // Initialize broken issues if switching to broken
+            if (cond.value === "broken" && !state.qcData.brokenIssues) {
+              state.qcData.brokenIssues = [];
+            }
+            render();
+          });
           const carrier = document.getElementById("qcCarrier");
           if (carrier) carrier.addEventListener("change", () => state.qcData.carrier = carrier.value);
-          const damage = document.getElementById("qcHasDamage");
-          if (damage) damage.addEventListener("change", () => state.qcData.hasDamage = damage.checked ? "yes" : "no");
-          const cracks = document.getElementById("qcHasCracks");
-          if (cracks) cracks.addEventListener("change", () => state.qcData.hasCracks = cracks.checked ? "yes" : "no");
+          // Broken issues checkboxes
+          document.querySelectorAll('.qc-broken-issue').forEach(checkbox => {
+            checkbox.addEventListener("change", () => {
+              const issueId = checkbox.getAttribute('data-issue');
+              if (!state.qcData.brokenIssues) state.qcData.brokenIssues = [];
+              if (checkbox.checked) {
+                if (!state.qcData.brokenIssues.includes(issueId)) {
+                  state.qcData.brokenIssues.push(issueId);
+                }
+              } else {
+                state.qcData.brokenIssues = state.qcData.brokenIssues.filter(id => id !== issueId);
+              }
+            });
+          });
+          const brokenOther = document.getElementById("qcBrokenIssueOther");
+          if (brokenOther) brokenOther.addEventListener("input", () => {
+            state.qcData.brokenIssueOther = brokenOther.value;
+          });
           const locked = document.getElementById("qcIsLocked");
           if (locked) locked.addEventListener("change", () => state.qcData.isLocked = locked.checked ? "yes" : "no");
           const fmi = document.getElementById("qcHasFmi");
@@ -3266,10 +3483,27 @@
         };
         if (closeBtn) closeBtn.addEventListener("click", () => { state.qcOpen = false; state.qcStep = 1; state.qcData = null; state.qcDeviceKey = null; render(); });
         if (backBtn) backBtn.addEventListener("click", () => {
-          if (state.qcStep === 1) { state.qcOpen = false; state.qcStep = 1; state.qcData = null; state.qcDeviceKey = null; render(); }
-          else { state.qcStep -= 1; render(); }
+          if (state.qcStep === 1) { 
+            state.qcOpen = false; state.qcStep = 1; state.qcData = null; state.qcDeviceKey = null; render(); 
+          } else { 
+            // If going back from step 4 and condition is not broken, skip step 3
+            if (state.qcStep === 4 && state.qcData.condition !== "broken") {
+              state.qcStep = 2;
+            } else {
+              state.qcStep -= 1;
+            }
+            render(); 
+          }
         });
-        if (nextBtn) nextBtn.addEventListener("click", () => { state.qcStep += 1; render(); });
+        if (nextBtn) nextBtn.addEventListener("click", () => { 
+          // If on step 2 and condition is not broken, skip step 3 (broken issues)
+          if (state.qcStep === 2 && state.qcData.condition !== "broken") {
+            state.qcStep = 4;
+          } else {
+            state.qcStep += 1;
+          }
+          render(); 
+        });
         if ((state.qcData?.deviceMatch === 'no' || state.qcData?.storageMatch === 'no') && state.qcData?.actualBrand) {
           getModelsForBrand(state.qcData.actualBrand).then((models) => {
             if (!state.qcData.actualModelId) state.qcData.actualModelId = models[0]?.id || '';
@@ -3284,16 +3518,39 @@
         if (finishBtn) finishBtn.addEventListener("click", async () => {
           syncStepInputs();
           const qcSnapshot = { ...(state.qcData || {}) };
-          await saveQc(order.id, state.qcDeviceKey || buildOrderDeviceKey(order.id, 0), qcSnapshot);
-          const qcOutcome = await processQcOutcome(order, qcSnapshot);
-          state.qcOpen = false;
-          state.qcStep = 1;
-          state.qcData = null;
-          state.qcDeviceKey = null;
-          if (!qcOutcome.sentEmails) {
-            await openReofferModal(order, qcSnapshot);
+          
+          // Check if QC matches customer description
+          const isMatch = qcMatchesCustomerDescription(order, qcSnapshot);
+          
+          if (isMatch && !qcOutcome.sentEmails) {
+            // QC matches - show completion animation
+            state.qcCompletionAnimation = true;
+            render();
+            
+            // Show animation for 2 seconds then close
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            state.qcCompletionAnimation = false;
+            state.qcOpen = false;
+            state.qcStep = 1;
+            state.qcData = null;
+            state.qcDeviceKey = null;
+            // Set order to pay_now status
+            await updateOrderStatusInline(order.id, "pay_now", { notifyCustomer: false });
+            toast("QC completed! Order ready for payment.", "success");
+            render();
           } else {
-            toast("QC saved. Required customer emails sent. Waiting for response.", "info");
+            // QC doesn't match or needs emails - proceed with reoffer/email flow
+            state.qcOpen = false;
+            state.qcStep = 1;
+            state.qcData = null;
+            state.qcDeviceKey = null;
+            if (!qcOutcome.sentEmails && !isMatch) {
+              await openReofferModal(order, qcSnapshot);
+            } else {
+              toast("QC saved. Required customer emails sent. Waiting for response.", "info");
+            }
+            render();
+          }QC saved. Required customer emails sent. Waiting for response.", "info");
           }
           render();
         });
