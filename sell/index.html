@@ -630,24 +630,6 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="condition-info-modal" aria-hidden="true">
-    <div class="modal-card text-left">
-        <h3 class="text-2xl font-black text-slate-900 mb-3 text-center" id="condition-modal-title">Condition details</h3>
-        <ul id="condition-modal-details" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed mb-6"></ul>
-        <div class="border-t border-slate-200 pt-4">
-            <div class="bg-green-50 border-2 border-green-200 rounded-2xl py-4 px-4 mb-4 text-center shadow-sm">
-                <div class="text-xs font-black text-green-700 uppercase tracking-widest mb-1">Your Final Offer:</div>
-                <div class="price-val mb-0 text-green-700 drop-shadow-sm" id="condition-modal-price">--</div>
-            </div>
-            <div class="space-y-3">
-                <input type="email" id="condition-modal-email" class="form-control" placeholder="Enter email to save quote">
-                <button class="btn-primary" id="conditionModalCheckoutBtn">GET PAID INSTANTLY</button>
-                <button class="w-full py-3 border-2 border-slate-200 rounded-xl text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors" id="conditionModalCloseBtn">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-
 <footer class="bg-slate-800 text-white">
     <div class="container mx-auto px-4 py-12">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1352,28 +1334,10 @@
 
     const isSmallScreen = () => window.matchMedia('(max-width: 640px)').matches;
 
-    const openConditionModal = () => {
-        const overlay = document.getElementById('condition-info-modal');
-        const titleEl = document.getElementById('condition-modal-title');
-        const detailsEl = document.getElementById('condition-modal-details');
-        const priceEl = document.getElementById('condition-modal-price');
-        const emailInput = document.getElementById('condition-modal-email');
-        const cond = CONDITION_DEFS.find(c => c.key === state.selections.condition);
-        const priceMap = state.deviceData?.prices?.[state.selections.storage]?.[state.selections.lock] || {};
-        const price = Number(priceMap[state.selections.condition] || 0);
-        if (titleEl) titleEl.textContent = `${cond?.name || 'Condition'} Requirements`;
-        if (detailsEl) detailsEl.innerHTML = (cond?.desc || []).map(d => `<li>${d}</li>`).join('');
-        if (priceEl) priceEl.textContent = `$${price}`;
-        if (emailInput) {
-            const sourceEmail = document.getElementById('user-email')?.value || getStoredEmail();
-            emailInput.value = sourceEmail;
-        }
-        if (overlay) overlay.style.display = 'flex';
-    };
-
-    const closeConditionModal = () => {
-        const overlay = document.getElementById('condition-info-modal');
-        if (overlay) overlay.style.display = 'none';
+    const scrollToConditionRequirements = () => {
+        if (!isSmallScreen()) return;
+        const reqBox = document.getElementById('condition-requirements-box');
+        if (reqBox) reqBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     const renderConditionGrid = () => {
@@ -1388,7 +1352,7 @@
                 updateURL();
                 renderConditionGrid();
                 updatePrice();
-                if (isSmallScreen()) openConditionModal();
+                scrollToConditionRequirements();
             };
             grid.appendChild(card);
         });
@@ -1449,27 +1413,6 @@
         }
 
         setStoredEmail(email);
-        document.getElementById('qty-modal').style.display = 'flex';
-    };
-
-    document.getElementById('conditionModalCloseBtn').onclick = () => closeConditionModal();
-    document.getElementById('condition-info-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'condition-info-modal') closeConditionModal();
-    });
-    document.getElementById('conditionModalCheckoutBtn').onclick = () => {
-        const modalEmail = document.getElementById('condition-modal-email');
-        const email = (modalEmail?.value || '').trim();
-        if (!email.includes('@') || !email.includes('.')) {
-            modalEmail?.classList.add('error-highlight');
-            return;
-        }
-        const mainEmailInput = document.getElementById('user-email');
-        if (mainEmailInput) {
-            mainEmailInput.value = email;
-            mainEmailInput.classList.remove('error-highlight');
-        }
-        setStoredEmail(email);
-        closeConditionModal();
         document.getElementById('qty-modal').style.display = 'flex';
     };
 
