@@ -844,6 +844,33 @@
       );
     }
     
+    // Helper: get device status for a specific device
+    function getDeviceStatus(order, deviceIndex) {
+      if (!order) return null;
+      const deviceKey = buildOrderDeviceKey(order.id, deviceIndex);
+      return order.deviceStatusByKey?.[deviceKey] || order.status || null;
+    }
+    
+    // Helper: create flattened list of all devices with their statuses
+    function flattenOrdersToDevices(orders) {
+      const devices = [];
+      for (const order of orders) {
+        const entries = getOrderDeviceEntries(order);
+        for (const entry of entries) {
+          const deviceStatus = getDeviceStatus(order, entry.deviceIndex);
+          devices.push({
+            order,
+            deviceIndex: entry.deviceIndex,
+            item: entry.item,
+            qtyIndex: entry.qtyIndex,
+            deviceStatus: normalizeStatusKey(deviceStatus),
+            deviceKey: buildOrderDeviceKey(order.id, entry.deviceIndex),
+          });
+        }
+      }
+      return devices;
+    }
+    
     function getBaseOrdersForStatus(status) {
       const s = normalizeStatusKey(status);
       const { visible, cancelled } = splitCancelled(state.allOrders);
@@ -893,50 +920,41 @@
       state.currentActiveStatus = s;
       state.currentSearchTerm = term;
       syncSearchInputs(term);
-      // base list
-      let base = getBaseOrdersForStatus(s);
-      // status rules (only when no search term and not "all")
-      let out = base.slice();
+      
+      // Get base list of orders
+      let baseOrders = getBaseOrdersForStatus(s);
+      
+      // Flatten to devices
+      let allDevices = flattenOrdersToDevices(baseOrders);
+      
+      // Filter by device status (only when no search term and not "all")
       if (!term && s !== "all") {
         if (s === "kit_needs_printing") {
-          out = out.filter(o => {
-            const hasOrderStatus = KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status));
-            const hasDeviceStatus = o?.deviceStatusByKey && 
-              Object.values(o.deviceStatusByKey).some(ds => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(ds)));
-            return hasOrderStatus || hasDeviceStatus;
-          });
+          allDevices = allDevices.filter(d => KIT_PRINT_PENDING_STATUSES.has(d.deviceStatus));
         } else if (s === "label_generated") {
-          out = out.filter(o => {
-            const hasOrderStatus = isLabelGenerationStage(o);
-            const hasDeviceStatus = orderHasDeviceWithStatus(o, "label_generated");
-            return hasOrderStatus || hasDeviceStatus;
-          });
+          allDevices = allDevices.filter(d => d.deviceStatus === "label_generated");
         } else if (s === "emailed") {
-          out = out.filter(o => {
-            const hasOrderStatus = isBalanceEmailStatus(o) || normalizeStatusKey(o?.status) === "emailed";
-            const hasDeviceStatus = orderHasDeviceWithStatus(o, "emailed");
-            return hasOrderStatus || hasDeviceStatus;
-          });
+          allDevices = allDevices.filter(d => d.deviceStatus === "emailed");
         } else if (s === "received") {
-          out = out.filter(o => {
-            const hasOrderStatus = isReceivedStatusValue(o?.status);
-            const hasDeviceStatus = orderHasDeviceWithStatus(o, "received");
-            return hasOrderStatus || hasDeviceStatus;
-          });
+          allDevices = allDevices.filter(d => isReceivedStatusValue(d.deviceStatus));
         } else {
           // For all other statuses (including issue_resolved, completed, etc.)
-          out = out.filter(o => {
-            const hasOrderStatus = normalizeStatusKey(o?.status) === s;
-            const hasDeviceStatus = orderHasDeviceWithStatus(o, s);
-            return hasOrderStatus || hasDeviceStatus;
-          });
+          allDevices = allDevices.filter(d => d.deviceStatus === s);
         }
       }
-      // promo filter always applies
-      out = out.filter(o => matchesPromoFilter(o, state.currentPromoFilter));
-      // search term overrides (search within the already status/promo-filtered list to match your spec)
+      
+      // Apply promo filter to orders
+      const filteredOrderIds = new Set(
+        allDevices
+          .filter(d => matchesPromoFilter(d.order, state.currentPromoFilter))
+          .map(d => d.order.id)
+      );
+      allDevices = allDevices.filter(d => filteredOrderIds.has(d.order.id));
+      
+      // Search term filtering
       if (term) {
-        out = out.filter(order => {
+        allDevices = allDevices.filter(d => {
+          const order = d.order;
           const id = String(order?.id || "");
           const fullName = String(order?.shippingInfo?.fullName || "");
           const tracking = String(getAnyTrackingNumber(order) || "");
@@ -947,17 +965,25 @@
           return combined.includes(termLower);
         });
       }
-      // aging page mode
-      if (IS_AGING_PAGE) out = out.filter(isAgingCandidate);
-      // sort newest first by createdAt
-      out.sort((a, b) => {
-        const ta = toDateAny(a?.createdAt)?.getTime() || 0;
-        const tb = toDateAny(b?.createdAt)?.getTime() || 0;
-        return tb - ta;
+      
+      // Aging page mode - filter devices whose orders meet aging criteria
+      if (IS_AGING_PAGE) {
+        allDevices = allDevices.filter(d => isAgingCandidate(d.order));
+      }
+      
+      // Sort devices by order creation date (newest first)
+      allDevices.sort((a, b) => {
+        const ta = toDateAny(a.order?.createdAt)?.getTime() || 0;
+        const tb = toDateAny(b.order?.createdAt)?.getTime() || 0;
+        if (tb !== ta) return tb - ta;
+        // Secondary sort by device index within same order
+        return a.deviceIndex - b.deviceIndex;
       });
-      state.currentFilteredOrders = out;
-      // pagination
-      const totalPages = Math.max(1, Math.ceil(out.length / state.ORDERS_PER_PAGE));
+      
+      state.currentFilteredDevices = allDevices;
+      
+      // Pagination
+      const totalPages = Math.max(1, Math.ceil(allDevices.length / state.ORDERS_PER_PAGE));
       if (options?.preservePage) {
         state.currentPage = Math.min(state.currentPage, totalPages);
         state.currentPage = Math.max(1, state.currentPage);
