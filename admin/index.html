@@ -835,10 +835,24 @@
       }
       return { visible, cancelled };
     }
+    // Helper: check if order has any device with given status
+    function orderHasDeviceWithStatus(order, targetStatus) {
+      if (!order?.deviceStatusByKey) return false;
+      const normalizedTarget = normalizeStatusKey(targetStatus);
+      return Object.values(order.deviceStatusByKey).some(deviceStatus => 
+        normalizeStatusKey(deviceStatus) === normalizedTarget
+      );
+    }
+    
     function getBaseOrdersForStatus(status) {
       const s = normalizeStatusKey(status);
       const { visible, cancelled } = splitCancelled(state.allOrders);
-      if (s === "cancelled") return cancelled;
+      if (s === "cancelled") {
+        // Include orders with order-level cancelled status OR any cancelled device
+        const allCancelled = new Set(cancelled.map(o => o.id));
+        const withCancelledDevices = visible.filter(o => orderHasDeviceWithStatus(o, "cancelled"));
+        return [...cancelled, ...withCancelledDevices];
+      }
       if (s === "all") return visible; // default excludes cancelled
       // other statuses also based on visible, unless explicitly cancelled
       return visible;
@@ -885,15 +899,37 @@
       let out = base.slice();
       if (!term && s !== "all") {
         if (s === "kit_needs_printing") {
-          out = out.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status)));
+          out = out.filter(o => {
+            const hasOrderStatus = KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status));
+            const hasDeviceStatus = o?.deviceStatusByKey && 
+              Object.values(o.deviceStatusByKey).some(ds => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(ds)));
+            return hasOrderStatus || hasDeviceStatus;
+          });
         } else if (s === "label_generated") {
-          out = out.filter(o => isLabelGenerationStage(o));
+          out = out.filter(o => {
+            const hasOrderStatus = isLabelGenerationStage(o);
+            const hasDeviceStatus = orderHasDeviceWithStatus(o, "label_generated");
+            return hasOrderStatus || hasDeviceStatus;
+          });
         } else if (s === "emailed") {
-          out = out.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status) === "emailed");
+          out = out.filter(o => {
+            const hasOrderStatus = isBalanceEmailStatus(o) || normalizeStatusKey(o?.status) === "emailed";
+            const hasDeviceStatus = orderHasDeviceWithStatus(o, "emailed");
+            return hasOrderStatus || hasDeviceStatus;
+          });
         } else if (s === "received") {
-          out = out.filter(o => isReceivedStatusValue(o?.status));
+          out = out.filter(o => {
+            const hasOrderStatus = isReceivedStatusValue(o?.status);
+            const hasDeviceStatus = orderHasDeviceWithStatus(o, "received");
+            return hasOrderStatus || hasDeviceStatus;
+          });
         } else {
-          out = out.filter(o => normalizeStatusKey(o?.status) === s);
+          // For all other statuses (including issue_resolved, completed, etc.)
+          out = out.filter(o => {
+            const hasOrderStatus = normalizeStatusKey(o?.status) === s;
+            const hasDeviceStatus = orderHasDeviceWithStatus(o, s);
+            return hasOrderStatus || hasDeviceStatus;
+          });
         }
       }
       // promo filter always applies
@@ -1588,10 +1624,28 @@
     function computeStatusCounts() {
       const { visible, cancelled } = splitCancelled(state.allOrders);
       const statusCounts = new Map();
+      
+      // Count orders by order-level status AND by device-level statuses
       for (const o of visible) {
-        const s = normalizeStatusKey(o?.status) || "unknown";
-        statusCounts.set(s, (statusCounts.get(s) || 0) + 1);
+        const orderStatus = normalizeStatusKey(o?.status) || "unknown";
+        
+        // Count order-level status
+        statusCounts.set(orderStatus, (statusCounts.get(orderStatus) || 0) + 1);
+        
+        // Also count any device-level statuses
+        if (o?.deviceStatusByKey) {
+          const deviceStatuses = new Set();
+          for (const deviceStatus of Object.values(o.deviceStatusByKey)) {
+            const normalized = normalizeStatusKey(deviceStatus);
+            // Only count each unique device status once per order to avoid duplicates
+            if (normalized && !deviceStatuses.has(normalized) && normalized !== orderStatus) {
+              deviceStatuses.add(normalized);
+              statusCounts.set(normalized, (statusCounts.get(normalized) || 0) + 1);
+            }
+          }
+        }
       }
+      
       const statusCountAll = visible.length;
       const cancelledCount = cancelled.length;
       // live orders = visible excluding completed + return-label-generated
