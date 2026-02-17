@@ -56,6 +56,9 @@
                         <p class="text-sm text-teal-900 font-semibold">
                             Order: <span id="orderIdDisplay" class="font-mono">Loading...</span>
                         </p>
+                        <p class="text-sm text-teal-900 font-semibold mt-1">
+                            Device: <span id="deviceDisplay" class="font-mono">Loading...</span>
+                        </p>
                     </div>
                 </div>
 
@@ -86,7 +89,7 @@
 
                 <!-- Actions -->
                 <div class="mt-8 space-y-3">
-                    <a href="https://secondhandcell.com/track-order.html" 
+                    <a id="trackOrderBtn" href="https://secondhandcell.com/track-order.html" 
                        class="block w-full text-center px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-teal-600/30">
                         Track Your Order
                     </a>
@@ -120,12 +123,39 @@
         // Extract order ID from URL parameter
         const urlParams = new URLSearchParams(window.location.search);
         const orderId = urlParams.get('orderId');
+        const deviceKey = urlParams.get('deviceKey');
+        const deviceLabelParam = urlParams.get('deviceLabel');
         const orderIdDisplay = document.getElementById('orderIdDisplay');
+        const deviceDisplay = document.getElementById('deviceDisplay');
+        const trackOrderBtn = document.getElementById('trackOrderBtn');
+
+        const inferredDeviceLabel = (() => {
+            if (deviceLabelParam) return deviceLabelParam;
+            if (!deviceKey) return 'N/A';
+            const parts = String(deviceKey).split('::');
+            const maybeIndex = Number(parts[1]);
+            if (Number.isFinite(maybeIndex)) return `Device ${maybeIndex + 1}`;
+            return deviceKey;
+        })();
         
         if (orderId) {
             orderIdDisplay.textContent = `#${orderId}`;
+            if (trackOrderBtn) {
+                const trackParams = new URLSearchParams({
+                    orderId,
+                    fromEmailLink: '1'
+                });
+                if (deviceKey) {
+                    trackParams.set('deviceKey', deviceKey);
+                }
+                trackOrderBtn.href = `https://secondhandcell.com/track-order.html?${trackParams.toString()}`;
+            }
         } else {
             orderIdDisplay.textContent = 'N/A';
+        }
+
+        if (deviceDisplay) {
+            deviceDisplay.textContent = inferredDeviceLabel || 'N/A';
         }
     </script>
 </body>
