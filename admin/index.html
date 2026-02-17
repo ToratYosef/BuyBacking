@@ -496,6 +496,7 @@
       // orders master + filtered
       allOrders: [],
       currentFilteredOrders: [],
+      currentFilteredDevices: [],
       currentActiveStatus: "all",
       currentSearchTerm: "",
       currentPromoFilter: PROMO_FILTER.ALL,
@@ -1878,39 +1879,56 @@
       return parts.join(" • ");
     }
     function renderOrdersTable() {
-      const source = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
-      const total = source.length;
+      const devices = state.currentFilteredDevices || [];
+      const total = devices.length;
       const totalPages = Math.max(1, Math.ceil(total / state.ORDERS_PER_PAGE));
       const page = Math.min(Math.max(1, state.currentPage), totalPages);
       const start = (page - 1) * state.ORDERS_PER_PAGE;
       const end = start + state.ORDERS_PER_PAGE;
-      const pageOrders = source.slice(start, end);
+      const pageDevices = devices.slice(start, end);
       // build per-device rows & track lastRenderedDeviceKeys
       state.lastRenderedDeviceKeys = [];
       const rowHtml = [];
-      for (const order of pageOrders) {
-        const entries = getOrderDeviceEntries(order);
+      for (const deviceEntry of pageDevices) {
+        const order = deviceEntry.order;
+        const deviceIndex = deviceEntry.deviceIndex;
+        const item = deviceEntry.item;
+        const deviceStatus = deviceEntry.deviceStatus;
+        const deviceKey = deviceEntry.deviceKey;
+        
+        state.lastRenderedDeviceKeys.push(deviceKey);
         const createdAt = order?.createdAt;
         const lastUp = getLastUpdateTimestamp(order);
         const trackingNumber = getAnyTrackingNumber(order) || "";
         const trackingLink = trackingNumber ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNumber)}` : "";
         const statusExtra = labelStatusExtraHTML(order);
-        const payoutTotal = getOrderPayoutTotal(order);
-        state.lastRenderedDeviceKeys.push(buildOrderDeviceKey(order.id, 0));
+        const payoutTotal = getPerDeviceOffer(item, order);
+        
+        const deviceName = item?.device || item?.title || order?.device || "Device";
+        const storage = item?.storage || order?.storage || "";
+        const carrier = item?.carrier || order?.carrier || "";
+        const model = item?.model || order?.model || "";
+        const condition = item?.condition || order?.condition || "";
+        const deviceDetails = [storage, carrier, model].filter(Boolean).join(" • ");
+        
+        // Show device number if this order has multiple devices on this page
+        const devicesFromSameOrder = pageDevices.filter(d => d.order.id === order.id);
+        const showDeviceNum = devicesFromSameOrder.length > 1;
 
-        // Order summary row
+        // Device row
         rowHtml.push(`
-          <tr class="bg-slate-50/70 border-t border-slate-200 cursor-pointer" data-order-row="${esc(order.id)}">
+          <tr class="bg-white border-t border-slate-200 cursor-pointer hover:bg-slate-50" data-order-row="${esc(order.id)}" data-device-index="${deviceIndex}">
             <td class="px-4 py-3 align-top">
               <div class="flex items-start gap-3">
                 <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
-                <span class="inline-block w-1.5 h-8 rounded-full ${getStatusAccentBgClass(order.status)}" aria-hidden="true"></span>
+                <span class="inline-block w-1.5 h-full min-h-[40px] rounded-full ${getStatusAccentBgClass(deviceStatus)}" aria-hidden="true"></span>
               </div>
             </td>
             <td class="px-4 py-3 align-top">
               <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="font-bold text-slate-900">#${esc(order.id)}</span>
+                  ${showDeviceNum ? `<span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Device ${deviceIndex + 1}</span>` : ''}
                   <span class="text-xs text-slate-500">${esc(formatDate(createdAt))}</span>
                   <span class="text-xs text-slate-400">•</span>
                   <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
@@ -1924,13 +1942,16 @@
                   ${order?.shippingInfo?.email ? ` • <span>${esc(order.shippingInfo.email)}</span>` : ""}
                 </div>
                 <div class="text-sm text-slate-800 font-semibold mt-1">
-                  ${esc(entries.length)} device${entries.length === 1 ? "" : "s"} • Payout <span class="text-emerald-700">$${esc(Number(payoutTotal || 0).toFixed(2))}</span>
+                  ${esc(deviceName)}${deviceDetails ? ` • ${esc(deviceDetails)}` : ""}
+                </div>
+                <div class="text-xs font-bold text-emerald-700 mt-0.5">
+                  Payout: $${esc(Number(payoutTotal || 0).toFixed(2))}
                 </div>
                 ${lastUp ? `<div class="text-[11px] text-slate-400">Last update: ${esc(formatDate(lastUp))}</div>` : ""}
               </div>
             </td>
             <td class="px-4 py-3 align-top">
-              ${statusBadgeHTML(order.status, statusExtra)}
+              ${statusBadgeHTML(deviceStatus, statusExtra)}
             </td>
             <td class="px-4 py-3 align-top">
               ${trackingNumber ? `
@@ -1941,7 +1962,6 @@
             </td>
             <td class="px-4 py-3 align-top">
               <div class="flex flex-wrap gap-2 justify-end">
-                <span class="text-xs text-slate-400">Click row to open</span>
                 <button type="button" data-view-order="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
                   View
                 </button>
@@ -1949,47 +1969,6 @@
             </td>
           </tr>
         `);
-
-        // Device rows
-        if (false) for (const entry of entries) {
-          const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
-          state.lastRenderedDeviceKeys.push(deviceKey);
-          const item = entry.item || {};
-          const deviceTitle = item.device || order.device || "(Unknown device)";
-          const deviceSub = [
-            item.model || order.model || "",
-            item.storage || order.storage || "",
-            item.carrier || order.carrier || "",
-            item.condition || order.condition || ""
-          ].filter(Boolean).join(" • ");
-          rowHtml.push(`
-            <tr class="hover:bg-slate-50 transition-colors">
-              <td class="px-4 py-3 align-top">
-                <div class="flex items-center gap-3">
-                  <span class="w-6 text-slate-300 font-black" aria-hidden="true">↳</span>
-
-                </div>
-              </td>
-              <td class="px-4 py-3 align-top">
-                <div class="min-w-0">
-                  <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">Device ${esc(entry.deviceIndex + 1)}</div>
-                  <div class="text-sm text-slate-900 mt-1 font-semibold truncate">${esc(deviceTitle)}</div>
-                  ${deviceSub ? `<div class="text-xs text-slate-500 truncate">${esc(deviceSub)}</div>` : ""}
-                </div>
-              </td>
-              <td class="px-4 py-3 align-top">${statusBadgeHTML(getDeviceStatus(order, deviceKey))}</td>
-              <td class="px-4 py-3 align-top"><span class="text-sm text-slate-300">—</span></td>
-              <td class="px-4 py-3 align-top">
-                <div class="flex flex-wrap gap-2 justify-end">
-                  <button type="button" data-view-device="${esc(deviceKey)}"
-                    class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
-                    View
-                  </button>
-                </div>
-              </td>
-            </tr>
-          `);
-        }
       }
       const body = rowHtml.length
         ? rowHtml.join("")
