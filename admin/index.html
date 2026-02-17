@@ -922,7 +922,47 @@
       } else {
         state.currentPage = 1;
       }
-      render();
+      // Instead of full render, update just the table to preserve search input focus
+      refreshOrdersTableOnly();
+    }
+    // ----------------------------
+    // SPEC: PARTIAL TABLE REFRESH
+    // ----------------------------
+    function refreshOrdersTableOnly() {
+      // Update only the orders table, status breakdown, and bulk bar without full re-render
+      // This preserves search input focus and allows multi-character typing
+      const statusBreakdownEl = document.querySelector('[data-status-breakdown]');
+      const bulkBarEl = document.querySelector('[data-bulk-bar]');
+      const ordersTableEl = document.querySelector('[data-orders-table]');
+      
+      if (statusBreakdownEl) {
+        statusBreakdownEl.outerHTML = renderStatusBreakdown();
+      }
+      if (bulkBarEl) {
+        bulkBarEl.outerHTML = renderBulkBar();
+      }
+      if (ordersTableEl) {
+        ordersTableEl.outerHTML = renderOrdersTable();
+      }
+      
+      // Re-bind events for the updated sections
+      lucide.createIcons();
+      updateSelectAllCheckboxUI();
+      
+      // Re-bind status breakdown clicks
+      document.querySelectorAll("[data-status-tab]").forEach(btn => {
+        const go = () => {
+          const key = btn.getAttribute("data-status-tab");
+          if (key) filterAndRenderOrders(key, state.currentSearchTerm, { preservePage: false });
+        };
+        btn.addEventListener("click", go);
+        btn.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            go();
+          }
+        });
+      });
     }
     // ----------------------------
     // SPEC: BULK SELECTION (order)
@@ -1777,6 +1817,21 @@
       if (labTN) parts.push(`Label: ${esc(labTN)}`);
       return parts.join(" • ");
     }
+    // ----------------------------
+    // SPEC: 14-DAY SHIPPING TIMER
+    // ----------------------------
+    function isLateShipment(order) {
+      const status = normalizeStatusKey(order?.status);
+      if (status !== "label_generated") return false;
+      
+      const lastUpdate = getLastUpdateTimestamp(order);
+      const timestamp = toDateAny(lastUpdate || order?.createdAt);
+      if (!timestamp) return false;
+      
+      const daysSince = (Date.now() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
+      return daysSince > 14;
+    }
+    
     function renderOrdersTable() {
       const source = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
       const total = source.length;
@@ -1796,6 +1851,7 @@
         const trackingLink = trackingNumber ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNumber)}` : "";
         const statusExtra = labelStatusExtraHTML(order);
         const payoutTotal = getOrderPayoutTotal(order);
+        const isLate = isLateShipment(order);
         state.lastRenderedDeviceKeys.push(buildOrderDeviceKey(order.id, 0));
 
         // Order summary row
@@ -1815,6 +1871,7 @@
                   <span class="text-xs text-slate-400">•</span>
                   <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
                   ${promoBadgeHTML(order)}
+                  ${isLate ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">⚠️ 14+ Days</span>' : ''}
                 </div>
                 <div class="text-xs text-slate-500">
                   <span class="font-semibold text-slate-700">${esc(order?.shippingInfo?.fullName || "Guest")}</span>
@@ -1952,9 +2009,9 @@
               </div>
             </div>
             ${updateGlassMetricsHTML()}
-            ${renderStatusBreakdown()}
-            ${renderBulkBar()}
-            ${renderOrdersTable()}
+            <div data-status-breakdown>${renderStatusBreakdown()}</div>
+            <div data-bulk-bar>${renderBulkBar()}</div>
+            <div data-orders-table>${renderOrdersTable()}</div>
           </div>
         </main>
       `;
@@ -2644,9 +2701,24 @@
         `;
       }
       function step2() {
+        const customerCondition = currentItem.condition || order.condition || "N/A";
+        const customerCarrier = currentItem.carrier || currentItem.lock || order.carrier || order.lock || "N/A";
         return `
           <div class="space-y-4">
             <img src="https://images.unsplash.com/photo-1526570207772-784d36084510?auto=format&fit=crop&w=900&q=60" alt="Device condition" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+              <div class="text-xs font-semibold text-blue-700 uppercase tracking-wider">Customer's Original Selection</div>
+              <div class="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div class="text-xs text-blue-600 font-medium">Condition</div>
+                  <div class="text-slate-900 font-semibold capitalize">${esc(customerCondition)}</div>
+                </div>
+                <div>
+                  <div class="text-xs text-blue-600 font-medium">Carrier</div>
+                  <div class="text-slate-900 font-semibold capitalize">${esc(customerCarrier === "unlocked" ? "Unlocked" : customerCarrier === "att" ? "AT&T" : customerCarrier === "tmobile" ? "T-Mobile" : customerCarrier === "verizon" ? "Verizon" : customerCarrier)}</div>
+                </div>
+              </div>
+            </div>
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Quality / condition grade</label>
               <select id="qcCondition" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
