@@ -2144,6 +2144,20 @@
           const offer = getPerDeviceOffer(item, order);
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const showAcceptedOfferSwap = isAcceptedReofferStatus(deviceStatus) && Number.isFinite(acceptedDeviceOffer);
+          
+          // Check if QC has been completed for this device
+          const qcData = order?.qcDataByDevice?.[deviceKey];
+          const hasQcData = qcData && Object.keys(qcData).length > 0;
+          const qcStatusBadge = hasQcData 
+            ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <i data-lucide="check-square" style="width:11px;height:11px"></i>
+                QC Finished
+              </span>`
+            : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                <i data-lucide="clock" style="width:11px;height:11px"></i>
+                QC Pending
+              </span>`;
+          
           return `
             <button type="button" data-open-qc-device="${esc(deviceKey)}" class="w-full p-3.5 flex items-start gap-3 hover:bg-slate-50 transition-colors text-left">
               <div class="h-12 w-12 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
@@ -2158,6 +2172,9 @@
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(item.storage || order.storage || "")}</span>
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(formatCarrierLabel(item.carrier || order.carrier || ""))}</span>
                   <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200 capitalize">${esc(item.condition || order.condition || "")}</span>
+                </div>
+                <div class="mt-2">
+                  ${qcStatusBadge}
                 </div>
               </div>
               <div class="text-right">
@@ -3480,24 +3497,42 @@
           state.qcData = null;
           state.qcDeviceKey = null;
           
-          // Check if QC matches customer description
-          const customerCondition = (order.condition || 'good').toLowerCase();
-          const qcCondition = (qcSnapshot.condition || 'good').toLowerCase();
-          const conditionsMatch = customerCondition === qcCondition;
-          const hasNoIssues = !qcOutcome.sentEmails && qcSnapshot.hasDamage !== 'yes';
-          const isGoodCondition = ['flawless', 'good', 'fair'].includes(qcCondition);
+          // Get the device's customer-declared data
+          const entries = getOrderDeviceEntries(order);
+          const parsed = parseOrderDeviceKey(deviceKey);
+          const entry = entries.find(e => e.deviceIndex === parsed.deviceIndex) || entries[0] || { deviceIndex: 0, item: order, qtyIndex: 0 };
+          const customerItem = entry.item || order;
           
-          if (conditionsMatch && hasNoIssues && isGoodCondition) {
-            // QC matches - show completion animation and proceed
-            toast("QC completed successfully! Conditions match.", "success");
-            // Show QC completion status instead of opening reoffer
+          // Normalize and compare customer input with QC assessment
+          const normalizeStr = (s) => String(s || '').toLowerCase().trim();
+          
+          const customerCondition = normalizeStr(customerItem.condition || order.condition || 'good');
+          const qcCondition = normalizeStr(qcSnapshot.condition || 'good');
+          
+          const customerCarrier = normalizeStr(customerItem.carrier || customerItem.lock || order.carrier || order.lock || 'unlocked');
+          const qcCarrier = normalizeStr(qcSnapshot.carrier || 'unlocked');
+          
+          const customerStorage = normalizeStr(customerItem.storage || order.storage || '');
+          const qcStorage = normalizeStr(qcSnapshot.actualStorage || qcSnapshot.storage || '');
+          
+          // Check if QC matches customer's declared values
+          const conditionMatches = customerCondition === qcCondition;
+          const carrierMatches = customerCarrier === qcCarrier;
+          const storageMatches = !customerStorage || !qcStorage || customerStorage === qcStorage || qcSnapshot.storageMatch === 'yes';
+          
+          const allInputsMatch = conditionMatches && carrierMatches && storageMatches;
+          const hasBlockingIssues = qcOutcome.sentEmails; // FMI, locks, balance, blacklist
+          
+          if (allInputsMatch && !hasBlockingIssues) {
+            // Admin's QC matches customer input - skip reoffer, proceed to payment
+            toast("QC completed! Admin assessment matches customer input.", "success");
             render();
-          } else if (qcOutcome.sentEmails) {
-            // Locks/issues detected - emails sent
+          } else if (hasBlockingIssues) {
+            // Blocking issues detected - emails sent, waiting for customer
             toast("QC saved. Required customer emails sent. Waiting for response.", "info");
             render();
           } else {
-            // QC doesn't match or broken - open reoffer modal
+            // QC doesn't match customer input - show reoffer modal
             await openReofferModal(order, qcSnapshot);
             render();
           }
