@@ -644,13 +644,12 @@
       if (!qcData) return reasons;
       if (qcData.deviceMatch === 'no') reasons.push('Device received does not match the original model selection.');
       if (qcData.storageMatch === 'no') reasons.push('Storage/GB amount differs from what was quoted.');
-      if (qcData.hasDamage === 'yes') reasons.push('Physical damage beyond normal wear was found in inspection.');
+      if (qcData.hasDamage === 'yes') reasons.push('Physical damage was found in inspection.');
       if (qcData.hasCracks === 'yes') reasons.push('Cracked glass/back lowers the device value.');
       if (qcData.isFunctional === 'no') reasons.push('Device is not fully functional during testing.');
       if (qcData.isLocked === 'yes') reasons.push('Screen lock / passcode is still active.');
       if (qcData.hasFmi === 'yes') reasons.push('FMI / iCloud / FRP / Google lock is still active.');
       if (qcData.hasBalance === 'yes') reasons.push('Outstanding carrier/financing balance is present.');
-      if (Number.isFinite(computedPrice)) reasons.push('Updated offer uses current live pricing based on verified condition, carrier, and storage.');
       if (qcData.notes) reasons.push(`Inspector notes: ${qcData.notes}`);
       return reasons;
     }
@@ -1083,8 +1082,19 @@
       if (!res.ok) throw new Error("Failed to generate packing slip");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      // Create an iframe to load the PDF and trigger print dialog
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      iframe.onload = function() {
+        iframe.contentWindow.print();
+        // Clean up after printing
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          URL.revokeObjectURL(url);
+        }, 1000);
+      };
     }
 
     async function handleAction(orderId, actionType, options = {}) {
@@ -2280,7 +2290,10 @@
         }
         else if (["received", "imei_checked"].includes(status)) {
             groups.postReceive.push({ label: hasQc ? "Edit QC Checklist" : "Start QC Checklist", id: "openQcBtn", class: "bg-indigo-50 text-indigo-700 border-indigo-100" });
-            groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
+            // Only show Mark Completed after QC is complete
+            if (hasQc) {
+              groups.postReceive.push({ label: "Mark Completed", action: "markCompleted", class: "bg-emerald-600 text-white" });
+            }
             groups.postReceive.push({ label: "Propose Re-offer", action: "reOffer", class: "bg-purple-100 text-purple-700" });
         }
         else if (status === "emailed") {
@@ -2319,13 +2332,14 @@
         if (order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent"].includes(status)) {
              groups.tracking.unshift({ label: "Print Kit Docs", action: "printDocs", class: "bg-white border-slate-200" });
         }
-        groups.tracking.push({ label: "Print Packing Slip", action: "printPacking", class: "bg-white border-slate-200" });
-
-        // Admin
+        groups.tracking.push({ label: "Print Packing Slip", action: "printPacking", class: "bg-blue-600 text-white hover:bg-blue-700" });
+        // Delete and Cancel buttons moved to tracking section
         if (status !== 'cancelled') {
-             groups.admin.push({ label: "Cancel Order", action: "cancelOrder", class: "text-rose-600 hover:bg-rose-50" });
+          groups.tracking.push({ label: "Cancel Order", action: "cancelOrder", class: "text-white bg-rose-600 hover:bg-rose-700" });
         }
-        groups.admin.push({ label: "Delete Order", action: "deleteOrder", class: "text-rose-600 hover:bg-rose-50" });
+        groups.tracking.push({ label: "Delete Order", action: "deleteOrder", class: "text-white bg-rose-700 hover:bg-rose-800" });
+
+        // Admin buttons moved to tracking section
 
         // --- Render ---
         const renderBtn = (b) => `
@@ -2479,7 +2493,7 @@
               </select>
             </div>
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <span class="text-sm text-slate-700">Visible damage beyond normal wear?</span>
+              <span class="text-sm text-slate-700">Physical damage?</span>
               <input id="qcHasDamage" type="checkbox" ${state.qcData.hasDamage === "yes" ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
             </label>
           </div>
