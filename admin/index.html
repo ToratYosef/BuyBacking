@@ -177,6 +177,7 @@
       if (s.includes("pending") || s.includes("needs_printing") || s.includes("kit_needs_printing")) return "bg-amber-100 text-amber-800 border-amber-200";
       if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-100 text-blue-800 border-blue-200";
       if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-100 text-indigo-800 border-indigo-200";
+      if (s.includes("pay_now") || s.includes("pay now")) return "bg-amber-100 text-amber-800 border-amber-200";
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-100 text-emerald-800 border-emerald-200";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-100 text-purple-800 border-purple-200";
       return "bg-slate-100 text-slate-800 border-slate-200";
@@ -187,6 +188,7 @@
       if (s.includes("cancel")) return "bg-slate-300";
       if (s.includes("pending") || s.includes("needs_printing") || s.includes("kit_needs_printing")) return "bg-amber-400";
       if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-500";
+      if (s.includes("pay_now") || s.includes("pay now")) return "bg-amber-400";
       if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-500";
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-500";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-500";
@@ -1671,6 +1673,12 @@
           count: isActive ? "bg-white/15 text-white" : "bg-indigo-100 text-indigo-700"
         };
       }
+      if (s === "pay_now") {
+        return {
+          pill: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-amber-100 text-amber-700"
+        };
+      }
       if (s === "completed") {
         return {
           pill: isActive ? "bg-emerald-500 text-white shadow-md" : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100",
@@ -1691,6 +1699,7 @@
         { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
         { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
         { key: "received", label: "Received", count: visible.filter(o => isReceivedStatusValue(o?.status)).length },
+        { key: "pay_now", label: "Pay Now", count: statusCounts.get("pay_now") || 0 },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
@@ -3550,9 +3559,7 @@
               toast("QC saved. Required customer emails sent. Waiting for response.", "info");
             }
             render();
-          }QC saved. Required customer emails sent. Waiting for response.", "info");
           }
-          render();
         });
         syncStepInputs();
       }
