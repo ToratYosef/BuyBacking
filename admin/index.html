@@ -1859,21 +1859,28 @@
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
+      const splitIndex = Math.ceil(items.length / 2);
+      const firstRow = items.slice(0, splitIndex);
+      const secondRow = items.slice(splitIndex);
+      const renderPills = (rowItems) => rowItems.map(it => {
+        const classes = getStatusPillClasses(it.key, state.currentActiveStatus === it.key);
+        return `
+          <button data-status-tab="${esc(it.key)}"
+            class="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${classes.pill}"
+            role="button" tabindex="0">
+            ${esc(it.label)}
+            <span class="ml-2 inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs ${classes.count}">${it.count}</span>
+          </button>
+        `;
+      }).join("");
       return `
-        <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide mb-4">
-          ${items.map(it => `
-            ${(() => {
-              const classes = getStatusPillClasses(it.key, state.currentActiveStatus === it.key);
-              return `
-            <button data-status-tab="${esc(it.key)}"
-              class="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${classes.pill}"
-              role="button" tabindex="0">
-              ${esc(it.label)}
-              <span class="ml-2 inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs ${classes.count}">${it.count}</span>
-            </button>
-              `;
-            })()}
-          `).join("")}
+        <div class="space-y-2 mb-4">
+          <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            ${renderPills(firstRow)}
+          </div>
+          <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            ${renderPills(secondRow)}
+          </div>
         </div>
       `;
     }
