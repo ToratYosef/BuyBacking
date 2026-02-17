@@ -3282,12 +3282,26 @@
           e.stopPropagation();
           const deviceKey = btn.getAttribute("data-open-qc-device");
           if (!deviceKey) return;
-          state.selectedDeviceKey = deviceKey;
-          state.qcDeviceKey = deviceKey;
-          state.qcOpen = true;
-          state.modalScrollTop.qc = 0;
-          state.qcStep = 1;
-          state.qcData = null;
+          
+          const order = getSelectedOrder();
+          if (!order) return;
+          
+          // Check if QC is already finished for this device
+          const hasQcData = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
+          
+          if (hasQcData) {
+            // QC already completed - show payment confirmation modal
+            state.paymentConfirmModalOpen = true;
+            state.paymentConfirmDeviceKey = deviceKey;
+          } else {
+            // QC not completed - open QC modal
+            state.selectedDeviceKey = deviceKey;
+            state.qcDeviceKey = deviceKey;
+            state.qcOpen = true;
+            state.modalScrollTop.qc = 0;
+            state.qcStep = 1;
+            state.qcData = null;
+          }
           render();
         });
       });
