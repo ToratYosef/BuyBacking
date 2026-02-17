@@ -25,7 +25,7 @@ let pendingAction = null;
 
 const redirectToTrackOrder = () => {
 const params = new URLSearchParams(window.location.search);
-const target = new URL('/track-order.html', window.location.origin);
+const target = new URL('https://secondhandcell.com/track-order.html');
 const orderId = params.get('orderId');
 const email = params.get('email');
 const deviceKey = params.get('deviceKey');
@@ -44,6 +44,7 @@ if (action) {
 target.searchParams.set('action', action);
 }
 target.searchParams.set('fromReofferLink', '1');
+target.searchParams.set('fromEmailLink', '1');
 target.searchParams.set('scrollToReoffer', '1');
 
 window.location.replace(target.toString());

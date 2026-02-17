@@ -220,6 +220,22 @@
     .action-btn.decline:hover { background: #fecaca; }
     .reoffer-note { margin: 10px 0 0; color: var(--slate-700); font-size: 13px; }
 
+    .my-orders { margin-top: 20px; padding: 18px; border-radius: 14px; border: 1px solid var(--slate-200); background: #f8fafc; }
+    .my-orders-header h3 { margin: 0; font-size: 18px; }
+    .my-orders-header p { margin: 6px 0 0; color: var(--slate-700); font-size: 14px; }
+    .my-orders-grid { margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .order-card-btn { width: 100%; text-align: left; border: 1px solid var(--slate-200); border-radius: 12px; background: #fff; padding: 12px; cursor: pointer; transition: transform .15s ease, box-shadow .2s ease; }
+    .order-card-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 20px rgba(15,23,42,.08); }
+    .order-card-title { margin: 0 0 6px; font-size: 14px; font-weight: 800; color: var(--slate-900); }
+    .order-card-meta { margin: 2px 0; color: var(--slate-700); font-size: 13px; }
+    .status-chip { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; margin-top: 8px; }
+    .status-chip.label { background: #dbeafe; color: #1d4ed8; }
+    .status-chip.received { background: #dcfce7; color: #166534; }
+    .status-chip.processing { background: #fef3c7; color: #92400e; }
+    .status-chip.reoffer { background: #ffedd5; color: #9a3412; }
+    .status-chip.completed { background: #dcfce7; color: #166534; }
+    .status-chip.default { background: #e2e8f0; color: #334155; }
+
 
     .progress-list { list-style: none; padding: 0; margin: 20px 0 0; }
     .progress-item {
@@ -313,7 +329,7 @@
     <div class="page-header">
       <span class="page-eyebrow">Track order</span>
       <h1 class="page-title">Check the status of your trade-in</h1>
-      <p class="page-subtitle">Enter the order ID and email used at checkout so we can securely pull your latest status updates.</p>
+      <p class="page-subtitle">Use your order details or signed-in account to view your latest status updates and any re-offers.</p>
     </div>
     <section class="card" aria-labelledby="track-order-form-title">
       <h2 id="track-order-form-title" class="hidden">Order lookup</h2>
@@ -331,6 +347,14 @@
         </div>
       </form>
       <p id="formError" class="inline-error error hidden" role="alert"></p>
+
+      <section id="myOrdersSection" class="my-orders hidden" aria-live="polite">
+        <div class="my-orders-header">
+          <h3>Your Orders</h3>
+          <p>Signed in? Tap an order card to open full tracking details.</p>
+        </div>
+        <div id="myOrdersGrid" class="my-orders-grid"></div>
+      </section>
 
       <div id="statusCard" class="status-card hidden" aria-live="polite">
         <div class="status-header">
@@ -431,11 +455,14 @@
 </footer>
 
   <script type="module">
-    import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+    import { getFirestore, doc, getDoc, collection, query, where, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
     import { getFirebaseApp } from '/assets/js/firebase-app.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
     import { apiPost } from '/public/js/apiClient.js';
 
-    const db = getFirestore(getFirebaseApp());
+    const app = getFirebaseApp();
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
     const statusDescriptions = {
       order_pending: 'We have your order and are preparing your shipping kit details.',
@@ -534,11 +561,13 @@
     const reofferReasonsList = document.getElementById('reofferReasonsList');
     const reofferActions = document.getElementById('reofferActions');
     const reofferNote = document.getElementById('reofferNote');
+    const myOrdersSection = document.getElementById('myOrdersSection');
+    const myOrdersGrid = document.getElementById('myOrdersGrid');
 
     let currentOrder = null;
     let autoScrollToReoffer = false;
-    let pendingActionFromLink = null;
-    let pendingDeviceKeyFromLink = null;
+    let isFromEmailLink = false;
+    let signedInUser = null;
 
     function normalize(value) {
       return (value || '').trim().toLowerCase();
@@ -628,7 +657,7 @@
       );
     }
 
-    async function fetchOrder(orderId, email) {
+    async function fetchOrder(orderId, email, options = {}) {
       const orderRef = doc(db, 'orders', orderId);
       const snapshot = await getDoc(orderRef);
 
@@ -639,13 +668,16 @@
       const order = { id: snapshot.id, ...snapshot.data() };
       const orderEmail = resolveOrderEmail(order);
       const enteredEmail = normalize(email);
+      const skipEmailVerification = Boolean(options.skipEmailVerification);
 
-      if (!orderEmail) {
-        throw new Error('This order does not have an email on file. Please contact support.');
-      }
+      if (!skipEmailVerification) {
+        if (!orderEmail) {
+          throw new Error('This order does not have an email on file. Please contact support.');
+        }
 
-      if (enteredEmail && orderEmail !== enteredEmail) {
-        throw new Error('The email you entered does not match the email on the order.');
+        if (enteredEmail && orderEmail !== enteredEmail) {
+          throw new Error('The email you entered does not match the email on the order.');
+        }
       }
 
       return order;
@@ -788,7 +820,7 @@
           button.textContent = isAccept ? 'Accepting…' : 'Declining…';
         }
         await apiPost(isAccept ? '/accept-offer-action' : '/return-phone-action', { orderId: currentOrder.id, deviceKey: deviceKey || null });
-        const refreshed = await fetchOrder(currentOrder.id, customerEmailInput.value.trim());
+        const refreshed = await fetchOrder(currentOrder.id, customerEmailInput.value.trim(), { skipEmailVerification: isFromEmailLink || !!signedInUser });
         currentOrder = refreshed;
         displayOrder(refreshed);
       } catch (error) {
@@ -807,22 +839,6 @@
       if (reofferPanel.classList.contains('hidden')) return;
       autoScrollToReoffer = false;
       reofferPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    async function maybeRunLinkAction() {
-      if (!pendingActionFromLink) return;
-      if (pendingActionFromLink !== 'accept' && pendingActionFromLink !== 'decline') return;
-
-      const selector = pendingDeviceKeyFromLink
-        ? `[data-reoffer-action="${pendingActionFromLink}"][data-device-key="${CSS.escape(pendingDeviceKeyFromLink)}"]`
-        : `[data-reoffer-action="${pendingActionFromLink}"]`;
-      const button = reofferActions.querySelector(selector);
-      if (!button) return;
-
-      const action = pendingActionFromLink;
-      pendingActionFromLink = null;
-      pendingDeviceKeyFromLink = null;
-      await submitReofferDecision(action, button.dataset.deviceKey || null, button);
     }
 
     function displayOrder(order) {
@@ -845,7 +861,6 @@
       renderReofferPanel(order);
       statusCard.classList.remove('hidden');
       maybeScrollToReofferPanel();
-      maybeRunLinkAction().catch(() => {});
     }
 
     function setLoading(isLoading) {
@@ -860,6 +875,81 @@
       resetReofferPanel();
     }
 
+
+    function statusChipClass(status) {
+      const normalizedStatus = normalize(status);
+      if (normalizedStatus.includes('re-offered') || normalizedStatus.includes('reoffer')) return 'reoffer';
+      if (['label_generated', 'emailed', 'kit_sent', 'shipping_kit_requested', 'kit_needs_printing', 'needs_printing'].includes(normalizedStatus)) return 'label';
+      if (['received', 'device_received', 'imei_checked'].includes(normalizedStatus)) return 'received';
+      if (['processing', 'inspected', 'return_label_generated', 'return_label_sent'].includes(normalizedStatus)) return 'processing';
+      if (['completed', 're-offered-accepted', 're-offered-auto-accepted', 're_offered_accepted', 're_offered_auto_accepted'].includes(normalizedStatus)) return 'completed';
+      return 'default';
+    }
+
+    async function loadSignedInUserOrders(user) {
+      if (!user?.uid) return;
+      myOrdersGrid.innerHTML = '';
+      myOrdersSection.classList.remove('hidden');
+      const ordersRef = collection(db, 'orders');
+      const clauses = [query(ordersRef, where('userId', '==', user.uid), orderBy('createdAt', 'desc'), limit(20))];
+      if (user.email) {
+        clauses.push(query(ordersRef, where('shippingInfo.email', '==', user.email), orderBy('createdAt', 'desc'), limit(20)));
+      }
+
+      const byId = new Map();
+      for (const q of clauses) {
+        try {
+          const snap = await getDocs(q);
+          snap.forEach((docSnap) => byId.set(docSnap.id, { id: docSnap.id, ...docSnap.data() }));
+        } catch (error) {
+          // ignore query index issues and continue with available results
+        }
+      }
+
+      if (!byId.size) {
+        myOrdersGrid.innerHTML = '<p class="order-card-meta">No orders found for this account yet.</p>';
+        return;
+      }
+
+      Array.from(byId.values()).forEach((order) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'order-card-btn';
+        const status = normalize(order.status || '');
+        const itemCount = Array.isArray(order.items) ? order.items.length : (Number(order.qty) || 1);
+        btn.innerHTML = `
+          <p class="order-card-title">${order.id}</p>
+          <p class="order-card-meta"><strong>Payout:</strong> ${formatCurrency(order.totalPayout ?? order.estimatedQuote ?? order.originalQuote)}</p>
+          <p class="order-card-meta"><strong>Devices:</strong> ${itemCount}</p>
+          <p class="order-card-meta"><strong>Status:</strong> ${friendlyStatus(status)}</p>
+          <span class="status-chip ${statusChipClass(status)}">${friendlyStatus(status)}</span>
+        `;
+        btn.addEventListener('click', () => {
+          orderIdInput.value = order.id;
+          if (user.email && !customerEmailInput.value) {
+            customerEmailInput.value = user.email;
+          }
+          displayOrder(order);
+          statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        myOrdersGrid.appendChild(btn);
+      });
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      signedInUser = user || null;
+      if (signedInUser) {
+        customerEmailInput.required = false;
+        if (signedInUser.email && !customerEmailInput.value) {
+          customerEmailInput.value = signedInUser.email;
+        }
+        loadSignedInUserOrders(signedInUser).catch(() => {});
+      } else {
+        myOrdersSection.classList.add('hidden');
+        myOrdersGrid.innerHTML = '';
+      }
+    });
+
     reofferActions.addEventListener('click', (event) => {
       const btn = event.target.closest('[data-reoffer-action]');
       if (!btn) return;
@@ -873,14 +963,19 @@
       const orderId = orderIdInput.value.trim();
       const email = customerEmailInput.value.trim();
 
-      if (!orderId || !email) {
-        showError('Please enter both your order ID and the email used on the order.');
+      if (!orderId) {
+        showError('Please enter your order ID.');
+        return;
+      }
+
+      if (!isFromEmailLink && !signedInUser && !email) {
+        showError('Please enter the email used on the order.');
         return;
       }
 
       try {
         setLoading(true);
-        const order = await fetchOrder(orderId, email);
+        const order = await fetchOrder(orderId, email, { skipEmailVerification: isFromEmailLink || !!signedInUser });
         displayOrder(order);
       } catch (error) {
         showError(error.message || 'Unable to find your order. Please double-check the details.');
@@ -900,6 +995,9 @@
       pendingActionFromLink = actionFromUrl;
       pendingDeviceKeyFromLink = params.get('deviceKey') || null;
 
+      autoScrollToReoffer = params.get('scrollToReoffer') === '1' || params.get('fromReofferLink') === '1';
+      isFromEmailLink = params.get('fromEmailLink') === '1' || params.get('fromReofferLink') === '1';
+
       if (idFromUrl) {
         orderIdInput.value = idFromUrl;
       }
@@ -907,7 +1005,11 @@
         customerEmailInput.value = emailFromUrl;
       }
 
-      if (idFromUrl && emailFromUrl) {
+      if (isFromEmailLink) {
+        customerEmailInput.required = false;
+      }
+
+      if (idFromUrl && (emailFromUrl || isFromEmailLink)) {
         form.dispatchEvent(new Event('submit'));
       }
     }

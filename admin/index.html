@@ -3080,7 +3080,7 @@
               <p class="text-base text-slate-700 mb-4">
                 QC has been completed for this device. Would you like to proceed with payment?
               </p>
-              <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4" id="paymentInfoSection" style="display: none;">
+              <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4" id="paymentInfoSection">
                 <p class="text-sm font-semibold text-emerald-900 mb-3">💵 Payout Information</p>
                 <div class="mb-3">
                   <p class="text-2xl font-bold text-emerald-700" id="payoutAmount">--</p>
@@ -3101,7 +3101,7 @@
                 Close
               </button>
               <button id="paymentConfirmYesBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700">
-                Show Payment Info
+                Mark as Paid
               </button>
             </div>
           </div>
@@ -3794,40 +3794,45 @@
             render();
           });
         }
-        
-        if (paymentYesBtn && paymentInfo && payoutAmountEl) {
-          paymentYesBtn.addEventListener("click", async () => {
-            const order = getSelectedOrder();
-            if (!order) return;
-            
+
+        if (paymentInfo && payoutAmountEl) {
+          (async () => {
+            const currentOrder = getSelectedOrder();
+            if (!currentOrder) return;
+
             const deviceKey = state.paymentConfirmDeviceKey;
-            const qcData = order.qcDataByDevice?.[deviceKey];
-            
-            // Calculate payout
-            const computedPrice = await getQcOfferFromDb(order, qcData);
-            const fallbackPrice = getOrderPayoutTotal(order);
+            const qcData = currentOrder.qcDataByDevice?.[deviceKey];
+
+            const computedPrice = await getQcOfferFromDb(currentOrder, qcData);
+            const fallbackPrice = getOrderPayoutTotal(currentOrder);
             const finalPrice = Number.isFinite(computedPrice) ? computedPrice : fallbackPrice;
-            
-            // Get payment method and identifier
-            const paymentMethodRaw = order?.paymentMethod || 'N/A';
+
+            const paymentMethodRaw = currentOrder?.paymentMethod || 'N/A';
             const paymentMethodFormatted = String(paymentMethodRaw).replace(/[_-]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
-            const paymentIdentifier = getPayoutInfoDisplay(order);
-            
-            // Show payment info
+            const paymentIdentifier = getPayoutInfoDisplay(currentOrder);
+
             payoutAmountEl.textContent = `$${Number(finalPrice || 0).toFixed(2)}`;
             const methodEl = document.getElementById('paymentMethod');
             const identifierEl = document.getElementById('paymentIdentifier');
             if (methodEl) methodEl.textContent = paymentMethodFormatted;
             if (identifierEl) identifierEl.textContent = paymentIdentifier;
-            paymentInfo.style.display = 'block';
-            
-            // Change button text
-            paymentYesBtn.textContent = 'Close';
-            paymentYesBtn.onclick = () => {
-              state.paymentConfirmModalOpen = false;
-              state.paymentConfirmDeviceKey = null;
-              render();
-            };
+          })();
+        }
+        
+        if (paymentYesBtn) {
+          paymentYesBtn.addEventListener("click", async () => {
+            const order = getSelectedOrder();
+            if (!order) return;
+
+            const deviceKey = state.paymentConfirmDeviceKey;
+            if (deviceKey) {
+              await updateDeviceStatusInline(order.id, deviceKey, "completed");
+              toast("Device marked as paid and completed.", "success");
+            }
+
+            state.paymentConfirmModalOpen = false;
+            state.paymentConfirmDeviceKey = null;
+            render();
           });
         }
       }
