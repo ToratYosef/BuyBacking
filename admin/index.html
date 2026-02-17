@@ -530,6 +530,16 @@
       // bulk states
       isBulkSlipPrintInProgress: false,
       lastRefreshAt: null,
+      // confirmation modal
+      confirmationModal: {
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmText: 'Confirm',
+        cancelText: 'Cancel',
+        onConfirm: null,
+        isDangerous: false
+      }
     };
     function getSelectedOrder() {
       if (!state.selectedOrderId) return null;
@@ -2684,6 +2694,33 @@
                 <button id="orderTextImportCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 font-semibold text-sm">Cancel</button>
                 <button id="orderTextImportSubmitBtn" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Submit</button>
               </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    // ----------------------------
+    // CONFIRMATION MODAL
+    // ----------------------------
+    function renderConfirmationModal() {
+      if (!state.confirmationModal.isOpen) return "";
+      const m = state.confirmationModal;
+      return `
+        <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 overflow-hidden">
+            <div class="${m.isDangerous ? 'bg-rose-50' : 'bg-slate-50'} px-6 py-4 border-b ${m.isDangerous ? 'border-rose-100' : 'border-slate-100'}">
+              <h3 class="text-lg font-bold ${m.isDangerous ? 'text-rose-900' : 'text-slate-900'}">${esc(m.title)}</h3>
+            </div>
+            <div class="px-6 py-6">
+              <p class="text-sm text-slate-700">${esc(m.message)}</p>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button id="confirmModalCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors">
+                ${esc(m.cancelText)}
+              </button>
+              <button id="confirmModalConfirmBtn" class="px-4 py-2 rounded-lg ${m.isDangerous ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white text-sm font-semibold transition-colors">
+                ${esc(m.confirmText)}
+              </button>
             </div>
           </div>
         </div>
