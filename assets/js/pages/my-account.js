@@ -854,7 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   footerEmailSignupForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email = document.getElementById('footerPromoEmail').value;
+  const email = document.getElementById('footerEmail').value;
   footerSignupMessage.textContent = 'Submitting...';
   footerSignupMessage.className = 'mt-3 text-sm text-center text-blue-300';
 

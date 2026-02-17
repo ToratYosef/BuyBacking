@@ -689,8 +689,8 @@ iconClass = 'fa-power-off text-red-400';
 }
 
 const basePrice = Math.max(0, calculatedPrice);
-const promo = Math.floor(basePrice * 0.06);
-finalQuote = basePrice + promo;
+const bonus = Math.floor(basePrice * 0.06);
+finalQuote = basePrice + bonus;
 
 const displayedBrand = selectedBrand.charAt(0).toUpperCase() + selectedBrand.slice(1);
 const displayedModel = selectedDevice.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');

@@ -65,7 +65,7 @@ This section covers `admin/index.html` + dynamic action buttons created by `rend
 
 ### Static/top-level controls
 
-- **Apply SHIP48 / Start my quote now / dismiss (banner controls):** promo banner actions + close.
+- **Apply SHIP48 / Start my quote now / dismiss (banner controls):** offer banner actions + close.
 - **Status filter chips (`All`, `Order Pending`, `Needs Printing`, `Kit Sent`, `Kit Delivered`, `Label Generated`, `Phone On The Way`, `Received`, `Completed`, `Reoffer Pending`, `Return Label`, `Canceled`):** filter visible order table by status.
 - **Refresh all kit tracking:** bulk POST to `/refresh-tracking` with `type: kit` for eligible orders.
 - **Separate kit orders:** splits / groups kit orders in current dataset for operational triage.

@@ -206,56 +206,6 @@
       `;
     }
     // ----------------------------
-    // SPEC: promo filter
-    // ----------------------------
-    const PROMO_FILTER = { ALL: "all", WITH: "with", NONE: "none" };
-    function extractOrderPromoCode(order) {
-      const raw =
-        order?.promoCode ??
-        order?.promo_code ??
-        order?.promo ??
-        order?.promo_code_used ??
-        "";
-      const code = safeUpperTrim(raw);
-      return code || "";
-    }
-    function getPromoBonusAmount(order) {
-      const v = order?.promoBonusAmount ?? order?.promo_bonus ?? 0;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : 0;
-    }
-    function matchesPromoFilter(order, filterValue) {
-      const code = extractOrderPromoCode(order);
-      if (!filterValue || filterValue === PROMO_FILTER.ALL) return true;
-      if (filterValue === PROMO_FILTER.WITH) return !!code;
-      if (filterValue === PROMO_FILTER.NONE) return !code;
-      if (String(filterValue).startsWith("code:")) {
-        const target = safeUpperTrim(String(filterValue).slice(5));
-        return code === target;
-      }
-      return true;
-    }
-    function refreshPromoFilterOptions() {
-      const sel = document.getElementById("promoFilterSelect");
-      if (!sel) return;
-      const prev = state.currentPromoFilter || PROMO_FILTER.ALL;
-      const unique = new Set();
-      state.allOrders.forEach(o => {
-        const code = extractOrderPromoCode(o);
-        if (code) unique.add(code);
-      });
-      const codes = Array.from(unique).sort((a,b) => a.localeCompare(b));
-      const options = [
-        { value: PROMO_FILTER.ALL, label: "All" },
-        { value: PROMO_FILTER.WITH, label: "Promo used" },
-        { value: PROMO_FILTER.NONE, label: "No promo" },
-        ...codes.map(c => ({ value: `code:${c}`, label: `Code: ${c}` }))
-      ];
-      sel.innerHTML = options.map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join("");
-      sel.value = options.some(o => o.value === prev) ? prev : PROMO_FILTER.ALL;
-      state.currentPromoFilter = sel.value;
-    }
-    // ----------------------------
     // SPEC: device key + per-device entries
     // ----------------------------
     function buildOrderDeviceKey(orderId, deviceIndex = 0) {
@@ -544,7 +494,6 @@
       currentFilteredDevices: [],
       currentActiveStatus: "all",
       currentSearchTerm: "",
-      currentPromoFilter: PROMO_FILTER.ALL,
       // pagination
       ORDERS_PER_PAGE: 20,
       currentPage: 1,
@@ -856,9 +805,6 @@
         });
         ordersData.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
         state.allOrders = ordersData;
-        // keep promo filter options in sync
-        // (call after render since select exists only on orders tab; but safe to call now too)
-        // We'll call in bindAppEvents as well.
         // Keep drawer open until admin explicitly closes it.
         // If a selected order is temporarily missing from the live snapshot,
         // render falls back to the last selectedOrderSnapshot.
@@ -995,14 +941,6 @@
           allDevices = allDevices.filter(d => d.deviceStatus === s);
         }
       }
-      
-      // Apply promo filter to orders
-      const filteredOrderIds = new Set(
-        allDevices
-          .filter(d => matchesPromoFilter(d.order, state.currentPromoFilter))
-          .map(d => d.order.id)
-      );
-      allDevices = allDevices.filter(d => filteredOrderIds.has(d.order.id));
       
       // Search term filtering
       if (term) {
@@ -1669,12 +1607,6 @@
             <p class="text-xs text-slate-500 hidden sm:block">Manage orders, fulfillment, and QC workflows.</p>
           </div>
           <div class="hidden md:flex items-center gap-3">
-            <div class="flex items-center gap-2">
-              <label class="text-xs font-semibold text-slate-400 uppercase">Promo</label>
-              <select id="promoFilterSelect" class="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
-                <option value="all">All</option>
-              </select>
-            </div>
             <label class="flex items-center gap-2 text-sm text-slate-600">
               <input id="compactDensityToggle" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600" ${state.compactDensity ? "checked" : ""} />
               Compact
@@ -1870,16 +1802,6 @@
         </div>
       `;
     }
-    function promoBadgeHTML(order) {
-      const code = extractOrderPromoCode(order);
-      if (!code) return "";
-      const bonus = getPromoBonusAmount(order);
-      return `
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-          Promo ${esc(code)}${bonus ? ` (+$${esc(Number(bonus).toFixed(2))})` : ""}
-        </span>
-      `;
-    }
     function past14DaysBadgeHTML(order) {
       const status = normalizeStatusKey(order?.status);
       if (status !== 'label_generated') return "";
@@ -1988,7 +1910,6 @@
                   <span class="text-xs text-slate-500">${esc(formatDate(createdAt))}</span>
                   <span class="text-xs text-slate-400">•</span>
                   <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
-                  ${promoBadgeHTML(order)}
                   ${past14DaysBadgeHTML(order)}
                 </div>
                 <div class="text-xs text-slate-500">
@@ -2087,9 +2008,6 @@
                     class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
                 </div>
                 <div class="flex items-center gap-2">
-                  <select id="promoFilterSelectMobile" class="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-sm bg-white">
-                    <option value="all">All</option>
-                  </select>
                   <label class="flex items-center gap-2 text-sm text-slate-600">
                     <input id="compactDensityToggleMobile" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-indigo-600" ${state.compactDensity ? "checked" : ""} />
                     Compact
@@ -2279,9 +2197,7 @@
                   <i data-lucide="smartphone" class="text-slate-400" style="width:18px;height:18px"></i>
                   Devices (${entries.length})
                 </h3>
-                <div class="flex items-center gap-2">
-                  ${promoBadgeHTML(order)}
-                </div>
+                <div class="flex items-center gap-2"></div>
               </div>
               <div class="divide-y divide-slate-100">
                 ${devices}
@@ -3229,15 +3145,6 @@
       lucide.createIcons();
       bindAppEvents();
       restoreModalScrollPositions();
-      // after DOM is present
-      refreshPromoFilterOptions();
-      // mirror promo options into mobile select
-      const desk = document.getElementById("promoFilterSelect");
-      const mob = document.getElementById("promoFilterSelectMobile");
-      if (desk && mob) {
-        mob.innerHTML = desk.innerHTML;
-        mob.value = desk.value;
-      }
       updateSelectAllCheckboxUI();
       syncBodyScrollLock();
     }
@@ -3315,23 +3222,6 @@
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
         });
       });
-      // Promo filter
-      const promoSel = document.getElementById("promoFilterSelect");
-      if (promoSel) {
-        promoSel.value = state.currentPromoFilter || PROMO_FILTER.ALL;
-        promoSel.addEventListener("change", () => {
-          state.currentPromoFilter = promoSel.value;
-          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-        });
-      }
-      const promoSelMobile = document.getElementById("promoFilterSelectMobile");
-      if (promoSelMobile) {
-        promoSelMobile.value = state.currentPromoFilter || PROMO_FILTER.ALL;
-        promoSelMobile.addEventListener("change", () => {
-          state.currentPromoFilter = promoSelMobile.value;
-          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-        });
-      }
       // Density toggle
       const density = document.getElementById("compactDensityToggle");
       if (density) {
@@ -3932,7 +3822,6 @@
         state.currentFilteredDevices = [];
         state.currentActiveStatus = "all";
         state.currentSearchTerm = "";
-        state.currentPromoFilter = PROMO_FILTER.ALL;
         state.selectedOrderIds.clear();
         state.lastRenderedDeviceKeys = [];
         state.selectedOrderId = null;

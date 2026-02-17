@@ -393,9 +393,9 @@
     },
   };
 
-  const PROMO_CODE = 'SHIP48';
-  const PROMO_STORAGE_KEY = 'shcSelectedPromoCode';
-  const PROMO_DISMISS_KEY = 'shcShip48BannerDismissed';
+  const OFFER_CODE = 'SHIP48';
+  const OFFER_STORAGE_KEY = 'shcSelectedOfferCode';
+  const OFFER_DISMISS_KEY = 'shcShip48BannerDismissed';
   const SHIP48_START_KEY = 'shcShip48StartFlow';
   const apiClientPromise = import('/public/js/apiClient.js');
   let layoutBootstrapped = false;
@@ -408,14 +408,14 @@
       <div class="shc-ship48-inner">
         <div class="shc-ship48-ticker" aria-hidden="true">
           <div class="shc-ship48-ticker-track">
-            <span>USE CODE ${PROMO_CODE}</span>
-            <span>PROMO CODE ${PROMO_CODE}</span>
+            <span>USE CODE ${OFFER_CODE}</span>
+            <span>OFFER CODE ${OFFER_CODE}</span>
             <span>SHIP IN 48 HOURS FOR +$10</span>
           </div>
         </div>
         <div class="shc-ship48-text">
           <span class="shc-ship48-eyebrow">USE CODE</span>
-          <strong class="shc-ship48-headline">PROMO CODE ${PROMO_CODE}</strong>
+          <strong class="shc-ship48-headline">OFFER CODE ${OFFER_CODE}</strong>
           <p class="shc-ship48-subtext">Ship within 48 hours using Email Label to earn an instant +$10 bonus.</p>
           <div class="shc-ship48-meta">
             <span data-ship48-counter>Limited Ship48 bonuses remain.</span>
@@ -426,7 +426,7 @@
           <button type="button" class="shc-ship48-cta" data-ship48-cta>Start my quote now</button>
         </div>
       </div>
-      <button type="button" class="shc-ship48-dismiss" aria-label="Dismiss Ship48 promo" data-ship48-dismiss>&times;</button>
+      <button type="button" class="shc-ship48-dismiss" aria-label="Dismiss Ship48 offer" data-ship48-dismiss>&times;</button>
     `;
     return banner;
   }
@@ -446,51 +446,21 @@
     if (!banner) return;
     const counterEl = banner.querySelector('[data-ship48-counter]');
     const statusEl = banner.querySelector('[data-ship48-status]');
-    const ctaBtn = banner.querySelector('[data-ship48-cta]');
-
-    apiClientPromise
-      .then(({ apiGet }) => apiGet(`/promo-codes/${PROMO_CODE}`, { authRequired: false }))
-      .then((data) => {
-        const usesLeftRaw = Number(data.usesLeft ?? data.uses_left ?? 0);
-        const maxUsesRaw = Number(data.maxUses ?? data.max_uses ?? 0);
-        const bonusRaw = Number(data.bonusAmount ?? data.bonus_amount ?? 10);
-        const usesLeft = Number.isFinite(usesLeftRaw) ? usesLeftRaw : null;
-        const maxUses = Number.isFinite(maxUsesRaw) && maxUsesRaw > 0 ? maxUsesRaw : 100;
-        const bonusText = Number.isFinite(bonusRaw) && bonusRaw > 0 ? bonusRaw : 10;
-
-        if (counterEl) {
-          if (usesLeft === null) {
-            counterEl.textContent = `Limited to the first ${maxUses} Ship48 bonuses.`;
-          } else if (usesLeft > 0) {
-            counterEl.textContent = `${usesLeft} of ${maxUses} Ship48 bonuses remain (+$${bonusText}).`;
-          } else {
-            counterEl.textContent = 'All Ship48 bonuses have been claimed for now.';
-          }
-        }
-
-        if (usesLeft !== null && usesLeft <= 0 && ctaBtn) {
-          ctaBtn.disabled = true;
-          ctaBtn.textContent = 'All bonuses claimed';
-        }
-      })
-      .catch((error) => {
-        console.warn('Ship48 promo lookup failed:', error);
-        if (counterEl && !counterEl.textContent) {
-          counterEl.textContent = 'Limited Ship48 bonuses available. Act fast!';
-        }
-        updateShip48Status(
-          statusEl,
-          'error',
-          'Promo code SHIP48 adds $10 when you select Email Label (subject to availability).'
-        );
-      });
+    if (counterEl && !counterEl.textContent) {
+      counterEl.textContent = 'Limited Ship48 bonuses available. Act fast!';
+    }
+    updateShip48Status(
+      statusEl,
+      'success',
+      'Offer code SHIP48 adds $10 when you select Email Label (subject to availability).'
+    );
   }
 
   function startShip48FlowFromLayout(statusEl) {
-    safeStorage.set(PROMO_STORAGE_KEY, PROMO_CODE);
+    safeStorage.set(OFFER_STORAGE_KEY, OFFER_CODE);
     window.dispatchEvent(
-      new CustomEvent('shc:promo-code-selected', {
-        detail: { code: PROMO_CODE },
+      new CustomEvent('shc:offer-code-selected', {
+        detail: { code: OFFER_CODE },
       })
     );
     const modal = document.getElementById('quoteModal') || document.getElementById('pricingModal');
@@ -499,7 +469,7 @@
         new CustomEvent('shc:ship48-start-order', { detail: { source: 'shared-layout' } })
       );
       safeStorage.set(SHIP48_START_KEY, null);
-      updateShip48Status(statusEl, 'success', `${PROMO_CODE} locked in — launching the quote wizard…`);
+      updateShip48Status(statusEl, 'success', `${OFFER_CODE} locked in — launching the quote wizard…`);
       return;
     }
     safeStorage.set(SHIP48_START_KEY, '1');
@@ -509,7 +479,7 @@
   }
 
   function initShip48Banner() {
-    if (safeStorage.get(PROMO_DISMISS_KEY) === '1') {
+    if (safeStorage.get(OFFER_DISMISS_KEY) === '1') {
       return;
     }
     if (document.getElementById('shc-ship48-banner')) {
@@ -540,7 +510,7 @@
       dismissBtn.addEventListener('click', () => {
         banner.classList.remove('is-visible');
         banner.remove();
-        safeStorage.set(PROMO_DISMISS_KEY, '1');
+        safeStorage.set(OFFER_DISMISS_KEY, '1');
       });
     }
 

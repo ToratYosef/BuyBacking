@@ -98,7 +98,7 @@ const loginForm = document.getElementById('loginForm');
 const signupForm = document.getElementById('signupForm');
 const authMessage = document.getElementById('authMessage');
 const modals = document.querySelectorAll('.modal');
-const devicePromoCountdown = document.getElementById('devicePromoCountdown');
+const deviceOfferCountdown = document.getElementById('deviceOfferCountdown');
 const catalogDepthStat = document.getElementById('catalogDepthStat');
 const bundleBonusStat = document.getElementById('bundleBonusStat');
 const adminCodeInput = document.getElementById('admin-code-input');
@@ -355,7 +355,7 @@ submitButton.textContent = originalButtonText || 'Create order';
 });
 
 const updateDeviceCountdown = () => {
-if (!devicePromoCountdown) return;
+if (!deviceOfferCountdown) return;
 const now = new Date();
 let eventDate = new Date(`${now.getFullYear()}-10-19T09:00:00`);
 if (now > eventDate) {
@@ -363,16 +363,16 @@ eventDate = new Date(`${now.getFullYear() + 1}-10-19T09:00:00`);
 }
 const diff = eventDate - now;
 if (diff <= 0) {
-devicePromoCountdown.textContent = 'Promo Live!';
+deviceOfferCountdown.textContent = 'Offer Live!';
 return;
 }
 const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
 const minutes = Math.floor((diff / (1000 * 60)) % 60);
-devicePromoCountdown.textContent = `${days}d ${hours}h ${minutes}m`;
+deviceOfferCountdown.textContent = `${days}d ${hours}h ${minutes}m`;
 };
 
-if (devicePromoCountdown) {
+if (deviceOfferCountdown) {
 updateDeviceCountdown();
 setInterval(updateDeviceCountdown, 60000);
 }

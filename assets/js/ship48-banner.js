@@ -1,6 +1,6 @@
 (() => {
-  const PROMO_CODE = 'SHIP48';
-  const PROMO_DISMISS_KEY = 'shcShip48BannerDismissed';
+  const OFFER_CODE = 'SHIP48';
+  const OFFER_DISMISS_KEY = 'shcShip48BannerDismissed';
   
   const safeStorage = {
     get(key) { try { return window.localStorage ? window.localStorage.getItem(key) : null; } catch (e) { return null; } },
@@ -33,7 +33,7 @@
     const banner = document.querySelector('.ship48-banner') || document.querySelector('[data-ship48-banner]');
     
     if (!banner) return;
-    if (safeStorage.get(PROMO_DISMISS_KEY) === '1') {
+    if (safeStorage.get(OFFER_DISMISS_KEY) === '1') {
       banner.style.display = 'none';
       return;
     }
@@ -52,7 +52,7 @@
     contentDiv.innerHTML = `
       <span class="ship48-text">Ship within 48 hours for a <strong>+$10 Bonus</strong></span>
       <div class="ship48-code-pill">
-        ${PROMO_CODE}
+        ${OFFER_CODE}
         <button class="ship48-btn-copy" id="ship48CopyBtn">Copy</button>
       </div>
     `;
@@ -78,7 +78,7 @@
     if (copyBtn) {
       copyBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        navigator.clipboard.writeText(PROMO_CODE).then(() => {
+        navigator.clipboard.writeText(OFFER_CODE).then(() => {
           const originalText = copyBtn.textContent;
           copyBtn.textContent = 'Copied!';
           setTimeout(() => copyBtn.textContent = originalText, 2000);
@@ -87,7 +87,7 @@
     }
 
     dismissBtn.addEventListener('click', () => {
-      safeStorage.set(PROMO_DISMISS_KEY, '1');
+      safeStorage.set(OFFER_DISMISS_KEY, '1');
       banner.remove();
     });
   }

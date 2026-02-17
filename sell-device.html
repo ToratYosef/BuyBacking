@@ -176,7 +176,7 @@
             transition: background-color 0.2s ease; cursor: pointer;
         }
         .btn-red-logout:hover { background-color: #fef2f2; }
-        .ship48-promo-notice {
+        .ship48-offer-notice {
             border: 1px dashed rgba(234, 88, 12, 0.45);
             background: rgba(255, 247, 237, 0.95);
             border-radius: 1rem;
@@ -185,13 +185,13 @@
             text-align: left;
             box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.25);
         }
-        .ship48-promo-notice__headline {
+        .ship48-offer-notice__headline {
             font-size: 0.9rem;
             letter-spacing: 0.3em;
             font-weight: 800;
             color: #b45309;
         }
-        .ship48-promo-notice__copy {
+        .ship48-offer-notice__copy {
             margin-top: 0.35rem;
             color: #78350f;
             font-weight: 600;
@@ -617,9 +617,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </div>
             <div class="bg-slate-700 p-6 rounded-lg">
                 <h3 class="text-xl font-bold mb-2 text-white">Stay Updated</h3>
-                <p class="text-slate-300 mb-4">Sign up for promos, price increases, and more!</p>
+                <p class="text-slate-300 mb-4">Sign up for updates, price increases, and more!</p>
                 <form id="footerEmailSignupForm" class="flex flex-col sm:flex-row gap-2">
-                    <input type="email" id="footerPromoEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    <input type="email" id="footerEmail" placeholder="Enter your email" class="w-full flex-grow border border-slate-400 bg-slate-800 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                     <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700">Sign Up</button>
                 </form>
                 <div id="footerSignupMessage" class="mt-3 text-sm text-center"></div>
@@ -656,9 +656,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             <div class="p-6 md:p-8">
                 <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-2">Get Your Instant Quote</h2>
                 <p class="text-gray-600 mb-6">Answer a few quick questions to see what your device is worth.</p>
-                <div id="ship48PromoNotice" class="ship48-promo-notice hidden" role="status" aria-live="polite">
-                    <p id="ship48PromoHeadline" class="ship48-promo-notice__headline">PROMO CODE SHIP48 LOCKED IN</p>
-                    <p id="ship48PromoCopy" class="ship48-promo-notice__copy">We already applied SHIP48. Choose Email Label and ship within 48 hours to earn an extra $10.</p>
+                <div id="ship48OfferNotice" class="ship48-offer-notice hidden" role="status" aria-live="polite">
+                    <p id="ship48OfferHeadline" class="ship48-offer-notice__headline">OFFER CODE SHIP48 LOCKED IN</p>
+                    <p id="ship48OfferCopy" class="ship48-offer-notice__copy">We already applied SHIP48. Choose Email Label and ship within 48 hours to earn an extra $10.</p>
                 </div>
 
                 <div class="mb-6">
@@ -801,7 +801,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const signupForm = document.getElementById('signupForm');
             const authMessage = document.getElementById('authMessage');
             const modals = document.querySelectorAll('.modal');
-            const devicePromoCountdown = document.getElementById('devicePromoCountdown');
+            const deviceOfferCountdown = document.getElementById('deviceOfferCountdown');
             const catalogDepthStat = document.getElementById('catalogDepthStat');
             const bundleBonusStat = document.getElementById('bundleBonusStat');
 
@@ -825,7 +825,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             animateLandingStat(bundleBonusStat, 82000, (value) => `$${Math.round(value).toLocaleString()}`);
 
             const updateDeviceCountdown = () => {
-                if (!devicePromoCountdown) return;
+                if (!deviceOfferCountdown) return;
                 const now = new Date();
                 let eventDate = new Date(`${now.getFullYear()}-10-19T09:00:00`);
                 if (now > eventDate) {
@@ -833,16 +833,16 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
                 }
                 const diff = eventDate - now;
                 if (diff <= 0) {
-                    devicePromoCountdown.textContent = 'Promo Live!';
+                    deviceOfferCountdown.textContent = 'Offer Live!';
                     return;
                 }
                 const days = Math.floor(diff / (1000 * 60 * 60 * 24));
                 const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
                 const minutes = Math.floor((diff / (1000 * 60)) % 60);
-                devicePromoCountdown.textContent = `${days}d ${hours}h ${minutes}m`;
+                deviceOfferCountdown.textContent = `${days}d ${hours}h ${minutes}m`;
             };
 
-            if (devicePromoCountdown) {
+            if (deviceOfferCountdown) {
                 updateDeviceCountdown();
                 setInterval(updateDeviceCountdown, 60000);
             }
@@ -955,12 +955,12 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             const continueBtn = document.getElementById('modal-continue-btn');
             const brandIcon = document.getElementById('brand-icon');
             const quoteWizardTriggers = document.querySelectorAll('[data-open-quote-wizard]');
-            const SHIP48_PROMO_CODE = 'SHIP48';
+            const SHIP48_OFFER_CODE = 'SHIP48';
             const SHIP48_START_FLOW_KEY = 'shcShip48StartFlow';
-            const PROMO_STORAGE_KEY = 'shcSelectedPromoCode';
-            const ship48PromoNotice = document.getElementById('ship48PromoNotice');
-            const ship48PromoHeadline = document.getElementById('ship48PromoHeadline');
-            const ship48PromoCopy = document.getElementById('ship48PromoCopy');
+            const OFFER_STORAGE_KEY = 'shcSelectedOfferCode';
+            const ship48OfferNotice = document.getElementById('ship48OfferNotice');
+            const ship48OfferHeadline = document.getElementById('ship48OfferHeadline');
+            const ship48OfferCopy = document.getElementById('ship48OfferCopy');
 
             const safeStorageSet = (key, value) => {
                 try {
@@ -986,20 +986,20 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             let ship48FlowInFlight = false;
 
             function showShip48Notice(message) {
-                if (!ship48PromoNotice) return;
-                ship48PromoNotice.classList.remove('hidden');
-                if (ship48PromoHeadline) {
-                    ship48PromoHeadline.textContent = 'PROMO CODE SHIP48 LOCKED IN';
+                if (!ship48OfferNotice) return;
+                ship48OfferNotice.classList.remove('hidden');
+                if (ship48OfferHeadline) {
+                    ship48OfferHeadline.textContent = 'OFFER CODE SHIP48 LOCKED IN';
                 }
-                if (ship48PromoCopy) {
-                    ship48PromoCopy.textContent = message || 'We already applied SHIP48. Choose Email Label and ship within 48 hours to earn +$10.';
+                if (ship48OfferCopy) {
+                    ship48OfferCopy.textContent = message || 'We already applied SHIP48. Choose Email Label and ship within 48 hours to earn +$10.';
                 }
             }
 
             function beginShip48QuoteFlow(source = 'banner') {
                 if (ship48FlowInFlight) return;
                 ship48FlowInFlight = true;
-                safeStorageSet(PROMO_STORAGE_KEY, SHIP48_PROMO_CODE);
+                safeStorageSet(OFFER_STORAGE_KEY, SHIP48_OFFER_CODE);
                 safeStorageSet(SHIP48_START_FLOW_KEY, null);
                 showShip48Notice('SHIP48 has been applied. Choose Email Label and ship within 48 hours to secure your +$10 bonus.');
                 pricingModal.open();
