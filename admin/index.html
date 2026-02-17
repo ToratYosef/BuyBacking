@@ -845,27 +845,21 @@
       );
     }
     
-    // Helper: get device status for a specific device
-    function getDeviceStatus(order, deviceIndex) {
-      if (!order) return null;
-      const deviceKey = buildOrderDeviceKey(order.id, deviceIndex);
-      return order.deviceStatusByKey?.[deviceKey] || order.status || null;
-    }
-    
     // Helper: create flattened list of all devices with their statuses
     function flattenOrdersToDevices(orders) {
       const devices = [];
       for (const order of orders) {
         const entries = getOrderDeviceEntries(order);
         for (const entry of entries) {
-          const deviceStatus = getDeviceStatus(order, entry.deviceIndex);
+          const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+          const deviceStatus = getDeviceStatus(order, deviceKey);
           devices.push({
             order,
             deviceIndex: entry.deviceIndex,
             item: entry.item,
             qtyIndex: entry.qtyIndex,
-            deviceStatus: normalizeStatusKey(deviceStatus),
-            deviceKey: buildOrderDeviceKey(order.id, entry.deviceIndex),
+            deviceStatus,
+            deviceKey,
           });
         }
       }
