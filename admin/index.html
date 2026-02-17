@@ -1362,7 +1362,7 @@
         
         // tracking guard
         const order = state.allOrders.find(o => o.id === orderId);
-        if ((actionType === "refreshKitTracking" || actionType === "refreshEmailTracking") && order && isStatusPastReceived(order.status)) {
+        if ((actionType === "refreshKitTracking" || actionType === "refreshEmailTracking" || actionType === "updateTracking") && order && isStatusPastReceived(order.status)) {
           toast("Skipping tracking refresh: order is past received", "info");
           return;
         }
@@ -1426,6 +1426,11 @@
             endpoint = `/refresh-tracking`;
             method = "POST";
             body = { orderId, type: "email" };
+            break;
+          case "updateTracking":
+            endpoint = `/refresh-tracking`;
+            method = "POST";
+            body = { orderId, type: matchesKitTrackingHints(order) ? "kit" : "email" };
             break;
           case "cancelOrder":
             // uses /orders/{id}/cancel, caller can pass { body:{voidLabels:true} } etc
@@ -2660,10 +2665,14 @@
         }
         else if (["kit_on_the_way_to_us", "kit_delivered", "phone_on_the_way", "delivered_to_us"].includes(status)) {
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
+          if (["phone_on_the_way", "delivered_to_us"].includes(status)) {
+            groups.shipping.push({ label: "Update Tracking", action: "updateTracking", class: "bg-blue-50 border-blue-200 text-blue-700" });
+          }
         }
         else if (status === "label_generated") {
             if (isKitReq) groups.shipping.push({ label: "Mark Kit Sent", action: "markKitSent", class: "bg-white border-slate-200 text-slate-700" });
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
+          groups.shipping.push({ label: "Update Tracking", action: "updateTracking", class: "bg-blue-50 border-blue-200 text-blue-700" });
         }
         else if (["received", "imei_checked"].includes(status)) {
             // QC is now opened only from overview section by clicking devices
