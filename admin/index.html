@@ -881,6 +881,31 @@
       if (a && a.value !== v) a.value = v;
       if (b && b.value !== v) b.value = v;
     }
+    function debounce(fn, ms = 300) {
+      let timer;
+      const debounced = (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), ms);
+      };
+      debounced.cancel = () => {
+        clearTimeout(timer);
+      };
+      return debounced;
+    }
+    function preserveCaret(input, nextValue) {
+      if (!input) return;
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      input.value = nextValue;
+      requestAnimationFrame(() => {
+        if (typeof input.setSelectionRange === "function" && Number.isInteger(start) && Number.isInteger(end)) {
+          const valueLength = input.value.length;
+          const safeStart = Math.max(0, Math.min(start, valueLength));
+          const safeEnd = Math.max(safeStart, Math.min(end, valueLength));
+          input.setSelectionRange(safeStart, safeEnd);
+        }
+      });
+    }
     function restoreSearchFocus(preferredInputId, selectionStart = null, selectionEnd = null) {
       requestAnimationFrame(() => {
         const fallbackId = preferredInputId === "mobileSearchInput" ? "searchInput" : "mobileSearchInput";
@@ -900,6 +925,9 @@
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
       restoreSearchFocus(preferredInputId, selectionStart, selectionEnd);
     }
+    const debouncedApplySearchTerm = debounce((value, preferredInputId, selectionStart, selectionEnd) => {
+      applySearchTerm(value, preferredInputId, selectionStart, selectionEnd);
+    }, 300);
     // ----------------------------
     // SPEC: AGING PAGE FILTER
     // ----------------------------
@@ -3217,15 +3245,30 @@
       // Search inputs
       const search = document.getElementById("searchInput");
       if (search) {
-        search.addEventListener("input", () => applySearchTerm(search.value, "searchInput", search.selectionStart, search.selectionEnd));
+        search.addEventListener("input", (event) => {
+          const input = event.target;
+          if (!input) return;
+          const raw = input.value;
+          const formatted = raw;
+          if (formatted !== raw) preserveCaret(input, formatted);
+          state.currentSearchTerm = formatted;
+          syncSearchInputs(formatted);
+          debouncedApplySearchTerm(formatted, "searchInput", input.selectionStart, input.selectionEnd);
+        });
       }
       const clearSearchBtn = document.getElementById("clearSearchBtn");
       if (clearSearchBtn) {
-        clearSearchBtn.addEventListener("click", () => applySearchTerm("", "searchInput"));
+        clearSearchBtn.addEventListener("click", () => {
+          debouncedApplySearchTerm.cancel();
+          applySearchTerm("", "searchInput");
+        });
       }
       const clearSearchInlineBtn = document.getElementById("clearSearchInlineBtn");
       if (clearSearchInlineBtn) {
-        clearSearchInlineBtn.addEventListener("click", () => applySearchTerm("", "searchInput"));
+        clearSearchInlineBtn.addEventListener("click", () => {
+          debouncedApplySearchTerm.cancel();
+          applySearchTerm("", "searchInput");
+        });
       }
       // Status breakdown clicks + keyboard enter/space
       document.querySelectorAll("[data-status-tab]").forEach(btn => {
