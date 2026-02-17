@@ -3369,6 +3369,21 @@
           const order = getSelectedOrder();
           if (!order) return;
           
+          // Get the device status
+          const deviceStatus = getDeviceStatus(order, deviceKey);
+          
+          // If device status is 'issue_resolved' or 'emailed', allow redoing QC
+          if (deviceStatus === 'issue_resolved' || deviceStatus === 'emailed') {
+            state.selectedDeviceKey = deviceKey;
+            state.qcDeviceKey = deviceKey;
+            state.qcOpen = true;
+            state.modalScrollTop.qc = 0;
+            state.qcStep = 1;
+            // Keep existing QC data if available for editing
+            render();
+            return;
+          }
+          
           // Check if QC is already finished for this device
           const hasQcData = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
           
