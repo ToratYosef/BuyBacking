@@ -291,6 +291,54 @@
       }).length;
       return { allKeys, allQcCompleted, qcCompletedCount, totalDevices: allKeys.length, declinedCount };
     }
+    function isDeclinedReofferStatus(status) {
+      const s = normalizeStatusKey(status);
+      return s === 're-offered-declined' || s === 're_offered_declined';
+    }
+    function getOrderSettlementSummary(order) {
+      const entries = getOrderDeviceEntries(order);
+      const payableDeviceKeys = [];
+      const declinedDeviceKeys = [];
+      let payableTotal = 0;
+
+      for (const entry of entries) {
+        const item = entry.item || {};
+        const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+        const deviceStatus = getDeviceStatus(order, deviceKey);
+        const hasQcData = !!(order?.qcDataByDevice?.[deviceKey] && Object.keys(order.qcDataByDevice[deviceKey]).length);
+        const acceptedReoffer = isAcceptedReofferStatus(deviceStatus);
+        const declinedReoffer = isDeclinedReofferStatus(deviceStatus);
+        const normalizedStatus = normalizeStatusKey(deviceStatus);
+
+        if (declinedReoffer) {
+          declinedDeviceKeys.push(deviceKey);
+          continue;
+        }
+
+        if (normalizedStatus === 'completed' || normalizedStatus === 'return-label-generated') {
+          continue;
+        }
+
+        const qcPassedStatuses = new Set(['received', 'imei_checked', 'requote_accepted']);
+        const isQcPassedPayable = hasQcData && qcPassedStatuses.has(normalizedStatus);
+
+        if (acceptedReoffer || isQcPassedPayable) {
+          const baseOffer = Number(getPerDeviceOffer(item, order) || 0);
+          const acceptedOffer = Number(getDeviceAcceptedReofferPayout(order, deviceKey, baseOffer));
+          const payout = acceptedReoffer && Number.isFinite(acceptedOffer) && acceptedOffer > 0 ? acceptedOffer : baseOffer;
+          payableDeviceKeys.push(deviceKey);
+          payableTotal += Number.isFinite(payout) ? payout : 0;
+        }
+      }
+
+      return {
+        payableDeviceKeys,
+        payableCount: payableDeviceKeys.length,
+        payableTotal,
+        declinedDeviceKeys,
+        declinedCount: declinedDeviceKeys.length,
+      };
+    }
     function formatCarrierLabel(carrierRaw) {
       const c = String(carrierRaw || '').trim().toLowerCase();
       if (!c) return 'N/A';
@@ -543,7 +591,7 @@
       confirmModalData: null,
       // payment confirmation modal
       paymentConfirmModalOpen: false,
-      paymentConfirmDeviceKey: null,
+      paymentConfirmPayload: null,
     };
     function getSelectedOrder() {
       if (!state.selectedOrderId) return null;
@@ -1590,15 +1638,19 @@
             break;
           case "sendReturnLabel":
             if (order) {
-              const summary = getDeviceSummary(order);
-              if (!summary.allQcCompleted) {
-                toast(`Return label blocked: QC must be completed for all devices (${summary.qcCompletedCount}/${summary.totalDevices}).`, "error");
+              const settlement = getOrderSettlementSummary(order);
+              if (!settlement.declinedCount) {
+                toast("No re-offer declined devices found for return label.", "error");
                 return;
               }
-              const mailClass = summary.declinedCount >= 5 ? "priority" : "first_class";
+              const mailClass = settlement.declinedCount >= 5 ? "priority" : "first_class";
               endpoint = `/orders/${orderId}/return-label`;
               method = "POST";
-              body = { mailClass, declinedDeviceCount: summary.declinedCount };
+              body = {
+                mailClass,
+                declinedDeviceCount: settlement.declinedCount,
+                declinedDeviceKeys: settlement.declinedDeviceKeys,
+              };
               break;
             }
             endpoint = `/orders/${orderId}/return-label`;
@@ -2471,6 +2523,7 @@
           const offer = getPerDeviceOffer(item, order);
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const showAcceptedOfferSwap = isAcceptedReofferStatus(deviceStatus) && Number.isFinite(acceptedDeviceOffer);
+          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>`;
           
           // Check if QC has been completed for this device
           const qcData = order?.qcDataByDevice?.[deviceKey];
@@ -2500,6 +2553,7 @@
                 <div class="flex-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(item.device || order.device || "")}</h4>
+                    ${deviceStatusBadge}
                     ${awaitingResponseBadgeForDevice(deviceStatus)}
                   </div>
                   <div class="flex flex-wrap gap-1.5 mt-1.5">
@@ -2865,6 +2919,7 @@
         const focused = getFocusedDevice(order);
         const status = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status || "order_pending");
         const hasQc = focused.isFocused ? !!(order?.qcDataByDevice?.[focused.deviceKey]) : !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length));
+      const settlement = getOrderSettlementSummary(order);
         const groups = {
             primary: [],
             shipping: [],
@@ -2901,26 +2956,41 @@
         else if (["received", "imei_checked"].includes(status)) {
             // QC is now opened only from overview section by clicking devices
             // Only show Mark Completed after QC is complete
-            if (hasQc) {
-              groups.postReceive.push({ label: "Pay Now", action: "payNow", class: "bg-emerald-600 text-white" });
+            if (hasQc && settlement.payableCount > 0) {
+              groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
+            }
+            if (settlement.declinedCount > 0) {
+              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200 text-slate-700" });
             }
             // Reoffer button removed - only accessible via Finish QC
         }
         else if (status === "emailed") {
             // QC is now opened only from overview section by clicking devices
             // Reoffer button removed
-            groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
+            if (settlement.declinedCount > 0) {
+              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
+            }
         }
         else if (status === "re-offered-pending") {
              // No footer action button for re-offer pending per admin workflow request.
         }
         else if (status === "re-offered-accepted") {
-            groups.primary.push({ label: "Pay Now", action: "payNow", class: "bg-emerald-600 text-white" });
+            if (settlement.payableCount > 0) {
+              groups.primary.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
+            }
         }
         else if (status === "re-offered-declined") {
-            groups.primary.push({ label: "Send Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
+            if (settlement.declinedCount > 0) {
+              groups.primary.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
+            }
         }
         else if (["requote_accepted", "completed"].includes(status)) {
+            if (settlement.payableCount > 0) {
+              groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
+            }
+            if (settlement.declinedCount > 0) {
+              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
+            }
             groups.postReceive.push({ label: "Send Review Request", action: "sendReviewRequest", class: "bg-white border-slate-200" });
         }
 
@@ -3392,25 +3462,11 @@
     // PAYMENT CONFIRMATION MODAL
     // ----------------------------
     function renderPaymentConfirmModal() {
-      if (!state.paymentConfirmModalOpen || !state.paymentConfirmDeviceKey) return "";
+      if (!state.paymentConfirmModalOpen) return "";
       
       const order = getSelectedOrder();
       if (!order) return "";
-      
-      const deviceKey = state.paymentConfirmDeviceKey;
-      const qcData = order.qcDataByDevice?.[deviceKey];
-      if (!qcData) return "";
-      
-      // Parse device info from key
-      const parsed = parseOrderDeviceKey(deviceKey);
-      const deviceIndex = parsed.deviceIndex || 0;
-      const entries = getOrderDeviceEntries(order);
-      const entry = entries[deviceIndex] || entries[0];
-      const item = entry?.item || order;
-      
-      const deviceName = item.deviceName || item.model || 'Device';
-      const deviceCapacity = item.capacity || item.storage || '';
-      const deviceCondition = qcData.condition || item.condition || '';
+      const settlement = state.paymentConfirmPayload || getOrderSettlementSummary(order);
       
       return `
         <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" style="z-index: 999999;">
@@ -3420,15 +3476,15 @@
             </div>
             <div class="px-6 py-6">
               <div class="mb-4">
-                <p class="text-sm font-semibold text-slate-700 mb-2">Device Information:</p>
+                <p class="text-sm font-semibold text-slate-700 mb-2">Order Settlement Summary:</p>
                 <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                  <p class="text-sm text-slate-900 font-medium">${esc(deviceName)} ${deviceCapacity ? esc(deviceCapacity) : ''}</p>
-                  <p class="text-xs text-slate-600 mt-1">Condition: ${esc(deviceCondition)}</p>
-                  <p class="text-xs text-slate-600">Device ${deviceIndex + 1} of ${entries.length}</p>
+                  <p class="text-sm text-slate-900 font-medium">Order ${esc(order.id)}</p>
+                  <p class="text-xs text-slate-600 mt-1">Devices to pay now: ${Number(settlement?.payableCount || 0)}</p>
+                  <p class="text-xs text-slate-600">Declined devices for return label: ${Number(settlement?.declinedCount || 0)}</p>
                 </div>
               </div>
               <p class="text-base text-slate-700 mb-4">
-                QC has been completed for this device. Would you like to proceed with payment?
+                This confirms payment for all payable devices in this order.
               </p>
               <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4" id="paymentInfoSection">
                 <p class="text-sm font-semibold text-emerald-900 mb-3">💵 Payout Information</p>
@@ -3745,14 +3801,16 @@
           
           const order = getSelectedOrder();
           if (!order) return;
+
+          state.selectedDeviceKey = deviceKey;
+          state.qcDeviceKey = deviceKey;
+          state.drawerTab = "overview";
           
           // Get the device status
           const deviceStatus = getDeviceStatus(order, deviceKey);
           
           // If device status is 'issue_resolved' or 'emailed', allow redoing QC
           if (deviceStatus === 'issue_resolved' || deviceStatus === 'emailed') {
-            state.selectedDeviceKey = deviceKey;
-            state.qcDeviceKey = deviceKey;
             state.qcOpen = true;
             state.modalScrollTop.qc = 0;
             state.qcStep = 1;
@@ -3765,13 +3823,11 @@
           const hasQcData = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
           
           if (hasQcData) {
-            // QC already completed - show payment confirmation modal
-            state.paymentConfirmModalOpen = true;
-            state.paymentConfirmDeviceKey = deviceKey;
+            // QC already completed - keep drawer focused on this device
+            state.qcOpen = false;
+            state.qcData = null;
           } else {
             // QC not completed - open QC modal
-            state.selectedDeviceKey = deviceKey;
-            state.qcDeviceKey = deviceKey;
             state.qcOpen = true;
             state.modalScrollTop.qc = 0;
             state.qcStep = 1;
@@ -3904,16 +3960,12 @@
               return;
             }
             if (action === "payNow") {
-              const candidateDeviceKey =
-                state.selectedDeviceKey ||
-                Object.keys(order?.qcDataByDevice || {})[0] ||
-                buildOrderDeviceKey(order.id, 0);
-              const hasQcData = !!order?.qcDataByDevice?.[candidateDeviceKey];
-              if (!hasQcData) {
-                toast("Complete QC first before sending payment.", "error");
+              const settlement = getOrderSettlementSummary(order);
+              if (!settlement.payableCount) {
+                toast("No payable devices available. Complete QC or accept re-offers first.", "error");
                 return;
               }
-              state.paymentConfirmDeviceKey = candidateDeviceKey;
+              state.paymentConfirmPayload = settlement;
               state.paymentConfirmModalOpen = true;
               render();
               return;
@@ -4185,7 +4237,7 @@
         if (paymentCancelBtn) {
           paymentCancelBtn.addEventListener("click", () => {
             state.paymentConfirmModalOpen = false;
-            state.paymentConfirmDeviceKey = null;
+            state.paymentConfirmPayload = null;
             render();
           });
         }
@@ -4194,13 +4246,8 @@
           (async () => {
             const currentOrder = getSelectedOrder();
             if (!currentOrder) return;
-
-            const deviceKey = state.paymentConfirmDeviceKey;
-            const qcData = currentOrder.qcDataByDevice?.[deviceKey];
-
-            const computedPrice = await getQcOfferFromDb(currentOrder, qcData);
-            const fallbackPrice = getOrderPayoutTotal(currentOrder);
-            const finalPrice = Number.isFinite(computedPrice) ? computedPrice : fallbackPrice;
+            const settlement = state.paymentConfirmPayload || getOrderSettlementSummary(currentOrder);
+            const finalPrice = Number(settlement?.payableTotal || 0);
 
             const paymentMethodRaw = currentOrder?.paymentMethod || 'N/A';
             const paymentMethodFormatted = String(paymentMethodRaw).replace(/[_-]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
@@ -4234,14 +4281,20 @@
             const order = getSelectedOrder();
             if (!order) return;
 
-            const deviceKey = state.paymentConfirmDeviceKey;
-            if (deviceKey) {
-              await updateDeviceStatusInline(order.id, deviceKey, "completed");
-              toast("Device marked as paid and completed.", "success");
+            const settlement = state.paymentConfirmPayload || getOrderSettlementSummary(order);
+            const keys = settlement?.payableDeviceKeys || [];
+            if (!keys.length) {
+              toast("No payable devices found.", "error");
+              return;
             }
 
+            for (const key of keys) {
+              await updateDeviceStatusInline(order.id, key, "completed");
+            }
+            toast(`Marked ${keys.length} device${keys.length === 1 ? '' : 's'} as paid/completed.`, "success");
+
             state.paymentConfirmModalOpen = false;
-            state.paymentConfirmDeviceKey = null;
+            state.paymentConfirmPayload = null;
             render();
           });
         }
