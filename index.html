@@ -298,7 +298,7 @@
             overscroll-behavior-x: contain;
         }
         .testimonial-carousel.is-locked-user-scroll {
-            touch-action: pan-y;
+            touch-action: pan-y pinch-zoom;
         }
 
         .testimonial-carousel:focus { outline: none; }
@@ -1248,6 +1248,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let scrollRaf = null;
         let carouselTimer = null;
         let resumeTimer = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
 
         const applySlideClasses = (centerIdx) => {
             slides.forEach((slide, idx) => {
@@ -1339,6 +1341,29 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         customerReviewsTrack.addEventListener('scroll', onTrackScroll, { passive: true });
+
+        customerReviewsTrack.addEventListener('touchstart', (event) => {
+            const touch = event.touches && event.touches[0];
+            if (!touch) return;
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+        }, { passive: true });
+
+        customerReviewsTrack.addEventListener('touchmove', (event) => {
+            const touch = event.touches && event.touches[0];
+            if (!touch) return;
+            const dx = Math.abs(touch.clientX - touchStartX);
+            const dy = Math.abs(touch.clientY - touchStartY);
+            if (dx > dy) {
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        customerReviewsTrack.addEventListener('wheel', (event) => {
+            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+                event.preventDefault();
+            }
+        }, { passive: false });
 
         customerReviewsTrack.addEventListener('keydown', (event) => {
             if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
