@@ -302,6 +302,23 @@
             min-height: 230px;
         }
 
+        .overpay-device-media {
+            height: 110px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        .overpay-device-image {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
         .overpay-bonus {
             align-self: flex-start;
             display: inline-flex;
@@ -1118,6 +1135,48 @@ const trackAnalyticsEvent = (label, metadata = {}) => {
 };
 
 const currency = (value) => `$${Math.round(value).toLocaleString()}`;
+const OVERPAY_IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
+const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
+
+const resolveOverpayImageUrl = (imgEl, imageUrl, brand) => {
+    if (!imgEl) return;
+
+    const brandFallback = brand === 'samsung' ? '/assets/samsung.webp' : '/assets/apple.webp';
+    if (!imageUrl) {
+        imgEl.src = brandFallback;
+        return;
+    }
+
+    if (hasImageExtension(imageUrl)) {
+        imgEl.src = imageUrl;
+        imgEl.onerror = () => { imgEl.onerror = null; imgEl.src = brandFallback; };
+        return;
+    }
+
+    const candidates = OVERPAY_IMAGE_EXTENSIONS.map((ext) => `${imageUrl}${ext}`);
+    let index = 0;
+
+    const tryNext = () => {
+        if (index >= candidates.length) {
+            imgEl.src = brandFallback;
+            return;
+        }
+
+        const probe = new Image();
+        const candidate = candidates[index];
+        probe.onload = () => {
+            imgEl.src = candidate;
+            imgEl.onerror = () => { imgEl.onerror = null; imgEl.src = brandFallback; };
+        };
+        probe.onerror = () => {
+            index += 1;
+            tryNext();
+        };
+        probe.src = candidate;
+    };
+
+    tryNext();
+};
 
 const buildOverpaySellUrl = (entry) => {
     const params = new URLSearchParams();
@@ -1145,11 +1204,17 @@ function renderOverpayDevices(devices) {
         const bonusText = `+$${Math.round(device.bonus)} Bonus Today`;
         card.innerHTML = `
             <span class="overpay-bonus">${bonusText}</span>
+            <div class="overpay-device-media">
+                <img class="overpay-device-image" alt="${device.name}" loading="lazy" decoding="async">
+            </div>
             <h3 class="text-lg font-bold text-slate-900 leading-snug">${device.name}</h3>
-            <p class="overpay-meta">${device.storage} • ${(device.carrierLabel || device.carrier).toUpperCase()}</p>
+            <p class="overpay-meta">${(device.carrierLabel || device.carrier).toUpperCase()}</p>
             <p class="overpay-price">Now At- ${currency(device.basePayout)}</p>
             <button type="button" class="overpay-cta">Sell Now</button>
         `;
+
+        const imageEl = card.querySelector('.overpay-device-image');
+        resolveOverpayImageUrl(imageEl, device.imageUrl, device.brand);
 
         const cta = card.querySelector('.overpay-cta');
         const navigate = () => {
@@ -1198,6 +1263,7 @@ const getOverpayCandidates = async () => {
                         brand,
                         slug: modelDoc.id,
                         name: modelData.name || modelDoc.id,
+                        imageUrl: modelData.imageUrl || '',
                         storage,
                         carrier,
                         carrierLabel: carrier,
