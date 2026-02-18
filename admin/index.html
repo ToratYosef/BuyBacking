@@ -3888,34 +3888,23 @@
           state.selectedDeviceKey = deviceKey;
           state.qcDeviceKey = deviceKey;
           state.drawerTab = "overview";
-          
-          // Get the device status
+
+          const parsed = parseOrderDeviceKey(deviceKey);
+          const entries = getOrderDeviceEntries(order);
+          const entry = entries.find((item) => item.deviceIndex === parsed.deviceIndex) || entries[0] || { item: order };
+          const item = entry.item || order;
+          const unlockInfo = getDeviceUnlockInfo(order, deviceKey);
           const deviceStatus = getDeviceStatus(order, deviceKey);
-          
-          // If device status is 'issue_resolved' or 'emailed', allow redoing QC
-          if (deviceStatus === 'issue_resolved' || deviceStatus === 'emailed') {
-            state.qcOpen = true;
-            state.modalScrollTop.qc = 0;
-            state.qcStep = 1;
-            // Keep existing QC data if available for editing
-            render();
-            return;
-          }
-          
-          // Check if QC is already finished for this device
-          const hasQcData = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
-          
-          if (hasQcData) {
-            // QC already completed - keep drawer focused on this device
-            state.qcOpen = false;
-            state.qcData = null;
-          } else {
-            // QC not completed - open QC modal
-            state.qcOpen = true;
-            state.modalScrollTop.qc = 0;
-            state.qcStep = 1;
-            state.qcData = null;
-          }
+
+          state.qcOpen = false;
+          state.qcData = null;
+          state.unlockInfoModalData = {
+            deviceKey,
+            deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
+            deviceStatus,
+            unlockInfo,
+          };
+          state.unlockInfoModalOpen = true;
           render();
         });
       });
