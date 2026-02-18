@@ -169,8 +169,12 @@
       logOut.textContent = "Running...";
       try {
         const data = await apiCall("/repricer/run", "POST");
-        renderRows(data.rows || []);
-        logOut.textContent = [data.stdoutTail, data.stderrTail].filter(Boolean).join("\n\n") || "Run completed.";
+        await loadPreview();
+        const stdout = String(data.stdout || "").trim();
+        const stderr = String(data.stderr || "").trim();
+        const stdoutTail = stdout ? stdout.split(/\r?\n/).slice(-120).join("\n") : "";
+        const stderrTail = stderr ? stderr.split(/\r?\n/).slice(-120).join("\n") : "";
+        logOut.textContent = [stdoutTail, stderrTail].filter(Boolean).join("\n\n") || "Run completed.";
         setStatus("Repricer completed.");
       } catch (err) {
         logOut.textContent = err.message || "Run failed.";
