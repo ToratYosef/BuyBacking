@@ -401,11 +401,31 @@
 
             // Affiliate Tracking Pixel (must fire on every order confirmation page load)
             const pixel = document.createElement('iframe');
-            pixel.src = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(transactionIdForPixel)}&p=${basketTotalStr}`;
+            const pixelUrl = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(transactionIdForPixel)}&p=${basketTotalStr}`;
+            pixel.src = pixelUrl;
             pixel.height = '1';
             pixel.width = '1';
             pixel.frameBorder = '0';
             pixel.style.display = 'none';
+            pixel.addEventListener('load', () => {
+                console.log('[Affiliate Pixel] Loaded successfully', {
+                    transactionId: transactionIdForPixel,
+                    basketTotal: basketTotalStr,
+                    src: pixelUrl
+                });
+            });
+            pixel.addEventListener('error', () => {
+                console.error('[Affiliate Pixel] Failed to load', {
+                    transactionId: transactionIdForPixel,
+                    basketTotal: basketTotalStr,
+                    src: pixelUrl
+                });
+            });
+            console.log('[Affiliate Pixel] Sending cart tracking payload', {
+                transactionId: transactionIdForPixel,
+                basketTotal: basketTotalStr,
+                src: pixelUrl
+            });
             document.body.appendChild(pixel);
         });
     </script>
