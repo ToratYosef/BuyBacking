@@ -286,7 +286,7 @@
         .testimonial-carousel {
             display: flex;
             gap: 2rem;
-            overflow-x: auto;
+            overflow-x: hidden;
             overflow-y: hidden;
             scroll-snap-type: x mandatory;
             scroll-behavior: smooth;
@@ -294,10 +294,11 @@
             padding: 0.5rem 0.5rem;
             scrollbar-width: none; /* Firefox */
             -ms-overflow-style: none; /* IE/Edge legacy */
-            touch-action: pan-x;
+            touch-action: pan-y;
+            overscroll-behavior-x: contain;
         }
         .testimonial-carousel.is-locked-user-scroll {
-            touch-action: none;
+            touch-action: pan-y;
         }
 
         .testimonial-carousel:focus { outline: none; }
@@ -1337,35 +1338,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }, ms);
         };
 
-        const canScrollHorizontally = () => customerReviewsTrack.scrollWidth > customerReviewsTrack.clientWidth + 2;
-
-        const onTrackWheel = (event) => {
-            // Allow normal page scrolling when hovering the reviews.
-            // Only hijack wheel when the user is explicitly trying to scroll horizontally.
-            pauseTemporarily();
-            if (!canScrollHorizontally()) return;
-
-            const { deltaX, deltaY } = event;
-            const wantsHorizontal = event.shiftKey || Math.abs(deltaX) > Math.abs(deltaY);
-            if (!wantsHorizontal) return;
-
-            event.preventDefault();
-            customerReviewsTrack.scrollLeft += (Math.abs(deltaX) > 0 ? deltaX : deltaY);
-        };
-
         customerReviewsTrack.addEventListener('scroll', onTrackScroll, { passive: true });
-        customerReviewsTrack.removeEventListener('wheel', onTrackWheel);
-
-        // Allow page scrolling while hovering over reviews - don't capture wheel events
-        customerReviewsTrack.addEventListener('wheel', (event) => {
-            const { deltaX, deltaY } = event;
-            // Only prevent default for horizontal scrolling, allow vertical to pass through
-            if (Math.abs(deltaY) > Math.abs(deltaX)) {
-                // Vertical scroll - don't prevent, let it scroll the page
-                return;
-            }
-            // Horizontal scroll - allow carousel to handle it
-        }, { passive: false });
 
         customerReviewsTrack.addEventListener('keydown', (event) => {
             if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
