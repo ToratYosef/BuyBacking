@@ -263,6 +263,24 @@
       }
       return null;
     }
+    function getOriginalReofferCap(order, deviceKey = null) {
+      if (order && deviceKey) {
+        const parsed = parseOrderDeviceKey(deviceKey);
+        if (parsed?.orderId === order?.id && Number.isInteger(parsed.deviceIndex)) {
+          const entries = getOrderDeviceEntries(order);
+          const entry = entries.find((value) => value.deviceIndex === parsed.deviceIndex);
+          if (entry?.item) {
+            const perDevice = Number(getPerDeviceOffer(entry.item, order));
+            if (Number.isFinite(perDevice) && perDevice > 0) return perDevice;
+          }
+        }
+      }
+      const originalOrderPayout = Number(getOriginalPayout(order));
+      if (Number.isFinite(originalOrderPayout) && originalOrderPayout > 0) return originalOrderPayout;
+      const fallbackOrderPayout = Number(getOrderPayoutTotal(order));
+      if (Number.isFinite(fallbackOrderPayout) && fallbackOrderPayout > 0) return fallbackOrderPayout;
+      return null;
+    }
     function getDeviceAcceptedReofferPayout(order, deviceKey, fallbackOffer = null) {
       const byKey =
         order?.reOfferByDevice?.[deviceKey]?.newPrice ??
@@ -565,6 +583,8 @@
       qcDeviceKey: null,
       reofferOpen: false,
       reofferData: null,
+      reofferPriceGuardOpen: false,
+      reofferPriceGuardData: null,
       qcModelCache: {},
       qcStorageCache: {},
       viewDelegationBound: false,
@@ -3357,6 +3377,8 @@
     function renderReofferModal(order) {
       if (!state.reofferOpen || !state.reofferData || !order) return "";
       const d = state.reofferData;
+      const originalPriceCap = getOriginalReofferCap(order, d.deviceKey || null);
+      const maxAttr = Number.isFinite(originalPriceCap) ? `max="${Number(originalPriceCap).toFixed(2)}"` : "";
       return `
         <div class="fixed inset-0 z-[5100] flex items-center justify-center p-4 bg-slate-900/55 backdrop-blur-sm" style="z-index:99999;">
           <div class="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-hidden border border-slate-200 flex flex-col">
@@ -3370,7 +3392,8 @@
             <div id="reofferModalBody" class="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div>
                 <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Updated Price ($)</label>
-                <input id="reofferPrice" type="number" min="0" step="0.01" value="${esc(d.newPrice)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                <input id="reofferPrice" type="number" min="0" ${maxAttr} step="0.01" value="${esc(d.newPrice)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                ${Number.isFinite(originalPriceCap) ? `<p class="mt-1 text-[11px] text-slate-500">Max re-offer is original price: $${esc(Number(originalPriceCap).toFixed(2))}</p>` : ''}
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
@@ -3394,6 +3417,32 @@
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
               <button id="reofferCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold">Cancel</button>
               <button id="reofferSubmitBtn" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold">Send Re-offer</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderReofferPriceGuardModal() {
+      if (!state.reofferPriceGuardOpen) return "";
+      const guard = state.reofferPriceGuardData || {};
+      const entered = Number(guard.enteredPrice);
+      const original = Number(guard.originalPrice);
+      const enteredText = Number.isFinite(entered) ? `$${entered.toFixed(2)}` : "the entered price";
+      const originalText = Number.isFinite(original) ? `$${original.toFixed(2)}` : "the original price";
+      return `
+        <div class="fixed inset-0 z-[5200] flex items-center justify-center p-4 bg-slate-900/55 backdrop-blur-sm" style="z-index:100001;">
+          <div class="bg-white rounded-2xl shadow-xl w-full max-w-md border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100 bg-rose-50">
+              <h3 class="text-lg font-bold text-slate-900">Re-offer blocked</h3>
+            </div>
+            <div class="px-6 py-5 text-sm text-slate-700 space-y-2">
+              <p>Re-offer price is higher than original so no reoffer.</p>
+              <p>Entered: <span class="font-semibold text-slate-900">${esc(enteredText)}</span></p>
+              <p>Original: <span class="font-semibold text-slate-900">${esc(originalText)}</span></p>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button id="reofferPriceGuardCloseBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold">Close</button>
             </div>
           </div>
         </div>
@@ -3615,7 +3664,7 @@
               <div class="flex flex-wrap items-center justify-end gap-2 w-full">
                 <button id="unlockInfoCloseBtnFooter" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Close</button>
                 <button id="unlockInfoContinueQcBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">Continue to QC</button>
-                <button id="unlockInfoPasswordWrongBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700">Password Not Right</button>
+                <button id="unlockInfoPasswordWrongBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700">Password Didn’t Work</button>
               </div>
             </div>
           </div>
@@ -3650,6 +3699,7 @@
           ${getSelectedOrder() ? renderDrawer(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderQcModal(getSelectedOrder()) : ""}
           ${getSelectedOrder() ? renderReofferModal(getSelectedOrder()) : ""}
+          ${renderReofferPriceGuardModal()}
           ${renderOrderTextImportModal()}
           ${renderConfirmModal()}
           ${renderTrackingReportModal()}
@@ -3659,7 +3709,7 @@
       `;
     }
     function hasBlockingOverlayOpen() {
-      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen);
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.reofferPriceGuardOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
@@ -4289,6 +4339,14 @@
           const comments = (document.getElementById("reofferComments")?.value || "").trim();
           const carrier = (document.getElementById("reofferCarrier")?.value || "").trim();
           const condition = (document.getElementById("reofferCondition")?.value || "").trim();
+          const deviceKey = state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null;
+          const originalPrice = Number(getOriginalReofferCap(order, deviceKey));
+          if (Number.isFinite(originalPrice) && price > (originalPrice + 0.009)) {
+            state.reofferPriceGuardData = { enteredPrice: price, originalPrice };
+            state.reofferPriceGuardOpen = true;
+            render();
+            return;
+          }
           await handleAction(order.id, "reOffer", {
             body: {
               newPrice: price,
@@ -4296,12 +4354,19 @@
               comments,
               carrier,
               condition,
-              deviceKey: state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null
+              deviceKey
             }
           });
           state.reofferOpen = false;
           state.reofferData = null;
           state.modalScrollTop.reoffer = 0;
+          render();
+        });
+      }
+      if (state.reofferPriceGuardOpen) {
+        document.getElementById("reofferPriceGuardCloseBtn")?.addEventListener("click", () => {
+          state.reofferPriceGuardOpen = false;
+          state.reofferPriceGuardData = null;
           render();
         });
       }
