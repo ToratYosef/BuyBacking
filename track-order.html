@@ -363,37 +363,12 @@
     </div>
     <section class="card" aria-labelledby="track-order-form-title">
       <h2 id="track-order-form-title" class="hidden">Order lookup</h2>
-      <div id="manualLookupSection">
-        <form id="orderLookupForm">
-          <div>
-            <label for="orderId">Order ID</label>
-            <input id="orderId" name="orderId" type="text" placeholder="e.g. SHC-01234" autocomplete="off">
-          </div>
-          <div>
-            <label for="customerEmail">Email address</label>
-            <input id="customerEmail" name="customerEmail" type="email" placeholder="Email used on the order" autocomplete="email">
-          </div>
-          <div>
-            <button id="submitButton" type="submit">Check status</button>
-          </div>
-        </form>
-      </div>
-      <p id="formError" class="inline-error error hidden" role="alert"></p>
-
       <section id="myOrdersSection" class="my-orders hidden" aria-live="polite">
         <div class="my-orders-header">
           <h3>Your Orders</h3>
           <p>Signed in? Tap an order card to open full tracking details.</p>
         </div>
         <div id="myOrdersGrid" class="my-orders-grid"></div>
-      </section>
-
-      <section id="otherOrderLookupSection" class="my-orders hidden" aria-live="polite">
-        <div class="my-orders-header">
-          <h3>Need another order?</h3>
-          <p>Use manual lookup if the order is not listed above.</p>
-        </div>
-        <button id="toggleOtherOrderLookupBtn" type="button" class="secondary-action-btn">Check other order</button>
       </section>
 
       <div id="statusCard" class="status-card hidden" aria-live="polite">
@@ -438,6 +413,26 @@
           <p id="reofferNote" class="reoffer-note"></p>
         </div>
 
+      </div>
+
+      <div id="manualLookupSection" class="my-orders" aria-live="polite">
+        <div class="my-orders-header">
+          <h3>Check another order</h3>
+        </div>
+        <form id="orderLookupForm">
+          <div>
+            <label for="orderId">Order ID</label>
+            <input id="orderId" name="orderId" type="text" placeholder="e.g. SHC-01234" autocomplete="off">
+          </div>
+          <div>
+            <label for="customerEmail">Email address</label>
+            <input id="customerEmail" name="customerEmail" type="email" placeholder="Email used on the order" autocomplete="email">
+          </div>
+          <div>
+            <button id="submitButton" type="submit">Check status</button>
+          </div>
+        </form>
+        <p id="formError" class="inline-error error hidden" role="alert"></p>
       </div>
     </section>
   </main>
@@ -586,8 +581,6 @@
     const submitButton = document.getElementById('submitButton');
     const formError = document.getElementById('formError');
     const manualLookupSection = document.getElementById('manualLookupSection');
-    const otherOrderLookupSection = document.getElementById('otherOrderLookupSection');
-    const toggleOtherOrderLookupBtn = document.getElementById('toggleOtherOrderLookupBtn');
     const statusCard = document.getElementById('statusCard');
     const statusPill = document.getElementById('statusPill');
     const statusTitle = document.getElementById('statusTitle');
@@ -611,22 +604,13 @@
     let autoScrollToReoffer = false;
     let isFromEmailLink = false;
     let signedInUser = null;
-    let manualLookupVisibleForSignedIn = false;
 
     function updateLookupUi() {
-      const showManualLookup = !signedInUser || manualLookupVisibleForSignedIn || isFromEmailLink;
-      manualLookupSection.classList.toggle('hidden', !showManualLookup);
-
-      const showSignedInHelper = !!signedInUser;
-      otherOrderLookupSection.classList.toggle('hidden', !showSignedInHelper);
-
-      if (showSignedInHelper) {
-        toggleOtherOrderLookupBtn.textContent = showManualLookup ? 'Hide other order fields' : 'Check other order';
-      }
+      manualLookupSection.classList.remove('hidden');
     }
 
     function refreshLookupRequirements() {
-      const requiresManualLookup = !signedInUser || manualLookupVisibleForSignedIn;
+      const requiresManualLookup = true;
       orderIdInput.required = requiresManualLookup;
       customerEmailInput.required = requiresManualLookup && !isFromEmailLink;
     }
@@ -1014,28 +998,16 @@
     onAuthStateChanged(auth, (user) => {
       signedInUser = user || null;
       if (signedInUser) {
-        manualLookupVisibleForSignedIn = isFromEmailLink || !!orderIdInput.value.trim() || !!customerEmailInput.value.trim();
         if (signedInUser.email && !customerEmailInput.value) {
           customerEmailInput.value = signedInUser.email;
         }
         loadSignedInUserOrders(signedInUser).catch(() => {});
       } else {
-        manualLookupVisibleForSignedIn = false;
         myOrdersSection.classList.add('hidden');
-        otherOrderLookupSection.classList.add('hidden');
         myOrdersGrid.innerHTML = '';
       }
       updateLookupUi();
       refreshLookupRequirements();
-    });
-
-    toggleOtherOrderLookupBtn.addEventListener('click', () => {
-      manualLookupVisibleForSignedIn = !manualLookupVisibleForSignedIn;
-      updateLookupUi();
-      refreshLookupRequirements();
-      if (manualLookupVisibleForSignedIn) {
-        orderIdInput.focus();
-      }
     });
 
     reofferActions.addEventListener('click', (event) => {
