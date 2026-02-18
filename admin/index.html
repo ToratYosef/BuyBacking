@@ -3612,7 +3612,11 @@
               ${detailHtml}
             </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button id="unlockInfoDoneBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">Close</button>
+              <div class="flex flex-wrap items-center justify-end gap-2 w-full">
+                <button id="unlockInfoCloseBtnFooter" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Close</button>
+                <button id="unlockInfoContinueQcBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">Continue to QC</button>
+                <button id="unlockInfoPasswordWrongBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700">Password Not Right</button>
+              </div>
             </div>
           </div>
         </div>
@@ -4426,7 +4430,9 @@
 
       if (state.unlockInfoModalOpen) {
         const closeBtn = document.getElementById("unlockInfoCloseBtn");
-        const doneBtn = document.getElementById("unlockInfoDoneBtn");
+        const closeFooterBtn = document.getElementById("unlockInfoCloseBtnFooter");
+        const continueQcBtn = document.getElementById("unlockInfoContinueQcBtn");
+        const passwordWrongBtn = document.getElementById("unlockInfoPasswordWrongBtn");
         const overlay = document.getElementById("unlockInfoOverlay");
         const closeUnlockModal = () => {
           state.unlockInfoModalOpen = false;
@@ -4434,10 +4440,49 @@
           render();
         };
         if (closeBtn) closeBtn.addEventListener("click", closeUnlockModal);
-        if (doneBtn) doneBtn.addEventListener("click", closeUnlockModal);
+        if (closeFooterBtn) closeFooterBtn.addEventListener("click", closeUnlockModal);
         if (overlay) {
           overlay.addEventListener("click", (event) => {
             if (event.target === overlay) closeUnlockModal();
+          });
+        }
+
+        if (continueQcBtn) {
+          continueQcBtn.addEventListener("click", () => {
+            const deviceKey = state.unlockInfoModalData?.deviceKey || state.selectedDeviceKey;
+            if (!deviceKey) {
+              closeUnlockModal();
+              return;
+            }
+            state.selectedDeviceKey = deviceKey;
+            state.qcDeviceKey = deviceKey;
+            state.unlockInfoModalOpen = false;
+            state.unlockInfoModalData = null;
+            state.qcOpen = true;
+            state.modalScrollTop.qc = 0;
+            state.qcStep = 1;
+            state.qcData = null;
+            render();
+          });
+        }
+
+        if (passwordWrongBtn) {
+          passwordWrongBtn.addEventListener("click", async () => {
+            const order = getSelectedOrder();
+            if (!order) return;
+            const deviceKey = state.unlockInfoModalData?.deviceKey || state.selectedDeviceKey || null;
+            try {
+              await handleAction(order.id, "emailLocked", {
+                body: {
+                  deviceKey,
+                  notes: "Customer-submitted unlock credentials were not correct. Please provide updated unlock credentials.",
+                },
+              });
+              toast("Password incorrect email sent to customer.", "success");
+              closeUnlockModal();
+            } catch (error) {
+              toast(error?.message || "Failed to send password incorrect email.", "error");
+            }
           });
         }
 
