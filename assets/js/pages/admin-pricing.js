@@ -1,6 +1,6 @@
 import { firebaseApp } from "/assets/js/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirestore, collection, getDocs, updateDoc, doc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getFirestore, collection, getDoc, getDocs, updateDoc, doc, setDoc, deleteField, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 // Firebase Config (your provided credentials)
 
@@ -131,6 +131,42 @@ statusMessage.classList.add('bg-green-100', 'text-green-700');
 statusMessage.classList.add('bg-blue-100', 'text-blue-700');
 }
 statusMessage.classList.remove('hidden');
+}
+
+const buildHistoryDocId = (date = new Date()) => {
+const year = date.getFullYear();
+const month = `${date.getMonth() + 1}`.padStart(2, '0');
+const day = `${date.getDate()}`.padStart(2, '0');
+return `${year}-${month}-${day}`;
+};
+
+async function snapshotDevicePricing(docRef, context = {}) {
+try {
+const snap = await getDoc(docRef);
+if (!snap.exists()) {
+return false;
+}
+
+const currentPrices = normalizeDevicePrices(snap.data()?.prices || {});
+if (!Object.keys(currentPrices).length) {
+return false;
+}
+
+const dayId = buildHistoryDocId();
+const historyRef = doc(collection(docRef, 'priceHistory'), dayId);
+await setDoc(historyRef, {
+date: dayId,
+prices: currentPrices,
+source: 'admin-pricing',
+context,
+capturedAt: serverTimestamp(),
+updatedAt: serverTimestamp()
+}, { merge: true });
+return true;
+} catch (error) {
+console.warn('Unable to snapshot device pricing history:', error);
+return false;
+}
 }
 
 function showXmlImportFeedback(message, type = 'info') {
@@ -867,6 +903,11 @@ for (const model of xmlImportPayload) {
 try {
 const collectionPath = `devices/${model.brand}/models`;
 const docRef = doc(db, collectionPath, model.slug);
+await snapshotDevicePricing(docRef, {
+action: 'xml-import',
+brand: model.brand,
+slug: model.slug
+});
 const payload = {
 brand: model.brand,
 slug: model.slug,
@@ -1083,6 +1124,12 @@ const condition = element.dataset.condition;
 const docRef = doc(db, docPath, docId);
 
 try {
+await snapshotDevicePricing(docRef, {
+action: 'inline-price-update',
+storage,
+connectivity,
+condition
+});
 // Use a batched write to ensure atomicity and avoid race conditions
 await setDoc(docRef, {
 prices: {
@@ -1130,6 +1177,11 @@ return;
 
 try {
 const docRef = doc(db, docPath, docId);
+await snapshotDevicePricing(docRef, {
+action: 'delete-pricing-row',
+storage,
+connectivity
+});
 const payload = {
 [`prices.${storage}.${connectivity}`]: deleteField()
 };
@@ -1181,7 +1233,11 @@ try {
 await Promise.all(updates.map(({ device, cleanedPrices }) => {
 const docRef = doc(db, device.documentPath, device.docId);
 const payload = Object.keys(cleanedPrices).length ? { prices: cleanedPrices } : { prices: deleteField() };
-return updateDoc(docRef, payload);
+return snapshotDevicePricing(docRef, {
+action: 'remove-legacy-locked',
+brand: device.brand,
+slug: device.docId
+}).then(() => updateDoc(docRef, payload));
 }));
 
 showStatus(`Removed ${totalRemoved} Carrier Locked (Legacy) entr${totalRemoved === 1 ? 'y' : 'ies'}.`, 'success');
@@ -1319,6 +1375,11 @@ const docRef = doc(db, docPath, slug);
 
 try {
 showStatus(`Saving pricing for ${name}…`, 'info');
+await snapshotDevicePricing(docRef, {
+action: 'add-device-submit',
+brand,
+slug
+});
 await setDoc(docRef, {
 name,
 slug,
@@ -1542,7 +1603,11 @@ const updateData = deviceUpdates[brand][slug];
 const collectionPath = `devices/${brand}/models`;
 const docRef = doc(db, collectionPath, slug);
 
-updatePromises.push(setDoc(docRef, updateData, { merge: true })
+updatePromises.push(snapshotDevicePricing(docRef, {
+action: 'excel-import',
+brand,
+slug
+}).then(() => setDoc(docRef, updateData, { merge: true }))
 .then(() => {
 updatedCount++;
 })

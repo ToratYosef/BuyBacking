@@ -676,8 +676,6 @@
                 
                 <div class="features-grid-shell">
                     <img src="/samsung/assets/s24u.webp" srcset="/samsung/assets/s24u.webp 500w, /samsung/assets/s24u.webp 1000w" sizes="(max-width: 1280px) 180px, 240px" width="240" height="480" loading="lazy" alt="Samsung Galaxy phone" class="feature-side-phone left">
-                    <img src="/iphone/assets/i17pm.webp" srcset="/iphone/assets/i17pm.webp 500w, /iphone/assets/i17pm.webp 1000w" sizes="(max-width: 1280px) 180px, 240px" width="240" height="480" loading="lazy" alt="iPhone middle left" class="feature-side-phone mid-left">
-                    <img src="/samsung/assets/s24u.webp" srcset="/samsung/assets/s24u.webp 500w, /samsung/assets/s24u.webp 1000w" sizes="(max-width: 1280px) 180px, 240px" width="240" height="480" loading="lazy" alt="Samsung middle right" class="feature-side-phone mid-right">
                     <img src="/iphone/assets/i17pm.webp" srcset="/iphone/assets/i17pm.webp 500w, /iphone/assets/i17pm.webp 1000w" sizes="(max-width: 1280px) 180px, 240px" width="240" height="480" loading="lazy" alt="iPhone" class="feature-side-phone right">
 
                 <div class="features-cards-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -1107,6 +1105,168 @@ const applyPopularPricing = async () => {
 };
 
 document.addEventListener('DOMContentLoaded', applyPopularPricing);
+
+const trackAnalyticsEvent = (label, metadata = {}) => {
+    try {
+        const tracker = window.PageTracker;
+        if (tracker && typeof tracker.recordConversion === 'function') {
+            tracker.recordConversion({ label, metadata });
+        }
+    } catch (error) {
+        console.warn('Analytics tracking error:', error);
+    }
+};
+
+const currency = (value) => `$${Math.round(value).toLocaleString()}`;
+
+const buildOverpaySellUrl = (entry) => {
+    const params = new URLSearchParams();
+    params.set('model', entry.slug);
+    params.set('storage', entry.storage);
+    params.set('carrier', entry.carrier);
+    params.set('device', `${entry.brand}-${entry.slug}`);
+    return `/sell/?${params.toString()}`;
+};
+
+function renderOverpayDevices(devices) {
+    const mount = document.getElementById('overpay-devices-list');
+    if (!mount) return;
+
+    if (!Array.isArray(devices) || !devices.length) {
+        mount.innerHTML = '<div class="overpay-card"><p class="text-slate-300 font-semibold">No bonus devices available right now.</p><p class="overpay-meta">Check back soon for updated daily offers.</p></div>';
+        return;
+    }
+
+    mount.innerHTML = '';
+    devices.forEach((device) => {
+        const card = document.createElement('article');
+        card.className = 'overpay-card';
+
+        const bonusText = `+$${Math.round(device.bonus)} Bonus Today`;
+        card.innerHTML = `
+            <span class="overpay-bonus">${bonusText}</span>
+            <h3 class="text-lg font-bold text-slate-100 leading-snug">${device.name}</h3>
+            <p class="overpay-meta">${device.storage} • ${(device.carrierLabel || device.carrier).toUpperCase()}</p>
+            <p class="overpay-price">Base payout ${currency(device.basePayout)}</p>
+            <button type="button" class="overpay-cta">Sell Now</button>
+        `;
+
+        const cta = card.querySelector('.overpay-cta');
+        const navigate = () => {
+            trackAnalyticsEvent('trackOverpayClick', {
+                device: device.slug,
+                brand: device.brand,
+                storage: device.storage,
+                carrier: device.carrier,
+                bonus: Number(device.bonus)
+            });
+            trackButtonClick(`Overpay_Device_${device.name.replace(/\s+/g, '_')}`);
+            window.location.href = buildOverpaySellUrl(device);
+        };
+
+        card.addEventListener('click', navigate);
+        if (cta) cta.addEventListener('click', (event) => {
+            event.stopPropagation();
+            navigate();
+        });
+
+        mount.appendChild(card);
+    });
+}
+
+const getOverpayCandidates = async () => {
+    const brands = ['iphone', 'samsung'];
+    const candidates = [];
+
+    await Promise.all(brands.map(async (brand) => {
+        const snap = await getDocs(collection(db, 'devices', brand, 'models'));
+        snap.forEach((modelDoc) => {
+            const modelData = modelDoc.data() || {};
+            const prices = modelData.prices || {};
+            const overpayBonusRaw = modelData.overpayBonus;
+            const hasManualBonus = !!overpayBonusRaw;
+            const manualBonusValue = typeof overpayBonusRaw === 'number'
+                ? overpayBonusRaw
+                : Number(overpayBonusRaw?.amount || 0);
+
+            Object.entries(prices).forEach(([storage, carrierMap]) => {
+                Object.entries(carrierMap || {}).forEach(([carrier, conditionMap]) => {
+                    const flawless = Number(conditionMap?.flawless || 0);
+                    const best = flawless || Math.max(...Object.values(conditionMap || {}).map((value) => Number(value || 0)));
+                    if (!Number.isFinite(best) || best <= 0) return;
+                    candidates.push({
+                        brand,
+                        slug: modelDoc.id,
+                        name: modelData.name || modelDoc.id,
+                        storage,
+                        carrier,
+                        carrierLabel: carrier,
+                        basePayout: best,
+                        overpayBonus: hasManualBonus,
+                        manualBonus: manualBonusValue
+                    });
+                });
+            });
+        });
+    }));
+
+    return candidates;
+};
+
+const getFallbackOverpayDevices = (candidates) => {
+    const iphoneCandidates = candidates
+        .filter((item) => item.brand === 'iphone')
+        .sort((a, b) => b.basePayout - a.basePayout);
+
+    const chosen = [];
+    const seenSlug = new Set();
+    iphoneCandidates.forEach((candidate) => {
+        if (chosen.length >= 3) return;
+        if (seenSlug.has(candidate.slug)) return;
+        seenSlug.add(candidate.slug);
+        chosen.push({
+            ...candidate,
+            bonus: (Math.floor(Math.random() * 8) + 8)
+        });
+    });
+    return chosen;
+};
+
+const loadOverpayDevices = async () => {
+    try {
+        const candidates = await getOverpayCandidates();
+        if (!candidates.length) {
+            renderOverpayDevices([]);
+            return;
+        }
+
+        const averagePayout = candidates.reduce((sum, item) => sum + item.basePayout, 0) / candidates.length;
+        const threshold = averagePayout * 1.1;
+        const live = candidates
+            .filter((item) => item.basePayout >= threshold || item.overpayBonus)
+            .map((item) => ({
+                ...item,
+                bonus: item.manualBonus > 0 ? item.manualBonus : (Math.floor(Math.random() * 8) + 8)
+            }))
+            .sort((a, b) => (b.basePayout + b.bonus) - (a.basePayout + a.bonus))
+            .slice(0, 5);
+
+        const output = live.length ? live : getFallbackOverpayDevices(candidates);
+        renderOverpayDevices(output);
+    } catch (error) {
+        console.error('Failed to load overpay devices:', error);
+        renderOverpayDevices([]);
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const run = () => loadOverpayDevices();
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 1500 });
+    } else {
+        window.setTimeout(run, 120);
+    }
+});
 
 // Home page logic (from assets/js/pages/index-b8699033.js)
 setLogLevel('error');
