@@ -2160,6 +2160,12 @@
           count: isActive ? "bg-white/15 text-white" : "bg-emerald-100 text-emerald-700"
         };
       }
+      if (s === "re-offered-pending" || s === "re-offered-accepted" || s === "re-offered-declined") {
+        return {
+          pill: isActive ? "bg-purple-500 text-white shadow-md" : "bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-purple-100 text-purple-700"
+        };
+      }
       return {
         pill: isActive ? "bg-slate-700 text-white shadow-md" : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200",
         count: isActive ? "bg-white/15 text-white" : "bg-white/70 text-slate-600"
@@ -2176,6 +2182,9 @@
         { key: "delivered_to_us", label: "Delivered", count: visible.filter(o => normalizeStatusKey(o?.status) === "delivered_to_us").length },
         { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
         { key: "issue_resolved", label: "Resolved", count: statusCounts.get("issue_resolved") || 0 },
+        { key: "re-offered-pending", label: "Re-offer Pending", count: statusCounts.get("re-offered-pending") || 0 },
+        { key: "re-offered-accepted", label: "Re-offer Accepted", count: statusCounts.get("re-offered-accepted") || 0 },
+        { key: "re-offered-declined", label: "Re-offer Declined", count: statusCounts.get("re-offered-declined") || 0 },
         { key: "received", label: "Received", count: visible.filter(o => isReceivedStatusValue(o?.status)).length },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
@@ -3028,7 +3037,7 @@
               groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
             }
             if (settlement.declinedCount > 0) {
-              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200 text-slate-700" });
+              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
             }
             // Reoffer button removed - only accessible via Finish QC
         }
@@ -3036,7 +3045,7 @@
             // QC is now opened only from overview section by clicking devices
             // Reoffer button removed
             if (settlement.declinedCount > 0) {
-              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
+              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
             }
         }
         else if (status === "re-offered-pending") {
@@ -3049,7 +3058,7 @@
         }
         else if (status === "re-offered-declined") {
             if (settlement.declinedCount > 0) {
-              groups.primary.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
+              groups.primary.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700", fullWidth: true });
             }
         }
         else if (["requote_accepted", "completed"].includes(status)) {
@@ -3057,7 +3066,7 @@
               groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
             }
             if (settlement.declinedCount > 0) {
-              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-white border-slate-200" });
+              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
             }
             groups.postReceive.push({ label: "Send Review Request", action: "sendReviewRequest", class: "bg-white border-slate-200" });
         }
@@ -3085,7 +3094,7 @@
 
         // --- Render ---
         const renderBtn = (b) => `
-            <button ${b.id ? `id="${b.id}"` : ""} ${b.action ? `data-action="${b.action}"` : ""} class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all ${b.class || "bg-white border-slate-200 text-slate-700"}">
+          <button ${b.id ? `id="${b.id}"` : ""} ${b.action ? `data-action="${b.action}"` : ""} class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all ${b.fullWidth ? "col-span-full" : ""} ${b.class || "bg-white border-slate-200 text-slate-700"}">
                 ${esc(b.label)}
             </button>
         `;

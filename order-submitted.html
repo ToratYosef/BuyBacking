@@ -319,6 +319,21 @@
                 const qty = Math.max(1, Number(item.qty || 1));
                 for (let i = 0; i < qty; i += 1) expanded.push(item);
             });
+            const basketTotalVal = deviceItems.reduce((sum, item) => {
+                const qty = Math.max(1, Number(item?.qty || 1));
+                const unit = Number(item?.unitPrice ?? item?.price ?? item?.payout ?? item?.offerAmount);
+                if (Number.isFinite(unit)) {
+                    return sum + (unit * qty);
+                }
+                const itemTotal = Number(item?.totalPayout ?? item?.estimatedQuote ?? 0);
+                if (Number.isFinite(itemTotal)) {
+                    return sum + itemTotal;
+                }
+                return sum;
+            }, 0);
+            const basketTotalForPixel = Number.isFinite(basketTotalVal) && basketTotalVal > 0 ? basketTotalVal : (Number.isFinite(priceVal) ? priceVal : 0);
+            const basketTotalStr = basketTotalForPixel.toFixed(2);
+            const transactionIdForPixel = String(orderId || getV('id') || getV('orderId') || '').trim() || 'unknown';
             badgeEl.textContent = `${expanded.length} device${expanded.length === 1 ? '' : 's'}`;
             listEl.innerHTML = expanded.map((item, idx) => `
                 <div class="rounded-xl border border-slate-200 p-4 bg-slate-50">
@@ -384,16 +399,14 @@
                 }
             }
 
-            // Fix Affiliate Tracking Pixel
-            if (orderId && orderId !== 'Pending' && orderId !== 'unknown' && priceVal > 0) {
-                const pixel = document.createElement('iframe');
-                pixel.src = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(orderId)}&p=${priceStr}`;
-                pixel.height = '1'; 
-                pixel.width = '1'; 
-                pixel.frameBorder = '0'; 
-                pixel.style.display = 'none';
-                document.body.appendChild(pixel);
-            }
+            // Affiliate Tracking Pixel (must fire on every order confirmation page load)
+            const pixel = document.createElement('iframe');
+            pixel.src = `https://scdcb.com/p.ashx?a=144&e=305&t=${encodeURIComponent(transactionIdForPixel)}&p=${basketTotalStr}`;
+            pixel.height = '1';
+            pixel.width = '1';
+            pixel.frameBorder = '0';
+            pixel.style.display = 'none';
+            document.body.appendChild(pixel);
         });
     </script>
 
