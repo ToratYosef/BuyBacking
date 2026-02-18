@@ -65,13 +65,41 @@ if (!window[INIT_FLAG]) {
     const pref = getStoredThemePreference();
     applyTheme(pref);
 
+    const resolveFooterAnchor = () => {
+      const footer =
+        document.querySelector("footer") ||
+        document.querySelector(".site-footer") ||
+        document.querySelector("#site-footer") ||
+        document.querySelector(".footer") ||
+        null;
+
+      if (footer) {
+        let anchor = footer.querySelector(".shc-theme-toggle-anchor");
+        if (!anchor) {
+          anchor = document.createElement("div");
+          anchor.className = "shc-theme-toggle-anchor";
+          footer.appendChild(anchor);
+        }
+        return anchor;
+      }
+
+      let fallbackAnchor = document.getElementById("shcThemeToggleFallbackAnchor");
+      if (!fallbackAnchor) {
+        fallbackAnchor = document.createElement("div");
+        fallbackAnchor.id = "shcThemeToggleFallbackAnchor";
+        fallbackAnchor.className = "shc-theme-toggle-anchor shc-theme-toggle-anchor--fallback";
+        document.body.appendChild(fallbackAnchor);
+      }
+      return fallbackAnchor;
+    };
+
     if (!document.getElementById("shcThemeToggle")) {
       const toggle = document.createElement("button");
       toggle.id = "shcThemeToggle";
       toggle.type = "button";
       toggle.className = "shc-theme-toggle";
       toggle.setAttribute("data-no-theme-invert", "true");
-      document.body.appendChild(toggle);
+      resolveFooterAnchor().appendChild(toggle);
 
       toggle.addEventListener("click", () => {
         const currentPref = getStoredThemePreference();
@@ -88,6 +116,9 @@ if (!window[INIT_FLAG]) {
         applyTheme("auto");
         updateThemeToggleLabel();
       });
+    } else {
+      const existing = document.getElementById("shcThemeToggle");
+      resolveFooterAnchor().appendChild(existing);
     }
 
     const mediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
