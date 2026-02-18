@@ -17,123 +17,6 @@ const INIT_FLAG = "__shcAuthInitialized";
 if (!window[INIT_FLAG]) {
   window[INIT_FLAG] = true;
 
-  const THEME_STORAGE_KEY = "shcThemePreference";
-
-  const getSystemTheme = () => {
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  };
-
-  const resolveTheme = (pref) => {
-    if (pref === "dark" || pref === "light") return pref;
-    return getSystemTheme();
-  };
-
-  const applyTheme = (pref) => {
-    const root = document.documentElement;
-    const resolved = resolveTheme(pref);
-    root.setAttribute("data-theme", resolved);
-  };
-
-  const getStoredThemePreference = () => {
-    try {
-      return localStorage.getItem(THEME_STORAGE_KEY) || "auto";
-    } catch {
-      return "auto";
-    }
-  };
-
-  const setStoredThemePreference = (value) => {
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, value);
-    } catch {}
-  };
-
-  const updateThemeToggleLabel = () => {
-    const btn = document.getElementById("shcThemeToggle");
-    if (!btn) return;
-    const pref = getStoredThemePreference();
-    const resolved = resolveTheme(pref);
-    const modeLabel = resolved === "dark" ? "Dark" : "Light";
-    const sourceLabel = pref === "auto" ? "Auto" : "Manual";
-    btn.textContent = `${modeLabel} (${sourceLabel})`;
-    btn.setAttribute("aria-label", `Theme toggle. Current mode: ${modeLabel}, ${sourceLabel}`);
-  };
-
-  const initThemeToggle = () => {
-    const pref = getStoredThemePreference();
-    applyTheme(pref);
-
-    const resolveFooterAnchor = () => {
-      const footer =
-        document.querySelector("footer") ||
-        document.querySelector(".site-footer") ||
-        document.querySelector("#site-footer") ||
-        document.querySelector(".footer") ||
-        null;
-
-      if (footer) {
-        let anchor = footer.querySelector(".shc-theme-toggle-anchor");
-        if (!anchor) {
-          anchor = document.createElement("div");
-          anchor.className = "shc-theme-toggle-anchor";
-          footer.appendChild(anchor);
-        }
-        return anchor;
-      }
-
-      let fallbackAnchor = document.getElementById("shcThemeToggleFallbackAnchor");
-      if (!fallbackAnchor) {
-        fallbackAnchor = document.createElement("div");
-        fallbackAnchor.id = "shcThemeToggleFallbackAnchor";
-        fallbackAnchor.className = "shc-theme-toggle-anchor shc-theme-toggle-anchor--fallback";
-        document.body.appendChild(fallbackAnchor);
-      }
-      return fallbackAnchor;
-    };
-
-    if (!document.getElementById("shcThemeToggle")) {
-      const toggle = document.createElement("button");
-      toggle.id = "shcThemeToggle";
-      toggle.type = "button";
-      toggle.className = "shc-theme-toggle";
-      toggle.setAttribute("data-no-theme-invert", "true");
-      resolveFooterAnchor().appendChild(toggle);
-
-      toggle.addEventListener("click", () => {
-        const currentPref = getStoredThemePreference();
-        const currentResolved = resolveTheme(currentPref);
-        const nextPref = currentResolved === "dark" ? "light" : "dark";
-        setStoredThemePreference(nextPref);
-        applyTheme(nextPref);
-        updateThemeToggleLabel();
-      });
-
-      toggle.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        setStoredThemePreference("auto");
-        applyTheme("auto");
-        updateThemeToggleLabel();
-      });
-    } else {
-      const existing = document.getElementById("shcThemeToggle");
-      resolveFooterAnchor().appendChild(existing);
-    }
-
-    const mediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-    if (mediaQuery && typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", () => {
-        if (getStoredThemePreference() === "auto") {
-          applyTheme("auto");
-          updateThemeToggleLabel();
-        }
-      });
-    }
-
-    updateThemeToggleLabel();
-  };
-
   const auth = getAuth(getFirebaseApp());
   setPersistence(auth, browserLocalPersistence).catch(() => {});
 
@@ -498,11 +381,9 @@ if (!window[INIT_FLAG]) {
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
-      initThemeToggle();
       bindAuthUi();
     });
   } else {
-    initThemeToggle();
     bindAuthUi();
   }
 
