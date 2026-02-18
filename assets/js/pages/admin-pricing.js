@@ -543,7 +543,7 @@ if (!deviceSegment) {
 return null;
 }
 
-return `https://secondhandcell.com/sell/?device=${deviceSegment}&storage={storage}&carrier={carrier}&power={power}&functionality={functionality}&quality={quality}`;
+return `https://secondhandcell.com/sell/?device=${deviceSegment}`;
 }
 
 function formatXml(xmlString) {

@@ -39,7 +39,7 @@ async function cloneS25ToGalaxyS25() {
           "device=samsung-s25-ultra",
           "device=samsung-galaxy-s25-ultra"
         )
-      : `https://secondhandcell.com/sell/?device=samsung-galaxy-s25-ultra&storage={storage}&carrier={carrier}&power={power}&functionality={functionality}&quality={quality}`,
+      : `https://secondhandcell.com/sell/?device=samsung-galaxy-s25-ultra`,
   };
 
   await destRef.set(cloned);
