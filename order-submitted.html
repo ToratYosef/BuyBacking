@@ -30,6 +30,7 @@
     })(window,document,'script','dataLayer','GTM-W3BM2JC8');</script>
 
     <script src="https://www.googletagmanager.com/gtag/js?id=AW-17534255111"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.min.js"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
@@ -101,7 +102,7 @@
                 <h3 class="text-2xl font-extrabold text-emerald-900 mb-2">Download your prepaid USPS label</h3>
                 <p class="text-sm text-emerald-800 mb-4 max-w-2xl mx-auto" id="labelStatusMessage">Download your label and ship your device to lock in your payment.</p>
                 <div class="bg-white border border-emerald-200 rounded-2xl p-3 shadow-inner mb-4">
-                    <iframe id="labelPdfFrame" title="USPS Label PDF" class="w-full h-[520px] rounded-xl hidden"></iframe>
+                    <div id="labelPdfFrame" title="USPS Label PDF" class="w-full rounded-xl hidden"></div>
                     <p id="labelPdfFallback" class="text-sm text-slate-600 py-8">Label preview will appear here once available.</p>
                 </div>
                 <div class="flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -363,15 +364,57 @@
                 document.getElementById('emailOptionCard').classList.remove('hidden');
                 document.getElementById('kitOptionCard').classList.add('hidden');
                 
+                const renderLabelPdf = async (labelUrl) => {
+                    const frame = document.getElementById('labelPdfFrame');
+                    const frameFallback = document.getElementById('labelPdfFallback');
+                    if (!frame || !frameFallback) return false;
+
+                    try {
+                        if (!window.pdfjsLib) throw new Error('pdfjs not loaded');
+                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.js';
+
+                        const loadingTask = window.pdfjsLib.getDocument({ url: labelUrl, withCredentials: false });
+                        const pdfDoc = await loadingTask.promise;
+
+                        frame.innerHTML = '';
+                        for (let pageNumber = 1; pageNumber <= pdfDoc.numPages; pageNumber += 1) {
+                            const page = await pdfDoc.getPage(pageNumber);
+                            const viewport = page.getViewport({ scale: 1 });
+                            const targetWidth = Math.min(frame.clientWidth || viewport.width, 900);
+                            const scale = targetWidth / viewport.width;
+                            const scaledViewport = page.getViewport({ scale });
+                            const canvas = document.createElement('canvas');
+                            const context = canvas.getContext('2d');
+
+                            canvas.width = Math.floor(scaledViewport.width);
+                            canvas.height = Math.floor(scaledViewport.height);
+                            canvas.style.width = '100%';
+                            canvas.style.height = 'auto';
+                            canvas.style.borderRadius = '0.75rem';
+                            canvas.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.18)';
+                            canvas.style.marginBottom = pageNumber === pdfDoc.numPages ? '0' : '0.75rem';
+
+                            await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+                            frame.appendChild(canvas);
+                        }
+
+                        frame.classList.remove('hidden');
+                        frameFallback.classList.add('hidden');
+                        return true;
+                    } catch (error) {
+                        console.warn('Unable to render label PDF in-page:', error);
+                        frame.classList.add('hidden');
+                        frameFallback.classList.remove('hidden');
+                        frameFallback.textContent = 'Unable to render label preview on this device. Tap Print Label PDF to open the file directly.';
+                        return false;
+                    }
+                };
+
                 // Show Label Generation Card if available
                 const labelUrl = getV('labelUrl');
                 if (labelUrl) {
                     document.getElementById('emailLabelCard').classList.remove('hidden');
-                    const frame = document.getElementById('labelPdfFrame');
-                    const frameFallback = document.getElementById('labelPdfFallback');
-                    frame.src = labelUrl;
-                    frame.classList.remove('hidden');
-                    frameFallback.classList.add('hidden');
+                    renderLabelPdf(labelUrl);
                     const printBtn = document.getElementById('printLabelButton');
                     printBtn.onclick = () => {
                         const win = window.open(labelUrl, '_blank', 'noopener');
