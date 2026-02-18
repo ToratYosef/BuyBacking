@@ -652,6 +652,18 @@
       };
     }
 
+    function isScreenLockOnlyResolved(order, deviceKey) {
+      if (!order || !deviceKey) return false;
+      const deviceStatus = getDeviceStatus(order, deviceKey);
+      if (normalizeStatusKey(deviceStatus) !== 'issue_resolved') return false;
+      const issues = order?.qcIssuesByDevice?.[deviceKey];
+      if (!issues || typeof issues !== 'object') return false;
+      const reasons = Object.keys(issues);
+      if (reasons.length !== 1 || reasons[0] !== 'password_locked') return false;
+      const lockIssue = issues.password_locked;
+      return Boolean(lockIssue?.resolved || lockIssue?.resolvedAt);
+    }
+
     function normalizeCarrierForPricing(value) {
       const v = String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       if (!v) return 'unlocked';
@@ -2554,7 +2566,11 @@
           const deviceStatus = getDeviceStatus(order, deviceKey);
           const offer = getPerDeviceOffer(item, order);
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
-          const showAcceptedOfferSwap = isAcceptedReofferStatus(deviceStatus) && Number.isFinite(acceptedDeviceOffer);
+          const isAcceptedReoffer = isAcceptedReofferStatus(deviceStatus);
+          const isDeclinedReoffer = isDeclinedReofferStatus(deviceStatus);
+          const showAcceptedOfferSwap = (isAcceptedReoffer || isDeclinedReoffer)
+            && Number.isFinite(acceptedDeviceOffer)
+            && Math.abs(Number(acceptedDeviceOffer || 0) - Number(offer || 0)) > 0.009;
           const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>`;
           
           // Check if QC has been completed for this device
@@ -2601,7 +2617,7 @@
                   <div class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Offer</div>
                   ${showAcceptedOfferSwap ? `
                     <div class="text-sm font-bold text-rose-600 line-through decoration-2 decoration-rose-500">$${esc(Number(offer || 0).toFixed(2))}</div>
-                    <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 mt-1">New Accepted Offer</div>
+                    <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 mt-1">${isDeclinedReoffer ? 'Re-Offer Price (Declined)' : 'New Accepted Offer'}</div>
                     <div class="text-xl font-extrabold text-emerald-600">$${esc(Number(acceptedDeviceOffer || 0).toFixed(2))}</div>
                   ` : `
                     <div class="text-lg font-bold text-green-600">$${esc(Number(offer || 0).toFixed(2))}</div>
@@ -3904,15 +3920,41 @@
           const unlockInfo = getDeviceUnlockInfo(order, deviceKey);
           const deviceStatus = getDeviceStatus(order, deviceKey);
 
-          state.qcOpen = false;
-          state.qcData = null;
-          state.unlockInfoModalData = {
-            deviceKey,
-            deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
-            deviceStatus,
-            unlockInfo,
-          };
-          state.unlockInfoModalOpen = true;
+          if (isScreenLockOnlyResolved(order, deviceKey)) {
+            state.qcOpen = false;
+            state.qcData = null;
+            state.unlockInfoModalData = {
+              deviceKey,
+              deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
+              deviceStatus,
+              unlockInfo,
+            };
+            state.unlockInfoModalOpen = true;
+            render();
+            return;
+          }
+
+          state.unlockInfoModalOpen = false;
+          state.unlockInfoModalData = null;
+
+          if (deviceStatus === 'issue_resolved' || deviceStatus === 'emailed') {
+            state.qcOpen = true;
+            state.modalScrollTop.qc = 0;
+            state.qcStep = 1;
+            render();
+            return;
+          }
+
+          const hasQcData = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
+          if (hasQcData) {
+            state.qcOpen = false;
+            state.qcData = null;
+          } else {
+            state.qcOpen = true;
+            state.modalScrollTop.qc = 0;
+            state.qcStep = 1;
+            state.qcData = null;
+          }
           render();
         });
       });
