@@ -20,6 +20,18 @@
       #ordersTableBody .text-xs { font-size: .68rem; }
       #ordersTableBody button { padding: .35rem .55rem !important; }
     }
+
+    :root[data-theme="dark"] { color-scheme: dark; }
+    :root[data-theme="dark"] body { background: #0b0f16 !important; filter: invert(1) hue-rotate(180deg); }
+    :root[data-theme="dark"] img,
+    :root[data-theme="dark"] video,
+    :root[data-theme="dark"] iframe,
+    :root[data-theme="dark"] canvas,
+    :root[data-theme="dark"] svg,
+    :root[data-theme="dark"] i,
+    :root[data-theme="dark"] [data-no-theme-invert="true"] {
+      filter: invert(1) hue-rotate(180deg);
+    }
   </style>
   <script>
     // Optional override:
@@ -1903,6 +1915,10 @@
     function renderTopbar() {
       const initial = state.user?.email ? state.user.email.charAt(0).toUpperCase() : "A";
       const trackingMeta = getLatestTrackingRefreshMeta();
+      const currentTheme = localStorage.getItem("shcAdminTheme") || "auto";
+      const systemTheme = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+      const resolvedTheme = currentTheme === "auto" ? systemTheme : currentTheme;
+      const themeLabel = resolvedTheme === "dark" ? "Dark" : "Light";
       return `
         <header class="h-16 bg-white border-b border-slate-200 sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between gap-4">
           <div class="flex flex-col justify-center">
@@ -1915,6 +1931,9 @@
             </div>
           </div>
           <div class="flex items-center gap-4">
+            <button id="adminThemeToggle" data-no-theme-invert="true" class="px-3 py-1.5 text-xs font-semibold rounded-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50" title="Toggle dark mode">
+              ${esc(themeLabel)} (${esc(currentTheme === "auto" ? "Auto" : "Manual")})
+            </button>
             <button id="logoutBtn" class="p-2 text-rose-600 hover:bg-rose-50 rounded-full transition-colors" title="Sign out">
               <i data-lucide="log-out" style="width:18px;height:18px"></i>
             </button>
@@ -3542,6 +3561,31 @@
       updateSelectAllCheckboxUI();
       syncBodyScrollLock();
     }
+
+    function resolveAdminTheme(pref) {
+      if (pref === "dark" || pref === "light") return pref;
+      return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+    }
+
+    function applyAdminTheme(pref) {
+      const resolved = resolveAdminTheme(pref);
+      document.documentElement.setAttribute("data-theme", resolved);
+    }
+
+    function initAdminTheme() {
+      const pref = localStorage.getItem("shcAdminTheme") || "auto";
+      applyAdminTheme(pref);
+      const mediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+      if (mediaQuery && typeof mediaQuery.addEventListener === "function") {
+        mediaQuery.addEventListener("change", () => {
+          const current = localStorage.getItem("shcAdminTheme") || "auto";
+          if (current === "auto") {
+            applyAdminTheme("auto");
+            render();
+          }
+        });
+      }
+    }
     // ----------------------------
     // EVENTS
     // ----------------------------
@@ -3596,6 +3640,23 @@
       // Logout
       const logoutBtn = document.getElementById("logoutBtn");
       if (logoutBtn) logoutBtn.addEventListener("click", () => signOut(auth));
+      const adminThemeToggle = document.getElementById("adminThemeToggle");
+      if (adminThemeToggle) {
+        adminThemeToggle.addEventListener("click", () => {
+          const currentPref = localStorage.getItem("shcAdminTheme") || "auto";
+          const currentResolved = resolveAdminTheme(currentPref);
+          const nextPref = currentResolved === "dark" ? "light" : "dark";
+          localStorage.setItem("shcAdminTheme", nextPref);
+          applyAdminTheme(nextPref);
+          render();
+        });
+        adminThemeToggle.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          localStorage.setItem("shcAdminTheme", "auto");
+          applyAdminTheme("auto");
+          render();
+        });
+      }
       // Search inputs
       const search = document.getElementById("searchInput");
       if (search) {
@@ -4274,6 +4335,7 @@
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
     });
     // first paint (auth spinner)
+    initAdminTheme();
     render();
   </script>
 </body>
