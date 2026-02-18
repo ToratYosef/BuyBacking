@@ -870,18 +870,13 @@
         };
 
         // Canonical public deeplink shape used by feeds and partners.
-        syncParam('device', state.selections.deviceSlug);
+        const canonicalDeviceSlug = state.selections.deviceSlug || buildCanonicalDeviceSlug(state.selections.brand, state.selections.model);
+        syncParam('device', canonicalDeviceSlug);
         syncParam('storage', state.selections.storage);
         syncParam('carrier', state.selections.lock);
-
-        if (state.selections.condition) {
-            syncParam('quality', state.selections.condition);
-            params.delete('power');
-            params.delete('functionality');
-        } else {
-            params.delete('power');
-            params.delete('functionality');
-        }
+        syncParam('quality', state.selections.condition);
+        params.delete('power');
+        params.delete('functionality');
 
         // Preserve UTMs and other unknown params; only rewrite if something actually changed.
         const nextPath = `${url.pathname}${url.search}${url.hash}`;
@@ -908,6 +903,17 @@
 
     const normalizeParam = (val) => (val || '').trim().toLowerCase();
     const slugify = (val) => normalizeParam(val).replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const normalizeBrandForDevice = (brand) => {
+        const normalized = normalizeParam(brand);
+        if (normalized === 'apple') return 'iphone';
+        return normalized;
+    };
+    const buildCanonicalDeviceSlug = (brand, model) => {
+        const brandSlug = normalizeBrandForDevice(brand);
+        const modelSlug = slugify(model);
+        if (!brandSlug || !modelSlug) return '';
+        return modelSlug.startsWith(`${brandSlug}-`) ? modelSlug : `${brandSlug}-${modelSlug}`;
+    };
     const getCart = () => {
         try {
             return JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '[]');
@@ -1493,8 +1499,10 @@
     };
     const hydrateFromURL = async () => {
         const params = new URLSearchParams(window.location.search);
-        const deviceParam = params.get('device') || params.get('model') || '';
         const brandParam = params.get('brand') || '';
+        const legacyModelParam = params.get('model') || '';
+        const legacyDeviceParam = buildCanonicalDeviceSlug(brandParam, legacyModelParam);
+        const deviceParam = params.get('device') || legacyDeviceParam || legacyModelParam || '';
         const storageParam = params.get('storage') || '';
         const carrierParam = params.get('carrier') || params.get('lock') || '';
         const conditionParam = params.get('condition') || '';
@@ -1508,7 +1516,7 @@
             state.currentStep = 'model';
             state.selections.model = modelMatch.model.id;
             state.selections.modelName = modelMatch.model.name;
-            state.selections.deviceSlug = normalizeParam(deviceParam) || modelMatch.model.id;
+            state.selections.deviceSlug = buildCanonicalDeviceSlug(modelMatch.brand, modelMatch.model.id) || normalizeParam(deviceParam) || modelMatch.model.id;
             const snap = await getDoc(doc(db, "devices", state.selections.brand, "models", state.selections.model));
             state.deviceData = snap.data();
             state.currentStep = 'storage';
