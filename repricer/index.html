@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Repricer Rules | SecondHandCell</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/site-chrome.css" />
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+  <header class="site-header site-header--mobile-compact relative" data-site-header>
+    <div class="site-header__inner site-header__inner--centered">
+      <div class="logo-container-left">
+        <a href="/" class="logo-link" aria-label="SecondHandCell home">
+          <img src="/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320" height="320" />
+        </a>
+      </div>
+      <div class="logo-text-container-center">
+        <a href="/" aria-label="Go to homepage" class="inline-flex flex-col items-center no-underline">
+          <div class="logo-wordmark">
+            <span class="logo-wordmark__primary">Second</span><span class="logo-wordmark__accent">HandCell</span>
+          </div>
+          <p class="logo-tagline">Repricer Rules</p>
+        </a>
+      </div>
+      <nav class="header-auth-nav" aria-label="Account navigation">
+        <div id="authStatusContainer" class="site-header__auth-wrapper">
+          <a href="#" id="loginNavBtn" class="site-header__login">Login/Sign Up</a>
+          <div id="userMonogram" class="user-monogram hidden"></div>
+          <div id="authDropdown" class="auth-dropdown hidden">
+            <a href="/my-account.html" class="auth-dropdown__link">My Account</a>
+            <button id="logoutBtn" class="auth-dropdown__button">Sign Out</button>
+          </div>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main class="flex-1">
+    <div class="max-w-4xl mx-auto px-4 py-10">
+      <div class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 md:p-8 space-y-6">
+        <div>
+          <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight">Repricer Rule Builder</h1>
+          <p class="text-sm text-slate-600 mt-2">Set tiered price bumps based on current profit %. These rules are used by both the cloud repricer and the run-repricer script.</p>
+        </div>
+
+        <div id="authNotice" class="hidden rounded-xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm"></div>
+
+        <section class="space-y-4">
+          <label class="block text-sm font-semibold text-slate-700" for="targetProfitPct">Target Profit % (minimum)</label>
+          <input id="targetProfitPct" type="number" min="1" max="99" step="0.01" class="w-full md:w-64 rounded-xl border border-slate-300 px-3 py-2 text-sm" />
+          <p class="text-xs text-slate-500">If current profit is below this threshold, repricer sets price to hit this target exactly.</p>
+        </section>
+
+        <section class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-lg font-bold">Profit Tiers</h2>
+            <button id="addTierBtn" type="button" class="rounded-xl bg-slate-900 text-white text-sm font-semibold px-3 py-2 hover:bg-slate-700">Add Tier</button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="min-w-full border border-slate-200 rounded-xl overflow-hidden text-sm">
+              <thead class="bg-slate-100 text-slate-700">
+                <tr>
+                  <th class="text-left px-3 py-2 font-semibold">If Profit % ≥</th>
+                  <th class="text-left px-3 py-2 font-semibold">Add $</th>
+                  <th class="text-left px-3 py-2 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody id="tiersBody" class="divide-y divide-slate-200"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-end">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700" for="previewProfitPct">Preview Profit %</label>
+            <input id="previewProfitPct" type="number" min="0" max="500" step="0.01" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" value="45" />
+          </div>
+          <button id="previewBtn" type="button" class="rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-semibold px-4 py-2 hover:bg-slate-50">Preview</button>
+          <div id="previewOut" class="text-sm text-slate-700">Bump: $0.00</div>
+        </section>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="reloadBtn" type="button" class="rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-semibold px-4 py-2 hover:bg-slate-50">Reload</button>
+          <button id="saveBtn" type="button" class="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2 hover:bg-emerald-700">Save Rules</button>
+          <span id="statusText" class="text-sm text-slate-600"></span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="/assets/js/global-auth.js"></script>
+  <script type="module">
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
+    import { getFirebaseApp } from "/assets/js/firebase-app.js";
+
+    const app = getFirebaseApp();
+    const auth = getAuth(app);
+    const functions = getFunctions(app);
+
+    const getRulesFn = httpsCallable(functions, "getRepricerRules");
+    const setRulesFn = httpsCallable(functions, "setRepricerRules");
+
+    const authNotice = document.getElementById("authNotice");
+    const targetProfitInput = document.getElementById("targetProfitPct");
+    const tiersBody = document.getElementById("tiersBody");
+    const addTierBtn = document.getElementById("addTierBtn");
+    const saveBtn = document.getElementById("saveBtn");
+    const reloadBtn = document.getElementById("reloadBtn");
+    const statusText = document.getElementById("statusText");
+    const previewProfitInput = document.getElementById("previewProfitPct");
+    const previewBtn = document.getElementById("previewBtn");
+    const previewOut = document.getElementById("previewOut");
+
+    let signedInUser = null;
+
+    function setStatus(message, isError = false) {
+      statusText.textContent = message || "";
+      statusText.className = isError ? "text-sm text-rose-600" : "text-sm text-slate-600";
+    }
+
+    function addTierRow(minProfitPct = 15, bumpAmount = 1) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="px-3 py-2">
+          <input type="number" min="0.01" max="99.99" step="0.01" class="tier-profit w-32 rounded-lg border border-slate-300 px-2 py-1" value="${Number(minProfitPct).toFixed(2)}" />
+        </td>
+        <td class="px-3 py-2">
+          <input type="number" min="0" max="999" step="0.01" class="tier-bump w-28 rounded-lg border border-slate-300 px-2 py-1" value="${Number(bumpAmount).toFixed(2)}" />
+        </td>
+        <td class="px-3 py-2">
+          <button type="button" class="remove-tier rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold px-2 py-1 hover:bg-rose-100">Remove</button>
+        </td>
+      `;
+      tr.querySelector(".remove-tier")?.addEventListener("click", () => {
+        tr.remove();
+        runPreview();
+      });
+      tr.querySelector(".tier-profit")?.addEventListener("input", runPreview);
+      tr.querySelector(".tier-bump")?.addEventListener("input", runPreview);
+      tiersBody.appendChild(tr);
+    }
+
+    function getRulesFromForm() {
+      const targetProfitPctDisplay = Number(targetProfitInput.value);
+      if (!Number.isFinite(targetProfitPctDisplay) || targetProfitPctDisplay <= 0 || targetProfitPctDisplay >= 100) {
+        throw new Error("Target Profit % must be between 0 and 100.");
+      }
+
+      const rows = Array.from(tiersBody.querySelectorAll("tr"));
+      if (!rows.length) {
+        throw new Error("Add at least one tier.");
+      }
+
+      const tiers = rows.map((row) => {
+        const minPct = Number(row.querySelector(".tier-profit")?.value);
+        const bump = Number(row.querySelector(".tier-bump")?.value);
+        if (!Number.isFinite(minPct) || minPct <= 0 || minPct >= 100) {
+          throw new Error("Each tier profit % must be between 0 and 100.");
+        }
+        if (!Number.isFinite(bump) || bump < 0) {
+          throw new Error("Each bump must be a non-negative dollar amount.");
+        }
+        return {
+          minProfitPct: minPct / 100,
+          bumpAmount: bump,
+        };
+      }).sort((a, b) => b.minProfitPct - a.minProfitPct);
+
+      return {
+        targetProfitPct: targetProfitPctDisplay / 100,
+        tiers,
+      };
+    }
+
+    function runPreview() {
+      try {
+        const rules = getRulesFromForm();
+        const inputPct = Number(previewProfitInput.value);
+        const profitPct = Number.isFinite(inputPct) ? inputPct / 100 : 0;
+        let bump = 0;
+        for (const tier of rules.tiers) {
+          if (profitPct >= tier.minProfitPct) {
+            bump = tier.bumpAmount;
+            break;
+          }
+        }
+        previewOut.textContent = `Bump: $${bump.toFixed(2)}${profitPct < rules.targetProfitPct ? " (below target: repricer will target exact min profit)" : ""}`;
+      } catch (error) {
+        previewOut.textContent = error?.message || "Preview unavailable";
+      }
+    }
+
+    async function loadRules() {
+      if (!signedInUser) {
+        authNotice.classList.remove("hidden");
+        authNotice.textContent = "Sign in with an admin account to view and edit repricer rules.";
+        setStatus("Waiting for sign-in...");
+        return;
+      }
+
+      setStatus("Loading rules...");
+      try {
+        const response = await getRulesFn();
+        const payload = response?.data || {};
+        const rules = payload.rules || {};
+        const tiers = Array.isArray(rules.tiers) ? rules.tiers : [];
+
+        targetProfitInput.value = Number((Number(rules.targetProfitPct || 0.15) * 100).toFixed(2));
+        tiersBody.innerHTML = "";
+        if (!tiers.length) {
+          addTierRow(15, 1);
+        } else {
+          tiers.forEach((tier) => {
+            addTierRow(Number(tier.minProfitPct) * 100, Number(tier.bumpAmount));
+          });
+        }
+
+        authNotice.classList.add("hidden");
+        setStatus("Rules loaded.");
+        runPreview();
+      } catch (error) {
+        authNotice.classList.remove("hidden");
+        authNotice.textContent = "You need an admin account to manage repricer rules.";
+        setStatus(error?.message || "Failed to load rules.", true);
+      }
+    }
+
+    async function saveRules() {
+      if (!signedInUser) {
+        setStatus("Sign in first.", true);
+        return;
+      }
+
+      let rules;
+      try {
+        rules = getRulesFromForm();
+      } catch (error) {
+        setStatus(error?.message || "Invalid form values.", true);
+        return;
+      }
+
+      setStatus("Saving rules...");
+      saveBtn.disabled = true;
+      try {
+        await setRulesFn({ rules });
+        setStatus("Rules saved.");
+      } catch (error) {
+        setStatus(error?.message || "Failed to save rules.", true);
+      } finally {
+        saveBtn.disabled = false;
+      }
+    }
+
+    addTierBtn.addEventListener("click", () => {
+      addTierRow(15, 1);
+      runPreview();
+    });
+    reloadBtn.addEventListener("click", loadRules);
+    saveBtn.addEventListener("click", saveRules);
+    previewBtn.addEventListener("click", runPreview);
+    targetProfitInput.addEventListener("input", runPreview);
+    previewProfitInput.addEventListener("input", runPreview);
+
+    onAuthStateChanged(auth, (user) => {
+      signedInUser = user || null;
+      loadRules();
+    });
+  </script>
+</body>
+</html>
