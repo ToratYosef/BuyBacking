@@ -676,6 +676,7 @@
                 <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
                     <img src="/assets/stars-4.svg" alt="Trustpilot 5 star rating" loading="lazy" class="h-12 w-auto object-contain">
                 </a>
+                <div class="shc-theme-toggle-anchor" data-no-theme-invert="true"></div>
             </div>
         </div>
         <div class="border-t border-slate-700 mt-8 pt-6 text-center text-slate-400 text-sm">
@@ -1892,6 +1893,60 @@ if (!window[INIT_FLAG]) {
   }
 
 } // End of INIT_FLAG check
+</script>
+<script>
+(() => {
+    if (window.__shcThemeToggleInitialized) return;
+    window.__shcThemeToggleInitialized = true;
+    const key = 'shcThemePreference';
+    const systemTheme = () => (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const resolveTheme = (pref) => (pref === 'dark' || pref === 'light' ? pref : systemTheme());
+    const getPref = () => {
+        try { return localStorage.getItem(key) || 'auto'; } catch { return 'auto'; }
+    };
+    const setPref = (value) => {
+        try { localStorage.setItem(key, value); } catch {}
+    };
+    const applyTheme = (pref) => {
+        document.documentElement.setAttribute('data-theme', resolveTheme(pref));
+    };
+    const updateLabel = (btn) => {
+        const pref = getPref();
+        const mode = resolveTheme(pref) === 'dark' ? 'Dark' : 'Light';
+        btn.textContent = `${mode} (${pref === 'auto' ? 'Auto' : 'Manual'})`;
+    };
+    const mount = () => {
+        const anchor = document.querySelector('.shc-theme-toggle-anchor') || document.querySelector('footer') || document.body;
+        let btn = document.getElementById('shcThemeToggle');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = 'shcThemeToggle';
+            btn.type = 'button';
+            btn.className = 'shc-theme-toggle';
+            btn.setAttribute('data-no-theme-invert', 'true');
+            btn.addEventListener('click', () => {
+                const next = resolveTheme(getPref()) === 'dark' ? 'light' : 'dark';
+                setPref(next);
+                applyTheme(next);
+                updateLabel(btn);
+            });
+            btn.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                setPref('auto');
+                applyTheme('auto');
+                updateLabel(btn);
+            });
+        }
+        anchor.appendChild(btn);
+        applyTheme(getPref());
+        updateLabel(btn);
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mount);
+    } else {
+        mount();
+    }
+})();
 </script>
 </body>
 </html>
