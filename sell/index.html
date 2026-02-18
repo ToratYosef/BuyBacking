@@ -854,25 +854,43 @@
     };
 
     const updateURL = () => {
-        const url = new URL(window.location);
-        url.searchParams.delete('device');
-        Object.entries(state.selections).forEach(([key, val]) => {
-            if (key === 'deviceSlug') {
-                if (val) url.searchParams.set('device', val);
-                else url.searchParams.delete('device');
+        const url = new URL(window.location.href);
+        const params = url.searchParams;
+
+        // Remove legacy/internal params from older URL formats.
+        ['brand', 'model', 'lock', 'condition'].forEach((legacyKey) => params.delete(legacyKey));
+
+        const syncParam = (key, value) => {
+            const normalized = (value || '').toString().trim();
+            if (!normalized) {
+                params.delete(key);
                 return;
             }
-            if (key === 'condition') {
-                // Keep the URL shape consistent even when skipping the condition step.
-                // After a network is chosen (or in final view), we keep `condition=` present.
-                if (state.selections.lock || state.isFinalView) url.searchParams.set('condition', val || '');
-                else url.searchParams.delete('condition');
-                return;
+            params.set(key, normalized);
+        };
+
+        // Canonical public deeplink shape used by feeds and partners.
+        syncParam('device', state.selections.deviceSlug);
+        syncParam('storage', state.selections.storage);
+        syncParam('carrier', state.selections.lock);
+
+        if (state.selections.condition) {
+            syncParam('quality', state.selections.condition);
+            if (state.selections.condition === 'broken') {
+                syncParam('power', 'no');
+                syncParam('functionality', 'broken');
+            } else {
+                syncParam('power', 'yes');
+                syncParam('functionality', 'working');
             }
-            if (val && key !== 'qty' && key !== 'modelName') url.searchParams.set(key, val);
-            else if (key !== 'qty' && key !== 'modelName') url.searchParams.delete(key);
-        });
-        window.history.replaceState({}, '', url);
+        }
+
+        // Preserve UTMs and other unknown params; only rewrite if something actually changed.
+        const nextPath = `${url.pathname}${url.search}${url.hash}`;
+        const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+        if (nextPath !== currentPath) {
+            window.history.replaceState({}, '', nextPath);
+        }
     };
 
     const getModels = async (brand) => {
