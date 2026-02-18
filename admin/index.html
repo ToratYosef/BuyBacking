@@ -528,6 +528,8 @@
       // bulk states
       isBulkSlipPrintInProgress: false,
       bulkTrackingRefreshInProgress: false,
+      bulkVoidAgedInProgress: false,
+      bulkVoidTestInProgress: false,
       lastRefreshAt: null,
       lastTrackingRefreshMeta: null,
       trackingReportModalOpen: false,
@@ -1313,6 +1315,78 @@
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
     }
+    async function runAdminBulkVoidAction(buttonEl, {
+      endpoint,
+      confirmText,
+      loadingLabel,
+      inProgressStateKey,
+      body = {},
+    }) {
+      if (!buttonEl || !endpoint || !inProgressStateKey) return;
+      if (state[inProgressStateKey]) return;
+
+      const ok = confirm(confirmText || "Run bulk void action?");
+      if (!ok) return;
+
+      const originalText = buttonEl.textContent;
+      state[inProgressStateKey] = true;
+      buttonEl.disabled = true;
+      buttonEl.textContent = loadingLabel || "Processing…";
+
+      try {
+        const result = await apiPost(endpoint, body);
+        const cancelled = Number(result?.cancelled || 0);
+        const skipped = Number(result?.skipped || 0);
+        const failed = Number(result?.failed || 0);
+        const scanned = Number(result?.scanned || 0);
+
+        const skippedSamples = Array.isArray(result?.skippedEntries)
+          ? result.skippedEntries.slice(0, 5).map((entry) => `#${entry.orderId}: ${entry.reason}`)
+          : [];
+        const failedSamples = Array.isArray(result?.failedEntries)
+          ? result.failedEntries.slice(0, 5).map((entry) => `#${entry.orderId}: ${entry.reason}`)
+          : [];
+
+        alert(
+          `Bulk void complete.\n\n` +
+          `Scanned: ${scanned}\n` +
+          `Cancelled: ${cancelled}\n` +
+          `Skipped: ${skipped}\n` +
+          `Failed: ${failed}\n\n` +
+          (skippedSamples.length ? `Skipped samples:\n- ${skippedSamples.join("\n- ")}\n\n` : "") +
+          (failedSamples.length ? `Failed samples:\n- ${failedSamples.join("\n- ")}\n` : "")
+        );
+      } catch (error) {
+        toast(error?.message || "Bulk void action failed", "error");
+      } finally {
+        state[inProgressStateKey] = false;
+        const liveBtn = document.getElementById(buttonEl.id) || buttonEl;
+        if (liveBtn) {
+          liveBtn.disabled = false;
+          liveBtn.textContent = originalText || "Run";
+        }
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
+    }
+
+    async function runBulkVoidAgedOrders(buttonEl) {
+      return runAdminBulkVoidAction(buttonEl, {
+        endpoint: '/orders/admin/bulk-void-aged',
+        confirmText: 'Void labels + cancel all eligible orders older than 27 days? This will NOT email customers.',
+        loadingLabel: 'Voiding 27+ day orders…',
+        inProgressStateKey: 'bulkVoidAgedInProgress',
+        body: { minDays: 27 },
+      });
+    }
+
+    async function runBulkVoidTestOrders(buttonEl) {
+      return runAdminBulkVoidAction(buttonEl, {
+        endpoint: '/orders/admin/bulk-void-test-orders',
+        confirmText: 'Auto-pick test orders (emails/address rule), void labels, and cancel them now? This will NOT email customers.',
+        loadingLabel: 'Deleting test orders…',
+        inProgressStateKey: 'bulkVoidTestInProgress',
+      });
+    }
     // ----------------------------
     // SPEC: VOID LABELS + CANCEL FLOW (best-effort implementation)
     // ----------------------------
@@ -1980,6 +2054,18 @@
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200">
                 <i data-lucide="refresh-cw" style="width:18px;height:18px"></i>
                 Refresh Label + Phone Tracking
+              </button>
+              <button id="bulk-void-aged-orders"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidAgedInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-200'}"
+                ${state.bulkVoidAgedInProgress ? 'disabled' : ''}>
+                <i data-lucide="shield-x" style="width:18px;height:18px"></i>
+                ${state.bulkVoidAgedInProgress ? 'Voiding 27+ Day Orders…' : 'Bulk Void 27+ Day Orders'}
+              </button>
+              <button id="bulk-void-test-orders"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidTestInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200'}"
+                ${state.bulkVoidTestInProgress ? 'disabled' : ''}>
+                <i data-lucide="trash-2" style="width:18px;height:18px"></i>
+                ${state.bulkVoidTestInProgress ? 'Deleting Test Orders…' : 'Delete Our Orders'}
               </button>
             </div>
           </div>
@@ -3540,6 +3626,14 @@
       const btnRefreshLabelPhoneTracking = document.getElementById("refresh-label-phone-tracking");
       if (btnRefreshLabelPhoneTracking) {
         btnRefreshLabelPhoneTracking.addEventListener("click", () => refreshLabelGeneratedAndPhoneOnWay(btnRefreshLabelPhoneTracking));
+      }
+      const btnBulkVoidAgedOrders = document.getElementById("bulk-void-aged-orders");
+      if (btnBulkVoidAgedOrders) {
+        btnBulkVoidAgedOrders.addEventListener("click", () => runBulkVoidAgedOrders(btnBulkVoidAgedOrders));
+      }
+      const btnBulkVoidTestOrders = document.getElementById("bulk-void-test-orders");
+      if (btnBulkVoidTestOrders) {
+        btnBulkVoidTestOrders.addEventListener("click", () => runBulkVoidTestOrders(btnBulkVoidTestOrders));
       }
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
