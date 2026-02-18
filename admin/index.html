@@ -592,6 +592,9 @@
       // payment confirmation modal
       paymentConfirmModalOpen: false,
       paymentConfirmPayload: null,
+      // unlock info modal
+      unlockInfoModalOpen: false,
+      unlockInfoModalData: null,
     };
     function getSelectedOrder() {
       if (!state.selectedOrderId) return null;
@@ -618,6 +621,35 @@
         sum += (Number.isFinite(unit) ? unit : 0) * qty;
       }
       return sum;
+    }
+
+    function getDeviceUnlockInfo(order, deviceKey) {
+      if (!order || !deviceKey) return null;
+      const fromDeviceMap = order?.unlockInfoByDevice?.[deviceKey];
+      const fromIssueMap = order?.qcIssuesByDevice?.[deviceKey]?.password_locked?.unlockInfo;
+      const source = fromDeviceMap || fromIssueMap;
+      if (!source || typeof source !== 'object') return null;
+
+      const method = String(source.method || '').trim().toLowerCase();
+      const value = String(source.value || '').trim();
+      let patternPath = Array.isArray(source.patternPath)
+        ? source.patternPath.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value >= 1 && value <= 9)
+        : [];
+
+      if (!patternPath.length && method === 'pattern' && value) {
+        patternPath = value
+          .split('-')
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value) && value >= 1 && value <= 9);
+      }
+
+      return {
+        reason: source.reason || 'password_locked',
+        method,
+        value,
+        patternPath,
+        updatedAt: source.updatedAt || null,
+      };
     }
 
     function normalizeCarrierForPricing(value) {
@@ -3520,6 +3552,56 @@
         </div>
       `;
     }
+
+    function renderUnlockInfoModal() {
+      if (!state.unlockInfoModalOpen) return "";
+      const order = getSelectedOrder();
+      if (!order) return "";
+
+      const info = state.unlockInfoModalData || {};
+      const unlock = info.unlockInfo || null;
+      const method = String(unlock?.method || '').trim().toLowerCase();
+      const hasUnlockData = !!(unlock && method && (unlock.value || (Array.isArray(unlock.patternPath) && unlock.patternPath.length)));
+      const patternPath = Array.isArray(unlock?.patternPath) ? unlock.patternPath : [];
+
+      const detailHtml = !hasUnlockData
+        ? `<div class="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm font-medium">No unlock details were submitted by customer for this device.</div>`
+        : method === 'pin'
+          ? `<div class="rounded-xl border border-indigo-200 bg-indigo-50 p-5"><div class="text-xs font-semibold uppercase text-indigo-600 mb-2">PIN</div><div class="text-4xl font-extrabold tracking-widest text-indigo-900 font-mono">${esc(unlock.value)}</div></div>`
+          : method === 'password'
+            ? `<div class="rounded-xl border border-indigo-200 bg-indigo-50 p-5"><div class="text-xs font-semibold uppercase text-indigo-600 mb-2">Password</div><div class="text-3xl font-extrabold tracking-wide text-indigo-900 font-mono break-all">${esc(unlock.value)}</div></div>`
+            : `<div class="rounded-xl border border-indigo-200 bg-indigo-50 p-5">
+                <div class="text-xs font-semibold uppercase text-indigo-600 mb-3">Pattern</div>
+                <div class="grid grid-cols-3 gap-3 w-[180px]" data-unlock-pattern-preview data-pattern-seq="${esc(patternPath.join('-'))}">
+                  ${Array.from({ length: 9 }, (_, i) => `<div class="h-12 w-12 rounded-full border-2 border-slate-400 bg-white transition-all duration-200" data-preview-dot="${i + 1}"></div>`).join('')}
+                </div>
+                <div class="mt-3 text-sm text-slate-600"><strong>Order:</strong> ${esc(patternPath.join(' → '))}</div>
+              </div>`;
+
+      return `
+        <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" id="unlockInfoOverlay" style="z-index:999999;">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden">
+            <div class="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-3">
+              <div>
+                <h3 class="text-lg font-bold text-slate-900">Unlock Info</h3>
+                <p class="text-xs text-slate-500 mt-1">Order ${esc(order.id)} • ${esc(info.deviceLabel || 'Device')}</p>
+              </div>
+              <button id="unlockInfoCloseBtn" class="text-slate-400 hover:text-slate-600">
+                <i data-lucide="x" style="width:20px;height:20px"></i>
+              </button>
+            </div>
+            <div class="px-6 py-5 space-y-4">
+              <div class="text-xs text-slate-500 uppercase font-semibold">Current Device Status</div>
+              <div class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(info.deviceStatus || '')}">${esc(formatStatusLabel(info.deviceStatus || 'unknown'))}</div>
+              ${detailHtml}
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button id="unlockInfoDoneBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
     
     // ----------------------------
     // MAIN RENDER
@@ -3552,11 +3634,12 @@
           ${renderConfirmModal()}
           ${renderTrackingReportModal()}
           ${renderPaymentConfirmModal()}
+          ${renderUnlockInfoModal()}
         </div>
       `;
     }
     function hasBlockingOverlayOpen() {
-      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen);
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
