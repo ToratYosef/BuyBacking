@@ -601,10 +601,10 @@
         </div>
 
         <div id="sell-deeplink-loading" class="deeplink-loading hidden" aria-live="polite" aria-busy="true">
-            <img src="/assets/sellcell.webp" alt="SellCell" class="deeplink-loading-logo" loading="lazy">
+            <img id="sell-deeplink-loading-logo" src="/assets/sellcell.webp" alt="SellCell" class="deeplink-loading-logo hidden" loading="lazy">
             <div class="deeplink-loading-spinner" aria-hidden="true"></div>
-            <p class="deeplink-loading-title">Loading device info from SellCell.com...</p>
-            <p class="deeplink-loading-subtitle">Hang tight while we fetch your quote details.</p>
+            <p class="deeplink-loading-title" id="sell-deeplink-loading-title">Loading device info from URL</p>
+            <p class="deeplink-loading-subtitle" id="sell-deeplink-loading-subtitle">Hang tight while we fetch your quote details.</p>
         </div>
         <h2 class="step-title" id="step-name">Select Brand</h2>
         <div class="selection-grid" id="grid-content">
@@ -1867,18 +1867,30 @@
         return keys.find(k => normalizeParam(k) === normalized) || '';
     };
 
-    const shouldShowSellcellLoading = () => {
+    const getDeeplinkLoadingContext = () => {
         const params = new URLSearchParams(window.location.search);
         const source = normalizeParam(params.get('utm_source'));
         const device = normalizeParam(params.get('device') || params.get('model'));
-        return Boolean(device) && source.includes('sellcell');
+        const isDeeplink = Boolean(device);
+        const isSellcell = source.includes('sellcell');
+        return { isDeeplink, isSellcell };
     };
-    const toggleSellcellLoading = (isVisible) => {
+    const toggleDeeplinkLoading = (isVisible, isSellcellSource = false) => {
         const loadingEl = document.getElementById('sell-deeplink-loading');
+        const logoEl = document.getElementById('sell-deeplink-loading-logo');
+        const titleEl = document.getElementById('sell-deeplink-loading-title');
+        const subtitleEl = document.getElementById('sell-deeplink-loading-subtitle');
         const crumbsGroup = document.querySelector('#selection-flow .breadcrumbs-group');
         const stepTitle = document.getElementById('step-name');
         const grid = document.getElementById('grid-content');
         if (!loadingEl || !crumbsGroup || !stepTitle || !grid) return;
+
+        if (titleEl) titleEl.textContent = isSellcellSource ? 'Loading device info from SellCell.com...' : 'Loading device info from URL';
+        if (subtitleEl) subtitleEl.textContent = isSellcellSource
+            ? 'Hang tight while we fetch your quote details from SellCell.'
+            : 'Hang tight while we fetch your quote details.';
+        if (logoEl) logoEl.classList.toggle('hidden', !isSellcellSource);
+
         loadingEl.classList.toggle('hidden', !isVisible);
         crumbsGroup.classList.toggle('hidden', isVisible);
         stepTitle.classList.toggle('hidden', isVisible);
@@ -1886,8 +1898,8 @@
     };
 
     const hydrateFromURL = async () => {
-        const showSellcellLoading = shouldShowSellcellLoading();
-        if (showSellcellLoading) toggleSellcellLoading(true);
+        const deeplinkLoading = getDeeplinkLoadingContext();
+        if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(true, deeplinkLoading.isSellcell);
         const params = new URLSearchParams(window.location.search);
         const brandParam = params.get('brand') || '';
         const legacyModelParam = params.get('model') || '';
@@ -1937,12 +1949,12 @@
             // Condition can be blank; URL will still include `condition=`.
             if (state.selections.brand && state.selections.model && state.selections.storage && state.selections.lock) {
                 showFinalOffer();
-                if (showSellcellLoading) toggleSellcellLoading(false);
+                if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
                 return;
             }
         }
         renderCurrentStep();
-        if (showSellcellLoading) toggleSellcellLoading(false);
+        if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
     };
 
     hydrateFromURL();
