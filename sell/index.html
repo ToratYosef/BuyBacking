@@ -1772,16 +1772,26 @@
         if (!slug) return null;
         const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
         const brands = brandOverride ? [brandOverride] : BRAND_OPTIONS.map(b => b.key);
-        for (const brand of brands) {
-            const brandSlug = normalizeBrandForDevice(brand);
-            const slugCandidates = new Set([rawSlug]);
-            if (brandSlug) {
-                if (rawSlug.startsWith(`${brandSlug}-`)) {
-                    slugCandidates.add(rawSlug.slice(brandSlug.length + 1));
+        const addBrandSlugVariants = (candidates, brandToken) => {
+            const token = normalizeParam(brandToken).replace(/(^-|-$)/g, '');
+            if (!token) return;
+            const snapshot = [...candidates];
+            snapshot.forEach(candidate => {
+                if (!candidate) return;
+                if (candidate.startsWith(`${token}-`)) {
+                    candidates.add(candidate.slice(token.length + 1));
                 } else {
-                    slugCandidates.add(`${brandSlug}-${rawSlug}`);
+                    candidates.add(`${token}-${candidate}`);
                 }
-            }
+            });
+        };
+        for (const brand of brands) {
+            const slugCandidates = new Set([rawSlug]);
+
+            // Support both canonical prefixes (e.g. iphone-*) and literal brand prefixes
+            // (e.g. apple-*) so both link styles hydrate correctly.
+            addBrandSlugVariants(slugCandidates, normalizeBrandForDevice(brand));
+            addBrandSlugVariants(slugCandidates, brand);
 
             const models = await getModels(brand);
             const match = models.find(model => {
