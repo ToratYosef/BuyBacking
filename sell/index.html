@@ -1770,14 +1770,31 @@
     };
     const findModelBySlug = async (slug, brandOverride = '') => {
         if (!slug) return null;
-        const targetSlug = normalizeParam(slug);
+        const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
         const brands = brandOverride ? [brandOverride] : BRAND_OPTIONS.map(b => b.key);
         for (const brand of brands) {
+            const brandSlug = normalizeBrandForDevice(brand);
+            const slugCandidates = new Set([rawSlug]);
+            if (brandSlug) {
+                if (rawSlug.startsWith(`${brandSlug}-`)) {
+                    slugCandidates.add(rawSlug.slice(brandSlug.length + 1));
+                } else {
+                    slugCandidates.add(`${brandSlug}-${rawSlug}`);
+                }
+            }
+
             const models = await getModels(brand);
             const match = models.find(model => {
                 const modelSlug = normalizeParam(model.id);
                 const nameSlug = slugify(model.name);
-                return modelSlug === targetSlug || nameSlug === targetSlug;
+                const canonicalById = buildCanonicalDeviceSlug(brand, model.id);
+                const canonicalByName = buildCanonicalDeviceSlug(brand, model.name);
+                return [...slugCandidates].some(candidate => (
+                    candidate === modelSlug
+                    || candidate === nameSlug
+                    || candidate === canonicalById
+                    || candidate === canonicalByName
+                ));
             });
             if (match) return { brand, model: match };
         }
