@@ -1770,14 +1770,41 @@
     };
     const findModelBySlug = async (slug, brandOverride = '') => {
         if (!slug) return null;
-        const targetSlug = normalizeParam(slug);
+        const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
         const brands = brandOverride ? [brandOverride] : BRAND_OPTIONS.map(b => b.key);
+        const addBrandSlugVariants = (candidates, brandToken) => {
+            const token = normalizeParam(brandToken).replace(/(^-|-$)/g, '');
+            if (!token) return;
+            const snapshot = [...candidates];
+            snapshot.forEach(candidate => {
+                if (!candidate) return;
+                if (candidate.startsWith(`${token}-`)) {
+                    candidates.add(candidate.slice(token.length + 1));
+                } else {
+                    candidates.add(`${token}-${candidate}`);
+                }
+            });
+        };
         for (const brand of brands) {
+            const slugCandidates = new Set([rawSlug]);
+
+            // Support both canonical prefixes (e.g. iphone-*) and literal brand prefixes
+            // (e.g. apple-*) so both link styles hydrate correctly.
+            addBrandSlugVariants(slugCandidates, normalizeBrandForDevice(brand));
+            addBrandSlugVariants(slugCandidates, brand);
+
             const models = await getModels(brand);
             const match = models.find(model => {
                 const modelSlug = normalizeParam(model.id);
                 const nameSlug = slugify(model.name);
-                return modelSlug === targetSlug || nameSlug === targetSlug;
+                const canonicalById = buildCanonicalDeviceSlug(brand, model.id);
+                const canonicalByName = buildCanonicalDeviceSlug(brand, model.name);
+                return [...slugCandidates].some(candidate => (
+                    candidate === modelSlug
+                    || candidate === nameSlug
+                    || candidate === canonicalById
+                    || candidate === canonicalByName
+                ));
             });
             if (match) return { brand, model: match };
         }
