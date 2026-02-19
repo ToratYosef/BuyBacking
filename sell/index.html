@@ -320,6 +320,49 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         
+
+
+        .deeplink-loading {
+            border: 1px solid #d1fae5;
+            border-radius: 20px;
+            padding: 24px 18px;
+            background: linear-gradient(160deg, #ecfdf5 0%, #ffffff 65%);
+            text-align: center;
+            box-shadow: 0 16px 30px -24px rgba(21, 128, 61, 0.5);
+            max-width: 520px;
+            margin: 0 auto 16px;
+        }
+        .deeplink-loading-logo {
+            width: 140px;
+            height: auto;
+            margin: 0 auto 14px;
+            object-fit: contain;
+        }
+        .deeplink-loading-spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid #bbf7d0;
+            border-top-color: #15803d;
+            border-radius: 9999px;
+            margin: 0 auto 12px;
+            animation: deeplink-spin 0.9s linear infinite;
+        }
+        .deeplink-loading-title {
+            font-size: 18px;
+            font-weight: 900;
+            color: #065f46;
+            margin-bottom: 6px;
+        }
+        .deeplink-loading-subtitle {
+            font-size: 13px;
+            color: #065f46;
+            opacity: 0.82;
+        }
+        @keyframes deeplink-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         .hidden { display: none !important; }
 
         .scroll-target { scroll-margin-top: 150px; }
@@ -555,6 +598,13 @@
                     <div class="text-lg font-black text-slate-900" id="selected-device-name">--</div>
                 </div>
             </div>
+        </div>
+
+        <div id="sell-deeplink-loading" class="deeplink-loading hidden" aria-live="polite" aria-busy="true">
+            <img src="/assets/sellcell.webp" alt="SellCell" class="deeplink-loading-logo" loading="lazy">
+            <div class="deeplink-loading-spinner" aria-hidden="true"></div>
+            <p class="deeplink-loading-title">Loading device info from SellCell.com...</p>
+            <p class="deeplink-loading-subtitle">Hang tight while we fetch your quote details.</p>
         </div>
         <h2 class="step-title" id="step-name">Select Brand</h2>
         <div class="selection-grid" id="grid-content">
@@ -1157,6 +1207,7 @@
         document.getElementById('selection-flow').classList.remove('hidden');
         document.getElementById('condition-help-box').classList.add('hidden');
         renderCurrentStep();
+        if (showSellcellLoading) toggleSellcellLoading(false);
     };
 
     const applyGridCols = (grid, count) => {
@@ -1770,14 +1821,41 @@
     };
     const findModelBySlug = async (slug, brandOverride = '') => {
         if (!slug) return null;
-        const targetSlug = normalizeParam(slug);
+        const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
         const brands = brandOverride ? [brandOverride] : BRAND_OPTIONS.map(b => b.key);
+        const addBrandSlugVariants = (candidates, brandToken) => {
+            const token = normalizeParam(brandToken).replace(/(^-|-$)/g, '');
+            if (!token) return;
+            const snapshot = [...candidates];
+            snapshot.forEach(candidate => {
+                if (!candidate) return;
+                if (candidate.startsWith(`${token}-`)) {
+                    candidates.add(candidate.slice(token.length + 1));
+                } else {
+                    candidates.add(`${token}-${candidate}`);
+                }
+            });
+        };
         for (const brand of brands) {
+            const slugCandidates = new Set([rawSlug]);
+
+            // Support both canonical prefixes (e.g. iphone-*) and literal brand prefixes
+            // (e.g. apple-*) so both link styles hydrate correctly.
+            addBrandSlugVariants(slugCandidates, normalizeBrandForDevice(brand));
+            addBrandSlugVariants(slugCandidates, brand);
+
             const models = await getModels(brand);
             const match = models.find(model => {
                 const modelSlug = normalizeParam(model.id);
                 const nameSlug = slugify(model.name);
-                return modelSlug === targetSlug || nameSlug === targetSlug;
+                const canonicalById = buildCanonicalDeviceSlug(brand, model.id);
+                const canonicalByName = buildCanonicalDeviceSlug(brand, model.name);
+                return [...slugCandidates].some(candidate => (
+                    candidate === modelSlug
+                    || candidate === nameSlug
+                    || candidate === canonicalById
+                    || candidate === canonicalByName
+                ));
             });
             if (match) return { brand, model: match };
         }
@@ -1788,7 +1866,28 @@
         if (!normalized) return '';
         return keys.find(k => normalizeParam(k) === normalized) || '';
     };
+
+    const shouldShowSellcellLoading = () => {
+        const params = new URLSearchParams(window.location.search);
+        const source = normalizeParam(params.get('utm_source'));
+        const device = normalizeParam(params.get('device') || params.get('model'));
+        return Boolean(device) && source.includes('sellcell');
+    };
+    const toggleSellcellLoading = (isVisible) => {
+        const loadingEl = document.getElementById('sell-deeplink-loading');
+        const crumbsGroup = document.querySelector('#selection-flow .breadcrumbs-group');
+        const stepTitle = document.getElementById('step-name');
+        const grid = document.getElementById('grid-content');
+        if (!loadingEl || !crumbsGroup || !stepTitle || !grid) return;
+        loadingEl.classList.toggle('hidden', !isVisible);
+        crumbsGroup.classList.toggle('hidden', isVisible);
+        stepTitle.classList.toggle('hidden', isVisible);
+        grid.classList.toggle('hidden', isVisible);
+    };
+
     const hydrateFromURL = async () => {
+        const showSellcellLoading = shouldShowSellcellLoading();
+        if (showSellcellLoading) toggleSellcellLoading(true);
         const params = new URLSearchParams(window.location.search);
         const brandParam = params.get('brand') || '';
         const legacyModelParam = params.get('model') || '';
@@ -1838,10 +1937,12 @@
             // Condition can be blank; URL will still include `condition=`.
             if (state.selections.brand && state.selections.model && state.selections.storage && state.selections.lock) {
                 showFinalOffer();
+                if (showSellcellLoading) toggleSellcellLoading(false);
                 return;
             }
         }
         renderCurrentStep();
+        if (showSellcellLoading) toggleSellcellLoading(false);
     };
 
     hydrateFromURL();
