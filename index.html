@@ -4,7 +4,7 @@
   <script>
     window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
   </script>
-        <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -97,15 +97,6 @@
         imagesrcset="/iphone/assets/i17pm.webp 500w, /iphone/assets/i15pm-1000.webp 1000w"
         imagesizes="(max-width: 640px) 160px, (max-width: 1024px) 200px, 250px">
 
-  <!-- Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8JYPJDKSP8"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'AW-17534255111');
-    gtag('config', 'G-8JYPJDKSP8');
-  </script>
 
     <style>
         /* Base styles */
@@ -200,7 +191,7 @@
         .hero-section {
             background-image:
                 linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.82)),
-                url('https://www.slashgear.com/img/gallery/12-common-smartphone-myths-you-need-to-stop-believing/intro-1733024987.webp');
+                url('/assets/logo.webp');
             background-size: cover;
             background-position: center;
             position: relative;
@@ -839,7 +830,7 @@
 
         <!-- CTA -->
         <section id="cta" class="bg-indigo-700 py-20 text-center relative overflow-hidden">
-            <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+            <div class="absolute inset-0 bg-slate-700/10"></div>
             <div class="container mx-auto px-4 relative z-10">
                 <h2 class="text-4xl md:text-5xl font-extrabold text-white mb-6">Ready to cash in?</h2>
                 <p class="text-xl text-indigo-100 mb-10 max-w-2xl mx-auto">Get your instant quote now—it only takes 60 seconds.</p>
@@ -904,29 +895,6 @@
 </footer>
 
     <script type="module">
-import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getFirestore, doc, getDoc, getDocs, collection, addDoc, serverTimestamp, runTransaction, setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-
-// Firebase configuration (from assets/js/firebase-config.js)
-const firebaseConfig = {
-  apiKey: 'AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k',
-  authDomain: 'auth.secondhandcell.com',
-  projectId: 'buyback-a0f05',
-  storageBucket: 'buyback-a0f05.appspot.com',
-  messagingSenderId: '876430429098',
-  appId: '1:876430429098:web:f6dd64b1960d90461979d3',
-  measurementId: 'G-6WWQN44JHT',
-};
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const firebaseApp = app;
-const getFirebaseApp = () => firebaseApp;
-if (typeof window !== 'undefined') { window.firebaseConfig = firebaseConfig; window.firebaseApp = firebaseApp; }
-
-// API client (from public/js/apiClient.js)
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
-
 const defaultApiBase = "/api";
 
 let apiBase =
@@ -937,25 +905,13 @@ let apiBase =
 const RAILWAY_API_ORIGIN = "https://shc33.up.railway.app";
 
 function normalizeApiBase(base) {
-  if (typeof base !== "string") {
-    return base;
-  }
-
+  if (typeof base !== "string") return base;
   const trimmed = base.trim().replace(/\/$/, "");
-  if (trimmed === RAILWAY_API_ORIGIN) {
-    return `${trimmed}/server`;
-  }
-
+  if (trimmed === RAILWAY_API_ORIGIN) return `${trimmed}/server`;
   return trimmed;
 }
 
 apiBase = normalizeApiBase(apiBase);
-
-function setApiBase(nextBase) {
-  if (nextBase) {
-    apiBase = normalizeApiBase(nextBase);
-  }
-}
 
 function resolveUrl(path) {
   const cleanedBase = apiBase.replace(/\/$/, "");
@@ -963,109 +919,19 @@ function resolveUrl(path) {
   return new URL(`${cleanedBase}${cleanedPath}`, window.location.origin).toString();
 }
 
-async function getIdToken({ forceRefresh = false } = {}) {
-  const user = auth.currentUser;
-  if (!user) {
-    return null;
-  }
-  return user.getIdToken(forceRefresh);
-}
-
-async function requestWithAuth(method, path, data, options = {}, { forceRefresh = false } = {}) {
-  const { authRequired = false, headers = {}, ...fetchOptions } = options;
-  const token = await getIdToken({ forceRefresh });
-
-  if (authRequired && !token) {
-    throw new Error("Authentication required. Please sign in and try again.");
-  }
-
-  const requestHeaders = {
-    "Content-Type": "application/json",
-    ...headers,
-  };
-
-  if (token) {
-    requestHeaders.Authorization = `Bearer ${token}`;
-  }
-
-  return fetch(resolveUrl(path), {
-    method,
-    headers: requestHeaders,
-    body: data ? JSON.stringify(data) : undefined,
-    ...fetchOptions,
+async function apiPost(path, data) {
+  const response = await fetch(resolveUrl(path), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data || {}),
   });
-}
 
-async function apiRequest(method, path, data, options = {}) {
-  let response = await requestWithAuth(method, path, data, options, { forceRefresh: false });
-
-  if (response.status === 401) {
-    response = await requestWithAuth(method, path, data, options, { forceRefresh: true });
+  if (!response.ok) {
+    throw new Error("Request failed");
   }
 
   const contentType = response.headers.get("content-type") || "";
-  const payload = contentType.includes("application/json")
-    ? await response.json()
-    : await response.text();
-
-  if (!response.ok) {
-    const message = payload?.error || payload?.message || response.statusText;
-    const error = new Error(message || "API request failed.");
-    error.status = response.status;
-    error.payload = payload;
-    throw error;
-  }
-
-  return payload;
-}
-
-async function apiRaw(path, options = {}) {
-  const { authRequired = false, headers = {}, body, method = "GET", ...fetchOptions } = options;
-  const makeRequest = async (forceRefresh = false) => {
-    const token = await getIdToken({ forceRefresh });
-
-    if (authRequired && !token) {
-      throw new Error("Authentication required. Please sign in and try again.");
-    }
-
-    const requestHeaders = { ...headers };
-    if (token) {
-      requestHeaders.Authorization = `Bearer ${token}`;
-    }
-
-    return fetch(resolveUrl(path), {
-      method,
-      headers: requestHeaders,
-      body,
-      ...fetchOptions,
-    });
-  };
-
-  let response = await makeRequest(false);
-  if (response.status === 401) {
-    response = await makeRequest(true);
-  }
-  return response;
-}
-
-function apiGet(path, options) {
-  return apiRequest("GET", path, undefined, options);
-}
-
-function apiPost(path, data, options) {
-  return apiRequest("POST", path, data, options);
-}
-
-function apiPut(path, data, options) {
-  return apiRequest("PUT", path, data, options);
-}
-
-function apiDelete(path, data, options) {
-  return apiRequest("DELETE", path, data, options);
-}
-
-function apiFetch(path, options = {}) {
-  return apiRequest(options.method || "GET", path, options.body, options);
+  return contentType.includes("application/json") ? response.json() : response.text();
 }
 
 // Popular pricing (from assets/js/popular-pricing.js)
@@ -1085,30 +951,11 @@ const findHighestPrice = (prices = {}) => {
     return max || null;
 };
 
-const applyPopularPricing = async () => {
+const applyPopularPricing = () => {
     const priceEls = document.querySelectorAll('[data-device-price]');
-    if (!priceEls.length) return;
-
-    await Promise.all(Array.from(priceEls).map(async (el) => {
-        const brand = el.getAttribute('data-brand');
-        const slug = el.getAttribute('data-slug');
-        if (!brand || !slug) return;
-
-        try {
-            const snap = await getDoc(doc(db, "devices", brand, "models", slug));
-            if (!snap.exists()) {
-                console.warn(`No pricing found for ${brand}/${slug}`);
-                el.textContent = formatPrice(null);
-                return;
-            }
-
-            const highest = findHighestPrice(snap.data().prices || {});
-            el.textContent = formatPrice(highest);
-        } catch (error) {
-            console.error(`Failed to load pricing for ${brand}/${slug}:`, error);
-            el.textContent = formatPrice(null);
-        }
-    }));
+    priceEls.forEach((el) => {
+        el.textContent = 'Get instant offer';
+    });
 };
 
 document.addEventListener('DOMContentLoaded', applyPopularPricing);
@@ -1229,90 +1076,8 @@ function renderOverpayDevices(devices) {
     });
 }
 
-const getOverpayCandidates = async () => {
-    const brands = ['iphone', 'samsung'];
-    const candidates = [];
-
-    await Promise.all(brands.map(async (brand) => {
-        const snap = await getDocs(collection(db, 'devices', brand, 'models'));
-        snap.forEach((modelDoc) => {
-            const modelData = modelDoc.data() || {};
-            const prices = modelData.prices || {};
-            const overpayBonusRaw = modelData.overpayBonus;
-            const hasManualBonus = !!overpayBonusRaw;
-            const manualBonusValue = typeof overpayBonusRaw === 'number'
-                ? overpayBonusRaw
-                : Number(overpayBonusRaw?.amount || 0);
-
-            Object.entries(prices).forEach(([storage, carrierMap]) => {
-                Object.entries(carrierMap || {}).forEach(([carrier, conditionMap]) => {
-                    const flawless = Number(conditionMap?.flawless || 0);
-                    const best = flawless || Math.max(...Object.values(conditionMap || {}).map((value) => Number(value || 0)));
-                    if (!Number.isFinite(best) || best <= 0) return;
-                    candidates.push({
-                        brand,
-                        slug: modelDoc.id,
-                        name: modelData.name || modelDoc.id,
-                        imageUrl: modelData.imageUrl || '',
-                        storage,
-                        carrier,
-                        carrierLabel: carrier,
-                        basePayout: best,
-                        overpayBonus: hasManualBonus,
-                        manualBonus: manualBonusValue
-                    });
-                });
-            });
-        });
-    }));
-
-    return candidates;
-};
-
-const getFallbackOverpayDevices = (candidates) => {
-    const iphoneCandidates = candidates
-        .filter((item) => item.brand === 'iphone')
-        .sort((a, b) => b.basePayout - a.basePayout);
-
-    const chosen = [];
-    const seenSlug = new Set();
-    iphoneCandidates.forEach((candidate) => {
-        if (chosen.length >= 2) return;
-        if (seenSlug.has(candidate.slug)) return;
-        seenSlug.add(candidate.slug);
-        chosen.push({
-            ...candidate,
-            bonus: (Math.floor(Math.random() * 8) + 8)
-        });
-    });
-    return chosen;
-};
-
-const loadOverpayDevices = async () => {
-    try {
-        const candidates = await getOverpayCandidates();
-        if (!candidates.length) {
-            renderOverpayDevices([]);
-            return;
-        }
-
-        const averagePayout = candidates.reduce((sum, item) => sum + item.basePayout, 0) / candidates.length;
-        const threshold = averagePayout * 1.1;
-        const live = candidates
-            .filter((item) => item.basePayout >= threshold || item.overpayBonus)
-            .map((item) => ({
-                ...item,
-                bonus: item.manualBonus > 0 ? item.manualBonus : (Math.floor(Math.random() * 8) + 8)
-            }))
-            .sort((a, b) => (b.basePayout + b.bonus) - (a.basePayout + a.bonus))
-            .slice(0, 2);
-
-        const output = live.length ? live : getFallbackOverpayDevices(candidates);
-        renderOverpayDevices(output);
-    } catch (error) {
-        console.error('Failed to load overpay devices:', error);
-        renderOverpayDevices([]);
-    }
+const loadOverpayDevices = () => {
+    renderOverpayDevices([]);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1325,40 +1090,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Home page logic (from assets/js/pages/index-b8699033.js)
-setLogLevel('error');
-
-// --- Firebase Click Tracker Function ---
-const trackButtonClick = async (buttonName) => {
+const trackButtonClick = (buttonName) => {
     const cleanedButtonName = buttonName.replace(/\s/g, '_').replace(/'/g, '');
-    const buttonDocRef = doc(db, "button_clicks", cleanedButtonName);
-    const userId = auth.currentUser?.uid || getOrCreateGuestId();
-
-    try {
-        await runTransaction(db, async (transaction) => {
-            const buttonDoc = await transaction.get(buttonDocRef);
-            const historyEntry = { timestamp: new Date(), userId: userId };
-            if (!buttonDoc.exists()) {
-                transaction.set(buttonDocRef, {
-                    count: 1,
-                    buttonName: buttonName,
-                    history: [historyEntry],
-                    lastClicked: serverTimestamp()
-                });
-            } else {
-                const data = buttonDoc.data();
-                const previousHistory = Array.isArray(data.history) ? data.history : [];
-                const updatedHistory = [...previousHistory, historyEntry];
-                transaction.update(buttonDocRef, {
-                    count: (data.count || 0) + 1,
-                    history: updatedHistory,
-                    lastClicked: serverTimestamp()
-                });
-            }
-        });
-        console.log(`Click on '${buttonName}' successfully tracked and updated.`);
-    } catch (error) {
-        console.error("Transaction failed: ", error);
-    }
+    trackAnalyticsEvent('button_click', { buttonName: cleanedButtonName });
 };
 
 const getOrCreateGuestId = () => {
@@ -1369,27 +1103,6 @@ const getOrCreateGuestId = () => {
     }
     return id;
 };
-
-document.addEventListener('DOMContentLoaded', function() {
-    // Image loading with fallback
-    function loadImageWithFallback(imgElement) {
-        const baseSrc = imgElement.dataset.baseSrc;
-        if (!baseSrc) return;
-        const extensions = ['.webp', '.svg', '.avif', '.png', '.webp', '.webp'];
-        let current = 0;
-        function tryLoad() {
-            if (current >= extensions.length) {
-                if (imgElement.id.includes('_cat_img')) {
-                    imgElement.src = `https://placehold.co/150x150/e0e7ff/4338ca?text=Category`;
-                } else {
-                    imgElement.src = `https://placehold.co/200x200/f0f4ff/6366f1?text=No+Image`;
-                }
-                imgElement.alt = "Image not available";
-                return;
-            }
-            const testSrc = baseSrc + extensions[current];
-            const img = new Image();
-            img.onload = () => { imgElement.src = testSrc; };
             img.onerror = () => { current++; tryLoad(); };
             img.src = testSrc;
         }
@@ -1509,10 +1222,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             try {
-                await addDoc(collection(db, "signed_up_emails"), {
-                    email: email,
-                    timestamp: new Date()
-                });
+                await apiPost('/newsletter-signup', { email });
                 footerSignupMessage.textContent = 'Success! Thanks for signing up.';
                 footerSignupMessage.className = 'mt-3 text-sm text-center text-green-300';
                 footerEmailSignupForm.reset();
