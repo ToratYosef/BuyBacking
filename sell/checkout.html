@@ -491,6 +491,14 @@
         }
     };
 
+    initRecaptcha().catch(() => {
+        if (recaptchaErrorEl) {
+            recaptchaErrorEl.textContent = "Error: reCAPTCHA failed to load. Please refresh and try again";
+            recaptchaErrorEl.style.display = 'block';
+        }
+        if (recaptchaContainer) recaptchaContainer.classList.add('error-highlight');
+    });
+
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEY = 'shc_cart';
     const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken' };
@@ -980,7 +988,8 @@
                 createdAt: new Date().toISOString()
             };
 
-            orderData.recaptchaToken = await getRecaptchaToken();
+            orderData.recaptchaToken = recaptchaPrefetchedToken || await getRecaptchaToken();
+            recaptchaPrefetchedToken = '';
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
