@@ -905,7 +905,7 @@
 
     <script type="module">
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getFirestore, doc, getDoc, getDocs, collection, addDoc, serverTimestamp, runTransaction, setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+import { getFirestore, doc, getDoc, getDocs, collection, addDoc, setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 
 // Firebase configuration (from assets/js/firebase-config.js)
@@ -1327,47 +1327,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // Home page logic (from assets/js/pages/index-b8699033.js)
 setLogLevel('error');
 
-// --- Firebase Click Tracker Function ---
-const trackButtonClick = async (buttonName) => {
+// --- Local Click Tracker Function (no Firestore writes on homepage) ---
+const trackButtonClick = (buttonName) => {
     const cleanedButtonName = buttonName.replace(/\s/g, '_').replace(/'/g, '');
-    const buttonDocRef = doc(db, "button_clicks", cleanedButtonName);
-    const userId = auth.currentUser?.uid || getOrCreateGuestId();
-
-    try {
-        await runTransaction(db, async (transaction) => {
-            const buttonDoc = await transaction.get(buttonDocRef);
-            const historyEntry = { timestamp: new Date(), userId: userId };
-            if (!buttonDoc.exists()) {
-                transaction.set(buttonDocRef, {
-                    count: 1,
-                    buttonName: buttonName,
-                    history: [historyEntry],
-                    lastClicked: serverTimestamp()
-                });
-            } else {
-                const data = buttonDoc.data();
-                const previousHistory = Array.isArray(data.history) ? data.history : [];
-                const updatedHistory = [...previousHistory, historyEntry];
-                transaction.update(buttonDocRef, {
-                    count: (data.count || 0) + 1,
-                    history: updatedHistory,
-                    lastClicked: serverTimestamp()
-                });
-            }
-        });
-        console.log(`Click on '${buttonName}' successfully tracked and updated.`);
-    } catch (error) {
-        console.error("Transaction failed: ", error);
-    }
-};
-
-const getOrCreateGuestId = () => {
-    let id = localStorage.getItem('shcGuestId');
-    if (!id) {
-        id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        localStorage.setItem('shcGuestId', id);
-    }
-    return id;
+    trackAnalyticsEvent('button_click', { buttonName: cleanedButtonName });
 };
 
 document.addEventListener('DOMContentLoaded', function() {
