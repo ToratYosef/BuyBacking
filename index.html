@@ -895,29 +895,6 @@
 </footer>
 
     <script type="module">
-import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getFirestore, doc, getDoc, getDocs, collection, addDoc, setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-
-// Firebase configuration (from assets/js/firebase-config.js)
-const firebaseConfig = {
-  apiKey: 'AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k',
-  authDomain: 'auth.secondhandcell.com',
-  projectId: 'buyback-a0f05',
-  storageBucket: 'buyback-a0f05.appspot.com',
-  messagingSenderId: '876430429098',
-  appId: '1:876430429098:web:f6dd64b1960d90461979d3',
-  measurementId: 'G-6WWQN44JHT',
-};
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const firebaseApp = app;
-const getFirebaseApp = () => firebaseApp;
-if (typeof window !== 'undefined') { window.firebaseConfig = firebaseConfig; window.firebaseApp = firebaseApp; }
-
-// API client (from public/js/apiClient.js)
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
-
 const defaultApiBase = "/api";
 
 let apiBase =
@@ -1113,12 +1090,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Home page logic (from assets/js/pages/index-b8699033.js)
-setLogLevel('error');
-
-// --- Local Click Tracker Function (no Firestore writes on homepage) ---
 const trackButtonClick = (buttonName) => {
     const cleanedButtonName = buttonName.replace(/\s/g, '_').replace(/'/g, '');
     trackAnalyticsEvent('button_click', { buttonName: cleanedButtonName });
+};
+
+const getOrCreateGuestId = () => {
+    let id = localStorage.getItem('shcGuestId');
+    if (!id) {
+        id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem('shcGuestId', id);
+    }
+    return id;
 };
             img.onerror = () => { current++; tryLoad(); };
             img.src = testSrc;
