@@ -45,14 +45,6 @@ const deviceData = {
             }
         },
         {
-            name: 'iPhone 16 SE', slug: '16-se', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/iphone/assets/i16e',
-            prices: {
-                '64GB':  { unlocked: { flawless: 400, good: 385, fair: 375, damaged: 355, broken: 200 }, locked: { flawless: 375, good: 360, fair: 350, damaged: 330, broken: 175 } },
-                '128GB': { unlocked: { flawless: 500, good: 485, fair: 475, damaged: 455, broken: 300 }, locked: { flawless: 475, good: 460, fair: 450, damaged: 430, broken: 275 } },
-                '256GB': { unlocked: { flawless: 600, good: 585, fair: 575, damaged: 555, broken: 400 }, locked: { flawless: 575, good: 560, fair: 550, damaged: 530, broken: 375 } }
-            }
-        },
-        {
             name: 'iPhone 15 Pro Max', slug: '15-pro-max', imageUrl: 'https://raw.githubusercontent.com/ToratYosef/BuyBacking/main/iphone/assets/i15pm',
             prices: {
                 '128GB': { unlocked: { flawless: 700, good: 685, fair: 675, damaged: 655, broken: 500 }, locked: { flawless: 675, good: 660, fair: 650, damaged: 630, broken: 475 } },
