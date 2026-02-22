@@ -1,24 +1,20 @@
-import {
-  browserLocalPersistence,
-  createUserWithEmailAndPassword,
-  getAuth,
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  setPersistence,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut,
-  updateProfile,
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { getFirebaseApp } from "./firebase-app.js";
+import { loadFirebase } from "./firebase-loader.js";
 
 const INIT_FLAG = "__shcAuthInitialized";
 if (!window[INIT_FLAG]) {
   window[INIT_FLAG] = true;
 
-  const auth = getAuth(getFirebaseApp());
-  setPersistence(auth, browserLocalPersistence).catch(() => {});
+  let auth = null;
+  let authSdk = null;
+  let authObserverAttached = false;
+
+  const ensureAuthReady = async () => {
+    if (auth && authSdk) return;
+    const { app, modules } = await loadFirebase();
+    authSdk = modules.auth;
+    auth = authSdk.getAuth(app);
+    await authSdk.setPersistence(auth, authSdk.browserLocalPersistence).catch(() => {});
+  };
 
   const ensureStyle = () => {
     const styleId = "shc-auth-styles";
@@ -328,7 +324,7 @@ if (!window[INIT_FLAG]) {
     const googleLoginBtn = document.getElementById("googleLoginBtn");
     const googleSignupBtn = document.getElementById("googleSignupBtn");
 
-    const provider = new GoogleAuthProvider();
+    let provider = null;
 
     const updateUiForUser = (user) => {
       if (loginNavBtn) {
@@ -358,7 +354,20 @@ if (!window[INIT_FLAG]) {
       }
     };
 
-    onAuthStateChanged(auth, (user) => updateUiForUser(user));
+    const attachAuthObserver = async () => {
+      if (authObserverAttached) return;
+      await ensureAuthReady();
+      authSdk.onAuthStateChanged(auth, (user) => updateUiForUser(user));
+      authObserverAttached = true;
+    };
+
+    try {
+      const cachedUser = localStorage.getItem("shcAuthUser");
+      if (cachedUser) {
+        const parsed = JSON.parse(cachedUser);
+        updateUiForUser(parsed);
+      }
+    } catch (error) {}
 
     const attachDropdown = () => {
       if (!userMonogram || !authDropdown) return;
@@ -388,13 +397,15 @@ if (!window[INIT_FLAG]) {
     };
     attachDropdown();
 
-    const openLogin = () => {
+    const openLogin = async () => {
+      await attachAuthObserver();
       clearMessage(authMessage);
       setActiveTab("login");
       toggleModal(modal, true);
     };
 
-    const openSignup = () => {
+    const openSignup = async () => {
+      await attachAuthObserver();
       clearMessage(authMessage);
       setActiveTab("signup");
       toggleModal(modal, true);
@@ -403,7 +414,7 @@ if (!window[INIT_FLAG]) {
     if (loginNavBtn) {
       loginNavBtn.addEventListener("click", (e) => {
         e.preventDefault();
-        openLogin();
+        void openLogin();
       });
     }
 
@@ -416,7 +427,7 @@ if (!window[INIT_FLAG]) {
     document.getElementById("signupTabBtn")?.addEventListener("click", () => openSignup());
     signupSwitch?.addEventListener("click", (e) => {
       e.preventDefault();
-      openLogin();
+      void openLogin();
     });
 
     const handleAuthError = (error) => {
@@ -434,7 +445,8 @@ if (!window[INIT_FLAG]) {
         return;
       }
       try {
-        await signInWithEmailAndPassword(auth, email, password);
+        await ensureAuthReady();
+        await authSdk.signInWithEmailAndPassword(auth, email, password);
         showMessage(authMessage, "Welcome back!", false);
         setTimeout(() => toggleModal(modal, false), 600);
       } catch (error) {
@@ -453,9 +465,10 @@ if (!window[INIT_FLAG]) {
         return;
       }
       try {
-        const credentials = await createUserWithEmailAndPassword(auth, email, password);
+        await ensureAuthReady();
+        const credentials = await authSdk.createUserWithEmailAndPassword(auth, email, password);
         if (credentials.user && name) {
-          await updateProfile(credentials.user, { displayName: name });
+          await authSdk.updateProfile(credentials.user, { displayName: name });
         }
         showMessage(authMessage, "Account created! Redirecting...", false);
         setTimeout(() => toggleModal(modal, false), 700);
@@ -473,7 +486,8 @@ if (!window[INIT_FLAG]) {
         return;
       }
       try {
-        await sendPasswordResetEmail(auth, email);
+        await ensureAuthReady();
+        await authSdk.sendPasswordResetEmail(auth, email);
         showMessage(authMessage, "Password reset sent. Check your inbox.", false);
       } catch (error) {
         handleAuthError(error);
@@ -483,7 +497,9 @@ if (!window[INIT_FLAG]) {
     const handleGoogle = async () => {
       clearMessage(authMessage);
       try {
-        await signInWithPopup(auth, provider);
+        await ensureAuthReady();
+        provider = provider || new authSdk.GoogleAuthProvider();
+        await authSdk.signInWithPopup(auth, provider);
         showMessage(authMessage, "Signed in with Google!", false);
         setTimeout(() => toggleModal(modal, false), 600);
       } catch (error) {
@@ -496,7 +512,8 @@ if (!window[INIT_FLAG]) {
 
     logoutBtn?.addEventListener("click", async () => {
       try {
-        await signOut(auth);
+        await ensureAuthReady();
+        await authSdk.signOut(auth);
         toggleModal(modal, false);
         if (authDropdown) authDropdown.classList.remove("is-visible");
       } catch (error) {
