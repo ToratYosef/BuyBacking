@@ -4,6 +4,7 @@
     <script>
       window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
     </script>
+<script src="https://www.google.com/recaptcha/api.js?render=6LcAzHMsAAAAAKmkD3gbuO3662okbIai0-jaQM64" async defer></script>
 <script src="https://cdn.tailwindcss.com"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -441,6 +442,15 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const appId = "buyback-a0f05";
+    const RECAPTCHA_SITE_KEY = '6LcAzHMsAAAAAKmkD3gbuO3662okbIai0-jaQM64';
+
+    const getRecaptchaToken = async (action = 'submit_order') => {
+        if (!window.grecaptcha || typeof window.grecaptcha.execute !== 'function') {
+            throw new Error('reCAPTCHA is unavailable.');
+        }
+        await new Promise((resolve) => window.grecaptcha.ready(resolve));
+        return window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action });
+    };
 
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEY = 'shc_cart';
@@ -930,6 +940,8 @@
                 paymentIdentifier: document.getElementById('payoutIdentifier').value,
                 createdAt: new Date().toISOString()
             };
+
+            orderData.recaptchaToken = await getRecaptchaToken();
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
