@@ -45,6 +45,19 @@
 
     <main class="container mx-auto px-4 py-12">
         <section class="bg-slate-100 rounded-[2rem] p-10 shadow-2xl">
+            <div class="mb-8 rounded-3xl bg-white p-5 shadow-sm border border-slate-200">
+                <div class="flex flex-wrap items-center justify-between gap-4 text-xs font-bold uppercase tracking-wider text-slate-400">
+                    <span class="text-indigo-600">1. Payment</span>
+                    <span>2. Contact</span>
+                    <span>3. Shipping</span>
+                    <span>4. Confirm</span>
+                </div>
+                <div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div class="h-full w-1/4 rounded-full bg-indigo-600"></div>
+                </div>
+                <p class="mt-3 text-sm text-slate-500">Nice—you're on the first step. Complete checkout to lock your quote for 14 days.</p>
+            </div>
+
             <div class="flex items-center justify-between mb-8 flex-wrap gap-4">
                 <h1 class="text-4xl font-bold text-slate-900">Checkout</h1>
                 <a href="/sell" class="text-sm font-semibold text-slate-500 hover:text-slate-700">Edit details</a>
@@ -77,6 +90,11 @@
                     <div class="bg-white rounded-3xl p-6 shadow-md">
                         <h2 class="text-xl font-semibold text-slate-900 mb-2">Shipping</h2>
                         <p class="text-sm text-slate-500">Confirm where we should send your prepaid label.</p>
+                        <div class="mt-5 grid gap-3 sm:grid-cols-2 text-sm">
+                            <button type="button" data-ship-option="digital" class="ship-option rounded-2xl border-2 border-indigo-500 bg-indigo-50 px-4 py-3 font-semibold text-indigo-700">Digital Label (fastest)</button>
+                            <button type="button" data-ship-option="kit" class="ship-option rounded-2xl border-2 border-slate-200 px-4 py-3 font-semibold text-slate-600">Mail Me a Shipping Kit</button>
+                        </div>
+                        <p id="shipSpeedMessage" class="mt-4 text-sm font-medium text-indigo-700">Estimated payment speed: 2-3 business days after inspection.</p>
                     </div>
                 </div>
 
@@ -97,6 +115,10 @@
                     </div>
                     <div class="mt-4 border-t border-slate-200 pt-4">
                         <input type="text" placeholder="Offer code" class="w-full rounded-full border border-slate-200 px-4 py-2 text-sm">
+                    </div>
+                    <div class="mt-5 rounded-2xl bg-emerald-50 border border-emerald-100 p-4">
+                        <p class="text-xs uppercase tracking-wider text-emerald-700 font-bold">Checkout tip</p>
+                        <p class="mt-1 text-sm text-emerald-900">Use the same email from your quote to speed up verification and payout.</p>
                     </div>
                 </aside>
             </div>
@@ -157,5 +179,30 @@
     </div>
 </footer>
   <script src="/assets/js/page-tracker.js" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const options = Array.from(document.querySelectorAll('.ship-option'));
+      const message = document.getElementById('shipSpeedMessage');
+      const speedByOption = {
+        digital: 'Estimated payment speed: 2-3 business days after inspection.',
+        kit: 'Estimated payment speed: 4-6 business days after inspection (includes kit transit time).'
+      };
+
+      options.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          options.forEach((item) => {
+            item.classList.remove('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+            item.classList.add('border-slate-200', 'text-slate-600');
+          });
+
+          btn.classList.remove('border-slate-200', 'text-slate-600');
+          btn.classList.add('border-indigo-500', 'bg-indigo-50', 'text-indigo-700');
+
+          const selectedOption = btn.getAttribute('data-ship-option');
+          message.textContent = speedByOption[selectedOption] || speedByOption.digital;
+        });
+      });
+    });
+  </script>
 </body>
 </html>
