@@ -617,7 +617,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 storage: '256GB',
                 price: 700,
                 reoffer: null,
-                imageUrl: 'https://secondhandcell.com/assets/iphone/assets/i15pm.webp',
+                imageUrl: 'https://cdn.secondhandcell.com/images/iphone/assets/i15pm.webp',
                 timestamp: serverTimestamp()
             });
             await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
@@ -626,7 +626,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 storage: '512GB',
                 price: 600,
                 reoffer: 550,
-                imageUrl: 'https://secondhandcell.com/assets/samsung/assets/s24u.webp',
+                imageUrl: 'https://cdn.secondhandcell.com/images/samsung/assets/s24u.webp',
                 timestamp: serverTimestamp()
             });
             await setDoc(doc(db, `users/${userId}/orders`, generateSequentialOrderId()), {
@@ -635,7 +635,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 storage: '128GB',
                 price: 550,
                 reoffer: null,
-                imageUrl: 'https://secondhandcell.com/assets/ipm2.webp',
+                imageUrl: 'https://cdn.secondhandcell.com/images/assets/ipm2.webp',
                 timestamp: serverTimestamp()
             });
         } else {
@@ -802,49 +802,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 role: 'iPhone 15 Pro Max Seller',
                 rating: 5,
                 review: 'SecondHandCell handled my iPhone trade-in in days. The shipping kit arrived quickly, inspection was honest, and the payout hit my account the same afternoon.',
-                avatar: '/assets/faces/3.webp'
+                avatar: 'https://cdn.secondhandcell.com/images/assets/faces/3.webp'
             },
             {
                 name: 'Sarah Johnson',
                 role: 'Galaxy S23 Ultra Seller',
                 rating: 4.5,
                 review: 'The $10 shipping kit deduction was worth it—everything I needed was in the box. Their portal kept me updated until the payout cleared the next morning.',
-                avatar: '/assets/faces/5.webp'
+                avatar: 'https://cdn.secondhandcell.com/images/assets/faces/5.webp'
             },
             {
                 name: 'David Martinez',
                 role: 'Software Engineer • Seattle, WA',
                 rating: 5,
                 review: 'I compared half a dozen services and this one actually paid what they quoted. The dashboard makes tracking each step effortless.',
-                avatar: '/assets/faces/6.webp'
+                avatar: 'https://cdn.secondhandcell.com/images/assets/faces/6.webp'
             },
             {
                 name: 'Emily Thompson',
                 role: 'Teacher • Chicago, IL',
                 rating: 4.5,
                 review: 'As a teacher with zero free time, I loved how transparent the process was. I chose an email label, shipped the same day, and had my Zelle transfer within 48 hours.',
-                avatar: '/assets/faces/7.webp'
+                avatar: 'https://cdn.secondhandcell.com/images/assets/faces/7.webp'
             },
             {
                 name: 'Jessica Rivera',
                 role: 'Nurse • Tampa, FL',
                 rating: 5,
                 review: 'Customer support answered my questions in minutes and the payout matched what I was promised. It felt like working with a friend instead of a company.',
-                avatar: '/assets/faces/8.webp'
+                avatar: 'https://cdn.secondhandcell.com/images/assets/faces/8.webp'
             },
             {
                 name: 'Amanda Chen',
                 role: 'Entrepreneur • Austin, TX',
                 rating: 4.8,
                 review: 'I recycle phones from my business upgrades. Every order with SecondHandCell has been smooth, and they always explain any adjustments before finalizing the quote.',
-                avatar: '/assets/faces/9.webp'
+                avatar: 'https://cdn.secondhandcell.com/images/assets/faces/9.webp'
             },
             {
                 name: 'James Wilson',
                 role: 'IT Consultant • Denver, CO',
                 rating: 5,
                 review: 'Best phone buyback experience I\'ve had. Fast payment, transparent pricing, and excellent customer service. Highly recommend!',
-                avatar: '/assets/faces/10.webp'
+                avatar: 'https://cdn.secondhandcell.com/images/assets/faces/10.webp'
             }
         ];
 
