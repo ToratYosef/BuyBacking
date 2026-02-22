@@ -4,7 +4,6 @@
     <script>
       window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
     </script>
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
 <script src="https://cdn.tailwindcss.com"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -99,14 +98,6 @@
         .btn-submit { width: 100%; padding: 18px; background: var(--brand-gradient); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 20px; transition: 0.3s; }
         .btn-submit:hover { opacity: 0.9; transform: scale(1.01); }
         .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        .recaptcha-wrap.error-highlight {
-            border: 2px solid var(--neon-red);
-            border-radius: 8px;
-            box-shadow: 0 0 12px var(--neon-red) !important;
-            padding: 8px;
-            display: inline-block;
-        }
-
         .cart-item-card {
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -335,13 +326,6 @@
             </label>
             <div id="terms-error" class="field-error-msg mt-2">Error: You must accept terms to continue</div>
 
-            <div class="mt-4">
-                <div id="recaptcha-container" class="recaptcha-wrap">
-                    <div id="checkout-recaptcha" class="g-recaptcha" data-callback="onCheckoutRecaptchaSuccess" data-expired-callback="onCheckoutRecaptchaExpired" data-error-callback="onCheckoutRecaptchaExpired"></div>
-                </div>
-                <div id="recaptcha-error" class="field-error-msg mt-2">Error: Please confirm you're not a robot</div>
-            </div>
-
             <button class="btn-submit" id="submitOrderBtn">SUBMIT MY TRADE-IN</button>
         </div>
     </div>
@@ -457,47 +441,6 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const appId = "buyback-a0f05";
-    const RECAPTCHA_SITE_KEY = "6LcAzHMsAAAAAKmkD3gbuO3662okbIai0-jaQM64";
-
-    const recaptchaElement = document.getElementById('checkout-recaptcha');
-    if (recaptchaElement) {
-        recaptchaElement.setAttribute('data-sitekey', RECAPTCHA_SITE_KEY);
-    }
-
-    const getRecaptchaToken = async () => {
-        if (!window.grecaptcha || typeof window.grecaptcha.getResponse !== 'function') {
-            throw new Error('reCAPTCHA is unavailable.');
-        }
-        const token = window.grecaptcha.getResponse();
-        if (!token) {
-            throw new Error('reCAPTCHA is required.');
-        }
-        return token;
-    };
-
-    window.onCheckoutRecaptchaSuccess = () => {
-        document.getElementById('recaptcha-error').style.display = 'none';
-        document.getElementById('recaptcha-container').classList.remove('error-highlight');
-    };
-
-    window.onCheckoutRecaptchaExpired = () => {
-        document.getElementById('recaptcha-container').classList.add('error-highlight');
-        document.getElementById('recaptcha-error').style.display = 'block';
-    };
-
-    const resetRecaptchaWidget = () => {
-        if (window.grecaptcha && typeof window.grecaptcha.reset === 'function') {
-            window.grecaptcha.reset();
-        }
-    };
-
-    initRecaptcha().catch(() => {
-        if (recaptchaErrorEl) {
-            recaptchaErrorEl.textContent = "Error: reCAPTCHA failed to load. Please refresh and try again";
-            recaptchaErrorEl.style.display = 'block';
-        }
-        if (recaptchaContainer) recaptchaContainer.classList.add('error-highlight');
-    });
 
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEY = 'shc_cart';
@@ -988,9 +931,6 @@
                 createdAt: new Date().toISOString()
             };
 
-            orderData.recaptchaToken = recaptchaPrefetchedToken || await getRecaptchaToken();
-            recaptchaPrefetchedToken = '';
-
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
             const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
@@ -1049,7 +989,6 @@
             
             window.location.href = successUrl.toString();
         } catch (e) {
-            resetRecaptchaWidget();
             alert("Server error.");
         } finally {
             btn.disabled = !isZipValid();
@@ -1131,8 +1070,6 @@
         });
         document.getElementById('terms-error').style.display = 'none';
         document.getElementById('terms-container').classList.remove('error-highlight');
-        document.getElementById('recaptcha-error').style.display = 'none';
-        document.getElementById('recaptcha-container').classList.remove('error-highlight');
         clearAddressVerifyError();
 
         requiredIds.forEach(id => {
@@ -1160,20 +1097,6 @@
             termsError.style.display = 'block';
             hasError = true;
             if (!firstErrorEl) firstErrorEl = termsContainer;
-        }
-
-        const recaptchaAvailable = window.grecaptcha && typeof window.grecaptcha.getResponse === 'function';
-        const recaptchaToken = recaptchaAvailable ? window.grecaptcha.getResponse() : '';
-        if (!recaptchaToken) {
-            const recaptchaContainer = document.getElementById('recaptcha-container');
-            const recaptchaError = document.getElementById('recaptcha-error');
-            recaptchaError.textContent = recaptchaAvailable
-                ? "Error: Please confirm you're not a robot"
-                : "Error: reCAPTCHA failed to load. Please refresh and try again";
-            recaptchaError.style.display = 'block';
-            recaptchaContainer.classList.add('error-highlight');
-            hasError = true;
-            if (!firstErrorEl) firstErrorEl = recaptchaContainer;
         }
 
         if (hasError) {
