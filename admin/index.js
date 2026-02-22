@@ -747,6 +747,47 @@ async function processLabelVoid(order, labelRequests, triggerSource = "manual") 
 }
 
 // Serve admin.html
+
+async function verifyRecaptchaToken(token, remoteIp = "") {
+  const secret = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secret) {
+    console.error("RECAPTCHA_SECRET_KEY is not configured on the server.");
+    return { success: false, reason: "server_misconfigured" };
+  }
+
+  if (!token || typeof token !== "string") {
+    return { success: false, reason: "missing_token" };
+  }
+
+  try {
+    const payload = new URLSearchParams();
+    payload.append("secret", secret);
+    payload.append("response", token);
+    if (remoteIp) {
+      payload.append("remoteip", remoteIp);
+    }
+
+    const { data } = await axios.post(
+      "https://www.google.com/recaptcha/api/siteverify",
+      payload,
+      {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 10000,
+      }
+    );
+
+    return {
+      success: Boolean(data?.success),
+      score: data?.score,
+      action: data?.action,
+      errorCodes: data?.["error-codes"] || [],
+    };
+  } catch (error) {
+    console.error("Failed to verify reCAPTCHA token:", error.message || error);
+    return { success: false, reason: "verification_request_failed" };
+  }
+}
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
@@ -784,9 +825,27 @@ app.post("/api/submit-order", async (req, res) => {
     if (!orderData || !orderData.shippingInfo || !orderData.estimatedQuote) {
       return res.status(400).json({ error: "Invalid order data" });
     }
+
+    const recaptchaToken = orderData.recaptchaToken;
+    const recaptchaCheck = await verifyRecaptchaToken(
+      recaptchaToken,
+      req.ip || req.headers["x-forwarded-for"] || ""
+    );
+
+    if (!recaptchaCheck.success) {
+      console.warn("reCAPTCHA validation failed for submit-order", {
+        reason: recaptchaCheck.reason || null,
+        errorCodes: recaptchaCheck.errorCodes || [],
+      });
+      return res.status(400).json({ error: "reCAPTCHA verification failed" });
+    }
+
+    const { recaptchaToken: _recaptchaToken, ...orderDataWithoutToken } = orderData;
+
     // Add the new order to the Firestore database
     const docRef = await ordersCollection.add({
-      ...orderData,
+      ...orderDataWithoutToken,
+      recaptchaVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       status: "pending_shipment",
     });
