@@ -158,44 +158,12 @@
     safeSet(IP_CACHE_KEY, JSON.stringify(payload));
   };
 
-  const fetchPublicIp = async () => {
-    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timeout = controller
-      ? setTimeout(() => {
-          try {
-            controller.abort();
-          } catch (error) {}
-        }, 4000)
-      : null;
-
-    try {
-      const response = await fetch("https://api.ipify.org?format=json", {
-        method: "GET",
-        signal: controller ? controller.signal : undefined,
-      });
-      if (!response.ok) {
-        throw new Error("Failed to resolve IP");
-      }
-      const payload = await response.json();
-      if (payload && typeof payload.ip === "string" && payload.ip.trim()) {
-        return payload.ip.trim();
-      }
-    } catch (error) {
-      // ignore fetch failures
-    } finally {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-    }
-    return "unknown";
-  };
-
   const resolveIp = async () => {
     const cached = loadCachedIp();
     if (cached) {
       return cached;
     }
-    const ip = await fetchPublicIp();
+    const ip = "unknown";
     storeCachedIp(ip);
     return ip;
   };
@@ -691,13 +659,12 @@
     if (document.visibilityState === "prerender") {
       const onVisible = () => {
         document.removeEventListener("visibilitychange", onVisible);
-        resolveIp().then(recordView);
+        recordView("unknown");
       };
       document.addEventListener("visibilitychange", onVisible);
       return;
     }
-    const ip = await resolveIp();
-    recordView(ip);
+    recordView("unknown");
   };
 
   const exposeTracker = () => {
