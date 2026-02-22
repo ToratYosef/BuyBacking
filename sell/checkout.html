@@ -337,7 +337,7 @@
 
             <div class="mt-4">
                 <div id="recaptcha-container" class="recaptcha-wrap">
-                    <div id="checkout-recaptcha" class="g-recaptcha" data-callback="onCheckoutRecaptchaSuccess" data-expired-callback="onCheckoutRecaptchaExpired" data-error-callback="onCheckoutRecaptchaExpired"></div>
+                    <div id="checkout-recaptcha" data-callback="onCheckoutRecaptchaSuccess" data-expired-callback="onCheckoutRecaptchaExpired" data-error-callback="onCheckoutRecaptchaExpired"></div>
                 </div>
                 <div id="recaptcha-error" class="field-error-msg mt-2">Error: Please confirm you're not a robot</div>
             </div>
@@ -460,18 +460,112 @@
     const RECAPTCHA_SITE_KEY = "6LcAzHMsAAAAAKmkD3gbuO3662okbIai0-jaQM64";
 
     const recaptchaElement = document.getElementById('checkout-recaptcha');
-    if (recaptchaElement) {
-        recaptchaElement.setAttribute('data-sitekey', RECAPTCHA_SITE_KEY);
-    }
+    const recaptchaContainer = document.getElementById('recaptcha-container');
+    const recaptchaErrorEl = document.getElementById('recaptcha-error');
+    const RECAPTCHA_ACTION = 'submit_order';
+    let recaptchaMode = null; // 'v2' | 'v3'
+    let recaptchaWidgetId = null;
+    let recaptchaInitPromise = null;
+    let recaptchaPrefetchedToken = '';
+
+    const isInvalidKeyTypeError = (error) => /invalid key type/i.test(String(error?.message || error || ''));
+
+    const waitForGrecaptcha = async (timeoutMs = 10000) => {
+        const startedAt = Date.now();
+        while (Date.now() - startedAt < timeoutMs) {
+            if (window.grecaptcha && typeof window.grecaptcha.ready === 'function') return;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        throw new Error('reCAPTCHA is unavailable.');
+    };
+
+    const loadRecaptchaScript = (src) => new Promise((resolve, reject) => {
+        const existing = Array.from(document.querySelectorAll('script[src]')).find((script) => script.src === src);
+        if (existing) {
+            if (existing.dataset.loaded === '1') {
+                resolve();
+                return;
+            }
+            existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('error', () => reject(new Error('reCAPTCHA failed to load.')), { once: true });
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.defer = true;
+        script.addEventListener('load', () => {
+            script.dataset.loaded = '1';
+            resolve();
+        }, { once: true });
+        script.addEventListener('error', () => reject(new Error('reCAPTCHA failed to load.')), { once: true });
+        document.head.appendChild(script);
+    });
+
+    const initRecaptcha = async () => {
+        if (recaptchaInitPromise) return recaptchaInitPromise;
+
+        recaptchaInitPromise = (async () => {
+            if (recaptchaElement) {
+                recaptchaElement.setAttribute('data-sitekey', RECAPTCHA_SITE_KEY);
+            }
+
+            await waitForGrecaptcha();
+            await new Promise((resolve) => window.grecaptcha.ready(resolve));
+
+            try {
+                if (!recaptchaElement || typeof window.grecaptcha.render !== 'function') {
+                    throw new Error('reCAPTCHA is unavailable.');
+                }
+
+                recaptchaWidgetId = window.grecaptcha.render(recaptchaElement, {
+                    sitekey: RECAPTCHA_SITE_KEY,
+                    callback: window.onCheckoutRecaptchaSuccess,
+                    'expired-callback': window.onCheckoutRecaptchaExpired,
+                    'error-callback': window.onCheckoutRecaptchaExpired,
+                });
+                recaptchaMode = 'v2';
+            } catch (error) {
+                if (!isInvalidKeyTypeError(error)) {
+                    throw error;
+                }
+
+                recaptchaMode = 'v3';
+                if (recaptchaContainer) recaptchaContainer.classList.add('hidden');
+                if (recaptchaErrorEl) {
+                    recaptchaErrorEl.style.display = 'none';
+                    recaptchaErrorEl.textContent = "Error: Please confirm you're not a robot";
+                }
+
+                await loadRecaptchaScript(`https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(RECAPTCHA_SITE_KEY)}`);
+                await waitForGrecaptcha();
+                await new Promise((resolve) => window.grecaptcha.ready(resolve));
+            }
+        })();
+
+        return recaptchaInitPromise;
+    };
 
     const getRecaptchaToken = async () => {
+        await initRecaptcha();
+
+        if (recaptchaMode === 'v3') {
+            if (!window.grecaptcha || typeof window.grecaptcha.execute !== 'function') {
+                throw new Error('reCAPTCHA is unavailable.');
+            }
+            const token = await window.grecaptcha.execute(RECAPTCHA_SITE_KEY, { action: RECAPTCHA_ACTION });
+            if (!token) throw new Error('reCAPTCHA is required.');
+            return token;
+        }
+
         if (!window.grecaptcha || typeof window.grecaptcha.getResponse !== 'function') {
             throw new Error('reCAPTCHA is unavailable.');
         }
-        const token = window.grecaptcha.getResponse();
-        if (!token) {
-            throw new Error('reCAPTCHA is required.');
-        }
+        const token = recaptchaWidgetId != null
+            ? window.grecaptcha.getResponse(recaptchaWidgetId)
+            : window.grecaptcha.getResponse();
+        if (!token) throw new Error('reCAPTCHA is required.');
         return token;
     };
 
@@ -486,10 +580,23 @@
     };
 
     const resetRecaptchaWidget = () => {
-        if (window.grecaptcha && typeof window.grecaptcha.reset === 'function') {
+        recaptchaPrefetchedToken = '';
+        if (recaptchaMode === 'v2' && window.grecaptcha && typeof window.grecaptcha.reset === 'function') {
+            if (recaptchaWidgetId != null) {
+                window.grecaptcha.reset(recaptchaWidgetId);
+                return;
+            }
             window.grecaptcha.reset();
         }
     };
+
+    initRecaptcha().catch(() => {
+        if (recaptchaErrorEl) {
+            recaptchaErrorEl.textContent = "Error: reCAPTCHA failed to load. Please refresh and try again";
+            recaptchaErrorEl.style.display = 'block';
+        }
+        if (recaptchaContainer) recaptchaContainer.classList.add('error-highlight');
+    });
 
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEY = 'shc_cart';
@@ -980,7 +1087,8 @@
                 createdAt: new Date().toISOString()
             };
 
-            orderData.recaptchaToken = await getRecaptchaToken();
+            orderData.recaptchaToken = recaptchaPrefetchedToken || await getRecaptchaToken();
+            recaptchaPrefetchedToken = '';
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
@@ -1153,18 +1261,22 @@
             if (!firstErrorEl) firstErrorEl = termsContainer;
         }
 
-        const recaptchaAvailable = window.grecaptcha && typeof window.grecaptcha.getResponse === 'function';
-        const recaptchaToken = recaptchaAvailable ? window.grecaptcha.getResponse() : '';
+        let recaptchaToken = '';
+        try {
+            recaptchaToken = await getRecaptchaToken();
+        } catch (error) {
+            recaptchaToken = '';
+        }
         if (!recaptchaToken) {
             const recaptchaContainer = document.getElementById('recaptcha-container');
             const recaptchaError = document.getElementById('recaptcha-error');
-            recaptchaError.textContent = recaptchaAvailable
-                ? "Error: Please confirm you're not a robot"
-                : "Error: reCAPTCHA failed to load. Please refresh and try again";
+            recaptchaError.textContent = "Error: reCAPTCHA failed to validate. Please refresh and try again";
             recaptchaError.style.display = 'block';
             recaptchaContainer.classList.add('error-highlight');
             hasError = true;
             if (!firstErrorEl) firstErrorEl = recaptchaContainer;
+        } else {
+            recaptchaPrefetchedToken = recaptchaToken;
         }
 
         if (hasError) {
