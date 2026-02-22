@@ -59,7 +59,7 @@ curl -I https://secondhandcell.com/sellcell/feed.xml | grep -i x-cache-status
 curl -I https://secondhandcell.com/sellcell/feed.xml | grep -i x-cache-status
 
 # Static asset test (replace with real asset path)
-curl -I https://secondhandcell.com/assets/logo.webp | grep -iE 'x-cache-status|cache-control'
+curl -I https://cdn.secondhandcell.com/images/assets/logo.webp | grep -iE 'x-cache-status|cache-control'
 ```
 
 ## Optional: pair with Cloudflare

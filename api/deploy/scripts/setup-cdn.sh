@@ -123,5 +123,5 @@ Enabled link:
 
 Quick checks:
   curl -I https://${DOMAIN}/sellcell/feed.xml | grep -i x-cache-status
-  curl -I https://${DOMAIN}/assets/logo.webp | grep -iE 'x-cache-status|cache-control'
+  curl -I https://cdn.secondhandcell.com/images/assets/logo.webp | grep -iE 'x-cache-status|cache-control'
 DONE

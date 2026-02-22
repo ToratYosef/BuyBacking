@@ -2042,7 +2042,7 @@ app.get('/fix-issue/:orderId', async (req, res) => {
         <div class="logo-container-left">
           <a href="https://secondhandcell.com" class="logo-link" aria-label="SecondHandCell home">
             <img
-              src="https://secondhandcell.com/assets/logo.webp"
+              src="https://cdn.secondhandcell.com/images/assets/logo.webp"
               alt="SecondHandCell Logo"
               class="logo-image"
               width="320"
