@@ -158,6 +158,10 @@
     function normalizeStatusKey(status) {
       return String(status || "").trim().toLowerCase();
     }
+    function isCancelledStatusValue(status) {
+      const normalized = normalizeStatusKey(status);
+      return normalized === "cancelled" || normalized === "canceled";
+    }
     function isReceivedStatusValue(status) {
       return RECEIVED_VALUES.has(normalizeStatusKey(status));
     }
@@ -1867,6 +1871,11 @@
         
         if (!order) {
           toast("Order not found", "error");
+          return;
+        }
+
+        if (isCancelledStatusValue(order.status) || isCancelledStatusValue(getDeviceStatus(order, safeDeviceKey))) {
+          toast("QC is disabled for canceled orders/devices", "error");
           return;
         }
         
@@ -3973,6 +3982,12 @@
           const order = getSelectedOrder();
           if (!order) return;
 
+          const deviceStatus = getDeviceStatus(order, deviceKey);
+          if (isCancelledStatusValue(order.status) || isCancelledStatusValue(deviceStatus)) {
+            toast("QC is disabled for canceled orders/devices", "error");
+            return;
+          }
+
           state.selectedDeviceKey = deviceKey;
           state.qcDeviceKey = deviceKey;
           state.drawerTab = "overview";
@@ -3982,7 +3997,6 @@
           const entry = entries.find((item) => item.deviceIndex === parsed.deviceIndex) || entries[0] || { item: order };
           const item = entry.item || order;
           const unlockInfo = getDeviceUnlockInfo(order, deviceKey);
-          const deviceStatus = getDeviceStatus(order, deviceKey);
 
           if (isScreenLockOnlyResolved(order, deviceKey)) {
             state.qcOpen = false;
@@ -4048,6 +4062,12 @@
           
           const order = getSelectedOrder();
           if (!order) return;
+
+          const deviceStatus = getDeviceStatus(order, deviceKey);
+          if (isCancelledStatusValue(order.status) || isCancelledStatusValue(deviceStatus)) {
+            toast("QC is disabled for canceled orders/devices", "error");
+            return;
+          }
           
           // Close menu
           const menu = document.querySelector(`[data-device-menu="${CSS.escape(deviceKey)}"]`);
@@ -4290,6 +4310,15 @@
           syncStepInputs();
           const qcSnapshot = { ...(state.qcData || {}) };
           const deviceKey = state.qcDeviceKey || buildOrderDeviceKey(order.id, 0);
+          if (isCancelledStatusValue(order.status) || isCancelledStatusValue(getDeviceStatus(order, deviceKey))) {
+            toast("QC is disabled for canceled orders/devices", "error");
+            state.qcOpen = false;
+            state.qcStep = 1;
+            state.qcData = null;
+            state.qcDeviceKey = null;
+            render();
+            return;
+          }
           await saveQc(order.id, deviceKey, qcSnapshot);
           const qcOutcome = await processQcOutcome(order, qcSnapshot, deviceKey);
           state.qcOpen = false;
