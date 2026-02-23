@@ -559,6 +559,7 @@
     const state = {
       user: null,
       authLoading: true,
+      authError: "",
       sidebarOpen: false,
       // orders master + filtered
       allOrders: [],
@@ -2091,6 +2092,14 @@
                     <div class="ml-3"><h3 class="text-sm font-medium text-rose-800">Invalid email or password. Please try again.</h3></div>
                   </div>
                 </div>
+                ${state.authError ? `
+                <div class="rounded-md border border-rose-200 bg-rose-50 p-4">
+                  <div class="flex">
+                    <div class="flex-shrink-0"><i data-lucide="shield-alert" class="h-5 w-5 text-rose-500"></i></div>
+                    <div class="ml-3"><h3 class="text-sm font-medium text-rose-800">${esc(state.authError)}</h3></div>
+                  </div>
+                </div>
+                ` : ""}
                 <div>
                   <button id="loginBtn" type="submit"
                     class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 transition-all">
@@ -2114,6 +2123,7 @@
       const spinner = document.getElementById("loginSpinner");
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
+        state.authError = "";
         errEl.classList.add("hidden");
         btn.disabled = true;
         btnText.classList.add("hidden");
@@ -4869,37 +4879,81 @@
     // ----------------------------
     // AUTH
     // ----------------------------
-    onAuthStateChanged(auth, (u) => {
-      state.user = u || null;
-      state.authLoading = false;
-      if (state.user) {
-        startOrdersListener();
-      } else {
-        if (unsubscribeOrders) unsubscribeOrders();
-        unsubscribeOrders = null;
-        state.allOrders = [];
-        state.currentFilteredOrders = [];
-        state.currentFilteredDevices = [];
-        state.currentActiveStatus = "all";
-        state.currentSearchTerm = "";
-        state.selectedOrderIds.clear();
-        state.lastRenderedDeviceKeys = [];
-        state.selectedOrderId = null;
-        state.selectedOrderSnapshot = null;
-        state.statusDropdownOpen = false;
-        state.qcOpen = false;
-        state.qcStep = 1;
-        state.qcData = null;
-        state.reofferOpen = false;
-        state.reofferData = null;
-        state.unlockInfoModalOpen = false;
-        state.unlockInfoModalData = null;
-        state.orderTextImportOpen = false;
-        state.modalScrollTop = { qc: 0, reoffer: 0, import: 0 };
-        state.sidebarOpen = false;
+    function resetAdminState() {
+      if (unsubscribeOrders) unsubscribeOrders();
+      unsubscribeOrders = null;
+      state.allOrders = [];
+      state.currentFilteredOrders = [];
+      state.currentFilteredDevices = [];
+      state.currentActiveStatus = "all";
+      state.currentSearchTerm = "";
+      state.selectedOrderIds.clear();
+      state.lastRenderedDeviceKeys = [];
+      state.selectedOrderId = null;
+      state.selectedOrderSnapshot = null;
+      state.statusDropdownOpen = false;
+      state.qcOpen = false;
+      state.qcStep = 1;
+      state.qcData = null;
+      state.reofferOpen = false;
+      state.reofferData = null;
+      state.unlockInfoModalOpen = false;
+      state.unlockInfoModalData = null;
+      state.orderTextImportOpen = false;
+      state.modalScrollTop = { qc: 0, reoffer: 0, import: 0 };
+      state.sidebarOpen = false;
+    }
+
+    async function isUidAdmin(uid) {
+      if (!uid) return false;
+      const adminRef = doc(db, "admins", uid);
+      const adminSnap = await getDoc(adminRef);
+      return adminSnap.exists();
+    }
+
+    let authCheckVersion = 0;
+    onAuthStateChanged(auth, async (u) => {
+      const currentCheckVersion = ++authCheckVersion;
+
+      if (!u) {
+        state.user = null;
+        state.authLoading = false;
+        resetAdminState();
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+        return;
       }
-      // initial filter
-      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+
+      state.authLoading = true;
+      render();
+
+      try {
+        const allowed = await isUidAdmin(u.uid);
+        if (currentCheckVersion !== authCheckVersion) return;
+
+        if (!allowed) {
+          state.user = null;
+          state.authLoading = false;
+          state.authError = "Access denied. This account is not listed in admins.";
+          resetAdminState();
+          try { await signOut(auth); } catch (signOutErr) { console.error(signOutErr); }
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+          return;
+        }
+
+        state.authError = "";
+        state.user = u;
+        state.authLoading = false;
+        startOrdersListener();
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+      } catch (err) {
+        console.error("Admin access check failed:", err);
+        state.user = null;
+        state.authLoading = false;
+        state.authError = "Could not verify admin access. Please try again.";
+        resetAdminState();
+        try { await signOut(auth); } catch (signOutErr) { console.error(signOutErr); }
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+      }
     });
     // first paint (auth spinner)
     render();
