@@ -908,7 +908,7 @@
 
     <script type="module">
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getFirestore, doc, getDoc, getDocs, collection, addDoc, serverTimestamp, runTransaction, setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+import { getFirestore, doc, getDoc, getDocs, collection, addDoc, setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
 
 // Firebase configuration (from assets/js/firebase-config.js)
@@ -1116,17 +1116,6 @@ const applyPopularPricing = async () => {
 
 document.addEventListener('DOMContentLoaded', applyPopularPricing);
 
-const trackAnalyticsEvent = (label, metadata = {}) => {
-    try {
-        const tracker = window.PageTracker;
-        if (tracker && typeof tracker.recordConversion === 'function') {
-            tracker.recordConversion({ label, metadata });
-        }
-    } catch (error) {
-        console.warn('Analytics tracking error:', error);
-    }
-};
-
 const currency = (value) => `$${Math.round(value).toLocaleString()}`;
 const OVERPAY_IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
 const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
@@ -1211,14 +1200,6 @@ function renderOverpayDevices(devices) {
 
         const cta = card.querySelector('.overpay-cta');
         const navigate = () => {
-            trackAnalyticsEvent('trackOverpayClick', {
-                device: device.slug,
-                brand: device.brand,
-                storage: device.storage,
-                carrier: device.carrier,
-                bonus: Number(device.bonus)
-            });
-            trackButtonClick(`Overpay_Device_${device.name.replace(/\s+/g, '_')}`);
             window.location.href = buildOverpaySellUrl(device);
         };
 
@@ -1330,49 +1311,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // Home page logic (from assets/js/pages/index-b8699033.js)
 setLogLevel('error');
 
-// --- Firebase Click Tracker Function ---
-const trackButtonClick = async (buttonName) => {
-    const cleanedButtonName = buttonName.replace(/\s/g, '_').replace(/'/g, '');
-    const buttonDocRef = doc(db, "button_clicks", cleanedButtonName);
-    const userId = auth.currentUser?.uid || getOrCreateGuestId();
-
-    try {
-        await runTransaction(db, async (transaction) => {
-            const buttonDoc = await transaction.get(buttonDocRef);
-            const historyEntry = { timestamp: new Date(), userId: userId };
-            if (!buttonDoc.exists()) {
-                transaction.set(buttonDocRef, {
-                    count: 1,
-                    buttonName: buttonName,
-                    history: [historyEntry],
-                    lastClicked: serverTimestamp()
-                });
-            } else {
-                const data = buttonDoc.data();
-                const previousHistory = Array.isArray(data.history) ? data.history : [];
-                const updatedHistory = [...previousHistory, historyEntry];
-                transaction.update(buttonDocRef, {
-                    count: (data.count || 0) + 1,
-                    history: updatedHistory,
-                    lastClicked: serverTimestamp()
-                });
-            }
-        });
-        console.log(`Click on '${buttonName}' successfully tracked and updated.`);
-    } catch (error) {
-        console.error("Transaction failed: ", error);
-    }
-};
-
-const getOrCreateGuestId = () => {
-    let id = localStorage.getItem('shcGuestId');
-    if (!id) {
-        id = `guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-        localStorage.setItem('shcGuestId', id);
-    }
-    return id;
-};
-
 document.addEventListener('DOMContentLoaded', function() {
     // Image loading with fallback
     function loadImageWithFallback(imgElement) {
@@ -1459,37 +1397,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Click tracking for buttons
-    const heroOfferBtn = document.getElementById('heroOfferBtn');
-    if (heroOfferBtn) {
-        heroOfferBtn.addEventListener('click', () => trackButtonClick('Hero_Get_Instant_Offer'));
-    }
-
-    const finalOfferBtn = document.getElementById('finalOfferBtn');
-    if (finalOfferBtn) {
-        finalOfferBtn.addEventListener('click', () => trackButtonClick('Final_Sell_Device_Now'));
-    }
-
-    document.querySelectorAll('.feature-card h3').forEach(card => {
-        card.addEventListener('click', () => {
-            trackButtonClick(`Feature_Card_${card.textContent.trim()}`);
-        });
-    });
-
-    document.querySelectorAll('.homepage-card-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-            const deviceName = e.currentTarget.querySelector('h3').textContent;
-            trackButtonClick(`Popular_Device_Get_Offer_${deviceName}`);
-        });
-    });
-
-    document.querySelectorAll('.review-link-card').forEach(link => {
-        link.addEventListener('click', () => {
-            const platformName = link.querySelector('span.font-bold')?.textContent || "Review_Site";
-            trackButtonClick(`External_Review_Click_${platformName.replace(/\s/g, '_')}`);
-        });
-    });
-
     // Footer email signup
     const footerEmailSignupForm = document.getElementById('footerEmailSignupForm');
     let footerSignupMessage = document.getElementById('footerSignupMessage');
@@ -1519,7 +1426,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 footerSignupMessage.textContent = 'Success! Thanks for signing up.';
                 footerSignupMessage.className = 'mt-3 text-sm text-center text-green-300';
                 footerEmailSignupForm.reset();
-                trackButtonClick('Footer_Email_Signup');
             } catch (error) {
                 console.error("Error adding document: ", error);
                 footerSignupMessage.textContent = 'Error: Could not sign up.';
@@ -1829,6 +1735,5 @@ function setupScrollAnimations() {
 
 <script type="module" src="/assets/js/global-auth.js" defer></script>
 <script src="/assets/js/policy-modals.js" defer></script>
-  <script src="/assets/js/page-tracker.js" defer></script>
 </body>
 </html>
