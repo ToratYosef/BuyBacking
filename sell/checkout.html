@@ -434,7 +434,7 @@
 <script type="module">
     import { getFirebaseApp } from "/assets/js/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, collection, doc, getDoc, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { apiPost } from "/public/js/apiClient.js";
 
     const app = getFirebaseApp();
@@ -446,6 +446,10 @@
     const CART_STORAGE_KEY = 'shc_cart';
     const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken' };
     const CONDITION_KEYS = Object.keys(CONDITION_LABELS);
+    const BRAND_OPTIONS = [
+        { key: 'iphone', label: 'iPhone' },
+        { key: 'samsung', label: 'Samsung' }
+    ];
     let cartItems = [];
     const zipInput = document.getElementById('zip');
     const submitOrderBtn = document.getElementById('submitOrderBtn');
@@ -739,17 +743,116 @@
         saveCart(cartItems);
     };
 
+    const normalizeParam = (val) => (val || '').trim().toLowerCase();
+    const slugify = (val) => normalizeParam(val).replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const normalizeBrandKey = (brand) => {
+        const normalized = normalizeParam(brand);
+        if (normalized === 'apple' || normalized === 'iphone') return 'iphone';
+        if (normalized === 'samsung' || normalized === 'galaxy') return 'samsung';
+        return normalized;
+    };
+    const getBrandSlugAliases = (brand) => {
+        const brandKey = normalizeBrandKey(brand);
+        if (brandKey === 'iphone') return ['iphone', 'apple'];
+        if (brandKey === 'samsung') return ['samsung', 'galaxy'];
+        return [brandKey].filter(Boolean);
+    };
+    const normalizeBrandForDevice = (brand) => normalizeBrandKey(brand);
+    const buildCanonicalDeviceSlug = (brand, model) => {
+        const brandSlug = normalizeBrandForDevice(brand);
+        const modelSlug = slugify(model);
+        if (!brandSlug || !modelSlug) return '';
+        return modelSlug.startsWith(`${brandSlug}-`) ? modelSlug : `${brandSlug}-${modelSlug}`;
+    };
+    const normalizeCarrier = (value) => {
+        const carrier = normalizeParam(value).replace(/\s+/g, '');
+        if (carrier.includes('t-mobile') || carrier.includes('tmobile')) return 'tmobile';
+        if (carrier.includes('att') || carrier.includes('at&t')) return 'att';
+        if (carrier.includes('verizon')) return 'verizon';
+        if (carrier.includes('unlocked')) return 'unlocked';
+        if (carrier.includes('locked')) return 'locked';
+        if (carrier.includes('other')) return 'other';
+        return carrier;
+    };
+    const mapQualityToCondition = (quality) => {
+        const normalized = normalizeParam(quality);
+        if (['flawless', 'excellent', 'like-new', 'likenew', 'mint'].includes(normalized)) return 'flawless';
+        if (['good'].includes(normalized)) return 'good';
+        if (['fair'].includes(normalized)) return 'fair';
+        if (['broken', 'poor', 'damaged'].includes(normalized)) return 'broken';
+        return '';
+    };
+    const getMatchingKey = (keys, value) => {
+        const normalized = normalizeParam(value);
+        if (!normalized) return '';
+        return keys.find((k) => normalizeParam(k) === normalized) || '';
+    };
+    const getModels = async (brand) => {
+        const colRef = collection(db, 'devices', brand, 'models');
+        const snap = await getDocs(colRef);
+        return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    };
+    const findModelBySlug = async (slug, brandOverride = '') => {
+        if (!slug) return null;
+        const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
+        const normalizedBrandOverride = normalizeBrandKey(brandOverride);
+        const isSupportedBrandOverride = BRAND_OPTIONS.some((b) => b.key === normalizedBrandOverride);
+        const brands = isSupportedBrandOverride ? [normalizedBrandOverride] : BRAND_OPTIONS.map((b) => b.key);
+        const addBrandSlugVariants = (candidates, brandToken) => {
+            const token = normalizeParam(brandToken).replace(/(^-|-$)/g, '');
+            if (!token) return;
+            const snapshot = [...candidates];
+            snapshot.forEach((candidate) => {
+                if (!candidate) return;
+                if (candidate.startsWith(`${token}-`)) {
+                    candidates.add(candidate.slice(token.length + 1));
+                } else {
+                    candidates.add(`${token}-${candidate}`);
+                }
+            });
+        };
+        for (const brand of brands) {
+            const slugCandidates = new Set([rawSlug]);
+            getBrandSlugAliases(brand).forEach((brandToken) => addBrandSlugVariants(slugCandidates, brandToken));
+
+            const models = await getModels(brand);
+            const match = models.find((model) => {
+                const modelSlug = normalizeParam(model.id);
+                const nameSlug = slugify(model.name);
+                const canonicalById = buildCanonicalDeviceSlug(brand, model.id);
+                const canonicalByName = buildCanonicalDeviceSlug(brand, model.name);
+                return [...slugCandidates].some((candidate) => (
+                    candidate === modelSlug
+                    || candidate === nameSlug
+                    || candidate === canonicalById
+                    || candidate === canonicalByName
+                ));
+            });
+            if (match) return { brand, model: match };
+        }
+        return null;
+    };
+
     const init = async () => {
         cartItems = getCart();
         placeSummaryByViewport();
 
-        const b = params.get('brand');
-        const m = params.get('model'); 
+        let b = normalizeBrandKey(params.get('brand') || '');
+        let m = params.get('model') || '';
+        const deviceParam = params.get('device') || '';
         const s = params.get('storage');
-        const l = params.get('lock');
-        const c = params.get('condition');
+        const l = params.get('lock') || params.get('carrier');
+        const c = params.get('condition') || mapQualityToCondition(params.get('quality'));
         const qty = parseInt(params.get('qty') || '1');
         const normalizedQty = Math.max(1, Number.isFinite(qty) ? qty : 1);
+
+        if ((!b || !m) && deviceParam) {
+            const modelMatch = await findModelBySlug(deviceParam, b);
+            if (modelMatch) {
+                b = modelMatch.brand;
+                m = modelMatch.model.id;
+            }
+        }
 
         if (!b && !m && !s && !l && !c && cartItems.length === 1 && params.has('qty')) {
             cartItems[0].qty = normalizedQty;
@@ -764,15 +867,17 @@
                     const data = snap.data();
                     const getVal = (obj, key) => obj[key] || obj[key.toLowerCase()] || obj[key.toUpperCase()];
                     const storageMap = getVal(data.prices, s) || {};
-                    const lockMap = getVal(storageMap, l) || {};
-                    const unitPrice = lockMap[c] || 0;
+                    const lockKey = getMatchingKey(Object.keys(storageMap), normalizeCarrier(l));
+                    const lockMap = getVal(storageMap, lockKey || l) || {};
+                    const normalizedCondition = mapQualityToCondition(c) || normalizeParam(c);
+                    const unitPrice = lockMap[normalizedCondition] || lockMap[c] || 0;
                     addItemToCart({
                         brand: b,
                         model: m,
                         modelName: data.name,
                         storage: s,
-                        lock: l,
-                        condition: c,
+                        lock: lockKey || l,
+                        condition: normalizedCondition || c,
                         qty: normalizedQty,
                         unitPrice: unitPrice,
                         conditionPrices: lockMap

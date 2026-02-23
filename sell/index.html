@@ -1053,10 +1053,20 @@
 
     const normalizeParam = (val) => (val || '').trim().toLowerCase();
     const slugify = (val) => normalizeParam(val).replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const normalizeBrandForDevice = (brand) => {
+    const normalizeBrandKey = (brand) => {
         const normalized = normalizeParam(brand);
-        if (normalized === 'apple') return 'iphone';
+        if (normalized === 'apple' || normalized === 'iphone') return 'iphone';
+        if (normalized === 'samsung' || normalized === 'galaxy') return 'samsung';
         return normalized;
+    };
+    const getBrandSlugAliases = (brand) => {
+        const brandKey = normalizeBrandKey(brand);
+        if (brandKey === 'iphone') return ['iphone', 'apple'];
+        if (brandKey === 'samsung') return ['samsung', 'galaxy'];
+        return [brandKey].filter(Boolean);
+    };
+    const normalizeBrandForDevice = (brand) => {
+        return normalizeBrandKey(brand);
     };
     const buildCanonicalDeviceSlug = (brand, model) => {
         const brandSlug = normalizeBrandForDevice(brand);
@@ -1822,7 +1832,9 @@
     const findModelBySlug = async (slug, brandOverride = '') => {
         if (!slug) return null;
         const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
-        const brands = brandOverride ? [brandOverride] : BRAND_OPTIONS.map(b => b.key);
+        const normalizedBrandOverride = normalizeBrandKey(brandOverride);
+        const isSupportedBrandOverride = BRAND_OPTIONS.some((b) => b.key === normalizedBrandOverride);
+        const brands = isSupportedBrandOverride ? [normalizedBrandOverride] : BRAND_OPTIONS.map(b => b.key);
         const addBrandSlugVariants = (candidates, brandToken) => {
             const token = normalizeParam(brandToken).replace(/(^-|-$)/g, '');
             if (!token) return;
@@ -1841,8 +1853,7 @@
 
             // Support both canonical prefixes (e.g. iphone-*) and literal brand prefixes
             // (e.g. apple-*) so both link styles hydrate correctly.
-            addBrandSlugVariants(slugCandidates, normalizeBrandForDevice(brand));
-            addBrandSlugVariants(slugCandidates, brand);
+            getBrandSlugAliases(brand).forEach((brandToken) => addBrandSlugVariants(slugCandidates, brandToken));
 
             const models = await getModels(brand);
             const match = models.find(model => {
