@@ -653,6 +653,16 @@
       render();
     }
 
+    function getOrderForTopGenerateShippingLabel() {
+      if (state.selectedOrderId) {
+        return state.allOrders.find(o => o.id === state.selectedOrderId) || state.selectedOrderSnapshot || null;
+      }
+      const selectedIds = Array.from(state.selectedOrderIds || []);
+      if (selectedIds.length !== 1) return null;
+      const selectedId = selectedIds[0];
+      return state.allOrders.find(o => o.id === selectedId) || null;
+    }
+
     function closeShippingLabelModal() {
       state.shippingLabelModalOpen = false;
       state.shippingLabelSubmitting = false;
@@ -2327,6 +2337,12 @@
                 <i data-lucide="shield-x" style="width:18px;height:18px"></i>
                 ${state.bulkVoidAgedInProgress ? 'Voiding 27+ Day Orders…' : 'Bulk Void 27+ Day Orders'}
               </button>
+              <button id="bulk-generate-shipping-label"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${getOrderForTopGenerateShippingLabel() ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}"
+                ${!getOrderForTopGenerateShippingLabel() ? 'disabled' : ''}>
+                <i data-lucide="package-plus" style="width:18px;height:18px"></i>
+                Generate Shipping Label
+              </button>
               <button id="bulk-void-test-orders"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidTestInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200'}"
                 ${state.bulkVoidTestInProgress ? 'disabled' : ''}>
@@ -3170,7 +3186,6 @@
         }
         // Print Packing Slip with better styling
         groups.tracking.push({ label: "Print Packing Slip", action: "printPacking", class: "bg-blue-600 text-white hover:bg-blue-700" });
-        groups.tracking.push({ label: "Generate Shipping Label", action: "openShippingLabelModal", class: "bg-indigo-600 text-white hover:bg-indigo-700" });
         // Delete and Cancel buttons on same line
         if (status !== 'cancelled') {
           groups.tracking.push({ label: "Cancel Order", action: "cancelOrder", class: "text-white bg-orange-600 hover:bg-orange-700" });
@@ -4076,6 +4091,17 @@
       if (btnBulkVoidTestOrders) {
         btnBulkVoidTestOrders.addEventListener("click", () => runBulkVoidTestOrders(btnBulkVoidTestOrders));
       }
+      const btnBulkGenerateShippingLabel = document.getElementById("bulk-generate-shipping-label");
+      if (btnBulkGenerateShippingLabel) {
+        btnBulkGenerateShippingLabel.addEventListener("click", () => {
+          const targetOrder = getOrderForTopGenerateShippingLabel();
+          if (!targetOrder) {
+            toast("Select exactly one order first.", "error");
+            return;
+          }
+          openShippingLabelModal(targetOrder);
+        });
+      }
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
         el.addEventListener("click", () => {
@@ -4296,10 +4322,6 @@
             if (action === "reOffer") {
               await openReofferModal(order, state.qcData);
               render();
-              return;
-            }
-            if (action === "openShippingLabelModal") {
-              openShippingLabelModal(order);
               return;
             }
             if (action === "payNow") {
