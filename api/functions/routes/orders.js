@@ -1808,6 +1808,71 @@ function createOrdersRouter({
     }
   });
 
+  router.post('/manual-shipping-label', async (req, res) => {
+    try {
+      const directionRaw = String(req.body?.direction || '').trim().toLowerCase();
+      const direction = directionRaw || 'customer_to_me';
+      if (!['customer_to_me', 'me_to_customer'].includes(direction)) {
+        return res.status(400).json({
+          error: 'direction must be either customer_to_me or me_to_customer.',
+        });
+      }
+
+      const customerAddress = normalizeCustomerAddress(req.body?.customerAddress || {}, {});
+      const shcAddress = {
+        name: 'SHC Returns',
+        company_name: 'SecondHandCell',
+        phone: '3475591707',
+        address_line1: '1602 McDonald Ave Ste Rear',
+        city_locality: 'Brooklyn',
+        state_province: 'NY',
+        postal_code: '11230-6336',
+        country_code: 'US',
+      };
+
+      const fromAddress = direction === 'customer_to_me' ? customerAddress : shcAddress;
+      const toAddress = direction === 'customer_to_me' ? shcAddress : customerAddress;
+
+      const deviceCount = Math.max(1, Number(req.body?.deviceCount) || 1);
+      const shippingProfile = resolveUspsServiceAndWeightByDeviceCount(deviceCount);
+      const packageData = {
+        service_code: shippingProfile.serviceCode,
+        dimensions: { unit: 'inch', height: 2, width: 4, length: 6 },
+        weight: { value: shippingProfile.weightOz, unit: 'ounce' },
+      };
+
+      const labelReference = `MANUAL-${Date.now()}-${direction === 'customer_to_me' ? 'CUSTOMER-TO-ME' : 'ME-TO-CUSTOMER'}`;
+      const labelData = await createShipEngineLabel(
+        fromAddress,
+        toAddress,
+        labelReference,
+        packageData,
+        {
+          direction,
+          deviceCount,
+          chosenService: shippingProfile.chosenService,
+          weightOz: shippingProfile.weightOz,
+          blocks: shippingProfile.blocks,
+        }
+      );
+
+      return res.json({
+        message: 'Manual shipping label generated successfully.',
+        direction,
+        labelDownloadUrl: labelData?.label_download?.pdf || null,
+        trackingNumber: labelData?.tracking_number || null,
+      });
+    } catch (error) {
+      const responseData = error.response?.data || error.responseData;
+      const statusCode = error.status || error.response?.status || 500;
+      console.error('Error generating standalone manual shipping label:', responseData || error.message || error);
+      return res.status(statusCode).json({
+        error: 'Failed to generate manual shipping label',
+        details: responseData || error.message,
+      });
+    }
+  });
+
   router.post('/orders/:id/void-label', async (req, res) => {
     try {
       const orderId = req.params.id;
