@@ -106,7 +106,7 @@
     <script type="module" src="/assets/js/global-auth.js" defer></script>
     <script>
         (function hydrateCheckoutSummary() {
-            const CART_STORAGE_KEY = 'shc_cart';
+            const CART_STORAGE_KEYS = ['shc_cart', 'shcOrderSummary'];
             const deviceLabelEl = document.getElementById('checkout-summary-device-label');
             const devicePriceEl = document.getElementById('checkout-summary-device-price');
             const subtotalEl = document.getElementById('checkout-summary-subtotal');
@@ -114,12 +114,46 @@
 
             if (!deviceLabelEl || !devicePriceEl || !subtotalEl || !totalEl) return;
 
-            let cart = [];
-            try {
-                cart = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '[]');
-            } catch (err) {
-                cart = [];
-            }
+            const toNumber = (value) => {
+                const parsed = Number(value);
+                return Number.isFinite(parsed) ? parsed : 0;
+            };
+
+            const getItemUnitPrice = (item = {}) => {
+                const qty = Math.max(1, Math.floor(toNumber(item.qty || 1)));
+                if (Number.isFinite(Number(item.unitPrice))) return toNumber(item.unitPrice);
+                if (Number.isFinite(Number(item.price))) return toNumber(item.price);
+                if (Number.isFinite(Number(item.payout))) return toNumber(item.payout);
+                if (Number.isFinite(Number(item.offerAmount))) return toNumber(item.offerAmount);
+                if (Number.isFinite(Number(item.totalPayout))) return toNumber(item.totalPayout) / qty;
+                if (Number.isFinite(Number(item.estimatedQuote))) return toNumber(item.estimatedQuote) / qty;
+                return 0;
+            };
+
+            const getModelName = (item = {}) => item.modelName || item.model || item.device || 'Device';
+
+            const readCart = () => {
+                for (const key of CART_STORAGE_KEYS) {
+                    try {
+                        const raw = localStorage.getItem(key);
+                        if (!raw) continue;
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed) && parsed.length) return parsed;
+                        if (Array.isArray(parsed?.items) && parsed.items.length) return parsed.items;
+                    } catch (err) {
+                        // Continue to next storage key.
+                    }
+                }
+
+                const query = new URLSearchParams(window.location.search);
+                const queryModel = query.get('model') || query.get('modelName') || query.get('device');
+                const queryPrice = toNumber(query.get('price') || query.get('unitPrice') || query.get('estimatedQuote') || query.get('totalPayout'));
+                const queryQty = Math.max(1, Math.floor(toNumber(query.get('qty') || 1)));
+                if (!queryModel && queryPrice <= 0) return [];
+                return [{ modelName: queryModel || 'Device', qty: queryQty, unitPrice: queryPrice }];
+            };
+
+            const cart = readCart();
 
             if (!Array.isArray(cart) || !cart.length) return;
 
@@ -128,11 +162,11 @@
             const modelNames = [];
 
             cart.forEach((item) => {
-                const qty = Math.max(1, Math.floor(Number(item.qty || 1)));
-                const unitPrice = Number(item.unitPrice || 0);
+                const qty = Math.max(1, Math.floor(toNumber(item.qty || 1)));
+                const unitPrice = getItemUnitPrice(item);
                 totalQty += qty;
                 subtotal += unitPrice * qty;
-                modelNames.push(item.modelName || item.model || 'Device');
+                modelNames.push(getModelName(item));
             });
 
             const firstModel = modelNames[0] || 'Device';
