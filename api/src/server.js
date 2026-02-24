@@ -19,7 +19,6 @@ const refreshTrackingRouter = require('./routes/refreshTracking');
 const manualFulfillRouter = require('./routes/manualFulfill');
 const adminUsersRouter = require('./routes/adminUsers');
 const supportRouter = require('./routes/support');
-const neonDataRouter = require('./routes/neonData');
 const { notFoundHandler, errorHandler } = require('./utils/errors');
 
 const {
@@ -2252,11 +2251,6 @@ const publicExactPaths = new Set([
   '/submit-order',
   '/email-support',
   '/submit-chat-feedback',
-  '/neon/doc',
-  '/neon/query',
-  '/neon/add',
-  '/neon/set',
-  '/neon/update',
 ]);
 const publicPrefixPaths = ['/wholesale'];
 
@@ -2386,7 +2380,6 @@ apiRouter.use(refreshTrackingRouter);
 apiRouter.use(manualFulfillRouter);
 apiRouter.use(adminUsersRouter);
 apiRouter.use(supportRouter);
-apiRouter.use(neonDataRouter);
 
 apiRouter.use(expressApp);
 
