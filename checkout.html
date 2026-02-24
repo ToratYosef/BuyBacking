@@ -83,17 +83,17 @@
                 <aside class="bg-white rounded-3xl p-6 shadow-md h-fit">
                     <h3 class="text-lg font-semibold text-slate-900 mb-4">Order Summary</h3>
                     <div class="flex items-center justify-between text-sm text-slate-600">
-                        <span>Device</span>
-                        <span>$0.00</span>
+                        <span id="checkout-summary-device-label">Device</span>
+                        <span id="checkout-summary-device-price">$0.00</span>
                     </div>
                     <div class="my-4 border-t border-slate-200"></div>
                     <div class="flex items-center justify-between text-sm text-slate-600">
                         <span>Order Subtotal</span>
-                        <span>$0.00</span>
+                        <span id="checkout-summary-subtotal">$0.00</span>
                     </div>
                     <div class="flex items-center justify-between text-sm font-semibold text-slate-900 mt-2">
                         <span>Order Total</span>
-                        <span>$0.00</span>
+                        <span id="checkout-summary-total">$0.00</span>
                     </div>
                     <div class="mt-4 border-t border-slate-200 pt-4">
                         <input type="text" placeholder="Offer code" class="w-full rounded-full border border-slate-200 px-4 py-2 text-sm">
@@ -104,6 +104,44 @@
     </main>
 
     <script type="module" src="/assets/js/global-auth.js" defer></script>
+    <script>
+        (function hydrateCheckoutSummary() {
+            const CART_STORAGE_KEY = 'shc_cart';
+            const deviceLabelEl = document.getElementById('checkout-summary-device-label');
+            const devicePriceEl = document.getElementById('checkout-summary-device-price');
+            const subtotalEl = document.getElementById('checkout-summary-subtotal');
+            const totalEl = document.getElementById('checkout-summary-total');
+
+            if (!deviceLabelEl || !devicePriceEl || !subtotalEl || !totalEl) return;
+
+            let cart = [];
+            try {
+                cart = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '[]');
+            } catch (err) {
+                cart = [];
+            }
+
+            if (!Array.isArray(cart) || !cart.length) return;
+
+            let totalQty = 0;
+            let subtotal = 0;
+            const modelNames = [];
+
+            cart.forEach((item) => {
+                const qty = Math.max(1, Math.floor(Number(item.qty || 1)));
+                const unitPrice = Number(item.unitPrice || 0);
+                totalQty += qty;
+                subtotal += unitPrice * qty;
+                modelNames.push(item.modelName || item.model || 'Device');
+            });
+
+            const firstModel = modelNames[0] || 'Device';
+            deviceLabelEl.textContent = totalQty > 1 ? `${firstModel} + ${totalQty - 1} more` : firstModel;
+            devicePriceEl.textContent = `$${subtotal.toFixed(2)}`;
+            subtotalEl.textContent = `$${subtotal.toFixed(2)}`;
+            totalEl.textContent = `$${subtotal.toFixed(2)}`;
+        }());
+    </script>
 
 <footer class="bg-slate-800 text-white">
     <div class="container mx-auto px-4 py-12">
