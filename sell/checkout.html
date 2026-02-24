@@ -443,7 +443,7 @@
     const appId = "buyback-a0f05";
 
     const params = new URLSearchParams(window.location.search);
-    const CART_STORAGE_KEY = 'shc_cart';
+    const CART_STORAGE_KEYS = ['shc_cart', 'shcOrderSummary'];
     const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken' };
     const CONDITION_KEYS = Object.keys(CONDITION_LABELS);
     const BRAND_OPTIONS = [
@@ -529,15 +529,51 @@
         }
     });
 
+    const toNumber = (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const getItemUnitPrice = (item = {}) => {
+        const qty = Math.max(1, Math.floor(toNumber(item.qty || 1)));
+        if (Number.isFinite(Number(item.unitPrice))) return toNumber(item.unitPrice);
+        if (Number.isFinite(Number(item.price))) return toNumber(item.price);
+        if (Number.isFinite(Number(item.payout))) return toNumber(item.payout);
+        if (Number.isFinite(Number(item.offerAmount))) return toNumber(item.offerAmount);
+        if (Number.isFinite(Number(item.totalPayout))) return toNumber(item.totalPayout) / qty;
+        if (Number.isFinite(Number(item.estimatedQuote))) return toNumber(item.estimatedQuote) / qty;
+        return 0;
+    };
+    const normalizeCartItem = (item = {}) => {
+        const qty = Math.max(1, Math.floor(toNumber(item.qty || 1)));
+        const unitPrice = getItemUnitPrice(item);
+        const modelName = item.modelName || item.model || item.device || 'Device';
+        return {
+            ...item,
+            modelName,
+            qty,
+            unitPrice,
+            storage: item.storage || item.capacity || '',
+            lock: item.lock || item.carrier || '',
+            condition: item.condition || item.condition_cosmetic || item.cosmeticCondition || '',
+            conditionPrices: item.conditionPrices || null
+        };
+    };
     const getCart = () => {
-        try {
-            return JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '[]');
-        } catch (e) {
-            return [];
+        for (const key of CART_STORAGE_KEYS) {
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) continue;
+                const parsed = JSON.parse(raw);
+                const items = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.items) ? parsed.items : []);
+                if (items.length) return items.map(normalizeCartItem);
+            } catch (e) {
+                // ignore this key and continue
+            }
         }
+        return [];
     };
     const saveCart = (cart) => {
-        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+        localStorage.setItem('shc_cart', JSON.stringify(cart.map(normalizeCartItem)));
     };
     const getTotalQty = () => cartItems.reduce((sum, item) => sum + Math.max(1, Math.floor(Number(item.qty || 1))), 0);
     const syncQtyParamToUrl = () => {
@@ -558,7 +594,10 @@
     const updateSummary = () => {
         const isKit = document.querySelector('input[name="shipping_preference"]:checked').value === 'ship_kit';
         const fee = isKit ? 25 : 0;
-        const total = cartItems.reduce((sum, item) => sum + (item.unitPrice * item.qty), 0);
+        const total = cartItems.reduce((sum, item) => {
+            const normalized = normalizeCartItem(item);
+            return sum + (normalized.unitPrice * normalized.qty);
+        }, 0);
         document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
         document.getElementById('sum-total').textContent = `$${Math.max(total - fee, 0).toFixed(2)}`;
     };
@@ -683,8 +722,10 @@
             return;
         }
         emptyState.classList.add('hidden');
-        cartItems.forEach((item, index) => {
+        cartItems.forEach((rawItem, index) => {
+            const item = normalizeCartItem(rawItem);
             const conditionKey = ensureCartCondition(item);
+            cartItems[index] = item;
             const card = document.createElement('div');
             card.className = 'cart-item-card';
             const total = (item.unitPrice * item.qty).toFixed(2);
@@ -716,8 +757,9 @@
         updateSummary();
     };
     const applyCartChange = (index, action, value = null) => {
-        const item = cartItems[index];
+        const item = normalizeCartItem(cartItems[index]);
         if (!item) return;
+        cartItems[index] = item;
         if (action === 'increase') item.qty += 1;
         if (action === 'decrease') item.qty = Math.max(item.qty - 1, 1);
         if (action === 'remove') cartItems.splice(index, 1);
