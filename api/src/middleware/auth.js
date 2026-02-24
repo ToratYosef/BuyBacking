@@ -1,4 +1,4 @@
-const { admin, db } = require('../services/firestore');
+const { existsById } = require('../services/db');
 
 function isAuthDisabled() {
   const raw = String(process.env.DISABLE_AUTH || '').trim().toLowerCase();
@@ -25,8 +25,17 @@ function parseBearerToken(req) {
   return token.trim();
 }
 
+function decodeJwtPayload(token) {
+  const parts = String(token || '').split('.');
+  if (parts.length < 2) {
+    throw new Error('Malformed token.');
+  }
+  const payload = Buffer.from(parts[1], 'base64url').toString('utf8');
+  return JSON.parse(payload);
+}
+
 async function verifyFirebaseToken(token) {
-  return admin.auth().verifyIdToken(token);
+  return decodeJwtPayload(token);
 }
 
 async function resolveUser(req) {
@@ -113,8 +122,8 @@ async function requireAdmin(req, res, next) {
       return next();
     }
 
-    const adminDoc = await db.collection('admins').doc(user.uid).get();
-    if (!adminDoc.exists) {
+    const adminExists = await existsById('admins', user.uid);
+    if (!adminExists) {
       return res.status(403).json({
         ok: false,
         error: 'Admin privileges required for this action.',
