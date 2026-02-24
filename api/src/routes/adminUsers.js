@@ -1,26 +1,33 @@
 const express = require('express');
-const { upsert } = require('../services/db');
+const { admin, db } = require('../services/firestore');
 const { requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
 router.post('/create-admin', requireAdmin, async (req, res, next) => {
   try {
-    const { uid, email, displayName } = req.body || {};
+    const { email, password, displayName } = req.body || {};
 
-    if (!uid || !email) {
-      return res.status(400).json({ ok: false, error: 'uid and email are required.' });
+    if (!email || !password) {
+      return res.status(400).json({ ok: false, error: 'Email and password are required.' });
     }
 
-    await upsert('admins', uid, {
+    const userRecord = await admin.auth().createUser({
       email,
-      displayName: displayName || null,
-      createdAt: new Date().toISOString(),
-      createdBy: req.user.uid,
-      admin: true,
+      password,
+      displayName: displayName || undefined,
     });
 
-    return res.json({ ok: true, uid, email });
+    await admin.auth().setCustomUserClaims(userRecord.uid, { admin: true });
+
+    await db.collection('admins').doc(userRecord.uid).set({
+      email: userRecord.email,
+      displayName: userRecord.displayName || displayName || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: req.user.uid,
+    });
+
+    return res.json({ ok: true, uid: userRecord.uid, email: userRecord.email });
   } catch (error) {
     return next(error);
   }

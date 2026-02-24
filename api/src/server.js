@@ -26,7 +26,7 @@ const {
   updateOrderBoth,
   buildOrderDeviceKey,
 } = require('../functions/index.js');
-const { getWithId } = require('./services/db');
+const { admin } = require('../functions/helpers/firebaseAdmin');
 
 const app = express();
 
@@ -399,10 +399,13 @@ app.get('/fix-issue/:orderId', async (req, res) => {
       return res.status(400).send('Order ID is required.');
     }
 
-    const order = await getWithId('orders', orderId);
-    if (!order) {
+    const orderRef = admin.firestore().collection('orders').doc(orderId);
+    const snapshot = await orderRef.get();
+    if (!snapshot.exists) {
       return res.status(404).send('Order not found.');
     }
+
+    const order = { id: snapshot.id, ...snapshot.data() };
     const requestedDeviceKey = req.query.deviceKey ? String(req.query.deviceKey).trim() : '';
     const issues = buildIssueList(order);
     const visibleIssues = requestedDeviceKey
@@ -2032,13 +2035,16 @@ app.post('/fix-issue/:orderId/confirm', async (req, res) => {
       return res.status(400).json({ error: 'Issue reason is required.' });
     }
 
-    const order = await getWithId('orders', orderId);
-    if (!order) {
+    const orderRef = admin.firestore().collection('orders').doc(orderId);
+    const snapshot = await orderRef.get();
+    if (!snapshot.exists) {
       return res.status(404).json({ error: 'Order not found.' });
     }
 
+    const order = { id: snapshot.id, ...snapshot.data() };
+
     const updatePayload = {};
-    const serverTimestamp = new Date().toISOString();
+    const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
 
     const unlockMethod = String(req.body?.unlockMethod || '').trim().toLowerCase();
     const unlockValueRaw = String(req.body?.unlockValue || '').trim();
