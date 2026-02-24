@@ -435,12 +435,34 @@
     import { getFirebaseApp } from "/assets/js/firebase-app.js";
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, collection, doc, getDoc, getDocs, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-    import { apiPost } from "/public/js/apiClient.js";
 
     const app = getFirebaseApp();
     const auth = getAuth(app);
     const db = getFirestore(app);
     const appId = "buyback-a0f05";
+    const API_BASE_URL = (window.SHC_API_BASE_URL || '/server').replace(/\/$/, '');
+
+    const apiPost = async (path, body, options = {}) => {
+        const { authRequired = false } = options;
+        const endpoint = `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+        const headers = { 'Content-Type': 'application/json' };
+
+        if (authRequired && auth.currentUser) {
+            headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+        }
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body || {})
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(payload?.error || payload?.message || `Request failed (${response.status})`);
+        }
+        return payload;
+    };
 
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEYS = ['shc_cart', 'shcOrderSummary'];
