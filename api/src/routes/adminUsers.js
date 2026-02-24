@@ -6,17 +6,14 @@ const router = express.Router();
 
 router.post('/create-admin', requireAdmin, async (req, res, next) => {
   try {
-    const { email, password, displayName } = req.body || {};
+    const { uid, email, displayName } = req.body || {};
 
-    if (!email || !password) {
-      return res.status(400).json({ ok: false, error: 'Email and password are required.' });
+    if (!uid || !email) {
+      return res.status(400).json({ ok: false, error: 'uid and email are required.' });
     }
-
-    const uid = `admin_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
     await upsert('admins', uid, {
       email,
-      password,
       displayName: displayName || null,
       createdAt: new Date().toISOString(),
       createdBy: req.user.uid,
