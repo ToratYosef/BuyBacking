@@ -1,59 +1,28 @@
-CREATE TABLE IF NOT EXISTS orders (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL,
-  migrated_at timestamptz DEFAULT NOW()
+create table if not exists firebase_docs (
+  path text primary key,
+  collection text not null,
+  doc_id text not null,
+  parent_path text,
+  data jsonb not null,
+  create_time timestamptz,
+  update_time timestamptz,
+  exported_at timestamptz not null default now()
 );
 
-CREATE TABLE IF NOT EXISTS users (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL,
-  migrated_at timestamptz DEFAULT NOW()
+create index if not exists idx_firebase_docs_collection on firebase_docs(collection);
+create index if not exists idx_firebase_docs_parent_path on firebase_docs(parent_path);
+create index if not exists idx_firebase_docs_data_gin on firebase_docs using gin (data);
+
+create table if not exists firebase_auth_users (
+  uid text primary key,
+  email text,
+  phone_number text,
+  display_name text,
+  disabled boolean,
+  custom_claims jsonb,
+  provider_data jsonb,
+  user_metadata jsonb,
+  exported_at timestamptz not null default now()
 );
 
-CREATE TABLE IF NOT EXISTS admins (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL,
-  migrated_at timestamptz DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS signed_up_emails (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL,
-  migrated_at timestamptz DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS counters (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL,
-  migrated_at timestamptz DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS devices_iphone_models (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL,
-  migrated_at timestamptz DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS devices_samsung_models (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL,
-  migrated_at timestamptz DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS orders_status_idx
-ON orders ((data->>'status'));
-
-CREATE INDEX IF NOT EXISTS orders_email_idx
-ON orders ((data->>'email'));
-
-CREATE INDEX IF NOT EXISTS orders_price_idx
-ON orders (((data->>'price')::numeric));
-
-CREATE INDEX IF NOT EXISTS users_email_idx
-ON users ((data->>'email'));
-
-CREATE INDEX IF NOT EXISTS admins_email_idx
-ON admins ((data->>'email'));
-
-CREATE INDEX IF NOT EXISTS orders_created_at_idx
-ON orders (((data->>'createdAt')::timestamptz));
+create index if not exists idx_firebase_auth_users_email on firebase_auth_users(email);
