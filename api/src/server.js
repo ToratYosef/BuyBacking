@@ -19,6 +19,7 @@ const refreshTrackingRouter = require('./routes/refreshTracking');
 const manualFulfillRouter = require('./routes/manualFulfill');
 const adminUsersRouter = require('./routes/adminUsers');
 const supportRouter = require('./routes/support');
+const neonDataRouter = require('./routes/neonData');
 const { notFoundHandler, errorHandler } = require('./utils/errors');
 
 const {
@@ -26,7 +27,7 @@ const {
   updateOrderBoth,
   buildOrderDeviceKey,
 } = require('../functions/index.js');
-const { admin } = require('../functions/helpers/firebaseAdmin');
+const { getWithId } = require('./services/db');
 
 const app = express();
 
@@ -399,13 +400,10 @@ app.get('/fix-issue/:orderId', async (req, res) => {
       return res.status(400).send('Order ID is required.');
     }
 
-    const orderRef = admin.firestore().collection('orders').doc(orderId);
-    const snapshot = await orderRef.get();
-    if (!snapshot.exists) {
+    const order = await getWithId('orders', orderId);
+    if (!order) {
       return res.status(404).send('Order not found.');
     }
-
-    const order = { id: snapshot.id, ...snapshot.data() };
     const requestedDeviceKey = req.query.deviceKey ? String(req.query.deviceKey).trim() : '';
     const issues = buildIssueList(order);
     const visibleIssues = requestedDeviceKey
@@ -2035,16 +2033,13 @@ app.post('/fix-issue/:orderId/confirm', async (req, res) => {
       return res.status(400).json({ error: 'Issue reason is required.' });
     }
 
-    const orderRef = admin.firestore().collection('orders').doc(orderId);
-    const snapshot = await orderRef.get();
-    if (!snapshot.exists) {
+    const order = await getWithId('orders', orderId);
+    if (!order) {
       return res.status(404).json({ error: 'Order not found.' });
     }
 
-    const order = { id: snapshot.id, ...snapshot.data() };
-
     const updatePayload = {};
-    const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+    const serverTimestamp = new Date().toISOString();
 
     const unlockMethod = String(req.body?.unlockMethod || '').trim().toLowerCase();
     const unlockValueRaw = String(req.body?.unlockValue || '').trim();
@@ -2257,6 +2252,11 @@ const publicExactPaths = new Set([
   '/submit-order',
   '/email-support',
   '/submit-chat-feedback',
+  '/neon/doc',
+  '/neon/query',
+  '/neon/add',
+  '/neon/set',
+  '/neon/update',
 ]);
 const publicPrefixPaths = ['/wholesale'];
 
@@ -2386,6 +2386,7 @@ apiRouter.use(refreshTrackingRouter);
 apiRouter.use(manualFulfillRouter);
 apiRouter.use(adminUsersRouter);
 apiRouter.use(supportRouter);
+apiRouter.use(neonDataRouter);
 
 apiRouter.use(expressApp);
 
