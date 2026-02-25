@@ -251,7 +251,7 @@
     </main>
     
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const urlParams = new URLSearchParams(window.location.search);
             let sessionSummary = null;
             try {
@@ -286,6 +286,35 @@
             };
             const currency = (value) => `$${Number(value || 0).toFixed(2)}`;
             const esc = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+            const normalizeItemFromOrder = (item = {}) => ({
+                modelName: firstFilled(item?.modelName, item?.model, item?.device),
+                brand: firstFilled(item?.brand, item?.manufacturer),
+                storage: firstFilled(item?.storage, item?.capacity, item?.size),
+                carrier: firstFilled(item?.carrier, item?.lock, item?.network),
+                condition: firstFilled(item?.condition, item?.condition_cosmetic, item?.cosmeticCondition, item?.quality),
+                qty: Math.max(1, Number(item?.qty || 1)),
+                unitPrice: parseUnitPrice(item)
+            });
+            const hasDetailedItems = (items = []) => items.some((item) => {
+                const normalizedName = String(item?.modelName || '').trim().toLowerCase();
+                const hasName = !!normalizedName && !['device on file', 'device details on file', 'multiple devices'].includes(normalizedName);
+                const hasCondition = !!String(item?.condition || '').trim();
+                return hasName || hasCondition;
+            });
+            const fetchOrderById = async (targetOrderId) => {
+                const safeId = String(targetOrderId || '').trim();
+                if (!safeId) return null;
+                try {
+                    const base = window.SHC_API_BASE_URL || '';
+                    const endpoint = `${base.replace(/\/$/, '')}/orders/${encodeURIComponent(safeId)}`;
+                    const response = await fetch(endpoint, { method: 'GET' });
+                    if (!response.ok) return null;
+                    return await response.json();
+                } catch (error) {
+                    console.warn('Unable to fetch order details for submitted page', error);
+                    return null;
+                }
+            };
 
             // Data extraction
             const orderId = getV('id') || getV('orderId') || 'Pending';
@@ -324,16 +353,16 @@
             document.getElementById('summaryPaymentMethod').textContent = displayMethod;
             document.getElementById('summaryFullAddress').innerHTML = fullAddressHtml;
 
-            const rawItems = Array.isArray(sessionSummary?.items) ? sessionSummary.items : [];
-            const normalizedItems = rawItems.map((item) => ({
-                modelName: firstFilled(item?.modelName, item?.model, item?.device),
-                brand: firstFilled(item?.brand, item?.manufacturer),
-                storage: firstFilled(item?.storage, item?.capacity, item?.size),
-                carrier: firstFilled(item?.carrier, item?.lock, item?.network),
-                condition: firstFilled(item?.condition, item?.condition_cosmetic, item?.cosmeticCondition, item?.quality),
-                qty: Math.max(1, Number(item?.qty || 1)),
-                unitPrice: parseUnitPrice(item)
-            }));
+            let rawItems = Array.isArray(sessionSummary?.items) ? sessionSummary.items : [];
+            let normalizedItems = rawItems.map(normalizeItemFromOrder);
+
+            if (!hasDetailedItems(normalizedItems)) {
+                const fetchedOrder = await fetchOrderById(orderId);
+                if (Array.isArray(fetchedOrder?.items) && fetchedOrder.items.length) {
+                    rawItems = fetchedOrder.items;
+                    normalizedItems = rawItems.map(normalizeItemFromOrder);
+                }
+            }
             const fallbackQty = Math.max(1, Number(getV('qty') || 1));
             const fallbackUnitPrice = fallbackQty > 1 ? (priceVal / fallbackQty) : priceVal;
             const deviceItems = normalizedItems.length ? normalizedItems : [{
