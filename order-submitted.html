@@ -264,6 +264,19 @@
 
             const getV = (key) => urlParams.get(key) || sessionSummary?.[key] || '';
             const normalizeCondition = (value) => (value || '').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'N/A';
+            const firstFilled = (...values) => values.find((value) => String(value || '').trim()) || '';
+            const parseUnitPrice = (item) => {
+                const directUnit = Number(item?.unitPrice ?? item?.price ?? item?.payout ?? item?.offerAmount);
+                if (Number.isFinite(directUnit) && directUnit > 0) {
+                    return directUnit;
+                }
+                const total = Number(item?.totalPayout ?? item?.estimatedQuote ?? item?.totalPrice);
+                if (Number.isFinite(total) && total > 0) {
+                    const qty = Math.max(1, Number(item?.qty || 1));
+                    return total / qty;
+                }
+                return 0;
+            };
             const currency = (value) => `$${Number(value || 0).toFixed(2)}`;
             const esc = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
@@ -305,7 +318,16 @@
             document.getElementById('summaryFullAddress').innerHTML = fullAddressHtml;
 
             const rawItems = Array.isArray(sessionSummary?.items) ? sessionSummary.items : [];
-            const deviceItems = rawItems.length ? rawItems : [{
+            const normalizedItems = rawItems.map((item) => ({
+                modelName: firstFilled(item?.modelName, item?.model, item?.device),
+                brand: firstFilled(item?.brand, item?.manufacturer),
+                storage: firstFilled(item?.storage, item?.capacity, item?.size),
+                carrier: firstFilled(item?.carrier, item?.lock, item?.network),
+                condition: firstFilled(item?.condition, item?.condition_cosmetic, item?.cosmeticCondition, item?.quality),
+                qty: Math.max(1, Number(item?.qty || 1)),
+                unitPrice: parseUnitPrice(item)
+            }));
+            const deviceItems = normalizedItems.length ? normalizedItems : [{
                 modelName: device,
                 brand: '',
                 storage: '',
@@ -347,7 +369,7 @@
                         </div>
                         <div class="text-right">
                             <p class="text-xs uppercase tracking-wider text-slate-500 font-bold">Payout</p>
-                            <p class="text-lg font-extrabold text-emerald-700">${currency(item.unitPrice || 0)}</p>
+                            <p class="text-lg font-extrabold text-emerald-700">${currency(parseUnitPrice(item))}</p>
                         </div>
                     </div>
                     <div class="mt-3 text-sm text-slate-700 flex flex-wrap gap-2">
