@@ -4,8 +4,6 @@
   <script>
     window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
   </script>
-        <script src="https://cdn.tailwindcss.com"></script>
-
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
@@ -767,7 +765,7 @@
                     <a href="sell/?device=iphone-15-pro-max" class="animate-on-scroll homepage-card-link group block h-full">
                         <div class="homepage-card-inner card-modern p-6 flex flex-col h-full items-center text-center">
                             <div class="h-48 w-full flex items-center justify-center mb-6 overflow-hidden">
-                                <img id="i15pm_pop_img" src="" data-base-src="/iphone/assets/i15pm" loading="lazy" alt="iPhone 15 Pro Max" class="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300">
+                                <img id="i15pm_pop_img" src="" data-base-src="https://cdn.secondhandcell.com/images/iphone/assets/i15pm" loading="lazy" alt="iPhone 15 Pro Max" class="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300">
                             </div>
                             <h3 class="text-lg font-bold text-slate-900 mb-1">iPhone 15 Pro Max</h3>
                             <p class="text-green-600 font-bold text-lg mb-6" data-device-price data-brand="iphone" data-slug="15-pro-max">Checking price...</p>
@@ -779,7 +777,7 @@
                     <a href="sell/?brand=samsung&model=galaxy-s24-ultra" class="animate-on-scroll homepage-card-link group block h-full">
                         <div class="homepage-card-inner card-modern p-6 flex flex-col h-full items-center text-center">
                             <div class="h-48 w-full flex items-center justify-center mb-6 overflow-hidden">
-                                <img id="s24u_pop_img" src="" data-base-src="/samsung/assets/s24u" loading="lazy" alt="Samsung S24 Ultra" class="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300">
+                                <img id="s24u_pop_img" src="" data-base-src="https://cdn.secondhandcell.com/images/samsung/assets/s24u" loading="lazy" alt="Samsung S24 Ultra" class="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300">
                             </div>
                             <h3 class="text-lg font-bold text-slate-900 mb-1">Samsung S24 Ultra</h3>
                             <p class="text-green-600 font-bold text-lg mb-6" data-device-price data-brand="samsung" data-slug="galaxy-s24-ultra">Checking price...</p>
@@ -791,7 +789,7 @@
                      <a href="sell/?device=iphone-16" class="animate-on-scroll homepage-card-link group block h-full">
                         <div class="homepage-card-inner card-modern p-6 flex flex-col h-full items-center text-center">
                             <div class="h-48 w-full flex items-center justify-center mb-6 overflow-hidden">
-                                <img id="i13_pop_img" src="" data-base-src="/iphone/assets/i16" loading="lazy" alt="iPhone 16" class="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300">
+                                <img id="i13_pop_img" src="" data-base-src="https://cdn.secondhandcell.com/images/iphone/assets/i16" loading="lazy" alt="iPhone 16" class="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300">
                             </div>
                             <h3 class="text-lg font-bold text-slate-900 mb-1">iPhone 16</h3>
                             <p class="text-green-600 font-bold text-lg mb-6" data-device-price data-brand="iphone" data-slug="16">Checking price...</p>
@@ -803,7 +801,7 @@
                     <a href="sell/?brand=samsung&model=galaxy-s22" class="animate-on-scroll homepage-card-link group block h-full">
                         <div class="homepage-card-inner card-modern p-6 flex flex-col h-full items-center text-center">
                             <div class="h-48 w-full flex items-center justify-center mb-6 overflow-hidden">
-                                <img id="s22_pop_img" src="" data-base-src="/samsung/assets/s22" loading="lazy" alt="Samsung S22" class="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300">
+                                <img id="s22_pop_img" src="" data-base-src="https://cdn.secondhandcell.com/images/samsung/assets/s22" loading="lazy" alt="Samsung S22" class="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-300">
                             </div>
                             <h3 class="text-lg font-bold text-slate-900 mb-1">Samsung S22</h3>
                             <p class="text-green-600 font-bold text-lg mb-6" data-device-price data-brand="samsung" data-slug="galaxy-s22">Checking price...</p>
@@ -1088,6 +1086,32 @@ const findHighestPrice = (prices = {}) => {
     return max || null;
 };
 
+const normalizeSlug = (value = '') => String(value || '').trim().toLowerCase();
+
+const getModelDocBySlug = async (brand, slug) => {
+    const normalizedSlug = normalizeSlug(slug);
+
+    const direct = await getDoc(doc(db, "devices", brand, "models", normalizedSlug));
+    if (direct.exists()) return direct.data();
+
+    const modelsSnap = await getDocs(collection(db, "devices", brand, "models"));
+    let matchedData = null;
+
+    modelsSnap.forEach((modelDoc) => {
+        if (matchedData) return;
+        const model = modelDoc.data() || {};
+        const docId = normalizeSlug(modelDoc.id);
+        const modelSlug = normalizeSlug(model.slug);
+        const modelID = normalizeSlug(model.modelID);
+
+        if (docId === normalizedSlug || modelSlug === normalizedSlug || modelID === normalizedSlug) {
+            matchedData = model;
+        }
+    });
+
+    return matchedData;
+};
+
 const applyPopularPricing = async () => {
     const priceEls = document.querySelectorAll('[data-device-price]');
     if (!priceEls.length) return;
@@ -1098,14 +1122,14 @@ const applyPopularPricing = async () => {
         if (!brand || !slug) return;
 
         try {
-            const snap = await getDoc(doc(db, "devices", brand, "models", slug));
-            if (!snap.exists()) {
+            const modelData = await getModelDocBySlug(brand, slug);
+            if (!modelData) {
                 console.warn(`No pricing found for ${brand}/${slug}`);
                 el.textContent = formatPrice(null);
                 return;
             }
 
-            const highest = findHighestPrice(snap.data().prices || {});
+            const highest = findHighestPrice(modelData.prices || {});
             el.textContent = formatPrice(highest);
         } catch (error) {
             console.error(`Failed to load pricing for ${brand}/${slug}:`, error);
@@ -1314,10 +1338,17 @@ setLogLevel('error');
 document.addEventListener('DOMContentLoaded', function() {
     // Image loading with fallback
     function loadImageWithFallback(imgElement) {
-        const baseSrc = imgElement.dataset.baseSrc;
-        if (!baseSrc) return;
-        const extensions = ['.webp', '.svg', '.avif', '.png', '.webp', '.webp'];
+        const rawBaseSrc = imgElement.dataset.baseSrc;
+        if (!rawBaseSrc) return;
+
+        const baseSrc = rawBaseSrc.startsWith('http')
+            ? rawBaseSrc
+            : `https://cdn.secondhandcell.com/images${rawBaseSrc.startsWith('/') ? '' : '/'}${rawBaseSrc}`;
+
+        const extensions = ['.webp', '.png', '.jpg', '.jpeg', '.svg', '.avif'];
+        const tried = new Set();
         let current = 0;
+
         function tryLoad() {
             if (current >= extensions.length) {
                 if (imgElement.id.includes('_cat_img')) {
@@ -1328,12 +1359,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 imgElement.alt = "Image not available";
                 return;
             }
-            const testSrc = baseSrc + extensions[current];
+
+            const testSrc = `${baseSrc}${extensions[current]}`;
+            current += 1;
+            if (tried.has(testSrc)) {
+                tryLoad();
+                return;
+            }
+            tried.add(testSrc);
+
             const img = new Image();
             img.onload = () => { imgElement.src = testSrc; };
-            img.onerror = () => { current++; tryLoad(); };
+            img.onerror = () => { tryLoad(); };
             img.src = testSrc;
         }
+
         tryLoad();
     }
     document.querySelectorAll('img[data-base-src]').forEach(loadImageWithFallback);
