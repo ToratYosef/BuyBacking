@@ -1086,16 +1086,50 @@ const findHighestPrice = (prices = {}) => {
     return max || null;
 };
 
-const normalizeSlug = (value = '') => String(value || '').trim().toLowerCase();
+const normalizeSlug = (value = '') => String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/_+/g, '-');
+
+const toSlugCore = (value = '') => normalizeSlug(value)
+    .replace(/^iphone[-/]/, '')
+    .replace(/^samsung[-/]/, '')
+    .replace(/[^a-z0-9]+/g, '');
+
+const buildSlugCandidates = (brand, slug) => {
+    const normalizedBrand = normalizeSlug(brand);
+    const normalizedSlug = normalizeSlug(slug);
+    const core = toSlugCore(normalizedSlug);
+
+    const candidates = new Set([
+        normalizedSlug,
+        `${normalizedBrand}-${normalizedSlug}`,
+        normalizedSlug.replace(/\//g, '-'),
+        normalizedSlug.replace(/-/g, '/'),
+    ]);
+
+    if (core) {
+        candidates.add(`${normalizedBrand}-${core}`);
+        candidates.add(`${normalizedBrand}/${core}`);
+    }
+
+    return Array.from(candidates).filter(Boolean);
+};
 
 const getModelDocBySlug = async (brand, slug) => {
-    const normalizedSlug = normalizeSlug(slug);
+    const candidates = buildSlugCandidates(brand, slug);
 
-    const direct = await getDoc(doc(db, "devices", brand, "models", normalizedSlug));
-    if (direct.exists()) return direct.data();
+    for (const candidate of candidates) {
+        const direct = await getDoc(doc(db, "devices", brand, "models", candidate));
+        if (direct.exists()) return direct.data();
+    }
 
     const modelsSnap = await getDocs(collection(db, "devices", brand, "models"));
     let matchedData = null;
+    const candidateSet = new Set(candidates.map(normalizeSlug));
+    const candidateCores = new Set(candidates.map(toSlugCore));
 
     modelsSnap.forEach((modelDoc) => {
         if (matchedData) return;
@@ -1103,8 +1137,18 @@ const getModelDocBySlug = async (brand, slug) => {
         const docId = normalizeSlug(modelDoc.id);
         const modelSlug = normalizeSlug(model.slug);
         const modelID = normalizeSlug(model.modelID);
+        const docIdCore = toSlugCore(docId);
+        const modelSlugCore = toSlugCore(modelSlug);
+        const modelIdCore = toSlugCore(modelID);
 
-        if (docId === normalizedSlug || modelSlug === normalizedSlug || modelID === normalizedSlug) {
+        if (
+            candidateSet.has(docId) ||
+            candidateSet.has(modelSlug) ||
+            candidateSet.has(modelID) ||
+            candidateCores.has(docIdCore) ||
+            candidateCores.has(modelSlugCore) ||
+            candidateCores.has(modelIdCore)
+        ) {
             matchedData = model;
         }
     });
