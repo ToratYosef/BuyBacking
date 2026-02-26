@@ -49,9 +49,12 @@ function cacheControlFor(filePath) {
   }
 
   const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".html") {
+    return "no-cache, must-revalidate";
+  }
+
   if (STATIC_EXTENSIONS.has(ext)) {
-    // Keep a modest cache for non-hashed assets while pushing callers toward hashed filenames.
-    return "public, max-age=600";
+    return "public, max-age=86400, stale-while-revalidate=604800";
   }
 
   return "public, max-age=0";

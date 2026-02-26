@@ -34,7 +34,7 @@
   <link rel="icon" href="/favicon/favicon.ico" type="image/x-icon" />
   <link rel="icon" href="/favicon/favicon.ico" />
 
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/assets/css/tailwind.css" />
 
   <!-- Structured data -->
   <script type="application/ld+json">
@@ -85,24 +85,43 @@
   <!-- Fonts: preconnect BEFORE stylesheet -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Inter:wght@300;400;500;600;700;800&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript>
+        <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    </noscript>
 
   <!-- Font Awesome for Chat Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    </noscript>
 
-  <!-- Preload hero image -->
-  <link rel="preload" as="image" href="https://cdn.secondhandcell.com/images/iphone/assets/i17pm.webp" type="image/webp"
-        imagesrcset="https://cdn.secondhandcell.com/images/iphone/assets/i17pm.webp 500w, https://cdn.secondhandcell.com/images/iphone/assets/i15pm-1000.webp 1000w"
-        imagesizes="(max-width: 640px) 160px, (max-width: 1024px) 200px, 250px">
-
-  <!-- Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8JYPJDKSP8"></script>
+    <!-- Analytics (lazy-loaded after first interaction / idle) -->
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'AW-17534255111');
-    gtag('config', 'G-8JYPJDKSP8');
+        let analyticsLoaded = false;
+        function loadAnalytics() {
+            if (analyticsLoaded) return;
+            analyticsLoaded = true;
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = 'https://www.googletagmanager.com/gtag/js?id=G-8JYPJDKSP8';
+            document.head.appendChild(script);
+            gtag('js', new Date());
+            gtag('config', 'AW-17534255111');
+            gtag('config', 'G-8JYPJDKSP8');
+        }
+
+        ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach((eventName) => {
+            window.addEventListener(eventName, loadAnalytics, { once: true, passive: true });
+        });
+
+        if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(loadAnalytics, { timeout: 3000 });
+        } else {
+            window.setTimeout(loadAnalytics, 2500);
+        }
   </script>
 
     <style>
@@ -197,8 +216,7 @@
         /* Hero Section Refined */
         .hero-section {
             background-image:
-                linear-gradient(rgba(15, 23, 42, 0.82), rgba(15, 23, 42, 0.82)),
-                url('https://www.slashgear.com/img/gallery/12-common-smartphone-myths-you-need-to-stop-believing/intro-1733024987.webp');
+                linear-gradient(rgba(15, 23, 42, 0.86), rgba(15, 23, 42, 0.86));
             background-size: cover;
             background-position: center;
             position: relative;
@@ -594,7 +612,7 @@
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
             <a href="/" class="logo-link" aria-label="SecondHandCell home">
-                <img src="https://cdn.secondhandcell.com/images/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320" height="320" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+                <img src="https://cdn.secondhandcell.com/images/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320" height="320" fetchpriority="high" decoding="async" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
             </a>
         </div>
         <div class="logo-text-container-center">
@@ -752,12 +770,12 @@
         <!-- Popular Devices -->
         <section id="popular" class="bg-white py-24">
             <div class="container mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex flex-col md:flex-row justify-between items-end mb-12 border-b border-slate-100 pb-8">
-                    <div class="text-center md:text-left">
+                <div class="flex flex-col items-center text-center mb-12 border-b border-slate-100 pb-8">
+                    <div class="text-center">
                         <h2 class="text-3xl font-extrabold text-slate-900">Popular Devices</h2>
                         <p class="mt-2 text-lg text-slate-600">See what others are selling right now.</p>
                     </div>
-                    <a href="sell/" class="hidden md:inline-flex text-blue-600 font-semibold hover:text-blue-800 items-center gap-1 mt-4 md:mt-0">View All Devices <svg class="icon"><use href="#icon-arrow-right"></use></svg></a>
+                    <a href="sell/" class="hidden md:inline-flex text-blue-600 font-semibold hover:text-blue-800 items-center gap-1 mt-4">View All Devices <svg class="icon"><use href="#icon-arrow-right"></use></svg></a>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -905,9 +923,20 @@
 </footer>
 
     <script type="module">
-import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getFirestore, doc, getDoc, getDocs, collection, addDoc, setLogLevel } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+let initializeApp;
+let getApps;
+let getFirestore;
+let doc;
+let getDoc;
+let getDocs;
+let collection;
+let addDoc;
+let setLogLevel;
+let getAuth;
+let firebaseApp = null;
+let auth = null;
+let db = null;
+let firebaseInitPromise = null;
 
 // Firebase configuration (from assets/js/firebase-config.js)
 const firebaseConfig = {
@@ -919,14 +948,41 @@ const firebaseConfig = {
   appId: '1:876430429098:web:f6dd64b1960d90461979d3',
   measurementId: 'G-6WWQN44JHT',
 };
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const firebaseApp = app;
 const getFirebaseApp = () => firebaseApp;
-if (typeof window !== 'undefined') { window.firebaseConfig = firebaseConfig; window.firebaseApp = firebaseApp; }
+if (typeof window !== 'undefined') { window.firebaseConfig = firebaseConfig; }
+
+async function ensureFirebase() {
+    if (firebaseInitPromise) {
+        await firebaseInitPromise;
+        return { firebaseApp, auth, db };
+    }
+
+    firebaseInitPromise = (async () => {
+        const appModule = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js');
+        const firestoreModule = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js');
+        const authModule = await import('https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js');
+
+        ({ initializeApp, getApps } = appModule);
+        ({ getFirestore, doc, getDoc, getDocs, collection, addDoc, setLogLevel } = firestoreModule);
+        ({ getAuth } = authModule);
+
+        firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+        auth = getAuth(firebaseApp);
+        db = getFirestore(firebaseApp);
+        setLogLevel('error');
+
+        if (typeof window !== 'undefined') {
+            window.firebaseApp = firebaseApp;
+        }
+
+        return { firebaseApp, auth, db };
+    })();
+
+    await firebaseInitPromise;
+    return { firebaseApp, auth, db };
+}
 
 // API client (from public/js/apiClient.js)
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
 
 const defaultApiBase = "/api";
 
@@ -965,6 +1021,9 @@ function resolveUrl(path) {
 }
 
 async function getIdToken({ forceRefresh = false } = {}) {
+    if (!auth) {
+        return null;
+    }
   const user = auth.currentUser;
   if (!user) {
     return null;
@@ -1157,6 +1216,7 @@ const getModelDocBySlug = async (brand, slug) => {
 };
 
 const applyPopularPricing = async () => {
+    await ensureFirebase();
     const priceEls = document.querySelectorAll('[data-device-price]');
     if (!priceEls.length) return;
 
@@ -1182,7 +1242,29 @@ const applyPopularPricing = async () => {
     }));
 };
 
-document.addEventListener('DOMContentLoaded', applyPopularPricing);
+function runWhenVisible(element, callback) {
+    if (!element) return;
+    const onVisible = () => {
+        callback();
+    };
+
+    if (!('IntersectionObserver' in window)) {
+        onVisible();
+        return;
+    }
+
+    const observer = new IntersectionObserver((entries, currentObserver) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        currentObserver.disconnect();
+        onVisible();
+    }, { rootMargin: '200px 0px' });
+
+    observer.observe(element);
+}
+
+runWhenVisible(document.getElementById('popular'), () => {
+    void applyPopularPricing();
+});
 
 const currency = (value) => `$${Math.round(value).toLocaleString()}`;
 const OVERPAY_IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
@@ -1282,6 +1364,7 @@ function renderOverpayDevices(devices) {
 }
 
 const getOverpayCandidates = async () => {
+    await ensureFirebase();
     const brands = ['iphone', 'samsung'];
     const candidates = [];
 
@@ -1341,6 +1424,9 @@ const getFallbackOverpayDevices = (candidates) => {
 };
 
 const loadOverpayDevices = async () => {
+    const mount = document.getElementById('overpay-devices-list');
+    if (!mount) return;
+
     try {
         const candidates = await getOverpayCandidates();
         if (!candidates.length) {
@@ -1367,19 +1453,18 @@ const loadOverpayDevices = async () => {
     }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+const overpayMount = document.getElementById('overpay-devices-list');
+runWhenVisible(overpayMount ? (overpayMount.closest('section') || overpayMount) : null, () => {
     const run = () => loadOverpayDevices();
     if (typeof window.requestIdleCallback === 'function') {
-        window.requestIdleCallback(run, { timeout: 1500 });
+        window.requestIdleCallback(run, { timeout: 2000 });
     } else {
-        window.setTimeout(run, 120);
+        window.setTimeout(run, 400);
     }
 });
 
 // Home page logic (from assets/js/pages/index-b8699033.js)
-setLogLevel('error');
-
-document.addEventListener('DOMContentLoaded', function() {
+function initHomePageDomFeatures() {
     // Image loading with fallback
     function loadImageWithFallback(imgElement) {
         const rawBaseSrc = imgElement.dataset.baseSrc;
@@ -1503,6 +1588,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             try {
+                await ensureFirebase();
                 await addDoc(collection(db, "signed_up_emails"), {
                     email: email,
                     timestamp: new Date()
@@ -1602,7 +1688,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <p class="text-slate-600 leading-relaxed italic">"${testimonial.review}"</p>
                 </div>
                 <div class="flex items-center gap-4 mt-6 pt-6 border-t border-slate-100">
-                    <img src="${testimonial.avatar}" alt="Portrait of ${testimonial.name}" class="w-12 h-12 rounded-full object-cover">
+                    <img src="${testimonial.avatar}" alt="Portrait of ${testimonial.name}" loading="lazy" decoding="async" class="w-12 h-12 rounded-full object-cover">
                     <div>
                         <p class="font-bold text-slate-900">${testimonial.name}</p>
                         <p class="text-xs text-slate-500 font-medium uppercase">${testimonial.role}</p>
@@ -1764,7 +1850,28 @@ document.addEventListener('DOMContentLoaded', function() {
         window.requestAnimationFrame(() => scrollToIndex(currentIndex, 'auto'));
         startCarousel();
     }
-});
+}
+
+function runAfterFirstPaint(callback) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(callback, { timeout: 1600 });
+            } else {
+                window.setTimeout(callback, 220);
+            }
+        }, { once: true });
+        return;
+    }
+
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(callback, { timeout: 1600 });
+    } else {
+        window.setTimeout(callback, 220);
+    }
+}
+
+runAfterFirstPaint(initHomePageDomFeatures);
 
 function setupScrollAnimations() {
     const observerOptions = {
@@ -1817,7 +1924,34 @@ function setupScrollAnimations() {
 
 </script>
 
-<script type="module" src="/assets/js/global-auth.js" defer></script>
-<script src="/assets/js/policy-modals.js" defer></script>
+<script>
+(() => {
+    let loaded = false;
+    const loadNonCriticalScripts = () => {
+        if (loaded) return;
+        loaded = true;
+
+        const globalAuthScript = document.createElement('script');
+        globalAuthScript.type = 'module';
+        globalAuthScript.src = '/assets/js/global-auth.js';
+        document.body.appendChild(globalAuthScript);
+
+        const policyScript = document.createElement('script');
+        policyScript.src = '/assets/js/policy-modals.js';
+        policyScript.defer = true;
+        document.body.appendChild(policyScript);
+    };
+
+    ['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach((eventName) => {
+        window.addEventListener(eventName, loadNonCriticalScripts, { once: true, passive: true });
+    });
+
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(loadNonCriticalScripts, { timeout: 2200 });
+    } else {
+        window.setTimeout(loadNonCriticalScripts, 1800);
+    }
+})();
+</script>
 </body>
 </html>
