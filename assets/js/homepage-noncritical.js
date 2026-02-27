@@ -28,18 +28,12 @@ let apiBase =
     (window.SHC_API_BASE_URL || window.API_BASE_URL || window.API_BASE)) ||
   defaultApiBase;
 
-const RAILWAY_API_ORIGIN = "https://shc33.up.railway.app";
-
 function normalizeApiBase(base) {
   if (typeof base !== "string") {
     return base;
   }
 
   const trimmed = base.trim().replace(/\/$/, "");
-  if (trimmed === RAILWAY_API_ORIGIN) {
-    return `${trimmed}/server`;
-  }
-
   return trimmed;
 }
 
