@@ -4016,6 +4016,75 @@
         modal.classList.add("hidden");
         modal.classList.remove("flex");
       }
+      function setAbandonedSequenceStatus(message, type = "info") {
+        const statusEl = document.getElementById("abandoned-sequence-status");
+        if (!statusEl) return;
+        statusEl.textContent = String(message || "");
+        statusEl.className = "text-sm rounded-md px-3 py-2";
+        if (type === "success") {
+          statusEl.classList.add("bg-green-100", "text-green-700");
+        } else if (type === "error") {
+          statusEl.classList.add("bg-rose-100", "text-rose-700");
+        } else {
+          statusEl.classList.add("bg-slate-100", "text-slate-700");
+        }
+        statusEl.classList.remove("hidden");
+      }
+      function setAbandonedSequenceSending(isSending) {
+        const submitBtn = document.getElementById("submit-abandoned-sequence-btn");
+        if (!submitBtn) return;
+        submitBtn.disabled = !!isSending;
+        submitBtn.textContent = isSending ? "Sending..." : "Send All 5";
+      }
+      async function handleSendAbandonedTestSequence() {
+        const emailInput = document.getElementById("abandoned-sequence-email");
+        const targetEmail = String(emailInput?.value || "").trim().toLowerCase();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(targetEmail)) {
+          setAbandonedSequenceStatus("Please enter a valid email address.", "error");
+          return;
+        }
+
+        const stages = [
+          { key: "30m", subject: "Did you forget something?" },
+          { key: "4h", subject: "Your quote is waiting" },
+          { key: "24h", subject: "Limited-time bonus reminder" },
+          { key: "72h", subject: "Final reminder before your quote expires" },
+          { key: "7d", subject: "Last chance to complete checkout" },
+        ];
+
+        setAbandonedSequenceSending(true);
+        setAbandonedSequenceStatus("Sending 5 emails. Please wait…", "info");
+
+        try {
+          for (let index = 0; index < stages.length; index += 1) {
+            const stage = stages[index];
+            const html = `
+              <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a;max-width:640px;margin:0 auto;padding:24px;">
+                <h2 style="margin:0 0 12px;font-size:24px;color:#0f172a;">SecondHandCell Test Email (${stage.key})</h2>
+                <p style="margin:0 0 10px;">This is abandoned checkout sequence test email <strong>${index + 1}/5</strong>.</p>
+                <p style="margin:0 0 10px;">Recipient: <strong>${targetEmail}</strong></p>
+                <p style="margin:0;">Stage key: <strong>${stage.key}</strong></p>
+              </div>
+            `;
+
+            await apiPost("/send-email", {
+              to: targetEmail,
+              subject: `[TEST ${index + 1}/5] ${stage.subject}`,
+              html,
+            }, { authRequired: true });
+          }
+
+          setAbandonedSequenceStatus(`Done! Sent all 5 test emails to ${targetEmail}.`, "success");
+          toast(`Sent 5 abandoned-checkout test emails to ${targetEmail}.`, "success");
+        } catch (error) {
+          const message = error?.message || "Failed to send abandoned checkout sequence.";
+          setAbandonedSequenceStatus(message, "error");
+          toast(message, "error");
+        } finally {
+          setAbandonedSequenceSending(false);
+        }
+      }
       function maybeOpenAbandonedSequenceModal(value) {
         const text = String(value || "").toLowerCase();
         if (text.includes(ABANDONED_SEQUENCE_TRIGGER)) {
@@ -4058,6 +4127,19 @@
       const cancelAbandonedSequenceBtn = document.getElementById("cancel-abandoned-sequence-btn");
       if (cancelAbandonedSequenceBtn) {
         cancelAbandonedSequenceBtn.addEventListener("click", closeAbandonedSequenceModal);
+      }
+      const submitAbandonedSequenceBtn = document.getElementById("submit-abandoned-sequence-btn");
+      if (submitAbandonedSequenceBtn) {
+        submitAbandonedSequenceBtn.onclick = handleSendAbandonedTestSequence;
+      }
+      const abandonedSequenceEmailInput = document.getElementById("abandoned-sequence-email");
+      if (abandonedSequenceEmailInput) {
+        abandonedSequenceEmailInput.onkeydown = (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            handleSendAbandonedTestSequence();
+          }
+        };
       }
       const abandonedSequenceModal = document.getElementById("abandoned-sequence-modal");
       if (abandonedSequenceModal) {
