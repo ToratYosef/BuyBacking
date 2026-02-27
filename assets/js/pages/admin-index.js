@@ -592,6 +592,13 @@ const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
 const sendReminderBtn = document.getElementById('send-reminder-btn');
 const sendExpiringReminderBtn = document.getElementById('send-expiring-reminder-btn');
 const sendKitReminderBtn = document.getElementById('send-kit-reminder-btn');
+const openAbandonedSequenceModalBtn = document.getElementById('open-abandoned-sequence-modal-btn');
+const abandonedSequenceModal = document.getElementById('abandoned-sequence-modal');
+const closeAbandonedSequenceModalBtn = document.getElementById('close-abandoned-sequence-modal-btn');
+const cancelAbandonedSequenceBtn = document.getElementById('cancel-abandoned-sequence-btn');
+const submitAbandonedSequenceBtn = document.getElementById('submit-abandoned-sequence-btn');
+const abandonedSequenceEmailInput = document.getElementById('abandoned-sequence-email');
+const abandonedSequenceStatus = document.getElementById('abandoned-sequence-status');
 
 const voidLabelFormContainer = document.getElementById('void-label-form-container');
 const voidLabelOptionsContainer = document.getElementById('void-label-options');
@@ -8102,6 +8109,156 @@ modalMessage.classList.add('bg-blue-100', 'text-blue-700');
 modalMessage.classList.remove('hidden');
 }
 
+
+const ABANDONED_CHECKOUT_TEST_STAGES = [
+{ key: 'after12h', subject: 'Your Payout is Ready', heading: 'Your payout is ready' },
+{ key: 'after24h', subject: 'Where did you go?', heading: 'Still thinking it over?' },
+{ key: 'after3d', subject: 'You are quite the negotiator...', heading: 'You drove a hard bargain', bonusCode: 'HigherPayout', bonusAmount: 10 },
+{ key: 'after5d', subject: 'Your Offer is Expiring', heading: 'Your offer window is closing' },
+{ key: 'after7d', subject: 'Last Call: lock in your payout', heading: 'Final reminder', bonusCode: 'HigherPayout', bonusAmount: 10 },
+];
+
+const ABANDONED_CHECKOUT_TEST_DEVICES = [
+{
+  modelName: 'IPHONE 16 PLUS',
+  storage: '128GB',
+  lock: 'Verizon',
+  condition: 'Fair',
+  qty: 1,
+  unitPrice: 308,
+  imageUrl: 'https://secondhandcell.com/assets/sellcell.webp',
+},
+{
+  modelName: 'IPHONE 16 PLUS',
+  storage: '256GB',
+  lock: 'Verizon',
+  condition: 'Fair',
+  qty: 1,
+  unitPrice: 329,
+  imageUrl: 'https://secondhandcell.com/assets/sellcell.webp',
+},
+];
+
+function formatUsd(amount) {
+const value = Number(amount || 0);
+return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
+}
+
+function buildTestDevicesHtml(devices = []) {
+return devices.map((device) => {
+  const qty = Math.max(1, Number(device.qty) || 1);
+  const lineTotal = qty * Number(device.unitPrice || 0);
+  return `
+    <tr>
+      <td style="padding:12px;border-bottom:1px solid #e2e8f0;"><img src="${window.escapeHtml(device.imageUrl)}" alt="${window.escapeHtml(device.modelName)}" style="width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid #dbeafe;" /></td>
+      <td style="padding:12px;border-bottom:1px solid #e2e8f0;color:#0f172a;"><div style="font-weight:700;">${window.escapeHtml(device.modelName)} • ${window.escapeHtml(device.storage)}</div><div style="font-size:13px;color:#475569;margin-top:4px;">${window.escapeHtml(device.lock)} • ${window.escapeHtml(device.condition)} • Qty ${qty}</div></td>
+      <td style="padding:12px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;white-space:nowrap;">${formatUsd(lineTotal)}</td>
+    </tr>`;
+}).join('');
+}
+
+function buildAbandonedCheckoutTestEmailHtml(targetEmail, stage) {
+const devices = ABANDONED_CHECKOUT_TEST_DEVICES;
+const subtotal = devices.reduce((sum, device) => sum + (Math.max(1, Number(device.qty) || 1) * Number(device.unitPrice || 0)), 0);
+const checkoutUrl = `https://secondhandcell.com/sell/checkout.html?email=${encodeURIComponent(String(targetEmail || '').trim().toLowerCase())}`;
+const promoGif = 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXZza2JnM2Nkd2x1Y3puMzY5eDljN2x3N3hqYjN3N2M3M2Y0eWw3aiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3o7btPCcdNniyf0ArS/giphy.gif';
+const bonusBlock = stage.bonusAmount && stage.bonusCode
+  ? `<div style="margin:16px 0;padding:12px;border-radius:12px;border:1px solid #f59e0b;background:#fffbeb;color:#92400e;"><strong>Bonus unlocked:</strong> Use code <strong>${window.escapeHtml(stage.bonusCode)}</strong> for <strong>${formatUsd(stage.bonusAmount)}</strong> extra payout.</div>`
+  : '';
+
+return `<!doctype html><html><body style="margin:0;padding:0;background:#e0f2fe;font-family:Arial,sans-serif;color:#0f172a;"><div style="max-width:640px;margin:20px auto;background:#fff;border:1px solid #bae6fd;border-radius:20px;overflow:hidden;"><div style="background:linear-gradient(135deg,#0ea5e9,#0f766e 55%,#14b8a6);padding:26px 20px;color:#fff;text-align:center;"><img src="https://secondhandcell.com/assets/logo.webp" alt="SecondHandCell" style="height:42px;width:auto;display:block;margin:0 auto 10px;" /><div style="font-size:15px;font-weight:700;">Fast payouts. Fair offers. Zero hassle.</div><h1 style="margin:12px 0 0;font-size:30px;">${window.escapeHtml(stage.heading)}</h1></div><div style="padding:20px;"><img src="https://secondhandcell.com/assets/sellcell.webp" alt="Devices" style="width:100%;border-radius:12px;border:1px solid #bae6fd;" /><img src="${promoGif}" alt="Promo" style="width:100%;max-width:420px;display:block;margin:12px auto;border-radius:12px;" /><p style="font-size:16px;line-height:1.6;color:#334155;">Test send for abandoned-checkout stage <strong>${window.escapeHtml(stage.key)}</strong>. This email includes sample devices for QA.</p>${bonusBlock}<table width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #bae6fd;border-radius:12px;overflow:hidden;background:#f8fafc;"><thead><tr><th colspan="2" style="padding:10px 12px;text-align:left;color:#0e7490;font-size:12px;border-bottom:1px solid #bae6fd;">Saved devices</th><th style="padding:10px 12px;text-align:right;color:#0e7490;font-size:12px;border-bottom:1px solid #bae6fd;">Payout</th></tr></thead><tbody>${buildTestDevicesHtml(devices)}<tr><td colspan="2" style="padding:14px 12px;text-align:right;font-weight:700;background:#ecfeff;">Total checkout</td><td style="padding:14px 12px;text-align:right;font-weight:800;background:#ecfeff;">${formatUsd(subtotal)}</td></tr></tbody></table><div style="text-align:center;margin:18px 0 8px;"><a href="${checkoutUrl}" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#0f766e);color:#fff;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:700;">Checkout Now</a></div></div></div></body></html>`;
+}
+
+function setAbandonedSequenceStatus(message, type = 'info') {
+if (!abandonedSequenceStatus) {
+  return;
+}
+abandonedSequenceStatus.textContent = message;
+abandonedSequenceStatus.className = 'text-sm rounded-md px-3 py-2';
+if (type === 'success') {
+  abandonedSequenceStatus.classList.add('bg-green-100', 'text-green-700');
+} else if (type === 'error') {
+  abandonedSequenceStatus.classList.add('bg-red-100', 'text-red-700');
+} else {
+  abandonedSequenceStatus.classList.add('bg-slate-100', 'text-slate-700');
+}
+abandonedSequenceStatus.classList.remove('hidden');
+}
+
+function toggleAbandonedSequenceModal(show) {
+if (!abandonedSequenceModal) {
+  return;
+}
+abandonedSequenceModal.classList.toggle('hidden', !show);
+abandonedSequenceModal.classList.toggle('flex', !!show);
+if (show) {
+  setTimeout(() => abandonedSequenceEmailInput?.focus(), 0);
+} else if (abandonedSequenceStatus) {
+  abandonedSequenceStatus.classList.add('hidden');
+}
+}
+
+function setAbandonedSequenceSending(isSending) {
+if (!submitAbandonedSequenceBtn) {
+  return;
+}
+submitAbandonedSequenceBtn.disabled = isSending;
+submitAbandonedSequenceBtn.textContent = isSending ? 'Sending...' : 'Send All 5';
+}
+
+async function handleSendAbandonedTestSequence() {
+const targetEmail = String(abandonedSequenceEmailInput?.value || '').trim().toLowerCase();
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+if (!emailRegex.test(targetEmail)) {
+  setAbandonedSequenceStatus('Please enter a valid email address.', 'error');
+  return;
+}
+
+setAbandonedSequenceSending(true);
+setAbandonedSequenceStatus('Sending 5 emails. Please wait…', 'info');
+
+try {
+  for (let index = 0; index < ABANDONED_CHECKOUT_TEST_STAGES.length; index += 1) {
+    const stage = ABANDONED_CHECKOUT_TEST_STAGES[index];
+    const html = buildAbandonedCheckoutTestEmailHtml(targetEmail, stage);
+    await apiPost('/send-email', {
+      to: targetEmail,
+      subject: `[TEST ${index + 1}/5] ${stage.subject}`,
+      html,
+    }, { authRequired: true });
+  }
+  setAbandonedSequenceStatus(`Done! Sent all 5 abandoned-checkout test emails to ${targetEmail}.`, 'success');
+  displayModalMessage(`Sent 5 abandoned-checkout test emails to ${targetEmail}.`, 'success');
+} catch (error) {
+  console.error('Failed to send abandoned checkout test sequence:', error);
+  setAbandonedSequenceStatus(`Failed while sending sequence: ${error.message}`, 'error');
+  displayModalMessage(`Failed to send sequence: ${error.message}`, 'error');
+} finally {
+  setAbandonedSequenceSending(false);
+}
+}
+
+function initializeAbandonedSequenceModal() {
+if (!openAbandonedSequenceModalBtn || !abandonedSequenceModal) {
+  return;
+}
+openAbandonedSequenceModalBtn.addEventListener('click', () => toggleAbandonedSequenceModal(true));
+closeAbandonedSequenceModalBtn?.addEventListener('click', () => toggleAbandonedSequenceModal(false));
+cancelAbandonedSequenceBtn?.addEventListener('click', () => toggleAbandonedSequenceModal(false));
+abandonedSequenceModal.addEventListener('click', (event) => {
+  if (event.target === abandonedSequenceModal) {
+    toggleAbandonedSequenceModal(false);
+  }
+});
+submitAbandonedSequenceBtn?.addEventListener('click', handleSendAbandonedTestSequence);
+abandonedSequenceEmailInput?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    handleSendAbandonedTestSequence();
+  }
+});
+}
+
 function closeOrderDetailsModal() {
 if (!orderDetailsModal) {
 return;
@@ -8546,6 +8703,8 @@ timeDisplay.textContent = timeDate;
 // Update time every minute
 updateTimeDate();
 setInterval(updateTimeDate, 60000);
+
+initializeAbandonedSequenceModal();
 
 // Update notification badge for new orders
 function updateNotificationBadge(orders) {
