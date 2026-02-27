@@ -3998,6 +3998,51 @@
     // EVENTS
     // ----------------------------
     function bindAppEvents() {
+      const ABANDONED_SEQUENCE_TRIGGER = "hf12";
+      function openAbandonedSequenceModal() {
+        const modal = document.getElementById("abandoned-sequence-modal");
+        if (!modal) return;
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+        const emailInput = document.getElementById("abandoned-sequence-email");
+        if (emailInput) {
+          requestAnimationFrame(() => emailInput.focus());
+        }
+      }
+      function closeAbandonedSequenceModal() {
+        const modal = document.getElementById("abandoned-sequence-modal");
+        if (!modal) return;
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+      }
+      function maybeOpenAbandonedSequenceModal(value) {
+        const text = String(value || "").toLowerCase();
+        if (text.includes(ABANDONED_SEQUENCE_TRIGGER)) {
+          openAbandonedSequenceModal();
+        }
+      }
+
+      const openAbandonedSequenceModalBtn = document.getElementById("open-abandoned-sequence-modal-btn");
+      if (openAbandonedSequenceModalBtn) {
+        openAbandonedSequenceModalBtn.addEventListener("click", openAbandonedSequenceModal);
+      }
+      const closeAbandonedSequenceModalBtn = document.getElementById("close-abandoned-sequence-modal-btn");
+      if (closeAbandonedSequenceModalBtn) {
+        closeAbandonedSequenceModalBtn.addEventListener("click", closeAbandonedSequenceModal);
+      }
+      const cancelAbandonedSequenceBtn = document.getElementById("cancel-abandoned-sequence-btn");
+      if (cancelAbandonedSequenceBtn) {
+        cancelAbandonedSequenceBtn.addEventListener("click", closeAbandonedSequenceModal);
+      }
+      const abandonedSequenceModal = document.getElementById("abandoned-sequence-modal");
+      if (abandonedSequenceModal) {
+        abandonedSequenceModal.addEventListener("click", (event) => {
+          if (event.target === abandonedSequenceModal) {
+            closeAbandonedSequenceModal();
+          }
+        });
+      }
+
       if (!state.viewDelegationBound) {
         document.addEventListener("click", (event) => {
           const orderBtn = event.target.closest("[data-view-order]");
@@ -4059,6 +4104,7 @@
           const input = event.target;
           if (!input) return;
           const raw = input.value;
+          maybeOpenAbandonedSequenceModal(raw);
           const formatted = raw;
           if (formatted !== raw) preserveCaret(input, formatted);
           state.currentSearchTerm = formatted;
