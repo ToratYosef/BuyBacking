@@ -8020,7 +8020,7 @@ function getAbandonedCheckoutDevices(progress = {}) {
 
 function buildAbandonedCheckoutDevicesHtml(devices = []) {
   if (!devices.length) {
-    return '<tr><td colspan="3" style="padding:12px 10px; color:#475569;">Your saved device details are ready in checkout.</td></tr>';
+    return '<tr><td colspan="3" style="padding:16px 14px; color:#475569; font-size:14px;">Your saved device details are ready in checkout.</td></tr>';
   }
 
   return devices.map((device) => {
@@ -8032,12 +8032,12 @@ function buildAbandonedCheckoutDevicesHtml(devices = []) {
 
     return `
       <tr>
-        <td style="padding:12px 10px; border-bottom:1px solid #e2e8f0;">${imageBlock}</td>
-        <td style="padding:12px 10px; border-bottom:1px solid #e2e8f0; color:#0f172a;">
+        <td style="padding:14px 12px; border-bottom:1px solid #e2e8f0; background:#ffffff;">${imageBlock}</td>
+        <td style="padding:14px 12px; border-bottom:1px solid #e2e8f0; color:#0f172a; background:#ffffff;">
           <div style="font-weight:700; font-size:15px;">${escapeHtml(titleBits || device.modelName)}</div>
           <div style="font-size:13px; color:#475569; margin-top:4px;">${escapeHtml(metaBits)}</div>
         </td>
-        <td style="padding:12px 10px; border-bottom:1px solid #e2e8f0; text-align:right; color:#0f172a; font-weight:700; white-space:nowrap;">${formatUsd(device.lineTotal)}</td>
+        <td style="padding:14px 12px; border-bottom:1px solid #e2e8f0; text-align:right; color:#0f172a; font-weight:700; white-space:nowrap; background:#ffffff;">${formatUsd(device.lineTotal)}</td>
       </tr>
     `;
   }).join('');
@@ -8050,6 +8050,16 @@ function buildAbandonedCheckoutEmail(progress, stage) {
   const subtotal = devices.reduce((sum, device) => sum + (Number(device.lineTotal) || 0), 0);
   const checkoutUrl = buildAbandonedCheckoutUrl(email);
   const slogan = 'Fast payouts. Fair offers. Zero hassle.';
+  const logoDarkUrl = 'https://secondhandcell.com/assets/logo.webp';
+  const promoHeroImageUrl = 'https://secondhandcell.com/assets/sellcell.webp';
+  const promoGifByStage = {
+    after12h: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExaXZza2JnM2Nkd2x1Y3puMzY5eDljN2x3N3hqYjN3N2M3M2Y0eWw3aiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/3o7btPCcdNniyf0ArS/giphy.gif',
+    after24h: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExeWt4ajM4Nmo2MjE2aXNhcnl2cDBxNGlud2RlZmY4bm1hdXd4NW1uaiZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l0MYt5jPR6QX5pnqM/giphy.gif',
+    after3d: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExNnNnNW9jNjNuMzM0d2d0djR0dW9oMmJqd2N6eDk1b2JzaWh6enN4eSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/YTbZzCkRQCEJa/giphy.gif',
+    after5d: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExb2V3NnFhMzQ2bnJwZjN3dXBsN3B6d2xvMmlrM3Y4a2w0emNwY3lmYyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/jpVuGo0JkAXJiuNNK7/giphy.gif',
+    after7d: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExc2thYnVvazduYWZhYTU2cnB4N3l0Yzh1ZHA1Yzgxd2w5YjVvODI3NyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/26u4lOMA8JKSnL9Uk/giphy.gif',
+  };
+  const promoGifUrl = promoGifByStage[stage.key] || promoGifByStage.after12h;
   const hasBonus = Number.isFinite(Number(stage.bonusAmount)) && stage.bonusAmount > 0 && stage.bonusCode;
 
   const introByStage = {
@@ -8061,9 +8071,9 @@ function buildAbandonedCheckoutEmail(progress, stage) {
   };
 
   const reasonPoints = [
-    'Free tracked shipping label at checkout.',
-    'Offer protected for 14 days once you complete checkout.',
-    'Real support team—just reply if you need help or a box.',
+    'Shipping is always 100% free with a prepaid label.',
+    'Your quote is protected for 14 days after checkout.',
+    'Need a box or help? Reply and our team handles it fast.',
   ];
 
   const bonusBlock = hasBonus
@@ -8081,26 +8091,35 @@ function buildAbandonedCheckoutEmail(progress, stage) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(stage.subject)}</title>
 </head>
-<body style="margin:0; padding:0; background:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; color:#0f172a;">
+<body style="margin:0; padding:0; background:#e0f2fe; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif; color:#0f172a;">
   <div style="padding:24px 12px;">
-    <div style="max-width:640px; margin:0 auto; background:#ffffff; border-radius:18px; overflow:hidden; border:1px solid #e2e8f0; box-shadow:0 16px 40px rgba(2,6,23,0.08);">
-      <div style="background:linear-gradient(135deg,#0f766e,#14b8a6); color:#ffffff; padding:30px 24px; text-align:center;">
-        <div style="font-size:13px; letter-spacing:0.08em; text-transform:uppercase; opacity:0.92;">SecondHandCell</div>
-        <div style="margin-top:8px; font-size:16px; font-weight:600;">${escapeHtml(slogan)}</div>
-        <h1 style="margin:16px 0 0; font-size:30px; line-height:1.2;">${escapeHtml(stage.heading)}</h1>
+    <div style="max-width:640px; margin:0 auto; background:#ffffff; border-radius:24px; overflow:hidden; border:1px solid #bae6fd; box-shadow:0 18px 42px rgba(14,116,144,0.22);">
+      <div style="background:linear-gradient(135deg,#0ea5e9,#0f766e 55%,#14b8a6); color:#ffffff; padding:26px 24px 30px; text-align:center;">
+        <img src="${escapeHtml(logoDarkUrl)}" alt="SecondHandCell" style="display:block; margin:0 auto 12px; height:44px; width:auto;" />
+        <div style="font-size:15px; font-weight:700; letter-spacing:0.02em;">${escapeHtml(slogan)}</div>
+        <h1 style="margin:14px 0 0; font-size:31px; line-height:1.2;">${escapeHtml(stage.heading)}</h1>
       </div>
-      <div style="padding:26px 24px;">
+      <div style="padding:20px 24px 26px; background:linear-gradient(180deg,#ecfeff 0%,#ffffff 30%);">
+        <img src="${escapeHtml(promoHeroImageUrl)}" alt="Sell your devices" style="display:block; width:100%; max-width:592px; height:auto; border-radius:16px; border:1px solid #bae6fd;" />
+        <img src="${escapeHtml(promoGifUrl)}" alt="Promotion" style="display:block; margin:14px auto 4px; width:100%; max-width:440px; height:auto; border-radius:14px;" />
+
         <p style="margin:0 0 16px; font-size:16px;">Hi ${escapeHtml(firstName)},</p>
         <p style="margin:0 0 16px; font-size:16px; line-height:1.65; color:#334155;">${introByStage[stage.key] || 'Your saved checkout is ready when you are.'}</p>
 
         ${bonusBlock}
 
-        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; margin:16px 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid #bae6fd; border-radius:14px; overflow:hidden; margin:16px 0; background:#f8fafc;">
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:12px 14px; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:#0e7490; border-bottom:1px solid #bae6fd;" colspan="2">Saved devices</th>
+              <th style="text-align:right; padding:12px 14px; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:#0e7490; border-bottom:1px solid #bae6fd;">Payout</th>
+            </tr>
+          </thead>
           <tbody>
             ${buildAbandonedCheckoutDevicesHtml(devices)}
             <tr>
-              <td colspan="2" style="padding:14px 10px; text-align:right; font-size:14px; color:#334155; font-weight:700;">Total checkout</td>
-              <td style="padding:14px 10px; text-align:right; font-size:16px; color:#0f172a; font-weight:800; white-space:nowrap;">${formatUsd(subtotal)}</td>
+              <td colspan="2" style="padding:16px 12px; text-align:right; font-size:14px; color:#334155; font-weight:700; background:#ecfeff;">Total checkout</td>
+              <td style="padding:16px 12px; text-align:right; font-size:19px; color:#0f172a; font-weight:800; white-space:nowrap; background:#ecfeff;">${formatUsd(subtotal)}</td>
             </tr>
           </tbody>
         </table>
@@ -8110,10 +8129,13 @@ function buildAbandonedCheckoutEmail(progress, stage) {
         </ul>
 
         <div style="text-align:center; margin:8px 0 22px;">
-          <a href="${escapeHtml(checkoutUrl)}" style="display:inline-block; background:#0f766e; color:#ffffff; text-decoration:none; font-weight:700; border-radius:999px; padding:12px 24px;">Checkout Now</a>
+          <a href="${escapeHtml(checkoutUrl)}" style="display:inline-block; background:linear-gradient(135deg,#0ea5e9,#0f766e); color:#ffffff; text-decoration:none; font-weight:800; border-radius:999px; padding:14px 30px; letter-spacing:0.01em; box-shadow:0 8px 18px rgba(14,116,144,0.35);">Checkout Now</a>
         </div>
 
-        <p style="margin:0; font-size:14px; color:#64748b;">Questions or need a shipping box? Reply to this email and our team will help right away.</p>
+        <div style="border-top:1px solid #e2e8f0; padding-top:16px; margin-top:10px;">
+          <p style="margin:0 0 8px; font-size:14px; color:#64748b;">Questions or need a shipping box? Reply to this email and our team will help right away.</p>
+          <p style="margin:0; font-size:13px; color:#0f766e; font-weight:700;">Trusted by thousands of sellers with fast, fair payouts.</p>
+        </div>
       </div>
     </div>
   </div>
