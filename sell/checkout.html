@@ -575,6 +575,35 @@
         qty: Math.max(1, Math.floor(Number(item.qty || 1))),
         unitPrice: Number(item.unitPrice || 0)
     }));
+    const mapDbDevicesToCart = (devices = []) => {
+        return (Array.isArray(devices) ? devices : []).map((item = {}) => {
+            const normalized = normalizeCartItem(item);
+            const key = [
+                normalized.brand || '',
+                normalized.model || '',
+                normalized.storage || '',
+                normalized.lock || '',
+                normalized.condition || ''
+            ].join('|');
+
+            return {
+                ...normalized,
+                key
+            };
+        });
+    };
+    const fetchSellProgressCart = async (email) => {
+        const normalizedEmail = normalizeEmail(email);
+        if (!isValidEmail(normalizedEmail)) return [];
+        const docRef = getSellProgressDocRef(normalizedEmail);
+        if (!docRef) return [];
+
+        const snap = await getDoc(docRef);
+        if (!snap.exists()) return [];
+
+        const data = snap.data() || {};
+        return mapDbDevicesToCart(data.devices || []);
+    };
     const upsertSellProgress = async ({ email, didComplete = false, cartItems = [] }) => {
         const normalizedEmail = normalizeEmail(email);
         if (!isValidEmail(normalizedEmail)) return;
@@ -833,6 +862,12 @@
         if (action === 'remove') cartItems.splice(index, 1);
         saveCart(cartItems);
         syncQtyParamToUrl();
+        const checkoutEmail = normalizeEmail(document.getElementById('email')?.value || localStorage.getItem(EMAIL_STORAGE_KEY) || '');
+        if (isValidEmail(checkoutEmail)) {
+            upsertSellProgress({ email: checkoutEmail, didComplete: false, cartItems }).catch((error) => {
+                console.error('Failed saving checkout cart changes:', error);
+            });
+        }
         if (redirectToSellIfCartEmpty()) return;
         renderCart();
     };
@@ -953,54 +988,20 @@
             checkoutEmailInput.value = fallbackEmail;
         }
 
-        let b = normalizeBrandKey(params.get('brand') || '');
-        let m = params.get('model') || '';
-        const deviceParam = params.get('device') || '';
-        const s = params.get('storage');
-        const l = params.get('lock') || params.get('carrier');
-        const c = params.get('condition') || mapQualityToCondition(params.get('quality'));
-        const qty = parseInt(params.get('qty') || '1');
-        const normalizedQty = Math.max(1, Number.isFinite(qty) ? qty : 1);
-
-        if ((!b || !m) && deviceParam) {
-            const modelMatch = await findModelBySlug(deviceParam, b);
-            if (modelMatch) {
-                b = modelMatch.brand;
-                m = modelMatch.model.id;
-            }
-        }
-
-        if (!b && !m && !s && !l && !c && cartItems.length === 1 && params.has('qty')) {
-            cartItems[0].qty = normalizedQty;
-            saveCart(cartItems);
-        }
-
-        try {
-            if (b && m && s && l && c) {
-                const docRef = doc(db, "devices", b, "models", m);
-                const snap = await getDoc(docRef);
-                if (snap.exists()) {
-                    const data = snap.data();
-                    const getVal = (obj, key) => obj[key] || obj[key.toLowerCase()] || obj[key.toUpperCase()];
-                    const storageMap = getVal(data.prices, s) || {};
-                    const lockKey = getMatchingKey(Object.keys(storageMap), normalizeCarrier(l));
-                    const lockMap = getVal(storageMap, lockKey || l) || {};
-                    const normalizedCondition = mapQualityToCondition(c) || normalizeParam(c);
-                    const unitPrice = lockMap[normalizedCondition] || lockMap[c] || 0;
-                    addItemToCart({
-                        brand: b,
-                        model: m,
-                        modelName: data.name,
-                        storage: s,
-                        lock: lockKey || l,
-                        condition: normalizedCondition || c,
-                        qty: normalizedQty,
-                        unitPrice: unitPrice,
-                        conditionPrices: lockMap
-                    });
+        const checkoutEmail = normalizeEmail(checkoutEmailInput?.value || fallbackEmail || '');
+        if (isValidEmail(checkoutEmail)) {
+            try {
+                const savedCart = await fetchSellProgressCart(checkoutEmail);
+                if (savedCart.length) {
+                    cartItems = savedCart;
+                    saveCart(cartItems);
+                } else if (cartItems.length) {
+                    await upsertSellProgress({ email: checkoutEmail, didComplete: false, cartItems });
                 }
+            } catch (error) {
+                console.error('Failed loading sell progress cart from Firebase:', error);
             }
-        } catch (err) { console.error(err); }
+        }
 
         if (redirectToSellIfCartEmpty()) return;
 
