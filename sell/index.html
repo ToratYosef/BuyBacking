@@ -833,7 +833,7 @@
 
 <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, getDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, setDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
     const firebaseConfig = {
@@ -939,6 +939,7 @@
     const FALLBACK_DEVICE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
     const CART_STORAGE_KEY = 'shc_cart';
     const EMAIL_STORAGE_KEY = 'shc_quote_email';
+    const SELL_PROGRESS_COLLECTION = 'sellOrderProgress';
     const IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
 
     const state = {
@@ -953,6 +954,62 @@
     };
 
     const stepOrder = ['brand', 'model', 'storage', 'lock', 'condition'];
+
+    const isValidEmail = (value) => {
+        const email = (value || '').trim();
+        return email.includes('@') && email.includes('.');
+    };
+    const normalizeEmail = (value) => (value || '').trim().toLowerCase();
+    const lockEmailInput = (emailValue = '') => {
+        const emailInput = document.getElementById('user-email');
+        if (!emailInput) return;
+        if (emailValue) emailInput.value = emailValue;
+        emailInput.readOnly = true;
+        emailInput.classList.remove('error-highlight');
+        emailInput.setAttribute('title', 'Email saved. This sell session is linked to this address.');
+        const errorLabel = document.getElementById('email-error-msg');
+        if (errorLabel) errorLabel.style.display = 'none';
+    };
+    const getSellProgressDocRef = (email) => {
+        const normalized = normalizeEmail(email);
+        if (!normalized) return null;
+        return doc(db, SELL_PROGRESS_COLLECTION, encodeURIComponent(normalized));
+    };
+    const mapCartItemsForDb = (cartItems = []) => cartItems.map((item) => ({
+        key: item.key || '',
+        brand: item.brand || '',
+        model: item.model || '',
+        modelName: item.modelName || '',
+        deviceSlug: item.deviceSlug || '',
+        storage: item.storage || '',
+        lock: item.lock || '',
+        condition: item.condition || '',
+        qty: Math.max(1, Number(item.qty || 1)),
+        unitPrice: Number(item.unitPrice || 0)
+    }));
+    const upsertSellProgress = async ({ email, didComplete = false, cartItems = [] }) => {
+        const normalizedEmail = normalizeEmail(email);
+        if (!isValidEmail(normalizedEmail)) return;
+
+        const docRef = getSellProgressDocRef(normalizedEmail);
+        if (!docRef) return;
+
+        const existingSnap = await getDoc(docRef);
+        const nowIso = new Date().toISOString();
+        const existingData = existingSnap.exists() ? existingSnap.data() : null;
+
+        const payload = {
+            email: normalizedEmail,
+            didComplete: Boolean(didComplete),
+            devices: mapCartItemsForDb(cartItems),
+            updatedAt: nowIso
+        };
+
+        if (!existingData?.createdAt) payload.createdAt = nowIso;
+
+        await setDoc(docRef, payload, { merge: true });
+        setStoredEmail(normalizedEmail);
+    };
 
     let currentUser = null;
     onAuthStateChanged(auth, (user) => {
@@ -981,17 +1038,16 @@
 
             // Pre-fill email field for account holders but keep editable
             if (emailInput) {
-                emailInput.value = user.email || '';
-                emailInput.readOnly = false; // ALLOW CHANGING EVEN IF SIGNED IN
-                emailInput.classList.remove('error-highlight');
-                document.getElementById('email-error-msg').style.display = 'none';
+                const fallbackEmail = getStoredEmail();
+                const preferredEmail = normalizeEmail(user.email || fallbackEmail || '');
+                if (preferredEmail) lockEmailInput(preferredEmail);
             }
         } else {
             loginBtn.classList.remove('hidden');
             monogram.classList.add('hidden');
             if (emailInput) {
-                emailInput.value = '';
-                emailInput.readOnly = false;
+                const storedEmail = normalizeEmail(getStoredEmail());
+                if (storedEmail) lockEmailInput(storedEmail);
             }
         }
     });
@@ -1178,6 +1234,7 @@
         }
         saveCart(cart);
         updateCartSummary();
+        return cart;
     };
     const getStoredEmail = () => {
         try {
@@ -1505,11 +1562,13 @@
         // Ensure email pre-fill logic is updated when switching to final view
         const emailInput = document.getElementById('user-email');
         if (emailInput) {
-            if (currentUser && currentUser.email) {
-                emailInput.value = currentUser.email;
-                emailInput.readOnly = false; // KEEP EDITABLE EVEN WHEN SIGNED IN
+            const existingEmail = normalizeEmail(getStoredEmail());
+            if (existingEmail) {
+                lockEmailInput(existingEmail);
+            } else if (currentUser && currentUser.email) {
+                lockEmailInput(currentUser.email);
             } else if (!emailInput.value) {
-                emailInput.value = getStoredEmail();
+                emailInput.readOnly = false;
             }
         }
 
@@ -1780,34 +1839,57 @@
     document.getElementById('startCheckoutBtn').onclick = () => {
         const emailInput = document.getElementById('user-email');
         const errorLabel = document.getElementById('email-error-msg');
-        const email = emailInput.value;
+        const email = normalizeEmail(emailInput.value);
         
-        if (!email.includes('@') || !email.includes('.')) {
+        if (!isValidEmail(email)) {
             emailInput.classList.add('error-highlight');
             errorLabel.style.display = 'block';
             return;
         }
 
         setStoredEmail(email);
+        lockEmailInput(email);
         document.getElementById('qty-modal').style.display = 'flex';
     };
 
     document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
-    document.getElementById('finalSubmitBtn').onclick = () => {
-        setStoredEmail(document.getElementById('user-email').value);
-        addCurrentDeviceToCart();
-        const finalData = { ...state.selections, email: document.getElementById('user-email').value };
+    document.getElementById('finalSubmitBtn').onclick = async () => {
+        const email = normalizeEmail(document.getElementById('user-email').value);
+        setStoredEmail(email);
+        lockEmailInput(email);
+        const cart = addCurrentDeviceToCart() || getCart();
+        try {
+            await upsertSellProgress({ email, didComplete: false, cartItems: cart });
+        } catch (error) {
+            console.error('Failed saving sell session:', error);
+        }
+        const finalData = { ...state.selections, email };
         window.location.href = `/sell/checkout.html?${new URLSearchParams(finalData).toString()}`;
     };
-    document.getElementById('addAnotherDeviceBtn').onclick = () => {
-        setStoredEmail(document.getElementById('user-email').value);
-        addCurrentDeviceToCart();
+    document.getElementById('addAnotherDeviceBtn').onclick = async () => {
+        const email = normalizeEmail(document.getElementById('user-email').value);
+        setStoredEmail(email);
+        lockEmailInput(email);
+        const cart = addCurrentDeviceToCart() || getCart();
+        try {
+            await upsertSellProgress({ email, didComplete: false, cartItems: cart });
+        } catch (error) {
+            console.error('Failed saving sell session:', error);
+        }
         document.getElementById('qty-modal').style.display = 'none';
         jumpToStep('brand');
     };
     document.getElementById('resetFlowBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
-    document.getElementById('continueToCheckoutBtn').onclick = () => {
+    document.getElementById('continueToCheckoutBtn').onclick = async () => {
+        const email = normalizeEmail(getStoredEmail());
+        if (isValidEmail(email)) {
+            try {
+                await upsertSellProgress({ email, didComplete: false, cartItems: getCart() });
+            } catch (error) {
+                console.error('Failed saving sell session before checkout:', error);
+            }
+        }
         window.location.href = '/sell/checkout.html';
     };
 

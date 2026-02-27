@@ -480,6 +480,9 @@
     const checkoutSummaryAside = document.getElementById('checkout-summary-aside');
     const termsSubmitSection = document.getElementById('terms-submit-section');
 
+    const SELL_PROGRESS_COLLECTION = 'sellOrderProgress';
+    const EMAIL_STORAGE_KEY = 'shc_quote_email';
+
     const placeSummaryByViewport = () => {
         if (!checkoutWrapper || !checkoutForm || !checkoutSummaryAside || !termsSubmitSection) return;
         if (window.matchMedia('(max-width: 640px)').matches) {
@@ -527,7 +530,7 @@
             
             const emailField = document.getElementById('email');
             if (emailField) {
-                emailField.value = user.email || '';
+                emailField.value = (user.email || '').trim().toLowerCase();
                 emailField.readOnly = false;
             }
 
@@ -550,6 +553,49 @@
             monogram.classList.add('hidden');
         }
     });
+
+    const normalizeEmail = (value) => (value || '').trim().toLowerCase();
+    const isValidEmail = (value) => {
+        const email = normalizeEmail(value);
+        return email.includes('@') && email.includes('.');
+    };
+    const getSellProgressDocRef = (email) => {
+        const normalized = normalizeEmail(email);
+        if (!normalized) return null;
+        return doc(db, SELL_PROGRESS_COLLECTION, encodeURIComponent(normalized));
+    };
+    const mapCartItemsForDb = (items = []) => items.map((item) => ({
+        key: item.key || '',
+        brand: item.brand || '',
+        model: item.model || '',
+        modelName: item.modelName || '',
+        storage: item.storage || '',
+        lock: item.lock || '',
+        condition: item.condition || '',
+        qty: Math.max(1, Math.floor(Number(item.qty || 1))),
+        unitPrice: Number(item.unitPrice || 0)
+    }));
+    const upsertSellProgress = async ({ email, didComplete = false, cartItems = [] }) => {
+        const normalizedEmail = normalizeEmail(email);
+        if (!isValidEmail(normalizedEmail)) return;
+        const docRef = getSellProgressDocRef(normalizedEmail);
+        if (!docRef) return;
+
+        const existingSnap = await getDoc(docRef);
+        const nowIso = new Date().toISOString();
+        const existingData = existingSnap.exists() ? existingSnap.data() : null;
+
+        const payload = {
+            email: normalizedEmail,
+            didComplete: Boolean(didComplete),
+            devices: mapCartItemsForDb(cartItems),
+            updatedAt: nowIso
+        };
+        if (!existingData?.createdAt) payload.createdAt = nowIso;
+
+        await setDoc(docRef, payload, { merge: true });
+        try { localStorage.setItem(EMAIL_STORAGE_KEY, normalizedEmail); } catch (e) {}
+    };
 
     const toNumber = (value) => {
         const parsed = Number(value);
@@ -901,6 +947,12 @@
         cartItems = getCart();
         placeSummaryByViewport();
 
+        const checkoutEmailInput = document.getElementById('email');
+        const fallbackEmail = normalizeEmail(params.get('email') || localStorage.getItem(EMAIL_STORAGE_KEY) || '');
+        if (checkoutEmailInput && !checkoutEmailInput.value && fallbackEmail) {
+            checkoutEmailInput.value = fallbackEmail;
+        }
+
         let b = normalizeBrandKey(params.get('brand') || '');
         let m = params.get('model') || '';
         const deviceParam = params.get('device') || '';
@@ -951,6 +1003,15 @@
         } catch (err) { console.error(err); }
 
         if (redirectToSellIfCartEmpty()) return;
+
+        const currentCheckoutEmail = normalizeEmail(document.getElementById('email')?.value || fallbackEmail || '');
+        if (isValidEmail(currentCheckoutEmail)) {
+            try {
+                await upsertSellProgress({ email: currentCheckoutEmail, didComplete: false, cartItems });
+            } catch (error) {
+                console.error('Failed to save checkout progress state:', error);
+            }
+        }
 
         // AUTO-REMOVE ERROR HIGHLIGHT ON INPUT
         const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
@@ -1025,6 +1086,14 @@
         const finalPayout = parseFloat(document.getElementById('sum-total').textContent.replace('$', ''));
 
         shippingInfo.shippingPreference = pref;
+        const progressEmail = normalizeEmail(shippingInfo.email || document.getElementById('email')?.value || '');
+        if (isValidEmail(progressEmail)) {
+            try {
+                await upsertSellProgress({ email: progressEmail, didComplete: false, cartItems });
+            } catch (error) {
+                console.error('Failed to save pre-submit checkout progress:', error);
+            }
+        }
         btn.disabled = true;
         btn.textContent = "Processing...";
 
@@ -1101,6 +1170,14 @@
             };
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
+
+            if (isValidEmail(progressEmail)) {
+                try {
+                    await upsertSellProgress({ email: progressEmail, didComplete: true, cartItems });
+                } catch (error) {
+                    console.error('Failed to save completed checkout state:', error);
+                }
+            }
 
             const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
             const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
