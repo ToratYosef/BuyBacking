@@ -506,18 +506,31 @@
         }
         .testimonial-avatar { width: 3rem; height: 3rem; border-radius: 9999px; object-fit: cover; border: 2px solid #ffffff; box-shadow: 0 2px 6px rgba(15,23,42,0.12); }
         .testimonial-carousel {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 1rem;
+            position: relative;
+            overflow: hidden;
             padding: 0.25rem;
         }
         .testimonial-carousel:focus { outline: none; }
-        .testimonial-slide { min-width: 0; }
+        .testimonial-rail {
+            display: flex;
+            gap: 1rem;
+            will-change: transform;
+            transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .testimonial-slide {
+            min-width: 0;
+            flex: 0 0 calc((100% - 2rem) / 3);
+        }
         @media (min-width: 768px) {
-            .testimonial-carousel { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
+            .testimonial-rail { gap: 1.25rem; }
+            .testimonial-slide { flex-basis: calc((100% - 1.25rem) / 2); }
         }
         @media (min-width: 1024px) {
-            .testimonial-carousel { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+            .testimonial-rail { gap: 1.5rem; }
+            .testimonial-slide { flex-basis: calc((100% - 3rem) / 3); }
+        }
+        @media (max-width: 767px) {
+            .testimonial-slide { flex-basis: 100%; }
         }
 
         @media (max-width: 640px) {
@@ -537,7 +550,6 @@
             #pixel-hero { left: 50% !important; top: 50% !important; width: 160px !important; transform: translate(-50%, -50%) rotate(2deg) !important; }
             #samsung-hero { left: 4% !important; bottom: 6% !important; width: 170px !important; transform: rotate(-8deg) !important; }
             .testimonial-card { padding: 1.2rem; border-radius: 1rem; }
-            .testimonial-slide { flex-basis: 92%; }
             #popular .homepage-card-inner { padding: 1rem; }
             #popular .h-48 { height: 9rem; }
         }
@@ -1659,8 +1671,77 @@ function initHomePageDomFeatures() {
             </article>
         `;
 
-        const cardsMarkup = testimonialData.map((t, index) => renderReviewCard(t, index)).join('');
-        customerReviewsTrack.innerHTML = cardsMarkup;
+        const getVisibleCount = () => {
+            if (window.matchMedia('(min-width: 1024px)').matches) return 3;
+            if (window.matchMedia('(min-width: 768px)').matches) return 2;
+            return 1;
+        };
+
+        let rail = null;
+        let autoPlayTimer = null;
+        let currentIndex = 0;
+
+        const setRailOffset = (index, withTransition = true) => {
+            if (!rail || !rail.firstElementChild) return;
+            rail.style.transition = withTransition ? 'transform 0.65s cubic-bezier(0.22, 1, 0.36, 1)' : 'none';
+            const gap = parseFloat(window.getComputedStyle(rail).columnGap || window.getComputedStyle(rail).gap || '0') || 0;
+            const cardWidth = rail.firstElementChild.getBoundingClientRect().width;
+            const stepWidth = cardWidth + gap;
+            rail.style.transform = `translate3d(${-index * stepWidth}px, 0, 0)`;
+        };
+
+        const stopAutoPlay = () => {
+            if (!autoPlayTimer) return;
+            clearInterval(autoPlayTimer);
+            autoPlayTimer = null;
+        };
+
+        const startAutoPlay = () => {
+            stopAutoPlay();
+            autoPlayTimer = setInterval(() => {
+                if (!rail) return;
+                currentIndex += 1;
+                setRailOffset(currentIndex, true);
+            }, 3800);
+        };
+
+        const rebuildTestimonials = () => {
+            const visibleCount = getVisibleCount();
+            currentIndex = 0;
+
+            const loopData = testimonialData.concat(testimonialData.slice(0, visibleCount));
+            const cardsMarkup = loopData.map((t, index) => renderReviewCard(t, index)).join('');
+            customerReviewsTrack.innerHTML = `<div class="testimonial-rail">${cardsMarkup}</div>`;
+            rail = customerReviewsTrack.querySelector('.testimonial-rail');
+            setRailOffset(0, false);
+
+            if (rail) {
+                rail.addEventListener('transitionend', () => {
+                    if (currentIndex < testimonialData.length) return;
+                    currentIndex = 0;
+                    setRailOffset(currentIndex, false);
+                });
+            }
+
+            startAutoPlay();
+        };
+
+        rebuildTestimonials();
+        customerReviewsTrack.addEventListener('mouseenter', stopAutoPlay);
+        customerReviewsTrack.addEventListener('mouseleave', startAutoPlay);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAutoPlay();
+            } else {
+                startAutoPlay();
+            }
+        });
+
+        let resizeTimeout = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(rebuildTestimonials, 140);
+        });
     }
 }
 
