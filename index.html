@@ -486,86 +486,38 @@
         }
 
         /* Testimonials */
-        .testimonial-section { position: relative; background: #f0f9ff; overflow: hidden; }
-        .testimonial-cover { position:absolute; inset:0; pointer-events:none; background: linear-gradient(90deg, rgba(240,249,255,.95) 0%, rgba(240,249,255,0) 10%, rgba(240,249,255,0) 90%, rgba(240,249,255,.95) 100%); z-index:1; }
+        .testimonial-section { position: relative; background: linear-gradient(180deg, #f8fbff 0%, #eef7ff 100%); overflow: hidden; }
+        .testimonial-cover { position:absolute; inset:0; pointer-events:none; background: radial-gradient(circle at 50% 0%, rgba(59,130,246,0.10) 0%, rgba(59,130,246,0) 55%); z-index:1; }
         .testimonial-card {
-            background: white; border-radius: 1.5rem;
-            padding: 2rem; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
-            transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), filter 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .testimonial-avatar { width: 3.5rem; height: 3.5rem; border-radius: 9999px; object-fit: cover; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-        /* Testimonials carousel (center card emphasized, sides fogged) */
-        .testimonial-carousel {
+            background: #ffffff;
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            min-height: 100%;
             display: flex;
-            gap: 2rem;
-            overflow-x: hidden;
-            overflow-y: hidden;
-            scroll-snap-type: x mandatory;
-            scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch;
-            padding: 0.5rem 0.5rem;
-            scrollbar-width: none; /* Firefox */
-            -ms-overflow-style: none; /* IE/Edge legacy */
-            touch-action: pan-y;
-            overscroll-behavior-x: contain;
+            flex-direction: column;
+            justify-content: space-between;
+            border: 1px solid #dbeafe;
+            box-shadow: 0 16px 35px -28px rgba(15, 23, 42, 0.35);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
-        .testimonial-carousel.is-locked-user-scroll {
-            touch-action: pan-y pinch-zoom;
+        .testimonial-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px -30px rgba(15, 23, 42, 0.4);
         }
-
+        .testimonial-avatar { width: 3rem; height: 3rem; border-radius: 9999px; object-fit: cover; border: 2px solid #ffffff; box-shadow: 0 2px 6px rgba(15,23,42,0.12); }
+        .testimonial-carousel {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            padding: 0.25rem;
+        }
         .testimonial-carousel:focus { outline: none; }
-
-        .testimonial-carousel::-webkit-scrollbar { display: none; }
-
-        .testimonial-spacer {
-            flex: 0 0 clamp(0px, calc((100% - 520px) / 2), 40vw);
-        }
-
-        .testimonial-slide {
-            flex: 0 0 85%;
-            max-width: 520px;
-            scroll-snap-align: center;
-            opacity: 0.22;
-            filter: blur(3.5px);
-            transform: scale(0.88);
-            will-change: transform, opacity, filter;
-        }
-
+        .testimonial-slide { min-width: 0; }
         @media (min-width: 768px) {
-            .testimonial-slide { flex-basis: 60%; }
+            .testimonial-carousel { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; }
         }
-
         @media (min-width: 1024px) {
-            .testimonial-slide { flex-basis: 33%; }
-        }
-
-        .testimonial-slide.is-near {
-            opacity: 0.55;
-            filter: blur(1.8px);
-            transform: scale(0.94);
-        }
-
-        .testimonial-slide.is-center {
-            opacity: 1;
-            filter: none;
-            transform: scale(1.06);
-            border-color: rgba(37, 99, 235, 0.35);
-            box-shadow: 0 24px 60px -20px rgba(2, 6, 23, 0.35), 0 0 0 1px rgba(37, 99, 235, 0.10);
-            animation: testimonialCenterPop 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-
-        @keyframes testimonialCenterPop {
-            0% { transform: scale(0.95); }
-            60% { transform: scale(1.075); }
-            100% { transform: scale(1.06); }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .testimonial-carousel { scroll-behavior: auto; }
-            .testimonial-card { transition: none; }
+            .testimonial-carousel { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
         }
 
         @media (max-width: 640px) {
@@ -1707,158 +1659,8 @@ function initHomePageDomFeatures() {
             </article>
         `;
 
-        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
         const cardsMarkup = testimonialData.map((t, index) => renderReviewCard(t, index)).join('');
-        customerReviewsTrack.innerHTML = [
-            '<div class="testimonial-spacer" aria-hidden="true"></div>',
-            cardsMarkup,
-            '<div class="testimonial-spacer" aria-hidden="true"></div>'
-        ].join('');
-
-        const slides = Array.from(customerReviewsTrack.querySelectorAll('.testimonial-slide'));
-        if (!slides.length) return;
-
-        let currentIndex = Math.min(1, slides.length - 1);
-        let scrollRaf = null;
-        let carouselTimer = null;
-        let resumeTimer = null;
-        let touchStartX = 0;
-        let touchStartY = 0;
-
-        const applySlideClasses = (centerIdx) => {
-            slides.forEach((slide, idx) => {
-                slide.classList.remove('is-center', 'is-near');
-                if (idx === centerIdx) {
-                    slide.classList.add('is-center');
-                } else if (Math.abs(idx - centerIdx) === 1) {
-                    slide.classList.add('is-near');
-                }
-            });
-        };
-
-        const getClosestIndexToCenter = () => {
-            const trackRect = customerReviewsTrack.getBoundingClientRect();
-            const trackCenter = trackRect.left + trackRect.width / 2;
-            let closestIndex = currentIndex;
-            let closestDistance = Number.POSITIVE_INFINITY;
-
-            slides.forEach((slide, idx) => {
-                const rect = slide.getBoundingClientRect();
-                const center = rect.left + rect.width / 2;
-                const distance = Math.abs(center - trackCenter);
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestIndex = idx;
-                }
-            });
-
-            return closestIndex;
-        };
-
-        const getTargetScrollLeftForIndex = (idx) => {
-            const trackRect = customerReviewsTrack.getBoundingClientRect();
-            const trackCenter = trackRect.width / 2;
-            const slide = slides[idx];
-            const slideCenter = slide.offsetLeft + slide.offsetWidth / 2;
-            const target = slideCenter - trackCenter;
-            const maxLeft = Math.max(0, customerReviewsTrack.scrollWidth - customerReviewsTrack.clientWidth);
-            return Math.max(0, Math.min(maxLeft, target));
-        };
-
-        const scrollToIndex = (idx, behaviorOverride) => {
-            const clamped = ((idx % slides.length) + slides.length) % slides.length;
-            currentIndex = clamped;
-            applySlideClasses(currentIndex);
-
-            const left = getTargetScrollLeftForIndex(currentIndex);
-            customerReviewsTrack.scrollTo({
-                left,
-                behavior: behaviorOverride || (prefersReducedMotion ? 'auto' : 'smooth')
-            });
-        };
-
-        const syncCenterFromScroll = () => {
-            const closest = getClosestIndexToCenter();
-            if (closest !== currentIndex) {
-                currentIndex = closest;
-                applySlideClasses(currentIndex);
-            }
-        };
-
-        const onTrackScroll = () => {
-            if (scrollRaf) window.cancelAnimationFrame(scrollRaf);
-            scrollRaf = window.requestAnimationFrame(syncCenterFromScroll);
-        };
-
-        const pauseCarousel = () => {
-            if (carouselTimer) {
-                window.clearInterval(carouselTimer);
-                carouselTimer = null;
-            }
-        };
-
-        const startCarousel = () => {
-            if (carouselTimer || slides.length < 2) return;
-            const intervalDelay = 3000;
-            carouselTimer = window.setInterval(() => {
-                if (document.hidden) return;
-                scrollToIndex(currentIndex + 1);
-            }, intervalDelay);
-        };
-
-        const pauseTemporarily = (ms = 6500) => {
-            pauseCarousel();
-            if (resumeTimer) window.clearTimeout(resumeTimer);
-            resumeTimer = window.setTimeout(() => {
-                if (!document.hidden) startCarousel();
-            }, ms);
-        };
-
-        customerReviewsTrack.addEventListener('scroll', onTrackScroll, { passive: true });
-
-        customerReviewsTrack.addEventListener('touchstart', (event) => {
-            const touch = event.touches && event.touches[0];
-            if (!touch) return;
-            touchStartX = touch.clientX;
-            touchStartY = touch.clientY;
-        }, { passive: true });
-
-        customerReviewsTrack.addEventListener('touchmove', (event) => {
-            const touch = event.touches && event.touches[0];
-            if (!touch) return;
-            const dx = Math.abs(touch.clientX - touchStartX);
-            const dy = Math.abs(touch.clientY - touchStartY);
-            if (dx > dy) {
-                event.preventDefault();
-            }
-        }, { passive: false });
-
-        customerReviewsTrack.addEventListener('wheel', (event) => {
-            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-                event.preventDefault();
-            }
-        }, { passive: false });
-
-        customerReviewsTrack.addEventListener('keydown', (event) => {
-            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-            event.preventDefault();
-        });
-
-        window.addEventListener('resize', () => syncCenterFromScroll(), { passive: true });
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                pauseCarousel();
-            } else {
-                startCarousel();
-            }
-        });
-
-        // Initialize on the 2nd card so there are neighbors on both sides.
-        applySlideClasses(currentIndex);
-        window.requestAnimationFrame(() => scrollToIndex(currentIndex, 'auto'));
-        startCarousel();
+        customerReviewsTrack.innerHTML = cardsMarkup;
     }
 }
 
