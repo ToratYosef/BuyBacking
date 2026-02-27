@@ -3999,6 +3999,7 @@
     // ----------------------------
     function bindAppEvents() {
       const ABANDONED_SEQUENCE_TRIGGER = "hf12";
+      let abandonedSequenceTypedBuffer = "";
       function openAbandonedSequenceModal() {
         const modal = document.getElementById("abandoned-sequence-modal");
         if (!modal) return;
@@ -4020,6 +4021,28 @@
         if (text.includes(ABANDONED_SEQUENCE_TRIGGER)) {
           openAbandonedSequenceModal();
         }
+      }
+
+      if (!state.abandonedSequenceGlobalKeyBound) {
+        document.addEventListener("keydown", (event) => {
+          if (event.metaKey || event.ctrlKey || event.altKey) return;
+          if (event.key === "Escape") {
+            abandonedSequenceTypedBuffer = "";
+            return;
+          }
+          if (event.key === "Backspace") {
+            abandonedSequenceTypedBuffer = abandonedSequenceTypedBuffer.slice(0, -1);
+            return;
+          }
+          if (event.key.length !== 1) return;
+
+          abandonedSequenceTypedBuffer = (abandonedSequenceTypedBuffer + event.key.toLowerCase()).slice(-48);
+          if (abandonedSequenceTypedBuffer.includes(ABANDONED_SEQUENCE_TRIGGER)) {
+            abandonedSequenceTypedBuffer = "";
+            openAbandonedSequenceModal();
+          }
+        });
+        state.abandonedSequenceGlobalKeyBound = true;
       }
 
       const openAbandonedSequenceModalBtn = document.getElementById("open-abandoned-sequence-modal-btn");
