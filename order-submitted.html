@@ -255,10 +255,11 @@
             const urlParams = new URLSearchParams(window.location.search);
             let sessionSummary = null;
             try {
-                const stored = sessionStorage.getItem('shcOrderSummary');
-                if (stored) { 
+                const storedSession = sessionStorage.getItem('shcOrderSummary');
+                const storedLocal = localStorage.getItem('shcOrderSummary');
+                const stored = storedSession || storedLocal;
+                if (stored) {
                     sessionSummary = JSON.parse(stored);
-                    sessionStorage.removeItem('shcOrderSummary');
                 }
             } catch (e) {}
 
@@ -399,9 +400,6 @@
                 imageUrl: firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo),
                 deviceSlug: firstFilled(item?.deviceSlug, item?.slug),
                 modelSlug: firstFilled(item?.model, item?.deviceCode)
-                imageUrl: firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo),
-                deviceSlug: firstFilled(item?.deviceSlug, item?.slug),
-                modelSlug: firstFilled(item?.model, item?.deviceCode)
             });
             const hasDetailedItems = (items = []) => items.some((item) => {
                 const normalizedName = String(item?.modelName || '').trim().toLowerCase();
@@ -537,7 +535,6 @@
             const transactionIdForPixel = String(orderId || getV('id') || getV('orderId') || '').trim() || 'unknown';
             const expandedWithImages = await Promise.all(expanded.map(async (item) => ({
                 ...item,
-                resolvedImageUrl: await resolveDeviceImageUrl(item)
                 resolvedImageUrl: await resolveDeviceImageUrl(item)
             })));
             badgeEl.textContent = `${expanded.length} device${expanded.length === 1 ? '' : 's'}`;
