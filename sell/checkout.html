@@ -1172,14 +1172,6 @@
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
-            if (isValidEmail(progressEmail)) {
-                try {
-                    await upsertSellProgress({ email: progressEmail, didComplete: true, cartItems });
-                } catch (error) {
-                    console.error('Failed to save completed checkout state:', error);
-                }
-            }
-
             const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
             const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
@@ -1209,9 +1201,10 @@
                     condition: item.condition || '',
                     qty: Math.max(1, Math.floor(Number(item.qty || 1))),
                     unitPrice: Number(item.unitPrice || 0),
+                    deviceSlug: item.deviceSlug || '',
                     imageUrl: item.imageUrl || item.image || item.thumbnail || ''
                 }));
-                sessionStorage.setItem('shcOrderSummary', JSON.stringify({
+                const orderSummaryPayload = {
                     id: result.orderId,
                     price: finalPayout.toFixed(2),
                     device: cartItems.length > 1 ? 'Multiple devices' : cartItems[0].modelName,
@@ -1230,11 +1223,24 @@
                     phone: shippingInfo.phone,
                     payoutIdentifier: document.getElementById('payoutIdentifier').value,
                     items: itemSummary
-                }));
+                };
+                sessionStorage.setItem('shcOrderSummary', JSON.stringify(orderSummaryPayload));
+                localStorage.setItem('shcOrderSummary', JSON.stringify(orderSummaryPayload));
             } catch (e) {
                 console.error('Failed to persist order summary payload', e);
             }
-            
+
+            try {
+                cartItems = [];
+                saveCart(cartItems);
+                renderCart();
+                if (isValidEmail(progressEmail)) {
+                    await upsertSellProgress({ email: progressEmail, didComplete: true, cartItems: [] });
+                }
+            } catch (error) {
+                console.error('Failed to clear checkout cart after order submission:', error);
+            }
+
             window.location.href = successUrl.toString();
         } catch (e) {
             alert("Server error.");
