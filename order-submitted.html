@@ -58,7 +58,7 @@
     <div class="site-header__inner site-header__inner--centered">
         <div class="logo-container-left">
             <a href="/" class="logo-link" aria-label="SecondHandCell home">
-                <img src="https://cdn.secondhandcell.com/images/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320" height="320" onerror="this.onerror=null;this.src='https://placehold.co/200x64/ffffff/1e293b?text=SecondHandCell';">
+                <img src="https://cdn.secondhandcell.com/images/assets/logo.webp" alt="SecondHandCell Logo" class="logo-image" width="320" height="320" fetchpriority="high" decoding="async" onerror="this.onerror=null;this.src='https://cdn.secondhandcell.com/images/assets/logo.webp?v=2';">
             </a>
         </div>
         <div class="logo-text-container-center">
@@ -277,6 +277,90 @@
                 }
                 return 0;
             };
+            const FALLBACK_DEVICE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+            const IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
+            const imageUrlResolutionCache = new Map();
+            const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
+            const normalizeBrandFolder = (brandValue) => {
+                const brand = String(brandValue || '').trim().toLowerCase();
+                if (!brand) return '';
+                if (brand.includes('apple') || brand.includes('iphone')) return 'iphone';
+                if (brand.includes('samsung')) return 'samsung';
+                if (brand.includes('google') || brand.includes('pixel')) return 'google';
+                if (brand.includes('ipad')) return 'ipad';
+                return '';
+            };
+            const slugifyModel = (value) => String(value || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+            const buildImageBaseCandidates = (item = {}) => {
+                const candidates = [];
+                const pushCandidate = (candidate) => {
+                    const normalized = String(candidate || '').trim();
+                    if (!normalized || candidates.includes(normalized)) return;
+                    candidates.push(normalized);
+                };
+                pushCandidate(firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo));
+
+                const folder = normalizeBrandFolder(firstFilled(item?.brand, item?.manufacturer));
+                const possibleSlugs = [
+                    item?.deviceSlug,
+                    item?.slug,
+                    item?.model,
+                    item?.modelSlug,
+                    slugifyModel(item?.modelName),
+                    slugifyModel(item?.device)
+                ];
+                if (folder) {
+                    possibleSlugs.forEach((slugValue) => {
+                        const slug = String(slugValue || '').trim().toLowerCase();
+                        if (!slug) return;
+                        pushCandidate(`https://cdn.secondhandcell.com/images/${folder}/assets/${slug}`);
+                    });
+                }
+                return candidates;
+            };
+            const resolveDeviceImageUrl = async (item = {}) => {
+                const baseCandidates = buildImageBaseCandidates(item);
+                if (!baseCandidates.length) return FALLBACK_DEVICE_IMAGE;
+
+                for (const baseCandidate of baseCandidates) {
+                    if (hasImageExtension(baseCandidate)) {
+                        return baseCandidate;
+                    }
+                    if (imageUrlResolutionCache.has(baseCandidate)) {
+                        const cached = imageUrlResolutionCache.get(baseCandidate);
+                        if (cached && cached !== FALLBACK_DEVICE_IMAGE) return cached;
+                        continue;
+                    }
+                    const extensionCandidates = IMAGE_EXTENSIONS.map((ext) => `${baseCandidate}${ext}`);
+                    const resolvedUrl = await new Promise((resolve) => {
+                        let index = 0;
+                        const tryNext = () => {
+                            if (index >= extensionCandidates.length) {
+                                resolve(FALLBACK_DEVICE_IMAGE);
+                                return;
+                            }
+                            const probe = new Image();
+                            const candidate = extensionCandidates[index];
+                            probe.onload = () => resolve(candidate);
+                            probe.onerror = () => {
+                                index += 1;
+                                tryNext();
+                            };
+                            probe.src = candidate;
+                        };
+                        tryNext();
+                    });
+                    imageUrlResolutionCache.set(baseCandidate, resolvedUrl);
+                    if (resolvedUrl && resolvedUrl !== FALLBACK_DEVICE_IMAGE) {
+                        return resolvedUrl;
+                    }
+                }
+                return FALLBACK_DEVICE_IMAGE;
+            }; 
             const splitTotalAcrossDevices = (total, count) => {
                 const safeCount = Math.max(1, Number(count || 1));
                 const cents = Math.max(0, Math.round(Number(total || 0) * 100));
@@ -294,7 +378,9 @@
                 condition: firstFilled(item?.condition, item?.condition_cosmetic, item?.cosmeticCondition, item?.quality),
                 qty: Math.max(1, Number(item?.qty || 1)),
                 unitPrice: parseUnitPrice(item),
-                imageUrl: firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo)
+                imageUrl: firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo),
+                deviceSlug: firstFilled(item?.deviceSlug, item?.slug),
+                modelSlug: firstFilled(item?.model, item?.deviceCode)
             });
             const hasDetailedItems = (items = []) => items.some((item) => {
                 const normalizedName = String(item?.modelName || '').trim().toLowerCase();
@@ -357,11 +443,27 @@
             let rawItems = Array.isArray(sessionSummary?.items) ? sessionSummary.items : [];
             let normalizedItems = rawItems.map(normalizeItemFromOrder);
 
-            if (!hasDetailedItems(normalizedItems)) {
+            const hasImageCandidate = (items = []) => items.some((item) => buildImageBaseCandidates(item).length > 0);
+            const needsDetailFallback = !hasDetailedItems(normalizedItems);
+            const needsImageEnrichment = !hasImageCandidate(normalizedItems);
+            if (needsDetailFallback || needsImageEnrichment) {
                 const fetchedOrder = await fetchOrderById(orderId);
                 if (Array.isArray(fetchedOrder?.items) && fetchedOrder.items.length) {
-                    rawItems = fetchedOrder.items;
-                    normalizedItems = rawItems.map(normalizeItemFromOrder);
+                    const fetchedNormalizedItems = fetchedOrder.items.map(normalizeItemFromOrder);
+                    if (needsDetailFallback) {
+                        normalizedItems = fetchedNormalizedItems;
+                    } else if (needsImageEnrichment) {
+                        normalizedItems = normalizedItems.map((item, index) => {
+                            const fetchedItem = fetchedNormalizedItems[index] || {};
+                            return {
+                                ...fetchedItem,
+                                ...item,
+                                imageUrl: firstFilled(item.imageUrl, fetchedItem.imageUrl),
+                                deviceSlug: firstFilled(item.deviceSlug, fetchedItem.deviceSlug),
+                                modelSlug: firstFilled(item.modelSlug, fetchedItem.modelSlug)
+                            };
+                        });
+                    }
                 }
             }
             const fallbackQty = Math.max(1, Number(getV('qty') || 1));
@@ -412,12 +514,16 @@
             const basketTotalForPixel = Number.isFinite(basketTotalVal) && basketTotalVal > 0 ? basketTotalVal : (Number.isFinite(priceVal) ? priceVal : 0);
             const basketTotalStr = basketTotalForPixel.toFixed(2);
             const transactionIdForPixel = String(orderId || getV('id') || getV('orderId') || '').trim() || 'unknown';
+            const expandedWithImages = await Promise.all(expanded.map(async (item) => ({
+                ...item,
+                resolvedImageUrl: await resolveDeviceImageUrl(item)
+            })));
             badgeEl.textContent = `${expanded.length} device${expanded.length === 1 ? '' : 's'}`;
-            listEl.innerHTML = expanded.map((item, idx) => `
+            listEl.innerHTML = expandedWithImages.map((item, idx) => `
                 <div class="rounded-xl border border-slate-200 p-4 bg-slate-50">
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex items-center gap-3 min-w-0">
-                            <img src="${esc(item.imageUrl || 'https://placehold.co/56x56/e2e8f0/475569?text=%F0%9F%93%B1')}" alt="${esc(item.modelName || 'Trade-in device')}" class="h-12 w-12 rounded-lg border border-slate-200 bg-white object-contain p-1 shrink-0" loading="lazy" onerror="this.onerror=null;this.src='https://placehold.co/56x56/e2e8f0/475569?text=%F0%9F%93%B1';">
+                            <img src="${esc(item.resolvedImageUrl || FALLBACK_DEVICE_IMAGE)}" alt="${esc(item.modelName || 'Trade-in device')}" class="h-12 w-12 rounded-lg border border-slate-200 bg-white object-contain p-1 shrink-0" loading="lazy" onerror="this.onerror=null;this.src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';">
                             <div class="min-w-0">
                                 <p class="text-xs uppercase tracking-wider text-slate-500 font-bold">Device ${idx + 1}</p>
                                 <p class="text-base font-bold text-slate-900">${esc(item.modelName || item.model || 'Device on file')}</p>
