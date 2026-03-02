@@ -1172,14 +1172,6 @@
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
-            if (isValidEmail(progressEmail)) {
-                try {
-                    await upsertSellProgress({ email: progressEmail, didComplete: true, cartItems });
-                } catch (error) {
-                    console.error('Failed to save completed checkout state:', error);
-                }
-            }
-
             const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
             const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
@@ -1237,7 +1229,18 @@
             } catch (e) {
                 console.error('Failed to persist order summary payload', e);
             }
-            
+
+            try {
+                cartItems = [];
+                saveCart(cartItems);
+                renderCart();
+                if (isValidEmail(progressEmail)) {
+                    await upsertSellProgress({ email: progressEmail, didComplete: true, cartItems: [] });
+                }
+            } catch (error) {
+                console.error('Failed to clear checkout cart after order submission:', error);
+            }
+
             window.location.href = successUrl.toString();
         } catch (e) {
             alert("Server error.");
