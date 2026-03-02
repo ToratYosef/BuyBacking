@@ -281,6 +281,7 @@
             const IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
             const imageUrlResolutionCache = new Map();
             const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
+<<<<<<< codex/fix-logo-on-order-submitted-page-1q2yqd
             const normalizeBrandFolder = (brandValue) => {
                 const brand = String(brandValue || '').trim().toLowerCase();
                 if (!brand) return '';
@@ -361,6 +362,37 @@
                 }
                 return FALLBACK_DEVICE_IMAGE;
             }; 
+=======
+            const resolveDeviceImageUrl = async (baseUrl) => {
+                const normalizedBase = String(baseUrl || '').trim();
+                if (!normalizedBase) return FALLBACK_DEVICE_IMAGE;
+                if (hasImageExtension(normalizedBase)) return normalizedBase;
+                if (imageUrlResolutionCache.has(normalizedBase)) {
+                    return imageUrlResolutionCache.get(normalizedBase);
+                }
+                const candidates = IMAGE_EXTENSIONS.map((ext) => `${normalizedBase}${ext}`);
+                const resolvedUrl = await new Promise((resolve) => {
+                    let index = 0;
+                    const tryNext = () => {
+                        if (index >= candidates.length) {
+                            resolve(FALLBACK_DEVICE_IMAGE);
+                            return;
+                        }
+                        const probe = new Image();
+                        const candidate = candidates[index];
+                        probe.onload = () => resolve(candidate);
+                        probe.onerror = () => {
+                            index += 1;
+                            tryNext();
+                        };
+                        probe.src = candidate;
+                    };
+                    tryNext();
+                });
+                imageUrlResolutionCache.set(normalizedBase, resolvedUrl);
+                return resolvedUrl;
+            };
+>>>>>>> main
             const splitTotalAcrossDevices = (total, count) => {
                 const safeCount = Math.max(1, Number(count || 1));
                 const cents = Math.max(0, Math.round(Number(total || 0) * 100));
@@ -370,6 +402,24 @@
             };
             const currency = (value) => `$${Number(value || 0).toFixed(2)}`;
             const esc = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+            const deriveImageUrlFromItem = (item = {}) => {
+                const directImageUrl = firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo);
+                if (directImageUrl) return directImageUrl;
+                const brandValue = String(firstFilled(item?.brand, item?.manufacturer)).trim().toLowerCase();
+                const imageFolderByBrand = {
+                    apple: 'iphone',
+                    iphone: 'iphone',
+                    samsung: 'samsung',
+                    google: 'google',
+                    ipad: 'ipad'
+                };
+                const slugValue = String(item?.deviceSlug || item?.slug || '').trim().toLowerCase();
+                const folder = imageFolderByBrand[brandValue];
+                if (folder && slugValue) {
+                    return `https://cdn.secondhandcell.com/images/${folder}/assets/${slugValue}`;
+                }
+                return '';
+            };
             const normalizeItemFromOrder = (item = {}) => ({
                 modelName: firstFilled(item?.modelName, item?.model, item?.device),
                 brand: firstFilled(item?.brand, item?.manufacturer),
@@ -378,9 +428,13 @@
                 condition: firstFilled(item?.condition, item?.condition_cosmetic, item?.cosmeticCondition, item?.quality),
                 qty: Math.max(1, Number(item?.qty || 1)),
                 unitPrice: parseUnitPrice(item),
+<<<<<<< codex/fix-logo-on-order-submitted-page-1q2yqd
                 imageUrl: firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo),
                 deviceSlug: firstFilled(item?.deviceSlug, item?.slug),
                 modelSlug: firstFilled(item?.model, item?.deviceCode)
+=======
+                imageUrl: deriveImageUrlFromItem(item)
+>>>>>>> main
             });
             const hasDetailedItems = (items = []) => items.some((item) => {
                 const normalizedName = String(item?.modelName || '').trim().toLowerCase();
@@ -501,7 +555,11 @@
             const transactionIdForPixel = String(orderId || getV('id') || getV('orderId') || '').trim() || 'unknown';
             const expandedWithImages = await Promise.all(expanded.map(async (item) => ({
                 ...item,
+<<<<<<< codex/fix-logo-on-order-submitted-page-1q2yqd
                 resolvedImageUrl: await resolveDeviceImageUrl(item)
+=======
+                resolvedImageUrl: await resolveDeviceImageUrl(item.imageUrl)
+>>>>>>> main
             })));
             badgeEl.textContent = `${expanded.length} device${expanded.length === 1 ? '' : 's'}`;
             listEl.innerHTML = expandedWithImages.map((item, idx) => `
