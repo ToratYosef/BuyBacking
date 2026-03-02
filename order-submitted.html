@@ -370,6 +370,24 @@
             };
             const currency = (value) => `$${Number(value || 0).toFixed(2)}`;
             const esc = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+            const deriveImageUrlFromItem = (item = {}) => {
+                const directImageUrl = firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo);
+                if (directImageUrl) return directImageUrl;
+                const brandValue = String(firstFilled(item?.brand, item?.manufacturer)).trim().toLowerCase();
+                const imageFolderByBrand = {
+                    apple: 'iphone',
+                    iphone: 'iphone',
+                    samsung: 'samsung',
+                    google: 'google',
+                    ipad: 'ipad'
+                };
+                const slugValue = String(item?.deviceSlug || item?.slug || '').trim().toLowerCase();
+                const folder = imageFolderByBrand[brandValue];
+                if (folder && slugValue) {
+                    return `https://cdn.secondhandcell.com/images/${folder}/assets/${slugValue}`;
+                }
+                return '';
+            };
             const normalizeItemFromOrder = (item = {}) => ({
                 modelName: firstFilled(item?.modelName, item?.model, item?.device),
                 brand: firstFilled(item?.brand, item?.manufacturer),
@@ -378,6 +396,9 @@
                 condition: firstFilled(item?.condition, item?.condition_cosmetic, item?.cosmeticCondition, item?.quality),
                 qty: Math.max(1, Number(item?.qty || 1)),
                 unitPrice: parseUnitPrice(item),
+                imageUrl: firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo),
+                deviceSlug: firstFilled(item?.deviceSlug, item?.slug),
+                modelSlug: firstFilled(item?.model, item?.deviceCode)
                 imageUrl: firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo),
                 deviceSlug: firstFilled(item?.deviceSlug, item?.slug),
                 modelSlug: firstFilled(item?.model, item?.deviceCode)
@@ -516,6 +537,7 @@
             const transactionIdForPixel = String(orderId || getV('id') || getV('orderId') || '').trim() || 'unknown';
             const expandedWithImages = await Promise.all(expanded.map(async (item) => ({
                 ...item,
+                resolvedImageUrl: await resolveDeviceImageUrl(item)
                 resolvedImageUrl: await resolveDeviceImageUrl(item)
             })));
             badgeEl.textContent = `${expanded.length} device${expanded.length === 1 ? '' : 's'}`;
