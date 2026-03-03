@@ -4318,10 +4318,12 @@ async function printPackingSlip(order, deviceIndex = 0) {
     const frame = document.getElementById('print-frame');
 
     frame.addEventListener('load', () => {
-      const w = frame.contentWindow;
-      if (!w) return;
-      w.focus();
-      w.print();
+      try {
+        window.focus();
+        window.print();
+      } catch (error) {
+        console.warn('Unable to auto-open print dialog from iframe load event:', error);
+      }
     });
 
     frame.src = pdfUrl;
@@ -4441,10 +4443,12 @@ if (printWindow) {
     const frame = document.getElementById('print-frame');
 
     frame.addEventListener('load', () => {
-      const w = frame.contentWindow;
-      if (!w) return;
-      w.focus();
-      w.print();
+      try {
+        window.focus();
+        window.print();
+      } catch (error) {
+        console.warn('Unable to auto-open print dialog from iframe load event:', error);
+      }
     });
 
     frame.src = pdfUrl;

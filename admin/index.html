@@ -1751,7 +1751,12 @@
       iframe.src = url;
       document.body.appendChild(iframe);
       iframe.onload = function() {
-        iframe.contentWindow.print();
+        try {
+          window.focus();
+          window.print();
+        } catch (error) {
+          console.warn('Unable to auto-open print dialog from iframe load event:', error);
+        }
         // Clean up after printing
         setTimeout(() => {
           document.body.removeChild(iframe);
