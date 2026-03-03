@@ -4,82 +4,81 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Analytics Admin</title>
-  <style>
-    :root { color-scheme: light; }
-  </style>
-  <link rel="stylesheet" href="/admin/analytics/style.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <main class="layout">
-    <header class="toolbar">
-      <h1>Analytics</h1>
-      <div class="range-controls">
-        <label>From <input type="date" id="fromDate" /></label>
-        <label>To <input type="date" id="toDate" /></label>
-        <button id="refreshBtn">Refresh</button>
+<body class="bg-slate-50 text-slate-900">
+  <main class="mx-auto max-w-7xl p-4 md:p-6">
+    <header class="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <h1 class="text-2xl font-bold">Analytics</h1>
+      <div class="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <label class="text-sm font-medium">From <input type="date" id="fromDate" class="ml-1 rounded border border-slate-300 px-2 py-1" /></label>
+        <label class="text-sm font-medium">To <input type="date" id="toDate" class="ml-1 rounded border border-slate-300 px-2 py-1" /></label>
+        <button id="refreshBtn" class="rounded bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700">Refresh</button>
       </div>
     </header>
 
-    <section id="tokenPrompt" class="panel token-panel hidden">
-      <h2>Admin token required</h2>
-      <p>Enter your analytics admin token.</p>
-      <div class="token-row">
-        <input id="tokenInput" type="password" placeholder="Bearer token" />
-        <button id="saveTokenBtn">Save token</button>
+    <section id="tokenPrompt" class="mb-4 hidden rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 class="text-lg font-semibold">Admin token required</h2>
+      <p class="mt-1 text-sm text-slate-600">Enter your analytics admin token.</p>
+      <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input id="tokenInput" type="password" placeholder="Bearer token" class="w-full rounded border border-slate-300 px-3 py-2" />
+        <button id="saveTokenBtn" class="rounded bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black">Save token</button>
       </div>
     </section>
 
     <section id="appContent" class="hidden">
-      <section class="kpi-grid">
-        <article class="panel kpi"><h3>Sessions</h3><p id="kpiSessions">-</p></article>
-        <article class="panel kpi"><h3>Conversions</h3><p id="kpiConversions">-</p></article>
-        <article class="panel kpi"><h3>Conversion rate</h3><p id="kpiConversionRate">-</p></article>
+      <section class="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><h3 class="text-sm font-semibold text-slate-500">Sessions</h3><p id="kpiSessions" class="mt-2 text-3xl font-bold">-</p></article>
+        <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><h3 class="text-sm font-semibold text-slate-500">Conversions</h3><p id="kpiConversions" class="mt-2 text-3xl font-bold">-</p></article>
+        <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><h3 class="text-sm font-semibold text-slate-500">Conversion rate</h3><p id="kpiConversionRate" class="mt-2 text-3xl font-bold">-</p></article>
       </section>
 
-      <section class="chart-grid">
-        <article class="panel"><h3>Sessions per hour (today)</h3><canvas id="sessionsPerHour"></canvas></article>
-        <article class="panel"><h3>Sessions per day</h3><canvas id="sessionsPerDay"></canvas></article>
-        <article class="panel"><h3>Top pages</h3><canvas id="topPages"></canvas></article>
-        <article class="panel"><h3>Top sources</h3><canvas id="topSources"></canvas></article>
+      <section class="mb-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
+        <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><h3 class="mb-2 font-semibold">Sessions per hour (today)</h3><canvas id="sessionsPerHour"></canvas></article>
+        <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><h3 class="mb-2 font-semibold">Sessions per day</h3><canvas id="sessionsPerDay"></canvas></article>
+        <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><h3 class="mb-2 font-semibold">Top pages</h3><canvas id="topPages"></canvas></article>
+        <article class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><h3 class="mb-2 font-semibold">Top sources</h3><canvas id="topSources"></canvas></article>
       </section>
 
-      <section class="panel table-panel">
-        <h3>Sessions</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>First seen</th>
-              <th>Landing path</th>
-              <th>Source</th>
-              <th>Country</th>
-              <th>Masked IP</th>
-              <th>Converted</th>
-            </tr>
-          </thead>
-          <tbody id="sessionsBody"></tbody>
-        </table>
-        <div class="pager">
-          <button id="prevPage">Prev</button>
-          <span id="pageLabel">Page 1</span>
-          <button id="nextPage">Next</button>
+      <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 class="mb-3 font-semibold">Sessions</h3>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-left text-slate-600">
+                <th class="p-2">First seen</th>
+                <th class="p-2">Landing path</th>
+                <th class="p-2">Source</th>
+                <th class="p-2">Country</th>
+                <th class="p-2">Masked IP</th>
+                <th class="p-2">Converted</th>
+              </tr>
+            </thead>
+            <tbody id="sessionsBody"></tbody>
+          </table>
+        </div>
+        <div class="mt-3 flex items-center justify-end gap-2">
+          <button id="prevPage" class="rounded border border-slate-300 px-3 py-1.5 text-sm">Prev</button>
+          <span id="pageLabel" class="text-sm">Page 1</span>
+          <button id="nextPage" class="rounded border border-slate-300 px-3 py-1.5 text-sm">Next</button>
         </div>
       </section>
     </section>
   </main>
 
-  <aside id="sessionDrawer" class="drawer hidden">
-    <button id="closeDrawer" class="close-btn">×</button>
-    <h2>Session detail</h2>
-    <dl class="meta-grid">
-      <dt>Landing URL</dt><dd id="detailLandingUrl">-</dd>
-      <dt>Referrer</dt><dd id="detailReferrer">-</dd>
-      <dt>Source</dt><dd id="detailSource">-</dd>
+  <aside id="sessionDrawer" class="fixed right-0 top-0 z-20 hidden h-full w-full max-w-lg overflow-y-auto border-l border-slate-200 bg-white p-4 shadow-2xl">
+    <button id="closeDrawer" class="mb-2 rounded px-2 py-1 text-2xl leading-none text-slate-600 hover:bg-slate-100">×</button>
+    <h2 class="text-xl font-bold">Session detail</h2>
+    <dl class="mt-3 grid grid-cols-[120px_1fr] gap-2 text-sm">
+      <dt class="font-semibold">Landing URL</dt><dd id="detailLandingUrl">-</dd>
+      <dt class="font-semibold">Referrer</dt><dd id="detailReferrer">-</dd>
+      <dt class="font-semibold">Source</dt><dd id="detailSource">-</dd>
     </dl>
-    <h3>Timeline</h3>
-    <ul id="timeline" class="timeline"></ul>
+    <h3 class="mt-4 text-lg font-semibold">Timeline</h3>
+    <ul id="timeline" class="mt-2 divide-y divide-slate-200 text-sm"></ul>
   </aside>
 
-  <script src="/admin/analytics/vendor/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="/admin/analytics/app.js"></script>
 </body>
 </html>

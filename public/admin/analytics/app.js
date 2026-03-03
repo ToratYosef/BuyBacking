@@ -1,16 +1,10 @@
-/*
-To populate Chart.js locally:
-1) npm i chart.js --save-dev
-2) cp node_modules/chart.js/dist/chart.umd.min.js public/admin/analytics/vendor/chart.umd.min.js
-This page expects the local bundle at /admin/analytics/vendor/chart.umd.min.js
-*/
 (function () {
   'use strict';
 
   const API_BASE =
     (typeof window !== 'undefined' &&
       (window.SHC_API_BASE_URL || window.API_BASE_URL || window.API_BASE)) ||
-    '/api';
+    '';
   const TOKEN_KEY = 'analytics_admin_token';
   const PAGE_LIMIT = 25;
   let offset = 0;

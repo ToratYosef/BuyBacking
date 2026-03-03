@@ -4,7 +4,7 @@
   const API_BASE =
     (typeof window !== 'undefined' &&
       (window.SHC_API_BASE_URL || window.API_BASE_URL || window.API_BASE)) ||
-    '/api';
+    '';
 
   const COLLECT_ENDPOINT = `${String(API_BASE).replace(/\/+$/, '')}/analytics/collect`;
   const HEARTBEAT_ENDPOINT = `${String(API_BASE).replace(/\/+$/, '')}/analytics/heartbeat`;
