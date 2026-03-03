@@ -53,8 +53,7 @@
             z-index: 100;
         }
 
-        .checkout-wrapper { max-width: 1100px; margin: 32px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 380px; gap: 28px; }
-        @media (max-width: 900px) { .checkout-wrapper { grid-template-columns: 1fr; } }
+        .checkout-wrapper { max-width: 980px; margin: 32px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr; gap: 20px; }
         .section-card { background: white; padding: 28px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid var(--border); margin-bottom: 18px; }
         .input-group { margin-bottom: 15px; }
         .input-group label { display: block; font-size: 13px; font-weight: 700; color: #64748b; margin-bottom: 5px; text-transform: uppercase; }
@@ -95,6 +94,29 @@
         .option-pill:checked + .option-label { border-color: var(--brand-primary); background-color: #f0fdf4; box-shadow: 0 4px 12px rgba(21, 128, 61, 0.1); }
 
         .summary-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid var(--border); position: sticky; top: 20px; }
+
+        .shipping-options-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .section-card--compact {
+            padding: 20px;
+        }
+        .address-grid-compact {
+            gap: 12px;
+        }
+        .address-grid-compact .input-group {
+            margin-bottom: 8px;
+        }
+        .address-grid-compact .input-field {
+            padding: 10px;
+        }
+        .payout-options-row {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(120px, 1fr));
+            gap: 10px;
+        }
         .btn-submit { width: 100%; padding: 18px; background: var(--brand-gradient); color: white; border: none; border-radius: 10px; font-size: 18px; font-weight: 800; cursor: pointer; margin-top: 20px; transition: 0.3s; }
         .btn-submit:hover { opacity: 0.9; transform: scale(1.01); }
         .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
@@ -121,6 +143,11 @@
             .checkout-wrapper { margin: 12px auto; padding: 0 10px; gap: 14px; }
             .section-card, .summary-card { padding: 16px; border-radius: 12px; }
             .option-label { padding: 12px; }
+            .payout-options-row {
+                overflow-x: auto;
+                grid-template-columns: repeat(4, minmax(110px, 1fr));
+                padding-bottom: 4px;
+            }
             .btn-submit { padding: 14px; font-size: 16px; }
             .site-header__inner { flex-wrap: wrap; gap: 8px; }
             .logo-image { width: 120px; height: auto; }
@@ -205,7 +232,7 @@
         <!-- Step 1: Shipping Preference -->
         <div class="section-card">
             <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Preference</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="shipping-options-row">
                 <div>
                     <input type="radio" id="email_label" name="shipping_preference" value="email_label" class="option-pill" checked>
                     <label for="email_label" class="option-label">
@@ -226,9 +253,9 @@
         </div>
 
         <!-- Step 2: Shipping Address -->
-        <div class="section-card" id="address-section">
+        <div class="section-card section-card--compact" id="address-section">
             <h2 class="text-xl font-bold mb-6 border-b pb-2">2. Shipping Address</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 address-grid-compact">
                 <div class="input-group md:col-span-2">
                     <label>Full Name</label>
                     <div id="fullName-error" class="field-error-msg">Error: Please complete required field</div>
@@ -282,7 +309,7 @@
         <!-- Step 3: Payout Method -->
         <div class="section-card">
             <h2 class="text-xl font-bold mb-6 border-b pb-2">3. Payout Method</h2>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            <div class="payout-options-row mb-6">
                 <div>
                     <input type="radio" id="pay_cashapp" name="payment_method" value="cashapp" class="option-pill" checked>
                     <label for="pay_cashapp" class="option-label">
@@ -475,25 +502,17 @@
     let cartItems = [];
     const zipInput = document.getElementById('zip');
     const submitOrderBtn = document.getElementById('submitOrderBtn');
-    const checkoutWrapper = document.querySelector('.checkout-wrapper');
     const checkoutForm = document.getElementById('checkout-form');
     const checkoutSummaryAside = document.getElementById('checkout-summary-aside');
-    const termsSubmitSection = document.getElementById('terms-submit-section');
 
     const SELL_PROGRESS_COLLECTION = 'sellOrderProgress';
     const EMAIL_STORAGE_KEY = 'shc_quote_email';
 
     const placeSummaryByViewport = () => {
-        if (!checkoutWrapper || !checkoutForm || !checkoutSummaryAside || !termsSubmitSection) return;
-        if (window.matchMedia('(max-width: 640px)').matches) {
-            if (checkoutSummaryAside.parentElement !== checkoutForm) {
-                checkoutForm.insertBefore(checkoutSummaryAside, termsSubmitSection);
-            }
-            return;
-        }
-        if (checkoutSummaryAside.parentElement !== checkoutWrapper) {
-            checkoutWrapper.appendChild(checkoutSummaryAside);
-        }
+        if (!checkoutForm || !checkoutSummaryAside) return;
+        const firstSectionCard = checkoutForm.querySelector('.section-card');
+        if (firstSectionCard && checkoutSummaryAside.parentElement === checkoutForm && checkoutSummaryAside.nextElementSibling === firstSectionCard) return;
+        checkoutForm.insertBefore(checkoutSummaryAside, firstSectionCard || checkoutForm.firstChild);
     };
     const addressVerifyError = document.getElementById('address-verify-error');
     const addressSuggestionModal = document.getElementById('addressSuggestionModal');
