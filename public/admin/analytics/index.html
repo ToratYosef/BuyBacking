@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analytics Admin</title>
+  <style>
+    :root { color-scheme: light; }
+  </style>
+  <link rel="stylesheet" href="/admin/analytics/style.css" />
+</head>
+<body>
+  <main class="layout">
+    <header class="toolbar">
+      <h1>Analytics</h1>
+      <div class="range-controls">
+        <label>From <input type="date" id="fromDate" /></label>
+        <label>To <input type="date" id="toDate" /></label>
+        <button id="refreshBtn">Refresh</button>
+      </div>
+    </header>
+
+    <section id="tokenPrompt" class="panel token-panel hidden">
+      <h2>Admin token required</h2>
+      <p>Enter your analytics admin token.</p>
+      <div class="token-row">
+        <input id="tokenInput" type="password" placeholder="Bearer token" />
+        <button id="saveTokenBtn">Save token</button>
+      </div>
+    </section>
+
+    <section id="appContent" class="hidden">
+      <section class="kpi-grid">
+        <article class="panel kpi"><h3>Sessions</h3><p id="kpiSessions">-</p></article>
+        <article class="panel kpi"><h3>Conversions</h3><p id="kpiConversions">-</p></article>
+        <article class="panel kpi"><h3>Conversion rate</h3><p id="kpiConversionRate">-</p></article>
+      </section>
+
+      <section class="chart-grid">
+        <article class="panel"><h3>Sessions per hour (today)</h3><canvas id="sessionsPerHour"></canvas></article>
+        <article class="panel"><h3>Sessions per day</h3><canvas id="sessionsPerDay"></canvas></article>
+        <article class="panel"><h3>Top pages</h3><canvas id="topPages"></canvas></article>
+        <article class="panel"><h3>Top sources</h3><canvas id="topSources"></canvas></article>
+      </section>
+
+      <section class="panel table-panel">
+        <h3>Sessions</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>First seen</th>
+              <th>Landing path</th>
+              <th>Source</th>
+              <th>Country</th>
+              <th>Masked IP</th>
+              <th>Converted</th>
+            </tr>
+          </thead>
+          <tbody id="sessionsBody"></tbody>
+        </table>
+        <div class="pager">
+          <button id="prevPage">Prev</button>
+          <span id="pageLabel">Page 1</span>
+          <button id="nextPage">Next</button>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <aside id="sessionDrawer" class="drawer hidden">
+    <button id="closeDrawer" class="close-btn">×</button>
+    <h2>Session detail</h2>
+    <dl class="meta-grid">
+      <dt>Landing URL</dt><dd id="detailLandingUrl">-</dd>
+      <dt>Referrer</dt><dd id="detailReferrer">-</dd>
+      <dt>Source</dt><dd id="detailSource">-</dd>
+    </dl>
+    <h3>Timeline</h3>
+    <ul id="timeline" class="timeline"></ul>
+  </aside>
+
+  <script src="/admin/analytics/vendor/chart.umd.min.js"></script>
+  <script src="/admin/analytics/app.js"></script>
+</body>
+</html>
