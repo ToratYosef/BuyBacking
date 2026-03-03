@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Order Submitted | Database Testing</title>
+  <link rel="stylesheet" href="/assets/css/tailwind.css" />
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <main class="max-w-3xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-3">Order Submitted</h1>
+    <p class="mb-4">Your order was written to MongoDB test route.</p>
+    <pre id="result" class="bg-white border rounded p-4 overflow-auto"></pre>
+  </main>
+
+  <script src="./assets/js/common.js"></script>
+  <script>
+    const result = document.getElementById('result');
+    const url = new URL(window.location.href);
+    const orderId = url.searchParams.get('orderId');
+
+    async function load() {
+      if (!orderId) {
+        result.textContent = 'No orderId provided.';
+        return;
+      }
+      try {
+        const order = await window.DatabaseTestingApi.getOrder(orderId);
+        result.textContent = JSON.stringify(order, null, 2);
+      } catch (error) {
+        result.textContent = error.message;
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sell Device | Database Testing</title>
+  <link rel="stylesheet" href="/assets/css/tailwind.css" />
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <main class="max-w-3xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-3">Sell Your Device (Mongo Test)</h1>
+    <p class="mb-6">This test path mirrors the sell flow and stores orders in MongoDB only.</p>
+
+    <form id="sellForm" class="space-y-4 bg-white border rounded-xl p-6">
+      <input required name="brand" class="w-full border rounded px-3 py-2" placeholder="Brand (Apple/Samsung)" />
+      <input required name="model" class="w-full border rounded px-3 py-2" placeholder="Model (iPhone 13)" />
+      <input required name="condition" class="w-full border rounded px-3 py-2" placeholder="Condition" />
+      <input required type="number" step="0.01" name="offerPrice" class="w-full border rounded px-3 py-2" placeholder="Offer Price" />
+      <button class="bg-green-700 text-white px-4 py-2 rounded" type="submit">Continue to Checkout</button>
+    </form>
+  </main>
+
+  <script>
+    document.getElementById('sellForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const form = new FormData(event.target);
+      const draftOrder = {
+        device: {
+          brand: form.get('brand'),
+          model: form.get('model'),
+          condition: form.get('condition'),
+        },
+        offerPrice: Number(form.get('offerPrice')),
+      };
+      localStorage.setItem('databaseTestingDraftOrder', JSON.stringify(draftOrder));
+      window.location.href = '../checkout.html';
+    });
+  </script>
+</body>
+</html>
