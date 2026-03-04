@@ -691,6 +691,7 @@
       bulkTrackingRefreshInProgress: false,
       bulkVoidAgedInProgress: false,
       bulkVoidTestInProgress: false,
+      bulkDeleteCancelledInProgress: false,
       bulkVoidProgressVisible: false,
       bulkVoidProgressLabel: "",
       bulkVoidProgressPercent: 0,
@@ -1009,7 +1010,7 @@
           if (issueLabels[issueId]) {
             reasons.push(issueLabels[issueId]);
           }
-        });
+        }));
       }
       
       // Add other custom issue if specified
@@ -1822,6 +1823,77 @@
         body: { limit: 12 },
       });
     }
+
+    async function runBulkDeleteCancelledOrders(buttonEl) {
+      if (!buttonEl || state.bulkDeleteCancelledInProgress) return;
+      const cancelledOrders = (state.allOrders || []).filter((order) => isCancelledStatusValue(order?.status));
+      if (!cancelledOrders.length) {
+        toast('No canceled orders to delete', 'info');
+        return;
+      }
+
+      const confirmed = await showConfirmation({
+        title: 'Delete all canceled orders?',
+        message: `This will permanently delete ${cancelledOrders.length} canceled order(s) one-by-one using the same per-order DELETE route as manual admin deletion. This cannot be undone.`,
+        confirmText: 'Delete All',
+        cancelText: 'Keep Orders',
+        confirmClass: 'bg-rose-600 hover:bg-rose-700'
+      });
+      if (!confirmed) return;
+
+      const originalText = buttonEl.textContent;
+      state.bulkDeleteCancelledInProgress = true;
+      state.bulkVoidProgressVisible = true;
+      state.bulkVoidProgressLabel = 'Deleting canceled orders…';
+      state.bulkVoidProgressPercent = 0;
+      state.bulkVoidProgressDetails = `Starting 0/${cancelledOrders.length}`;
+      buttonEl.disabled = true;
+      buttonEl.textContent = 'Deleting canceled orders…';
+      render();
+
+      let deleted = 0;
+      let failed = 0;
+
+      for (let i = 0; i < cancelledOrders.length; i += 1) {
+        const order = cancelledOrders[i];
+        try {
+          // Intentionally sequential to behave like manual admin one-by-one deletion.
+          await apiDelete(`/orders/${order.id}`);
+          deleted += 1;
+          state.allOrders = state.allOrders.filter((o) => o.id !== order.id);
+        } catch (error) {
+          failed += 1;
+          console.error(`Failed to delete canceled order ${order.id}`, error);
+        }
+
+        const processed = i + 1;
+        state.bulkVoidProgressPercent = Math.round((processed / cancelledOrders.length) * 100);
+        state.bulkVoidProgressDetails = `Processed ${processed}/${cancelledOrders.length} • deleted ${deleted} • failed ${failed}`;
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      state.bulkDeleteCancelledInProgress = false;
+      state.bulkVoidProgressPercent = 100;
+      state.bulkVoidProgressDetails = `Done • deleted ${deleted} • failed ${failed}`;
+      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+
+      setTimeout(() => {
+        state.bulkVoidProgressVisible = false;
+        state.bulkVoidProgressLabel = '';
+        state.bulkVoidProgressPercent = 0;
+        state.bulkVoidProgressDetails = '';
+        render();
+      }, 1200);
+
+      const liveBtn = document.getElementById(buttonEl.id) || buttonEl;
+      if (liveBtn) {
+        liveBtn.disabled = false;
+        liveBtn.textContent = originalText || 'Delete Canceled Orders';
+      }
+      if (failed) toast(`Deleted ${deleted} canceled orders, ${failed} failed`, 'error');
+      else toast(`Deleted ${deleted} canceled orders`, 'success');
+    }
     // ----------------------------
     // SPEC: VOID LABELS + CANCEL FLOW (best-effort implementation)
     // ----------------------------
@@ -2522,6 +2594,12 @@
                 ${state.bulkVoidTestInProgress ? 'disabled' : ''}>
                 <i data-lucide="trash-2" style="width:18px;height:18px"></i>
                 ${state.bulkVoidTestInProgress ? 'Deleting Test Orders…' : 'Delete Our Orders'}
+              </button>
+              <button id="bulk-delete-cancelled-orders"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkDeleteCancelledInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-700 hover:bg-rose-800 text-white shadow-md shadow-rose-200'}"
+                ${state.bulkDeleteCancelledInProgress ? 'disabled' : ''}>
+                <i data-lucide="trash" style="width:18px;height:18px"></i>
+                ${state.bulkDeleteCancelledInProgress ? 'Deleting Canceled Orders…' : 'Delete Canceled Orders'}
               </button>
             </div>
           </div>
@@ -4462,6 +4540,10 @@
       if (btnBulkVoidTestOrders) {
         btnBulkVoidTestOrders.addEventListener("click", () => runBulkVoidTestOrders(btnBulkVoidTestOrders));
       }
+      const btnBulkDeleteCancelledOrders = document.getElementById("bulk-delete-cancelled-orders");
+      if (btnBulkDeleteCancelledOrders) {
+        btnBulkDeleteCancelledOrders.addEventListener("click", () => runBulkDeleteCancelledOrders(btnBulkDeleteCancelledOrders));
+      }
       const btnBulkGenerateShippingLabel = document.getElementById("bulk-generate-shipping-label");
       if (btnBulkGenerateShippingLabel) {
         btnBulkGenerateShippingLabel.addEventListener("click", () => openShippingLabelModal());
@@ -5231,6 +5313,11 @@
       state.unlockInfoModalOpen = false;
       state.unlockInfoModalData = null;
       state.orderTextImportOpen = false;
+      state.bulkDeleteCancelledInProgress = false;
+      state.bulkVoidProgressVisible = false;
+      state.bulkVoidProgressLabel = "";
+      state.bulkVoidProgressPercent = 0;
+      state.bulkVoidProgressDetails = "";
       state.modalScrollTop = { qc: 0, reoffer: 0, import: 0 };
       state.sidebarOpen = false;
     }
