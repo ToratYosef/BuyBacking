@@ -509,6 +509,17 @@
     const db = getFirestore(app);
     const appId = "buyback-a0f05";
     const API_BASE_URL = (window.SHC_API_BASE_URL || '/server').replace(/\/$/, '');
+    const DEBUG_PERF = /(^localhost$|^127\.0\.0\.1$)/.test(window.location.hostname) || new URLSearchParams(window.location.search).has('debugPerf');
+    const PERF_TAG = '[sell/checkout perf]';
+    const perfLog = (...args) => { if (DEBUG_PERF) console.log(PERF_TAG, ...args); };
+    const perfMark = (name) => { try { performance.mark(name); } catch (_) {} perfLog('mark', name); };
+    const withPerf = async (label, fn) => {
+        const start = performance.now();
+        try { return await fn(); }
+        finally { perfLog(`${label} took ${(performance.now() - start).toFixed(1)}ms`); }
+    };
+    perfMark('checkout:page-start');
+    requestAnimationFrame(() => perfMark('checkout:first-content-paint-skeleton'));
 
     const apiPost = async (path, body, options = {}) => {
         const { authRequired = false } = options;
@@ -519,11 +530,11 @@
             headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
         }
 
-        const response = await fetch(endpoint, {
+        const response = await withPerf(`network:apiPost:${path}`, () => fetch(endpoint, {
             method: 'POST',
             headers,
             body: JSON.stringify(body || {})
-        });
+        }));
 
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -548,6 +559,8 @@
 
     const SELL_PROGRESS_COLLECTION = 'sellOrderProgress';
     const EMAIL_STORAGE_KEY = 'shc_quote_email';
+    const SELL_PROGRESS_CACHE_KEY = 'shc_sell_progress_cache_v2';
+    const SELL_PROGRESS_CACHE_TTL_MS = 2 * 60 * 1000;
 
     const placeSummaryByViewport = () => {
         if (!checkoutForm || !checkoutSummaryAside) return;
@@ -567,6 +580,7 @@
 
     // AUTH LISTENER - LOAD SAVED ADDRESS & SET MONOGRAM
     onAuthStateChanged(auth, async (user) => {
+        perfMark('checkout:auth-resolved');
         const loginBtn = document.getElementById('loginNavBtn');
         const monogram = document.getElementById('userMonogram');
         
@@ -595,7 +609,7 @@
             }
 
             try {
-                const addressDoc = await getDoc(doc(db, "artifacts", appId, "users", user.uid, "profile", "address"));
+                const addressDoc = await withPerf(`firestore:getAddress:${user.uid}`, () => getDoc(doc(db, "artifacts", appId, "users", user.uid, "profile", "address")));
                 if (addressDoc.exists()) {
                     const data = addressDoc.data();
                     if (data.fullName) document.getElementById('fullName').value = data.fullName;
@@ -652,17 +666,44 @@
             };
         });
     };
+    const readSellProgressCache = (email) => {
+        try {
+            const raw = localStorage.getItem(SELL_PROGRESS_CACHE_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            const entry = parsed?.[email];
+            if (!entry || !Array.isArray(entry.devices)) return null;
+            if ((Date.now() - Number(entry.ts || 0)) > SELL_PROGRESS_CACHE_TTL_MS) return null;
+            return entry.devices;
+        } catch (_) { return null; }
+    };
+    const writeSellProgressCache = (email, devices) => {
+        try {
+            const raw = localStorage.getItem(SELL_PROGRESS_CACHE_KEY);
+            const parsed = raw ? JSON.parse(raw) : {};
+            parsed[email] = { ts: Date.now(), devices };
+            localStorage.setItem(SELL_PROGRESS_CACHE_KEY, JSON.stringify(parsed));
+        } catch (_) {}
+    };
     const fetchSellProgressCart = async (email) => {
         const normalizedEmail = normalizeEmail(email);
         if (!isValidEmail(normalizedEmail)) return [];
         const docRef = getSellProgressDocRef(normalizedEmail);
         if (!docRef) return [];
 
-        const snap = await getDoc(docRef);
+        const cachedDevices = readSellProgressCache(normalizedEmail);
+        if (cachedDevices) {
+            perfLog(`sell progress cache hit for ${normalizedEmail}`);
+            return mapDbDevicesToCart(cachedDevices);
+        }
+
+        const snap = await withPerf(`firestore:getSellProgress:${normalizedEmail}`, () => getDoc(docRef));
         if (!snap.exists()) return [];
 
         const data = snap.data() || {};
-        return mapDbDevicesToCart(data.devices || []);
+        const devices = Array.isArray(data.devices) ? data.devices : [];
+        writeSellProgressCache(normalizedEmail, devices);
+        return mapDbDevicesToCart(devices);
     };
     const upsertSellProgress = async ({ email, didComplete = false, cartItems = [] }) => {
         const normalizedEmail = normalizeEmail(email);
@@ -670,19 +711,18 @@
         const docRef = getSellProgressDocRef(normalizedEmail);
         if (!docRef) return;
 
-        const existingSnap = await getDoc(docRef);
         const nowIso = new Date().toISOString();
-        const existingData = existingSnap.exists() ? existingSnap.data() : null;
-
+        const devices = mapCartItemsForDb(cartItems);
         const payload = {
             email: normalizedEmail,
             didComplete: Boolean(didComplete),
-            devices: mapCartItemsForDb(cartItems),
-            updatedAt: nowIso
+            devices,
+            updatedAt: nowIso,
+            createdAt: nowIso
         };
-        if (!existingData?.createdAt) payload.createdAt = nowIso;
 
-        await setDoc(docRef, payload, { merge: true });
+        await withPerf(`firestore:upsertSellProgress:${normalizedEmail}`, () => setDoc(docRef, payload, { merge: true }));
+        writeSellProgressCache(normalizedEmail, devices);
         try { localStorage.setItem(EMAIL_STORAGE_KEY, normalizedEmail); } catch (e) {}
     };
 
@@ -987,22 +1027,36 @@
         if (['broken', 'poor', 'damaged'].includes(normalized)) return 'broken';
         return '';
     };
+    const inferBrandFromDeviceSlug = (slugValue = '') => {
+        const slug = normalizeParam(slugValue).replace(/(^-|-$)/g, '');
+        if (!slug) return '';
+        if (slug.startsWith('iphone-') || slug.startsWith('apple-')) return 'iphone';
+        if (slug.startsWith('samsung-') || slug.startsWith('galaxy-')) return 'samsung';
+        return '';
+    };
     const getMatchingKey = (keys, value) => {
         const normalized = normalizeParam(value);
         if (!normalized) return '';
         return keys.find((k) => normalizeParam(k) === normalized) || '';
     };
+    const modelsCache = new Map();
     const getModels = async (brand) => {
+        if (modelsCache.has(brand)) return modelsCache.get(brand);
         const colRef = collection(db, 'devices', brand, 'models');
-        const snap = await getDocs(colRef);
-        return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const snap = await withPerf(`firestore:getModels:${brand}`, () => getDocs(colRef));
+        const models = snap.docs.map((d) => ({ id: d.id, name: String(d.data()?.name || d.id) }));
+        modelsCache.set(brand, models);
+        return models;
     };
     const findModelBySlug = async (slug, brandOverride = '') => {
         if (!slug) return null;
         const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
         const normalizedBrandOverride = normalizeBrandKey(brandOverride);
-        const isSupportedBrandOverride = BRAND_OPTIONS.some((b) => b.key === normalizedBrandOverride);
-        const brands = isSupportedBrandOverride ? [normalizedBrandOverride] : BRAND_OPTIONS.map((b) => b.key);
+        const inferredBrand = inferBrandFromDeviceSlug(rawSlug);
+        const preferredBrand = normalizedBrandOverride || inferredBrand;
+        const isSupportedBrandOverride = BRAND_OPTIONS.some((b) => b.key === preferredBrand);
+        // Performance: avoid querying both brand collections when slug/URL already indicates one.
+        const brands = isSupportedBrandOverride ? [preferredBrand] : BRAND_OPTIONS.map((b) => b.key);
         const addBrandSlugVariants = (candidates, brandToken) => {
             const token = normalizeParam(brandToken).replace(/(^-|-$)/g, '');
             if (!token) return;
@@ -1127,6 +1181,8 @@
 
         syncQtyParamToUrl();
         renderCart();
+        perfMark('checkout:first-data-rendered');
+        perfMark('checkout:all-data-loaded');
     };
 
     const updatePaymentFields = () => {
@@ -1160,7 +1216,7 @@
 
         if (auth.currentUser) {
             try {
-                await setDoc(doc(db, "artifacts", appId, "users", auth.currentUser.uid, "profile", "address"), shippingInfo);
+                await withPerf(`firestore:setAddress:${auth.currentUser.uid}`, () => setDoc(doc(db, "artifacts", appId, "users", auth.currentUser.uid, "profile", "address"), shippingInfo));
             } catch (e) { console.error("Error saving address:", e); }
         }
 
@@ -1488,7 +1544,7 @@
     });
 
     window.addEventListener('resize', placeSummaryByViewport);
-    init();
+    withPerf('checkout:init', init);
 </script>
 
 <!-- Google Places autocomplete intentionally disabled to avoid billing-gated API dependency. -->
