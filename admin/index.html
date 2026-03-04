@@ -1827,14 +1827,17 @@
     async function runBulkDeleteCancelledOrders(buttonEl) {
       if (!buttonEl || state.bulkDeleteCancelledInProgress) return;
       const cancelledOrders = (state.allOrders || []).filter((order) => isCancelledStatusValue(order?.status));
-      if (!cancelledOrders.length) {
+      const cancelledOrderIds = Array.from(new Set(cancelledOrders.map((order) => String(order?.id || "").trim()).filter(Boolean)));
+      if (!cancelledOrderIds.length) {
         toast('No canceled orders to delete', 'info');
         return;
       }
+      const batchSize = 100;
+      const totalBatches = Math.ceil(cancelledOrderIds.length / batchSize);
 
       const confirmed = await showConfirmation({
         title: 'Delete all canceled orders?',
-        message: `This will permanently delete ${cancelledOrders.length} canceled order(s) one-by-one using the same per-order DELETE route as manual admin deletion. This cannot be undone.`,
+        message: `This will permanently delete ${cancelledOrderIds.length} canceled order(s) in batches of up to ${batchSize}. This cannot be undone.`,
         confirmText: 'Delete All',
         cancelText: 'Keep Orders',
         confirmClass: 'bg-rose-600 hover:bg-rose-700'
@@ -1846,36 +1849,54 @@
       state.bulkVoidProgressVisible = true;
       state.bulkVoidProgressLabel = 'Deleting canceled orders…';
       state.bulkVoidProgressPercent = 0;
-      state.bulkVoidProgressDetails = `Starting 0/${cancelledOrders.length}`;
+      state.bulkVoidProgressDetails = `Starting 0/${cancelledOrderIds.length} (batch 0/${totalBatches})`;
       buttonEl.disabled = true;
       buttonEl.textContent = 'Deleting canceled orders…';
       render();
 
       let deleted = 0;
+      let notFound = 0;
       let failed = 0;
+      let processed = 0;
 
-      for (let i = 0; i < cancelledOrders.length; i += 1) {
-        const order = cancelledOrders[i];
+      for (let i = 0; i < cancelledOrderIds.length; i += batchSize) {
+        const batchOrderIds = cancelledOrderIds.slice(i, i + batchSize);
         try {
-          // Intentionally sequential to behave like manual admin one-by-one deletion.
-          await apiDelete(`/orders/${order.id}`);
-          deleted += 1;
-          state.allOrders = state.allOrders.filter((o) => o.id !== order.id);
+          const response = await apiPost('/orders/bulk-delete', { orderIds: batchOrderIds });
+          const deletedIds = Array.isArray(response?.deleted) ? response.deleted.map((id) => String(id)) : [];
+          const notFoundIds = Array.isArray(response?.notFound) ? response.notFound.map((id) => String(id)) : [];
+          const failedEntries = Array.isArray(response?.failed) ? response.failed : [];
+
+          deleted += deletedIds.length;
+          notFound += notFoundIds.length;
+          failed += failedEntries.length;
+
+          const removedIdSet = new Set([...deletedIds, ...notFoundIds]);
+          if (removedIdSet.size) {
+            state.allOrders = (state.allOrders || []).filter((order) => !removedIdSet.has(String(order?.id || '')));
+          }
+          if (failedEntries.length) {
+            failedEntries.slice(0, 5).forEach((entry) => {
+              const failedOrderId = entry?.orderId || entry?.id || 'unknown';
+              console.error(`Failed to bulk delete canceled order ${failedOrderId}`, entry?.error || entry);
+            });
+          }
         } catch (error) {
-          failed += 1;
-          console.error(`Failed to delete canceled order ${order.id}`, error);
+          failed += batchOrderIds.length;
+          console.error(`Failed to delete canceled order batch ${Math.floor(i / batchSize) + 1}`, error);
         }
 
-        const processed = i + 1;
-        state.bulkVoidProgressPercent = Math.round((processed / cancelledOrders.length) * 100);
-        state.bulkVoidProgressDetails = `Processed ${processed}/${cancelledOrders.length} • deleted ${deleted} • failed ${failed}`;
+        processed += batchOrderIds.length;
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        state.bulkVoidProgressPercent = Math.round((processed / cancelledOrderIds.length) * 100);
+        state.bulkVoidProgressDetails = `Processed ${processed}/${cancelledOrderIds.length} • batch ${batchNumber}/${totalBatches} • deleted ${deleted} • not found ${notFound} • failed ${failed}`;
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
       state.bulkDeleteCancelledInProgress = false;
       state.bulkVoidProgressPercent = 100;
-      state.bulkVoidProgressDetails = `Done • deleted ${deleted} • failed ${failed}`;
+      state.bulkVoidProgressDetails = `Done • deleted ${deleted} • not found ${notFound} • failed ${failed}`;
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
 
       setTimeout(() => {
@@ -1891,8 +1912,8 @@
         liveBtn.disabled = false;
         liveBtn.textContent = originalText || 'Delete Canceled Orders';
       }
-      if (failed) toast(`Deleted ${deleted} canceled orders, ${failed} failed`, 'error');
-      else toast(`Deleted ${deleted} canceled orders`, 'success');
+      if (failed) toast(`Bulk delete complete: ${deleted} deleted, ${notFound} not found, ${failed} failed`, 'error');
+      else toast(`Bulk delete complete: ${deleted} deleted, ${notFound} not found`, 'success');
     }
     // ----------------------------
     // SPEC: VOID LABELS + CANCEL FLOW (best-effort implementation)
