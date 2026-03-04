@@ -1269,7 +1269,7 @@
         }
         const colRef = collection(db, "devices", brand, "models");
         const snap = await withPerf(`firestore:getModels:${brand}`, () => getDocs(colRef));
-        const models = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const models = snap.docs.map(d => ({ id: d.id, name: String(d.data()?.name || d.id) }));
         state.modelsCache[brand] = models;
         saveCachedModels(brand, models);
         return models;
@@ -1279,7 +1279,8 @@
         const cacheKey = `${brand}::${modelId}`;
         if (modelDocCache.has(cacheKey)) return modelDocCache.get(cacheKey);
         const modelFromList = (state.modelsCache?.[brand] || []).find((m) => m.id === modelId);
-        if (modelFromList) {
+        // List cache intentionally stores summary-only fields; fetch full doc for pricing/details.
+        if (modelFromList && modelFromList.prices) {
             modelDocCache.set(cacheKey, modelFromList);
             return modelFromList;
         }
@@ -1651,6 +1652,7 @@
         state.selections[state.currentStep] = value;
         if (state.currentStep === 'brand') {
             state.selections.deviceSlug = '';
+            modelDocCache.clear();
         }
         if (state.currentStep === 'model') {
             state.selections.deviceSlug = value;
@@ -2097,12 +2099,22 @@
         if (['broken', 'poor', 'damaged'].includes(normalized)) return 'broken';
         return '';
     };
+    const inferBrandFromDeviceSlug = (slugValue = '') => {
+        const slug = normalizeParam(slugValue).replace(/(^-|-$)/g, '');
+        if (!slug) return '';
+        if (slug.startsWith('iphone-') || slug.startsWith('apple-')) return 'iphone';
+        if (slug.startsWith('samsung-') || slug.startsWith('galaxy-')) return 'samsung';
+        return '';
+    };
     const findModelBySlug = async (slug, brandOverride = '') => {
         if (!slug) return null;
         const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
         const normalizedBrandOverride = normalizeBrandKey(brandOverride);
-        const isSupportedBrandOverride = BRAND_OPTIONS.some((b) => b.key === normalizedBrandOverride);
-        const brands = isSupportedBrandOverride ? [normalizedBrandOverride] : BRAND_OPTIONS.map(b => b.key);
+        const inferredBrand = inferBrandFromDeviceSlug(rawSlug);
+        const preferredBrand = normalizedBrandOverride || inferredBrand;
+        const isSupportedBrandOverride = BRAND_OPTIONS.some((b) => b.key === preferredBrand);
+        // Performance: only query one brand when URL/device slug clearly indicates it.
+        const brands = isSupportedBrandOverride ? [preferredBrand] : BRAND_OPTIONS.map(b => b.key);
         const addBrandSlugVariants = (candidates, brandToken) => {
             const token = normalizeParam(brandToken).replace(/(^-|-$)/g, '');
             if (!token) return;
@@ -2122,6 +2134,14 @@
             // Support both canonical prefixes (e.g. iphone-*) and literal brand prefixes
             // (e.g. apple-*) so both link styles hydrate correctly.
             getBrandSlugAliases(brand).forEach((brandToken) => addBrandSlugVariants(slugCandidates, brandToken));
+
+            const directCandidate = rawSlug.replace(new RegExp(`^${brand}-`), '');
+            if (directCandidate) {
+                const directData = await getModelDocData(brand, directCandidate).catch(() => null);
+                if (directData && directData.prices) {
+                    return { brand, model: { id: directCandidate, name: String(directData.name || directCandidate) } };
+                }
+            }
 
             const models = await getModels(brand);
             const match = models.find(model => {

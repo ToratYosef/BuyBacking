@@ -1027,6 +1027,13 @@
         if (['broken', 'poor', 'damaged'].includes(normalized)) return 'broken';
         return '';
     };
+    const inferBrandFromDeviceSlug = (slugValue = '') => {
+        const slug = normalizeParam(slugValue).replace(/(^-|-$)/g, '');
+        if (!slug) return '';
+        if (slug.startsWith('iphone-') || slug.startsWith('apple-')) return 'iphone';
+        if (slug.startsWith('samsung-') || slug.startsWith('galaxy-')) return 'samsung';
+        return '';
+    };
     const getMatchingKey = (keys, value) => {
         const normalized = normalizeParam(value);
         if (!normalized) return '';
@@ -1037,7 +1044,7 @@
         if (modelsCache.has(brand)) return modelsCache.get(brand);
         const colRef = collection(db, 'devices', brand, 'models');
         const snap = await withPerf(`firestore:getModels:${brand}`, () => getDocs(colRef));
-        const models = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const models = snap.docs.map((d) => ({ id: d.id, name: String(d.data()?.name || d.id) }));
         modelsCache.set(brand, models);
         return models;
     };
@@ -1045,8 +1052,11 @@
         if (!slug) return null;
         const rawSlug = normalizeParam(slug).replace(/(^-|-$)/g, '');
         const normalizedBrandOverride = normalizeBrandKey(brandOverride);
-        const isSupportedBrandOverride = BRAND_OPTIONS.some((b) => b.key === normalizedBrandOverride);
-        const brands = isSupportedBrandOverride ? [normalizedBrandOverride] : BRAND_OPTIONS.map((b) => b.key);
+        const inferredBrand = inferBrandFromDeviceSlug(rawSlug);
+        const preferredBrand = normalizedBrandOverride || inferredBrand;
+        const isSupportedBrandOverride = BRAND_OPTIONS.some((b) => b.key === preferredBrand);
+        // Performance: avoid querying both brand collections when slug/URL already indicates one.
+        const brands = isSupportedBrandOverride ? [preferredBrand] : BRAND_OPTIONS.map((b) => b.key);
         const addBrandSlugVariants = (candidates, brandToken) => {
             const token = normalizeParam(brandToken).replace(/(^-|-$)/g, '');
             if (!token) return;
