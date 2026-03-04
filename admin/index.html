@@ -55,6 +55,7 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
     const API_BASE_URL = window.SHC_API_BASE_URL || "https://api.secondhandcell.com/server";
+    const PRINT_API_BASE_URL = "https://api.secondhandcell.com";
     // Spec flags
     const IS_AGING_PAGE = !!window.IS_AGING_PAGE;
     const MIN_AGING_MS = 1000 * 60 * 60 * 24 * 7; // 7 days (safe default if not provided)
@@ -541,6 +542,55 @@
     const apiPost = (p, b) => apiCall(p, "POST", b ?? {});
     const apiPut = (p, b) => apiCall(p, "PUT", b ?? {});
     const apiDelete = (p) => apiCall(p, "DELETE", null);
+
+    async function authorizedFetch(url, options = {}) {
+      const user = auth.currentUser;
+      const token = user ? await user.getIdToken() : null;
+      const headers = {
+        ...(options.headers || {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+      return fetch(url, { ...options, headers });
+    }
+
+    function getSavedLabelUrls(orderData = {}) {
+      const urls = [];
+      ["uspsLabelUrl", "outboundLabelUrl", "inboundLabelUrl"].forEach((key) => {
+        if (orderData?.[key]) urls.push(orderData[key]);
+      });
+
+      const shipEngineLabels = orderData?.shipEngineLabels;
+      if (shipEngineLabels && typeof shipEngineLabels === "object") {
+        Object.values(shipEngineLabels).forEach((value) => {
+          if (!value || typeof value !== "object") return;
+          ["labelDownload", "labelDownloadUrl", "downloadUrl", "url", "href", "pdfUrl"].forEach((key) => {
+            if (value[key]) urls.push(value[key]);
+          });
+        });
+      }
+
+      return Array.from(new Set(urls.filter(Boolean)));
+    }
+
+    async function fetchOrderPrintData(orderId) {
+      const response = await authorizedFetch(`${PRINT_API_BASE_URL}/orders/${orderId}`, { method: "GET" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to fetch order labels");
+      }
+      return data?.order || data;
+    }
+
+    async function openPdfEndpointInNewTab(endpoint, failureMessage) {
+      const response = await authorizedFetch(`${PRINT_API_BASE_URL}${endpoint}`, { method: "GET" });
+      if (!response.ok) {
+        throw new Error(failureMessage);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }
     const SHC_HARDCODED_ADDRESS = "1602 McDonald Ave Ste Rear";
     function toast(msg, type="info") {
       const el = document.createElement("div");
@@ -1736,33 +1786,13 @@
     // SPEC: MODAL ACTION SWITCH (exact endpoints)
     // ----------------------------
     async function printPackingSlip(orderId) {
-      const user = auth.currentUser;
-      const token = user ? await user.getIdToken() : null;
-      const res = await fetch(`${API_BASE_URL}/packing-slip/${orderId}`, {
-        method: "GET",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error("Failed to generate packing slip");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      // Create an iframe to load the PDF and trigger print dialog
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = url;
-      document.body.appendChild(iframe);
-      iframe.onload = function() {
-        try {
-          window.focus();
-          window.print();
-        } catch (error) {
-          console.warn('Unable to auto-open print dialog from iframe load event:', error);
-        }
-        // Clean up after printing
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-          URL.revokeObjectURL(url);
-        }, 1000);
-      };
+      await openPdfEndpointInNewTab(`/packing-slip/${orderId}`, "Failed to generate packing slip");
+      toast("Packing slip opened in a new tab", "success");
+    }
+
+    async function printBundle(orderId) {
+      await openPdfEndpointInNewTab(`/print-bundle/${orderId}`, "Failed to generate print bundle");
+      toast("Shipping kit bundle opened in a new tab", "success");
     }
 
     async function handleAction(orderId, actionType, options = {}) {
@@ -1803,11 +1833,19 @@
         let method = "POST";
         let body = options?.body ?? null;
         switch (actionType) {
-          case "generateLabel":
-            endpoint = `/generate-label/${orderId}`;
-            method = "POST";
-            body = {};
-            break;
+          case "generateLabel": {
+            await apiPost(`/generate-label/${orderId}`, {});
+            const refreshedOrder = await fetchOrderPrintData(orderId);
+            const labelUrls = getSavedLabelUrls(refreshedOrder);
+            if (labelUrls.length) {
+              labelUrls.forEach((labelUrl) => window.open(labelUrl, "_blank", "noopener,noreferrer"));
+              toast(`Opened ${labelUrls.length} label${labelUrls.length === 1 ? "" : "s"} in new tab${labelUrls.length === 1 ? "" : "s"}`, "success");
+            } else {
+              toast("Label generated, but no saved label URLs were returned yet", "info");
+            }
+            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+            return;
+          }
           case "markReceived":
             endpoint = `/orders/${orderId}/status`;
             method = "PUT";
@@ -1942,7 +1980,7 @@
             body = { status: "completed" };
             break;
           case "printDocs":
-            toast("Print Kit Docs is not available in this view", "info");
+            await printBundle(orderId);
             return;
           case "printPacking":
             await printPackingSlip(orderId);
