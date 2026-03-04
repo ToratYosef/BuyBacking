@@ -37,7 +37,7 @@
   <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
     // ----------------------------
     // CONFIG
     // ----------------------------
@@ -59,6 +59,20 @@
     // Spec flags
     const IS_AGING_PAGE = !!window.IS_AGING_PAGE;
     const MIN_AGING_MS = 1000 * 60 * 60 * 24 * 7; // 7 days (safe default if not provided)
+    const DEBUG_PERF = /(^localhost$|^127\.0\.0\.1$)/.test(window.location.hostname) || new URLSearchParams(window.location.search).has('debugPerf');
+    const PERF_TAG = '[admin perf]';
+    const perfLog = (...args) => { if (DEBUG_PERF) console.log(PERF_TAG, ...args); };
+    const perfMark = (name) => { try { performance.mark(name); } catch (_) {} perfLog('mark', name); };
+    const withPerf = async (label, fn) => {
+      const start = performance.now();
+      try { return await fn(); }
+      finally { perfLog(`${label} took ${(performance.now() - start).toFixed(1)}ms`); }
+    };
+    perfMark('admin:page-start');
+    requestAnimationFrame(() => perfMark('admin:first-content-paint-skeleton'));
+    const ADMIN_ORDERS_INITIAL_LIMIT = 50;
+    const ADMIN_ORDERS_CHUNK_SIZE = 50;
+    const ADMIN_UI_CACHE_KEY = 'shc_admin_ui_cache_v1';
     // ----------------------------
     // DOM HELPERS
     // ----------------------------
@@ -533,7 +547,7 @@
         config.headers["Content-Type"] = "application/json";
         config.body = JSON.stringify(body);
       }
-      const res = await fetch(`${API_BASE_URL}${safeEndpoint}`, config);
+      const res = await withPerf(`network:api:${safeEndpoint}`, () => fetch(`${API_BASE_URL}${safeEndpoint}`, config));
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || data.error || "API Request Failed");
       return data;
@@ -550,7 +564,7 @@
         ...(options.headers || {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
-      return fetch(url, { ...options, headers });
+      return withPerf(`network:authorizedFetch:${url}`, () => fetch(url, { ...options, headers }));
     }
 
     function getSavedLabelUrls(orderData = {}) {
@@ -603,6 +617,28 @@
       document.body.appendChild(el);
       setTimeout(() => el.remove(), 2800);
     }
+    const readAdminUiCache = () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(ADMIN_UI_CACHE_KEY) || '{}');
+        if (!parsed || typeof parsed !== 'object') return {};
+        return parsed;
+      } catch (_) {
+        return {};
+      }
+    };
+    const writeAdminUiCache = () => {
+      try {
+        const payload = {
+          currentActiveStatus: state.currentActiveStatus,
+          currentSearchTerm: state.currentSearchTerm,
+          compactDensity: !!state.compactDensity,
+          activeTab: state.activeTab,
+          ts: Date.now()
+        };
+        localStorage.setItem(ADMIN_UI_CACHE_KEY, JSON.stringify(payload));
+      } catch (_) {}
+    };
+    const cachedUi = readAdminUiCache();
     // ----------------------------
     // SPEC: GLOBAL STATE
     // ----------------------------
@@ -615,8 +651,8 @@
       allOrders: [],
       currentFilteredOrders: [],
       currentFilteredDevices: [],
-      currentActiveStatus: "all",
-      currentSearchTerm: "",
+      currentActiveStatus: cachedUi.currentActiveStatus || "all",
+      currentSearchTerm: cachedUi.currentSearchTerm || "",
       // pagination
       ORDERS_PER_PAGE: 20,
       currentPage: 1,
@@ -625,9 +661,9 @@
       expandedOrderIds: new Set(),
       lastRenderedDeviceKeys: [],
       // density
-      compactDensity: false,
+      compactDensity: !!cachedUi.compactDensity,
       // UI tabs
-      activeTab: "orders",
+      activeTab: cachedUi.activeTab || "orders",
       // drawer / modal
       selectedOrderId: null,
       selectedOrderSnapshot: null,
@@ -661,6 +697,7 @@
       bulkVoidProgressDetails: "",
       lastRefreshAt: null,
       lastTrackingRefreshMeta: null,
+      ordersLoading: false,
       trackingReportModalOpen: false,
       trackingReportData: null,
       // confirmation modal
@@ -705,12 +742,13 @@
       prefillShippingLabelForm(null);
       state.shippingLabelModalOpen = true;
       render();
+      writeAdminUiCache();
     }
 
     async function autoDownloadPdf(url, filename = "shipping-label.pdf") {
       if (!url) return;
       try {
-        const response = await fetch(url);
+        const response = await withPerf(`network:fetchJson:${url}`, () => fetch(url));
         if (!response.ok) throw new Error("download failed");
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
@@ -739,6 +777,7 @@
       state.shippingLabelPreviewUrl = "";
       state.shippingLabelTrackingNumber = "";
       render();
+      writeAdminUiCache();
     }
 
     async function submitManualShippingLabel() {
@@ -787,6 +826,23 @@
         return liveOrder;
       }
       return state.selectedOrderSnapshot || null;
+    }
+
+    async function hydrateSelectedOrderDetails(orderId) {
+      if (!orderId) return;
+      try {
+        const detailSnap = await withPerf(`firestore:order-detail:${orderId}`, () => getDoc(doc(db, "orders", orderId)));
+        if (!detailSnap.exists() || state.selectedOrderId !== orderId) return;
+        const data = detailSnap.data() || {};
+        const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+        const detailedOrder = { id: detailSnap.id, ...data, createdAtMillis };
+        state.selectedOrderSnapshot = detailedOrder;
+        const idx = state.allOrders.findIndex((o) => o.id === orderId);
+        if (idx >= 0) state.allOrders[idx] = { ...state.allOrders[idx], ...detailedOrder };
+        render();
+      } catch (error) {
+        console.error('Failed to load order details', error);
+      }
     }
 
     function getOrderPayoutTotal(order) {
@@ -874,7 +930,7 @@
       if (!key) return [];
       if (state.qcModelCache[key]) return state.qcModelCache[key];
       try {
-        const snap = await getDocs(collection(db, 'devices', key, 'models'));
+        const snap = await withPerf(`firestore:getModels:${key}`, () => getDocs(collection(db, 'devices', key, 'models')));
         const models = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
         state.qcModelCache[key] = models;
         return models;
@@ -890,7 +946,7 @@
       const cacheKey = `${b}::${m}`;
       if (state.qcStorageCache[cacheKey]) return state.qcStorageCache[cacheKey];
       try {
-        const snap = await getDoc(doc(db, 'devices', b, 'models', m));
+        const snap = await withPerf(`firestore:getModel:${b}:${m}`, () => getDoc(doc(db, 'devices', b, 'models', m)));
         if (!snap.exists()) return [];
         const data = snap.data() || {};
         const storageKeys = Object.keys(data.prices || {});
@@ -913,7 +969,7 @@
       const condition = conditionRaw === 'damaged' ? 'broken' : conditionRaw;
       if (!brand || !modelId || !storage) return null;
       try {
-        const snap = await getDoc(doc(db, 'devices', brand, 'models', modelId));
+        const snap = await withPerf(`firestore:getModel:${brand}:${modelId}`, () => getDoc(doc(db, 'devices', brand, 'models', modelId)));
         if (!snap.exists()) return null;
         const data = snap.data() || {};
         const prices = data.prices || {};
@@ -953,7 +1009,7 @@
           if (issueLabels[issueId]) {
             reasons.push(issueLabels[issueId]);
           }
-        });
+        }));
       }
       
       // Add other custom issue if specified
@@ -1059,7 +1115,7 @@
     async function updateDeviceStatusInline(orderId, deviceKey, newStatus) {
       if (!orderId || !deviceKey || !newStatus) return;
       const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, {
+      await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
         updatedAt: new Date()
       });
@@ -1100,31 +1156,73 @@
     // FIRESTORE LISTENER
     // ----------------------------
     let unsubscribeOrders = null;
-    function startOrdersListener() {
+    let ordersLoadVersion = 0;
+    async function startOrdersListener() {
       if (unsubscribeOrders) unsubscribeOrders();
-      const ordersRef = collection(db, "orders");
-      unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
-        const ordersData = snapshot.docs.map(d => {
-          const data = d.data();
-          const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
-          return { id: d.id, ...data, createdAtMillis };
-        });
-        ordersData.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
-        state.allOrders = ordersData;
-        if (state.bulkTrackingRefreshInProgress) {
-          return;
+      const loadVersion = ++ordersLoadVersion;
+      state.ordersLoading = true;
+      state.allOrders = [];
+      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+
+      try {
+        let cursor = null;
+        let loaded = [];
+        while (true) {
+          if (loadVersion !== ordersLoadVersion) return;
+          const ordersQuery = cursor
+            ? query(collection(db, "orders"), orderBy("createdAt", "desc"), startAfter(cursor), limit(ADMIN_ORDERS_CHUNK_SIZE))
+            : query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_CHUNK_SIZE));
+
+          const snapshot = await withPerf(`firestore:orders-chunk:${loaded.length}`, () => getDocs(ordersQuery));
+          if (loadVersion !== ordersLoadVersion) return;
+          if (snapshot.empty) break;
+
+          const chunkOrders = snapshot.docs.map((d) => {
+            const data = d.data();
+            const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+            return { id: d.id, ...data, createdAtMillis };
+          });
+
+          loaded = loaded.concat(chunkOrders);
+          loaded.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+          state.allOrders = loaded;
+
+          if (loaded.length === chunkOrders.length) {
+            perfMark('admin:first-data-rendered');
+          }
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+
+          cursor = snapshot.docs[snapshot.docs.length - 1] || null;
+          if (snapshot.size < ADMIN_ORDERS_CHUNK_SIZE) break;
+
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
-        // Keep drawer open until admin explicitly closes it.
-        // If a selected order is temporarily missing from the live snapshot,
-        // render falls back to the last selectedOrderSnapshot.
-        // Re-run filter pipeline to keep pagination + selection consistent
+
+        if (loadVersion !== ordersLoadVersion) return;
+        state.ordersLoading = false;
+        perfMark('admin:all-data-loaded');
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-      }, (err) => {
-        console.error("Firestore Error:", err);
+
+        const liveOrdersRef = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_INITIAL_LIMIT));
+        unsubscribeOrders = onSnapshot(liveOrdersRef, (snapshot) => {
+          const byId = new Map((state.allOrders || []).map((order) => [order.id, order]));
+          snapshot.docs.forEach((d) => {
+            const data = d.data();
+            const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+            byId.set(d.id, { id: d.id, ...data, createdAtMillis });
+          });
+          state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+        }, (err) => {
+          console.error("Firestore Error:", err);
+          toast("Live updates failed", "error");
+        });
+      } catch (err) {
+        state.ordersLoading = false;
+        console.error("Failed loading orders:", err);
         toast("Failed to load orders", "error");
-        // still render shell
-        render();
-      });
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
     }
     // ----------------------------
     // SPEC: CANCELLED HANDLING + BASE ORDERS
@@ -1327,6 +1425,7 @@
         state.currentPage = 1;
       }
       render();
+      writeAdminUiCache();
     }
     // ----------------------------
     // SPEC: BULK SELECTION (order)
@@ -1366,14 +1465,14 @@
       try {
         const orderIds = Array.from(state.selectedOrderIds);
         const token = await auth.currentUser.getIdToken();
-        const response = await fetch(`${API_BASE_URL}/merge-print`, {
+        const response = await withPerf("network:merge-print", () => fetch(`${API_BASE_URL}/merge-print`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ orderIds }),
-        });
+        }));
         if (!response.ok) {
           const errText = await response.text();
           throw new Error(errText || 'Failed to create merged slip PDF');
@@ -2017,7 +2116,7 @@
         const safeDeviceKey = deviceKey || buildOrderDeviceKey(orderId, 0);
         
         // First, get the current order to compute new order status
-        const orderSnap = await getDoc(orderRef);
+        const orderSnap = await withPerf(`firestore:getOrder:${orderId}`, () => getDoc(orderRef));
         const order = orderSnap.exists() ? { id: orderSnap.id, ...orderSnap.data() } : null;
         
         if (!order) {
@@ -2050,21 +2149,21 @@
         const newOrderStatus = computeOrderStatus(tempOrder);
         
         try {
-          await updateDoc(orderRef, {
+          await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
             [`qcDataByDevice.${safeDeviceKey}`]: qcData,
             [`deviceStatusByKey.${safeDeviceKey}`]: deviceStatus,
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
             qcCompletedAt: new Date()
-          });
+          }));
         } catch (e) {
-          await setDoc(orderRef, {
+          await withPerf(`firestore:setOrder:${orderId}`, () => setDoc(orderRef, {
             qcDataByDevice: { [safeDeviceKey]: qcData },
             deviceStatusByKey: { [safeDeviceKey]: deviceStatus },
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
             qcCompletedAt: new Date()
-          }, { merge: true });
+          }, { merge: true }));
         }
         toast("QC saved", "success");
       } catch (e) {
@@ -2591,7 +2690,9 @@
         `);
       }
       const showNoResults = !rowHtml.length;
-      const noResultsBody = state.currentSearchTerm
+      const noResultsBody = state.ordersLoading
+        ? `<tr><td colspan="5" class="px-6 py-10 text-center text-slate-500">Loading orders… ${esc(String(state.allOrders.length))} loaded</td></tr>`
+        : state.currentSearchTerm
         ? `<tr>
             <td colspan="5" class="px-6 py-10 text-center text-slate-500">
               <div class="space-y-3">
@@ -4215,6 +4316,7 @@
             state.unlockInfoModalOpen = false;
             state.unlockInfoModalData = null;
             render();
+            hydrateSelectedOrderDetails(orderId);
             return;
           }
 
@@ -4239,6 +4341,7 @@
             state.unlockInfoModalOpen = false;
             state.unlockInfoModalData = null;
             render();
+            hydrateSelectedOrderDetails(parsed.orderId);
           }
         });
         state.viewDelegationBound = true;
@@ -4340,6 +4443,7 @@
           state.unlockInfoModalOpen = false;
           state.unlockInfoModalData = null;
           render();
+          hydrateSelectedOrderDetails(orderId);
         });
       });
 
@@ -5134,12 +5238,13 @@
     async function isUidAdmin(uid) {
       if (!uid) return false;
       const adminRef = doc(db, "admins", uid);
-      const adminSnap = await getDoc(adminRef);
+      const adminSnap = await withPerf(`firestore:isAdmin:${uid}`, () => getDoc(adminRef));
       return adminSnap.exists();
     }
 
     let authCheckVersion = 0;
     onAuthStateChanged(auth, async (u) => {
+      perfMark('admin:auth-resolved');
       const currentCheckVersion = ++authCheckVersion;
 
       if (!u) {
@@ -5170,8 +5275,14 @@
         state.authError = "";
         state.user = u;
         state.authLoading = false;
-        startOrdersListener();
+        state.ordersLoading = true;
+        // Render the full admin layout immediately, then stream Firestore data in chunks.
+        // This avoids a blank/blocked experience while network requests are in flight.
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+        perfMark('admin:layout-rendered-before-fetch');
+        requestAnimationFrame(() => {
+          void startOrdersListener();
+        });
       } catch (err) {
         console.error("Admin access check failed:", err);
         state.user = null;
