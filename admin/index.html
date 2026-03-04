@@ -37,7 +37,7 @@
   <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
     // ----------------------------
     // CONFIG
     // ----------------------------
@@ -59,6 +59,19 @@
     // Spec flags
     const IS_AGING_PAGE = !!window.IS_AGING_PAGE;
     const MIN_AGING_MS = 1000 * 60 * 60 * 24 * 7; // 7 days (safe default if not provided)
+    const DEBUG_PERF = /(^localhost$|^127\.0\.0\.1$)/.test(window.location.hostname) || new URLSearchParams(window.location.search).has('debugPerf');
+    const PERF_TAG = '[admin perf]';
+    const perfLog = (...args) => { if (DEBUG_PERF) console.log(PERF_TAG, ...args); };
+    const perfMark = (name) => { try { performance.mark(name); } catch (_) {} perfLog('mark', name); };
+    const withPerf = async (label, fn) => {
+      const start = performance.now();
+      try { return await fn(); }
+      finally { perfLog(`${label} took ${(performance.now() - start).toFixed(1)}ms`); }
+    };
+    perfMark('admin:page-start');
+    requestAnimationFrame(() => perfMark('admin:first-content-paint-skeleton'));
+    const ADMIN_ORDERS_INITIAL_LIMIT = 200;
+    const ADMIN_UI_CACHE_KEY = 'shc_admin_ui_cache_v1';
     // ----------------------------
     // DOM HELPERS
     // ----------------------------
@@ -533,7 +546,7 @@
         config.headers["Content-Type"] = "application/json";
         config.body = JSON.stringify(body);
       }
-      const res = await fetch(`${API_BASE_URL}${safeEndpoint}`, config);
+      const res = await withPerf(`network:api:${safeEndpoint}`, () => fetch(`${API_BASE_URL}${safeEndpoint}`, config));
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || data.error || "API Request Failed");
       return data;
@@ -550,7 +563,7 @@
         ...(options.headers || {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
-      return fetch(url, { ...options, headers });
+      return withPerf(`network:authorizedFetch:${url}`, () => fetch(url, { ...options, headers }));
     }
 
     function getSavedLabelUrls(orderData = {}) {
@@ -603,6 +616,28 @@
       document.body.appendChild(el);
       setTimeout(() => el.remove(), 2800);
     }
+    const readAdminUiCache = () => {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(ADMIN_UI_CACHE_KEY) || '{}');
+        if (!parsed || typeof parsed !== 'object') return {};
+        return parsed;
+      } catch (_) {
+        return {};
+      }
+    };
+    const writeAdminUiCache = () => {
+      try {
+        const payload = {
+          currentActiveStatus: state.currentActiveStatus,
+          currentSearchTerm: state.currentSearchTerm,
+          compactDensity: !!state.compactDensity,
+          activeTab: state.activeTab,
+          ts: Date.now()
+        };
+        localStorage.setItem(ADMIN_UI_CACHE_KEY, JSON.stringify(payload));
+      } catch (_) {}
+    };
+    const cachedUi = readAdminUiCache();
     // ----------------------------
     // SPEC: GLOBAL STATE
     // ----------------------------
@@ -615,8 +650,8 @@
       allOrders: [],
       currentFilteredOrders: [],
       currentFilteredDevices: [],
-      currentActiveStatus: "all",
-      currentSearchTerm: "",
+      currentActiveStatus: cachedUi.currentActiveStatus || "all",
+      currentSearchTerm: cachedUi.currentSearchTerm || "",
       // pagination
       ORDERS_PER_PAGE: 20,
       currentPage: 1,
@@ -625,9 +660,9 @@
       expandedOrderIds: new Set(),
       lastRenderedDeviceKeys: [],
       // density
-      compactDensity: false,
+      compactDensity: !!cachedUi.compactDensity,
       // UI tabs
-      activeTab: "orders",
+      activeTab: cachedUi.activeTab || "orders",
       // drawer / modal
       selectedOrderId: null,
       selectedOrderSnapshot: null,
@@ -705,12 +740,13 @@
       prefillShippingLabelForm(null);
       state.shippingLabelModalOpen = true;
       render();
+      writeAdminUiCache();
     }
 
     async function autoDownloadPdf(url, filename = "shipping-label.pdf") {
       if (!url) return;
       try {
-        const response = await fetch(url);
+        const response = await withPerf(`network:fetchJson:${url}`, () => fetch(url));
         if (!response.ok) throw new Error("download failed");
         const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
@@ -739,6 +775,7 @@
       state.shippingLabelPreviewUrl = "";
       state.shippingLabelTrackingNumber = "";
       render();
+      writeAdminUiCache();
     }
 
     async function submitManualShippingLabel() {
@@ -874,7 +911,7 @@
       if (!key) return [];
       if (state.qcModelCache[key]) return state.qcModelCache[key];
       try {
-        const snap = await getDocs(collection(db, 'devices', key, 'models'));
+        const snap = await withPerf(`firestore:getModels:${key}`, () => getDocs(collection(db, 'devices', key, 'models')));
         const models = snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) }));
         state.qcModelCache[key] = models;
         return models;
@@ -890,7 +927,7 @@
       const cacheKey = `${b}::${m}`;
       if (state.qcStorageCache[cacheKey]) return state.qcStorageCache[cacheKey];
       try {
-        const snap = await getDoc(doc(db, 'devices', b, 'models', m));
+        const snap = await withPerf(`firestore:getModel:${b}:${m}`, () => getDoc(doc(db, 'devices', b, 'models', m)));
         if (!snap.exists()) return [];
         const data = snap.data() || {};
         const storageKeys = Object.keys(data.prices || {});
@@ -913,7 +950,7 @@
       const condition = conditionRaw === 'damaged' ? 'broken' : conditionRaw;
       if (!brand || !modelId || !storage) return null;
       try {
-        const snap = await getDoc(doc(db, 'devices', brand, 'models', modelId));
+        const snap = await withPerf(`firestore:getModel:${brand}:${modelId}`, () => getDoc(doc(db, 'devices', brand, 'models', modelId)));
         if (!snap.exists()) return null;
         const data = snap.data() || {};
         const prices = data.prices || {};
@@ -953,7 +990,7 @@
           if (issueLabels[issueId]) {
             reasons.push(issueLabels[issueId]);
           }
-        });
+        }));
       }
       
       // Add other custom issue if specified
@@ -1059,7 +1096,7 @@
     async function updateDeviceStatusInline(orderId, deviceKey, newStatus) {
       if (!orderId || !deviceKey || !newStatus) return;
       const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, {
+      await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
         updatedAt: new Date()
       });
@@ -1102,7 +1139,9 @@
     let unsubscribeOrders = null;
     function startOrdersListener() {
       if (unsubscribeOrders) unsubscribeOrders();
-      const ordersRef = collection(db, "orders");
+      // Limit initial realtime subscription so first paint is fast and index-friendly.
+      // If you later add where() filters here, create a composite index on [status ASC, createdAt DESC].
+      const ordersRef = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_INITIAL_LIMIT));
       unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
         const ordersData = snapshot.docs.map(d => {
           const data = d.data();
@@ -1111,6 +1150,8 @@
         });
         ordersData.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
         state.allOrders = ordersData;
+        perfMark('admin:first-data-rendered');
+        perfMark('admin:all-data-loaded');
         if (state.bulkTrackingRefreshInProgress) {
           return;
         }
@@ -1327,6 +1368,7 @@
         state.currentPage = 1;
       }
       render();
+      writeAdminUiCache();
     }
     // ----------------------------
     // SPEC: BULK SELECTION (order)
@@ -1366,14 +1408,14 @@
       try {
         const orderIds = Array.from(state.selectedOrderIds);
         const token = await auth.currentUser.getIdToken();
-        const response = await fetch(`${API_BASE_URL}/merge-print`, {
+        const response = await withPerf("network:merge-print", () => fetch(`${API_BASE_URL}/merge-print`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ orderIds }),
-        });
+        }));
         if (!response.ok) {
           const errText = await response.text();
           throw new Error(errText || 'Failed to create merged slip PDF');
@@ -2017,7 +2059,7 @@
         const safeDeviceKey = deviceKey || buildOrderDeviceKey(orderId, 0);
         
         // First, get the current order to compute new order status
-        const orderSnap = await getDoc(orderRef);
+        const orderSnap = await withPerf(`firestore:getOrder:${orderId}`, () => getDoc(orderRef));
         const order = orderSnap.exists() ? { id: orderSnap.id, ...orderSnap.data() } : null;
         
         if (!order) {
@@ -2050,21 +2092,21 @@
         const newOrderStatus = computeOrderStatus(tempOrder);
         
         try {
-          await updateDoc(orderRef, {
+          await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
             [`qcDataByDevice.${safeDeviceKey}`]: qcData,
             [`deviceStatusByKey.${safeDeviceKey}`]: deviceStatus,
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
             qcCompletedAt: new Date()
-          });
+          }));
         } catch (e) {
-          await setDoc(orderRef, {
+          await withPerf(`firestore:setOrder:${orderId}`, () => setDoc(orderRef, {
             qcDataByDevice: { [safeDeviceKey]: qcData },
             deviceStatusByKey: { [safeDeviceKey]: deviceStatus },
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
             qcCompletedAt: new Date()
-          }, { merge: true });
+          }, { merge: true }));
         }
         toast("QC saved", "success");
       } catch (e) {
@@ -5134,12 +5176,13 @@
     async function isUidAdmin(uid) {
       if (!uid) return false;
       const adminRef = doc(db, "admins", uid);
-      const adminSnap = await getDoc(adminRef);
+      const adminSnap = await withPerf(`firestore:isAdmin:${uid}`, () => getDoc(adminRef));
       return adminSnap.exists();
     }
 
     let authCheckVersion = 0;
     onAuthStateChanged(auth, async (u) => {
+      perfMark('admin:auth-resolved');
       const currentCheckVersion = ++authCheckVersion;
 
       if (!u) {

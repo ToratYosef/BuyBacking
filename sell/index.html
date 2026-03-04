@@ -969,6 +969,30 @@
         measurementId: "G-6WWQN44JHT"
     };
 
+
+
+    // Performance instrumentation (development-only).
+    const DEBUG_PERF = /(^localhost$|^127\.0\.0\.1$)/.test(window.location.hostname) || new URLSearchParams(window.location.search).has('debugPerf');
+    const PERF_TAG = '[sell/index perf]';
+    const perfLog = (...args) => { if (DEBUG_PERF) console.log(PERF_TAG, ...args); };
+    const perfMark = (name) => { try { performance.mark(name); } catch (_) {} perfLog('mark', name); };
+    const perfMeasure = (name, start, end) => { try { performance.measure(name, start, end); } catch (_) {} };
+    const withPerf = async (label, fn) => {
+        const start = `${label}:start:${Date.now()}`;
+        const end = `${label}:end:${Date.now()}`;
+        perfMark(start);
+        try { return await fn(); }
+        finally {
+            perfMark(end);
+            perfMeasure(label, start, end);
+            const entries = performance.getEntriesByName(label);
+            const ms = entries.length ? entries[entries.length - 1].duration.toFixed(1) : 'n/a';
+            perfLog(`${label} took ${ms}ms`);
+        }
+    };
+    perfMark('sell-index:page-start');
+    requestAnimationFrame(() => perfMark('sell-index:first-content-paint-skeleton'));
+
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     if (typeof window !== 'undefined') { window.firebaseApp = app; }
     const auth = getAuth(app);
@@ -1062,6 +1086,8 @@
     const FALLBACK_DEVICE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
     const CART_STORAGE_KEY = 'shc_cart';
     const EMAIL_STORAGE_KEY = 'shc_quote_email';
+    const MODELS_CACHE_KEY = 'shc_models_cache_v2';
+    const MODELS_CACHE_TTL_MS = 3 * 60 * 1000;
     const SELL_PROGRESS_COLLECTION = 'sellOrderProgress';
     const IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
 
@@ -1117,9 +1143,7 @@
         const docRef = getSellProgressDocRef(normalizedEmail);
         if (!docRef) return;
 
-        const existingSnap = await getDoc(docRef);
         const nowIso = new Date().toISOString();
-        const existingData = existingSnap.exists() ? existingSnap.data() : null;
 
         const payload = {
             email: normalizedEmail,
@@ -1128,14 +1152,15 @@
             updatedAt: nowIso
         };
 
-        if (!existingData?.createdAt) payload.createdAt = nowIso;
+        payload.createdAt = nowIso;
 
-        await setDoc(docRef, payload, { merge: true });
+        await withPerf(`firestore:upsertSellProgress:${normalizedEmail}`, () => setDoc(docRef, payload, { merge: true }));
         setStoredEmail(normalizedEmail);
     };
 
     let currentUser = null;
     onAuthStateChanged(auth, (user) => {
+        perfMark('sell-index:auth-resolved');
         currentUser = user;
         const loginBtn = document.getElementById('loginNavBtn');
         const monogram = document.getElementById('userMonogram');
@@ -1215,13 +1240,53 @@
         }
     };
 
+    const loadCachedModels = (brand) => {
+        try {
+            const raw = localStorage.getItem(MODELS_CACHE_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            const bucket = parsed?.[brand];
+            if (!bucket || !Array.isArray(bucket.data)) return null;
+            if ((Date.now() - Number(bucket.ts || 0)) > MODELS_CACHE_TTL_MS) return null;
+            return bucket.data;
+        } catch (_) { return null; }
+    };
+    const saveCachedModels = (brand, models) => {
+        try {
+            const raw = localStorage.getItem(MODELS_CACHE_KEY);
+            const parsed = raw ? JSON.parse(raw) : {};
+            parsed[brand] = { ts: Date.now(), data: models };
+            localStorage.setItem(MODELS_CACHE_KEY, JSON.stringify(parsed));
+        } catch (_) {}
+    };
     const getModels = async (brand) => {
         if (state.modelsCache[brand]) return state.modelsCache[brand];
+        const cached = loadCachedModels(brand);
+        if (cached) {
+            state.modelsCache[brand] = cached;
+            perfLog(`models cache hit for ${brand} (${cached.length})`);
+            return cached;
+        }
         const colRef = collection(db, "devices", brand, "models");
-        const snap = await getDocs(colRef);
+        const snap = await withPerf(`firestore:getModels:${brand}`, () => getDocs(colRef));
         const models = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         state.modelsCache[brand] = models;
+        saveCachedModels(brand, models);
         return models;
+    };
+    const modelDocCache = new Map();
+    const getModelDocData = async (brand, modelId) => {
+        const cacheKey = `${brand}::${modelId}`;
+        if (modelDocCache.has(cacheKey)) return modelDocCache.get(cacheKey);
+        const modelFromList = (state.modelsCache?.[brand] || []).find((m) => m.id === modelId);
+        if (modelFromList) {
+            modelDocCache.set(cacheKey, modelFromList);
+            return modelFromList;
+        }
+        const snap = await withPerf(`firestore:getModel:${cacheKey}`, () => getDoc(doc(db, "devices", brand, "models", modelId)));
+        const data = snap.data() || {};
+        modelDocCache.set(cacheKey, data);
+        return data;
     };
 
     const parseStorageSize = (s) => {
@@ -1567,8 +1632,7 @@
         }
 
         try {
-            const snap = await getDoc(doc(db, "devices", state.selections.brand, "models", value));
-            const modelData = snap.data() || {};
+            const modelData = await getModelDocData(state.selections.brand, value);
             const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
             const deviceName = `${fullBrand} ${label}`.trim();
             pendingConfirmAction = () => handleSelection(value, label, modelData);
@@ -1599,8 +1663,7 @@
             if (preloadedModelData) {
                 state.deviceData = preloadedModelData;
             } else {
-                const snap = await getDoc(doc(db, "devices", state.selections.brand, "models", value));
-                state.deviceData = snap.data();
+                state.deviceData = await getModelDocData(state.selections.brand, value);
             }
             state.currentStep = 'storage';
         }
@@ -1776,7 +1839,7 @@
             const modelRef = doc(db, 'devices', brand, 'models', model);
             const historyRef = collection(modelRef, 'priceHistory');
             const trendQuery = query(historyRef, orderBy('date', 'desc'), limit(60));
-            const snap = await getDocs(trendQuery);
+            const snap = await withPerf(`firestore:priceHistory:${brand}:${model}`, () => getDocs(trendQuery));
             const rows = snap.docs
                 .map((entry) => entry.data())
                 .filter((entry) => entry && entry.prices)
@@ -2135,8 +2198,7 @@
             state.selections.model = modelMatch.model.id;
             state.selections.modelName = modelMatch.model.name;
             state.selections.deviceSlug = buildCanonicalDeviceSlug(modelMatch.brand, modelMatch.model.id) || normalizeParam(deviceParam) || modelMatch.model.id;
-            const snap = await getDoc(doc(db, "devices", state.selections.brand, "models", state.selections.model));
-            state.deviceData = snap.data();
+            state.deviceData = await getModelDocData(state.selections.brand, state.selections.model);
             state.currentStep = 'storage';
 
             if (storageParam) {
@@ -2164,16 +2226,20 @@
             // If we have enough info to reach the "last step", go straight to the final offer.
             // Condition can be blank; URL will still include `condition=`.
             if (state.selections.brand && state.selections.model && state.selections.storage && state.selections.lock) {
-                showFinalOffer();
+                await withPerf('render:show-final-offer', () => Promise.resolve(showFinalOffer()));
+                perfMark('sell-index:first-data-rendered');
                 if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
+                perfMark('sell-index:all-data-loaded');
                 return;
             }
         }
-        renderCurrentStep();
+        await withPerf('render:current-step', () => renderCurrentStep());
+        perfMark('sell-index:first-data-rendered');
         if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
+        perfMark('sell-index:all-data-loaded');
     };
 
-    hydrateFromURL();
+    withPerf('hydrate-from-url', hydrateFromURL);
     updateCartSummary();
 
     const storedEmail = getStoredEmail();
