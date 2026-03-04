@@ -5275,8 +5275,14 @@
         state.authError = "";
         state.user = u;
         state.authLoading = false;
-        startOrdersListener();
+        state.ordersLoading = true;
+        // Render the full admin layout immediately, then stream Firestore data in chunks.
+        // This avoids a blank/blocked experience while network requests are in flight.
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+        perfMark('admin:layout-rendered-before-fetch');
+        requestAnimationFrame(() => {
+          void startOrdersListener();
+        });
       } catch (err) {
         console.error("Admin access check failed:", err);
         state.user = null;
