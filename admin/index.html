@@ -37,7 +37,7 @@
   <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
     // ----------------------------
     // CONFIG
     // ----------------------------
@@ -70,7 +70,8 @@
     };
     perfMark('admin:page-start');
     requestAnimationFrame(() => perfMark('admin:first-content-paint-skeleton'));
-    const ADMIN_ORDERS_INITIAL_LIMIT = 200;
+    const ADMIN_ORDERS_INITIAL_LIMIT = 50;
+    const ADMIN_ORDERS_CHUNK_SIZE = 50;
     const ADMIN_UI_CACHE_KEY = 'shc_admin_ui_cache_v1';
     // ----------------------------
     // DOM HELPERS
@@ -696,6 +697,7 @@
       bulkVoidProgressDetails: "",
       lastRefreshAt: null,
       lastTrackingRefreshMeta: null,
+      ordersLoading: false,
       trackingReportModalOpen: false,
       trackingReportData: null,
       // confirmation modal
@@ -824,6 +826,23 @@
         return liveOrder;
       }
       return state.selectedOrderSnapshot || null;
+    }
+
+    async function hydrateSelectedOrderDetails(orderId) {
+      if (!orderId) return;
+      try {
+        const detailSnap = await withPerf(`firestore:order-detail:${orderId}`, () => getDoc(doc(db, "orders", orderId)));
+        if (!detailSnap.exists() || state.selectedOrderId !== orderId) return;
+        const data = detailSnap.data() || {};
+        const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+        const detailedOrder = { id: detailSnap.id, ...data, createdAtMillis };
+        state.selectedOrderSnapshot = detailedOrder;
+        const idx = state.allOrders.findIndex((o) => o.id === orderId);
+        if (idx >= 0) state.allOrders[idx] = { ...state.allOrders[idx], ...detailedOrder };
+        render();
+      } catch (error) {
+        console.error('Failed to load order details', error);
+      }
     }
 
     function getOrderPayoutTotal(order) {
@@ -1137,35 +1156,73 @@
     // FIRESTORE LISTENER
     // ----------------------------
     let unsubscribeOrders = null;
-    function startOrdersListener() {
+    let ordersLoadVersion = 0;
+    async function startOrdersListener() {
       if (unsubscribeOrders) unsubscribeOrders();
-      // Limit initial realtime subscription so first paint is fast and index-friendly.
-      // If you later add where() filters here, create a composite index on [status ASC, createdAt DESC].
-      const ordersRef = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_INITIAL_LIMIT));
-      unsubscribeOrders = onSnapshot(ordersRef, (snapshot) => {
-        const ordersData = snapshot.docs.map(d => {
-          const data = d.data();
-          const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
-          return { id: d.id, ...data, createdAtMillis };
-        });
-        ordersData.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
-        state.allOrders = ordersData;
-        perfMark('admin:first-data-rendered');
-        perfMark('admin:all-data-loaded');
-        if (state.bulkTrackingRefreshInProgress) {
-          return;
+      const loadVersion = ++ordersLoadVersion;
+      state.ordersLoading = true;
+      state.allOrders = [];
+      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+
+      try {
+        let cursor = null;
+        let loaded = [];
+        while (true) {
+          if (loadVersion !== ordersLoadVersion) return;
+          const ordersQuery = cursor
+            ? query(collection(db, "orders"), orderBy("createdAt", "desc"), startAfter(cursor), limit(ADMIN_ORDERS_CHUNK_SIZE))
+            : query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_CHUNK_SIZE));
+
+          const snapshot = await withPerf(`firestore:orders-chunk:${loaded.length}`, () => getDocs(ordersQuery));
+          if (loadVersion !== ordersLoadVersion) return;
+          if (snapshot.empty) break;
+
+          const chunkOrders = snapshot.docs.map((d) => {
+            const data = d.data();
+            const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+            return { id: d.id, ...data, createdAtMillis };
+          });
+
+          loaded = loaded.concat(chunkOrders);
+          loaded.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+          state.allOrders = loaded;
+
+          if (loaded.length === chunkOrders.length) {
+            perfMark('admin:first-data-rendered');
+          }
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+
+          cursor = snapshot.docs[snapshot.docs.length - 1] || null;
+          if (snapshot.size < ADMIN_ORDERS_CHUNK_SIZE) break;
+
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
-        // Keep drawer open until admin explicitly closes it.
-        // If a selected order is temporarily missing from the live snapshot,
-        // render falls back to the last selectedOrderSnapshot.
-        // Re-run filter pipeline to keep pagination + selection consistent
+
+        if (loadVersion !== ordersLoadVersion) return;
+        state.ordersLoading = false;
+        perfMark('admin:all-data-loaded');
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-      }, (err) => {
-        console.error("Firestore Error:", err);
+
+        const liveOrdersRef = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_INITIAL_LIMIT));
+        unsubscribeOrders = onSnapshot(liveOrdersRef, (snapshot) => {
+          const byId = new Map((state.allOrders || []).map((order) => [order.id, order]));
+          snapshot.docs.forEach((d) => {
+            const data = d.data();
+            const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+            byId.set(d.id, { id: d.id, ...data, createdAtMillis });
+          });
+          state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+        }, (err) => {
+          console.error("Firestore Error:", err);
+          toast("Live updates failed", "error");
+        });
+      } catch (err) {
+        state.ordersLoading = false;
+        console.error("Failed loading orders:", err);
         toast("Failed to load orders", "error");
-        // still render shell
-        render();
-      });
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
     }
     // ----------------------------
     // SPEC: CANCELLED HANDLING + BASE ORDERS
@@ -2633,7 +2690,9 @@
         `);
       }
       const showNoResults = !rowHtml.length;
-      const noResultsBody = state.currentSearchTerm
+      const noResultsBody = state.ordersLoading
+        ? `<tr><td colspan="5" class="px-6 py-10 text-center text-slate-500">Loading orders… ${esc(String(state.allOrders.length))} loaded</td></tr>`
+        : state.currentSearchTerm
         ? `<tr>
             <td colspan="5" class="px-6 py-10 text-center text-slate-500">
               <div class="space-y-3">
@@ -4257,6 +4316,7 @@
             state.unlockInfoModalOpen = false;
             state.unlockInfoModalData = null;
             render();
+            hydrateSelectedOrderDetails(orderId);
             return;
           }
 
@@ -4281,6 +4341,7 @@
             state.unlockInfoModalOpen = false;
             state.unlockInfoModalData = null;
             render();
+            hydrateSelectedOrderDetails(parsed.orderId);
           }
         });
         state.viewDelegationBound = true;
@@ -4382,6 +4443,7 @@
           state.unlockInfoModalOpen = false;
           state.unlockInfoModalData = null;
           render();
+          hydrateSelectedOrderDetails(orderId);
         });
       });
 
