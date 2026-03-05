@@ -648,6 +648,11 @@
             .trend-chart-wrap canvas { height: 110px !important; }
         }
         
+        @media (max-width: 640px) {
+            #offer-view .breadcrumbs-group { display: none; }
+            #offer-view #final-quote-action-card { position: sticky; top: 76px; z-index: 5; }
+        }
+
         .user-monogram {
             display: flex; align-items: center; justify-content: center;
             width: 2.5rem; height: 2.5rem; border-radius: 9999px;
@@ -773,7 +778,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             
             <!-- Left Side: Device & Condition Info (Col Span 2) -->
-            <div class="lg:col-span-2 space-y-6">
+            <div class="order-2 lg:order-1 lg:col-span-2 space-y-6">
                 <div class="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
                     <div class="flex flex-col sm:flex-row sm:items-center gap-4">
                         <img id="final-device-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="Selected device" loading="lazy" class="w-24 h-24 object-contain">
@@ -799,23 +804,20 @@
             </div>
 
             <!-- Right Side: Price & Checkout (Sticky Action Card) -->
-            <div class="lg:sticky lg:top-[160px] space-y-4">
+            <div class="order-1 lg:order-2 lg:sticky lg:top-[160px] space-y-4">
                 <div id="final-quote-action-card" class="bg-white p-8 rounded-2xl border-2 border-green-600 shadow-xl text-center">
                     <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Your Final Offer:</div>
+                    <div id="mobile-offer-device" class="text-sm font-bold text-slate-700 mb-2 lg:hidden">--</div>
                     <div id="mobile-requirements-box" style="display:none">
                         <div class="text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-1"><span id="mobile-condition-title">Condition</span> Requirements</div>
                         <ul id="mobile-condition-details" class="list-disc pl-5 space-y-1 text-[12px] text-emerald-900"></ul>
                     </div>
-                    <div class="price-val mb-6" id="final-price">--</div>
+                    <div class="price-val mb-4" id="final-price">--</div>
 
                     <div class="space-y-4">
-                        <div class="text-left">
-                            <div id="email-error-msg" class="error-label">Error: Valid Email Required</div>
-                            <input type="email" id="user-email" class="form-control" placeholder="Enter email to save quote">
-                        </div>
-                        <button class="btn-primary" id="startCheckoutBtn">GET PAID INSTANTLY</button>
+                        <button class="btn-primary" id="startCheckoutBtn">ACCEPT OFFER</button>
                         
-                        <div class="pt-2">
+                        <div class="pt-1">
                             <a href="/sell/index.html" id="resetFlowBtn" class="text-green-700 text-sm font-bold hover:underline inline-flex items-center gap-2">
                                 <i class="fa-solid fa-arrow-left"></i> Start New Trade-in
                             </a>
@@ -1743,6 +1745,8 @@
         const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
         document.getElementById('final-device-name').textContent = `${fullBrand} ${state.selections.modelName} ${state.selections.storage}`;
         document.getElementById('summary-tags').textContent = `Network: ${LOCK_LABELS[state.selections.lock] || state.selections.lock}`;
+        const mobileOfferDevice = document.getElementById('mobile-offer-device');
+        if (mobileOfferDevice) mobileOfferDevice.textContent = `${fullBrand} ${state.selections.modelName} ${state.selections.storage}`;
         updateFinalDeviceImage();
         renderConditionGrid();
         updatePrice();
@@ -2016,54 +2020,33 @@
         });
     };
 
-    // EMAIL VALIDATION HANDLER
-    document.getElementById('user-email').oninput = (e) => {
-        const val = e.target.value;
-        if (val.includes('@') && val.includes('.')) {
-            e.target.classList.remove('error-highlight');
-            document.getElementById('email-error-msg').style.display = 'none';
-        }
-    };
-
     document.getElementById('startCheckoutBtn').onclick = () => {
-        const emailInput = document.getElementById('user-email');
-        const errorLabel = document.getElementById('email-error-msg');
-        const email = normalizeEmail(emailInput.value);
-        
-        if (!isValidEmail(email)) {
-            emailInput.classList.add('error-highlight');
-            errorLabel.style.display = 'block';
-            return;
-        }
-
-        setStoredEmail(email);
-        lockEmailInput(email);
         document.getElementById('qty-modal').style.display = 'flex';
     };
 
     document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('finalSubmitBtn').onclick = async () => {
-        const email = normalizeEmail(document.getElementById('user-email').value);
-        setStoredEmail(email);
-        lockEmailInput(email);
         const cart = addCurrentDeviceToCart() || getCart();
-        try {
-            await upsertSellProgress({ email, didComplete: false, cartItems: cart });
-        } catch (error) {
-            console.error('Failed saving sell session:', error);
+        const progressEmail = normalizeEmail(currentUser?.email || getStoredEmail());
+        if (isValidEmail(progressEmail)) {
+            try {
+                await upsertSellProgress({ email: progressEmail, didComplete: false, cartItems: cart });
+            } catch (error) {
+                console.error('Failed saving sell session:', error);
+            }
         }
         window.location.href = '/sell/checkout.html';
     };
     document.getElementById('addAnotherDeviceBtn').onclick = async () => {
-        const email = normalizeEmail(document.getElementById('user-email').value);
-        setStoredEmail(email);
-        lockEmailInput(email);
         const cart = addCurrentDeviceToCart() || getCart();
-        try {
-            await upsertSellProgress({ email, didComplete: false, cartItems: cart });
-        } catch (error) {
-            console.error('Failed saving sell session:', error);
+        const progressEmail = normalizeEmail(currentUser?.email || getStoredEmail());
+        if (isValidEmail(progressEmail)) {
+            try {
+                await upsertSellProgress({ email: progressEmail, didComplete: false, cartItems: cart });
+            } catch (error) {
+                console.error('Failed saving sell session:', error);
+            }
         }
         document.getElementById('qty-modal').style.display = 'none';
         jumpToStep('brand');
@@ -2523,7 +2506,18 @@ if (!window[INIT_FLAG]) {
     });
 
     const handleAuthError = (error) => {
-      const friendly = error?.message || "Something went wrong. Please try again.";
+      const code = error?.code || "";
+      const authFriendlyMessages = {
+        "auth/invalid-email": "Please enter a valid email address.",
+        "auth/user-not-found": "Incorrect email or password.",
+        "auth/wrong-password": "Incorrect email or password.",
+        "auth/invalid-credential": "Incorrect email or password.",
+        "auth/too-many-requests": "Too many attempts. Please wait a moment and try again.",
+        "auth/email-already-in-use": "This email is already in use. Try logging in instead.",
+        "auth/weak-password": "Please choose a stronger password (at least 6 characters).",
+        "auth/network-request-failed": "We couldn't connect. Please check your internet and try again."
+      };
+      const friendly = authFriendlyMessages[code] || "We couldn't complete sign-in right now. Please try again.";
       showMessage(authMessage, friendly, true);
     };
 
