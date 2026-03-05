@@ -5,6 +5,16 @@
     <script>
       window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
     </script>
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-HMR9KFETRZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-HMR9KFETRZ');
+  </script>
 <link rel="stylesheet" href="/assets/css/tailwind.css" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -534,6 +544,16 @@
             const basketTotalForPixel = Number.isFinite(basketTotalVal) && basketTotalVal > 0 ? basketTotalVal : (Number.isFinite(priceVal) ? priceVal : 0);
             const basketTotalStr = basketTotalForPixel.toFixed(2);
             const transactionIdForPixel = String(orderId || getV('id') || getV('orderId') || '').trim() || 'unknown';
+            if (typeof window.gtag === 'function') {
+                const conversionPayload = {
+                    currency: 'USD',
+                    value: Number(basketTotalForPixel || 0),
+                    transaction_id: transactionIdForPixel,
+                    shipping_type: method
+                };
+                window.gtag('event', 'order_submission_page_view', conversionPayload);
+                window.gtag('event', 'order_submitted_conversion', conversionPayload);
+            }
             const expandedWithImages = await Promise.all(expanded.map(async (item) => ({
                 ...item,
                 resolvedImageUrl: await resolveDeviceImageUrl(item)
