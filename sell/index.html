@@ -1792,10 +1792,18 @@
 
     const isSmallScreen = () => window.matchMedia('(max-width: 640px)').matches;
 
-    const scrollToConditionRequirements = () => {
+    const scrollToPriceIfNeeded = () => {
         if (!isSmallScreen()) return;
-        const reqBox = document.getElementById('condition-requirements-box');
-        if (reqBox) reqBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const quoteCard = document.getElementById('final-quote-action-card');
+        const priceEl = document.getElementById('final-price');
+        const target = priceEl || quoteCard;
+        if (!target) return;
+
+        const rect = target.getBoundingClientRect();
+        const inView = rect.top >= 0 && rect.bottom <= window.innerHeight;
+        if (inView) return;
+
+        quoteCard?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     const renderConditionGrid = () => {
@@ -1810,7 +1818,7 @@
                 updateURL();
                 renderConditionGrid();
                 updatePrice();
-                scrollToConditionRequirements();
+                scrollToPriceIfNeeded();
             };
             grid.appendChild(card);
         });
