@@ -87,13 +87,13 @@ case 'auth/invalid-email':
 case 'auth/user-not-found':
 case 'auth/wrong-password':
 case 'auth/invalid-credential':
-errorMessage = 'Invalid email or password.';
+errorMessage = 'Incorrect email or password.';
 break;
 case 'auth/user-disabled':
 errorMessage = 'Your account has been disabled.';
 break;
 default:
-errorMessage = error.message;
+errorMessage = 'We could not sign you in right now. Please try again.';
 }
 showMessage(`Login Failed: ${errorMessage}`, 'error');
 }
@@ -127,7 +127,7 @@ case 'auth/weak-password':
 errorMessage = 'The password is too weak. Please choose a stronger password.';
 break;
 default:
-errorMessage = error.message;
+errorMessage = 'We could not create your account right now. Please try again.';
 }
 showMessage(`Registration Failed: ${errorMessage}`, 'error');
 }
