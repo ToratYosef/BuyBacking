@@ -2506,7 +2506,18 @@ if (!window[INIT_FLAG]) {
     });
 
     const handleAuthError = (error) => {
-      const friendly = error?.message || "Something went wrong. Please try again.";
+      const code = error?.code || "";
+      const authFriendlyMessages = {
+        "auth/invalid-email": "Please enter a valid email address.",
+        "auth/user-not-found": "Incorrect email or password.",
+        "auth/wrong-password": "Incorrect email or password.",
+        "auth/invalid-credential": "Incorrect email or password.",
+        "auth/too-many-requests": "Too many attempts. Please wait a moment and try again.",
+        "auth/email-already-in-use": "This email is already in use. Try logging in instead.",
+        "auth/weak-password": "Please choose a stronger password (at least 6 characters).",
+        "auth/network-request-failed": "We couldn't connect. Please check your internet and try again."
+      };
+      const friendly = authFriendlyMessages[code] || "We couldn't complete sign-in right now. Please try again.";
       showMessage(authMessage, friendly, true);
     };
 
