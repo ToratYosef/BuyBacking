@@ -177,6 +177,10 @@
       const normalized = normalizeStatusKey(status);
       return normalized === "cancelled" || normalized === "canceled";
     }
+    function getOrderCurrentStatusValue(order) {
+      // Deliberately read only current-status fields, never historical timelines.
+      return normalizeStatusKey(order?.status ?? order?.currentStatus ?? order?.current_status);
+    }
     function isReceivedStatusValue(status) {
       return RECEIVED_VALUES.has(normalizeStatusKey(status));
     }
@@ -1826,7 +1830,7 @@
 
     async function runBulkDeleteCancelledOrders(buttonEl) {
       if (!buttonEl || state.bulkDeleteCancelledInProgress) return;
-      const cancelledOrders = (state.allOrders || []).filter((order) => isCancelledStatusValue(order?.status));
+      const cancelledOrders = (state.allOrders || []).filter((order) => isCancelledStatusValue(getOrderCurrentStatusValue(order)));
       const cancelledOrderIds = Array.from(new Set(cancelledOrders.map((order) => String(order?.id || "").trim()).filter(Boolean)));
       if (!cancelledOrderIds.length) {
         toast('No canceled orders to delete', 'info');
