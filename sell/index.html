@@ -1253,7 +1253,7 @@
         syncParam('storage', state.selections.storage);
         syncParam('carrier', state.selections.lock);
         syncParam('quality', state.selections.condition);
-        syncParam('step', state.isFinalView ? 'final' : state.currentStep);
+        params.delete('step');
         params.delete('power');
         params.delete('functionality');
 
@@ -1473,6 +1473,15 @@
         });
     };
 
+    const applyDeeplinkFinalLayout = (isDeeplinkFinal) => {
+        document.body.classList.toggle('sell-deeplink-final', Boolean(isDeeplinkFinal));
+    };
+
+    const navigateToStepFromBreadcrumb = (step) => {
+        if (!stepOrder.includes(step)) return;
+        jumpToStep(step);
+    };
+
     const jumpToStep = (step) => {
         state.isFinalView = false;
         state.fromCompleteUrlParams = false;
@@ -1491,7 +1500,6 @@
         document.getElementById('selection-flow').classList.remove('hidden');
         document.getElementById('condition-help-box').classList.add('hidden');
         renderCurrentStep();
-        if (showSellcellLoading) toggleSellcellLoading(false);
     };
 
     const applyGridCols = (grid, count) => {
@@ -1759,7 +1767,7 @@
             // Condition is adjusted in the final view (no standalone step).
             if (i < currentIdx && step !== 'condition') {
                 span.style.cursor = 'pointer';
-                span.onclick = () => jumpToStep(step);
+                span.onclick = () => navigateToStepFromBreadcrumb(step);
             }
             if (state.isFinalView && step === 'condition') {
                 span.style.cursor = 'pointer';
@@ -2295,6 +2303,7 @@
                 return;
             }
         }
+
         state.fromCompleteUrlParams = false;
         await withPerf('render:current-step', () => renderCurrentStep());
         perfMark('sell-index:first-data-rendered');
