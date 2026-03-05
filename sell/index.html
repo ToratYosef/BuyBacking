@@ -650,7 +650,7 @@
         
         @media (max-width: 640px) {
             #offer-view .breadcrumbs-group { display: none; }
-            #offer-view #final-quote-action-card { position: sticky; top: 76px; z-index: 5; }
+            #offer-view #final-quote-action-card { position: static; }
         }
 
 
@@ -664,12 +664,6 @@
             min-height: 52px;
             padding: 10px 6px;
             font-size: 12px;
-        }
-        #offer-view.deeplink-final-layout .lg\:sticky {
-            position: static;
-        }
-        #offer-view.deeplink-final-layout #final-quote-action-card {
-            margin-top: 12px;
         }
 
         .user-monogram {
@@ -813,17 +807,6 @@
                     </div>
                 </div>
 
-                <div id="condition-requirements-box" class="req-box bg-white shadow-sm hidden">
-                    <div class="font-black text-slate-800 mb-4 pb-2 border-b flex items-center gap-2">
-                        <i class="fa-solid fa-list-check text-green-600"></i>
-                        <span id="condition-title-display">--</span> Requirements:
-                    </div>
-                    <ul id="condition-details" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed"></ul>
-                </div>
-            </div>
-
-            <!-- Right Side: Price & Checkout (Sticky Action Card) -->
-            <div class="order-1 lg:order-2 lg:sticky lg:top-[160px] space-y-4">
                 <div id="final-quote-action-card" class="bg-white p-8 rounded-2xl border-2 border-green-600 shadow-xl text-center">
                     <div class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Your Final Offer:</div>
                     <div id="mobile-offer-device" class="text-sm font-bold text-slate-700 mb-2 lg:hidden">--</div>
@@ -843,7 +826,19 @@
                         </div>
                     </div>
                 </div>
-                
+
+
+                <div id="condition-requirements-box" class="req-box bg-white shadow-sm hidden">
+                    <div class="font-black text-slate-800 mb-4 pb-2 border-b flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-green-600"></i>
+                        <span id="condition-title-display">--</span> Requirements:
+                    </div>
+                    <ul id="condition-details" class="list-disc pl-5 space-y-3 text-slate-600 text-sm leading-relaxed"></ul>
+                </div>
+            </div>
+
+            <!-- Right Side: Price & Checkout (Sticky Action Card) -->
+            <div class="order-1 lg:order-2 space-y-4">
                 <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-center gap-3">
                     <i class="fa-solid fa-shield-halved text-indigo-600 text-xl"></i>
                     <p class="text-[11px] text-indigo-900 leading-tight font-medium">Your price is locked for 14 days once you submit your trade-in.</p>
@@ -1729,33 +1724,6 @@
         if (e.key === 'Escape') closeDeviceConfirmModal();
     });
 
-
-    const applyDeeplinkFinalLayout = (isEnabled) => {
-        const offerView = document.getElementById('offer-view');
-        const quoteCard = document.getElementById('final-quote-action-card');
-        const leftCol = document.querySelector('#offer-view .lg\:col-span-2');
-        const reqBox = document.getElementById('condition-requirements-box');
-        const rightCol = quoteCard?.parentElement;
-        if (!offerView || !quoteCard || !leftCol || !reqBox || !rightCol) return;
-
-        if (!state.originalQuoteCardParent) {
-            state.originalQuoteCardParent = rightCol;
-            state.originalQuoteCardNextSibling = quoteCard.nextElementSibling;
-        }
-
-        if (isEnabled) {
-            offerView.classList.add('deeplink-final-layout');
-            leftCol.insertBefore(quoteCard, reqBox);
-        } else {
-            offerView.classList.remove('deeplink-final-layout');
-            const parent = state.originalQuoteCardParent;
-            const nextSibling = state.originalQuoteCardNextSibling;
-            if (parent) {
-                if (nextSibling && nextSibling.parentElement === parent) parent.insertBefore(quoteCard, nextSibling);
-                else parent.appendChild(quoteCard);
-            }
-        }
-    };
 
     const updateCrumbs = () => {
         const crumbContainer = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
