@@ -1253,6 +1253,7 @@
         syncParam('storage', state.selections.storage);
         syncParam('carrier', state.selections.lock);
         syncParam('quality', state.selections.condition);
+        syncParam('step', state.isFinalView ? 'final' : state.currentStep);
         params.delete('power');
         params.delete('functionality');
 
@@ -2228,6 +2229,7 @@
         const deeplinkLoading = getDeeplinkLoadingContext();
         if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(true, deeplinkLoading.isSellcell);
         const params = new URLSearchParams(window.location.search);
+        const requestedStep = normalizeParam(params.get('step') || '');
         const brandParam = params.get('brand') || '';
         const legacyModelParam = params.get('model') || '';
         const legacyDeviceParam = buildCanonicalDeviceSlug(brandParam, legacyModelParam);
@@ -2270,6 +2272,17 @@
             const needsBroken = ['no', 'false'].includes(normalizeParam(powerParam)) || ['no', 'false', 'broken', 'not-working'].includes(normalizeParam(functionalityParam));
             const finalCondition = needsBroken ? 'broken' : derivedCondition;
             if (finalCondition && CONDITION_LABELS[finalCondition]) state.selections.condition = finalCondition;
+
+            if (requestedStep && requestedStep !== 'final') {
+                const targetStep = requestedStep === 'condition' ? 'lock' : requestedStep;
+                if (stepOrder.includes(targetStep)) {
+                    jumpToStep(targetStep);
+                    perfMark('sell-index:first-data-rendered');
+                    if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
+                    perfMark('sell-index:all-data-loaded');
+                    return;
+                }
+            }
 
             // If we have enough info to reach the "last step", go straight to the final offer.
             // Condition can be blank; URL will still include `condition=`.
