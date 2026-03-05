@@ -181,6 +181,24 @@
                     </ol>
                 </div>
 
+
+                <div id="customerSendOptionCard" class="hidden border border-slate-200 rounded-xl p-6 bg-slate-50 ring-2 ring-slate-300">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-slate-700 font-semibold">Method: Customer Provided Label</p>
+                            <h3 class="text-lg font-bold text-slate-900">Use your own shipping label & packaging</h3>
+                        </div>
+                        <span class="px-3 py-1 bg-slate-700 text-white text-xs font-bold rounded-full">Selected</span>
+                    </div>
+                    <ol class="list-decimal list-inside space-y-3 text-slate-700 text-sm">
+                        <li>Pack your device securely using your own box and protective material.</li>
+                        <li>Turn off locks (Find My / Google Account), remove SIM, and factory reset the device.</li>
+                        <li>Add a note inside the package with order number <strong id="instructionOrderIdCustomer"></strong>.</li>
+                        <li>Ship your package using your own label and preferred carrier.</li>
+                        <li>Save your tracking number so you can monitor delivery.</li>
+                    </ol>
+                </div>
+
                 <div id="kitOptionCard" class="hidden border border-indigo-200 rounded-xl p-6 bg-indigo-50 ring-2 ring-indigo-400">
                     <div class="flex items-center justify-between mb-4">
                         <div>
@@ -439,7 +457,10 @@
             const zip = getV('zip');
             
             let fullAddressHtml = 'Address details on file';
-            if (street && city && state) {
+            const isCustomerProvidedLabel = ['no_label_customer_send', 'no label - customer send', 'customer_send', 'customer provided label'].includes(shippingPref);
+            if (isCustomerProvidedLabel) {
+                fullAddressHtml = 'Not provided (using customer provided label).';
+            } else if (street && city && state) {
                 const line1 = street + (unit ? `, ${unit}` : '');
                 const line2 = `${city}, ${state} ${zip}`.trim();
                 fullAddressHtml = `${line1}<br>${line2}`;
@@ -454,6 +475,8 @@
             document.getElementById('summaryDevice').textContent = device;
             document.getElementById('summaryPrice').textContent = `$${priceStr}`;
             document.getElementById('instructionOrderId1').textContent = `(#${orderId})`;
+            const customerInstructionEl = document.getElementById('instructionOrderIdCustomer');
+            if (customerInstructionEl) customerInstructionEl.textContent = `(#${orderId})`;
 
             const displayMethod = method.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             document.getElementById('summaryPaymentMethod').textContent = displayMethod;
@@ -562,12 +585,21 @@
             `).join('');
 
             // Handle Instruction Card Visibility (Only show chosen option)
+            const kitCard = document.getElementById('kitOptionCard');
+            const emailCard = document.getElementById('emailOptionCard');
+            const customerSendCard = document.getElementById('customerSendOptionCard');
             if (shippingPref === 'ship_kit' || shippingPref === 'ship kit requested') {
-                document.getElementById('kitOptionCard').classList.remove('hidden');
-                document.getElementById('emailOptionCard').classList.add('hidden');
+                kitCard.classList.remove('hidden');
+                emailCard.classList.add('hidden');
+                customerSendCard.classList.add('hidden');
+            } else if (isCustomerProvidedLabel) {
+                customerSendCard.classList.remove('hidden');
+                emailCard.classList.add('hidden');
+                kitCard.classList.add('hidden');
             } else {
-                document.getElementById('emailOptionCard').classList.remove('hidden');
-                document.getElementById('kitOptionCard').classList.add('hidden');
+                emailCard.classList.remove('hidden');
+                kitCard.classList.add('hidden');
+                customerSendCard.classList.add('hidden');
                 
                 const renderLabelPdf = async (labelUrl) => {
                     const frame = document.getElementById('labelPdfFrame');

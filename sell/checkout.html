@@ -871,6 +871,29 @@
     };
     const getSelectedShippingPreference = () => document.querySelector('input[name="shipping_preference"]:checked')?.value || '';
     const isCustomerSendSelected = () => getSelectedShippingPreference() === 'no_label_customer_send';
+    const toggleAddressInputsEnabled = (isEnabled) => {
+        const ids = ['streetAddress', 'addressUnit', 'city', 'state', 'zip', 'country'];
+        ids.forEach((id) => {
+            const field = document.getElementById(id);
+            if (!field) return;
+            field.disabled = !isEnabled;
+            if (!isEnabled) {
+                field.dataset.prevAutocomplete = field.getAttribute('autocomplete') || '';
+                field.setAttribute('autocomplete', 'off');
+                if (id !== 'country') field.value = '';
+                if (id === 'country') field.value = 'US';
+            }
+        });
+
+        ids.forEach((id) => {
+            const field = document.getElementById(id);
+            if (!field || !isEnabled) return;
+            const prev = field.dataset.prevAutocomplete;
+            if (prev) field.setAttribute('autocomplete', prev);
+            else field.removeAttribute('autocomplete');
+            delete field.dataset.prevAutocomplete;
+        });
+    };
     const updateShippingPreferenceUI = () => {
         const selected = getSelectedShippingPreference();
         const customerSend = selected === 'no_label_customer_send';
@@ -883,6 +906,7 @@
         document.querySelectorAll('.address-required-field').forEach((el) => {
             el.classList.toggle('hidden', customerSend);
         });
+        toggleAddressInputsEnabled(!customerSend);
         if (customerSend) clearAddressVerifyError();
         updateZipUI();
     };
@@ -1582,6 +1606,13 @@
 
         try {
             if (customerSend) {
+                shippingInfo.streetAddress = '';
+                shippingInfo.addressUnit = '';
+                shippingInfo.city = '';
+                shippingInfo.state = '';
+                shippingInfo.zip = '';
+                shippingInfo.zipCode = '';
+                shippingInfo.country = 'US';
                 await executeOrderSubmission(shippingInfo);
                 return;
             }
