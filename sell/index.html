@@ -653,6 +653,25 @@
             #offer-view #final-quote-action-card { position: sticky; top: 76px; z-index: 5; }
         }
 
+
+        #final-condition-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+        #final-condition-grid .select-card {
+            min-height: 52px;
+            padding: 10px 6px;
+            font-size: 12px;
+        }
+        #offer-view.deeplink-final-layout .lg\:sticky {
+            position: static;
+        }
+        #offer-view.deeplink-final-layout #final-quote-action-card {
+            margin-top: 12px;
+        }
+
         .user-monogram {
             display: flex; align-items: center; justify-content: center;
             width: 2.5rem; height: 2.5rem; border-radius: 9999px;
@@ -1101,7 +1120,10 @@
         isFinalView: false,
         trendChart: null,
         trendLibPromise: null,
-        trendViewedKey: ''
+        trendViewedKey: '',
+        fromCompleteUrlParams: false,
+        originalQuoteCardParent: null,
+        originalQuoteCardNextSibling: null
     };
 
     const stepOrder = ['brand', 'model', 'storage', 'lock', 'condition'];
@@ -1452,6 +1474,8 @@
 
     const jumpToStep = (step) => {
         state.isFinalView = false;
+        state.fromCompleteUrlParams = false;
+        applyDeeplinkFinalLayout(false);
         state.currentStep = step;
         const stepIndex = stepOrder.indexOf(step);
         stepOrder.forEach((s, i) => {
@@ -1705,6 +1729,34 @@
         if (e.key === 'Escape') closeDeviceConfirmModal();
     });
 
+
+    const applyDeeplinkFinalLayout = (isEnabled) => {
+        const offerView = document.getElementById('offer-view');
+        const quoteCard = document.getElementById('final-quote-action-card');
+        const leftCol = document.querySelector('#offer-view .lg\:col-span-2');
+        const reqBox = document.getElementById('condition-requirements-box');
+        const rightCol = quoteCard?.parentElement;
+        if (!offerView || !quoteCard || !leftCol || !reqBox || !rightCol) return;
+
+        if (!state.originalQuoteCardParent) {
+            state.originalQuoteCardParent = rightCol;
+            state.originalQuoteCardNextSibling = quoteCard.nextElementSibling;
+        }
+
+        if (isEnabled) {
+            offerView.classList.add('deeplink-final-layout');
+            leftCol.insertBefore(quoteCard, reqBox);
+        } else {
+            offerView.classList.remove('deeplink-final-layout');
+            const parent = state.originalQuoteCardParent;
+            const nextSibling = state.originalQuoteCardNextSibling;
+            if (parent) {
+                if (nextSibling && nextSibling.parentElement === parent) parent.insertBefore(quoteCard, nextSibling);
+                else parent.appendChild(quoteCard);
+            }
+        }
+    };
+
     const updateCrumbs = () => {
         const crumbContainer = state.isFinalView ? document.getElementById('final-crumbs') : document.getElementById('crumbs');
         if (!crumbContainer) return;
@@ -1751,6 +1803,7 @@
         renderConditionGrid();
         updatePrice();
         updateCrumbs();
+        applyDeeplinkFinalLayout(state.fromCompleteUrlParams);
         
         // Ensure email pre-fill logic is updated when switching to final view
         const emailInput = document.getElementById('user-email');
@@ -1793,7 +1846,8 @@
             };
             grid.appendChild(card);
         });
-        applyGridCols(grid, CONDITION_DEFS.length);
+        grid.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'sm:grid-cols-3', 'md:grid-cols-4', 'max-w-[280px]', 'max-w-[500px]', 'max-w-[700px]', 'mx-auto');
+        grid.classList.add('grid-cols-4');
     };
 
     const loadChartJs = async () => {
@@ -2229,6 +2283,7 @@
             // If we have enough info to reach the "last step", go straight to the final offer.
             // Condition can be blank; URL will still include `condition=`.
             if (state.selections.brand && state.selections.model && state.selections.storage && state.selections.lock) {
+                state.fromCompleteUrlParams = true;
                 await withPerf('render:show-final-offer', () => Promise.resolve(showFinalOffer()));
                 perfMark('sell-index:first-data-rendered');
                 if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
@@ -2236,6 +2291,7 @@
                 return;
             }
         }
+        state.fromCompleteUrlParams = false;
         await withPerf('render:current-step', () => renderCurrentStep());
         perfMark('sell-index:first-data-rendered');
         if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
