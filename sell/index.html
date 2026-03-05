@@ -4,6 +4,16 @@
     <script>
       window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
     </script>
+
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-CZVWQNNQYH"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-CZVWQNNQYH');
+  </script>
 <link rel="stylesheet" href="/assets/css/tailwind.css" />
 <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -996,6 +1006,55 @@
     perfMark('sell-index:page-start');
     requestAnimationFrame(() => perfMark('sell-index:first-content-paint-skeleton'));
 
+
+    const trackSellEvent = (eventName, params = {}) => {
+        if (typeof window.gtag !== 'function') return;
+        window.gtag('event', eventName, {
+            page_path: window.location.pathname,
+            ...params
+        });
+    };
+
+    const captureSellPagePerformance = () => {
+        const navEntry = performance.getEntriesByType('navigation')[0];
+        if (!navEntry) return;
+        trackSellEvent('sell_page_performance', {
+            page_load_ms: Math.round(navEntry.loadEventEnd || 0),
+            dom_content_loaded_ms: Math.round(navEntry.domContentLoadedEventEnd || 0),
+            response_ms: Math.round(navEntry.responseEnd || 0)
+        });
+    };
+
+    if (document.readyState === 'complete') {
+        captureSellPagePerformance();
+    } else {
+        window.addEventListener('load', captureSellPagePerformance, { once: true });
+    }
+
+    const interactedElements = new Set();
+    document.addEventListener('click', (event) => {
+        const target = event.target.closest('button, a, .select-card');
+        if (!target) return;
+        const descriptor = target.id || target.dataset.analytics || target.getAttribute('aria-label') || (target.textContent || '').trim().slice(0, 40);
+        if (!descriptor || interactedElements.has(descriptor)) return;
+        interactedElements.add(descriptor);
+        trackSellEvent('sell_interaction', {
+            interaction_type: target.tagName.toLowerCase(),
+            element: descriptor
+        });
+    });
+
+    let navigatingToCheckout = false;
+    window.addEventListener('pagehide', () => {
+        if (navigatingToCheckout) return;
+        trackSellEvent('sell_dropoff', {
+            step: state.currentStep,
+            is_final_view: state.isFinalView,
+            selected_brand: state.selections.brand || 'none',
+            selected_model: state.selections.model || 'none'
+        });
+    });
+
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     if (typeof window !== 'undefined') { window.firebaseApp = app; }
     const auth = getAuth(app);
@@ -1492,7 +1551,15 @@
         else grid.classList.add('grid-cols-2', 'md:grid-cols-4');
     };
 
+    let lastTrackedStep = null;
+
     const renderCurrentStep = async () => {
+        if (lastTrackedStep !== state.currentStep || state.isFinalView) {
+            lastTrackedStep = state.currentStep;
+            trackSellEvent('sell_funnel_step_view', {
+                step: state.isFinalView ? 'final_offer' : state.currentStep
+            });
+        }
         const grid = document.getElementById('grid-content');
         const title = document.getElementById('step-name');
         const helpBox = document.getElementById('condition-help-box');
@@ -1667,6 +1734,7 @@
         const stepIndex = stepOrder.indexOf(state.currentStep);
         stepOrder.forEach((s, i) => { if (i > stepIndex) { state.selections[s] = ''; if (s === 'model') state.selections.modelName = ''; } });
         state.selections[state.currentStep] = value;
+        trackSellEvent('sell_option_selected', { step: state.currentStep, value: String(value || '') });
         if (state.currentStep === 'brand') {
             state.selections.deviceSlug = '';
             modelDocCache.clear();
@@ -2057,12 +2125,14 @@
     };
 
     document.getElementById('startCheckoutBtn').onclick = () => {
+        trackSellEvent('sell_offer_accepted', { step: 'final_offer' });
         document.getElementById('qty-modal').style.display = 'flex';
     };
 
     document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
     document.getElementById('finalSubmitBtn').onclick = async () => {
+        trackSellEvent('sell_continue_to_checkout', { source: 'quantity_modal' });
         const cart = addCurrentDeviceToCart() || getCart();
         const progressEmail = normalizeEmail(currentUser?.email || getStoredEmail());
         if (isValidEmail(progressEmail)) {
@@ -2072,9 +2142,11 @@
                 console.error('Failed saving sell session:', error);
             }
         }
+        navigatingToCheckout = true;
         window.location.href = '/sell/checkout.html';
     };
     document.getElementById('addAnotherDeviceBtn').onclick = async () => {
+        trackSellEvent('sell_add_another_device');
         const cart = addCurrentDeviceToCart() || getCart();
         const progressEmail = normalizeEmail(currentUser?.email || getStoredEmail());
         if (isValidEmail(progressEmail)) {
@@ -2089,6 +2161,7 @@
     };
     document.getElementById('resetFlowBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
     document.getElementById('continueToCheckoutBtn').onclick = async () => {
+        trackSellEvent('sell_continue_to_checkout', { source: 'cart_footer' });
         const email = normalizeEmail(getStoredEmail());
         if (isValidEmail(email)) {
             try {
@@ -2097,6 +2170,7 @@
                 console.error('Failed saving sell session before checkout:', error);
             }
         }
+        navigatingToCheckout = true;
         window.location.href = '/sell/checkout.html';
     };
 
