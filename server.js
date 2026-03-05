@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const url = require("url");
+const { handleDatabaseTestingApi } = require("./api/src/routes/database-testing");
 
 const PORT = process.env.PORT || 3001;
 const ROOT = path.resolve(".");
@@ -113,7 +114,12 @@ function serveFile(filePath, res) {
 }
 
 const server = http.createServer((req, res) => {
-  const parsed = url.parse(req.url);
+  const parsed = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+
+  if (parsed.pathname.startsWith("/database-testing/api/")) {
+    return handleDatabaseTestingApi(req, res, parsed);
+  }
+
   let reqPath = decodeURIComponent(parsed.pathname || "/");
 
   // Normalize to prevent traversal
