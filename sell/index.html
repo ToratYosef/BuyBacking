@@ -649,8 +649,13 @@
         }
         
         @media (max-width: 640px) {
-            #offer-view .breadcrumbs-group { display: none; }
             #offer-view #final-quote-action-card { position: static; }
+        }
+
+        #offer-view .breadcrumbs {
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
         }
 
 
@@ -1751,7 +1756,17 @@
             }
             span.textContent = valueLabel;
             // Condition is adjusted in the final view (no standalone step).
-            if (i < currentIdx && step !== 'condition') span.onclick = () => jumpToStep(step);
+            if (i < currentIdx && step !== 'condition') {
+                span.style.cursor = 'pointer';
+                span.onclick = () => jumpToStep(step);
+            }
+            if (state.isFinalView && step === 'condition') {
+                span.style.cursor = 'pointer';
+                span.onclick = () => {
+                    const conditionGrid = document.getElementById('final-condition-grid');
+                    if (conditionGrid) conditionGrid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                };
+            }
             crumbContainer.appendChild(span);
         });
     };
