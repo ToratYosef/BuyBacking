@@ -116,9 +116,10 @@
         .option-label { cursor: pointer; border: 2px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
         .option-pill:checked + .option-label { border-color: var(--brand-primary); background-color: #f0fdf4; box-shadow: 0 4px 12px rgba(21, 128, 61, 0.1); }
 
-        .summary-card { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid var(--border); position: sticky; top: 20px; }
+        .summary-card { background: white; padding: 14px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid var(--border); position: sticky; top: 20px; }
         #checkout-summary-aside { width: 100%; }
         #summary-content { max-width: 640px; margin: 0 auto; }
+        .summary-header { margin-bottom: 10px; }
 
         .shipping-options-row {
             display: grid;
@@ -148,7 +149,7 @@
         .cart-item-card {
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 10px;
+            padding: 8px;
             background: #f9fafb;
         }
 
@@ -164,8 +165,8 @@
             width: 100%;
         }
         .cart-qty-btn {
-            width: 28px;
-            height: 28px;
+            width: 24px;
+            height: 24px;
             border-radius: 8px;
             border: 1px solid var(--border);
             display: inline-flex;
@@ -178,7 +179,8 @@
         .cart-qty-btn:hover { border-color: var(--brand-primary); color: var(--brand-primary); }
         @media (max-width: 640px) {
             .checkout-wrapper { margin: 12px auto; padding: 0 8px; gap: 14px; }
-            .section-card, .summary-card { padding: 16px; border-radius: 12px; }
+            .section-card { padding: 16px; border-radius: 12px; }
+            .summary-card { padding: 12px; border-radius: 12px; }
             .option-label { padding: 12px; }
             .shipping-options-row {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -187,8 +189,10 @@
                 grid-template-columns: 1fr;
             }
             .payout-options-row {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
+                grid-template-columns: repeat(4, minmax(0, 1fr));
             }
+            .option-label { padding: 10px 8px; }
+            .option-label .text-xs { font-size: 10px; }
             .btn-submit { padding: 14px; font-size: 16px; }
             .site-header__inner { flex-wrap: wrap; gap: 8px; }
             .logo-image { width: 120px; height: auto; }
@@ -198,7 +202,24 @@
             font-weight: 700;
             color: #dc2626;
         }
-        .cart-condition-badge {
+        
+        .summary-add-btn {
+            width: 100%;
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid #16a34a;
+            background: #f0fdf4;
+            color: #166534;
+            font-weight: 800;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .summary-add-btn:hover { background: #dcfce7; }
+.cart-condition-badge {
             display: inline-flex;
             align-items: center;
             padding: 5px 9px;
@@ -357,11 +378,11 @@
         </div>
 
         <!-- Step 3: Payout Method -->
-        <div class="section-card">
+        <div class="section-card" id="payout-section">
             <h2 class="text-xl font-bold mb-6 border-b pb-2">3. Payout Method</h2>
             <div class="payout-options-row mb-6">
                 <div>
-                    <input type="radio" id="pay_cashapp" name="payment_method" value="cashapp" class="option-pill" checked>
+                    <input type="radio" id="pay_cashapp" name="payment_method" value="cashapp" class="option-pill">
                     <label for="pay_cashapp" class="option-label">
                         <i class="fa-solid fa-dollar-sign text-2xl mb-1 text-green-600"></i>
                         <span class="text-xs font-bold">Cash App</span>
@@ -389,6 +410,7 @@
                     </label>
                 </div>
             </div>
+            <div id="payment-method-error" class="field-error-msg">Please select a payout method.</div>
             <div id="payment-details-input">
                 <label id="payment-label" class="block text-xs font-bold text-slate-500 uppercase mb-2">Cash App $Cashtag</label>
                 <div id="payoutIdentifier-error" class="field-error-msg">Please complete this field.</div>
@@ -410,9 +432,8 @@
     <!-- Sidebar Summary -->
     <aside id="checkout-summary-aside">
         <div class="summary-card">
-            <div class="flex items-center justify-between mb-4 border-b pb-2">
-                <h3 class="text-lg font-bold">Trade-in Summary</h3>
-                <a href="/sell/index.html?return=checkout" class="text-sm font-semibold text-green-700 hover:underline">Add another device</a>
+            <div class="flex items-center justify-between border-b pb-2 summary-header">
+                <h3 class="text-base font-bold">Trade-in Summary</h3>
             </div>
             <div id="summary-content" class="space-y-4">
                 <div id="cart-items"></div>
@@ -426,6 +447,10 @@
                     <span id="sum-total" class="text-3xl font-black text-green-700">$0</span>
                 </div>
             </div>
+            <button type="button" id="addAnotherDeviceBtn" class="summary-add-btn">
+                <i class="fa-solid fa-plus"></i>
+                Add Another Device
+            </button>
         </div>
     </aside>
 </main>
@@ -573,9 +598,10 @@
 
     const placeSummaryByViewport = () => {
         if (!checkoutForm || !checkoutSummaryAside) return;
-        const firstSectionCard = checkoutForm.querySelector('.section-card');
-        if (firstSectionCard && checkoutSummaryAside.parentElement === checkoutForm && checkoutSummaryAside.nextElementSibling === firstSectionCard) return;
-        checkoutForm.insertBefore(checkoutSummaryAside, firstSectionCard || checkoutForm.firstChild);
+        const payoutSection = document.getElementById('payout-section');
+        if (!payoutSection) return;
+        if (checkoutSummaryAside.parentElement === checkoutForm && checkoutSummaryAside.previousElementSibling === payoutSection) return;
+        payoutSection.insertAdjacentElement('afterend', checkoutSummaryAside);
     };
     const addressSection = document.getElementById('address-section');
     const addressSectionTitle = document.getElementById('address-section-title');
@@ -587,6 +613,7 @@
     const useSuggestedAddressBtn = document.getElementById('useSuggestedAddressBtn');
     const keepEnteredAddressBtn = document.getElementById('keepEnteredAddressBtn');
     const closeAddressModal = document.getElementById('closeAddressModal');
+    const paymentMethodError = document.getElementById('payment-method-error');
     let pendingSuggestedAddress = null;
     let pendingEnteredAddress = null;
 
@@ -953,24 +980,24 @@
             const conditionKey = ensureCartCondition(item);
             cartItems[index] = item;
             const card = document.createElement('div');
-            card.className = 'cart-item-card';
+            card.className = 'cart-item-card text-xs';
             const total = (item.unitPrice * item.qty).toFixed(2);
             const carrierDisplay = item.lock ? item.lock.charAt(0).toUpperCase() + item.lock.slice(1) : item.lock;
             card.innerHTML = `
                 <div class="flex items-start justify-between gap-3">
                     <div>
-                        <div class="font-semibold text-slate-900 leading-tight">${item.modelName}</div>
-                        <div class="text-[11px] text-slate-500 mt-0.5">${item.storage} • ${carrierDisplay}</div>
-                        <div class="mt-1.5">
+                        <div class="font-semibold text-slate-900 leading-tight text-[13px]">${item.modelName}</div>
+                        <div class="text-[10px] text-slate-500">${item.storage} • ${carrierDisplay}</div>
+                        <div class="mt-1">
                             <span class="cart-condition-badge" title="Condition locked from your quote">Condition: ${CONDITION_LABELS[conditionKey] || conditionKey}</span>
                         </div>
                     </div>
                     <div class="text-right">
-                        <div class="text-sm font-bold text-slate-900">$${total}</div>
-                        <button class="cart-remove-btn mt-0.5" data-action="remove" data-index="${index}">Remove</button>
+                        <div class="text-xs font-bold text-slate-900">$${total}</div>
+                        <button class="cart-remove-btn" data-action="remove" data-index="${index}">Remove</button>
                     </div>
                 </div>
-                <div class="flex items-center justify-between mt-2">
+                <div class="flex items-center justify-between mt-1">
                     <div class="flex items-center gap-2">
                         <button class="cart-qty-btn" data-action="decrease" data-index="${index}">-</button>
                         <span class="text-sm font-bold">${item.qty}</span>
@@ -1214,21 +1241,30 @@
         perfMark('checkout:all-data-loaded');
     };
 
+    const getSelectedPaymentMethod = () => document.querySelector('input[name="payment_method"]:checked')?.value || '';
     const updatePaymentFields = () => {
-        const selectedMethod = document.querySelector('input[name="payment_method"]:checked').value;
+        const selectedMethod = getSelectedPaymentMethod();
         const labels = { 
             cashapp: 'Cash App $Cashtag', 
             zelle: 'Zelle Email or Phone', 
             paypal: 'PayPal Email', 
             check: 'Full Name for Check' 
         };
-        document.getElementById('payment-label').textContent = labels[selectedMethod];
-        document.getElementById('payoutIdentifier').placeholder = selectedMethod === 'cashapp' ? '$cashtag' : '';
+        const paymentLabel = document.getElementById('payment-label');
+        const payoutIdentifier = document.getElementById('payoutIdentifier');
+        if (paymentMethodError) paymentMethodError.style.display = selectedMethod ? 'none' : 'block';
+        if (!selectedMethod) {
+            if (paymentLabel) paymentLabel.textContent = 'Select payout method';
+            if (payoutIdentifier) payoutIdentifier.placeholder = '';
+            return;
+        }
+        if (paymentLabel) paymentLabel.textContent = labels[selectedMethod] || 'Payout details';
+        if (payoutIdentifier) payoutIdentifier.placeholder = selectedMethod === 'cashapp' ? '$cashtag' : '';
     };
     const executeOrderSubmission = async (shippingInfo) => {
         const btn = submitOrderBtn;
         const pref = getSelectedShippingPreference();
-        const method = document.querySelector('input[name="payment_method"]:checked').value;
+        const method = getSelectedPaymentMethod();
         const finalPayout = parseFloat(document.getElementById('sum-total').textContent.replace('$', ''));
 
         shippingInfo.shippingPreference = pref;
@@ -1466,8 +1502,13 @@
             updateSummary();
         };
     });
-    document.querySelectorAll('input[name="payment_method"]').forEach(r => r.onchange = updatePaymentFields);
+    document.querySelectorAll('input[name="payment_method"]').forEach((r) => {
+        r.onchange = () => {
+            updatePaymentFields();
+        };
+    });
     updateShippingPreferenceUI();
+    updatePaymentFields();
 
     submitOrderBtn.onclick = async () => {
         const customerSend = isCustomerSendSelected();
@@ -1482,6 +1523,14 @@
             if (shippingPreferenceError) shippingPreferenceError.style.display = 'block';
             const firstShippingOption = document.querySelector('input[name="shipping_preference"]');
             if (firstShippingOption) firstErrorEl = firstShippingOption;
+            hasError = true;
+        }
+
+        const selectedPaymentMethod = getSelectedPaymentMethod();
+        if (!selectedPaymentMethod) {
+            if (paymentMethodError) paymentMethodError.style.display = 'block';
+            const firstPaymentOption = document.querySelector('input[name="payment_method"]');
+            if (!firstErrorEl && firstPaymentOption) firstErrorEl = firstPaymentOption;
             hasError = true;
         }
 
@@ -1599,6 +1648,10 @@
             submitOrderBtn.disabled = !(isCustomerSendSelected() || isZipValid());
             submitOrderBtn.textContent = "SUBMIT MY TRADE-IN";
         }
+    });
+
+    document.getElementById('addAnotherDeviceBtn')?.addEventListener('click', () => {
+        window.location.href = '/sell/index.html?return=checkout';
     });
 
     window.addEventListener('resize', placeSummaryByViewport);
