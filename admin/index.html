@@ -147,6 +147,7 @@
     // ----------------------------
     const STATUS_DROPDOWN_OPTIONS = [
       "order_pending",
+      "pending_customer_send",
       "shipping_kit_requested",
       "kit_needs_printing",
       "needs_printing",
@@ -2950,9 +2951,13 @@
       `;
     }
     function renderDrawer(order) {
+      const noLabelCustomerSend = normalizeStatusKey(order?.shippingPreferenceNormalized) === "no_label_customer_send"
+        || normalizeStatusKey(order?.shippingPreference) === "no_label_customer_send"
+        || normalizeStatusKey(order?.shippingPreference).includes("no label")
+        || normalizeStatusKey(order?.shippingPreference).includes("customer send");
       const tabs = [
         { id: "overview", label: "Overview", icon: "layout-dashboard" },
-        { id: "shipping", label: "Shipping & Tracking", icon: "truck" },
+        ...(!noLabelCustomerSend ? [{ id: "shipping", label: "Shipping & Tracking", icon: "truck" }] : []),
         { id: "logs", label: "Activity Logs", icon: "file-text" },
       ];
       const entries = getOrderDeviceEntries(order);
@@ -2960,6 +2965,9 @@
       const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
       tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
       const visibleEntries = entries;
+      if (noLabelCustomerSend && state.drawerTab === "shipping") {
+        state.drawerTab = "overview";
+      }
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
         const reofferAccepted = isAcceptedReofferStatus(order?.status);
@@ -3387,9 +3395,16 @@
         const hasLabels = !!(getAnyTrackingNumber(order) || getShipEngineLabelEntries(order).length);
         const isKitReq = order.shippingPreference === "Shipping Kit Requested";
         const isEmailReq = order.shippingPreference === "Email Label Requested";
+        const isNoLabelCustomerSend = normalizeStatusKey(order.shippingPreferenceNormalized) === "no_label_customer_send"
+          || normalizeStatusKey(order.shippingPreference) === "no_label_customer_send"
+          || normalizeStatusKey(order.shippingPreference).includes("no label")
+          || normalizeStatusKey(order.shippingPreference).includes("customer send");
 
         // --- Status Logic ---
-        if (["order_pending", "kit_needs_printing", "needs_printing"].includes(status)) {
+        if (status === "pending_customer_send") {
+            groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
+        }
+        else if (["order_pending", "kit_needs_printing", "needs_printing"].includes(status)) {
             if (!hasLabels) groups.primary.push({ label: "Generate USPS Label", action: "generateLabel", class: "bg-indigo-600 text-white" });
             groups.primary.push({ label: "Order Manually Fulfilled", action: "manualFulfill", class: "bg-slate-100 text-slate-800" });
         }
@@ -3460,7 +3475,7 @@
 
         // Tracking - reordered with better styling
         // Print docs (mock check for URL)
-        if (order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent"].includes(status)) {
+        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent"].includes(status)) {
              groups.tracking.unshift({ label: "Print Kit Docs", action: "printDocs", class: "bg-white border-slate-200" });
         }
         // Print Packing Slip with better styling
@@ -3472,11 +3487,13 @@
         groups.tracking.push({ label: "Delete Order", action: "deleteOrder", class: "text-white bg-rose-600 hover:bg-rose-700" });
 
         // Abandoned checkout campaign QA trigger (UI hook in admin/index.html)
-        groups.admin.push({
-          label: "Send 5 Abandoned Checkout Test Emails",
-          id: "open-abandoned-sequence-modal-btn",
-          class: "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100",
-        });
+        if (!isNoLabelCustomerSend) {
+          groups.admin.push({
+            label: "Send 5 Abandoned Checkout Test Emails",
+            id: "open-abandoned-sequence-modal-btn",
+            class: "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100",
+          });
+        }
 
         // --- Render ---
         const renderBtn = (b) => `

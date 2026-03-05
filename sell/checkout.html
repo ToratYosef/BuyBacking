@@ -275,11 +275,19 @@
             <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Preference</h2>
             <div class="shipping-options-row">
                 <div>
-                    <input type="radio" id="email_label" name="shipping_preference" value="email_label" class="option-pill" checked>
+                    <input type="radio" id="no_label_customer_send" name="shipping_preference" value="no_label_customer_send" class="option-pill" checked>
+                    <label for="no_label_customer_send" class="option-label">
+                        <i class="fa-solid fa-hand text-3xl text-slate-700 mb-2"></i>
+                        <span class="font-bold">No Label - Customer Send</span>
+                        <span class="text-xs text-slate-500 mt-1">Use your own shipping method</span>
+                    </label>
+                </div>
+                <div>
+                    <input type="radio" id="email_label" name="shipping_preference" value="email_label" class="option-pill">
                     <label for="email_label" class="option-label">
                         <i class="fa-solid fa-envelope text-3xl text-green-600 mb-2"></i>
                         <span class="font-bold">Email Me a Label</span>
-                        <span class="text-xs text-slate-500 mt-1">I have my own box (Fastest)</span>
+                        <span class="text-xs text-green-600 mt-1 font-semibold">Free</span>
                     </label>
                 </div>
                 <div>
@@ -287,7 +295,7 @@
                     <label for="ship_kit" class="option-label">
                         <i class="fa-solid fa-box text-3xl text-indigo-600 mb-2"></i>
                         <span class="font-bold">Ship Me a Box</span>
-                        <span class="text-xs text-slate-500 mt-1">$25 fee</span>
+                        <span class="text-xs text-slate-500 mt-1">$25</span>
                     </label>
                 </div>
             </div>
@@ -1227,6 +1235,11 @@
             }
 
             const isKit = pref === 'ship_kit';
+            const shippingPreferenceLabelMap = {
+                no_label_customer_send: 'No Label - Customer Send',
+                email_label: 'Email Label Requested',
+                ship_kit: 'Shipping Kit Requested'
+            };
             const totalQty = cartItems.reduce((sum, item) => sum + item.qty, 0);
             const firstItem = cartItems[0];
             const itemsPayload = cartItems.flatMap((item) => {
@@ -1278,7 +1291,7 @@
                 items: itemsPayload,
                 totalPayout: finalPayout,
                 estimatedQuote: finalPayout,
-                shippingPreference: isKit ? 'Shipping Kit Requested' : 'Email Label Requested',
+                shippingPreference: shippingPreferenceLabelMap[pref] || 'Email Label Requested',
                 shippingKitFee: isKit ? 25 : 0,
                 shippingInfo: shippingInfo,
                 paymentMethod: method,
