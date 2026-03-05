@@ -1115,7 +1115,10 @@
         isFinalView: false,
         trendChart: null,
         trendLibPromise: null,
-        trendViewedKey: ''
+        trendViewedKey: '',
+        fromCompleteUrlParams: false,
+        originalQuoteCardParent: null,
+        originalQuoteCardNextSibling: null
     };
 
     const stepOrder = ['brand', 'model', 'storage', 'lock', 'condition'];
@@ -1466,6 +1469,8 @@
 
     const jumpToStep = (step) => {
         state.isFinalView = false;
+        state.fromCompleteUrlParams = false;
+        applyDeeplinkFinalLayout(false);
         state.currentStep = step;
         const stepIndex = stepOrder.indexOf(step);
         stepOrder.forEach((s, i) => {
@@ -1766,6 +1771,7 @@
         renderConditionGrid();
         updatePrice();
         updateCrumbs();
+        applyDeeplinkFinalLayout(state.fromCompleteUrlParams);
         
         // Ensure email pre-fill logic is updated when switching to final view
         const emailInput = document.getElementById('user-email');
@@ -2245,6 +2251,7 @@
             // If we have enough info to reach the "last step", go straight to the final offer.
             // Condition can be blank; URL will still include `condition=`.
             if (state.selections.brand && state.selections.model && state.selections.storage && state.selections.lock) {
+                state.fromCompleteUrlParams = true;
                 await withPerf('render:show-final-offer', () => Promise.resolve(showFinalOffer()));
                 perfMark('sell-index:first-data-rendered');
                 if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
@@ -2252,6 +2259,7 @@
                 return;
             }
         }
+        state.fromCompleteUrlParams = false;
         await withPerf('render:current-step', () => renderCurrentStep());
         perfMark('sell-index:first-data-rendered');
         if (deeplinkLoading.isDeeplink) toggleDeeplinkLoading(false, deeplinkLoading.isSellcell);
