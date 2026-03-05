@@ -1473,6 +1473,13 @@
         });
     };
 
+    const navigateToStepFromBreadcrumb = (step) => {
+        if (!stepOrder.includes(step)) return;
+        const url = new URL(window.location.href);
+        url.searchParams.set('step', step);
+        window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+    };
+
     const jumpToStep = (step) => {
         state.isFinalView = false;
         state.fromCompleteUrlParams = false;
@@ -1491,7 +1498,6 @@
         document.getElementById('selection-flow').classList.remove('hidden');
         document.getElementById('condition-help-box').classList.add('hidden');
         renderCurrentStep();
-        if (showSellcellLoading) toggleSellcellLoading(false);
     };
 
     const applyGridCols = (grid, count) => {
@@ -1759,7 +1765,7 @@
             // Condition is adjusted in the final view (no standalone step).
             if (i < currentIdx && step !== 'condition') {
                 span.style.cursor = 'pointer';
-                span.onclick = () => jumpToStep(step);
+                span.onclick = () => navigateToStepFromBreadcrumb(step);
             }
             if (state.isFinalView && step === 'condition') {
                 span.style.cursor = 'pointer';
