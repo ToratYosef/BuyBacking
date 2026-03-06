@@ -655,7 +655,7 @@
       allOrders: [],
       currentFilteredOrders: [],
       currentFilteredDevices: [],
-      currentActiveStatus: cachedUi.currentActiveStatus || "all",
+      currentActiveStatus: "all",
       currentSearchTerm: cachedUi.currentSearchTerm || "",
       // pagination
       ORDERS_PER_PAGE: 20,
@@ -1243,11 +1243,15 @@
     }
     // Helper: check if order has any device with given status
     function orderHasDeviceWithStatus(order, targetStatus) {
-      if (!order?.deviceStatusByKey) return false;
+      if (!order) return false;
       const normalizedTarget = normalizeStatusKey(targetStatus);
-      return Object.values(order.deviceStatusByKey).some(deviceStatus => 
-        normalizeStatusKey(deviceStatus) === normalizedTarget
-      );
+      const entries = getOrderDeviceEntries(order);
+      for (const entry of entries) {
+        const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+        const deviceStatus = getDeviceStatus(order, deviceKey);
+        if (normalizeStatusKey(deviceStatus) === normalizedTarget) return true;
+      }
+      return false;
     }
     
     // Helper: create flattened list of all devices with their statuses
@@ -1383,7 +1387,7 @@
         } else if (s === "delivered_to_us") {
           allDevices = allDevices.filter(d => d.deviceStatus === "delivered_to_us");
         } else if (s === "received") {
-          allDevices = allDevices.filter(d => isReceivedStatusValue(d.deviceStatus));
+          allDevices = allDevices.filter(d => d.deviceStatus === "received");
         } else {
           // For all other statuses (including issue_resolved, completed, etc.)
           allDevices = allDevices.filter(d => d.deviceStatus === s);
@@ -2455,7 +2459,7 @@
         return s === "completed" || s === "re-offered-accepted";
       }).length;
       const conversionRate = initialOrderCount ? Math.round((completedOrdersCount / initialOrderCount) * 100) : 0;
-      const receivedDevicesCount = visible.filter(o => isReceivedStatusValue(o?.status)).length;
+      const receivedDevicesCount = visible.filter(o => orderHasDeviceWithStatus(o, "received")).length;
       return `
         <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
           <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -2551,7 +2555,7 @@
         { key: "re-offered-pending", label: "Re-offer Pending", count: statusCounts.get("re-offered-pending") || 0 },
         { key: "re-offered-accepted", label: "Re-offer Accepted", count: statusCounts.get("re-offered-accepted") || 0 },
         { key: "re-offered-declined", label: "Re-offer Declined", count: statusCounts.get("re-offered-declined") || 0 },
-        { key: "received", label: "Received", count: visible.filter(o => isReceivedStatusValue(o?.status)).length },
+        { key: "received", label: "Received", count: visible.filter(o => orderHasDeviceWithStatus(o, "received")).length },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
