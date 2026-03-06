@@ -1243,11 +1243,15 @@
     }
     // Helper: check if order has any device with given status
     function orderHasDeviceWithStatus(order, targetStatus) {
-      if (!order?.deviceStatusByKey) return false;
+      if (!order) return false;
       const normalizedTarget = normalizeStatusKey(targetStatus);
-      return Object.values(order.deviceStatusByKey).some(deviceStatus => 
-        normalizeStatusKey(deviceStatus) === normalizedTarget
-      );
+      const entries = getOrderDeviceEntries(order);
+      for (const entry of entries) {
+        const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+        const deviceStatus = getDeviceStatus(order, deviceKey);
+        if (normalizeStatusKey(deviceStatus) === normalizedTarget) return true;
+      }
+      return false;
     }
     
     // Helper: create flattened list of all devices with their statuses
