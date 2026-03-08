@@ -1070,7 +1070,19 @@
       
       // If order hasn't been received yet, use order-level status
       const currentOrderStatus = normalizeStatusKey(order.status);
-      const preReceiveStatuses = ['order_pending', 'needs_printing', 'kit_needs_printing', 'shipping_kit_requested', 'label_generated', 'kit_on_the_way_to_us', 'phone_on_the_way', 'delivered_to_us'];
+      const preReceiveStatuses = [
+        'order_pending',
+        'needs_printing',
+        'kit_needs_printing',
+        'shipping_kit_requested',
+        'kit_sent',
+        'kit_on_the_way_to_customer',
+        'kit_delivered',
+        'kit_on_the_way_to_us',
+        'label_generated',
+        'phone_on_the_way',
+        'delivered_to_us'
+      ];
       if (preReceiveStatuses.includes(currentOrderStatus)) {
         return currentOrderStatus;
       }
@@ -1378,6 +1390,10 @@
       if (s !== "all") {
         if (s === "kit_needs_printing") {
           allDevices = allDevices.filter(d => KIT_PRINT_PENDING_STATUSES.has(d.deviceStatus));
+        } else if (s === "kit_requested") {
+          allDevices = allDevices.filter(d => ["shipping_kit_requested", "kit_needs_printing", "needs_printing"].includes(d.deviceStatus));
+        } else if (s === "kit_sent") {
+          allDevices = allDevices.filter(d => ["kit_sent", "kit_on_the_way_to_customer"].includes(d.deviceStatus));
         } else if (s === "label_generated") {
           allDevices = allDevices.filter(d => d.deviceStatus === "label_generated");
         } else if (s === "emailed") {
@@ -2604,7 +2620,7 @@ Inbound refreshes: ${inboundCount}`);
           count: isActive ? "bg-white/15 text-white" : "bg-white/70 text-slate-600"
         };
       }
-      if (s === "order_pending" || s === "kit_needs_printing") {
+      if (s === "order_pending" || s === "kit_needs_printing" || s === "kit_requested") {
         return {
           pill: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100",
           count: isActive ? "bg-white/15 text-white" : "bg-amber-100 text-amber-700"
@@ -2616,7 +2632,7 @@ Inbound refreshes: ${inboundCount}`);
           count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
         };
       }
-      if (s === "kit_sent" || s === "kit_delivered" || s === "kit_on_the_way_to_us" || s === "phone_on_the_way" || s === "delivered_to_us") {
+      if (s === "kit_sent" || s === "kit_delivered" || s === "kit_on_the_way_to_us" || s === "kit_on_the_way_to_customer" || s === "phone_on_the_way" || s === "delivered_to_us") {
         return {
           pill: isActive ? "bg-blue-500 text-white shadow-md" : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100",
           count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
@@ -2647,23 +2663,62 @@ Inbound refreshes: ${inboundCount}`);
     }
     function renderStatusBreakdown() {
       const { statusCounts, statusCountAll, cancelledCount, visible } = computeStatusCounts();
-      const items = [
-        { key: "all", label: "All", count: statusCountAll },
+      const baseStatusItems = [
         { key: "order_pending", label: "Order Pending", count: statusCounts.get("order_pending") || 0 },
-        { key: "kit_needs_printing", label: "Kit Needs Printing", count: visible.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
-        { key: "kit_sent", label: "Kit Sent", count: visible.filter(o => normalizeStatusKey(o?.status) === "kit_sent").length },
+        { key: "kit_requested", label: "Kit Requested", count: visible.filter(o => ["shipping_kit_requested", "kit_needs_printing", "needs_printing"].includes(normalizeStatusKey(o?.status))).length },
+        { key: "kit_sent", label: "Kit Sent", count: visible.filter(o => ["kit_sent", "kit_on_the_way_to_customer"].includes(normalizeStatusKey(o?.status))).length },
         { key: "kit_delivered", label: "Kit Delivered", count: visible.filter(o => normalizeStatusKey(o?.status) === "kit_delivered").length },
         { key: "kit_on_the_way_to_us", label: "Kit On The Way To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "kit_on_the_way_to_us").length },
-        { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
+        { key: "label_generated", label: "Label Generated", count: visible.filter(o => normalizeStatusKey(o?.status) === "label_generated").length },
         { key: "phone_on_the_way", label: "Phone On The Way To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "phone_on_the_way").length },
         { key: "delivered_to_us", label: "Delivered To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "delivered_to_us").length },
-        { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
-        { key: "issue_resolved", label: "Resolved", count: statusCounts.get("issue_resolved") || 0 },
+        { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status) === "emailed").length },
+        { key: "issue_resolved", label: "Issue Resolved", count: statusCounts.get("issue_resolved") || 0 },
+        { key: "received", label: "Received", count: visible.filter(o => orderHasDeviceWithStatus(o, "received")).length },
         { key: "re-offered-pending", label: "Re-offer Pending", count: statusCounts.get("re-offered-pending") || 0 },
         { key: "re-offered-accepted", label: "Re-offer Accepted", count: statusCounts.get("re-offered-accepted") || 0 },
         { key: "re-offered-declined", label: "Re-offer Declined", count: statusCounts.get("re-offered-declined") || 0 },
-        { key: "received", label: "Received", count: visible.filter(o => orderHasDeviceWithStatus(o, "received")).length },
+        { key: "re-offered-auto-accepted", label: "Re-offer Auto Accepted", count: statusCounts.get("re-offered-auto-accepted") || 0 },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
+      ];
+      const discoveredStatuses = new Set(statusCounts.keys());
+      const knownStatuses = new Set([
+        "all",
+        "cancelled",
+        "canceled",
+        "order_pending",
+        "shipping_kit_requested",
+        "kit_needs_printing",
+        "needs_printing",
+        "kit_requested",
+        "kit_sent",
+        "kit_on_the_way_to_customer",
+        "kit_delivered",
+        "kit_on_the_way_to_us",
+        "label_generated",
+        "phone_on_the_way",
+        "delivered_to_us",
+        "emailed",
+        "issue_resolved",
+        "received",
+        "re-offered-pending",
+        "re-offered-accepted",
+        "re-offered-declined",
+        "re-offered-auto-accepted",
+        "completed",
+      ]);
+      const extraStatusItems = Array.from(discoveredStatuses)
+        .filter(statusKey => !knownStatuses.has(statusKey))
+        .sort((a, b) => a.localeCompare(b))
+        .map(statusKey => ({
+          key: statusKey,
+          label: formatStatusLabel(statusKey),
+          count: statusCounts.get(statusKey) || 0,
+        }));
+      const items = [
+        { key: "all", label: "All", count: statusCountAll },
+        ...baseStatusItems,
+        ...extraStatusItems,
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
       const splitIndex = Math.ceil(items.length / 2);
