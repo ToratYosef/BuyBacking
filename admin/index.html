@@ -1702,6 +1702,110 @@
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
     }
+    function getKitRefreshDirection(status) {
+      const s = normalizeStatusKey(status);
+      // Until kit is delivered, keep refreshing outbound kit tracking.
+      if (["kit_delivered", "kit_on_the_way_to_us", "delivered_to_us", "received", "imei_checked", "completed"].includes(s)) {
+        return "inbound";
+      }
+      return "outbound";
+    }
+    async function refreshKitLifecycleTracking(buttonEl) {
+      const base = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
+      const allowed = new Set(["kit_sent", "kit_on_the_way_to_customer", "kit_delivered", "kit_on_the_way_to_us", "delivered_to_us"]);
+      const candidates = base.filter(o => allowed.has(normalizeStatusKey(o?.status)));
+
+      if (!candidates.length) {
+        toast("No kit lifecycle tracking candidates found", "info");
+        return;
+      }
+
+      const outboundCount = candidates.filter((o) => getKitRefreshDirection(o?.status) === "outbound").length;
+      const inboundCount = candidates.length - outboundCount;
+      const ok = confirm(`Refresh kit tracking for ${candidates.length} orders?
+
+Outbound refreshes: ${outboundCount}
+Inbound refreshes: ${inboundCount}`);
+      if (!ok) return;
+
+      const originalText = buttonEl?.textContent;
+      state.bulkTrackingRefreshInProgress = true;
+      if (buttonEl) {
+        buttonEl.disabled = true;
+        buttonEl.textContent = `Refreshing 0/${candidates.length}…`;
+      }
+      try {
+        const queue = candidates.slice();
+        let success = 0;
+        let failed = 0;
+        let done = 0;
+        let statusChanged = 0;
+        const latestStatusByOrderId = new Map(candidates.map((o) => [o.id, normalizeStatusKey(o?.status)]));
+
+        const updateProgressText = () => {
+          const liveBtn = document.getElementById("refresh-kits-tracking") || buttonEl;
+          if (liveBtn) {
+            liveBtn.disabled = true;
+            liveBtn.textContent = `Refreshing ${done}/${candidates.length}…`;
+          }
+        };
+
+        async function worker() {
+          while (queue.length) {
+            const order = queue.shift();
+            if (!order) return;
+            try {
+              const direction = getKitRefreshDirection(order?.status);
+              const res = await apiPost(`/refresh-tracking`, { orderId: order.id, type: "kit", direction, labelType: direction });
+              const previousStatus = normalizeStatusKey(order?.status);
+              const nextStatus = normalizeStatusKey(res?.order?.status || order?.status);
+              latestStatusByOrderId.set(order.id, nextStatus);
+              if (nextStatus && previousStatus && nextStatus !== previousStatus) statusChanged++;
+              success++;
+            } catch (e) {
+              failed++;
+            } finally {
+              done++;
+              updateProgressText();
+            }
+          }
+        }
+
+        const workers = Array.from({ length: Math.min(MAX_CONCURRENT_TRACKING_REQUESTS, candidates.length) }, () => worker());
+        await Promise.all(workers);
+
+        state.lastTrackingRefreshMeta = { at: new Date(), source: "admin_manual" };
+
+        const nowCounts = {
+          kit_sent: 0,
+          kit_on_the_way_to_customer: 0,
+          kit_delivered: 0,
+          kit_on_the_way_to_us: 0,
+          delivered_to_us: 0,
+        };
+        for (const value of latestStatusByOrderId.values()) {
+          if (value in nowCounts) nowCounts[value]++;
+        }
+
+        state.trackingReportData = {
+          processed: candidates.length,
+          refreshed: success,
+          statusChanged,
+          failed,
+          statusCounts: nowCounts,
+          completedAtLabel: `Completed ${formatTimeOnly(new Date())} (admin manual)`,
+        };
+        state.trackingReportModalOpen = true;
+      } finally {
+        state.bulkTrackingRefreshInProgress = false;
+        const liveBtn = document.getElementById("refresh-kits-tracking") || buttonEl;
+        if (liveBtn) {
+          liveBtn.disabled = false;
+          liveBtn.textContent = originalText || "Refresh Kits";
+        }
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
+    }
     async function runAdminBulkVoidAction(buttonEl, {
       endpoint,
       confirmText,
@@ -2609,6 +2713,11 @@
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200">
                 <i data-lucide="refresh-cw" style="width:18px;height:18px"></i>
                 Refresh Label + Phone Tracking
+              </button>
+              <button id="refresh-kits-tracking"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200">
+                <i data-lucide="refresh-cw" style="width:18px;height:18px"></i>
+                Refresh Kits
               </button>
               <button id="bulk-void-aged-orders"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidAgedInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-200'}"
@@ -4579,6 +4688,10 @@
       const btnRefreshLabelPhoneTracking = document.getElementById("refresh-label-phone-tracking");
       if (btnRefreshLabelPhoneTracking) {
         btnRefreshLabelPhoneTracking.addEventListener("click", () => refreshLabelGeneratedAndPhoneOnWay(btnRefreshLabelPhoneTracking));
+      }
+      const btnRefreshKitsTracking = document.getElementById("refresh-kits-tracking");
+      if (btnRefreshKitsTracking) {
+        btnRefreshKitsTracking.addEventListener("click", () => refreshKitLifecycleTracking(btnRefreshKitsTracking));
       }
       const btnBulkVoidAgedOrders = document.getElementById("bulk-void-aged-orders");
       if (btnBulkVoidAgedOrders) {
