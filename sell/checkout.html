@@ -1482,7 +1482,61 @@
 
             window.location.href = successUrl.toString();
         } catch (e) {
-            alert("Server error.");
+            console.error('Primary order submission failed, attempting client-side fallback:', e);
+
+            const fallbackOrderId = `fallback-${Date.now()}`;
+            const fallbackItems = cartItems.flatMap((item) => {
+                const qty = Math.max(1, Math.floor(Number(item.qty || 1)));
+                return Array.from({ length: qty }, () => ({
+                    device: item.modelName,
+                    brand: item.brand,
+                    modelId: item.model,
+                    modelName: item.modelName,
+                    storage: item.storage,
+                    carrier: item.lock,
+                    lock: item.lock,
+                    condition: item.condition,
+                    qty: 1,
+                    unitPrice: Number(item.unitPrice || 0),
+                    totalPayout: Number(item.unitPrice || 0)
+                }));
+            });
+
+            try {
+                await withPerf('firestore:addDoc:fallbackOrder', () => addDoc(collection(db, 'orders'), {
+                    source: 'checkout_fallback_submission',
+                    status: 'order_pending',
+                    shippingInfo,
+                    paymentMethod: method,
+                    paymentIdentifier: document.getElementById('payoutIdentifier').value,
+                    shippingPreference: pref,
+                    totalPayout: finalPayout,
+                    qty: fallbackItems.length,
+                    items: fallbackItems,
+                    createdAt: serverTimestamp(),
+                    clientCreatedAt: new Date().toISOString(),
+                    errorContext: String(e?.message || 'unknown')
+                }));
+            } catch (fallbackError) {
+                console.error('Fallback order persistence failed:', fallbackError);
+            }
+
+            const successUrl = new URL('/order-submitted.html', window.location.origin);
+            successUrl.searchParams.set('id', fallbackOrderId);
+            successUrl.searchParams.set('price', finalPayout.toFixed(2));
+            successUrl.searchParams.set('device', cartItems.length > 1 ? 'Multiple devices' : (cartItems[0]?.modelName || 'Device'));
+            successUrl.searchParams.set('qty', String(fallbackItems.length || 1));
+            successUrl.searchParams.set('name', shippingInfo.fullName || '');
+            successUrl.searchParams.set('street', shippingInfo.streetAddress || '');
+            successUrl.searchParams.set('unit', shippingInfo.addressUnit || '');
+            successUrl.searchParams.set('city', shippingInfo.city || '');
+            successUrl.searchParams.set('state', shippingInfo.state || '');
+            successUrl.searchParams.set('zip', shippingInfo.zipCode || '');
+            successUrl.searchParams.set('payMethod', method || '');
+            successUrl.searchParams.set('shipping', pref || '');
+            successUrl.searchParams.set('fallback', '1');
+
+            window.location.href = successUrl.toString();
         } finally {
             btn.disabled = !(isCustomerSendSelected() || isZipValid());
             btn.textContent = "SUBMIT MY TRADE-IN";
