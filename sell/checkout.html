@@ -290,19 +290,19 @@
             <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Preference</h2>
             <div class="shipping-options-row">
                 <div>
-                    <input type="radio" id="no_label_customer_send" name="shipping_preference" value="no_label_customer_send" class="option-pill">
-                    <label for="no_label_customer_send" class="option-label">
-                        <i class="fa-solid fa-hand text-3xl text-slate-700 mb-2"></i>
-                        <span class="font-bold">No Label - Customer Send</span>
-                        <span class="text-xs text-slate-500 mt-1">Use your own shipping method</span>
-                    </label>
-                </div>
-                <div>
                     <input type="radio" id="email_label" name="shipping_preference" value="email_label" class="option-pill">
                     <label for="email_label" class="option-label">
                         <i class="fa-solid fa-envelope text-3xl text-green-600 mb-2"></i>
                         <span class="font-bold">Email Me a Label</span>
                         <span class="text-xs text-green-600 mt-1 font-semibold">Free</span>
+                    </label>
+                </div>
+                <div>
+                    <input type="radio" id="faster_shipping_label" name="shipping_preference" value="faster-shipping-label" class="option-pill">
+                    <label for="faster_shipping_label" class="option-label">
+                        <i class="fa-solid fa-bolt text-3xl text-slate-700 mb-2"></i>
+                        <span class="font-bold">Faster Shipping Label</span>
+                        <span class="text-xs text-slate-500 mt-1">$5</span>
                     </label>
                 </div>
                 <div>
@@ -432,9 +432,9 @@
             <div id="summary-content" class="space-y-4">
                 <div id="cart-items"></div>
                 <div id="cart-empty" class="text-sm text-slate-500 hidden">No devices added yet.</div>
-                <div id="kit-fee-row" class="flex justify-between hidden text-red-600">
-                    <span class="text-sm">Shipping Kit Fee</span>
-                    <span class="text-sm font-bold">-$25.00</span>
+                <div id="shipping-fee-row" class="flex justify-between hidden text-red-600">
+                    <span class="text-sm">Shipping Fee</span>
+                    <span id="shipping-fee-amount" class="text-sm font-bold">-$0.00</span>
                 </div>
                 <div class="pt-4 mt-4 border-t flex justify-between items-end">
                     <span class="text-slate-800 font-bold">Total Payout</span>
@@ -822,13 +822,17 @@
         return true;
     };
     const updateSummary = () => {
-        const isKit = getSelectedShippingPreference() === 'ship_kit';
-        const fee = isKit ? 25 : 0;
+        const pref = getSelectedShippingPreference();
+        const fee = pref === 'ship_kit' ? 25 : (pref === 'faster-shipping-label' ? 5 : 0);
         const total = cartItems.reduce((sum, item) => {
             const normalized = normalizeCartItem(item);
             return sum + (normalized.unitPrice * normalized.qty);
         }, 0);
-        document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
+        const shippingFeeRow = document.getElementById('shipping-fee-row');
+        const shippingFeeAmount = document.getElementById('shipping-fee-amount');
+        const hasFee = fee > 0;
+        shippingFeeRow.classList.toggle('hidden', !hasFee);
+        if (shippingFeeAmount) shippingFeeAmount.textContent = `-$${fee.toFixed(2)}`;
         document.getElementById('sum-total').textContent = `$${Math.max(total - fee, 0).toFixed(2)}`;
     };
     const normalizeZip = (value) => value.replace(/\D/g, '').slice(0, 9);
@@ -864,7 +868,7 @@
         }
     };
     const getSelectedShippingPreference = () => document.querySelector('input[name="shipping_preference"]:checked')?.value || '';
-    const isCustomerSendSelected = () => getSelectedShippingPreference() === 'no_label_customer_send';
+    const isCustomerSendSelected = () => getSelectedShippingPreference() === 'faster-shipping-label';
     const toggleAddressInputsEnabled = (isEnabled) => {
         const ids = ['streetAddress', 'addressUnit', 'city', 'state', 'zip', 'country'];
         ids.forEach((id) => {
@@ -890,7 +894,7 @@
     };
     const updateShippingPreferenceUI = () => {
         const selected = getSelectedShippingPreference();
-        const customerSend = selected === 'no_label_customer_send';
+        const customerSend = selected === 'faster-shipping-label';
         if (shippingPreferenceError) shippingPreferenceError.style.display = selected ? 'none' : 'block';
         if (addressSectionTitle) {
             addressSectionTitle.textContent = customerSend
@@ -1311,7 +1315,7 @@
 
             const isKit = pref === 'ship_kit';
             const shippingPreferenceLabelMap = {
-                no_label_customer_send: 'No Label - Customer Send',
+                'faster-shipping-label': 'Faster Shipping Label Requested',
                 email_label: 'Email Label Requested',
                 ship_kit: 'Shipping Kit Requested'
             };
