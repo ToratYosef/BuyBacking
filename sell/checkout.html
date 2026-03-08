@@ -571,6 +571,30 @@
         return payload;
     };
 
+    const requestUpsGroundHazmatFastShippingLabel = async (orderId, customerAddress) => {
+        if (!orderId) throw new Error('orderId is required to request a faster shipping label.');
+        if (!customerAddress || typeof customerAddress !== 'object') {
+            throw new Error('customerAddress is required to request a faster shipping label.');
+        }
+
+        const normalizedCustomerAddress = {
+            fullName: (customerAddress.fullName || '').trim(),
+            streetAddress: (customerAddress.streetAddress || '').trim(),
+            city: (customerAddress.city || '').trim(),
+            state: (customerAddress.state || '').trim(),
+            zipCode: (customerAddress.zipCode || customerAddress.zip || '').trim()
+        };
+
+        if (!normalizedCustomerAddress.fullName || !normalizedCustomerAddress.streetAddress || !normalizedCustomerAddress.city || !normalizedCustomerAddress.state || !normalizedCustomerAddress.zipCode) {
+            throw new Error('customerAddress must include fullName, streetAddress, city, state, and zipCode.');
+        }
+
+        return apiPost(`/orders/${encodeURIComponent(orderId)}/faster-shipping-label`, {
+            customerAddress: normalizedCustomerAddress
+        }, { authRequired: false });
+    };
+    window.requestUpsGroundHazmatFastShippingLabel = requestUpsGroundHazmatFastShippingLabel;
+
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEYS = ['shc_cart', 'shcOrderSummary'];
     const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken' };
@@ -894,18 +918,14 @@
     };
     const updateShippingPreferenceUI = () => {
         const selected = getSelectedShippingPreference();
-        const customerSend = selected === 'faster-shipping-label';
         if (shippingPreferenceError) shippingPreferenceError.style.display = selected ? 'none' : 'block';
         if (addressSectionTitle) {
-            addressSectionTitle.textContent = customerSend
-                ? '2. Contact Information'
-                : '2. Contact & Shipping Details';
+            addressSectionTitle.textContent = '2. Contact & Shipping Details';
         }
         document.querySelectorAll('.address-required-field').forEach((el) => {
-            el.classList.toggle('hidden', customerSend);
+            el.classList.toggle('hidden', false);
         });
-        toggleAddressInputsEnabled(!customerSend);
-        if (customerSend) clearAddressVerifyError();
+        toggleAddressInputsEnabled(true);
         updateZipUI();
     };
     const buildShippingInfo = () => ({
@@ -1380,8 +1400,19 @@
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
-            const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
-            const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
+            let fasterLabelResult = null;
+            if (pref === 'faster-shipping-label' && result.orderId) {
+                fasterLabelResult = await requestUpsGroundHazmatFastShippingLabel(result.orderId, {
+                    fullName: shippingInfo.fullName,
+                    streetAddress: shippingInfo.streetAddress,
+                    city: shippingInfo.city,
+                    state: shippingInfo.state,
+                    zipCode: shippingInfo.zipCode
+                });
+            }
+
+            const labelUrl = fasterLabelResult?.labelDownloadUrl || result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
+            const trackingNumber = fasterLabelResult?.trackingNumber || result.autoLabelTrackingNumber || result.trackingNumber || '';
 
             const successUrl = new URL('/order-submitted.html', window.location.origin);
             successUrl.searchParams.set('id', result.orderId);
@@ -1533,10 +1564,7 @@
     updatePaymentFields();
 
     submitOrderBtn.onclick = async () => {
-        const customerSend = isCustomerSendSelected();
-        const requiredIds = customerSend
-            ? ['fullName', 'phone', 'email', 'payoutIdentifier']
-            : ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
         let hasError = false;
         let firstErrorEl = null;
 
@@ -1575,7 +1603,7 @@
             }
         });
 
-        if (!customerSend && !isZipValid()) {
+        if (!isZipValid()) {
             updateZipUI({ showError: true });
             hasError = true;
             if (!firstErrorEl) firstErrorEl = zipInput;
@@ -1600,21 +1628,9 @@
 
         const shippingInfo = buildShippingInfo();
         submitOrderBtn.disabled = true;
-        submitOrderBtn.textContent = customerSend ? "Submitting order..." : "Validating Address...";
+        submitOrderBtn.textContent = "Validating Address...";
 
         try {
-            if (customerSend) {
-                shippingInfo.streetAddress = '';
-                shippingInfo.addressUnit = '';
-                shippingInfo.city = '';
-                shippingInfo.state = '';
-                shippingInfo.zip = '';
-                shippingInfo.zipCode = '';
-                shippingInfo.country = 'US';
-                await executeOrderSubmission(shippingInfo);
-                return;
-            }
-
             const validation = await verifyAddress(shippingInfo);
             const status = (validation.status || '').toLowerCase();
             const matchedAddress = validation.matchedAddress || validation.matched_address;
