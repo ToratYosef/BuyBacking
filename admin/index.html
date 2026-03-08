@@ -719,6 +719,8 @@
       ordersLoading: false,
       trackingReportModalOpen: false,
       trackingReportData: null,
+      statusInventoryModalOpen: false,
+      statusInventoryData: null,
       // confirmation modal
       confirmModalOpen: false,
       confirmModalData: null,
@@ -2810,6 +2812,11 @@ Inbound refreshes: ${inboundCount}`);
                 <i data-lucide="trash" style="width:18px;height:18px"></i>
                 ${state.bulkDeleteCancelledInProgress ? 'Deleting Canceled Orders…' : 'Delete Canceled Orders'}
               </button>
+              <button id="show-status-inventory"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-800 text-white shadow-md shadow-slate-300">
+                <i data-lucide="list-checks" style="width:18px;height:18px"></i>
+                Status Inventory
+              </button>
             </div>
           </div>
           ${state.bulkVoidProgressVisible ? `
@@ -4212,6 +4219,138 @@ Inbound refreshes: ${inboundCount}`);
         </div>
       `;
     }
+
+    function buildStatusInventoryData() {
+      const orders = Array.isArray(state.allOrders) ? state.allOrders : [];
+      const baseStatuses = Array.from(new Set([
+        ...STATUS_DROPDOWN_OPTIONS,
+        "kit_sent",
+        "kit_requested",
+        "unknown",
+        "canceled",
+      ]));
+      const orderLevelCounts = new Map(baseStatuses.map((status) => [status, 0]));
+      const deviceLevelCounts = new Map(baseStatuses.map((status) => [status, 0]));
+      const discoveredStatuses = new Set(baseStatuses);
+
+      const orderRows = orders.map((order) => {
+        const orderId = String(order?.id || order?.orderId || "N/A");
+        const orderStatus = getOrderCurrentStatusValue(order) || "unknown";
+        discoveredStatuses.add(orderStatus);
+        orderLevelCounts.set(orderStatus, (orderLevelCounts.get(orderStatus) || 0) + 1);
+
+        const deviceStatuses = {};
+        Object.values(order?.deviceStatusByKey || {}).forEach((statusValue) => {
+          const normalizedStatus = normalizeStatusKey(statusValue) || "unknown";
+          discoveredStatuses.add(normalizedStatus);
+          deviceLevelCounts.set(normalizedStatus, (deviceLevelCounts.get(normalizedStatus) || 0) + 1);
+          deviceStatuses[normalizedStatus] = (deviceStatuses[normalizedStatus] || 0) + 1;
+        });
+
+        return {
+          orderId,
+          orderStatus,
+          deviceStatuses,
+        };
+      });
+
+      const statusRows = Array.from(discoveredStatuses)
+        .sort((a, b) => a.localeCompare(b))
+        .map((statusKey) => ({
+          statusKey,
+          orderCount: orderLevelCounts.get(statusKey) || 0,
+          deviceCount: deviceLevelCounts.get(statusKey) || 0,
+        }));
+
+      return {
+        generatedAt: new Date().toISOString(),
+        totalOrders: orders.length,
+        statusRows,
+        orderRows,
+      };
+    }
+
+    function openStatusInventoryModal() {
+      state.statusInventoryData = buildStatusInventoryData();
+      state.statusInventoryModalOpen = true;
+      render();
+    }
+
+    function closeStatusInventoryModal() {
+      state.statusInventoryModalOpen = false;
+      render();
+    }
+
+    function renderStatusInventoryModal() {
+      if (!state.statusInventoryModalOpen || !state.statusInventoryData) return "";
+      const report = state.statusInventoryData;
+      const generatedAtLabel = new Date(report.generatedAt).toLocaleString();
+      const statusRowsHtml = (report.statusRows || []).map((row) => `
+        <tr class="border-t border-slate-100">
+          <td class="px-3 py-2 text-xs font-semibold text-slate-700">${esc(formatStatusLabel(row.statusKey))}</td>
+          <td class="px-3 py-2 text-xs text-slate-700">${Number(row.orderCount || 0)}</td>
+          <td class="px-3 py-2 text-xs text-slate-700">${Number(row.deviceCount || 0)}</td>
+        </tr>
+      `).join("");
+      const orderRowsHtml = (report.orderRows || []).map((row) => {
+        const deviceStatusSummary = Object.entries(row.deviceStatuses || {})
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([statusKey, count]) => `${formatStatusLabel(statusKey)} (${count})`)
+          .join(", ");
+        return `
+          <tr class="border-t border-slate-100 align-top">
+            <td class="px-3 py-2 text-xs font-semibold text-slate-700">${esc(row.orderId)}</td>
+            <td class="px-3 py-2 text-xs text-slate-700">${esc(formatStatusLabel(row.orderStatus || "unknown"))}</td>
+            <td class="px-3 py-2 text-xs text-slate-600">${esc(deviceStatusSummary || "—")}</td>
+          </tr>
+        `;
+      }).join("");
+      return `
+        <div id="statusInventoryModalOverlay" class="fixed inset-0 z-[1200] bg-slate-900/50 p-4 sm:p-8 overflow-y-auto">
+          <div class="mx-auto max-w-6xl bg-white rounded-2xl border border-slate-200 shadow-2xl">
+            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-3 sticky top-0 bg-white rounded-t-2xl">
+              <div>
+                <h3 class="text-base sm:text-lg font-semibold text-slate-900">Order Status Inventory</h3>
+                <p class="text-xs text-slate-500">${esc(generatedAtLabel)} • ${Number(report.totalOrders || 0)} orders scanned</p>
+              </div>
+              <button id="statusInventoryModalCloseBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50">Close</button>
+            </div>
+            <div class="p-6 space-y-6">
+              <section>
+                <h4 class="text-sm font-semibold text-slate-900 mb-2">Status totals (includes zero-count statuses)</h4>
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                  <table class="min-w-full text-left">
+                    <thead class="bg-slate-50">
+                      <tr>
+                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Order-level Qty</th>
+                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Device-level Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>${statusRowsHtml || `<tr><td colspan="3" class="px-3 py-3 text-sm text-slate-500">No statuses found.</td></tr>`}</tbody>
+                  </table>
+                </div>
+              </section>
+              <section>
+                <h4 class="text-sm font-semibold text-slate-900 mb-2">Every order and its statuses</h4>
+                <div class="overflow-x-auto rounded-xl border border-slate-200 max-h-[52vh]">
+                  <table class="min-w-full text-left">
+                    <thead class="bg-slate-50 sticky top-0">
+                      <tr>
+                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Order ID</th>
+                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Order Status</th>
+                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Device Statuses</th>
+                      </tr>
+                    </thead>
+                    <tbody>${orderRowsHtml || `<tr><td colspan="3" class="px-3 py-3 text-sm text-slate-500">No orders loaded.</td></tr>`}</tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      `;
+    }
     
     // ----------------------------
     // PAYMENT CONFIRMATION MODAL
@@ -4387,12 +4526,13 @@ Inbound refreshes: ${inboundCount}`);
           ${renderPaymentConfirmModal()}
           ${renderUnlockInfoModal()}
           ${renderShippingLabelModal()}
+          ${renderStatusInventoryModal()}
           ${renderAbandonedSequenceEmailModal()}
         </div>
       `;
     }
     function hasBlockingOverlayOpen() {
-      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.reofferPriceGuardOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen || state.shippingLabelModalOpen);
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.reofferPriceGuardOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen || state.shippingLabelModalOpen || state.statusInventoryModalOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
@@ -4777,6 +4917,14 @@ Inbound refreshes: ${inboundCount}`);
       if (btnBulkGenerateShippingLabel) {
         btnBulkGenerateShippingLabel.addEventListener("click", () => openShippingLabelModal());
       }
+      const btnShowStatusInventory = document.getElementById("show-status-inventory");
+      if (btnShowStatusInventory) {
+        btnShowStatusInventory.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openStatusInventoryModal();
+        });
+      }
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
         el.addEventListener("click", () => {
@@ -5091,6 +5239,17 @@ Inbound refreshes: ${inboundCount}`);
         if (generateBtn) {
           generateBtn.addEventListener("click", async () => {
             await submitManualShippingLabel();
+          });
+        }
+      }
+
+      if (state.statusInventoryModalOpen) {
+        const overlay = document.getElementById("statusInventoryModalOverlay");
+        const closeBtn = document.getElementById("statusInventoryModalCloseBtn");
+        if (closeBtn) closeBtn.addEventListener("click", closeStatusInventoryModal);
+        if (overlay) {
+          overlay.addEventListener("click", (event) => {
+            if (event.target === overlay) closeStatusInventoryModal();
           });
         }
       }
