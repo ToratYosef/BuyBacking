@@ -290,19 +290,19 @@
             <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Preference</h2>
             <div class="shipping-options-row">
                 <div>
+                    <input type="radio" id="no_label_customer_send" name="shipping_preference" value="no_label_customer_send" class="option-pill">
+                    <label for="no_label_customer_send" class="option-label">
+                        <i class="fa-solid fa-hand text-3xl text-slate-700 mb-2"></i>
+                        <span class="font-bold">No Label - Customer Send</span>
+                        <span class="text-xs text-slate-500 mt-1">Use your own shipping method</span>
+                    </label>
+                </div>
+                <div>
                     <input type="radio" id="email_label" name="shipping_preference" value="email_label" class="option-pill">
                     <label for="email_label" class="option-label">
                         <i class="fa-solid fa-envelope text-3xl text-green-600 mb-2"></i>
                         <span class="font-bold">Email Me a Label</span>
                         <span class="text-xs text-green-600 mt-1 font-semibold">Free</span>
-                    </label>
-                </div>
-                <div style="display: none;" aria-hidden="true">
-                    <input type="radio" id="faster_shipping_label" name="shipping_preference" value="faster-shipping-label" class="option-pill">
-                    <label for="faster_shipping_label" class="option-label">
-                        <i class="fa-solid fa-bolt text-3xl text-slate-700 mb-2"></i>
-                        <span class="font-bold">Faster Shipping Label</span>
-                        <span class="text-xs text-slate-500 mt-1">$5</span>
                     </label>
                 </div>
                 <div>
@@ -432,9 +432,9 @@
             <div id="summary-content" class="space-y-4">
                 <div id="cart-items"></div>
                 <div id="cart-empty" class="text-sm text-slate-500 hidden">No devices added yet.</div>
-                <div id="shipping-fee-row" class="flex justify-between hidden text-red-600">
-                    <span class="text-sm">Shipping Fee</span>
-                    <span id="shipping-fee-amount" class="text-sm font-bold">-$0.00</span>
+                <div id="kit-fee-row" class="flex justify-between hidden text-red-600">
+                    <span class="text-sm">Shipping Kit Fee</span>
+                    <span class="text-sm font-bold">-$25.00</span>
                 </div>
                 <div class="pt-4 mt-4 border-t flex justify-between items-end">
                     <span class="text-slate-800 font-bold">Total Payout</span>
@@ -570,30 +570,6 @@
         }
         return payload;
     };
-
-    const requestUpsGroundHazmatFastShippingLabel = async (orderId, customerAddress) => {
-        if (!orderId) throw new Error('orderId is required to request a faster shipping label.');
-        if (!customerAddress || typeof customerAddress !== 'object') {
-            throw new Error('customerAddress is required to request a faster shipping label.');
-        }
-
-        const normalizedCustomerAddress = {
-            fullName: (customerAddress.fullName || '').trim(),
-            streetAddress: (customerAddress.streetAddress || '').trim(),
-            city: (customerAddress.city || '').trim(),
-            state: (customerAddress.state || '').trim(),
-            zipCode: (customerAddress.zipCode || customerAddress.zip || '').trim()
-        };
-
-        if (!normalizedCustomerAddress.fullName || !normalizedCustomerAddress.streetAddress || !normalizedCustomerAddress.city || !normalizedCustomerAddress.state || !normalizedCustomerAddress.zipCode) {
-            throw new Error('customerAddress must include fullName, streetAddress, city, state, and zipCode.');
-        }
-
-        return apiPost(`/orders/${encodeURIComponent(orderId)}/faster-shipping-label`, {
-            customerAddress: normalizedCustomerAddress
-        }, { authRequired: false });
-    };
-    window.requestUpsGroundHazmatFastShippingLabel = requestUpsGroundHazmatFastShippingLabel;
 
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEYS = ['shc_cart', 'shcOrderSummary'];
@@ -846,17 +822,13 @@
         return true;
     };
     const updateSummary = () => {
-        const pref = getSelectedShippingPreference();
-        const fee = pref === 'ship_kit' ? 25 : (pref === 'faster-shipping-label' ? 5 : 0);
+        const isKit = getSelectedShippingPreference() === 'ship_kit';
+        const fee = isKit ? 25 : 0;
         const total = cartItems.reduce((sum, item) => {
             const normalized = normalizeCartItem(item);
             return sum + (normalized.unitPrice * normalized.qty);
         }, 0);
-        const shippingFeeRow = document.getElementById('shipping-fee-row');
-        const shippingFeeAmount = document.getElementById('shipping-fee-amount');
-        const hasFee = fee > 0;
-        shippingFeeRow.classList.toggle('hidden', !hasFee);
-        if (shippingFeeAmount) shippingFeeAmount.textContent = `-$${fee.toFixed(2)}`;
+        document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
         document.getElementById('sum-total').textContent = `$${Math.max(total - fee, 0).toFixed(2)}`;
     };
     const normalizeZip = (value) => value.replace(/\D/g, '').slice(0, 9);
@@ -892,7 +864,7 @@
         }
     };
     const getSelectedShippingPreference = () => document.querySelector('input[name="shipping_preference"]:checked')?.value || '';
-    const isCustomerSendSelected = () => getSelectedShippingPreference() === 'faster-shipping-label';
+    const isCustomerSendSelected = () => getSelectedShippingPreference() === 'no_label_customer_send';
     const toggleAddressInputsEnabled = (isEnabled) => {
         const ids = ['streetAddress', 'addressUnit', 'city', 'state', 'zip', 'country'];
         ids.forEach((id) => {
@@ -918,14 +890,18 @@
     };
     const updateShippingPreferenceUI = () => {
         const selected = getSelectedShippingPreference();
+        const customerSend = selected === 'no_label_customer_send';
         if (shippingPreferenceError) shippingPreferenceError.style.display = selected ? 'none' : 'block';
         if (addressSectionTitle) {
-            addressSectionTitle.textContent = '2. Contact & Shipping Details';
+            addressSectionTitle.textContent = customerSend
+                ? '2. Contact Information'
+                : '2. Contact & Shipping Details';
         }
         document.querySelectorAll('.address-required-field').forEach((el) => {
-            el.classList.toggle('hidden', false);
+            el.classList.toggle('hidden', customerSend);
         });
-        toggleAddressInputsEnabled(true);
+        toggleAddressInputsEnabled(!customerSend);
+        if (customerSend) clearAddressVerifyError();
         updateZipUI();
     };
     const buildShippingInfo = () => ({
@@ -1335,7 +1311,7 @@
 
             const isKit = pref === 'ship_kit';
             const shippingPreferenceLabelMap = {
-                'faster-shipping-label': 'Faster Shipping Label Requested',
+                no_label_customer_send: 'No Label - Customer Send',
                 email_label: 'Email Label Requested',
                 ship_kit: 'Shipping Kit Requested'
             };
@@ -1400,19 +1376,8 @@
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
-            let fasterLabelResult = null;
-            if (pref === 'faster-shipping-label' && result.orderId) {
-                fasterLabelResult = await requestUpsGroundHazmatFastShippingLabel(result.orderId, {
-                    fullName: shippingInfo.fullName,
-                    streetAddress: shippingInfo.streetAddress,
-                    city: shippingInfo.city,
-                    state: shippingInfo.state,
-                    zipCode: shippingInfo.zipCode
-                });
-            }
-
-            const labelUrl = fasterLabelResult?.labelDownloadUrl || result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
-            const trackingNumber = fasterLabelResult?.trackingNumber || result.autoLabelTrackingNumber || result.trackingNumber || '';
+            const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
+            const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
             const successUrl = new URL('/order-submitted.html', window.location.origin);
             successUrl.searchParams.set('id', result.orderId);
@@ -1482,61 +1447,7 @@
 
             window.location.href = successUrl.toString();
         } catch (e) {
-            console.error('Primary order submission failed, attempting client-side fallback:', e);
-
-            const fallbackOrderId = `fallback-${Date.now()}`;
-            const fallbackItems = cartItems.flatMap((item) => {
-                const qty = Math.max(1, Math.floor(Number(item.qty || 1)));
-                return Array.from({ length: qty }, () => ({
-                    device: item.modelName,
-                    brand: item.brand,
-                    modelId: item.model,
-                    modelName: item.modelName,
-                    storage: item.storage,
-                    carrier: item.lock,
-                    lock: item.lock,
-                    condition: item.condition,
-                    qty: 1,
-                    unitPrice: Number(item.unitPrice || 0),
-                    totalPayout: Number(item.unitPrice || 0)
-                }));
-            });
-
-            try {
-                await withPerf('firestore:addDoc:fallbackOrder', () => addDoc(collection(db, 'orders'), {
-                    source: 'checkout_fallback_submission',
-                    status: 'order_pending',
-                    shippingInfo,
-                    paymentMethod: method,
-                    paymentIdentifier: document.getElementById('payoutIdentifier').value,
-                    shippingPreference: pref,
-                    totalPayout: finalPayout,
-                    qty: fallbackItems.length,
-                    items: fallbackItems,
-                    createdAt: serverTimestamp(),
-                    clientCreatedAt: new Date().toISOString(),
-                    errorContext: String(e?.message || 'unknown')
-                }));
-            } catch (fallbackError) {
-                console.error('Fallback order persistence failed:', fallbackError);
-            }
-
-            const successUrl = new URL('/order-submitted.html', window.location.origin);
-            successUrl.searchParams.set('id', fallbackOrderId);
-            successUrl.searchParams.set('price', finalPayout.toFixed(2));
-            successUrl.searchParams.set('device', cartItems.length > 1 ? 'Multiple devices' : (cartItems[0]?.modelName || 'Device'));
-            successUrl.searchParams.set('qty', String(fallbackItems.length || 1));
-            successUrl.searchParams.set('name', shippingInfo.fullName || '');
-            successUrl.searchParams.set('street', shippingInfo.streetAddress || '');
-            successUrl.searchParams.set('unit', shippingInfo.addressUnit || '');
-            successUrl.searchParams.set('city', shippingInfo.city || '');
-            successUrl.searchParams.set('state', shippingInfo.state || '');
-            successUrl.searchParams.set('zip', shippingInfo.zipCode || '');
-            successUrl.searchParams.set('payMethod', method || '');
-            successUrl.searchParams.set('shipping', pref || '');
-            successUrl.searchParams.set('fallback', '1');
-
-            window.location.href = successUrl.toString();
+            alert("Server error.");
         } finally {
             btn.disabled = !(isCustomerSendSelected() || isZipValid());
             btn.textContent = "SUBMIT MY TRADE-IN";
@@ -1618,7 +1529,10 @@
     updatePaymentFields();
 
     submitOrderBtn.onclick = async () => {
-        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        const customerSend = isCustomerSendSelected();
+        const requiredIds = customerSend
+            ? ['fullName', 'phone', 'email', 'payoutIdentifier']
+            : ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
         let hasError = false;
         let firstErrorEl = null;
 
@@ -1657,7 +1571,7 @@
             }
         });
 
-        if (!isZipValid()) {
+        if (!customerSend && !isZipValid()) {
             updateZipUI({ showError: true });
             hasError = true;
             if (!firstErrorEl) firstErrorEl = zipInput;
@@ -1682,9 +1596,21 @@
 
         const shippingInfo = buildShippingInfo();
         submitOrderBtn.disabled = true;
-        submitOrderBtn.textContent = "Validating Address...";
+        submitOrderBtn.textContent = customerSend ? "Submitting order..." : "Validating Address...";
 
         try {
+            if (customerSend) {
+                shippingInfo.streetAddress = '';
+                shippingInfo.addressUnit = '';
+                shippingInfo.city = '';
+                shippingInfo.state = '';
+                shippingInfo.zip = '';
+                shippingInfo.zipCode = '';
+                shippingInfo.country = 'US';
+                await executeOrderSubmission(shippingInfo);
+                return;
+            }
+
             const validation = await verifyAddress(shippingInfo);
             const status = (validation.status || '').toLowerCase();
             const matchedAddress = validation.matchedAddress || validation.matched_address;

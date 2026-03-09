@@ -535,20 +535,6 @@
       if (isBalanceEmailStatus(order)) return false;
       return pref.includes("email") || pref.includes("label") || s.includes("emailed") || s.includes("label") || s.includes("phone_on_the_way");
     }
-    function hasTwoWayKitLabelArtifacts(order) {
-      const hasOutbound = Boolean(order?.outboundLabelUrl || order?.outboundTrackingNumber);
-      const hasInbound = Boolean(order?.inboundLabelUrl || order?.inboundTrackingNumber);
-      return hasOutbound && hasInbound;
-    }
-    function isKitOrder(order) {
-      if (!order) return false;
-      const s = normalizeStatusKey(order?.status);
-      const pref = normalizeStatusKey(order?.shippingPreference);
-      if (s.includes("kit") || pref.includes("kit")) return true;
-      if (hasTwoWayKitLabelArtifacts(order)) return true;
-      if (shouldAutoMarkKitSent(order)) return true;
-      return false;
-    }
     // ----------------------------
     // API HELPERS (authRequired always)
     // ----------------------------
@@ -719,8 +705,6 @@
       ordersLoading: false,
       trackingReportModalOpen: false,
       trackingReportData: null,
-      statusInventoryModalOpen: false,
-      statusInventoryData: null,
       // confirmation modal
       confirmModalOpen: false,
       confirmModalData: null,
@@ -1086,19 +1070,7 @@
       
       // If order hasn't been received yet, use order-level status
       const currentOrderStatus = normalizeStatusKey(order.status);
-      const preReceiveStatuses = [
-        'order_pending',
-        'needs_printing',
-        'kit_needs_printing',
-        'shipping_kit_requested',
-        'kit_sent',
-        'kit_on_the_way_to_customer',
-        'kit_delivered',
-        'kit_on_the_way_to_us',
-        'label_generated',
-        'phone_on_the_way',
-        'delivered_to_us'
-      ];
+      const preReceiveStatuses = ['order_pending', 'needs_printing', 'kit_needs_printing', 'shipping_kit_requested', 'label_generated', 'kit_on_the_way_to_us', 'phone_on_the_way', 'delivered_to_us'];
       if (preReceiveStatuses.includes(currentOrderStatus)) {
         return currentOrderStatus;
       }
@@ -1406,16 +1378,12 @@
       if (s !== "all") {
         if (s === "kit_needs_printing") {
           allDevices = allDevices.filter(d => KIT_PRINT_PENDING_STATUSES.has(d.deviceStatus));
-        } else if (s === "kit_requested") {
-          allDevices = allDevices.filter(d => ["shipping_kit_requested", "kit_needs_printing", "needs_printing"].includes(d.deviceStatus));
-        } else if (s === "kit_sent") {
-          allDevices = allDevices.filter(d => ["kit_sent", "kit_on_the_way_to_customer"].includes(d.deviceStatus));
         } else if (s === "label_generated") {
-          allDevices = allDevices.filter(d => d.deviceStatus === "label_generated" && !isKitOrder(d.order));
+          allDevices = allDevices.filter(d => d.deviceStatus === "label_generated");
         } else if (s === "emailed") {
           allDevices = allDevices.filter(d => d.deviceStatus === "emailed");
         } else if (s === "phone_on_the_way") {
-          allDevices = allDevices.filter(d => d.deviceStatus === "phone_on_the_way" && !isKitOrder(d.order));
+          allDevices = allDevices.filter(d => d.deviceStatus === "phone_on_the_way");
         } else if (s === "delivered_to_us") {
           allDevices = allDevices.filter(d => d.deviceStatus === "delivered_to_us");
         } else if (s === "received") {
@@ -1641,7 +1609,7 @@
       const allowed = new Set(["label_generated", "phone_on_the_way"]);
       const candidates = base.filter(o => {
         const status = normalizeStatusKey(o?.status);
-        return allowed.has(status) && !isKitOrder(o);
+        return allowed.has(status);
       });
 
       if (!candidates.length) {
@@ -1680,7 +1648,8 @@
             const order = queue.shift();
             if (!order) return;
             try {
-              const res = await apiPost(`/refresh-tracking`, { orderId: order.id, type: "email" });
+              const refreshType = matchesKitTrackingHints(order) ? "kit" : "email";
+              const res = await apiPost(`/refresh-tracking`, { orderId: order.id, type: refreshType });
               const previousStatus = normalizeStatusKey(order?.status);
               const nextStatus = normalizeStatusKey(res?.order?.status || order?.status);
               latestStatusByOrderId.set(order.id, nextStatus);
@@ -1729,110 +1698,6 @@
         if (liveBtn) {
           liveBtn.disabled = false;
           liveBtn.textContent = originalText || "Refresh";
-        }
-        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-      }
-    }
-    function getKitRefreshDirection(status) {
-      const s = normalizeStatusKey(status);
-      // Until kit is delivered, keep refreshing outbound kit tracking.
-      if (["kit_delivered", "kit_on_the_way_to_us", "delivered_to_us", "received", "imei_checked", "completed"].includes(s)) {
-        return "inbound";
-      }
-      return "outbound";
-    }
-    async function refreshKitLifecycleTracking(buttonEl) {
-      const base = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
-      const allowed = new Set(["kit_sent", "kit_on_the_way_to_customer", "kit_delivered", "kit_on_the_way_to_us", "delivered_to_us"]);
-      const candidates = base.filter(o => allowed.has(normalizeStatusKey(o?.status)) && isKitOrder(o));
-
-      if (!candidates.length) {
-        toast("No kit lifecycle tracking candidates found", "info");
-        return;
-      }
-
-      const outboundCount = candidates.filter((o) => getKitRefreshDirection(o?.status) === "outbound").length;
-      const inboundCount = candidates.length - outboundCount;
-      const ok = confirm(`Refresh kit tracking for ${candidates.length} orders?
-
-Outbound refreshes: ${outboundCount}
-Inbound refreshes: ${inboundCount}`);
-      if (!ok) return;
-
-      const originalText = buttonEl?.textContent;
-      state.bulkTrackingRefreshInProgress = true;
-      if (buttonEl) {
-        buttonEl.disabled = true;
-        buttonEl.textContent = `Refreshing 0/${candidates.length}…`;
-      }
-      try {
-        const queue = candidates.slice();
-        let success = 0;
-        let failed = 0;
-        let done = 0;
-        let statusChanged = 0;
-        const latestStatusByOrderId = new Map(candidates.map((o) => [o.id, normalizeStatusKey(o?.status)]));
-
-        const updateProgressText = () => {
-          const liveBtn = document.getElementById("refresh-kits-tracking") || buttonEl;
-          if (liveBtn) {
-            liveBtn.disabled = true;
-            liveBtn.textContent = `Refreshing ${done}/${candidates.length}…`;
-          }
-        };
-
-        async function worker() {
-          while (queue.length) {
-            const order = queue.shift();
-            if (!order) return;
-            try {
-              const direction = getKitRefreshDirection(order?.status);
-              const res = await apiPost(`/refresh-tracking`, { orderId: order.id, type: "kit", direction, labelType: direction });
-              const previousStatus = normalizeStatusKey(order?.status);
-              const nextStatus = normalizeStatusKey(res?.order?.status || order?.status);
-              latestStatusByOrderId.set(order.id, nextStatus);
-              if (nextStatus && previousStatus && nextStatus !== previousStatus) statusChanged++;
-              success++;
-            } catch (e) {
-              failed++;
-            } finally {
-              done++;
-              updateProgressText();
-            }
-          }
-        }
-
-        const workers = Array.from({ length: Math.min(MAX_CONCURRENT_TRACKING_REQUESTS, candidates.length) }, () => worker());
-        await Promise.all(workers);
-
-        state.lastTrackingRefreshMeta = { at: new Date(), source: "admin_manual" };
-
-        const nowCounts = {
-          kit_sent: 0,
-          kit_on_the_way_to_customer: 0,
-          kit_delivered: 0,
-          kit_on_the_way_to_us: 0,
-          delivered_to_us: 0,
-        };
-        for (const value of latestStatusByOrderId.values()) {
-          if (value in nowCounts) nowCounts[value]++;
-        }
-
-        state.trackingReportData = {
-          processed: candidates.length,
-          refreshed: success,
-          statusChanged,
-          failed,
-          statusCounts: nowCounts,
-          completedAtLabel: `Completed ${formatTimeOnly(new Date())} (admin manual)`,
-        };
-        state.trackingReportModalOpen = true;
-      } finally {
-        state.bulkTrackingRefreshInProgress = false;
-        const liveBtn = document.getElementById("refresh-kits-tracking") || buttonEl;
-        if (liveBtn) {
-          liveBtn.disabled = false;
-          liveBtn.textContent = originalText || "Refresh Kits";
         }
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
@@ -2635,7 +2500,7 @@ Inbound refreshes: ${inboundCount}`);
           count: isActive ? "bg-white/15 text-white" : "bg-white/70 text-slate-600"
         };
       }
-      if (s === "order_pending" || s === "kit_needs_printing" || s === "kit_requested") {
+      if (s === "order_pending" || s === "kit_needs_printing") {
         return {
           pill: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100",
           count: isActive ? "bg-white/15 text-white" : "bg-amber-100 text-amber-700"
@@ -2647,7 +2512,7 @@ Inbound refreshes: ${inboundCount}`);
           count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
         };
       }
-      if (s === "kit_sent" || s === "kit_delivered" || s === "kit_on_the_way_to_us" || s === "kit_on_the_way_to_customer" || s === "phone_on_the_way" || s === "delivered_to_us") {
+      if (s === "phone_on_the_way" || s === "delivered_to_us") {
         return {
           pill: isActive ? "bg-blue-500 text-white shadow-md" : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100",
           count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
@@ -2678,62 +2543,20 @@ Inbound refreshes: ${inboundCount}`);
     }
     function renderStatusBreakdown() {
       const { statusCounts, statusCountAll, cancelledCount, visible } = computeStatusCounts();
-      const baseStatusItems = [
+      const items = [
+        { key: "all", label: "All", count: statusCountAll },
         { key: "order_pending", label: "Order Pending", count: statusCounts.get("order_pending") || 0 },
-        { key: "kit_requested", label: "Kit Requested", count: visible.filter(o => ["shipping_kit_requested", "kit_needs_printing", "needs_printing"].includes(normalizeStatusKey(o?.status))).length },
-        { key: "kit_sent", label: "Kit Sent", count: visible.filter(o => ["kit_sent", "kit_on_the_way_to_customer"].includes(normalizeStatusKey(o?.status))).length },
-        { key: "kit_delivered", label: "Kit Delivered", count: visible.filter(o => normalizeStatusKey(o?.status) === "kit_delivered").length },
-        { key: "kit_on_the_way_to_us", label: "Kit On The Way To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "kit_on_the_way_to_us").length },
-        { key: "label_generated", label: "Label Generated", count: visible.filter(o => normalizeStatusKey(o?.status) === "label_generated" && !isKitOrder(o)).length },
-        { key: "phone_on_the_way", label: "Phone On The Way To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "phone_on_the_way" && !isKitOrder(o)).length },
-        { key: "delivered_to_us", label: "Delivered To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "delivered_to_us").length },
-        { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status) === "emailed").length },
-        { key: "issue_resolved", label: "Issue Resolved", count: statusCounts.get("issue_resolved") || 0 },
-        { key: "received", label: "Received", count: visible.filter(o => orderHasDeviceWithStatus(o, "received")).length },
+        { key: "kit_needs_printing", label: "Kit Needs Printing", count: visible.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
+        { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
+        { key: "phone_on_the_way", label: "Phone On The Way To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "phone_on_the_way").length },
+        { key: "delivered_to_us", label: "Delivered", count: visible.filter(o => normalizeStatusKey(o?.status) === "delivered_to_us").length },
+        { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
+        { key: "issue_resolved", label: "Resolved", count: statusCounts.get("issue_resolved") || 0 },
         { key: "re-offered-pending", label: "Re-offer Pending", count: statusCounts.get("re-offered-pending") || 0 },
         { key: "re-offered-accepted", label: "Re-offer Accepted", count: statusCounts.get("re-offered-accepted") || 0 },
         { key: "re-offered-declined", label: "Re-offer Declined", count: statusCounts.get("re-offered-declined") || 0 },
-        { key: "re-offered-auto-accepted", label: "Re-offer Auto Accepted", count: statusCounts.get("re-offered-auto-accepted") || 0 },
+        { key: "received", label: "Received", count: visible.filter(o => orderHasDeviceWithStatus(o, "received")).length },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
-      ];
-      const discoveredStatuses = new Set(statusCounts.keys());
-      const knownStatuses = new Set([
-        "all",
-        "cancelled",
-        "canceled",
-        "order_pending",
-        "shipping_kit_requested",
-        "kit_needs_printing",
-        "needs_printing",
-        "kit_requested",
-        "kit_sent",
-        "kit_on_the_way_to_customer",
-        "kit_delivered",
-        "kit_on_the_way_to_us",
-        "label_generated",
-        "phone_on_the_way",
-        "delivered_to_us",
-        "emailed",
-        "issue_resolved",
-        "received",
-        "re-offered-pending",
-        "re-offered-accepted",
-        "re-offered-declined",
-        "re-offered-auto-accepted",
-        "completed",
-      ]);
-      const extraStatusItems = Array.from(discoveredStatuses)
-        .filter(statusKey => !knownStatuses.has(statusKey))
-        .sort((a, b) => a.localeCompare(b))
-        .map(statusKey => ({
-          key: statusKey,
-          label: formatStatusLabel(statusKey),
-          count: statusCounts.get(statusKey) || 0,
-        }));
-      const items = [
-        { key: "all", label: "All", count: statusCountAll },
-        ...baseStatusItems,
-        ...extraStatusItems,
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
       const splitIndex = Math.ceil(items.length / 2);
@@ -2784,11 +2607,6 @@ Inbound refreshes: ${inboundCount}`);
                 <i data-lucide="refresh-cw" style="width:18px;height:18px"></i>
                 Refresh Label + Phone Tracking
               </button>
-              <button id="refresh-kits-tracking"
-                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200">
-                <i data-lucide="refresh-cw" style="width:18px;height:18px"></i>
-                Refresh Kits
-              </button>
               <button id="bulk-void-aged-orders"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidAgedInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-200'}"
                 ${state.bulkVoidAgedInProgress ? 'disabled' : ''}>
@@ -2811,11 +2629,6 @@ Inbound refreshes: ${inboundCount}`);
                 ${state.bulkDeleteCancelledInProgress ? 'disabled' : ''}>
                 <i data-lucide="trash" style="width:18px;height:18px"></i>
                 ${state.bulkDeleteCancelledInProgress ? 'Deleting Canceled Orders…' : 'Delete Canceled Orders'}
-              </button>
-              <button id="show-status-inventory"
-                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-800 text-white shadow-md shadow-slate-300">
-                <i data-lucide="list-checks" style="width:18px;height:18px"></i>
-                Status Inventory
               </button>
             </div>
           </div>
@@ -4219,138 +4032,6 @@ Inbound refreshes: ${inboundCount}`);
         </div>
       `;
     }
-
-    function buildStatusInventoryData() {
-      const orders = Array.isArray(state.allOrders) ? state.allOrders : [];
-      const baseStatuses = Array.from(new Set([
-        ...STATUS_DROPDOWN_OPTIONS,
-        "kit_sent",
-        "kit_requested",
-        "unknown",
-        "canceled",
-      ]));
-      const orderLevelCounts = new Map(baseStatuses.map((status) => [status, 0]));
-      const deviceLevelCounts = new Map(baseStatuses.map((status) => [status, 0]));
-      const discoveredStatuses = new Set(baseStatuses);
-
-      const orderRows = orders.map((order) => {
-        const orderId = String(order?.id || order?.orderId || "N/A");
-        const orderStatus = getOrderCurrentStatusValue(order) || "unknown";
-        discoveredStatuses.add(orderStatus);
-        orderLevelCounts.set(orderStatus, (orderLevelCounts.get(orderStatus) || 0) + 1);
-
-        const deviceStatuses = {};
-        Object.values(order?.deviceStatusByKey || {}).forEach((statusValue) => {
-          const normalizedStatus = normalizeStatusKey(statusValue) || "unknown";
-          discoveredStatuses.add(normalizedStatus);
-          deviceLevelCounts.set(normalizedStatus, (deviceLevelCounts.get(normalizedStatus) || 0) + 1);
-          deviceStatuses[normalizedStatus] = (deviceStatuses[normalizedStatus] || 0) + 1;
-        });
-
-        return {
-          orderId,
-          orderStatus,
-          deviceStatuses,
-        };
-      });
-
-      const statusRows = Array.from(discoveredStatuses)
-        .sort((a, b) => a.localeCompare(b))
-        .map((statusKey) => ({
-          statusKey,
-          orderCount: orderLevelCounts.get(statusKey) || 0,
-          deviceCount: deviceLevelCounts.get(statusKey) || 0,
-        }));
-
-      return {
-        generatedAt: new Date().toISOString(),
-        totalOrders: orders.length,
-        statusRows,
-        orderRows,
-      };
-    }
-
-    function openStatusInventoryModal() {
-      state.statusInventoryData = buildStatusInventoryData();
-      state.statusInventoryModalOpen = true;
-      render();
-    }
-
-    function closeStatusInventoryModal() {
-      state.statusInventoryModalOpen = false;
-      render();
-    }
-
-    function renderStatusInventoryModal() {
-      if (!state.statusInventoryModalOpen || !state.statusInventoryData) return "";
-      const report = state.statusInventoryData;
-      const generatedAtLabel = new Date(report.generatedAt).toLocaleString();
-      const statusRowsHtml = (report.statusRows || []).map((row) => `
-        <tr class="border-t border-slate-100">
-          <td class="px-3 py-2 text-xs font-semibold text-slate-700">${esc(formatStatusLabel(row.statusKey))}</td>
-          <td class="px-3 py-2 text-xs text-slate-700">${Number(row.orderCount || 0)}</td>
-          <td class="px-3 py-2 text-xs text-slate-700">${Number(row.deviceCount || 0)}</td>
-        </tr>
-      `).join("");
-      const orderRowsHtml = (report.orderRows || []).map((row) => {
-        const deviceStatusSummary = Object.entries(row.deviceStatuses || {})
-          .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([statusKey, count]) => `${formatStatusLabel(statusKey)} (${count})`)
-          .join(", ");
-        return `
-          <tr class="border-t border-slate-100 align-top">
-            <td class="px-3 py-2 text-xs font-semibold text-slate-700">${esc(row.orderId)}</td>
-            <td class="px-3 py-2 text-xs text-slate-700">${esc(formatStatusLabel(row.orderStatus || "unknown"))}</td>
-            <td class="px-3 py-2 text-xs text-slate-600">${esc(deviceStatusSummary || "—")}</td>
-          </tr>
-        `;
-      }).join("");
-      return `
-        <div id="statusInventoryModalOverlay" class="fixed inset-0 z-[1200] bg-slate-900/50 p-4 sm:p-8 overflow-y-auto">
-          <div class="mx-auto max-w-6xl bg-white rounded-2xl border border-slate-200 shadow-2xl">
-            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-3 sticky top-0 bg-white rounded-t-2xl">
-              <div>
-                <h3 class="text-base sm:text-lg font-semibold text-slate-900">Order Status Inventory</h3>
-                <p class="text-xs text-slate-500">${esc(generatedAtLabel)} • ${Number(report.totalOrders || 0)} orders scanned</p>
-              </div>
-              <button id="statusInventoryModalCloseBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50">Close</button>
-            </div>
-            <div class="p-6 space-y-6">
-              <section>
-                <h4 class="text-sm font-semibold text-slate-900 mb-2">Status totals (includes zero-count statuses)</h4>
-                <div class="overflow-x-auto rounded-xl border border-slate-200">
-                  <table class="min-w-full text-left">
-                    <thead class="bg-slate-50">
-                      <tr>
-                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Order-level Qty</th>
-                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Device-level Qty</th>
-                      </tr>
-                    </thead>
-                    <tbody>${statusRowsHtml || `<tr><td colspan="3" class="px-3 py-3 text-sm text-slate-500">No statuses found.</td></tr>`}</tbody>
-                  </table>
-                </div>
-              </section>
-              <section>
-                <h4 class="text-sm font-semibold text-slate-900 mb-2">Every order and its statuses</h4>
-                <div class="overflow-x-auto rounded-xl border border-slate-200 max-h-[52vh]">
-                  <table class="min-w-full text-left">
-                    <thead class="bg-slate-50 sticky top-0">
-                      <tr>
-                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Order ID</th>
-                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Order Status</th>
-                        <th class="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Device Statuses</th>
-                      </tr>
-                    </thead>
-                    <tbody>${orderRowsHtml || `<tr><td colspan="3" class="px-3 py-3 text-sm text-slate-500">No orders loaded.</td></tr>`}</tbody>
-                  </table>
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
-      `;
-    }
     
     // ----------------------------
     // PAYMENT CONFIRMATION MODAL
@@ -4526,13 +4207,12 @@ Inbound refreshes: ${inboundCount}`);
           ${renderPaymentConfirmModal()}
           ${renderUnlockInfoModal()}
           ${renderShippingLabelModal()}
-          ${renderStatusInventoryModal()}
           ${renderAbandonedSequenceEmailModal()}
         </div>
       `;
     }
     function hasBlockingOverlayOpen() {
-      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.reofferPriceGuardOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen || state.shippingLabelModalOpen || state.statusInventoryModalOpen);
+      return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.reofferPriceGuardOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen || state.shippingLabelModalOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
@@ -4897,10 +4577,6 @@ Inbound refreshes: ${inboundCount}`);
       if (btnRefreshLabelPhoneTracking) {
         btnRefreshLabelPhoneTracking.addEventListener("click", () => refreshLabelGeneratedAndPhoneOnWay(btnRefreshLabelPhoneTracking));
       }
-      const btnRefreshKitsTracking = document.getElementById("refresh-kits-tracking");
-      if (btnRefreshKitsTracking) {
-        btnRefreshKitsTracking.addEventListener("click", () => refreshKitLifecycleTracking(btnRefreshKitsTracking));
-      }
       const btnBulkVoidAgedOrders = document.getElementById("bulk-void-aged-orders");
       if (btnBulkVoidAgedOrders) {
         btnBulkVoidAgedOrders.addEventListener("click", () => runBulkVoidAgedOrders(btnBulkVoidAgedOrders));
@@ -4916,14 +4592,6 @@ Inbound refreshes: ${inboundCount}`);
       const btnBulkGenerateShippingLabel = document.getElementById("bulk-generate-shipping-label");
       if (btnBulkGenerateShippingLabel) {
         btnBulkGenerateShippingLabel.addEventListener("click", () => openShippingLabelModal());
-      }
-      const btnShowStatusInventory = document.getElementById("show-status-inventory");
-      if (btnShowStatusInventory) {
-        btnShowStatusInventory.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          openStatusInventoryModal();
-        });
       }
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
@@ -5239,17 +4907,6 @@ Inbound refreshes: ${inboundCount}`);
         if (generateBtn) {
           generateBtn.addEventListener("click", async () => {
             await submitManualShippingLabel();
-          });
-        }
-      }
-
-      if (state.statusInventoryModalOpen) {
-        const overlay = document.getElementById("statusInventoryModalOverlay");
-        const closeBtn = document.getElementById("statusInventoryModalCloseBtn");
-        if (closeBtn) closeBtn.addEventListener("click", closeStatusInventoryModal);
-        if (overlay) {
-          overlay.addEventListener("click", (event) => {
-            if (event.target === overlay) closeStatusInventoryModal();
           });
         }
       }

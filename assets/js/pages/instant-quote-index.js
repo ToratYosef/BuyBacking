@@ -27,7 +27,6 @@ let finalQuote = 0.00; // Final calculated price
 let currentUserId = null; // New: to store user ID
 let pendingShippingUnlock = false;
 const SHIPPING_KIT_FEE = 25;
-const FASTER_SHIPPING_LABEL_FEE = 5;
 
 function formatCurrency(amount) {
     const numeric = Number(amount) || 0;
@@ -39,9 +38,7 @@ function getSelectedShippingPreferenceValue() {
 }
 
 function calculateShippingFee(preferenceValue = null) {
-    if (preferenceValue === 'ship_kit') return SHIPPING_KIT_FEE;
-    if (['faster-shipping-label', 'faster_shipping_label'].includes(preferenceValue)) return FASTER_SHIPPING_LABEL_FEE;
-    return 0;
+    return preferenceValue === 'ship_kit' ? SHIPPING_KIT_FEE : 0;
 }
 
 function calculateFinalPayout(preferenceValue = null) {
@@ -780,8 +777,6 @@ window.updateOverview = function() {
         displayShippingText = 'Shipping Kit Requested';
     } else if (shippingPreference === 'email_label') {
         displayShippingText = 'Email Label Requested';
-    } else if (['faster-shipping-label', 'faster_shipping_label'].includes(shippingPreference)) {
-        displayShippingText = 'Faster Shipping Label Requested';
     }
 
     const overviewShippingPreference = document.getElementById('overviewShippingPreference');
@@ -815,10 +810,6 @@ window.updateOverview = function() {
         if (shippingPreference === 'ship_kit') {
             breakdownShippingLabel.textContent = 'Shipping Kit';
             breakdownShippingAmount.textContent = `-$${SHIPPING_KIT_FEE.toFixed(2)}`;
-            breakdownShippingAmount.classList.add('text-rose-600');
-        } else if (['faster-shipping-label', 'faster_shipping_label'].includes(shippingPreference)) {
-            breakdownShippingLabel.textContent = 'Faster Shipping Label';
-            breakdownShippingAmount.textContent = `-$${FASTER_SHIPPING_LABEL_FEE.toFixed(2)}`;
             breakdownShippingAmount.classList.add('text-rose-600');
         } else if (shippingPreference === 'email_label') {
             breakdownShippingLabel.textContent = 'Email Label';
@@ -1020,11 +1011,7 @@ const selectedPayment = document.querySelector('input[name="payment_method"]:che
 const phoneInput = document.getElementById('phone');
 const shippingPreferenceInput = document.querySelector('input[name="shipping_preference"]:checked');
 const rawShippingPreference = shippingPreferenceInput.value;
-const shippingPreferenceLabel = rawShippingPreference === 'ship_kit'
-    ? 'Shipping Kit Requested'
-    : (['faster-shipping-label', 'faster_shipping_label'].includes(rawShippingPreference)
-        ? 'Faster Shipping Label Requested'
-        : 'Email Label Requested');
+const shippingPreferenceLabel = rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested';
 const shippingKitFee = calculateShippingFee(rawShippingPreference);
 const finalPayoutForOrder = calculateFinalPayout(rawShippingPreference);
 const perDeviceItem = {
