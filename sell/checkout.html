@@ -1419,7 +1419,8 @@
             let labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || result.labelUrl || '';
             let trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
-            if (!isKit && autoLabelStatus !== 'not_generated' && !labelUrl) {
+            const shouldAttemptLegacyLabelGeneration = !isKit && !labelUrl && !autoLabelStatus;
+            if (shouldAttemptLegacyLabelGeneration) {
                 const generatedLabel = await attemptLabelGeneration({
                     orderId: submittedOrderId,
                     isFasterShipping
