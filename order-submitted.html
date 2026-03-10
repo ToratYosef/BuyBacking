@@ -403,15 +403,20 @@
                 const hasCondition = !!String(item?.condition || '').trim();
                 return hasName || hasCondition;
             });
+            const API_BASE = String(window.SHC_API_BASE_URL || '/server');
+
             const fetchOrderById = async (targetOrderId) => {
                 const safeId = String(targetOrderId || '').trim();
                 if (!safeId) return null;
                 try {
-                    const base = '/server';
-                    const endpoint = `${base.replace(/\/$/, '')}/orders/${encodeURIComponent(safeId)}`;
+                    const endpoint = `${API_BASE.replace(/\/$/, '')}/orders/${encodeURIComponent(safeId)}`;
                     const response = await fetch(endpoint, { method: 'GET' });
                     if (!response.ok) return null;
-                    return await response.json();
+                    const payload = await response.json();
+                    if (payload && typeof payload === 'object' && payload.order && typeof payload.order === 'object') {
+                        return payload.order;
+                    }
+                    return payload;
                 } catch (error) {
                     console.warn('Unable to fetch order details for submitted page', error);
                     return null;
@@ -439,6 +444,23 @@
                     trackingNumber,
                     autoLabelStatus: firstFilled(order?.autoLabelStatus),
                 };
+            };
+
+            const hasLabelInfo = (labelInfo = {}) => {
+                return !!firstFilled(labelInfo?.labelUrl, labelInfo?.trackingNumber);
+            };
+
+            const waitForOrderLabelData = async (targetOrderId, maxAttempts = 5, delayMs = 1200) => {
+                for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                    const order = await fetchOrderById(targetOrderId);
+                    if (order && hasLabelInfo(getLabelInfoFromOrder(order))) {
+                        return order;
+                    }
+                    if (attempt < maxAttempts) {
+                        await new Promise((resolve) => setTimeout(resolve, delayMs));
+                    }
+                }
+                return null;
             };
 
             // Data extraction
@@ -735,19 +757,27 @@
                 sessionSummary?.autoLabelStatus
             ).toLowerCase();
 
-            // If redirect/session payload misses label fields, fetch the just-created
-            // order and recover label URL/tracking directly from backend order data.
-            if (!isKitShipping && (!existingLabelUrl || !existingTrackingNumber) && orderId && orderId !== 'Pending') {
+            // Always read the saved order record for label/tracking on confirmation load.
+            // Query/session payloads can be stale on some devices; DB is authoritative.
+            if (!isKitShipping && orderId && orderId !== 'Pending') {
                 if (!fetchedOrder) {
                     fetchedOrder = await fetchOrderById(orderId);
                 }
-                if (fetchedOrder) {
-                    const orderLabelInfo = getLabelInfoFromOrder(fetchedOrder);
-                    existingLabelUrl = existingLabelUrl || orderLabelInfo.labelUrl;
-                    existingTrackingNumber = existingTrackingNumber || orderLabelInfo.trackingNumber;
-                    if (!autoLabelStatus) {
-                        autoLabelStatus = String(orderLabelInfo.autoLabelStatus || '').toLowerCase();
+
+                let dbLabelOrder = fetchedOrder;
+                if (!dbLabelOrder || !hasLabelInfo(getLabelInfoFromOrder(dbLabelOrder))) {
+                    const polledOrder = await waitForOrderLabelData(orderId);
+                    if (polledOrder) {
+                        dbLabelOrder = polledOrder;
+                        fetchedOrder = fetchedOrder || polledOrder;
                     }
+                }
+
+                if (dbLabelOrder) {
+                    const orderLabelInfo = getLabelInfoFromOrder(dbLabelOrder);
+                    existingLabelUrl = firstFilled(orderLabelInfo.labelUrl, existingLabelUrl);
+                    existingTrackingNumber = firstFilled(orderLabelInfo.trackingNumber, existingTrackingNumber);
+                    autoLabelStatus = firstFilled(String(orderLabelInfo.autoLabelStatus || '').toLowerCase(), autoLabelStatus);
                 }
             }
             const labelWarning = firstFilled(
