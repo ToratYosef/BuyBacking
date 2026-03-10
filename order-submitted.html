@@ -26,9 +26,21 @@
         const referrer = document.referrer;
         const homepageUrl = '/index.html';
 
-        if (!referrer || !referrer.includes(expectedPathSegment)) {
+        // Allow opening this page even without a checkout referrer when an order context exists.
+        // This supports direct loads from email links, history, and manual navigation.
+        let hasOrderContext = false;
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const paramOrderId = String(params.get('id') || params.get('orderId') || '').trim();
+            const sessionSummaryRaw = sessionStorage.getItem('shcOrderSummary') || localStorage.getItem('shcOrderSummary');
+            const sessionSummary = sessionSummaryRaw ? JSON.parse(sessionSummaryRaw) : null;
+            const storedOrderId = String(sessionSummary?.id || sessionSummary?.orderId || '').trim();
+            hasOrderContext = !!(paramOrderId || storedOrderId);
+        } catch (_) {}
+
+        if ((!referrer || !referrer.includes(expectedPathSegment)) && !hasOrderContext) {
             window.location.replace(homepageUrl);
-            throw new Error("Unauthorized access attempt redirected."); 
+            throw new Error("Unauthorized access attempt redirected.");
         }
     </script>
     <!-- END IMMEDIATE ACCESS CONTROL CHECK -->
