@@ -3,7 +3,7 @@
 <head>
     <link rel="icon" href="/favicon/favicon.ico">
     <script>
-      window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
+      window.SHC_API_BASE_URL = "/server";
     </script>
 
   <!-- Google tag (gtag.js) -->
@@ -407,7 +407,7 @@
                 const safeId = String(targetOrderId || '').trim();
                 if (!safeId) return null;
                 try {
-                    const base = window.SHC_API_BASE_URL || '';
+                    const base = '/server';
                     const endpoint = `${base.replace(/\/$/, '')}/orders/${encodeURIComponent(safeId)}`;
                     const response = await fetch(endpoint, { method: 'GET' });
                     if (!response.ok) return null;
@@ -416,6 +416,29 @@
                     console.warn('Unable to fetch order details for submitted page', error);
                     return null;
                 }
+            };
+
+            const getLabelInfoFromOrder = (order = {}) => {
+                const labels = order && typeof order.shipEngineLabels === 'object' ? order.shipEngineLabels : {};
+                const preferredEntry = labels.ups || labels.usps || Object.values(labels).find((entry) => entry && typeof entry === 'object') || {};
+
+                const labelUrl = firstFilled(
+                    order?.labelDownloadUrl,
+                    order?.labelUrl,
+                    order?.uspsLabelUrl,
+                    order?.upsLabelUrl,
+                    preferredEntry?.downloadUrl
+                );
+                const trackingNumber = firstFilled(
+                    order?.trackingNumber,
+                    preferredEntry?.trackingNumber
+                );
+
+                return {
+                    labelUrl,
+                    trackingNumber,
+                    autoLabelStatus: firstFilled(order?.autoLabelStatus),
+                };
             };
 
             // Data extraction
@@ -457,12 +480,13 @@
 
             let rawItems = Array.isArray(sessionSummary?.items) ? sessionSummary.items : [];
             let normalizedItems = rawItems.map(normalizeItemFromOrder);
+            let fetchedOrder = null;
 
             const hasImageCandidate = (items = []) => items.some((item) => buildImageBaseCandidates(item).length > 0);
             const needsDetailFallback = !hasDetailedItems(normalizedItems);
             const needsImageEnrichment = !hasImageCandidate(normalizedItems);
             if (needsDetailFallback || needsImageEnrichment) {
-                const fetchedOrder = await fetchOrderById(orderId);
+                fetchedOrder = await fetchOrderById(orderId);
                 if (Array.isArray(fetchedOrder?.items) && fetchedOrder.items.length) {
                     const fetchedNormalizedItems = fetchedOrder.items.map(normalizeItemFromOrder);
                     if (needsDetailFallback) {
@@ -684,7 +708,7 @@
                 }
             };
 
-            const existingLabelUrl = firstFilled(
+            let existingLabelUrl = firstFilled(
                 getV('labelUrl'),
                 getV('labelDownloadUrl'),
                 getV('uspsLabelUrl'),
@@ -697,7 +721,7 @@
                 sessionSummary?.downloadUrl,
                 sessionSummary?.pdfUrl
             );
-            const existingTrackingNumber = firstFilled(
+            let existingTrackingNumber = firstFilled(
                 getV('trackingNumber'),
                 getV('uspsTrackingNumber'),
                 getV('upsTrackingNumber'),
@@ -706,10 +730,26 @@
                 sessionSummary?.uspsTrackingNumber,
                 sessionSummary?.upsTrackingNumber
             );
-            const autoLabelStatus = firstFilled(
+            let autoLabelStatus = firstFilled(
                 getV('autoLabelStatus'),
                 sessionSummary?.autoLabelStatus
             ).toLowerCase();
+
+            // If redirect/session payload misses label fields, fetch the just-created
+            // order and recover label URL/tracking directly from backend order data.
+            if (!isKitShipping && (!existingLabelUrl || !existingTrackingNumber) && orderId && orderId !== 'Pending') {
+                if (!fetchedOrder) {
+                    fetchedOrder = await fetchOrderById(orderId);
+                }
+                if (fetchedOrder) {
+                    const orderLabelInfo = getLabelInfoFromOrder(fetchedOrder);
+                    existingLabelUrl = existingLabelUrl || orderLabelInfo.labelUrl;
+                    existingTrackingNumber = existingTrackingNumber || orderLabelInfo.trackingNumber;
+                    if (!autoLabelStatus) {
+                        autoLabelStatus = String(orderLabelInfo.autoLabelStatus || '').toLowerCase();
+                    }
+                }
+            }
             const labelWarning = firstFilled(
                 getV('warnings'),
                 Array.isArray(sessionSummary?.warnings) ? sessionSummary.warnings.join(' ') : ''
