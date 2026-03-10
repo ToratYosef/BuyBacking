@@ -1458,13 +1458,23 @@
                 : [];
             const uniqueSubmitWarnings = [...new Set(submitWarnings)];
 
-            let labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || result.labelUrl || '';
-            let trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
+            let labelUrl = result.autoLabelDownloadUrl
+                || result.labelDownloadUrl
+                || result.labelUrl
+                || result.uspsLabelUrl
+                || result.upsLabelUrl
+                || '';
+            let trackingNumber = result.autoLabelTrackingNumber
+                || result.trackingNumber
+                || result.uspsTrackingNumber
+                || result.upsTrackingNumber
+                || '';
 
-            // For non-kit shipments (USPS/UPS), always wait on a label-service response
-            // before redirecting to the submitted page, even if backend auto-labeling
-            // reports a non-success status.
-            const shouldAttemptLegacyLabelGeneration = !isKit && !labelUrl;
+            // Avoid duplicate label requests: if submit-order already returned any
+            // auto-label response signal (status or warnings), do not call legacy
+            // label endpoints again.
+            const hasAutoLabelResponse = Boolean(autoLabelStatus) || uniqueSubmitWarnings.length > 0;
+            const shouldAttemptLegacyLabelGeneration = !isKit && !labelUrl && !hasAutoLabelResponse;
             if (shouldAttemptLegacyLabelGeneration) {
                 const generatedLabel = await attemptLabelGeneration({
                     orderId: submittedOrderId,
@@ -1524,6 +1534,8 @@
                     shipping: pref,
                     labelUrl,
                     trackingNumber,
+                    autoLabelStatus,
+                    warnings: uniqueSubmitWarnings,
                     email: shippingInfo.email,
                     phone: shippingInfo.phone,
                     payoutIdentifier: document.getElementById('payoutIdentifier').value,
