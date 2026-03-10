@@ -1082,8 +1082,17 @@ try {
 const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
 const orderId = result.orderId || 'N/A';
+const autoLabelStatus = typeof result.autoLabelStatus === 'string' ? result.autoLabelStatus.toLowerCase() : '';
+const submitWarnings = Array.isArray(result.warnings)
+? result.warnings.filter((warning) => typeof warning === 'string' && warning.trim())
+: [];
 
+if (autoLabelStatus === 'not_generated') {
+const warningText = submitWarnings.length ? ` ${submitWarnings.join(' ')}` : '';
+showPaymentMessage(`Order #${orderId} submitted, but the label was not auto-generated.${warningText} Please continue to the next step to generate your label.`, 'error');
+} else {
 showPaymentMessage(`Order #${orderId} submitted successfully! You will receive an email confirmation shortly.`, 'success');
+}
 
 // --- 4. Success Handling and Redirect Simulation ---
 

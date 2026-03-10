@@ -1409,10 +1409,17 @@
                 throw new Error('Order submitted but no orderId was returned.');
             }
 
+            const autoLabelStatus = typeof result.autoLabelStatus === 'string'
+                ? result.autoLabelStatus.toLowerCase()
+                : '';
+            const submitWarnings = Array.isArray(result.warnings)
+                ? result.warnings.filter((warning) => typeof warning === 'string' && warning.trim())
+                : [];
+
             let labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || result.labelUrl || '';
             let trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
-            if (!isKit) {
+            if (!isKit && autoLabelStatus !== 'not_generated' && !labelUrl) {
                 const generatedLabel = await attemptLabelGeneration({
                     orderId: submittedOrderId,
                     isFasterShipping
@@ -1438,6 +1445,8 @@
             successUrl.searchParams.set('zip', shippingInfo.zipCode);
             successUrl.searchParams.set('payMethod', method);
             successUrl.searchParams.set('shipping', pref);
+            if (autoLabelStatus) successUrl.searchParams.set('autoLabelStatus', autoLabelStatus);
+            if (submitWarnings.length) successUrl.searchParams.set('warnings', submitWarnings.join(' | '));
             
             if (labelUrl) successUrl.searchParams.set('labelUrl', labelUrl);
             if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);

@@ -696,6 +696,14 @@
                 sessionSummary?.trackingNumber,
                 sessionSummary?.autoLabelTrackingNumber
             );
+            const autoLabelStatus = firstFilled(
+                getV('autoLabelStatus'),
+                sessionSummary?.autoLabelStatus
+            ).toLowerCase();
+            const labelWarning = firstFilled(
+                getV('warnings'),
+                Array.isArray(sessionSummary?.warnings) ? sessionSummary.warnings.join(' ') : ''
+            );
 
             if (isKitShipping) {
                 kitCard.classList.remove('hidden');
@@ -705,7 +713,10 @@
                 kitCard.classList.add('hidden');
                 await showLabelResult({
                     labelUrl: existingLabelUrl,
-                    trackingNumber: existingTrackingNumber
+                    trackingNumber: existingTrackingNumber,
+                    labelWarning: autoLabelStatus === 'not_generated'
+                        ? (labelWarning || 'Label auto-generation is still pending. Please generate your label in the next step.')
+                        : labelWarning
                 });
             }
 
