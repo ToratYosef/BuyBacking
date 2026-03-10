@@ -290,19 +290,19 @@
             <h2 class="text-xl font-bold mb-6 border-b pb-2">1. Shipping Preference</h2>
             <div class="shipping-options-row">
                 <div>
-                    <input type="radio" id="no_label_customer_send" name="shipping_preference" value="no_label_customer_send" class="option-pill">
-                    <label for="no_label_customer_send" class="option-label">
-                        <i class="fa-solid fa-hand text-3xl text-slate-700 mb-2"></i>
-                        <span class="font-bold">No Label - Customer Send</span>
-                        <span class="text-xs text-slate-500 mt-1">Use your own shipping method</span>
+                    <input type="radio" id="regular_shipping" name="shipping_preference" value="regular_shipping" class="option-pill">
+                    <label for="regular_shipping" class="option-label">
+                        <i class="fa-solid fa-envelope text-3xl text-green-600 mb-2"></i>
+                        <span class="font-bold">Regular Shipping</span>
+                        <span class="text-xs text-green-600 mt-1 font-semibold">Free</span>
                     </label>
                 </div>
                 <div>
-                    <input type="radio" id="email_label" name="shipping_preference" value="email_label" class="option-pill">
-                    <label for="email_label" class="option-label">
-                        <i class="fa-solid fa-envelope text-3xl text-green-600 mb-2"></i>
-                        <span class="font-bold">Email Me a Label</span>
-                        <span class="text-xs text-green-600 mt-1 font-semibold">Free</span>
+                    <input type="radio" id="faster_shipping" name="shipping_preference" value="faster_shipping" class="option-pill">
+                    <label for="faster_shipping" class="option-label">
+                        <i class="fa-solid fa-truck-fast text-3xl text-amber-600 mb-2"></i>
+                        <span class="font-bold">Faster Shipping Option</span>
+                        <span class="text-xs text-amber-700 mt-1 font-semibold">-$5.00</span>
                     </label>
                 </div>
                 <div>
@@ -432,9 +432,9 @@
             <div id="summary-content" class="space-y-4">
                 <div id="cart-items"></div>
                 <div id="cart-empty" class="text-sm text-slate-500 hidden">No devices added yet.</div>
-                <div id="kit-fee-row" class="flex justify-between hidden text-red-600">
-                    <span class="text-sm">Shipping Kit Fee</span>
-                    <span class="text-sm font-bold">-$25.00</span>
+                <div id="shipping-fee-row" class="flex justify-between hidden text-red-600">
+                    <span id="shipping-fee-label" class="text-sm">Shipping Fee</span>
+                    <span id="shipping-fee-value" class="text-sm font-bold">-$0.00</span>
                 </div>
                 <div class="pt-4 mt-4 border-t flex justify-between items-end">
                     <span class="text-slate-800 font-bold">Total Payout</span>
@@ -566,7 +566,10 @@
 
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-            throw new Error(payload?.error || payload?.message || `Request failed (${response.status})`);
+            const error = new Error(payload?.error || payload?.message || `Request failed (${response.status})`);
+            error.status = response.status;
+            error.payload = payload;
+            throw error;
         }
         return payload;
     };
@@ -822,27 +825,36 @@
         return true;
     };
     const updateSummary = () => {
-        const isKit = getSelectedShippingPreference() === 'ship_kit';
-        const fee = isKit ? 25 : 0;
+        const selectedShipping = getSelectedShippingPreference();
+        const isKit = selectedShipping === 'ship_kit';
+        const isFasterShipping = selectedShipping === 'faster_shipping';
+        const fee = isKit ? 25 : (isFasterShipping ? 5 : 0);
         const total = cartItems.reduce((sum, item) => {
             const normalized = normalizeCartItem(item);
             return sum + (normalized.unitPrice * normalized.qty);
         }, 0);
-        document.getElementById('kit-fee-row').classList.toggle('hidden', !isKit);
+        const shippingFeeRow = document.getElementById('shipping-fee-row');
+        const shippingFeeLabel = document.getElementById('shipping-fee-label');
+        const shippingFeeValue = document.getElementById('shipping-fee-value');
+        shippingFeeRow.classList.toggle('hidden', fee <= 0);
+        if (fee > 0) {
+            shippingFeeLabel.textContent = isKit ? 'Shipping Kit Fee' : 'Faster Shipping Fee';
+            shippingFeeValue.textContent = `-$${fee.toFixed(2)}`;
+        }
         document.getElementById('sum-total').textContent = `$${Math.max(total - fee, 0).toFixed(2)}`;
     };
     const normalizeZip = (value) => value.replace(/\D/g, '').slice(0, 9);
     const isZipValid = () => zipInput.value.length >= 5;
     const updateZipUI = ({ showError = false } = {}) => {
         const zipError = document.getElementById('zip-error');
-        if (showError && !(isCustomerSendSelected() || isZipValid())) {
+        if (showError && !isZipValid()) {
             zipInput.classList.add('error-highlight');
             zipError.style.display = 'block';
-        } else if (isCustomerSendSelected() || isZipValid()) {
+        } else if (isZipValid()) {
             zipInput.classList.remove('error-highlight');
             zipError.style.display = 'none';
         }
-        submitOrderBtn.disabled = !(isCustomerSendSelected() || isZipValid());
+        submitOrderBtn.disabled = !isZipValid();
     };
     const clearAddressVerifyError = () => {
         addressVerifyError.style.display = 'none';
@@ -864,44 +876,15 @@
         }
     };
     const getSelectedShippingPreference = () => document.querySelector('input[name="shipping_preference"]:checked')?.value || '';
-    const isCustomerSendSelected = () => getSelectedShippingPreference() === 'no_label_customer_send';
-    const toggleAddressInputsEnabled = (isEnabled) => {
-        const ids = ['streetAddress', 'addressUnit', 'city', 'state', 'zip', 'country'];
-        ids.forEach((id) => {
-            const field = document.getElementById(id);
-            if (!field) return;
-            field.disabled = !isEnabled;
-            if (!isEnabled) {
-                field.dataset.prevAutocomplete = field.getAttribute('autocomplete') || '';
-                field.setAttribute('autocomplete', 'off');
-                if (id !== 'country') field.value = '';
-                if (id === 'country') field.value = 'US';
-            }
-        });
-
-        ids.forEach((id) => {
-            const field = document.getElementById(id);
-            if (!field || !isEnabled) return;
-            const prev = field.dataset.prevAutocomplete;
-            if (prev) field.setAttribute('autocomplete', prev);
-            else field.removeAttribute('autocomplete');
-            delete field.dataset.prevAutocomplete;
-        });
-    };
     const updateShippingPreferenceUI = () => {
         const selected = getSelectedShippingPreference();
-        const customerSend = selected === 'no_label_customer_send';
         if (shippingPreferenceError) shippingPreferenceError.style.display = selected ? 'none' : 'block';
         if (addressSectionTitle) {
-            addressSectionTitle.textContent = customerSend
-                ? '2. Contact Information'
-                : '2. Contact & Shipping Details';
+            addressSectionTitle.textContent = '2. Contact & Shipping Details';
         }
         document.querySelectorAll('.address-required-field').forEach((el) => {
-            el.classList.toggle('hidden', customerSend);
+            el.classList.remove('hidden');
         });
-        toggleAddressInputsEnabled(!customerSend);
-        if (customerSend) clearAddressVerifyError();
         updateZipUI();
     };
     const buildShippingInfo = () => ({
@@ -1310,9 +1293,10 @@
             }
 
             const isKit = pref === 'ship_kit';
+            const isFasterShipping = pref === 'faster_shipping';
             const shippingPreferenceLabelMap = {
-                no_label_customer_send: 'No Label - Customer Send',
-                email_label: 'Email Label Requested',
+                regular_shipping: 'Regular Shipping',
+                faster_shipping: 'Faster Shipping',
                 ship_kit: 'Shipping Kit Requested'
             };
             const totalQty = cartItems.reduce((sum, item) => sum + item.qty, 0);
@@ -1366,8 +1350,9 @@
                 items: itemsPayload,
                 totalPayout: finalPayout,
                 estimatedQuote: finalPayout,
-                shippingPreference: shippingPreferenceLabelMap[pref] || 'Email Label Requested',
+                shippingPreference: shippingPreferenceLabelMap[pref] || 'Regular Shipping',
                 shippingKitFee: isKit ? 25 : 0,
+                fasterShippingFee: isFasterShipping ? 5 : 0,
                 shippingInfo: shippingInfo,
                 paymentMethod: method,
                 paymentIdentifier: document.getElementById('payoutIdentifier').value,
@@ -1376,11 +1361,16 @@
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
 
-            const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || '';
+            const submittedOrderId = result.orderId || result.id || result.order?.id;
+            if (!submittedOrderId) {
+                throw new Error('Order submitted but no orderId was returned.');
+            }
+
+            const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || result.labelUrl || '';
             const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
             const successUrl = new URL('/order-submitted.html', window.location.origin);
-            successUrl.searchParams.set('id', result.orderId);
+            successUrl.searchParams.set('id', submittedOrderId);
             successUrl.searchParams.set('price', finalPayout.toFixed(2));
             successUrl.searchParams.set('device', cartItems.length > 1 ? 'Multiple devices' : cartItems[0].modelName);
             successUrl.searchParams.set('qty', totalQty);
@@ -1409,7 +1399,7 @@
                     imageUrl: item.imageUrl || item.image || item.thumbnail || ''
                 }));
                 const orderSummaryPayload = {
-                    id: result.orderId,
+                    id: submittedOrderId,
                     price: finalPayout.toFixed(2),
                     device: cartItems.length > 1 ? 'Multiple devices' : cartItems[0].modelName,
                     qty: totalQty,
@@ -1449,7 +1439,7 @@
         } catch (e) {
             alert("Server error.");
         } finally {
-            btn.disabled = !(isCustomerSendSelected() || isZipValid());
+            btn.disabled = !isZipValid();
             btn.textContent = "SUBMIT MY TRADE-IN";
         }
     };
@@ -1529,10 +1519,7 @@
     updatePaymentFields();
 
     submitOrderBtn.onclick = async () => {
-        const customerSend = isCustomerSendSelected();
-        const requiredIds = customerSend
-            ? ['fullName', 'phone', 'email', 'payoutIdentifier']
-            : ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
         let hasError = false;
         let firstErrorEl = null;
 
@@ -1571,7 +1558,7 @@
             }
         });
 
-        if (!customerSend && !isZipValid()) {
+        if (!isZipValid()) {
             updateZipUI({ showError: true });
             hasError = true;
             if (!firstErrorEl) firstErrorEl = zipInput;
@@ -1596,21 +1583,9 @@
 
         const shippingInfo = buildShippingInfo();
         submitOrderBtn.disabled = true;
-        submitOrderBtn.textContent = customerSend ? "Submitting order..." : "Validating Address...";
+        submitOrderBtn.textContent = "Validating Address...";
 
         try {
-            if (customerSend) {
-                shippingInfo.streetAddress = '';
-                shippingInfo.addressUnit = '';
-                shippingInfo.city = '';
-                shippingInfo.state = '';
-                shippingInfo.zip = '';
-                shippingInfo.zipCode = '';
-                shippingInfo.country = 'US';
-                await executeOrderSubmission(shippingInfo);
-                return;
-            }
-
             const validation = await verifyAddress(shippingInfo);
             const status = (validation.status || '').toLowerCase();
             const matchedAddress = validation.matchedAddress || validation.matched_address;
@@ -1642,7 +1617,7 @@
             showAddressVerifyError("Please enter a valid shipping address and check for any typos.");
         }
 
-        submitOrderBtn.disabled = !(isCustomerSendSelected() || isZipValid());
+        submitOrderBtn.disabled = !isZipValid();
         submitOrderBtn.textContent = "SUBMIT MY TRADE-IN";
     };
 
@@ -1663,14 +1638,14 @@
 
     closeAddressModal.addEventListener('click', () => {
         hideSuggestionModal();
-        submitOrderBtn.disabled = !(isCustomerSendSelected() || isZipValid());
+        submitOrderBtn.disabled = !isZipValid();
         submitOrderBtn.textContent = "SUBMIT MY TRADE-IN";
     });
 
     addressSuggestionModal.addEventListener('click', (event) => {
         if (event.target === addressSuggestionModal) {
             hideSuggestionModal();
-            submitOrderBtn.disabled = !(isCustomerSendSelected() || isZipValid());
+            submitOrderBtn.disabled = !isZipValid();
             submitOrderBtn.textContent = "SUBMIT MY TRADE-IN";
         }
     });
