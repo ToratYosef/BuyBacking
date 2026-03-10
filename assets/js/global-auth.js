@@ -138,6 +138,7 @@ if (!window[INIT_FLAG]) {
   };
 
   const bindInfoModals = () => {
+    ensureStyle();
     ensureInfoModals();
     const linkMap = [
       ["aboutUsLink", "aboutUsModal"],

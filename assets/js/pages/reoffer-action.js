@@ -23,34 +23,6 @@ const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 let countdownInterval = null;
 let pendingAction = null;
 
-const redirectToTrackOrder = () => {
-const params = new URLSearchParams(window.location.search);
-const target = new URL('https://secondhandcell.com/track-order.html');
-const orderId = params.get('orderId');
-const email = params.get('email');
-const deviceKey = params.get('deviceKey');
-const action = params.get('action');
-
-if (orderId) {
-target.searchParams.set('orderId', orderId);
-}
-if (email) {
-target.searchParams.set('email', email);
-}
-if (deviceKey) {
-target.searchParams.set('deviceKey', deviceKey);
-}
-if (action) {
-target.searchParams.set('action', action);
-}
-target.searchParams.set('fromReofferLink', '1');
-target.searchParams.set('fromEmailLink', '1');
-target.searchParams.set('scrollToReoffer', '1');
-
-window.location.replace(target.toString());
-};
-
-redirectToTrackOrder();
 
 const loadingState = document.getElementById('loadingState');
 const offerDetailsState = document.getElementById('offerDetailsState');
@@ -60,6 +32,9 @@ const confirmationMessage = document.getElementById('confirmationMessage');
 const orderIdDisplay = document.getElementById('orderIdDisplay');
 const newOfferPrice = document.getElementById('newOfferPrice');
 const reofferReason = document.getElementById('reofferReason');
+const reofferComments = document.getElementById('reofferComments');
+const oldOfferPrice = document.getElementById('oldOfferPrice');
+const savingsAmount = document.getElementById('savingsAmount');
 const buyerNameSpan = document.getElementById('buyerName');
 const errorMessage = document.getElementById('errorMessage');
 const acceptOfferBtn = document.getElementById('acceptOfferBtn');
@@ -130,11 +105,48 @@ return timestamp.toDate().getTime();
 return null;
 };
 
-const getAutoAcceptDeadline = (order) => {
-if (!order?.reOffer) return null;
-const explicit = extractTimestampMillis(order.reOffer.autoAcceptDate);
+
+const formatMoney = (amount) => {
+if (!Number.isFinite(Number(amount))) return 'N/A';
+return `$${Number(amount).toFixed(2)}`;
+};
+
+const firstValidAmount = (...values) => {
+for (const value of values) {
+const n = Number(value);
+if (Number.isFinite(n)) return n;
+}
+return null;
+};
+
+const resolveOriginalOfferAmount = (order, offer, selectedDeviceKey) => {
+const orderItems = Array.isArray(order?.items) ? order.items : [];
+const matchedItem = selectedDeviceKey
+? orderItems.find((item) => String(item?.deviceKey || item?.id || '').trim() === String(selectedDeviceKey).trim())
+: orderItems[0];
+
+return firstValidAmount(
+offer?.oldPrice,
+offer?.originalPrice,
+matchedItem?.originalQuote,
+matchedItem?.estimatedQuote,
+matchedItem?.quote,
+order?.originalQuote,
+order?.estimatedQuote,
+order?.totalPayout
+);
+};
+
+const getAutoAcceptDeadline = (order, selectedDeviceKey) => {
+const deviceOffer = selectedDeviceKey
+? (order?.reOfferByDevice?.[selectedDeviceKey] || order?.reofferByDevice?.[selectedDeviceKey] || null)
+: null;
+const sourceOffer = deviceOffer || order?.reOffer || null;
+
+if (!sourceOffer) return null;
+const explicit = extractTimestampMillis(sourceOffer.autoAcceptDate);
 if (explicit) return explicit;
-const created = extractTimestampMillis(order.reOffer.createdAt);
+const created = extractTimestampMillis(sourceOffer.createdAt);
 return created ? created + AUTO_ACCEPT_WINDOW_MS : null;
 };
 
@@ -189,7 +201,7 @@ replySection.classList.add('hidden');
 clearInterval(countdownInterval);
 
 try {
-const currentOrderData = await apiGet(`/orders/${orderId}`, { authRequired: true });
+const currentOrderData = await apiGet(`/orders/${orderId}`, { authRequired: false });
 const deviceOffer = selectedDeviceKey
 ? (currentOrderData?.reOfferByDevice?.[selectedDeviceKey] || currentOrderData?.reofferByDevice?.[selectedDeviceKey] || null)
 : null;
@@ -199,13 +211,25 @@ const deviceStatus = selectedDeviceKey
 
 orderIdDisplay.textContent = `#${orderId}`;
 const offerToDisplay = deviceOffer || currentOrderData.reOffer || null;
-newOfferPrice.textContent = `$${offerToDisplay?.newPrice?.toFixed(2) || currentOrderData.estimatedQuote?.toFixed(2) || 'N/A'}`;
-reofferReason.textContent = offerToDisplay?.reasons?.join(', ') || 'N/A';
+const newOfferAmount = firstValidAmount(offerToDisplay?.newPrice, currentOrderData?.estimatedQuote);
+const originalAmount = resolveOriginalOfferAmount(currentOrderData, offerToDisplay, selectedDeviceKey);
+
+newOfferPrice.textContent = formatMoney(newOfferAmount);
+oldOfferPrice.textContent = formatMoney(originalAmount);
+
+const savings = Number.isFinite(newOfferAmount) && Number.isFinite(originalAmount)
+? Math.max(0, originalAmount - newOfferAmount)
+: null;
+savingsAmount.textContent = savings === null ? 'N/A' : formatMoney(savings);
+
+const reasons = Array.isArray(offerToDisplay?.reasons) ? offerToDisplay.reasons.filter(Boolean) : [];
+reofferReason.textContent = reasons.length ? reasons.join(', ') : 'No reason was provided.';
+reofferComments.textContent = offerToDisplay?.comments || 'No additional notes provided by our team.';
 buyerNameSpan.textContent = currentOrderData.shippingInfo?.fullName || 'Customer';
 
 loadingState.classList.add('hidden');
 
-const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData);
+const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData, selectedDeviceKey);
 
 if ((String(deviceStatus) === 're-offered-pending') && autoAcceptDeadline) {
 offerDetailsState.classList.remove('hidden');
@@ -219,7 +243,7 @@ const updateCountdown = () => {
 const timeRemaining = autoAcceptDeadline - Date.now();
 if (timeRemaining <= 0) {
 clearInterval(countdownInterval);
-countdownTimer.textContent = 'Offer expired, auto-accepted.';
+countdownTimer.textContent = 'Offer expired and has been auto-accepted.';
 location.reload();
 } else {
 countdownTimer.textContent = formatTimeRemaining(timeRemaining);
@@ -263,7 +287,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
 const deviceKey = urlParams.get('deviceKey');
 const actionEndpoint = `/${actionType}-action`;
-await apiPost(actionEndpoint, { orderId: orderId, deviceKey: deviceKey || null }, { authRequired: true });
+await apiPost(actionEndpoint, { orderId: orderId, deviceKey: deviceKey || null }, { authRequired: false });
 
 await loadOfferDetails();
 
@@ -278,33 +302,33 @@ countdownContainer.classList.remove('hidden');
 }
 };
 
-acceptOfferBtn.addEventListener('click', () => {
+acceptOfferBtn?.addEventListener('click', () => {
 pendingAction = 'accept-offer';
 confirmMessage.textContent = 'Do you want to accept the new offer?';
 confirmPrompt.classList.remove('hidden');
 actionButtonsDiv.classList.add('hidden');
 });
 
-returnPhoneBtn.addEventListener('click', () => {
+returnPhoneBtn?.addEventListener('click', () => {
 pendingAction = 'return-phone';
 confirmMessage.textContent = 'Do you want to decline the offer and have your phone returned?';
 confirmPrompt.classList.remove('hidden');
 actionButtonsDiv.classList.add('hidden');
 });
 
-confirmYesBtn.addEventListener('click', () => {
+confirmYesBtn?.addEventListener('click', () => {
 if (pendingAction) {
 handleAction(pendingAction);
 }
 });
 
-confirmCancelBtn.addEventListener('click', () => {
+confirmCancelBtn?.addEventListener('click', () => {
 confirmPrompt.classList.add('hidden');
 actionButtonsDiv.classList.remove('hidden');
 pendingAction = null;
 });
 
-replyForm.addEventListener('submit', async (event) => {
+replyForm?.addEventListener('submit', async (event) => {
 event.preventDefault();
 const message = replyMessageInput.value.trim();
 if (!message) {
@@ -320,7 +344,7 @@ try {
 const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
 const replyBackendUrl = `/orders/${orderId}/add-buyer-reply`;
-await apiPost(replyBackendUrl, { replyMessage: message }, { authRequired: true });
+await apiPost(replyBackendUrl, { replyMessage: message }, { authRequired: false });
 replyStatus.textContent = 'Reply sent successfully!';
 replyStatus.style.color = 'green';
 replyMessageInput.value = '';
