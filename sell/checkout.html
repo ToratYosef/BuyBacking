@@ -1444,23 +1444,53 @@
             };
 
             const result = await apiPost('/submit-order', orderData, { authRequired: false });
+            const readSubmitResultValue = (...keys) => {
+                const sources = [result, result?.order, result?.data, result?.payload, result?.shippingLabel, result?.label];
+                for (const source of sources) {
+                    if (!source || typeof source !== 'object') continue;
+                    for (const key of keys) {
+                        const value = source[key];
+                        if (value !== undefined && value !== null && String(value).trim() !== '') {
+                            return value;
+                        }
+                    }
+                }
+                return '';
+            };
 
-            const submittedOrderId = result.orderId || result.id || result.order?.id;
+            const submittedOrderId = readSubmitResultValue('orderId', 'id') || result.order?.id;
             if (!submittedOrderId) {
                 throw new Error('Order submitted but no orderId was returned.');
             }
 
-            const autoLabelStatus = typeof result.autoLabelStatus === 'string'
-                ? result.autoLabelStatus.toLowerCase()
-                : '';
-            const submitWarnings = Array.isArray(result.warnings)
-                ? result.warnings.filter((warning) => typeof warning === 'string' && warning.trim())
-                : [];
+            const autoLabelStatus = String(readSubmitResultValue('autoLabelStatus')).toLowerCase();
+            const rawWarnings = readSubmitResultValue('warnings');
+            const submitWarnings = Array.isArray(rawWarnings)
+                ? rawWarnings.filter((warning) => typeof warning === 'string' && warning.trim())
+                : (typeof rawWarnings === 'string' && rawWarnings.trim() ? [rawWarnings.trim()] : []);
+            const uniqueSubmitWarnings = [...new Set(submitWarnings)];
 
-            let labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || result.labelUrl || '';
-            let trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
+            let labelUrl = readSubmitResultValue(
+                'autoLabelDownloadUrl',
+                'labelDownloadUrl',
+                'labelUrl',
+                'uspsLabelUrl',
+                'upsLabelUrl',
+                'downloadUrl',
+                'pdfUrl'
+            );
+            let trackingNumber = readSubmitResultValue(
+                'autoLabelTrackingNumber',
+                'trackingNumber',
+                'uspsTrackingNumber',
+                'upsTrackingNumber'
+            );
 
-            const shouldAttemptLegacyLabelGeneration = !isKit && !labelUrl && !autoLabelStatus;
+            // Avoid duplicate label requests: if submit-order already returned any
+            // auto-label response signal (status or warnings), do not call legacy
+            // label endpoints again.
+            const hasAutoLabelResponse = Boolean(autoLabelStatus) || uniqueSubmitWarnings.length > 0;
+            const shouldAttemptLegacyLabelGeneration = !isKit && !labelUrl && !hasAutoLabelResponse;
             if (shouldAttemptLegacyLabelGeneration) {
                 const generatedLabel = await attemptLabelGeneration({
                     orderId: submittedOrderId,
@@ -1488,7 +1518,7 @@
             successUrl.searchParams.set('payMethod', method);
             successUrl.searchParams.set('shipping', pref);
             if (autoLabelStatus) successUrl.searchParams.set('autoLabelStatus', autoLabelStatus);
-            if (submitWarnings.length) successUrl.searchParams.set('warnings', submitWarnings.join(' | '));
+            if (uniqueSubmitWarnings.length) successUrl.searchParams.set('warnings', uniqueSubmitWarnings.join(' | '));
             
             if (labelUrl) successUrl.searchParams.set('labelUrl', labelUrl);
             if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);
@@ -1520,6 +1550,8 @@
                     shipping: pref,
                     labelUrl,
                     trackingNumber,
+                    autoLabelStatus,
+                    warnings: uniqueSubmitWarnings,
                     email: shippingInfo.email,
                     phone: shippingInfo.phone,
                     payoutIdentifier: document.getElementById('payoutIdentifier').value,
