@@ -1306,6 +1306,7 @@
         const pref = getSelectedShippingPreference();
         const method = getSelectedPaymentMethod();
         const finalPayout = parseFloat(document.getElementById('sum-total').textContent.replace('$', ''));
+        const labelCarrier = pref === 'faster_shipping' ? 'ups' : 'usps';
 
         shippingInfo.shippingPreference = pref;
         const progressEmail = normalizeEmail(shippingInfo.email || document.getElementById('email')?.value || '');
@@ -1390,9 +1391,13 @@
                 totalPayout: finalPayout,
                 estimatedQuote: finalPayout,
                 shippingPreference: shippingPreferenceLabelMap[pref] || 'Regular Shipping',
+                labelCarrier,
                 shippingKitFee: isKit ? 25 : 0,
                 fasterShippingFee: isFasterShipping ? 5 : 0,
-                shippingInfo: shippingInfo,
+                shippingInfo: {
+                    ...shippingInfo,
+                    labelCarrier
+                },
                 paymentMethod: method,
                 paymentIdentifier: document.getElementById('payoutIdentifier').value,
                 createdAt: new Date().toISOString()
