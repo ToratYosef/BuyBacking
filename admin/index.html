@@ -3572,6 +3572,7 @@
       ];
       const pct = Math.round((state.qcStep / steps.length) * 100);
       function step1() {
+        const locked = state.qcData.isLocked === "yes";
         const customerQuality = currentItem.condition || order.condition || 'N/A';
         const customerCarrier = currentItem.carrier || currentItem.lock || order.carrier || order.lock || 'N/A';
         return `
@@ -3583,6 +3584,13 @@
               <p class="text-sm text-slate-800"><strong>Quality:</strong> ${esc(customerQuality)}</p>
               <p class="text-sm text-slate-800"><strong>Carrier:</strong> ${esc(customerCarrier)}</p>
             </div>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <div class="flex items-center gap-3">
+                <i data-lucide="shield-check" class="${locked ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
+                <span class="text-sm font-medium text-slate-900">Screen lock / passcode active?</span>
+              </div>
+              <input id="qcIsLocked" type="checkbox" ${locked ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
+            </label>
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Is this the proper device (model)?</label>
               <div class="flex gap-4">
@@ -3613,33 +3621,40 @@
                 </div>
               </div>
             ` : ""}
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Is the storage / gigabyte amount correct?</label>
-              <div class="flex gap-4">
-                <label class="flex items-center gap-2 border p-3 rounded-lg flex-1 cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="storageMatch" value="yes" ${state.qcData.storageMatch === "yes" ? "checked" : ""} class="text-indigo-600" />
-                  <span class="text-sm font-medium">Yes</span>
-                </label>
-                <label class="flex items-center gap-2 border p-3 rounded-lg flex-1 cursor-pointer hover:bg-slate-50">
-                  <input type="radio" name="storageMatch" value="no" ${state.qcData.storageMatch === "no" ? "checked" : ""} class="text-indigo-600" />
-                  <span class="text-sm font-medium">No</span>
-                </label>
+            ${locked ? `
+              <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p class="text-xs font-semibold text-amber-700 uppercase">Verification paused</p>
+                <p class="text-sm text-amber-900 mt-1">Storage and carrier checks are deferred until the passcode is removed.</p>
               </div>
-              ${state.qcData.storageMatch === "no" ? `
-                <div class="mt-3">
-                  <label class="block text-xs font-semibold text-slate-500 mb-1">Actual Storage / GB</label>
-                  <select id="qcActualStorage" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
-                    ${(state.qcStorageCache?.[`${state.qcData.actualBrand}::${state.qcData.actualModelId}`] || []).map(v => `<option value="${esc(v)}" ${state.qcData.actualStorage === v ? 'selected' : ''}>${esc(v)}</option>`).join('') || '<option value="">Select storage</option>'}
-                  </select>
+            ` : `
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2">Is the storage / gigabyte amount correct?</label>
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-2 border p-3 rounded-lg flex-1 cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="storageMatch" value="yes" ${state.qcData.storageMatch === "yes" ? "checked" : ""} class="text-indigo-600" />
+                    <span class="text-sm font-medium">Yes</span>
+                  </label>
+                  <label class="flex items-center gap-2 border p-3 rounded-lg flex-1 cursor-pointer hover:bg-slate-50">
+                    <input type="radio" name="storageMatch" value="no" ${state.qcData.storageMatch === "no" ? "checked" : ""} class="text-indigo-600" />
+                    <span class="text-sm font-medium">No</span>
+                  </label>
                 </div>
-              ` : ""}
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Carrier status</label>
-              <select id="qcCarrier" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
-                ${["unlocked","att","tmobile","verizon","other"].map(v => `<option value="${v}" ${state.qcData.carrier === v ? "selected" : ""}>${v === "unlocked" ? "Unlocked" : v === "att" ? "AT&T" : v === "tmobile" ? "T-Mobile" : v === "verizon" ? "Verizon" : "Other"}</option>`).join("")}
-              </select>
-            </div>
+                ${state.qcData.storageMatch === "no" ? `
+                  <div class="mt-3">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Actual Storage / GB</label>
+                    <select id="qcActualStorage" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                      ${(state.qcStorageCache?.[`${state.qcData.actualBrand}::${state.qcData.actualModelId}`] || []).map(v => `<option value="${esc(v)}" ${state.qcData.actualStorage === v ? 'selected' : ''}>${esc(v)}</option>`).join('') || '<option value="">Select storage</option>'}
+                    </select>
+                  </div>
+                ` : ""}
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 mb-2">Carrier status</label>
+                <select id="qcCarrier" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
+                  ${["unlocked","att","tmobile","verizon","other"].map(v => `<option value="${v}" ${state.qcData.carrier === v ? "selected" : ""}>${v === "unlocked" ? "Unlocked" : v === "att" ? "AT&T" : v === "tmobile" ? "T-Mobile" : v === "verizon" ? "Verizon" : "Other"}</option>`).join("")}
+                </select>
+              </div>
+            `}
           </div>
         `;
       }
@@ -3692,20 +3707,12 @@
         `;
       }
       function step3() {
-        const locked = state.qcData.isLocked === "yes";
         const fmi = state.qcData.hasFmi === "yes";
         const balance = state.qcData.hasBalance === "yes";
         const blacklisted = state.qcData.hasBlacklisted === "yes";
         return `
           <div class="space-y-4">
             <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=900&q=60" alt="Phone lock security" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
-            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <div class="flex items-center gap-3">
-                <i data-lucide="shield-check" class="${locked ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
-                <span class="text-sm font-medium text-slate-900">Screen lock / passcode active?</span>
-              </div>
-              <input id="qcIsLocked" type="checkbox" ${locked ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
-            </label>
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
                 <i data-lucide="key-round" class="${fmi ? "text-amber-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
