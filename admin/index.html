@@ -3501,15 +3501,6 @@
         }
         groups.tracking.push({ label: "Delete Order", action: "deleteOrder", class: "text-white bg-rose-600 hover:bg-rose-700" });
 
-        // Abandoned checkout campaign QA trigger (UI hook in admin/index.html)
-        if (!isNoLabelCustomerSend) {
-          groups.admin.push({
-            label: "Send 5 Abandoned Checkout Test Emails",
-            id: "open-abandoned-sequence-modal-btn",
-            class: "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100",
-          });
-        }
-
         // --- Render ---
         const renderBtn = (b) => `
           <button ${b.id ? `id="${b.id}"` : ""} ${b.action ? `data-action="${b.action}"` : ""} ${b.options ? `data-action-options="${esc(JSON.stringify(b.options))}"` : ""} class="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-all ${b.fullWidth ? "col-span-full" : ""} ${b.class || "bg-white border-slate-200 text-slate-700"}">
@@ -3586,12 +3577,15 @@
       const pct = Math.round((state.qcStep / steps.length) * 100);
       function step1() {
         const locked = state.qcData.isLocked === "yes";
+        const fmi = state.qcData.hasFmi === "yes";
+        const balance = state.qcData.hasBalance === "yes";
+        const blacklisted = state.qcData.hasBlacklisted === "yes";
         return `
           <div class="space-y-4">
             <img src="https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=60" alt="Phone inspection" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
             <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
-              <p class="text-sm text-slate-700">Start QC by checking if the device is currently passcode/screen locked.</p>
-              <p class="text-xs text-slate-500 mt-1">If locked, use <strong>Send Email</strong> to notify the customer immediately. If not locked, continue to the next QC question.</p>
+              <p class="text-sm text-slate-700">Start QC with lock/security checks.</p>
+              <p class="text-xs text-slate-500 mt-1">If any check below is selected, click <strong>Send Emails</strong> to notify the customer immediately. If none are selected, continue to the next QC question.</p>
             </div>
             <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
               <div class="flex items-center gap-3">
@@ -3599,6 +3593,27 @@
                 <span class="text-sm font-medium text-slate-900">Screen lock / passcode active?</span>
               </div>
               <input id="qcIsLocked" type="checkbox" ${locked ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
+            </label>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <div class="flex items-center gap-3">
+                <i data-lucide="key-round" class="${fmi ? "text-amber-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
+                <span class="text-sm font-medium text-slate-900">FMI / iCloud / FRP / Google lock active?</span>
+              </div>
+              <input id="qcHasFmi" type="checkbox" ${fmi ? "checked" : ""} class="h-5 w-5 accent-amber-500" />
+            </label>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <div class="flex items-center gap-3">
+                <i data-lucide="dollar-sign" class="${balance ? "text-amber-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
+                <span class="text-sm font-medium text-slate-900">Finance / balance owed?</span>
+              </div>
+              <input id="qcHasBalance" type="checkbox" ${balance ? "checked" : ""} class="h-5 w-5 accent-amber-500" />
+            </label>
+            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
+              <div class="flex items-center gap-3">
+                <i data-lucide="shield-alert" class="${blacklisted ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
+                <span class="text-sm font-medium text-slate-900">Blacklisted / lost / stolen?</span>
+              </div>
+              <input id="qcHasBlacklisted" type="checkbox" ${blacklisted ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
             </label>
           </div>
         `;
@@ -3724,33 +3739,9 @@
         `;
       }
       function step3() {
-        const fmi = state.qcData.hasFmi === "yes";
-        const balance = state.qcData.hasBalance === "yes";
-        const blacklisted = state.qcData.hasBlacklisted === "yes";
         return `
           <div class="space-y-4">
             <img src="https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=900&q=60" alt="Phone lock security" class="w-full h-32 object-cover rounded-xl border border-slate-200" loading="lazy" />
-            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <div class="flex items-center gap-3">
-                <i data-lucide="key-round" class="${fmi ? "text-amber-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
-                <span class="text-sm font-medium text-slate-900">FMI / iCloud / FRP / Google lock active?</span>
-              </div>
-              <input id="qcHasFmi" type="checkbox" ${fmi ? "checked" : ""} class="h-5 w-5 accent-amber-500" />
-            </label>
-            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <div class="flex items-center gap-3">
-                <i data-lucide="dollar-sign" class="${balance ? "text-amber-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
-                <span class="text-sm font-medium text-slate-900">Finance / balance owed?</span>
-              </div>
-              <input id="qcHasBalance" type="checkbox" ${balance ? "checked" : ""} class="h-5 w-5 accent-amber-500" />
-            </label>
-            <label class="flex items-center justify-between p-4 border rounded-lg hover:bg-slate-50 cursor-pointer">
-              <div class="flex items-center gap-3">
-                <i data-lucide="shield-alert" class="${blacklisted ? "text-rose-500" : "text-slate-400"}" style="width:20px;height:20px"></i>
-                <span class="text-sm font-medium text-slate-900">Blacklisted / lost / stolen?</span>
-              </div>
-              <input id="qcHasBlacklisted" type="checkbox" ${blacklisted ? "checked" : ""} class="h-5 w-5 accent-rose-600" />
-            </label>
             <div>
               <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Device IMEI (Optional)</label>
               <input id="qcImei" type="text" value="${esc(state.qcData.imei)}" inputmode="numeric" maxlength="15"
@@ -3800,7 +3791,7 @@
               ${state.qcStep < steps.length ? `
                 <button id="qcNextBtn"
                   class="px-6 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm shadow-indigo-200 transition-all">
-                  ${state.qcStep === 1 && state.qcData.isLocked === "yes" ? "Send Email" : "Next Step"}
+                  ${state.qcStep === 1 && (state.qcData.isLocked === "yes" || state.qcData.hasFmi === "yes" || state.qcData.hasBalance === "yes" || state.qcData.hasBlacklisted === "yes") ? "Send Emails" : "Next Step"}
                 </button>
               ` : `
                 <button id="qcFinishBtn"
@@ -5035,15 +5026,24 @@
         });
         if (nextBtn) nextBtn.addEventListener("click", async () => {
           syncStepInputs();
-          if (state.qcStep === 1 && state.qcData?.isLocked === "yes") {
+          if (state.qcStep === 1) {
             const deviceKey = state.qcDeviceKey || buildOrderDeviceKey(order.id, 0);
-            await handleAction(order.id, "emailLocked", { body: { deviceKey } });
-            state.qcOpen = false;
-            state.qcStep = 1;
-            state.qcData = null;
-            state.qcDeviceKey = null;
-            render();
-            return;
+            const emailActions = [];
+            if (state.qcData?.isLocked === "yes") emailActions.push("emailLocked");
+            if (state.qcData?.hasFmi === "yes") emailActions.push("emailFmi");
+            if (state.qcData?.hasBalance === "yes") emailActions.push("emailBalance");
+            if (state.qcData?.hasBlacklisted === "yes") emailActions.push("emailBlacklisted");
+            if (emailActions.length > 0) {
+              for (const actionType of emailActions) {
+                await handleAction(order.id, actionType, { body: { deviceKey } });
+              }
+              state.qcOpen = false;
+              state.qcStep = 1;
+              state.qcData = null;
+              state.qcDeviceKey = null;
+              render();
+              return;
+            }
           }
           state.qcStep += 1;
           render();
