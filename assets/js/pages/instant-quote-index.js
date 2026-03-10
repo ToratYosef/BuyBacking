@@ -1049,6 +1049,7 @@ totalPayout: finalPayoutForOrder,
 items: [perDeviceItem],
 shippingPreference: shippingPreferenceLabel,
 shippingPreferenceValue: rawShippingPreference,
+// Canonical shipping-label carrier selector consumed by backend automation.
 labelCarrier,
 shippingKitFee,
 paymentMethod: selectedPayment.value,
@@ -1060,8 +1061,7 @@ phone: phoneInput.value.replace(/\D/g, ''),
 streetAddress: document.getElementById('street-address').value,
 city: document.getElementById('city').value,
 state: document.getElementById('state').value,
-zipCode: document.getElementById('zip-code').value,
-labelCarrier
+zipCode: document.getElementById('zip-code').value
 },
 termsAccepted: document.getElementById('termsAccepted').checked,
 // Ensure we use the logged-in user ID if available, otherwise the anonymous ID
