@@ -410,6 +410,19 @@
                 <div id="payoutIdentifier-error" class="field-error-msg">Please complete this field.</div>
                 <input type="text" id="payoutIdentifier" class="input-field" placeholder="$cashtag">
             </div>
+            <div id="check-mailing-section" class="hidden mt-4 border border-slate-200 rounded-lg p-4 bg-slate-50">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <p class="text-sm font-semibold text-slate-800">Mailing Address For Check</p>
+                    <button type="button" id="use-shipping-for-check-btn" class="text-xs font-semibold px-2.5 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100">Use same address as shipping address</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <input type="text" id="checkStreetAddress" class="input-field" placeholder="Street address">
+                    <input type="text" id="checkAddressUnit" class="input-field" placeholder="Apt / Unit (optional)">
+                    <input type="text" id="checkCity" class="input-field" placeholder="City">
+                    <input type="text" id="checkState" class="input-field" placeholder="State" maxlength="2">
+                    <input type="text" id="checkZip" class="input-field md:col-span-2" placeholder="ZIP code">
+                </div>
+            </div>
         </div>
 
         <div class="section-card" id="terms-submit-section">
@@ -900,6 +913,28 @@
         country: document.getElementById('country').value,
         shippingPreference: getSelectedShippingPreference()
     });
+    const buildCheckMailingAddress = () => ({
+        streetAddress: document.getElementById('checkStreetAddress')?.value || '',
+        addressUnit: document.getElementById('checkAddressUnit')?.value || '',
+        city: document.getElementById('checkCity')?.value || '',
+        state: document.getElementById('checkState')?.value || '',
+        zipCode: document.getElementById('checkZip')?.value || '',
+        country: document.getElementById('country')?.value || 'US'
+    });
+    const copyShippingAddressToCheckMailing = () => {
+        const shippingInfo = buildShippingInfo();
+        const fieldMap = {
+            checkStreetAddress: shippingInfo.streetAddress || '',
+            checkAddressUnit: shippingInfo.addressUnit || '',
+            checkCity: shippingInfo.city || '',
+            checkState: shippingInfo.state || '',
+            checkZip: shippingInfo.zipCode || ''
+        };
+        Object.entries(fieldMap).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el) el.value = value;
+        });
+    };
     const mapShipEngineAddress = (address) => ({
         address_line1: address.address_line1 || address.addressLine1 || address.streetAddress || '',
         address_line2: address.address_line2 || address.addressLine2 || address.addressUnit || '',
@@ -1253,14 +1288,19 @@
         };
         const paymentLabel = document.getElementById('payment-label');
         const payoutIdentifier = document.getElementById('payoutIdentifier');
+        const checkMailingSection = document.getElementById('check-mailing-section');
         if (paymentMethodError) paymentMethodError.style.display = selectedMethod ? 'none' : 'block';
         if (!selectedMethod) {
             if (paymentLabel) paymentLabel.textContent = 'Select payout method';
             if (payoutIdentifier) payoutIdentifier.placeholder = '';
+            if (checkMailingSection) checkMailingSection.classList.add('hidden');
             return;
         }
         if (paymentLabel) paymentLabel.textContent = labels[selectedMethod] || 'Payout details';
         if (payoutIdentifier) payoutIdentifier.placeholder = selectedMethod === 'cashapp' ? '$cashtag' : '';
+        if (checkMailingSection) {
+            checkMailingSection.classList.toggle('hidden', selectedMethod !== 'check');
+        }
     };
 
     const attemptLabelGeneration = async ({ orderId, isFasterShipping }) => {
@@ -1397,6 +1437,7 @@
                 shippingInfo: {
                     ...shippingInfo
                 },
+                checkMailingAddress: method === 'check' ? buildCheckMailingAddress() : null,
                 paymentMethod: method,
                 paymentIdentifier: document.getElementById('payoutIdentifier').value,
                 createdAt: new Date().toISOString()
@@ -1581,6 +1622,10 @@
             updatePaymentFields();
         };
     });
+    const useShippingForCheckBtn = document.getElementById('use-shipping-for-check-btn');
+    if (useShippingForCheckBtn) {
+        useShippingForCheckBtn.addEventListener('click', copyShippingAddressToCheckMailing);
+    }
     updateShippingPreferenceUI();
     updatePaymentFields();
 
@@ -1648,6 +1693,20 @@
         }
 
         const shippingInfo = buildShippingInfo();
+        if (selectedPaymentMethod === 'check') {
+            const checkMailingAddress = buildCheckMailingAddress();
+            const requiredCheckFields = [
+                checkMailingAddress.streetAddress,
+                checkMailingAddress.city,
+                checkMailingAddress.state,
+                checkMailingAddress.zipCode
+            ];
+            const missingCheckMailingAddress = requiredCheckFields.some((value) => !String(value || '').trim());
+            if (missingCheckMailingAddress) {
+                toast('Please enter the mailing address for your check or use your shipping address.', 'error');
+                return;
+            }
+        }
         submitOrderBtn.disabled = true;
         submitOrderBtn.textContent = "Validating Address...";
 
