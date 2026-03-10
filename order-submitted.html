@@ -730,32 +730,10 @@
                 }
             };
 
-            let existingLabelUrl = firstFilled(
-                getV('labelUrl'),
-                getV('labelDownloadUrl'),
-                getV('uspsLabelUrl'),
-                getV('upsLabelUrl'),
-                sessionSummary?.labelUrl,
-                sessionSummary?.labelDownloadUrl,
-                sessionSummary?.autoLabelDownloadUrl,
-                sessionSummary?.uspsLabelUrl,
-                sessionSummary?.upsLabelUrl,
-                sessionSummary?.downloadUrl,
-                sessionSummary?.pdfUrl
-            );
-            let existingTrackingNumber = firstFilled(
-                getV('trackingNumber'),
-                getV('uspsTrackingNumber'),
-                getV('upsTrackingNumber'),
-                sessionSummary?.trackingNumber,
-                sessionSummary?.autoLabelTrackingNumber,
-                sessionSummary?.uspsTrackingNumber,
-                sessionSummary?.upsTrackingNumber
-            );
-            let autoLabelStatus = firstFilled(
-                getV('autoLabelStatus'),
-                sessionSummary?.autoLabelStatus
-            ).toLowerCase();
+            let existingLabelUrl = '';
+            let existingTrackingNumber = '';
+            let autoLabelStatus = '';
+            let dbLabelLookupFailed = false;
 
             // Always read the saved order record for label/tracking on confirmation load.
             // Query/session payloads can be stale on some devices; DB is authoritative.
@@ -778,6 +756,48 @@
                     existingLabelUrl = firstFilled(orderLabelInfo.labelUrl, existingLabelUrl);
                     existingTrackingNumber = firstFilled(orderLabelInfo.trackingNumber, existingTrackingNumber);
                     autoLabelStatus = firstFilled(String(orderLabelInfo.autoLabelStatus || '').toLowerCase(), autoLabelStatus);
+                } else {
+                    dbLabelLookupFailed = true;
+                    console.error('[Order Submitted] Failed to fetch label/tracking details from DB.', { orderId });
+                }
+            }
+
+            existingLabelUrl = firstFilled(
+                existingLabelUrl,
+                getV('labelUrl'),
+                getV('labelDownloadUrl'),
+                getV('uspsLabelUrl'),
+                getV('upsLabelUrl'),
+                sessionSummary?.labelUrl,
+                sessionSummary?.labelDownloadUrl,
+                sessionSummary?.autoLabelDownloadUrl,
+                sessionSummary?.uspsLabelUrl,
+                sessionSummary?.upsLabelUrl,
+                sessionSummary?.downloadUrl,
+                sessionSummary?.pdfUrl
+            );
+            existingTrackingNumber = firstFilled(
+                existingTrackingNumber,
+                getV('trackingNumber'),
+                getV('uspsTrackingNumber'),
+                getV('upsTrackingNumber'),
+                sessionSummary?.trackingNumber,
+                sessionSummary?.autoLabelTrackingNumber,
+                sessionSummary?.uspsTrackingNumber,
+                sessionSummary?.upsTrackingNumber
+            );
+            autoLabelStatus = firstFilled(
+                autoLabelStatus,
+                getV('autoLabelStatus'),
+                sessionSummary?.autoLabelStatus
+            ).toLowerCase();
+
+            if (!isKitShipping && orderId && orderId !== 'Pending') {
+                if (!existingLabelUrl) {
+                    console.error('[Order Submitted] No shipping label URL available for this order.', { orderId, dbLabelLookupFailed });
+                }
+                if (!existingTrackingNumber) {
+                    console.error('[Order Submitted] No tracking number available for this order.', { orderId, dbLabelLookupFailed });
                 }
             }
             const labelWarning = firstFilled(
