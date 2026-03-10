@@ -137,11 +137,16 @@ order?.totalPayout
 );
 };
 
-const getAutoAcceptDeadline = (order) => {
-if (!order?.reOffer) return null;
-const explicit = extractTimestampMillis(order.reOffer.autoAcceptDate);
+const getAutoAcceptDeadline = (order, selectedDeviceKey) => {
+const deviceOffer = selectedDeviceKey
+? (order?.reOfferByDevice?.[selectedDeviceKey] || order?.reofferByDevice?.[selectedDeviceKey] || null)
+: null;
+const sourceOffer = deviceOffer || order?.reOffer || null;
+
+if (!sourceOffer) return null;
+const explicit = extractTimestampMillis(sourceOffer.autoAcceptDate);
 if (explicit) return explicit;
-const created = extractTimestampMillis(order.reOffer.createdAt);
+const created = extractTimestampMillis(sourceOffer.createdAt);
 return created ? created + AUTO_ACCEPT_WINDOW_MS : null;
 };
 
@@ -224,7 +229,7 @@ buyerNameSpan.textContent = currentOrderData.shippingInfo?.fullName || 'Customer
 
 loadingState.classList.add('hidden');
 
-const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData);
+const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData, selectedDeviceKey);
 
 if ((String(deviceStatus) === 're-offered-pending') && autoAcceptDeadline) {
 offerDetailsState.classList.remove('hidden');
@@ -297,33 +302,33 @@ countdownContainer.classList.remove('hidden');
 }
 };
 
-acceptOfferBtn.addEventListener('click', () => {
+acceptOfferBtn?.addEventListener('click', () => {
 pendingAction = 'accept-offer';
 confirmMessage.textContent = 'Do you want to accept the new offer?';
 confirmPrompt.classList.remove('hidden');
 actionButtonsDiv.classList.add('hidden');
 });
 
-returnPhoneBtn.addEventListener('click', () => {
+returnPhoneBtn?.addEventListener('click', () => {
 pendingAction = 'return-phone';
 confirmMessage.textContent = 'Do you want to decline the offer and have your phone returned?';
 confirmPrompt.classList.remove('hidden');
 actionButtonsDiv.classList.add('hidden');
 });
 
-confirmYesBtn.addEventListener('click', () => {
+confirmYesBtn?.addEventListener('click', () => {
 if (pendingAction) {
 handleAction(pendingAction);
 }
 });
 
-confirmCancelBtn.addEventListener('click', () => {
+confirmCancelBtn?.addEventListener('click', () => {
 confirmPrompt.classList.add('hidden');
 actionButtonsDiv.classList.remove('hidden');
 pendingAction = null;
 });
 
-replyForm.addEventListener('submit', async (event) => {
+replyForm?.addEventListener('submit', async (event) => {
 event.preventDefault();
 const message = replyMessageInput.value.trim();
 if (!message) {
