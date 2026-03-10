@@ -1012,6 +1012,7 @@ const phoneInput = document.getElementById('phone');
 const shippingPreferenceInput = document.querySelector('input[name="shipping_preference"]:checked');
 const rawShippingPreference = shippingPreferenceInput.value;
 const shippingPreferenceLabel = rawShippingPreference === 'ship_kit' ? 'Shipping Kit Requested' : 'Email Label Requested';
+const labelCarrier = rawShippingPreference === 'faster_shipping' ? 'ups' : 'usps';
 const shippingKitFee = calculateShippingFee(rawShippingPreference);
 const finalPayoutForOrder = calculateFinalPayout(rawShippingPreference);
 const perDeviceItem = {
@@ -1048,6 +1049,7 @@ totalPayout: finalPayoutForOrder,
 items: [perDeviceItem],
 shippingPreference: shippingPreferenceLabel,
 shippingPreferenceValue: rawShippingPreference,
+labelCarrier,
 shippingKitFee,
 paymentMethod: selectedPayment.value,
 paymentDetails: {},
@@ -1058,7 +1060,8 @@ phone: phoneInput.value.replace(/\D/g, ''),
 streetAddress: document.getElementById('street-address').value,
 city: document.getElementById('city').value,
 state: document.getElementById('state').value,
-zipCode: document.getElementById('zip-code').value
+zipCode: document.getElementById('zip-code').value,
+labelCarrier
 },
 termsAccepted: document.getElementById('termsAccepted').checked,
 // Ensure we use the logged-in user ID if available, otherwise the anonymous ID
