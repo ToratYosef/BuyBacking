@@ -1262,6 +1262,45 @@
         if (paymentLabel) paymentLabel.textContent = labels[selectedMethod] || 'Payout details';
         if (payoutIdentifier) payoutIdentifier.placeholder = selectedMethod === 'cashapp' ? '$cashtag' : '';
     };
+
+    const attemptLabelGeneration = async ({ orderId, isFasterShipping }) => {
+        if (!orderId) return null;
+        const endpoint = isFasterShipping
+            ? '/api/shipping/generate-ups-label'
+            : '/api/shipping/generate-usps-label';
+
+        try {
+            const response = await withPerf(`network:labelGeneration:${orderId}`, () => fetch(`${API_BASE_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId })
+            }));
+            const payload = await response.json().catch(() => ({}));
+
+            if (response.status !== 200) {
+                console.warn('Label generation did not return HTTP 200; continuing with order submission.', {
+                    orderId,
+                    endpoint,
+                    status: response.status,
+                    payload
+                });
+                return null;
+            }
+
+            return {
+                labelUrl: payload?.labelDownloadUrl || payload?.labelUrl || payload?.autoLabelDownloadUrl || '',
+                trackingNumber: payload?.trackingNumber || payload?.autoLabelTrackingNumber || ''
+            };
+        } catch (error) {
+            console.warn('Label generation request failed; continuing with order submission.', {
+                orderId,
+                endpoint,
+                error: error?.message || error
+            });
+            return null;
+        }
+    };
+
     const executeOrderSubmission = async (shippingInfo) => {
         const btn = submitOrderBtn;
         const pref = getSelectedShippingPreference();
@@ -1366,8 +1405,21 @@
                 throw new Error('Order submitted but no orderId was returned.');
             }
 
-            const labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || result.labelUrl || '';
-            const trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
+            let labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || result.labelUrl || '';
+            let trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
+
+            if (!isKit) {
+                const generatedLabel = await attemptLabelGeneration({
+                    orderId: submittedOrderId,
+                    isFasterShipping
+                });
+                if (generatedLabel?.labelUrl) {
+                    labelUrl = generatedLabel.labelUrl;
+                }
+                if (generatedLabel?.trackingNumber) {
+                    trackingNumber = generatedLabel.trackingNumber;
+                }
+            }
 
             const successUrl = new URL('/order-submitted.html', window.location.origin);
             successUrl.searchParams.set('id', submittedOrderId);
