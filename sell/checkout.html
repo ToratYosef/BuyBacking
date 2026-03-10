@@ -1456,11 +1456,15 @@
             const submitWarnings = Array.isArray(result.warnings)
                 ? result.warnings.filter((warning) => typeof warning === 'string' && warning.trim())
                 : [];
+            const uniqueSubmitWarnings = [...new Set(submitWarnings)];
 
             let labelUrl = result.autoLabelDownloadUrl || result.labelDownloadUrl || result.labelUrl || '';
             let trackingNumber = result.autoLabelTrackingNumber || result.trackingNumber || '';
 
-            const shouldAttemptLegacyLabelGeneration = !isKit && !labelUrl && !autoLabelStatus;
+            // For non-kit shipments (USPS/UPS), always wait on a label-service response
+            // before redirecting to the submitted page, even if backend auto-labeling
+            // reports a non-success status.
+            const shouldAttemptLegacyLabelGeneration = !isKit && !labelUrl;
             if (shouldAttemptLegacyLabelGeneration) {
                 const generatedLabel = await attemptLabelGeneration({
                     orderId: submittedOrderId,
@@ -1488,7 +1492,7 @@
             successUrl.searchParams.set('payMethod', method);
             successUrl.searchParams.set('shipping', pref);
             if (autoLabelStatus) successUrl.searchParams.set('autoLabelStatus', autoLabelStatus);
-            if (submitWarnings.length) successUrl.searchParams.set('warnings', submitWarnings.join(' | '));
+            if (uniqueSubmitWarnings.length) successUrl.searchParams.set('warnings', uniqueSubmitWarnings.join(' | '));
             
             if (labelUrl) successUrl.searchParams.set('labelUrl', labelUrl);
             if (trackingNumber) successUrl.searchParams.set('trackingNumber', trackingNumber);
