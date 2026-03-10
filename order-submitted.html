@@ -31,7 +31,7 @@
         let hasOrderContext = false;
         try {
             const params = new URLSearchParams(window.location.search || '');
-            const paramOrderId = String(params.get('id') || params.get('orderId') || '').trim();
+            const paramOrderId = String(params.get('orderNumber') || '').trim();
             const sessionSummaryRaw = sessionStorage.getItem('shcOrderSummary') || localStorage.getItem('shcOrderSummary');
             const sessionSummary = sessionSummaryRaw ? JSON.parse(sessionSummaryRaw) : null;
             const storedOrderId = String(sessionSummary?.id || sessionSummary?.orderId || '').trim();
@@ -261,17 +261,12 @@
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const urlParams = new URLSearchParams(window.location.search);
-            let sessionSummary = null;
-            try {
-                const storedSession = sessionStorage.getItem('shcOrderSummary');
-                const storedLocal = localStorage.getItem('shcOrderSummary');
-                const stored = storedSession || storedLocal;
-                if (stored) {
-                    sessionSummary = JSON.parse(stored);
-                }
-            } catch (e) {}
+            const orderId = String(urlParams.get('orderNumber') || '').trim();
 
-            const getV = (key) => urlParams.get(key) || sessionSummary?.[key] || '';
+            if (!orderId) {
+                window.location.replace('/index.html');
+                return;
+            }
             const normalizeCondition = (value) => (value || '').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'N/A';
             const firstFilled = (...values) => values.find((value) => String(value || '').trim()) || '';
             const parseUnitPrice = (item) => {
@@ -474,23 +469,43 @@
                 }
                 return null;
             };
+            let fetchedOrder = await fetchOrderById(orderId);
+            if (!fetchedOrder) {
+                document.getElementById('heroName').textContent = 'Friend';
+                document.getElementById('heroDevice').textContent = 'Device details on file';
+                document.getElementById('summaryOrderId').textContent = orderId;
+                document.getElementById('instructionOrderId1').textContent = `(#${orderId})`;
+                document.getElementById('labelStatusMessage').textContent = 'We could not load your order details. Please contact support with your order number.';
+                return;
+            }
 
-            // Data extraction
-            const orderId = getV('id') || getV('orderId') || 'Pending';
-            const priceVal = parseFloat(getV('price') || getV('finalPayout') || '0');
+            const shippingInfo = fetchedOrder.shippingInfo || {};
+            const normalizeNumber = (value, fallback = 0) => {
+                const num = Number(value);
+                return Number.isFinite(num) ? num : fallback;
+            };
+
+            const priceVal = normalizeNumber(
+                fetchedOrder.totalPayout ?? fetchedOrder.estimatedQuote ?? fetchedOrder.finalPayout,
+                0
+            );
             const priceStr = priceVal.toFixed(2);
-            const device = getV('device') || 'Device details on file';
-            const name = getV('name') || 'Friend';
-            const method = getV('payMethod') || getV('paymentMethod') || 'Not specified';
-            const shippingPref = (getV('shipping') || getV('shippingPreference') || 'regular_shipping').toLowerCase();
+            const device = firstFilled(
+                fetchedOrder.device,
+                fetchedOrder.modelName,
+                Array.isArray(fetchedOrder.items) && fetchedOrder.items.length > 1 ? 'Multiple devices' : '',
+                'Device details on file'
+            );
+            const name = firstFilled(shippingInfo.fullName, shippingInfo.name, 'Friend');
+            const method = firstFilled(fetchedOrder.paymentMethod, fetchedOrder.payMethod, 'Not specified');
+            const shippingPref = String(firstFilled(fetchedOrder.shippingPreference, fetchedOrder.shipping_preference, 'regular_shipping')).toLowerCase();
 
-            // Full Address Reconstruction
-            const street = getV('street');
-            const unit = getV('unit');
-            const city = getV('city');
-            const state = getV('state');
-            const zip = getV('zip');
-            
+            const street = firstFilled(shippingInfo.streetAddress, shippingInfo.address_line1, shippingInfo.addressLine1);
+            const unit = firstFilled(shippingInfo.addressUnit, shippingInfo.unit, shippingInfo.address_line2, shippingInfo.addressLine2);
+            const city = firstFilled(shippingInfo.city);
+            const state = firstFilled(shippingInfo.state);
+            const zip = firstFilled(shippingInfo.zipCode, shippingInfo.zip);
+
             let fullAddressHtml = 'Address details on file';
             if (street && city && state) {
                 const line1 = street + (unit ? `, ${unit}` : '');
@@ -498,7 +513,6 @@
                 fullAddressHtml = `${line1}<br>${line2}`;
             }
 
-            // Populate Text Elements
             document.getElementById('heroName').textContent = name;
             document.getElementById('heroPrice').textContent = `$${priceStr}`;
             document.getElementById('heroDevice').textContent = device;
@@ -512,9 +526,8 @@
             document.getElementById('summaryPaymentMethod').textContent = displayMethod;
             document.getElementById('summaryFullAddress').innerHTML = fullAddressHtml;
 
-            let rawItems = Array.isArray(sessionSummary?.items) ? sessionSummary.items : [];
+            let rawItems = Array.isArray(fetchedOrder?.items) ? fetchedOrder.items : [];
             let normalizedItems = rawItems.map(normalizeItemFromOrder);
-            let fetchedOrder = null;
 
             const hasImageCandidate = (items = []) => items.some((item) => buildImageBaseCandidates(item).length > 0);
             const needsDetailFallback = !hasDetailedItems(normalizedItems);
@@ -539,7 +552,7 @@
                     }
                 }
             }
-            const fallbackQty = Math.max(1, Number(getV('qty') || 1));
+            const fallbackQty = Math.max(1, Number(fetchedOrder?.qty || 1));
             const fallbackUnitPrice = fallbackQty > 1 ? (priceVal / fallbackQty) : priceVal;
             const deviceItems = normalizedItems.length ? normalizedItems : [{
                 modelName: device.toLowerCase() === 'multiple devices' ? 'Device on file' : device,
@@ -586,7 +599,7 @@
             }, 0);
             const basketTotalForPixel = Number.isFinite(basketTotalVal) && basketTotalVal > 0 ? basketTotalVal : (Number.isFinite(priceVal) ? priceVal : 0);
             const basketTotalStr = basketTotalForPixel.toFixed(2);
-            const transactionIdForPixel = String(orderId || getV('id') || getV('orderId') || '').trim() || 'unknown';
+            const transactionIdForPixel = String(orderId || '').trim() || 'unknown';
             if (typeof window.gtag === 'function') {
                 const conversionPayload = {
                     currency: 'USD',
@@ -748,8 +761,8 @@
             let dbLabelLookupFailed = false;
 
             // Always read the saved order record for label/tracking on confirmation load.
-            // Query/session payloads can be stale on some devices; DB is authoritative.
-            if (!isKitShipping && orderId && orderId !== 'Pending') {
+            // Pull fresh label/tracking from DB so values stay authoritative.
+            if (!isKitShipping && orderId) {
                 if (!fetchedOrder) {
                     fetchedOrder = await fetchOrderById(orderId);
                 }
@@ -774,37 +787,9 @@
                 }
             }
 
-            existingLabelUrl = firstFilled(
-                existingLabelUrl,
-                getV('labelUrl'),
-                getV('labelDownloadUrl'),
-                getV('uspsLabelUrl'),
-                getV('upsLabelUrl'),
-                sessionSummary?.labelUrl,
-                sessionSummary?.labelDownloadUrl,
-                sessionSummary?.autoLabelDownloadUrl,
-                sessionSummary?.uspsLabelUrl,
-                sessionSummary?.upsLabelUrl,
-                sessionSummary?.downloadUrl,
-                sessionSummary?.pdfUrl
-            );
-            existingTrackingNumber = firstFilled(
-                existingTrackingNumber,
-                getV('trackingNumber'),
-                getV('uspsTrackingNumber'),
-                getV('upsTrackingNumber'),
-                sessionSummary?.trackingNumber,
-                sessionSummary?.autoLabelTrackingNumber,
-                sessionSummary?.uspsTrackingNumber,
-                sessionSummary?.upsTrackingNumber
-            );
-            autoLabelStatus = firstFilled(
-                autoLabelStatus,
-                getV('autoLabelStatus'),
-                sessionSummary?.autoLabelStatus
-            ).toLowerCase();
+            autoLabelStatus = String(autoLabelStatus || '').toLowerCase();
 
-            if (!isKitShipping && orderId && orderId !== 'Pending') {
+            if (!isKitShipping && orderId) {
                 if (!existingLabelUrl) {
                     console.error('[Order Submitted] No shipping label URL available for this order.', { orderId, dbLabelLookupFailed });
                 }
@@ -812,10 +797,9 @@
                     console.error('[Order Submitted] No tracking number available for this order.', { orderId, dbLabelLookupFailed });
                 }
             }
-            const labelWarning = firstFilled(
-                getV('warnings'),
-                Array.isArray(sessionSummary?.warnings) ? sessionSummary.warnings.join(' ') : ''
-            );
+            const labelWarning = Array.isArray(fetchedOrder?.warnings)
+                ? fetchedOrder.warnings.filter((warning) => typeof warning === 'string').join(' ')
+                : firstFilled(fetchedOrder?.warning, fetchedOrder?.labelWarning);
 
             if (isKitShipping) {
                 kitCard.classList.remove('hidden');
