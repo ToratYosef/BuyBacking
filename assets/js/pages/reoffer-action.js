@@ -201,7 +201,7 @@ replySection.classList.add('hidden');
 clearInterval(countdownInterval);
 
 try {
-const currentOrderData = await apiGet(`/orders/${orderId}`, { authRequired: true });
+const currentOrderData = await apiGet(`/orders/${orderId}`, { authRequired: false });
 const deviceOffer = selectedDeviceKey
 ? (currentOrderData?.reOfferByDevice?.[selectedDeviceKey] || currentOrderData?.reofferByDevice?.[selectedDeviceKey] || null)
 : null;
@@ -287,7 +287,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
 const deviceKey = urlParams.get('deviceKey');
 const actionEndpoint = `/${actionType}-action`;
-await apiPost(actionEndpoint, { orderId: orderId, deviceKey: deviceKey || null }, { authRequired: true });
+await apiPost(actionEndpoint, { orderId: orderId, deviceKey: deviceKey || null }, { authRequired: false });
 
 await loadOfferDetails();
 
@@ -344,7 +344,7 @@ try {
 const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
 const replyBackendUrl = `/orders/${orderId}/add-buyer-reply`;
-await apiPost(replyBackendUrl, { replyMessage: message }, { authRequired: true });
+await apiPost(replyBackendUrl, { replyMessage: message }, { authRequired: false });
 replyStatus.textContent = 'Reply sent successfully!';
 replyStatus.style.color = 'green';
 replyMessageInput.value = '';
