@@ -591,6 +591,16 @@
       return Array.from(new Set(urls.filter(Boolean)));
     }
 
+    function getReturnLabelUrl(orderData = {}) {
+      const candidates = [
+        orderData?.returnLabelUrl,
+        orderData?.return_label_url,
+        orderData?.labels?.returnLabelUrl,
+        orderData?.shippingLabels?.returnLabelUrl,
+      ];
+      return candidates.find((value) => typeof value === "string" && value.trim()) || null;
+    }
+
     async function fetchOrderPrintData(orderId) {
       const response = await authorizedFetch(`${API_BASE_URL}/orders/${orderId}`, { method: "GET" });
       const data = await response.json().catch(() => ({}));
@@ -2280,6 +2290,16 @@
           case "printPacking":
             await printPackingSlip(orderId, options?.deviceIndex);
             return;
+          case "viewReturnLabel": {
+            const returnLabelUrl = getReturnLabelUrl(order);
+            if (!returnLabelUrl) {
+              toast("No saved return label URL found for this order.", "error");
+              return;
+            }
+            window.open(returnLabelUrl, "_blank", "noopener,noreferrer");
+            toast("Return label opened in a new tab.", "success");
+            return;
+          }
           case "voidLabels":
               // Just a UI trigger to switch tab, no API call here directly unless submitted
               // But if we want to trigger the void modal logic:
@@ -3609,6 +3629,11 @@
               groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
             }
             groups.postReceive.push({ label: "Send Review Request", action: "sendReviewRequest", class: "bg-white border-slate-200" });
+        }
+        else if (status === "return-label-generated") {
+            if (getReturnLabelUrl(order)) {
+              groups.postReceive.push({ label: "View Return Label", action: "viewReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
+            }
         }
 
         // --- Independent ---
