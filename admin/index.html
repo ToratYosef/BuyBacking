@@ -2281,10 +2281,32 @@
             toast(`Unknown action: ${actionType}`, "error");
             return;
         }
-        if (method === "GET") await apiGet(endpoint);
-        else if (method === "POST") await apiPost(endpoint, body ?? {});
+        let actionResult = null;
+        let labelWindow = null;
+        if (actionType === 'sendReturnLabel') {
+          labelWindow = window.open('', '_blank', 'noopener,noreferrer');
+        }
+
+        if (method === "GET") actionResult = await apiGet(endpoint);
+        else if (method === "POST") actionResult = await apiPost(endpoint, body ?? {});
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
+
+        if (actionType === 'sendReturnLabel') {
+          const returnLabelUrl = actionResult?.returnLabelUrl || actionResult?.labelUrl || null;
+          if (returnLabelUrl && labelWindow && !labelWindow.closed) {
+            labelWindow.location = returnLabelUrl;
+          } else if (labelWindow && !labelWindow.closed) {
+            labelWindow.close();
+          }
+
+          if (returnLabelUrl) {
+            toast('Return label opened in a new tab.', 'success');
+          } else {
+            toast('Return label generated, but no label URL was returned.', 'info');
+          }
+        }
+
         await hydrateSelectedOrderDetails(orderId);
         toast(`Action ${actionType} success`, "success");
         // refresh order data by re-running filter (Firestore will also push updates)
@@ -5272,6 +5294,9 @@
               comments,
               carrier,
               condition,
+              brand,
+              modelId,
+              storage,
               deviceKey
             }
           });
