@@ -479,6 +479,23 @@
         ""
       );
     }
+    function getOrderCarrierCode(order) {
+      const raw =
+        order?.carrierCode ||
+        order?.carrier_code ||
+        order?.labelTrackingStatus?.carrierCode ||
+        order?.labelTrackingStatus?.carrier_code ||
+        order?.kitTrackingStatus?.carrierCode ||
+        order?.kitTrackingStatus?.carrier_code ||
+        "";
+      return String(raw || "").trim().toLowerCase();
+    }
+    function isUpsTrackingOrder(order) {
+      const carrier = getOrderCarrierCode(order);
+      if (carrier === "ups") return true;
+      const tracking = String(getAnyTrackingNumber(order) || "").trim().toUpperCase();
+      return tracking.startsWith("1Z");
+    }
     function getTrackingLink(trackingNumber) {
       const tracking = String(trackingNumber || '').trim();
       if (!tracking) return '';
@@ -1712,17 +1729,23 @@
     async function refreshLabelGeneratedAndPhoneOnWay(buttonEl) {
       const base = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
       const allowed = new Set(["label_generated", "phone_on_the_way"]);
-      const candidates = base.filter(o => {
+      const scopedCandidates = base.filter(o => {
         const status = normalizeStatusKey(o?.status);
         return allowed.has(status);
       });
 
+      const skippedUpsOrders = scopedCandidates.filter(isUpsTrackingOrder);
+      const candidates = scopedCandidates.filter((order) => !isUpsTrackingOrder(order));
+
       if (!candidates.length) {
-        toast("No label-generated / phone-on-the-way tracking candidates found", "info");
+        const message = skippedUpsOrders.length
+          ? "Only UPS labels found. Skipping UPS in bulk refresh to avoid incorrect Phone On The Way status flips."
+          : "No label-generated / phone-on-the-way tracking candidates found";
+        toast(message, "info");
         return;
       }
 
-      const ok = confirm(`Refresh tracking for ${candidates.length} orders in Label Generated / Phone On The Way?`);
+      const ok = confirm(`Refresh tracking for ${candidates.length} orders in Label Generated / Phone On The Way${skippedUpsOrders.length ? `\n\n(UPS skipped: ${skippedUpsOrders.length} order${skippedUpsOrders.length === 1 ? "" : "s"})` : ""}?`);
       if (!ok) return;
 
       const originalText = buttonEl?.textContent;
@@ -1793,6 +1816,7 @@
           refreshed: success,
           statusChanged,
           failed,
+          skippedUps: skippedUpsOrders.length,
           statusCounts: nowCounts,
           completedAtLabel: `Completed ${formatTimeOnly(new Date())} (admin manual)`,
         };
@@ -4213,6 +4237,7 @@
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-3"><span class="text-slate-500">Status Changed</span><div class="font-bold text-indigo-700">${Number(d.statusChanged || 0)}</div></div>
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-3"><span class="text-slate-500">Failed</span><div class="font-bold text-rose-700">${Number(d.failed || 0)}</div></div>
               </div>
+              ${Number(d.skippedUps || 0) > 0 ? `<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Skipped UPS labels: <span class="font-bold">${Number(d.skippedUps || 0)}</span> (UPS is excluded from this bulk refresh to prevent incorrect status changes)</div>` : ""}
               <div>
                 <div class="text-xs font-semibold text-slate-500 uppercase mb-2">Current Status Counts</div>
                 <div class="grid grid-cols-3 gap-2 text-xs">
