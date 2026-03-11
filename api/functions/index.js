@@ -3022,6 +3022,7 @@ const EXPIRING_REMINDER_ALLOWED_STATUSES = new Set([
 
 const KIT_REMINDER_ALLOWED_STATUSES = new Set([
   "kit_sent",
+  "kit_on_the_way_to_customer",
   "kit_delivered",
   "kit_on_the_way_to_us",
   KIT_TRANSIT_STATUS,
@@ -3042,6 +3043,7 @@ const AUTO_CANCEL_MONITORED_STATUSES = [
   "shipping_kit_requested",
   "kit_needs_printing",
   "kit_sent",
+  "kit_on_the_way_to_customer",
   KIT_TRANSIT_STATUS,
   "kit_in_transit",
   "kit_on_the_way_to_us",
@@ -4998,15 +5000,15 @@ function stringifyData(obj = {}) {
   return out;
 }
 
-const kitStatusOrder = ['needs_printing', 'kit_sent', KIT_TRANSIT_STATUS, 'kit_delivered'];
+const kitStatusOrder = ['needs_printing', KIT_TRANSIT_STATUS, 'kit_delivered'];
 
 function normalizeKitStatusValue(status) {
   if (!status) return status;
   const value = String(status).toLowerCase();
-  if (value === 'kit_in_transit') {
+  if (value === 'kit_in_transit' || value === 'kit_sent') {
     return KIT_TRANSIT_STATUS;
   }
-  return status;
+  return value;
 }
 
 function normalizeTransitStatus(status) {
@@ -5560,7 +5562,7 @@ function formatStatusForEmail(status) {
   if (status === "order_pending") return "Order Pending";
   if (status === "shipping_kit_requested" || status === "kit_needs_printing" || status === "needs_printing")
     return "Needs Printing";
-  if (status === "kit_sent") return "Kit Sent";
+  if (status === "kit_sent" || status === "kit_on_the_way_to_customer") return "Kit To Customer";
   if (status === "kit_delivered") return "Kit Delivered";
   return status
     .replace(/_/g, " ")
@@ -5985,7 +5987,8 @@ app.put("/orders/:id/status", async (req, res) => {
     const notifyCustomer = req.body?.notifyCustomer !== false;
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
     const statusUpdate = { status, lastStatusUpdateAt: timestamp };
-    if (status === 'kit_sent') {
+    if (status === 'kit_sent' || status === 'kit_on_the_way_to_customer') {
+      statusUpdate.status = 'kit_on_the_way_to_customer';
       statusUpdate.kitSentAt = timestamp;
     }
     if (status === 'needs_printing') {
@@ -6121,13 +6124,13 @@ app.post('/orders/:id/mark-kit-sent', async (req, res) => {
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
 
     const { order } = await updateOrderBoth(orderId, {
-      status: 'kit_sent',
+      status: 'kit_on_the_way_to_customer',
       kitSentAt: timestamp,
       lastStatusUpdateAt: timestamp,
     });
 
     res.json({
-      message: `Order ${orderId} marked as kit sent`,
+      message: `Order ${orderId} marked as kit to customer`,
       orderId,
       status: order.status,
     });

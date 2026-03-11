@@ -28,7 +28,7 @@ router.post('/manual-fulfill/:id', requireAdmin, async (req, res, next) => {
 
     if (outboundTrackingNumber) {
       updatePayload.outboundTrackingNumber = outboundTrackingNumber;
-      updatePayload.status = 'kit_sent';
+      updatePayload.status = 'kit_on_the_way_to_customer';
     } else {
       updatePayload.status = 'label_generated';
     }

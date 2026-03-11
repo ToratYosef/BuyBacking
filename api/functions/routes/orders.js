@@ -1209,7 +1209,7 @@ function createOrdersRouter({
 
         try {
           const updatePayload = {
-            status: 'kit_sent',
+            status: 'kit_on_the_way_to_customer',
           };
 
           if (!order.kitSentAt) {
@@ -1219,7 +1219,7 @@ function createOrdersRouter({
           await updateOrderBoth(order.id, updatePayload);
           return order.id;
         } catch (error) {
-          console.error(`Failed to mark order ${order.id} as kit sent after bundle:`, error);
+          console.error(`Failed to mark order ${order.id} as kit to customer after bundle:`, error);
           return null;
         }
       })
