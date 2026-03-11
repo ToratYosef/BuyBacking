@@ -696,6 +696,7 @@
       bulkVoidAgedInProgress: false,
       bulkVoidTestInProgress: false,
       bulkDeleteCancelledInProgress: false,
+      bulkSeparateKitSentInProgress: false,
       bulkVoidProgressVisible: false,
       bulkVoidProgressLabel: "",
       bulkVoidProgressPercent: 0,
@@ -1500,24 +1501,19 @@
       }
     }
     function shouldAutoMarkKitSent(order) {
-      // Spec: require >=2 kit label identifiers, not past received, not locked statuses
+      // Require at least 2 distinct ShipEngine kit labels, and skip locked/final statuses.
       const s = normalizeStatusKey(order?.status);
       if (isStatusPastReceived(s)) return false;
       const locked = new Set(["cancelled", "completed", "received"]);
       if (locked.has(s)) return false;
-      // ">=2 kit label identifiers" heuristic based on fields commonly present
+
+      // Strictly count labels from shipEngineLabels (do not infer from generic tracking fields).
       const ids = new Set();
       const labels = getShipEngineLabelEntries(order);
-      for (const { value: l } of labels) {
-        if (l?.labelId) ids.add(String(l.labelId));
-        if (l?.label_id) ids.add(String(l.label_id));
-        if (l?.id) ids.add(String(l.id));
-        if (l?.trackingNumber) ids.add(String(l.trackingNumber));
-        if (l?.tracking_number) ids.add(String(l.tracking_number));
+      for (const { value: label } of labels) {
+        const id = label?.labelId || label?.label_id || label?.id || label?.trackingNumber || label?.tracking_number;
+        if (id) ids.add(String(id));
       }
-      // also include explicit tracking fields
-      if (order?.outboundTrackingNumber) ids.add(String(order.outboundTrackingNumber));
-      if (order?.inboundTrackingNumber) ids.add(String(order.inboundTrackingNumber));
       return ids.size >= 2;
     }
     async function handleSeparateKitOrders() {
@@ -1528,15 +1524,15 @@
         return;
       }
       const ok = confirm(
-        `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_sent" and will NOT notify customers.`
+        `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_on_the_way_to_customer" and will NOT notify customers.`
       );
       if (!ok) return;
       let success = 0, failed = 0;
       for (const o of eligible) {
         try {
-          await updateOrderStatusInline(o.id, "kit_sent", { notifyCustomer: false });
+          await updateOrderStatusInline(o.id, "kit_on_the_way_to_customer", { notifyCustomer: false });
           // keep local in sync (optimistic)
-          o.status = "kit_sent";
+          o.status = "kit_on_the_way_to_customer";
           success++;
         } catch (e) {
           failed++;
@@ -1544,6 +1540,47 @@
       }
       toast(`Separate Kit Orders: ${success} ok, ${failed} failed`, failed ? "error" : "success");
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+    }
+    async function handleBulkSeparatePhoneOnWayKits(buttonEl) {
+      if (state.bulkSeparateKitSentInProgress) return;
+      const sourceOrders = getBaseOrdersForStatus("all");
+      const eligibleSourceStatuses = new Set(["phone_on_the_way", "kit_on_the_way_to_us"]);
+      const eligible = sourceOrders.filter((order) => {
+        const status = normalizeStatusKey(order?.status);
+        return eligibleSourceStatuses.has(status) && shouldAutoMarkKitSent(order);
+      });
+      if (!eligible.length) {
+        toast('No eligible orders found (requires Phone On The Way/Kit On The Way To Us + 2 kit labels)', 'info');
+        return;
+      }
+
+      const ok = confirm(
+        `Move ${eligible.length} order${eligible.length === 1 ? '' : 's'} to \"kit_on_the_way_to_customer\"?\n\nThis will NOT notify customers.`
+      );
+      if (!ok) return;
+
+      state.bulkSeparateKitSentInProgress = true;
+      if (buttonEl) buttonEl.disabled = true;
+      render();
+
+      let success = 0;
+      let failed = 0;
+      try {
+        for (const order of eligible) {
+          try {
+            await updateOrderStatusInline(order.id, "kit_on_the_way_to_customer", { notifyCustomer: false });
+            order.status = "kit_on_the_way_to_customer";
+            success++;
+          } catch (_) {
+            failed++;
+          }
+        }
+        toast(`Bulk separate complete: ${success} updated, ${failed} failed`, failed ? 'error' : 'success');
+      } finally {
+        state.bulkSeparateKitSentInProgress = false;
+        if (buttonEl) buttonEl.disabled = false;
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
     }
     // ----------------------------
     // SPEC: REFRESH ALL TRACKING (kit/email) with concurrency=4
@@ -2527,6 +2564,12 @@
           count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
         };
       }
+      if (s === "shipping_kit_requested" || s === "kit_on_the_way_to_customer" || s === "kit_delivered" || s === "kit_on_the_way_to_us") {
+        return {
+          pill: isActive ? "bg-cyan-600 text-white shadow-md" : "bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-cyan-100 text-cyan-700"
+        };
+      }
       if (s === "emailed" || s === "received") {
         return {
           pill: isActive ? "bg-indigo-500 text-white shadow-md" : "bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100",
@@ -2555,7 +2598,11 @@
       const items = [
         { key: "all", label: "All", count: statusCountAll },
         { key: "order_pending", label: "Order Pending", count: statusCounts.get("order_pending") || 0 },
+        { key: "shipping_kit_requested", label: "Kit Requested", count: statusCounts.get("shipping_kit_requested") || 0 },
         { key: "kit_needs_printing", label: "Kit Needs Printing", count: visible.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
+        { key: "kit_on_the_way_to_customer", label: "Kit To Customer", count: statusCounts.get("kit_on_the_way_to_customer") || 0 },
+        { key: "kit_delivered", label: "Kit Delivered", count: statusCounts.get("kit_delivered") || 0 },
+        { key: "kit_on_the_way_to_us", label: "Kit On The Way To Us", count: statusCounts.get("kit_on_the_way_to_us") || 0 },
         { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
         { key: "phone_on_the_way", label: "Phone On The Way To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "phone_on_the_way").length },
         { key: "delivered_to_us", label: "Delivered", count: visible.filter(o => normalizeStatusKey(o?.status) === "delivered_to_us").length },
@@ -2626,6 +2673,12 @@
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200">
                 <i data-lucide="package-plus" style="width:18px;height:18px"></i>
                 Generate Shipping Label
+              </button>
+              <button id="bulk-separate-kit-sent"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkSeparateKitSentInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-cyan-200'}"
+                ${state.bulkSeparateKitSentInProgress ? 'disabled' : ''}>
+                <i data-lucide="git-branch-plus" class="${state.bulkSeparateKitSentInProgress ? 'animate-pulse' : ''}" style="width:18px;height:18px"></i>
+                ${state.bulkSeparateKitSentInProgress ? 'Separating Kits…' : 'Separate Phone-On-The-Way Kits'}
               </button>
               <button id="bulk-void-test-orders"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidTestInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200'}"
@@ -3490,7 +3543,7 @@
 
         // Tracking - reordered with better styling
         // Print docs (mock check for URL)
-        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent"].includes(status)) {
+        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent", "kit_on_the_way_to_customer"].includes(status)) {
              groups.tracking.unshift({ label: "Print all packing slips", action: "printDocs", options: { includeAllPackingSlips: true }, class: "bg-white border-slate-200" });
         }
         // Print Packing Slip with better styling
@@ -4622,6 +4675,10 @@
       const btnBulkGenerateShippingLabel = document.getElementById("bulk-generate-shipping-label");
       if (btnBulkGenerateShippingLabel) {
         btnBulkGenerateShippingLabel.addEventListener("click", () => openShippingLabelModal());
+      }
+      const btnBulkSeparateKitSent = document.getElementById("bulk-separate-kit-sent");
+      if (btnBulkSeparateKitSent) {
+        btnBulkSeparateKitSent.addEventListener("click", () => handleBulkSeparatePhoneOnWayKits(btnBulkSeparateKitSent));
       }
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
