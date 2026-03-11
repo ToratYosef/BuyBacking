@@ -6826,7 +6826,7 @@ app.post('/orders/:id/sync-label-tracking', async (req, res) => {
 
 app.post("/orders/:id/re-offer", async (req, res) => {
   try {
-    const { newPrice, reasons, comments, deviceKey } = req.body;
+    const { newPrice, reasons, comments, deviceKey, carrier, condition, brand, modelId, storage } = req.body;
     const orderId = req.params.id;
 
     if (!newPrice || !reasons || !Array.isArray(reasons) || reasons.length === 0) {
@@ -6844,10 +6844,19 @@ app.post("/orders/:id/re-offer", async (req, res) => {
       ? deviceKey.trim()
       : buildOrderDeviceKey(orderId, 0);
 
+    const normalizedDeviceDetails = {
+      carrier: typeof carrier === 'string' ? carrier.trim() : '',
+      condition: typeof condition === 'string' ? condition.trim() : '',
+      brand: typeof brand === 'string' ? brand.trim() : '',
+      modelId: typeof modelId === 'string' ? modelId.trim() : '',
+      storage: typeof storage === 'string' ? storage.trim() : '',
+    };
+
     const nextOffer = {
       newPrice,
       reasons,
       comments,
+      deviceDetails: normalizedDeviceDetails,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       autoAcceptDate: admin.firestore.Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
     };
@@ -6885,6 +6894,16 @@ app.post("/orders/:id/re-offer", async (req, res) => {
 
     let reasonString = reasons.join(", ");
     if (comments) reasonString += `; ${comments}`;
+    const detailSummary = [
+      normalizedDeviceDetails.brand,
+      normalizedDeviceDetails.modelId,
+      normalizedDeviceDetails.storage,
+      normalizedDeviceDetails.carrier,
+      normalizedDeviceDetails.condition,
+    ].filter(Boolean).join(' / ');
+    if (detailSummary) {
+      reasonString += `${reasonString ? '; ' : ''}Updated device details: ${detailSummary}`;
+    }
 
     const customerName = order.shippingInfo.fullName || "there";
     const encodedDeviceKey = encodeURIComponent(resolvedDeviceKey);
