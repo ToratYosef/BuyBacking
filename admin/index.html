@@ -1032,17 +1032,33 @@
     }
 
     async function openReofferModal(order, qcData = null) {
+      const entries = getOrderDeviceEntries(order);
+      const selectedKey = state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
+      const parsed = parseOrderDeviceKey(selectedKey);
+      const selectedEntry = entries.find((entry) => entry.deviceIndex === parsed.deviceIndex) || entries[0] || { deviceIndex: 0, item: order };
+      const selectedItem = selectedEntry.item || order;
+      const selectedDeviceKey = buildOrderDeviceKey(order.id, selectedEntry.deviceIndex || 0);
       const fallbackPrice = getOrderPayoutTotal(order);
       const computedPrice = await getQcOfferFromDb(order, qcData);
       const finalPrice = Number.isFinite(computedPrice) ? computedPrice : fallbackPrice;
       const reasons = composeReofferReasoning(order, qcData, computedPrice);
+      const availableDevices = entries.map((entry) => {
+        const item = entry.item || order;
+        const key = buildOrderDeviceKey(order.id, entry.deviceIndex);
+        const label = `${item.device || `Device ${entry.deviceIndex + 1}`} • ${item.storage || 'Storage N/A'}`;
+        return { key, label, item };
+      });
       state.reofferData = {
-        deviceKey: state.qcDeviceKey || state.selectedDeviceKey || null,
+        deviceKey: selectedDeviceKey,
+        availableDevices,
         newPrice: Number(finalPrice || 0).toFixed(2),
         reasons: reasons.join('\n'),
         comments: qcData?.deviceMatch === 'no' ? `Device mismatch: ${qcData?.deviceName || 'updated in QC'}` : '',
-        carrier: qcData?.carrier || order?.carrier || order?.lock || '',
-        condition: qcData?.condition || order?.condition || 'good'
+        carrier: qcData?.carrier || selectedItem?.carrier || selectedItem?.lock || order?.carrier || order?.lock || '',
+        condition: qcData?.condition || selectedItem?.condition || order?.condition || 'good',
+        brand: qcData?.actualBrand || selectedItem?.brand || order?.brand || '',
+        modelId: qcData?.actualModelId || selectedItem?.modelId || selectedItem?.model || order?.modelId || order?.model || '',
+        storage: (qcData?.storageMatch === 'no' ? qcData?.actualStorage : qcData?.storage) || selectedItem?.storage || order?.storage || ''
       };
       state.reofferOpen = true;
     }
@@ -1062,6 +1078,29 @@
     function getDeviceStatus(order, deviceKey) {
       if (!order || !deviceKey) return normalizeStatusKey(order?.status || 'order_pending');
       return normalizeStatusKey(order?.deviceStatusByKey?.[deviceKey] || order?.status || 'order_pending');
+    }
+
+    function getEffectiveOrderStatus(order) {
+      if (!order) return 'order_pending';
+      const entries = getOrderDeviceEntries(order);
+      if (entries.length === 1) {
+        const singleDeviceKey = buildOrderDeviceKey(order.id, entries[0].deviceIndex);
+        return getDeviceStatus(order, singleDeviceKey);
+      }
+      return normalizeStatusKey(order?.status || 'order_pending');
+    }
+
+    function getActiveDeviceKey(order) {
+      if (!order) return null;
+      const entries = getOrderDeviceEntries(order);
+      if (!entries.length) return null;
+      if (state.selectedDeviceKey) {
+        const parsed = parseOrderDeviceKey(state.selectedDeviceKey);
+        if (parsed?.orderId === order.id) {
+          return state.selectedDeviceKey;
+        }
+      }
+      return buildOrderDeviceKey(order.id, entries[0].deviceIndex);
     }
     
     // Compute order status from all device statuses
@@ -1086,6 +1125,11 @@
         const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
         return getDeviceStatus(order, deviceKey);
       });
+
+      // Single-device orders should mirror the only device status exactly.
+      if (deviceStatuses.length === 1) {
+        return deviceStatuses[0] || currentOrderStatus;
+      }
       
       // Status priority for aggregation (higher index = more progressed)
       const statusPriority = {
@@ -1122,10 +1166,15 @@
     async function updateDeviceStatusInline(orderId, deviceKey, newStatus) {
       if (!orderId || !deviceKey || !newStatus) return;
       const orderRef = doc(db, 'orders', orderId);
-      await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
+      const order = state.allOrders.find((entry) => entry.id === orderId);
+      const payload = {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
         updatedAt: new Date()
-      }));
+      };
+      if (order && getOrderDeviceEntries(order).length === 1) {
+        payload.status = newStatus;
+      }
+      await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, payload));
     }
     function getLastUpdateTimestamp(order) {
       return (
@@ -3001,14 +3050,13 @@
     function renderStatusDropdown(order) {
       const open = state.statusDropdownOpen;
       if (!open) return "";
-      const focused = getFocusedDevice(order);
-      const isDeviceScoped = focused.isFocused && focused.deviceKey;
-      const activeStatus = isDeviceScoped ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
+      const activeDeviceKey = getActiveDeviceKey(order);
+      const activeStatus = activeDeviceKey ? getDeviceStatus(order, activeDeviceKey) : getEffectiveOrderStatus(order);
       return `
         <div class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-[1300]">
           <div class="p-2 max-h-72 overflow-y-auto">
             ${STATUS_DROPDOWN_OPTIONS.map(s => `
-              <button ${isDeviceScoped ? `data-set-device-status="${esc(s)}"` : `data-set-status="${esc(s)}"`}
+              <button ${activeDeviceKey ? `data-set-device-status="${esc(s)}" data-device-key="${esc(activeDeviceKey)}"` : `data-set-status="${esc(s)}"`}
                 class="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold ${
                   activeStatus === normalizeStatusKey(s) ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-700"
                 }">
@@ -3031,7 +3079,7 @@
       ];
       const entries = getOrderDeviceEntries(order);
       const focused = getFocusedDevice(order);
-      const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
+      const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order);
       tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
       const visibleEntries = entries;
       if (noLabelCustomerSend && state.drawerTab === "shipping") {
@@ -3450,7 +3498,7 @@
     }
     function renderDrawerFooter(order) {
         const focused = getFocusedDevice(order);
-        const status = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status || "order_pending");
+        const status = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order);
         const hasQc = focused.isFocused ? !!(order?.qcDataByDevice?.[focused.deviceKey]) : !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length));
       const settlement = getOrderSettlementSummary(order);
         const groups = {
@@ -3495,18 +3543,18 @@
         }
         else if (["received", "imei_checked"].includes(status)) {
             // QC is now opened only from overview section by clicking devices
-            // Only show Mark Completed after QC is complete
+            // Manual re-offer can still be sent without running QC.
+            groups.postReceive.push({ label: "Send Re-offer", action: "reOffer", class: "bg-purple-600 text-white hover:bg-purple-700" });
             if (hasQc && settlement.payableCount > 0) {
               groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
             }
             if (settlement.declinedCount > 0) {
               groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
             }
-            // Reoffer button removed - only accessible via Finish QC
         }
         else if (status === "emailed") {
             // QC is now opened only from overview section by clicking devices
-            // Reoffer button removed
+            groups.postReceive.push({ label: "Send Re-offer", action: "reOffer", class: "bg-purple-600 text-white hover:bg-purple-700" });
             if (settlement.declinedCount > 0) {
               groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
             }
@@ -3880,6 +3928,12 @@
                 ${Number.isFinite(originalPriceCap) ? `<p class="mt-1 text-[11px] text-slate-500">Max re-offer is original price: $${esc(Number(originalPriceCap).toFixed(2))}</p>` : ''}
               </div>
               <div class="grid grid-cols-2 gap-3">
+                <div class="col-span-2">
+                  <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Select Device</label>
+                  <select id="reofferDeviceKey" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white">
+                    ${(Array.isArray(d.availableDevices) ? d.availableDevices : []).map((entry) => `<option value="${esc(entry.key)}" ${entry.key === d.deviceKey ? 'selected' : ''}>${esc(entry.label)}</option>`).join('')}
+                  </select>
+                </div>
                 <div>
                   <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Carrier</label>
                   <input id="reofferCarrier" type="text" value="${esc(d.carrier)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
@@ -3887,6 +3941,18 @@
                 <div>
                   <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Condition</label>
                   <input id="reofferCondition" type="text" value="${esc(d.condition)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Brand</label>
+                  <input id="reofferBrand" type="text" value="${esc(d.brand)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Model</label>
+                  <input id="reofferModel" type="text" value="${esc(d.modelId)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                </div>
+                <div class="col-span-2">
+                  <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Storage</label>
+                  <input id="reofferStorage" type="text" value="${esc(d.storage)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
                 </div>
               </div>
               <div>
@@ -4862,11 +4928,14 @@
           e.preventDefault();
           e.stopPropagation();
           const order = getSelectedOrder();
-          if (!order || !state.selectedDeviceKey) return;
+          if (!order) return;
+          const targetDeviceKey = btn.getAttribute("data-device-key") || getActiveDeviceKey(order);
+          if (!targetDeviceKey) return;
+          state.selectedDeviceKey = targetDeviceKey;
           const newStatus = btn.getAttribute("data-set-device-status");
           state.statusDropdownOpen = false;
           render();
-          await updateDeviceStatusInline(order.id, state.selectedDeviceKey, newStatus);
+          await updateDeviceStatusInline(order.id, targetDeviceKey, newStatus);
           toast(`Device status updated to ${formatStatusLabel(newStatus)}`, "success");
         });
       });
@@ -5183,13 +5252,27 @@
         const closeReoffer = () => { state.reofferOpen = false; state.reofferData = null; state.modalScrollTop.reoffer = 0; render(); };
         document.getElementById("reofferCloseBtn")?.addEventListener("click", closeReoffer);
         document.getElementById("reofferCancelBtn")?.addEventListener("click", closeReoffer);
+        document.getElementById("reofferDeviceKey")?.addEventListener("change", (event) => {
+          const targetKey = event?.target?.value || '';
+          if (!state.reofferData || !targetKey) return;
+          const picked = (state.reofferData.availableDevices || []).find((entry) => entry.key === targetKey);
+          state.reofferData.deviceKey = targetKey;
+          if (picked?.item) {
+            state.reofferData.carrier = picked.item.carrier || picked.item.lock || state.reofferData.carrier || '';
+            state.reofferData.condition = picked.item.condition || state.reofferData.condition || 'good';
+            state.reofferData.brand = picked.item.brand || state.reofferData.brand || '';
+            state.reofferData.modelId = picked.item.modelId || picked.item.model || state.reofferData.modelId || '';
+            state.reofferData.storage = picked.item.storage || state.reofferData.storage || '';
+          }
+          render();
+        });
         document.getElementById("reofferSubmitBtn")?.addEventListener("click", async () => {
           const price = Number(document.getElementById("reofferPrice")?.value || 0);
           const reasons = (document.getElementById("reofferReasons")?.value || "").trim();
           const comments = (document.getElementById("reofferComments")?.value || "").trim();
           const carrier = (document.getElementById("reofferCarrier")?.value || "").trim();
           const condition = (document.getElementById("reofferCondition")?.value || "").trim();
-          const deviceKey = state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null;
+          const deviceKey = (document.getElementById("reofferDeviceKey")?.value || "").trim() || state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null;
           const originalPrice = Number(getOriginalReofferCap(order, deviceKey));
           if (Number.isFinite(originalPrice) && price > (originalPrice + 0.009)) {
             state.reofferPriceGuardData = { enteredPrice: price, originalPrice };
