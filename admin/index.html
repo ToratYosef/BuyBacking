@@ -1524,15 +1524,15 @@
         return;
       }
       const ok = confirm(
-        `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_sent" and will NOT notify customers.`
+        `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_on_the_way_to_customer" and will NOT notify customers.`
       );
       if (!ok) return;
       let success = 0, failed = 0;
       for (const o of eligible) {
         try {
-          await updateOrderStatusInline(o.id, "kit_sent", { notifyCustomer: false });
+          await updateOrderStatusInline(o.id, "kit_on_the_way_to_customer", { notifyCustomer: false });
           // keep local in sync (optimistic)
-          o.status = "kit_sent";
+          o.status = "kit_on_the_way_to_customer";
           success++;
         } catch (e) {
           failed++;
@@ -1555,7 +1555,7 @@
       }
 
       const ok = confirm(
-        `Move ${eligible.length} order${eligible.length === 1 ? '' : 's'} to \"kit_sent\"?\n\nThis will NOT notify customers.`
+        `Move ${eligible.length} order${eligible.length === 1 ? '' : 's'} to \"kit_on_the_way_to_customer\"?\n\nThis will NOT notify customers.`
       );
       if (!ok) return;
 
@@ -1568,8 +1568,8 @@
       try {
         for (const order of eligible) {
           try {
-            await updateOrderStatusInline(order.id, "kit_sent", { notifyCustomer: false });
-            order.status = "kit_sent";
+            await updateOrderStatusInline(order.id, "kit_on_the_way_to_customer", { notifyCustomer: false });
+            order.status = "kit_on_the_way_to_customer";
             success++;
           } catch (_) {
             failed++;
@@ -3543,7 +3543,7 @@
 
         // Tracking - reordered with better styling
         // Print docs (mock check for URL)
-        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent"].includes(status)) {
+        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent", "kit_on_the_way_to_customer"].includes(status)) {
              groups.tracking.unshift({ label: "Print all packing slips", action: "printDocs", options: { includeAllPackingSlips: true }, class: "bg-white border-slate-200" });
         }
         // Print Packing Slip with better styling
