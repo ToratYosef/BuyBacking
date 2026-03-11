@@ -3,7 +3,7 @@
 <head>
     <link rel="icon" href="/favicon/favicon.ico">
     <script>
-      window.SHC_API_BASE_URL = "/server";
+      window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
     </script>
 
   <!-- Google tag (gtag.js) -->
@@ -416,19 +416,44 @@
                 return hasName || hasCondition;
             });
             const API_BASE = String(window.SHC_API_BASE_URL || '/server');
+            const API_BASE_CANDIDATES = Array.from(new Set([
+                API_BASE,
+                '/server',
+                'https://api.secondhandcell.com/server'
+            ].map((base) => String(base || '').trim()).filter(Boolean)));
+
+            const parseOrderPayload = async (response) => {
+                const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+                if (!contentType.includes('application/json')) {
+                    throw new Error(`Expected JSON response but received content-type: ${contentType || 'unknown'}`);
+                }
+
+                const payload = await response.json();
+                if (payload && typeof payload === 'object' && payload.order && typeof payload.order === 'object') {
+                    return payload.order;
+                }
+                return payload;
+            };
 
             const fetchOrderById = async (targetOrderId) => {
                 const safeId = String(targetOrderId || '').trim();
                 if (!safeId) return null;
                 try {
-                    const endpoint = `${API_BASE.replace(/\/$/, '')}/orders/${encodeURIComponent(safeId)}`;
-                    const response = await fetch(endpoint, { method: 'GET' });
-                    if (!response.ok) return null;
-                    const payload = await response.json();
-                    if (payload && typeof payload === 'object' && payload.order && typeof payload.order === 'object') {
-                        return payload.order;
+                    for (const baseUrl of API_BASE_CANDIDATES) {
+                        const endpoint = `${baseUrl.replace(/\/$/, '')}/orders/${encodeURIComponent(safeId)}`;
+                        const response = await fetch(endpoint, { method: 'GET' });
+                        if (!response.ok) continue;
+
+                        try {
+                            return await parseOrderPayload(response);
+                        } catch (parseError) {
+                            console.warn('[Order Submitted] Invalid order API response format.', {
+                                endpoint,
+                                reason: parseError?.message || parseError
+                            });
+                        }
                     }
-                    return payload;
+                    return null;
                 } catch (error) {
                     console.warn('Unable to fetch order details for submitted page', error);
                     return null;
