@@ -1079,6 +1079,16 @@
       if (!order || !deviceKey) return normalizeStatusKey(order?.status || 'order_pending');
       return normalizeStatusKey(order?.deviceStatusByKey?.[deviceKey] || order?.status || 'order_pending');
     }
+
+    function getEffectiveOrderStatus(order) {
+      if (!order) return 'order_pending';
+      const entries = getOrderDeviceEntries(order);
+      if (entries.length === 1) {
+        const singleDeviceKey = buildOrderDeviceKey(order.id, entries[0].deviceIndex);
+        return getDeviceStatus(order, singleDeviceKey);
+      }
+      return normalizeStatusKey(order?.status || 'order_pending');
+    }
     
     // Compute order status from all device statuses
     // Pre-receive statuses (order_pending through label_generated) are order-level
@@ -1102,6 +1112,11 @@
         const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
         return getDeviceStatus(order, deviceKey);
       });
+
+      // Single-device orders should mirror the only device status exactly.
+      if (deviceStatuses.length === 1) {
+        return deviceStatuses[0] || currentOrderStatus;
+      }
       
       // Status priority for aggregation (higher index = more progressed)
       const statusPriority = {
@@ -1138,10 +1153,15 @@
     async function updateDeviceStatusInline(orderId, deviceKey, newStatus) {
       if (!orderId || !deviceKey || !newStatus) return;
       const orderRef = doc(db, 'orders', orderId);
-      await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
+      const order = state.allOrders.find((entry) => entry.id === orderId);
+      const payload = {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
         updatedAt: new Date()
-      }));
+      };
+      if (order && getOrderDeviceEntries(order).length === 1) {
+        payload.status = newStatus;
+      }
+      await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, payload));
     }
     function getLastUpdateTimestamp(order) {
       return (
@@ -3041,7 +3061,7 @@
       if (!open) return "";
       const focused = getFocusedDevice(order);
       const isDeviceScoped = focused.isFocused && focused.deviceKey;
-      const activeStatus = isDeviceScoped ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
+      const activeStatus = isDeviceScoped ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order);
       return `
         <div class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-[1300]">
           <div class="p-2 max-h-72 overflow-y-auto">
@@ -3069,7 +3089,7 @@
       ];
       const entries = getOrderDeviceEntries(order);
       const focused = getFocusedDevice(order);
-      const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status);
+      const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order);
       tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
       const visibleEntries = entries;
       if (noLabelCustomerSend && state.drawerTab === "shipping") {
@@ -3488,7 +3508,7 @@
     }
     function renderDrawerFooter(order) {
         const focused = getFocusedDevice(order);
-        const status = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : normalizeStatusKey(order.status || "order_pending");
+        const status = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order);
         const hasQc = focused.isFocused ? !!(order?.qcDataByDevice?.[focused.deviceKey]) : !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length));
       const settlement = getOrderSettlementSummary(order);
         const groups = {
