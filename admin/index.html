@@ -1089,6 +1089,19 @@
       }
       return normalizeStatusKey(order?.status || 'order_pending');
     }
+
+    function getActiveDeviceKey(order) {
+      if (!order) return null;
+      const entries = getOrderDeviceEntries(order);
+      if (!entries.length) return null;
+      if (state.selectedDeviceKey) {
+        const parsed = parseOrderDeviceKey(state.selectedDeviceKey);
+        if (parsed?.orderId === order.id) {
+          return state.selectedDeviceKey;
+        }
+      }
+      return buildOrderDeviceKey(order.id, entries[0].deviceIndex);
+    }
     
     // Compute order status from all device statuses
     // Pre-receive statuses (order_pending through label_generated) are order-level
@@ -3059,14 +3072,13 @@
     function renderStatusDropdown(order) {
       const open = state.statusDropdownOpen;
       if (!open) return "";
-      const focused = getFocusedDevice(order);
-      const isDeviceScoped = focused.isFocused && focused.deviceKey;
-      const activeStatus = isDeviceScoped ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order);
+      const activeDeviceKey = getActiveDeviceKey(order);
+      const activeStatus = activeDeviceKey ? getDeviceStatus(order, activeDeviceKey) : getEffectiveOrderStatus(order);
       return `
         <div class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-[1300]">
           <div class="p-2 max-h-72 overflow-y-auto">
             ${STATUS_DROPDOWN_OPTIONS.map(s => `
-              <button ${isDeviceScoped ? `data-set-device-status="${esc(s)}"` : `data-set-status="${esc(s)}"`}
+              <button ${activeDeviceKey ? `data-set-device-status="${esc(s)}" data-device-key="${esc(activeDeviceKey)}"` : `data-set-status="${esc(s)}"`}
                 class="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold ${
                   activeStatus === normalizeStatusKey(s) ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-700"
                 }">
@@ -4938,11 +4950,14 @@
           e.preventDefault();
           e.stopPropagation();
           const order = getSelectedOrder();
-          if (!order || !state.selectedDeviceKey) return;
+          if (!order) return;
+          const targetDeviceKey = btn.getAttribute("data-device-key") || getActiveDeviceKey(order);
+          if (!targetDeviceKey) return;
+          state.selectedDeviceKey = targetDeviceKey;
           const newStatus = btn.getAttribute("data-set-device-status");
           state.statusDropdownOpen = false;
           render();
-          await updateDeviceStatusInline(order.id, state.selectedDeviceKey, newStatus);
+          await updateDeviceStatusInline(order.id, targetDeviceKey, newStatus);
           toast(`Device status updated to ${formatStatusLabel(newStatus)}`, "success");
         });
       });
