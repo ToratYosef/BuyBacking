@@ -2116,25 +2116,37 @@
             body = { status: "completed", ...(options?.body || {}) };
             break;
           case "sendReturnLabel":
-            if (order) {
-              const settlement = getOrderSettlementSummary(order);
-              if (!settlement.declinedCount) {
-                toast("No re-offer declined devices found for return label.", "error");
-                return;
-              }
-              const mailClass = settlement.declinedCount >= 5 ? "priority" : "first_class";
-              endpoint = `/orders/${orderId}/return-label`;
-              method = "POST";
-              body = {
-                mailClass,
-                declinedDeviceCount: settlement.declinedCount,
-                declinedDeviceKeys: settlement.declinedDeviceKeys,
-              };
-              break;
+            if (!order) {
+              toast("Order not found.", "error");
+              return;
             }
+            const normalizedOrderStatus = normalizeStatusKey(order.status || '');
+            if (normalizedOrderStatus === 'return-label-generated') {
+              if (order.returnLabelUrl) {
+                window.open(order.returnLabelUrl, '_blank', 'noopener,noreferrer');
+                toast('Opened existing return label in a new tab.', 'success');
+              } else {
+                toast('Return label is marked generated but no label URL was found.', 'error');
+              }
+              return;
+            }
+            if (normalizedOrderStatus !== 're-offered-declined') {
+              toast('Return labels can only be generated from re-offer declined status.', 'error');
+              return;
+            }
+            const settlement = getOrderSettlementSummary(order);
+            if (!settlement.declinedCount) {
+              toast("No re-offer declined devices found for return label.", "error");
+              return;
+            }
+            const mailClass = settlement.declinedCount >= 5 ? "priority" : "first_class";
             endpoint = `/orders/${orderId}/return-label`;
             method = "POST";
-            body = {};
+            body = {
+              mailClass,
+              declinedDeviceCount: settlement.declinedCount,
+              declinedDeviceKeys: settlement.declinedDeviceKeys,
+            };
             break;
           case "markKitSent":
             endpoint = `/orders/${orderId}/mark-kit-sent`;
@@ -2261,10 +2273,32 @@
             toast(`Unknown action: ${actionType}`, "error");
             return;
         }
-        if (method === "GET") await apiGet(endpoint);
-        else if (method === "POST") await apiPost(endpoint, body ?? {});
+        let actionResult = null;
+        let labelWindow = null;
+        if (actionType === 'sendReturnLabel') {
+          labelWindow = window.open('', '_blank', 'noopener,noreferrer');
+        }
+
+        if (method === "GET") actionResult = await apiGet(endpoint);
+        else if (method === "POST") actionResult = await apiPost(endpoint, body ?? {});
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
+
+        if (actionType === 'sendReturnLabel') {
+          const returnLabelUrl = actionResult?.returnLabelUrl || actionResult?.labelUrl || null;
+          if (returnLabelUrl && labelWindow && !labelWindow.closed) {
+            labelWindow.location = returnLabelUrl;
+          } else if (labelWindow && !labelWindow.closed) {
+            labelWindow.close();
+          }
+
+          if (returnLabelUrl) {
+            toast('Return label opened in a new tab.', 'success');
+          } else {
+            toast('Return label generated, but no label URL was returned.', 'info');
+          }
+        }
+
         await hydrateSelectedOrderDetails(orderId);
         toast(`Action ${actionType} success`, "success");
         // refresh order data by re-running filter (Firestore will also push updates)
@@ -3516,16 +3550,10 @@
             if (hasQc && settlement.payableCount > 0) {
               groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
             }
-            if (settlement.declinedCount > 0) {
-              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
-            }
         }
         else if (status === "emailed") {
             // QC is now opened only from overview section by clicking devices
             groups.postReceive.push({ label: "Send Re-offer", action: "reOffer", class: "bg-purple-600 text-white hover:bg-purple-700" });
-            if (settlement.declinedCount > 0) {
-              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
-            }
         }
         else if (status === "re-offered-pending") {
              // No footer action button for re-offer pending per admin workflow request.
@@ -3540,12 +3568,14 @@
               groups.primary.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700", fullWidth: true });
             }
         }
+        else if (status === "return-label-generated") {
+            if (order.returnLabelUrl) {
+              groups.primary.push({ label: "Open Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700", fullWidth: true });
+            }
+        }
         else if (["requote_accepted", "completed"].includes(status)) {
             if (settlement.payableCount > 0) {
               groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
-            }
-            if (settlement.declinedCount > 0) {
-              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
             }
             groups.postReceive.push({ label: "Send Review Request", action: "sendReviewRequest", class: "bg-white border-slate-200" });
         }
