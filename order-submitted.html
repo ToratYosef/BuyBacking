@@ -304,6 +304,53 @@
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '');
+            const normalizeIphoneToken = (value) => String(value || '')
+                .trim()
+                .toLowerCase()
+                .replace(/\+/g, ' plus ')
+                .replace(/[^a-z0-9]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            const mapIphoneAssetSlug = (modelValue) => {
+                const normalizedModel = normalizeIphoneToken(modelValue);
+                if (!normalizedModel) return '';
+                const iphoneModelMap = {
+                    'iphone x': 'ix',
+                    'iphone xs': 'ixs',
+                    'iphone xs max': 'ixsm',
+                    'iphone se 2': 'ise2',
+                    'iphone se 2nd generation': 'ise2',
+                    'iphone se 3': 'ise3',
+                    'iphone se 3rd generation': 'ise3',
+                    'iphone 11': 'i11',
+                    'iphone 11 pro': 'i11p',
+                    'iphone 11 pro max': 'i11pm',
+                    'iphone 12': 'i12',
+                    'iphone 12 mini': 'i12m',
+                    'iphone 12 pro': 'i12p',
+                    'iphone 12 pro max': 'i12pm',
+                    'iphone 13': 'i13',
+                    'iphone 13 mini': 'i13m',
+                    'iphone 13 pro': 'i13p',
+                    'iphone 13 pro max': 'i13pm',
+                    'iphone 14': 'i14',
+                    'iphone 14 plus': 'i14pl',
+                    'iphone 14 pro': 'i14p',
+                    'iphone 14 pro max': 'i14pm',
+                    'iphone 15': 'i15',
+                    'iphone 15 plus': 'i15pl',
+                    'iphone 15 pro': 'i15p',
+                    'iphone 15 pro max': 'i15pm',
+                    'iphone 16': 'i16',
+                    'iphone 16e': 'i16e',
+                    'iphone 16 plus': 'i16pl',
+                    'iphone 16 pro': 'i16p',
+                    'iphone 16 pro max': 'i16pm',
+                    'iphone 17 pro max': 'i17pm'
+                };
+                if (iphoneModelMap[normalizedModel]) return iphoneModelMap[normalizedModel];
+                return '';
+            };
             const buildImageBaseCandidates = (item = {}) => {
                 const candidates = [];
                 const pushCandidate = (candidate) => {
@@ -314,6 +361,12 @@
                 pushCandidate(firstFilled(item?.imageUrl, item?.image, item?.thumbnail, item?.photo));
 
                 const folder = normalizeBrandFolder(firstFilled(item?.brand, item?.manufacturer));
+                const iphoneAssetSlug = folder === 'iphone'
+                    ? mapIphoneAssetSlug(firstFilled(item?.modelName, item?.model, item?.device))
+                    : '';
+                if (iphoneAssetSlug) {
+                    pushCandidate(`https://cdn.secondhandcell.com/images/iphone/assets/${iphoneAssetSlug}`);
+                }
                 const possibleSlugs = [
                     item?.deviceSlug,
                     item?.slug,
