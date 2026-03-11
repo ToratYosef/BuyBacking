@@ -34,7 +34,6 @@ const newOfferPrice = document.getElementById('newOfferPrice');
 const reofferReason = document.getElementById('reofferReason');
 const reofferComments = document.getElementById('reofferComments');
 const oldOfferPrice = document.getElementById('oldOfferPrice');
-const savingsAmount = document.getElementById('savingsAmount');
 const buyerNameSpan = document.getElementById('buyerName');
 const errorMessage = document.getElementById('errorMessage');
 const acceptOfferBtn = document.getElementById('acceptOfferBtn');
@@ -217,13 +216,9 @@ const originalAmount = resolveOriginalOfferAmount(currentOrderData, offerToDispl
 newOfferPrice.textContent = formatMoney(newOfferAmount);
 oldOfferPrice.textContent = formatMoney(originalAmount);
 
-const savings = Number.isFinite(newOfferAmount) && Number.isFinite(originalAmount)
-? Math.max(0, originalAmount - newOfferAmount)
-: null;
-savingsAmount.textContent = savings === null ? 'N/A' : formatMoney(savings);
-
 const reasons = Array.isArray(offerToDisplay?.reasons) ? offerToDisplay.reasons.filter(Boolean) : [];
-reofferReason.textContent = reasons.length ? reasons.join(', ') : 'No reason was provided.';
+reofferReason.textContent = reasons.length ? reasons.join('\n') : 'No reason was provided.';
+reofferReason.style.whiteSpace = 'pre-line';
 reofferComments.textContent = offerToDisplay?.comments || 'No additional notes provided by our team.';
 buyerNameSpan.textContent = currentOrderData.shippingInfo?.fullName || 'Customer';
 
