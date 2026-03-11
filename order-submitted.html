@@ -666,42 +666,18 @@
                 if (!frame || !frameFallback) return false;
 
                 try {
-                    if (!window.pdfjsLib) throw new Error('pdfjs not loaded');
-                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.5.136/pdf.worker.min.js';
-
-                    const loadingTask = window.pdfjsLib.getDocument({ url: labelUrl, withCredentials: false });
-                    const pdfDoc = await loadingTask.promise;
-
-                    frame.innerHTML = '';
-                    for (let pageNumber = 1; pageNumber <= pdfDoc.numPages; pageNumber += 1) {
-                        const page = await pdfDoc.getPage(pageNumber);
-                        const viewport = page.getViewport({ scale: 1 });
-                        const targetWidth = Math.min(frame.clientWidth || viewport.width, 900);
-                        const scale = targetWidth / viewport.width;
-                        const scaledViewport = page.getViewport({ scale });
-                        const canvas = document.createElement('canvas');
-                        const context = canvas.getContext('2d');
-
-                        canvas.width = Math.floor(scaledViewport.width);
-                        canvas.height = Math.floor(scaledViewport.height);
-                        canvas.style.width = '100%';
-                        canvas.style.height = 'auto';
-                        canvas.style.borderRadius = '0.75rem';
-                        canvas.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.18)';
-                        canvas.style.marginBottom = pageNumber === pdfDoc.numPages ? '0' : '0.75rem';
-
-                        await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
-                        frame.appendChild(canvas);
-                    }
+                    frame.removeAttribute('src');
+                    frame.src = labelUrl;
 
                     frame.classList.remove('hidden');
                     frameFallback.classList.add('hidden');
                     return true;
                 } catch (error) {
                     console.warn('Unable to render label PDF in-page:', error);
+                    frame.removeAttribute('src');
                     frame.classList.add('hidden');
                     frameFallback.classList.remove('hidden');
-                    frameFallback.textContent = 'Unable to render label preview on this device. Tap Print Label PDF to open the file directly.';
+                    frameFallback.textContent = 'Unable to render label preview. Use Print Label PDF to open the file directly.';
                     return false;
                 }
             };
