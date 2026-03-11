@@ -829,12 +829,24 @@
                 sessionSummary?.autoLabelStatus
             ).toLowerCase();
 
+            const labelShouldAlreadyExist = ['generated', 'completed', 'ready'].includes(autoLabelStatus);
+
             if (!isKitShipping && orderId && orderId !== 'Pending') {
                 if (!existingLabelUrl) {
-                    console.error('[Order Submitted] No shipping label URL available for this order.', { orderId, dbLabelLookupFailed });
+                    const missingLabelLog = labelShouldAlreadyExist ? console.error : console.warn;
+                    missingLabelLog('[Order Submitted] No shipping label URL available for this order.', {
+                        orderId,
+                        dbLabelLookupFailed,
+                        autoLabelStatus: autoLabelStatus || 'unknown'
+                    });
                 }
                 if (!existingTrackingNumber) {
-                    console.error('[Order Submitted] No tracking number available for this order.', { orderId, dbLabelLookupFailed });
+                    const missingTrackingLog = labelShouldAlreadyExist ? console.error : console.warn;
+                    missingTrackingLog('[Order Submitted] No tracking number available for this order.', {
+                        orderId,
+                        dbLabelLookupFailed,
+                        autoLabelStatus: autoLabelStatus || 'unknown'
+                    });
                 }
             }
             const labelWarning = firstFilled(
