@@ -53,14 +53,14 @@ try {
 const db = getFirestore();
 
 /**
- * Finds orders matching the criteria and updates their status to 'kit_sent'.
+ * Finds orders matching the criteria and updates their status to 'kit_on_the_way_to_customer'.
  */
 async function updateOrdersStatus() {
     // Define the specific query criteria
     const collectionPath = 'orders';
     const targetShippingPreference = 'Shipping Kit Requested';
     const targetStatus = 'label_generated';
-    const newStatus = 'kit_sent';
+    const newStatus = 'kit_on_the_way_to_customer';
 
     console.log(`\n--- Starting Order Update Process ---`);
     console.log(`Looking in collection: /${collectionPath}`);

@@ -303,10 +303,10 @@ function resolveInboundTransitResetStatus(order = {}) {
         }
 
         if (order?.kitSentAt) {
-            return 'kit_sent';
+            return KIT_TRANSIT_STATUS;
         }
 
-        return 'kit_sent';
+        return KIT_TRANSIT_STATUS;
     }
 
     return 'label_generated';
@@ -662,8 +662,8 @@ async function buildKitTrackingUpdate(
             if (!order?.kitSentAt && typeof serverTimestamp === 'function') {
                 updatePayload.kitSentAt = serverTimestamp();
             }
-        } else if (normalizedStatus !== 'kit_sent') {
-            updatePayload.status = 'kit_sent';
+        } else if (normalizedStatus !== KIT_TRANSIT_STATUS) {
+            updatePayload.status = KIT_TRANSIT_STATUS;
             if (typeof serverTimestamp === 'function') {
                 updatePayload.lastStatusUpdateAt = serverTimestamp();
             }

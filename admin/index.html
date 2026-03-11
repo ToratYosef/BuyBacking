@@ -171,7 +171,8 @@
     const RECEIVED_VALUES = new Set(["received", "imei_checked", "delivered_to_us", "phone_on_the_way"]);
     const PAST_RECEIVED_VALUES = new Set(["received", "completed", "re-offered-accepted", "re-offered-declined", "re-offered-auto-accepted"]);
     function normalizeStatusKey(status) {
-      return String(status || "").trim().toLowerCase();
+      const normalized = String(status || "").trim().toLowerCase();
+      return normalized === "kit_sent" ? "kit_on_the_way_to_customer" : normalized;
     }
     function isCancelledStatusValue(status) {
       const normalized = normalizeStatusKey(status);
@@ -2174,10 +2175,10 @@
             break;
           // New Actions from JSON Spec
           case "manualFulfill":
-            // "Order Manually Fulfilled" -> usually implies marking it completed or kit sent without generating label
-            // For now, prompt for intended status or set to kit_sent/completed?
+            // "Order Manually Fulfilled" -> usually implies marking it completed or kit to customer without generating label
+            // For now, prompt for intended status or set to kit_on_the_way_to_customer/completed?
             // Spec says "Order Manually Fulfilled", typically this means "mark as completed" in simple systems, 
-            // or "kit sent" manually. I'll default to marking kit sent for now or completed if the user confirms.
+            // or "kit to customer" manually. I'll default to marking kit to customer for now or completed if the user confirms.
             const manualOk = await showConfirmation({
               title: 'Manual Fulfillment',
               message: 'Mark this order as manually fulfilled (completed)?',
@@ -3488,7 +3489,7 @@
           }
         }
         else if (status === "label_generated") {
-            if (isKitReq) groups.shipping.push({ label: "Mark Kit Sent", action: "markKitSent", class: "bg-white border-slate-200 text-slate-700" });
+            if (isKitReq) groups.shipping.push({ label: "Mark Kit To Customer", action: "markKitSent", class: "bg-white border-slate-200 text-slate-700" });
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
           groups.shipping.push({ label: "Update Tracking", action: "updateTracking", class: "bg-blue-50 border-blue-200 text-blue-700" });
         }
@@ -3543,7 +3544,7 @@
 
         // Tracking - reordered with better styling
         // Print docs (mock check for URL)
-        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_sent", "kit_on_the_way_to_customer"].includes(status)) {
+        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_on_the_way_to_customer"].includes(status)) {
              groups.tracking.unshift({ label: "Print all packing slips", action: "printDocs", options: { includeAllPackingSlips: true }, class: "bg-white border-slate-200" });
         }
         // Print Packing Slip with better styling
