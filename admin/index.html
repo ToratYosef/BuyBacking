@@ -1501,24 +1501,19 @@
       }
     }
     function shouldAutoMarkKitSent(order) {
-      // Spec: require >=2 kit label identifiers, not past received, not locked statuses
+      // Require at least 2 distinct ShipEngine kit labels, and skip locked/final statuses.
       const s = normalizeStatusKey(order?.status);
       if (isStatusPastReceived(s)) return false;
       const locked = new Set(["cancelled", "completed", "received"]);
       if (locked.has(s)) return false;
-      // ">=2 kit label identifiers" heuristic based on fields commonly present
+
+      // Strictly count labels from shipEngineLabels (do not infer from generic tracking fields).
       const ids = new Set();
       const labels = getShipEngineLabelEntries(order);
-      for (const { value: l } of labels) {
-        if (l?.labelId) ids.add(String(l.labelId));
-        if (l?.label_id) ids.add(String(l.label_id));
-        if (l?.id) ids.add(String(l.id));
-        if (l?.trackingNumber) ids.add(String(l.trackingNumber));
-        if (l?.tracking_number) ids.add(String(l.tracking_number));
+      for (const { value: label } of labels) {
+        const id = label?.labelId || label?.label_id || label?.id || label?.trackingNumber || label?.tracking_number;
+        if (id) ids.add(String(id));
       }
-      // also include explicit tracking fields
-      if (order?.outboundTrackingNumber) ids.add(String(order.outboundTrackingNumber));
-      if (order?.inboundTrackingNumber) ids.add(String(order.inboundTrackingNumber));
       return ids.size >= 2;
     }
     async function handleSeparateKitOrders() {
@@ -1550,9 +1545,12 @@
       if (state.bulkSeparateKitSentInProgress) return;
       const sourceOrders = getBaseOrdersForStatus("all");
       const eligibleSourceStatuses = new Set(["phone_on_the_way", "kit_on_the_way_to_us"]);
-      const eligible = sourceOrders.filter((order) => eligibleSourceStatuses.has(normalizeStatusKey(order?.status)));
+      const eligible = sourceOrders.filter((order) => {
+        const status = normalizeStatusKey(order?.status);
+        return eligibleSourceStatuses.has(status) && shouldAutoMarkKitSent(order);
+      });
       if (!eligible.length) {
-        toast('No orders in "Phone On The Way To Us" status found', 'info');
+        toast('No eligible orders found (requires Phone On The Way/Kit On The Way To Us + 2 kit labels)', 'info');
         return;
       }
 
