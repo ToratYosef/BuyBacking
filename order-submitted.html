@@ -738,8 +738,11 @@
                 }
 
                 if (trackingNumber) {
-                    const trackingBase = isFasterShipping ? 'https://www.ups.com/track?tracknum=' : 'https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=';
-                    document.getElementById('labelTrackingDisplay').innerHTML = `Tracking: <a href="${trackingBase}${trackingNumber}" target="_blank" class="underline font-bold">${trackingNumber}</a>`;
+                    const isUpsTracking = /^1Z/i.test(String(trackingNumber || '').trim());
+                    const trackingUrl = isUpsTracking
+                        ? `https://www.ups.com/track?track=yes&trackNums=${encodeURIComponent(trackingNumber)}`
+                        : `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${encodeURIComponent(trackingNumber)}`;
+                    document.getElementById('labelTrackingDisplay').innerHTML = `Tracking: <a href="${trackingUrl}" target="_blank" class="underline font-bold">${trackingNumber}</a>`;
                 }
             };
 

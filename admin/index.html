@@ -479,6 +479,14 @@
         ""
       );
     }
+    function getTrackingLink(trackingNumber) {
+      const tracking = String(trackingNumber || '').trim();
+      if (!tracking) return '';
+      if (/^1Z/i.test(tracking)) {
+        return `https://www.ups.com/track?track=yes&trackNums=${encodeURIComponent(tracking)}`;
+      }
+      return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(tracking)}`;
+    }
     function getShipEngineLabelEntries(order) {
       const labels = order?.shipEngineLabels;
       if (!labels) return [];
@@ -2888,7 +2896,7 @@
         const createdAt = order?.createdAt;
         const lastUp = getLastUpdateTimestamp(order);
         const trackingNumber = getAnyTrackingNumber(order) || "";
-        const trackingLink = trackingNumber ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(trackingNumber)}` : "";
+        const trackingLink = getTrackingLink(trackingNumber);
         const statusExtra = labelStatusExtraHTML(order);
         const payoutTotal = getPerDeviceOffer(item, order);
         
@@ -3277,7 +3285,7 @@
       function shippingHTML() {
         const tracking = getAnyTrackingNumber(order) || "N/A";
         const trackingHref = tracking && tracking !== "N/A"
-          ? `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(tracking)}`
+          ? getTrackingLink(tracking)
           : "";
         return `
           <div class="space-y-6">

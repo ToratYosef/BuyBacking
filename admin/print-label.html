@@ -327,7 +327,11 @@
                 summaryParts.push(`${latestOrder.device}${latestOrder.storage ? ` (${latestOrder.storage})` : ''}`);
             }
             if (latestOrder.outboundTrackingNumber) {
-                summaryParts.push(`Outbound tracking: <a href="https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${latestOrder.outboundTrackingNumber}" target="_blank" rel="noopener">${latestOrder.outboundTrackingNumber}</a>`);
+                const outboundTracking = String(latestOrder.outboundTrackingNumber || '').trim();
+                const outboundTrackingUrl = /^1Z/i.test(outboundTracking)
+                    ? `https://www.ups.com/track?track=yes&trackNums=${encodeURIComponent(outboundTracking)}`
+                    : `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${encodeURIComponent(outboundTracking)}`;
+                summaryParts.push(`Outbound tracking: <a href="${outboundTrackingUrl}" target="_blank" rel="noopener">${latestOrder.outboundTrackingNumber}</a>`);
             }
             if (trackingLine) {
                 summaryParts.push(trackingLine);
