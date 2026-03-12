@@ -1093,6 +1093,8 @@
         originalQuoteCardParent: null,
         originalQuoteCardNextSibling: null
     };
+    const FLOW_HISTORY_KEY = '__shcSellFlow';
+    let isRestoringHistoryState = false;
 
     const stepOrder = ['brand', 'model', 'storage', 'lock', 'condition'];
 
@@ -1199,7 +1201,58 @@
         if (globalBar) globalBar.style.width = width;
     };
 
-    const updateURL = () => {
+    const buildFlowSnapshot = () => ({
+        currentStep: state.currentStep,
+        isFinalView: Boolean(state.isFinalView),
+        fromCompleteUrlParams: Boolean(state.fromCompleteUrlParams),
+        selections: { ...state.selections }
+    });
+
+    const restoreFromHistorySnapshot = async (snapshot = {}) => {
+        if (!snapshot || typeof snapshot !== 'object') return;
+        isRestoringHistoryState = true;
+        try {
+            state.currentStep = snapshot.currentStep || 'brand';
+            state.isFinalView = Boolean(snapshot.isFinalView);
+            state.fromCompleteUrlParams = Boolean(snapshot.fromCompleteUrlParams);
+            state.selections = {
+                brand: '',
+                model: '',
+                modelName: '',
+                storage: '',
+                lock: '',
+                condition: '',
+                qty: 1,
+                deviceSlug: '',
+                ...(snapshot.selections || {})
+            };
+
+            if (state.selections.brand && state.selections.model) {
+                try {
+                    state.deviceData = await getModelDocData(state.selections.brand, state.selections.model);
+                } catch (_) {
+                    state.deviceData = null;
+                }
+            } else {
+                state.deviceData = null;
+            }
+
+            if (state.isFinalView && state.selections.brand && state.selections.model && state.selections.storage && state.selections.lock) {
+                showFinalOffer({ syncUrl: false, skipScroll: true });
+                return;
+            }
+
+            state.isFinalView = false;
+            document.getElementById('offer-view').classList.add('hidden');
+            document.getElementById('selection-flow').classList.remove('hidden');
+            document.getElementById('condition-help-box').classList.add('hidden');
+            await renderCurrentStep();
+        } finally {
+            isRestoringHistoryState = false;
+        }
+    };
+
+    const updateURL = ({ historyMode = 'replace' } = {}) => {
         const url = new URL(window.location.href);
         const params = url.searchParams;
 
@@ -1228,8 +1281,18 @@
         // Preserve UTMs and other unknown params; only rewrite if something actually changed.
         const nextPath = `${url.pathname}${url.search}${url.hash}`;
         const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-        if (nextPath !== currentPath) {
-            window.history.replaceState({}, '', nextPath);
+        const historyState = {
+            [FLOW_HISTORY_KEY]: true,
+            snapshot: buildFlowSnapshot()
+        };
+
+        if (historyMode === 'push') {
+            window.history.pushState(historyState, '', nextPath);
+            return;
+        }
+
+        if (nextPath !== currentPath || !window.history.state?.[FLOW_HISTORY_KEY]) {
+            window.history.replaceState(historyState, '', nextPath);
         }
     };
 
@@ -1463,7 +1526,7 @@
             }
         });
         if (stepIndex <= stepOrder.indexOf('model')) state.selections.deviceSlug = '';
-        updateURL();
+        updateURL({ historyMode: 'push' });
         document.getElementById('offer-view').classList.add('hidden');
         document.getElementById('selection-flow').classList.remove('hidden');
         document.getElementById('condition-help-box').classList.add('hidden');
@@ -1669,7 +1732,6 @@
         if (state.currentStep === 'model') {
             state.selections.deviceSlug = value;
         }
-        updateURL();
         
         if (state.currentStep === 'brand') { state.currentStep = 'model'; } 
         else if (state.currentStep === 'model') {
@@ -1684,9 +1746,10 @@
         else if (state.currentStep === 'storage') { state.currentStep = 'lock'; }
         else if (state.currentStep === 'lock') {
             // Skip the standalone condition step and land on the final offer.
-            showFinalOffer();
+            showFinalOffer({ historyMode: 'push' });
             return;
         }
+        updateURL({ historyMode: 'push' });
         renderCurrentStep().then(() => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
@@ -1757,9 +1820,11 @@
         });
     };
 
-    const showFinalOffer = () => {
+    const showFinalOffer = ({ historyMode = 'replace', syncUrl = true, skipScroll = false } = {}) => {
         state.isFinalView = true;
-        updateURL();
+        if (syncUrl) {
+            updateURL({ historyMode });
+        }
         updateProgressBar();
         document.getElementById('selection-flow').classList.add('hidden');
         document.getElementById('offer-view').classList.remove('hidden');
@@ -1788,7 +1853,9 @@
         }
 
         // Do not auto-scroll the page on view switch.
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (!skipScroll) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
     };
 
     const isSmallScreen = () => window.matchMedia('(max-width: 640px)').matches;
@@ -1816,7 +1883,7 @@
             card.textContent = c.name;
             card.onclick = () => {
                 state.selections.condition = c.key;
-                updateURL();
+                updateURL({ historyMode: 'replace' });
                 renderConditionGrid();
                 updatePrice();
                 scrollToPriceIfNeeded();
@@ -2294,7 +2361,19 @@
         perfMark('sell-index:all-data-loaded');
     };
 
-    withPerf('hydrate-from-url', hydrateFromURL);
+    window.addEventListener('popstate', (event) => {
+        if (isRestoringHistoryState) return;
+        const snapshot = event.state?.[FLOW_HISTORY_KEY] ? event.state?.snapshot : null;
+        if (!snapshot) return;
+        restoreFromHistorySnapshot(snapshot);
+    });
+
+    withPerf('hydrate-from-url', async () => {
+        await hydrateFromURL();
+        if (!window.history.state?.[FLOW_HISTORY_KEY]) {
+            updateURL({ historyMode: 'replace' });
+        }
+    });
     updateCartSummary();
 
     const storedEmail = getStoredEmail();
