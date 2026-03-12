@@ -107,10 +107,16 @@ function injectComponent(targetId, html, eventName) {
   if (!slot || !html) return false;
   if (slot.innerHTML === html) {
     slot.setAttribute("data-loaded", "1");
+    if (targetId === "site-header") {
+      applyOptimisticAuthUi();
+    }
     return true;
   }
   slot.innerHTML = html;
   slot.setAttribute("data-loaded", "1");
+  if (targetId === "site-header") {
+    applyOptimisticAuthUi();
+  }
   if (eventName) dispatchChromeEvent(eventName);
   return true;
 }
@@ -154,7 +160,6 @@ export async function loadSharedSiteScripts({ includeAuth = true } = {}) {
 
   sharedScriptsPromise = (async () => {
     await initSiteChrome();
-    applyOptimisticAuthUi();
     if (includeAuth) {
       await loadScriptTag("/assets/js/global-auth.js", { type: "module", defer: false });
     }
