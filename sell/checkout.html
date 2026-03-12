@@ -252,23 +252,20 @@
         .order-review-confirm-btn {
             position: relative;
             overflow: hidden;
-            border: none;
+            border: 2px solid #2563eb;
             border-radius: 10px;
             padding: 16px;
             font-weight: 800;
-            color: #fff;
-            background: #1e40af;
-            isolation: isolate;
+            color: #1d4ed8;
+            background: linear-gradient(
+                to right,
+                #2563eb calc(var(--countdown-progress, 0) * 100%),
+                #ffffff 0
+            );
+            transition: background 1s linear, color 0.2s ease;
         }
-        .order-review-confirm-btn::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: #2563eb;
-            transform-origin: left;
-            transform: scaleX(var(--countdown-progress, 0));
-            transition: transform 1s linear;
-            z-index: -1;
+        .order-review-confirm-btn.is-filling {
+            color: #ffffff;
         }
     </style>
     <link rel="stylesheet" href="/assets/css/site-chrome.css">
@@ -1039,16 +1036,19 @@
         orderReviewModal.classList.remove('active');
         orderReviewModal.setAttribute('aria-hidden', 'true');
         orderReviewConfirmBtn.style.setProperty('--countdown-progress', '0');
+        orderReviewConfirmBtn.classList.remove('is-filling');
     };
     const startOrderReviewCountdown = (onComplete) => {
         if (orderReviewTimer) clearInterval(orderReviewTimer);
         orderReviewSecondsLeft = 5;
         orderReviewConfirmBtn.textContent = `Confirm (${orderReviewSecondsLeft}s)`;
         orderReviewConfirmBtn.style.setProperty('--countdown-progress', '0');
+        orderReviewConfirmBtn.classList.remove('is-filling');
         orderReviewTimer = setInterval(() => {
             orderReviewSecondsLeft -= 1;
             const progress = Math.min((5 - orderReviewSecondsLeft) / 5, 1);
             orderReviewConfirmBtn.style.setProperty('--countdown-progress', String(progress));
+            orderReviewConfirmBtn.classList.toggle('is-filling', progress > 0);
             if (orderReviewSecondsLeft > 0) {
                 orderReviewConfirmBtn.textContent = `Confirm (${orderReviewSecondsLeft}s)`;
                 return;
