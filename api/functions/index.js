@@ -2116,7 +2116,7 @@ app.get('/fix-issue/:orderId', async (req, res) => {
 
             <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
               <img
-                src="https://secondhandcell.com/assets/stars-4.svg"
+                src="https://secondhandcell.com/assets/stars-4.5.svg"
                 alt="Trustpilot 5 star rating"
                 loading="lazy"
                 class="h-12 w-auto object-contain"
