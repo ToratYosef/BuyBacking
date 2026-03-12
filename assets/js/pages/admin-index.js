@@ -7335,7 +7335,7 @@ function renderActionButtons(order) {
   );
   if (hasKitTracking) {
     utilityActions.push(
-      createButton('Refresh Kit Tracking', () => handleAction(order.id, 'refreshKitTracking'), 'bg-sky-600 hover:bg-sky-700')
+      createButton('Reload Kit', () => handleAction(order.id, 'refreshKitTracking'), 'bg-sky-600 hover:bg-sky-700')
     );
   }
 
