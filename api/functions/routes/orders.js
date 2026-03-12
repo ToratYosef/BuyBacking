@@ -20,6 +20,7 @@ function createOrdersRouter({
   createShipEngineLabel,
   getShipEngineApiKey,
   transporter,
+  conditionEmails,
   deviceHelpers,
 }) {
   const router = express.Router();
@@ -31,6 +32,12 @@ function createOrdersRouter({
     SHIPPING_LABEL_EMAIL_HTML,
   } = templates;
   const { sendAdminPushNotification, addAdminFirestoreNotification } = notifications;
+  const {
+    CONDITION_EMAIL_TEMPLATES = {},
+    CONDITION_EMAIL_FROM_ADDRESS = null,
+    CONDITION_EMAIL_BCC_RECIPIENTS = [],
+    buildConditionEmail = null,
+  } = conditionEmails || {};
   const { generateCustomLabelPdf, generateBagLabelPdf, mergePdfBuffers } = pdf;
   const {
     cloneShipEngineLabelMap,
@@ -216,6 +223,69 @@ function createOrdersRouter({
     const error = new Error(message);
     error.status = status;
     return error;
+  }
+
+  function normalizeUnlockInfo(rawUnlockInfo, fallbackReason = null) {
+    if (!rawUnlockInfo || typeof rawUnlockInfo !== 'object') {
+      return null;
+    }
+
+    const method = String(rawUnlockInfo.method || '').trim().toLowerCase();
+    if (!['pin', 'password', 'pattern'].includes(method)) {
+      return null;
+    }
+
+    const value = String(rawUnlockInfo.value || '').trim();
+    let patternPath = Array.isArray(rawUnlockInfo.patternPath)
+      ? rawUnlockInfo.patternPath
+        .map((entry) => Number(entry))
+        .filter((entry) => Number.isFinite(entry) && entry >= 1 && entry <= 9)
+      : [];
+
+    if (!patternPath.length && method === 'pattern' && value) {
+      patternPath = value
+        .split(/[^0-9]+/)
+        .map((entry) => Number(entry))
+        .filter((entry) => Number.isFinite(entry) && entry >= 1 && entry <= 9);
+    }
+
+    if ((method === 'pin' || method === 'password') && !value) {
+      return null;
+    }
+
+    if (method === 'pattern' && !value && !patternPath.length) {
+      return null;
+    }
+
+    return {
+      reason: String(rawUnlockInfo.reason || fallbackReason || 'password_locked').trim().toLowerCase(),
+      method,
+      value: value || (method === 'pattern' ? patternPath.join('-') : ''),
+      patternPath,
+      updatedAt: rawUnlockInfo.updatedAt || null,
+    };
+  }
+
+  function getLockIssueContext(order, deviceKey) {
+    const deviceIssues = order?.qcIssuesByDevice?.[deviceKey] || {};
+    const issue = deviceIssues.password_locked || null;
+    if (!issue || typeof issue !== 'object') {
+      return null;
+    }
+
+    const unlockInfo = normalizeUnlockInfo(
+      order?.unlockInfoByDevice?.[deviceKey] || issue.unlockInfo || null,
+      issue.reason || 'password_locked'
+    );
+
+    if (!unlockInfo) {
+      return null;
+    }
+
+    return {
+      issue,
+      unlockInfo,
+    };
   }
 
   function buildShipEngineErrorMessage(error, fallbackMessage) {
@@ -2986,6 +3056,180 @@ function createOrdersRouter({
       return res.status(500).send('Failed to process issue resolution.');
     }
   });
+
+  async function handleReqcUnlockInfo(req, res) {
+    try {
+      const orderId = String(req.params.id || '').trim();
+      const deviceKey = String(req.query.deviceKey || '').trim();
+      if (!orderId || !deviceKey) {
+        return res.status(400).json({ error: 'Order ID and deviceKey are required.' });
+      }
+
+      const orderRef = ordersCollection.doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (!orderSnap.exists) {
+        return res.status(404).json({ error: 'Order not found.' });
+      }
+
+      const order = { id: orderSnap.id, ...orderSnap.data() };
+      const lockContext = getLockIssueContext(order, deviceKey);
+      if (!lockContext) {
+        return res.status(404).json({ error: 'Unlock info not available for this device.' });
+      }
+
+      const issueResolved = !!lockContext.issue?.resolved;
+      return res.json({
+        ok: true,
+        orderId,
+        orderStatus: order.status || null,
+        deviceKey,
+        issueResolved,
+        unlockInfo: lockContext.unlockInfo,
+        issueNotes: lockContext.issue?.notes || null,
+        adminReview: lockContext.issue?.adminReview || null,
+      });
+    } catch (error) {
+      console.error('Failed to fetch re-QC unlock info:', error);
+      return res.status(500).json({ error: 'Failed to fetch unlock info.' });
+    }
+  }
+
+  router.get('/orders/:id/reqc-unlock-info', handleReqcUnlockInfo);
+  router.get('/api/orders/:id/reqc-unlock-info', handleReqcUnlockInfo);
+
+  async function handleReqcUnlockResult(req, res) {
+    try {
+      const orderId = String(req.params.id || '').trim();
+      const deviceKey = String(req.body?.deviceKey || '').trim();
+      const result = String(req.body?.result || '').trim().toLowerCase();
+      const notes = String(req.body?.notes || '').trim();
+      if (!orderId || !deviceKey) {
+        return res.status(400).json({ error: 'Order ID and deviceKey are required.' });
+      }
+      if (!['worked', 'failed'].includes(result)) {
+        return res.status(400).json({ error: 'Result must be either worked or failed.' });
+      }
+
+      const orderRef = ordersCollection.doc(orderId);
+      const orderSnap = await orderRef.get();
+      if (!orderSnap.exists) {
+        return res.status(404).json({ error: 'Order not found.' });
+      }
+
+      const order = { id: orderSnap.id, ...orderSnap.data() };
+      const lockContext = getLockIssueContext(order, deviceKey);
+      if (!lockContext) {
+        return res.status(404).json({ error: 'Lock issue context not available for this device.' });
+      }
+
+      const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+      const updatePayload = {
+        [`qcIssuesByDevice.${deviceKey}.password_locked.adminReview`]: {
+          result,
+          notes: notes || null,
+          reviewedAt: serverTimestamp,
+        },
+        [`qcIssuesByDevice.${deviceKey}.password_locked.updatedAt`]: serverTimestamp,
+        lastUpdatedAt: serverTimestamp,
+      };
+
+      if (result === 'worked') {
+        updatePayload[`deviceStatusByKey.${deviceKey}`] = 'processing';
+
+        const nextDeviceStatusByKey = {
+          ...(order.deviceStatusByKey || {}),
+          [deviceKey]: 'processing',
+        };
+        const derivedStatus = deriveOrderStatusFromDevices(order, nextDeviceStatusByKey);
+        if (derivedStatus) {
+          updatePayload.status = derivedStatus;
+        }
+
+        await updateOrderBoth(orderId, updatePayload, {
+          autoLogStatus: false,
+          logEntries: [
+            {
+              type: 'update',
+              message: `Admin re-QC unlock review passed for ${deviceKey}.`,
+              metadata: { deviceKey, result, notes: notes || null },
+            },
+          ],
+        });
+
+        return res.json({ ok: true, orderId, deviceKey, result, nextAction: 'continue_qc' });
+      }
+
+      updatePayload[`qcIssuesByDevice.${deviceKey}.password_locked.resolved`] = false;
+      updatePayload[`qcIssuesByDevice.${deviceKey}.password_locked.resolvedAt`] = null;
+      updatePayload[`deviceStatusByKey.${deviceKey}`] = 'emailed';
+      updatePayload.qcAwaitingResponse = true;
+
+      const nextDeviceStatusByKey = {
+        ...(order.deviceStatusByKey || {}),
+        [deviceKey]: 'emailed',
+      };
+      const derivedStatus = deriveOrderStatusFromDevices(order, nextDeviceStatusByKey);
+      if (derivedStatus) {
+        updatePayload.status = derivedStatus;
+      } else {
+        updatePayload.status = 'emailed';
+      }
+
+      const shippingInfo = order.shippingInfo || {};
+      const customerEmail = shippingInfo.email || shippingInfo.emailAddress;
+      if (!customerEmail) {
+        return res.status(400).json({ error: 'The order does not have a customer email address.' });
+      }
+      if (!buildConditionEmail || !CONDITION_EMAIL_TEMPLATES.password_locked || !CONDITION_EMAIL_FROM_ADDRESS) {
+        return res.status(500).json({ error: 'Password lock email configuration is missing.' });
+      }
+
+      const { subject, html, text } = buildConditionEmail('password_locked', order, notes, deviceKey);
+      const mailOptions = {
+        from: CONDITION_EMAIL_FROM_ADDRESS,
+        to: customerEmail,
+        subject,
+        html,
+        text,
+      };
+      if (Array.isArray(CONDITION_EMAIL_BCC_RECIPIENTS) && CONDITION_EMAIL_BCC_RECIPIENTS.length) {
+        mailOptions.bcc = CONDITION_EMAIL_BCC_RECIPIENTS;
+      }
+      await transporter.sendMail(mailOptions);
+
+      updatePayload.lastCustomerEmailSentAt = serverTimestamp;
+      updatePayload.lastConditionEmailReason = 'password_locked';
+      if (notes) {
+        updatePayload.lastConditionEmailNotes = notes;
+      }
+
+      await updateOrderBoth(orderId, updatePayload, {
+        autoLogStatus: false,
+        logEntries: [
+          {
+            type: 'email',
+            message: 'Admin re-QC unlock review failed; resent password lock email to customer.',
+            metadata: { deviceKey, result, notes: notes || null, reason: 'password_locked' },
+          },
+        ],
+      });
+
+      return res.json({
+        ok: true,
+        orderId,
+        deviceKey,
+        result,
+        nextAction: 'await_customer_resubmission',
+        emailed: true,
+      });
+    } catch (error) {
+      console.error('Failed to submit re-QC unlock result:', error);
+      return res.status(500).json({ error: 'Failed to submit re-QC unlock result.' });
+    }
+  }
+
+  router.post('/orders/:id/reqc-unlock-result', handleReqcUnlockResult);
+  router.post('/api/orders/:id/reqc-unlock-result', handleReqcUnlockResult);
 
   return router;
 }
