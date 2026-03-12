@@ -1,6 +1,24 @@
 const componentCache = new Map();
 let componentsPromise = null;
 let sharedScriptsPromise = null;
+const COMPONENT_CACHE_PREFIX = "shc:component:v1:";
+
+function getCachedComponent(path) {
+  try {
+    return sessionStorage.getItem(`${COMPONENT_CACHE_PREFIX}${path}`) || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function setCachedComponent(path, html) {
+  if (!html) return;
+  try {
+    sessionStorage.setItem(`${COMPONENT_CACHE_PREFIX}${path}`, html);
+  } catch (_) {
+    // Ignore storage quota/privacy mode failures.
+  }
+}
 
 async function fetchComponent(path) {
   if (!componentCache.has(path)) {
@@ -11,6 +29,9 @@ async function fetchComponent(path) {
           throw new Error(`Failed to load component: ${path}`);
         }
         return response.text();
+      }).then((html) => {
+        setCachedComponent(path, html);
+        return html;
       })
     );
   }
@@ -19,6 +40,46 @@ async function fetchComponent(path) {
 
 function dispatchChromeEvent(name) {
   document.dispatchEvent(new CustomEvent(name));
+}
+
+function applyOptimisticAuthUi() {
+  const loginNavBtn = document.getElementById("loginNavBtn");
+  const userMonogram = document.getElementById("userMonogram");
+  const authDropdown = document.getElementById("authDropdown");
+
+  let cachedUser = null;
+  try {
+    cachedUser = JSON.parse(localStorage.getItem("shcAuthUser") || "null");
+  } catch (_) {
+    cachedUser = null;
+  }
+
+  const hasCachedUser = Boolean(cachedUser?.uid || cachedUser?.email);
+  if (!loginNavBtn || !userMonogram) return;
+
+  if (!hasCachedUser) {
+    loginNavBtn.classList.remove("hidden");
+    userMonogram.classList.add("hidden");
+    return;
+  }
+
+  const source = String(cachedUser?.name || cachedUser?.email || "U").trim();
+  const parts = source.split(/\s+/).filter(Boolean);
+  let initials = "U";
+  if (parts.length > 1) {
+    initials = `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  } else if (parts.length === 1) {
+    initials = parts[0].slice(0, 2).toUpperCase();
+  }
+
+  loginNavBtn.classList.add("hidden");
+  userMonogram.textContent = initials;
+  userMonogram.classList.remove("hidden");
+
+  if (authDropdown) {
+    authDropdown.classList.add("hidden");
+    authDropdown.classList.remove("is-visible");
+  }
 }
 
 function loadScriptTag(src, { type = "text/javascript", defer = true } = {}) {
@@ -41,6 +102,19 @@ function loadScriptTag(src, { type = "text/javascript", defer = true } = {}) {
   });
 }
 
+function injectComponent(targetId, html, eventName) {
+  const slot = document.getElementById(targetId);
+  if (!slot || !html) return false;
+  if (slot.innerHTML === html) {
+    slot.setAttribute("data-loaded", "1");
+    return true;
+  }
+  slot.innerHTML = html;
+  slot.setAttribute("data-loaded", "1");
+  if (eventName) dispatchChromeEvent(eventName);
+  return true;
+}
+
 export async function initSiteChrome({
   headerTarget = "site-header",
   footerTarget = "site-footer",
@@ -51,25 +125,20 @@ export async function initSiteChrome({
     return componentsPromise;
   }
 
+  const cachedHeaderHtml = getCachedComponent(headerPath);
+  const cachedFooterHtml = getCachedComponent(footerPath);
+
+  injectComponent(headerTarget, cachedHeaderHtml, "shc:header-loaded");
+  injectComponent(footerTarget, cachedFooterHtml, "shc:footer-loaded");
+
   componentsPromise = (async () => {
     const [headerHtml, footerHtml] = await Promise.all([
       fetchComponent(headerPath),
       fetchComponent(footerPath),
     ]);
 
-    const headerSlot = document.getElementById(headerTarget);
-    if (headerSlot) {
-      headerSlot.innerHTML = headerHtml;
-      headerSlot.setAttribute("data-loaded", "1");
-      dispatchChromeEvent("shc:header-loaded");
-    }
-
-    const footerSlot = document.getElementById(footerTarget);
-    if (footerSlot) {
-      footerSlot.innerHTML = footerHtml;
-      footerSlot.setAttribute("data-loaded", "1");
-      dispatchChromeEvent("shc:footer-loaded");
-    }
+    injectComponent(headerTarget, headerHtml, "shc:header-loaded");
+    injectComponent(footerTarget, footerHtml, "shc:footer-loaded");
 
     dispatchChromeEvent("shc:components-loaded");
     return true;
@@ -85,6 +154,7 @@ export async function loadSharedSiteScripts({ includeAuth = true } = {}) {
 
   sharedScriptsPromise = (async () => {
     await initSiteChrome();
+    applyOptimisticAuthUi();
     if (includeAuth) {
       await loadScriptTag("/assets/js/global-auth.js", { type: "module", defer: false });
     }
