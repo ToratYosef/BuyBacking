@@ -729,6 +729,7 @@
       // bulk states
       isBulkSlipPrintInProgress: false,
       bulkTrackingRefreshInProgress: false,
+      bulkKitReloadInProgress: false,
       bulkVoidAgedInProgress: false,
       bulkVoidTestInProgress: false,
       bulkDeleteCancelledInProgress: false,
@@ -1744,6 +1745,16 @@
       );
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
     }
+    async function handleBulkReloadKit(buttonEl) {
+      if (state.bulkKitReloadInProgress) return;
+      state.bulkKitReloadInProgress = true;
+      try {
+        await refreshTrackingForOrders("kit", buttonEl);
+      } finally {
+        state.bulkKitReloadInProgress = false;
+      }
+    }
+
     async function refreshLabelGeneratedAndPhoneOnWay(buttonEl) {
       const base = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
       const allowed = new Set(["label_generated", "phone_on_the_way"]);
@@ -2811,6 +2822,12 @@
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-200">
                 <i data-lucide="refresh-cw" style="width:18px;height:18px"></i>
                 Refresh Label + Phone Tracking
+              </button>
+              <button id="bulk-reload-kit"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkKitReloadInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-700 text-white shadow-md shadow-sky-200'}"
+                ${state.bulkKitReloadInProgress ? 'disabled' : ''}>
+                <i data-lucide="package-check" class="${state.bulkKitReloadInProgress ? 'animate-pulse' : ''}" style="width:18px;height:18px"></i>
+                ${state.bulkKitReloadInProgress ? 'Reloading Kits…' : 'Bulk Reload Kit'}
               </button>
               <button id="bulk-void-aged-orders"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidAgedInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-200'}"
@@ -4837,6 +4854,10 @@
       const btnRefreshLabelPhoneTracking = document.getElementById("refresh-label-phone-tracking");
       if (btnRefreshLabelPhoneTracking) {
         btnRefreshLabelPhoneTracking.addEventListener("click", () => refreshLabelGeneratedAndPhoneOnWay(btnRefreshLabelPhoneTracking));
+      }
+      const btnBulkReloadKit = document.getElementById("bulk-reload-kit");
+      if (btnBulkReloadKit) {
+        btnBulkReloadKit.addEventListener("click", () => handleBulkReloadKit(btnBulkReloadKit));
       }
       const btnBulkVoidAgedOrders = document.getElementById("bulk-void-aged-orders");
       if (btnBulkVoidAgedOrders) {
