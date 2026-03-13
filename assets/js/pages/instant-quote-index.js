@@ -1015,24 +1015,6 @@ const shippingPreferenceLabel = rawShippingPreference === 'ship_kit' ? 'Shipping
 const labelCarrier = rawShippingPreference === 'faster_shipping' ? 'ups' : 'usps';
 const shippingKitFee = calculateShippingFee(rawShippingPreference);
 const finalPayoutForOrder = calculateFinalPayout(rawShippingPreference);
-const perDeviceItem = {
-device: document.getElementById('overviewDevice').textContent,
-brand: selectedBrand,
-modelId: selectedDevice,
-modelName: document.getElementById('overviewDevice').textContent,
-carrier: document.getElementById('carrier-select').value,
-lock: document.getElementById('carrier-select').value,
-storage: document.getElementById('storage-select').value,
-condition: conditions.cracks,
-condition_power_on: conditions.power,
-condition_functional: conditions.screen,
-condition_cracks: conditions.cracks === 'damaged' ? 'Yes' : 'No',
-condition_cosmetic: conditions.cracks,
-qty: 1,
-unitPrice: finalPayoutForOrder,
-totalPayout: finalPayoutForOrder,
-estimatedQuote: finalPayoutForOrder,
-};
 
 const orderData = {
 device: document.getElementById('overviewDevice').textContent,
@@ -1046,7 +1028,6 @@ condition_cosmetic: conditions.cracks, // 3-tier value: flawless, scratched, dam
 estimatedQuote: finalPayoutForOrder,
 originalQuote: Number(finalQuote) || 0,
 totalPayout: finalPayoutForOrder,
-items: [perDeviceItem],
 shippingPreference: shippingPreferenceLabel,
 shippingPreferenceValue: rawShippingPreference,
 // Canonical shipping-label carrier selector consumed by backend automation.
