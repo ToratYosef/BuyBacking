@@ -69,8 +69,8 @@
     };
     perfMark('admin:page-start');
     requestAnimationFrame(() => perfMark('admin:first-content-paint-skeleton'));
-    const ADMIN_ORDERS_INITIAL_LIMIT = 50;
-    const ADMIN_ORDERS_CHUNK_SIZE = 50;
+    const ADMIN_ORDERS_INITIAL_LIMIT = 150;
+    const ADMIN_ORDERS_CHUNK_SIZE = 150;
     const ADMIN_UI_CACHE_KEY = 'shc_admin_ui_cache_v1';
     // ----------------------------
     // DOM HELPERS
@@ -765,6 +765,7 @@
         state: "",
         zipCode: "",
       },
+      deferredOrdersRenderTimer: null,
     };
     function prefillShippingLabelForm(order = null) {
       const info = order?.shippingInfo || {};
@@ -1267,6 +1268,28 @@
     // ----------------------------
     let unsubscribeOrders = null;
     let ordersLoadVersion = 0;
+    function shouldDeferOrdersRenderDuringLoading() {
+      if (!state.ordersLoading) return false;
+      if (state.selectedOrderId) return true;
+      const active = document.activeElement;
+      const activeId = active?.id || "";
+      return activeId === "searchInput" || activeId === "mobileSearchInput";
+    }
+    function renderOrdersWithInteractionGuard() {
+      if (!shouldDeferOrdersRenderDuringLoading()) {
+        if (state.deferredOrdersRenderTimer) {
+          clearTimeout(state.deferredOrdersRenderTimer);
+          state.deferredOrdersRenderTimer = null;
+        }
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+        return;
+      }
+      if (state.deferredOrdersRenderTimer) return;
+      state.deferredOrdersRenderTimer = setTimeout(() => {
+        state.deferredOrdersRenderTimer = null;
+        renderOrdersWithInteractionGuard();
+      }, 250);
+    }
     async function startOrdersListener() {
       if (unsubscribeOrders) unsubscribeOrders();
       const loadVersion = ++ordersLoadVersion;
@@ -1300,7 +1323,7 @@
           if (loaded.length === chunkOrders.length) {
             perfMark('admin:first-data-rendered');
           }
-          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+          renderOrdersWithInteractionGuard();
 
           cursor = snapshot.docs[snapshot.docs.length - 1] || null;
           if (snapshot.size < ADMIN_ORDERS_CHUNK_SIZE) break;
@@ -5751,6 +5774,10 @@
     function resetAdminState() {
       if (unsubscribeOrders) unsubscribeOrders();
       unsubscribeOrders = null;
+      if (state.deferredOrdersRenderTimer) {
+        clearTimeout(state.deferredOrdersRenderTimer);
+        state.deferredOrdersRenderTimer = null;
+      }
       state.allOrders = [];
       state.currentFilteredOrders = [];
       state.currentFilteredDevices = [];
