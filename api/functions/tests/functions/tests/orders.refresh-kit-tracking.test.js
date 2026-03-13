@@ -184,7 +184,7 @@ test('prefers inbound tracking once the kit is delivered', async () => {
 
     assert.equal(delivered, false);
     assert.equal(direction, 'inbound');
-    assert.equal(updatePayload.status, 'phone_on_the_way');
+    assert.equal(updatePayload.status, 'kit_on_the_way_to_us');
     assert.ok(
         axiosStub.calls[0].url.includes('carrier_code=stamps_com'),
         'Inbound tracking should default to the standard carrier code when unspecified'
@@ -280,11 +280,11 @@ test('keeps kit inbound transit status when no ETA exists', async () => {
     );
 
     assert.equal(direction, 'inbound');
-    assert.equal(updatePayload.status, 'phone_on_the_way');
+    assert.equal(updatePayload.status, 'kit_on_the_way_to_us');
     assert.equal(updatePayload.lastStatusUpdateAt, 'server-ts');
 });
 
-test('keeps kit inbound transit status when scans are not yet in transit', async () => {
+test('keeps kit delivered status when inbound scans are not yet in transit', async () => {
     const axiosStub = createAxiosStub({
         status_code: 'LA',
         status_description: 'Label created'
@@ -292,10 +292,10 @@ test('keeps kit inbound transit status when scans are not yet in transit', async
 
     const { updatePayload } = await buildKitTrackingUpdate(
         {
-            status: 'phone_on_the_way_to_us',
+            status: 'kit_delivered',
             shippingPreference: 'Shipping Kit Requested',
             inboundTrackingNumber: '1ZKITLEVEL2',
-            kitSentAt: '2024-09-02T00:00:00Z'
+            kitDeliveredAt: '2024-09-02T00:00:00Z'
         },
         {
             axiosClient: axiosStub,
@@ -304,7 +304,7 @@ test('keeps kit inbound transit status when scans are not yet in transit', async
         }
     );
 
-    assert.equal(updatePayload.status, 'phone_on_the_way');
+    assert.ok(!('status' in updatePayload));
 });
 
 test('keeps emailed label inbound transit status when no ETA exists', async () => {
