@@ -5874,6 +5874,12 @@ const ordersRouter = createOrdersRouter({
   createShipEngineLabel,
   getShipEngineApiKey,
   transporter,
+  conditionEmails: {
+    CONDITION_EMAIL_TEMPLATES,
+    CONDITION_EMAIL_FROM_ADDRESS,
+    CONDITION_EMAIL_BCC_RECIPIENTS,
+    buildConditionEmail,
+  },
   deviceHelpers: {
     buildOrderDeviceKey,
     collectOrderDeviceKeys,
