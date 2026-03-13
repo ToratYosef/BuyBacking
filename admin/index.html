@@ -912,6 +912,7 @@
       if (!source || typeof source !== 'object') return null;
 
       const method = String(source.method || '').trim().toLowerCase();
+      if (!['pin', 'password', 'pattern'].includes(method)) return null;
       const value = String(source.value || '').trim();
       let patternPath = Array.isArray(source.patternPath)
         ? source.patternPath.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value >= 1 && value <= 9)
@@ -919,7 +920,7 @@
 
       if (!patternPath.length && method === 'pattern' && value) {
         patternPath = value
-          .split('-')
+          .split(/[^0-9]+/)
           .map((value) => Number(value))
           .filter((value) => Number.isFinite(value) && value >= 1 && value <= 9);
       }
@@ -931,6 +932,23 @@
         patternPath,
         updatedAt: source.updatedAt || null,
       };
+    }
+
+    async function fetchReqcUnlockInfo(orderId, deviceKey) {
+      if (!orderId || !deviceKey) throw new Error('Missing order/device context');
+      const query = new URLSearchParams({ deviceKey }).toString();
+      const response = await apiGet(`/orders/${orderId}/reqc-unlock-info?${query}`);
+      const unlock = response?.unlockInfo || null;
+      const method = String(unlock?.method || '').trim().toLowerCase();
+      if (!['pin', 'password', 'pattern'].includes(method)) {
+        throw new Error('Unlock info is not supported for re-QC modal');
+      }
+      return response;
+    }
+
+    async function submitReqcUnlockResult(orderId, payload) {
+      if (!orderId) throw new Error('Missing order context');
+      return apiPost(`/orders/${orderId}/reqc-unlock-result`, payload || {});
     }
 
     function isScreenLockOnlyResolved(order, deviceKey) {
@@ -4373,8 +4391,8 @@
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
               <div class="flex flex-wrap items-center justify-end gap-2 w-full">
                 <button id="unlockInfoCloseBtnFooter" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Close</button>
-                <button id="unlockInfoContinueQcBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">Continue to QC</button>
-                <button id="unlockInfoPasswordWrongBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700">Password Didn’t Work</button>
+                <button id="unlockInfoContinueQcBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">It worked, continue with QC</button>
+                <button id="unlockInfoPasswordWrongBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700">Didn’t work</button>
               </div>
             </div>
           </div>
@@ -4868,7 +4886,7 @@
         });
       });
       document.querySelectorAll("[data-open-qc-device]").forEach(btn => {
-        btn.addEventListener("click", (e) => {
+        btn.addEventListener("click", async (e) => {
           e.preventDefault();
           e.stopPropagation();
           const deviceKey = btn.getAttribute("data-open-qc-device");
@@ -4891,19 +4909,44 @@
           const entries = getOrderDeviceEntries(order);
           const entry = entries.find((item) => item.deviceIndex === parsed.deviceIndex) || entries[0] || { item: order };
           const item = entry.item || order;
-          const unlockInfo = getDeviceUnlockInfo(order, deviceKey);
 
           if (isScreenLockOnlyResolved(order, deviceKey)) {
             state.qcOpen = false;
             state.qcData = null;
-            state.unlockInfoModalData = {
-              deviceKey,
-              deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
-              deviceStatus,
-              unlockInfo,
-            };
-            state.unlockInfoModalOpen = true;
-            render();
+            try {
+              const unlockInfoResponse = await fetchReqcUnlockInfo(order.id, deviceKey);
+              state.unlockInfoModalData = {
+                orderId: order.id,
+                deviceKey,
+                deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
+                deviceStatus,
+                issueResolved: Boolean(unlockInfoResponse?.issueResolved),
+                issueNotes: unlockInfoResponse?.issueNotes || null,
+                adminReview: unlockInfoResponse?.adminReview || null,
+                unlockInfo: unlockInfoResponse?.unlockInfo || null,
+              };
+              state.unlockInfoModalOpen = true;
+              render();
+            } catch (error) {
+              console.error('Failed to load re-QC unlock info', error);
+              const fallbackUnlock = getDeviceUnlockInfo(order, deviceKey);
+              if (fallbackUnlock) {
+                state.unlockInfoModalData = {
+                  orderId: order.id,
+                  deviceKey,
+                  deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
+                  deviceStatus,
+                  unlockInfo: fallbackUnlock,
+                };
+                state.unlockInfoModalOpen = true;
+                render();
+                toast('Unable to load server unlock context; showing saved unlock details.', 'info');
+                return;
+              }
+              state.unlockInfoModalOpen = false;
+              state.unlockInfoModalData = null;
+              toast(error?.message || 'Unlock info unavailable for this device.', 'error');
+            }
             return;
           }
 
@@ -5569,40 +5612,68 @@
         }
 
         if (continueQcBtn) {
-          continueQcBtn.addEventListener("click", () => {
+          continueQcBtn.addEventListener("click", async () => {
+            const order = getSelectedOrder();
+            const orderId = state.unlockInfoModalData?.orderId || order?.id;
             const deviceKey = state.unlockInfoModalData?.deviceKey || state.selectedDeviceKey;
-            if (!deviceKey) {
+            if (!orderId || !deviceKey) {
               closeUnlockModal();
               return;
             }
-            state.selectedDeviceKey = deviceKey;
-            state.qcDeviceKey = deviceKey;
-            state.unlockInfoModalOpen = false;
-            state.unlockInfoModalData = null;
-            state.qcOpen = true;
-            state.modalScrollTop.qc = 0;
-            state.qcStep = 1;
-            state.qcData = null;
-            render();
+
+            try {
+              const result = await submitReqcUnlockResult(orderId, {
+                deviceKey,
+                result: 'worked',
+                notes: 'Unlocked successfully in re-QC',
+              });
+              if (result?.nextAction !== 'continue_qc') {
+                throw new Error('Unexpected re-QC response from server.');
+              }
+              await hydrateSelectedOrderDetails(orderId);
+              state.selectedDeviceKey = deviceKey;
+              state.qcDeviceKey = deviceKey;
+              state.unlockInfoModalOpen = false;
+              state.unlockInfoModalData = null;
+              state.qcOpen = true;
+              state.modalScrollTop.qc = 0;
+              state.qcStep = 1;
+              state.qcData = null;
+              render();
+              toast('Re-QC unlock marked as worked. Continue QC.', 'success');
+              filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+            } catch (error) {
+              console.error('Failed to submit worked re-QC unlock result', error);
+              toast(error?.message || 'Failed to save re-QC result.', 'error');
+            }
           });
         }
 
         if (passwordWrongBtn) {
           passwordWrongBtn.addEventListener("click", async () => {
             const order = getSelectedOrder();
-            if (!order) return;
+            const orderId = state.unlockInfoModalData?.orderId || order?.id;
             const deviceKey = state.unlockInfoModalData?.deviceKey || state.selectedDeviceKey || null;
+            if (!orderId || !deviceKey) {
+              toast('Missing order/device context.', 'error');
+              return;
+            }
             try {
-              await handleAction(order.id, "emailLocked", {
-                body: {
-                  deviceKey,
-                  notes: "We tried the password you gave us and it didn't work. Please provide updated unlock credentials.",
-                },
+              const result = await submitReqcUnlockResult(orderId, {
+                deviceKey,
+                result: 'failed',
+                notes: "PIN/password provided did not unlock device during re-QC.",
               });
-              toast("Password incorrect email sent to customer.", "success");
+              if (result?.nextAction !== 'await_customer_resubmission') {
+                throw new Error('Unexpected re-QC response from server.');
+              }
+              await hydrateSelectedOrderDetails(orderId);
+              toast('Marked as failed and resent email to customer.', 'success');
               closeUnlockModal();
+              filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
             } catch (error) {
-              toast(error?.message || "Failed to send password incorrect email.", "error");
+              console.error('Failed to submit failed re-QC unlock result', error);
+              toast(error?.message || 'Failed to send password incorrect email.', 'error');
             }
           });
         }
