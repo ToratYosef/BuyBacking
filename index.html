@@ -1259,8 +1259,16 @@ const getModelDocBySlug = async (brand, slug) => {
 };
 
 const HERO_DEVICE_SEARCH_BRANDS = [
-    { dbBrand: 'Samsung', urlBrand: 'samsung', fallbackImage: 'https://cdn.secondhandcell.com/images/assets/samsung.webp' },
-    { dbBrand: 'iphone', urlBrand: 'iphone', fallbackImage: 'https://cdn.secondhandcell.com/images/assets/apple.webp' }
+    {
+        dbBrandPaths: ['Samsung', 'samsung'],
+        urlBrand: 'samsung',
+        fallbackImage: 'https://cdn.secondhandcell.com/images/assets/samsung.webp'
+    },
+    {
+        dbBrandPaths: ['iphone', 'iPhone', 'apple'],
+        urlBrand: 'iphone',
+        fallbackImage: 'https://cdn.secondhandcell.com/images/assets/apple.webp'
+    }
 ];
 const HERO_DEVICE_IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
 const HERO_IMAGE_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -1319,33 +1327,52 @@ const loadHeroSearchDevices = async () => {
     heroSearchState.loadingPromise = (async () => {
         await ensureFirebase();
         const allDevices = [];
+        const seenDeviceKeys = new Set();
 
         for (const brand of HERO_DEVICE_SEARCH_BRANDS) {
-            const snap = await getDocs(collection(db, 'devices', brand.dbBrand, 'models'));
-            snap.forEach((modelDoc) => {
-                const data = modelDoc.data() || {};
-                const name = String(data.name || modelDoc.id || '').trim();
-                if (!name) return;
-                const rawSlug = data.slug || data.modelID || modelDoc.id;
-                const slug = normalizeDeviceSlug(rawSlug);
-                if (!slug) return;
+            let loadedForBrand = false;
 
-                allDevices.push({
-                    id: `${brand.urlBrand}-${modelDoc.id}`,
-                    name,
-                    brand: brand.urlBrand,
-                    slug,
-                    imageUrl: data.imageUrl || '',
-                    fallbackImage: brand.fallbackImage,
-                    searchText: normalizeSearchValue([
-                        name,
-                        brand.urlBrand,
-                        modelDoc.id,
-                        data.slug,
-                        data.modelID
-                    ].filter(Boolean).join(' '))
-                });
-            });
+            for (const dbBrandPath of brand.dbBrandPaths) {
+                try {
+                    const snap = await getDocs(collection(db, 'devices', dbBrandPath, 'models'));
+                    if (!snap.empty) loadedForBrand = true;
+
+                    snap.forEach((modelDoc) => {
+                        const data = modelDoc.data() || {};
+                        const name = String(data.name || modelDoc.id || '').trim();
+                        if (!name) return;
+                        const rawSlug = data.slug || data.modelID || modelDoc.id;
+                        const slug = normalizeDeviceSlug(rawSlug);
+                        if (!slug) return;
+
+                        const uniqueKey = `${brand.urlBrand}:${slug}`;
+                        if (seenDeviceKeys.has(uniqueKey)) return;
+                        seenDeviceKeys.add(uniqueKey);
+
+                        allDevices.push({
+                            id: `${brand.urlBrand}-${modelDoc.id}`,
+                            name,
+                            brand: brand.urlBrand,
+                            slug,
+                            imageUrl: data.imageUrl || '',
+                            fallbackImage: brand.fallbackImage,
+                            searchText: normalizeSearchValue([
+                                name,
+                                brand.urlBrand,
+                                modelDoc.id,
+                                data.slug,
+                                data.modelID
+                            ].filter(Boolean).join(' '))
+                        });
+                    });
+                } catch (error) {
+                    console.warn(`Hero search skipped brand path devices/${dbBrandPath}/models`, error);
+                }
+            }
+
+            if (!loadedForBrand) {
+                console.warn(`Hero search found no readable models for brand: ${brand.urlBrand}`);
+            }
         }
 
         allDevices.sort((a, b) => a.name.localeCompare(b.name));
