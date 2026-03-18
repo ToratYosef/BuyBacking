@@ -716,6 +716,7 @@
       qcDeviceKey: null,
       reofferOpen: false,
       reofferData: null,
+      reofferValidation: { message: "", fields: {} },
       reofferPriceGuardOpen: false,
       reofferPriceGuardData: null,
       qcModelCache: {},
@@ -1086,6 +1087,19 @@
       return reasons;
     }
 
+    function validateReofferDraft({ price, reasons, comments }) {
+      const fields = {};
+      if (!Number.isFinite(price) || price <= 0) fields.price = true;
+      if (!String(reasons || "").trim()) fields.reasons = true;
+      if (!String(comments || "").trim()) fields.comments = true;
+      const hasErrors = Object.keys(fields).length > 0;
+      return {
+        hasErrors,
+        message: hasErrors ? "Please fix the highlighted fields before sending the re-offer." : "",
+        fields
+      };
+    }
+
     async function openReofferModal(order, qcData = null) {
       const entries = getOrderDeviceEntries(order);
       const selectedKey = state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
@@ -1115,6 +1129,7 @@
         modelId: qcData?.actualModelId || selectedItem?.modelId || selectedItem?.model || order?.modelId || order?.model || '',
         storage: (qcData?.storageMatch === 'no' ? qcData?.actualStorage : qcData?.storage) || selectedItem?.storage || order?.storage || ''
       };
+      state.reofferValidation = { message: "", fields: {} };
       state.reofferOpen = true;
     }
 
@@ -2428,9 +2443,11 @@
         toast(`Action ${actionType} success`, "success");
         // refresh order data by re-running filter (Firestore will also push updates)
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+        return { ok: true, data: actionResult };
       } catch (e) {
         console.error(e);
         toast(`Action failed: ${e.message}`, "error");
+        return { ok: false, error: e };
       }
     }
     async function saveQc(orderId, deviceKey, qcData) {
@@ -4059,6 +4076,8 @@
     function renderReofferModal(order) {
       if (!state.reofferOpen || !state.reofferData || !order) return "";
       const d = state.reofferData;
+      const validation = state.reofferValidation || { message: "", fields: {} };
+      const invalid = validation.fields || {};
       const originalPriceCap = getOriginalReofferCap(order, d.deviceKey || null);
       const maxAttr = Number.isFinite(originalPriceCap) ? `max="${Number(originalPriceCap).toFixed(2)}"` : "";
       return `
@@ -4072,9 +4091,10 @@
               <button id="reofferCloseBtn" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" style="width:20px;height:20px"></i></button>
             </div>
             <div id="reofferModalBody" class="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
+              ${validation.message ? `<p class="rounded-md border border-red-200 bg-red-50 text-red-700 text-sm px-3 py-2">${esc(validation.message)}</p>` : ""}
               <div>
                 <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Updated Price ($)</label>
-                <input id="reofferPrice" type="number" min="0" ${maxAttr} step="0.01" value="${esc(d.newPrice)}" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm" />
+                <input id="reofferPrice" type="number" min="0" ${maxAttr} step="0.01" value="${esc(d.newPrice)}" class="w-full border ${invalid.price ? 'border-red-500 bg-red-50' : 'border-slate-300'} rounded-md px-3 py-2 text-sm" />
                 ${Number.isFinite(originalPriceCap) ? `<p class="mt-1 text-[11px] text-slate-500">Max re-offer is original price: $${esc(Number(originalPriceCap).toFixed(2))}</p>` : ''}
               </div>
               <div class="grid grid-cols-2 gap-3">
@@ -4107,11 +4127,11 @@
               </div>
               <div>
                 <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Reason(s)</label>
-                <textarea id="reofferReasons" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm h-20">${esc(d.reasons)}</textarea>
+                <textarea id="reofferReasons" class="w-full border ${invalid.reasons ? 'border-red-500 bg-red-50' : 'border-slate-300'} rounded-md px-3 py-2 text-sm h-20">${esc(d.reasons)}</textarea>
               </div>
               <div>
-                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Comments</label>
-                <textarea id="reofferComments" class="w-full border border-slate-300 rounded-md px-3 py-2 text-sm h-20">${esc(d.comments)}</textarea>
+                <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Description / Comments</label>
+                <textarea id="reofferComments" class="w-full border ${invalid.comments ? 'border-red-500 bg-red-50' : 'border-slate-300'} rounded-md px-3 py-2 text-sm h-20">${esc(d.comments)}</textarea>
               </div>
             </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
@@ -4726,6 +4746,7 @@
             state.qcData = null;
             state.reofferOpen = false;
             state.reofferData = null;
+            state.reofferValidation = { message: "", fields: {} };
             state.unlockInfoModalOpen = false;
             state.unlockInfoModalData = null;
             render();
@@ -4762,6 +4783,7 @@
             state.qcData = null;
             state.reofferOpen = false;
             state.reofferData = null;
+            state.reofferValidation = { message: "", fields: {} };
             state.unlockInfoModalOpen = false;
             state.unlockInfoModalData = null;
             render();
@@ -4916,6 +4938,7 @@
           state.qcData = null;
           state.reofferOpen = false;
           state.reofferData = null;
+          state.reofferValidation = { message: "", fields: {} };
           state.unlockInfoModalOpen = false;
           state.unlockInfoModalData = null;
           state.modalScrollTop.reoffer = 0;
@@ -5429,9 +5452,27 @@
         syncStepInputs();
       }
       if (state.reofferOpen && order) {
-        const closeReoffer = () => { state.reofferOpen = false; state.reofferData = null; state.modalScrollTop.reoffer = 0; render(); };
+        const closeReoffer = () => {
+          state.reofferOpen = false;
+          state.reofferData = null;
+          state.reofferValidation = { message: "", fields: {} };
+          state.modalScrollTop.reoffer = 0;
+          render();
+        };
         document.getElementById("reofferCloseBtn")?.addEventListener("click", closeReoffer);
         document.getElementById("reofferCancelBtn")?.addEventListener("click", closeReoffer);
+        const clearValidationField = (field) => {
+          if (!state.reofferValidation?.fields?.[field] && !state.reofferValidation?.message) return;
+          state.reofferValidation = {
+            message: "",
+            fields: { ...(state.reofferValidation?.fields || {}) }
+          };
+          delete state.reofferValidation.fields[field];
+          render();
+        };
+        document.getElementById("reofferPrice")?.addEventListener("input", () => clearValidationField("price"));
+        document.getElementById("reofferReasons")?.addEventListener("input", () => clearValidationField("reasons"));
+        document.getElementById("reofferComments")?.addEventListener("input", () => clearValidationField("comments"));
         document.getElementById("reofferDeviceKey")?.addEventListener("change", (event) => {
           const targetKey = event?.target?.value || '';
           if (!state.reofferData || !targetKey) return;
@@ -5456,6 +5497,13 @@
           const modelId = (document.getElementById("reofferModel")?.value || "").trim();
           const storage = (document.getElementById("reofferStorage")?.value || "").trim();
           const deviceKey = (document.getElementById("reofferDeviceKey")?.value || "").trim() || state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null;
+          const validation = validateReofferDraft({ price, reasons, comments });
+          if (validation.hasErrors) {
+            state.reofferValidation = validation;
+            toast("Please fix the highlighted re-offer fields before sending.", "error");
+            render();
+            return;
+          }
           const originalPrice = Number(getOriginalReofferCap(order, deviceKey));
           if (Number.isFinite(originalPrice) && price > (originalPrice + 0.009)) {
             state.reofferPriceGuardData = { enteredPrice: price, originalPrice };
@@ -5463,7 +5511,7 @@
             render();
             return;
           }
-          await handleAction(order.id, "reOffer", {
+          const result = await handleAction(order.id, "reOffer", {
             body: {
               newPrice: price,
               reasons: reasons ? reasons.split(/\n+/).map(x => x.trim()).filter(Boolean) : [],
@@ -5476,8 +5524,17 @@
               deviceKey
             }
           });
+          if (!result?.ok) {
+            state.reofferValidation = {
+              message: "We could not send this re-offer. Please fix the highlighted fields and try again.",
+              fields: { ...(state.reofferValidation?.fields || {}), comments: true }
+            };
+            render();
+            return;
+          }
           state.reofferOpen = false;
           state.reofferData = null;
+          state.reofferValidation = { message: "", fields: {} };
           state.modalScrollTop.reoffer = 0;
           render();
         });
@@ -5793,6 +5850,7 @@
       state.qcData = null;
       state.reofferOpen = false;
       state.reofferData = null;
+      state.reofferValidation = { message: "", fields: {} };
       state.unlockInfoModalOpen = false;
       state.unlockInfoModalData = null;
       state.orderTextImportOpen = false;
