@@ -802,6 +802,8 @@
                     </div>
                 </div>
 
+                <div id="price-trend-mobile-slot"></div>
+
 
                 <div id="condition-requirements-box" class="req-box bg-white shadow-sm hidden">
                     <div class="font-black text-slate-800 mb-4 pb-2 border-b flex items-center gap-2">
@@ -819,19 +821,21 @@
                     <p class="text-[11px] text-indigo-900 leading-tight font-medium">Your price is locked for 14 days once you submit your trade-in.</p>
                 </div>
 
-                <section id="price-trend-card" class="trend-card hidden" aria-live="polite">
-                    <div class="trend-header">
-                        <div>
-                            <h3 class="trend-title">📈 Price Trend – Last 30 Days</h3>
-                            <div id="trend-direction" class="trend-direction"></div>
+                <div id="price-trend-desktop-slot">
+                    <section id="price-trend-card" class="trend-card hidden" aria-live="polite">
+                        <div class="trend-header">
+                            <div>
+                                <h3 class="trend-title">📈 Price Trend – Last 30 Days</h3>
+                                <div id="trend-direction" class="trend-direction"></div>
+                            </div>
+                            <span class="trend-badge">Live Market Estimate</span>
                         </div>
-                        <span class="trend-badge">Live Market Estimate</span>
-                    </div>
-                    <div class="trend-chart-wrap">
-                        <canvas id="price-trend-canvas" aria-label="Price trend chart" role="img"></canvas>
-                    </div>
-                    <p class="trend-caption">This model typically changes $3–$7 per week based on market demand.</p>
-                </section>
+                        <div class="trend-chart-wrap">
+                            <canvas id="price-trend-canvas" aria-label="Price trend chart" role="img"></canvas>
+                        </div>
+                        <p class="trend-caption">This model typically changes $3–$7 per week based on market demand.</p>
+                    </section>
+                </div>
             </div>
             
         </div>
@@ -1833,6 +1837,7 @@
         document.getElementById('summary-tags').textContent = `Network: ${LOCK_LABELS[state.selections.lock] || state.selections.lock}`;
         const mobileOfferDevice = document.getElementById('mobile-offer-device');
         if (mobileOfferDevice) mobileOfferDevice.textContent = `${fullBrand} ${state.selections.modelName} ${state.selections.storage}`;
+        relocateTrendCard();
         updateFinalDeviceImage();
         renderConditionGrid();
         updatePrice();
@@ -1858,7 +1863,21 @@
         }
     };
 
+    const relocateTrendCard = () => {
+        const trendCard = document.getElementById('price-trend-card');
+        const mobileSlot = document.getElementById('price-trend-mobile-slot');
+        const desktopSlot = document.getElementById('price-trend-desktop-slot');
+        if (!trendCard || !mobileSlot || !desktopSlot) return;
+        const onMobile = window.matchMedia('(max-width: 1023px)').matches;
+        if (onMobile) {
+            if (trendCard.parentElement !== mobileSlot) mobileSlot.appendChild(trendCard);
+            return;
+        }
+        if (trendCard.parentElement !== desktopSlot) desktopSlot.appendChild(trendCard);
+    };
+
     const isSmallScreen = () => window.matchMedia('(max-width: 640px)').matches;
+    window.addEventListener('resize', relocateTrendCard, { passive: true });
 
     const scrollToPriceIfNeeded = () => {
         if (!isSmallScreen()) return;
