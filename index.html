@@ -1262,6 +1262,8 @@ const HERO_DEVICE_SEARCH_BRANDS = [
     { dbBrand: 'Samsung', urlBrand: 'samsung', fallbackImage: 'https://cdn.secondhandcell.com/images/assets/samsung.webp' },
     { dbBrand: 'iphone', urlBrand: 'iphone', fallbackImage: 'https://cdn.secondhandcell.com/images/assets/apple.webp' }
 ];
+const HERO_DEVICE_IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
+const HERO_IMAGE_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 const heroSearchState = {
     loaded: false,
     loadingPromise: null,
@@ -1279,6 +1281,36 @@ const normalizeSearchValue = (value = '') => String(value || '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+
+const hasImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
+const resolveHeroSearchImage = (baseUrl, imgEl, fallbackUrl) => {
+    if (!imgEl) return;
+    const fallback = fallbackUrl || HERO_IMAGE_PLACEHOLDER;
+    if (!baseUrl) {
+        imgEl.src = fallback;
+        return;
+    }
+    if (hasImageExtension(baseUrl)) {
+        imgEl.src = baseUrl;
+        imgEl.onerror = () => { imgEl.src = fallback; };
+        return;
+    }
+
+    const candidates = HERO_DEVICE_IMAGE_EXTENSIONS.map((ext) => `${baseUrl}${ext}`);
+    let idx = 0;
+    const tryNext = () => {
+        if (idx >= candidates.length) {
+            imgEl.src = fallback;
+            return;
+        }
+        const testImg = new Image();
+        const candidate = candidates[idx];
+        testImg.onload = () => { imgEl.src = candidate; };
+        testImg.onerror = () => { idx += 1; tryNext(); };
+        testImg.src = candidate;
+    };
+    tryNext();
+};
 
 const loadHeroSearchDevices = async () => {
     if (heroSearchState.loaded) return heroSearchState.devices;
@@ -1303,7 +1335,8 @@ const loadHeroSearchDevices = async () => {
                     name,
                     brand: brand.urlBrand,
                     slug,
-                    imageUrl: data.imageUrl || brand.fallbackImage,
+                    imageUrl: data.imageUrl || '',
+                    fallbackImage: brand.fallbackImage,
                     searchText: normalizeSearchValue([
                         name,
                         brand.urlBrand,
@@ -1357,12 +1390,27 @@ function setupHeroDeviceSearch() {
 
         const markup = matches.map((entry) => `
             <button type="button" class="hero-device-search-item" data-device-brand="${entry.brand}" data-device-slug="${entry.slug}">
-                <img class="hero-device-search-thumb" src="${entry.imageUrl}" alt="${entry.name}" loading="lazy" decoding="async">
+                <img
+                    class="hero-device-search-thumb"
+                    src="${HERO_IMAGE_PLACEHOLDER}"
+                    data-base-url="${entry.imageUrl || ''}"
+                    data-fallback-url="${entry.fallbackImage || ''}"
+                    alt="${entry.name}"
+                    loading="lazy"
+                    decoding="async"
+                >
                 <span class="font-medium">${entry.name}</span>
             </button>
         `).join('');
 
         results.innerHTML = markup;
+        results.querySelectorAll('.hero-device-search-thumb').forEach((imgEl) => {
+            resolveHeroSearchImage(
+                imgEl.getAttribute('data-base-url'),
+                imgEl,
+                imgEl.getAttribute('data-fallback-url')
+            );
+        });
         results.classList.remove('hidden');
         hint.classList.add('hidden');
     };
