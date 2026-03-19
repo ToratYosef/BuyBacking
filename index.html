@@ -237,6 +237,80 @@
 
         .hero-content { position: relative; z-index: 10; }
 
+        .hero-search-card {
+            max-width: 42rem;
+            margin: 0 auto 2.5rem;
+            background: rgba(15, 23, 42, 0.72);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            text-align: left;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+        }
+
+        .hero-device-search-input {
+            width: 100%;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            background: rgba(15, 23, 42, 0.65);
+            color: #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 0.9rem 1rem;
+            font-size: 0.95rem;
+            transition: border-color .2s ease, box-shadow .2s ease;
+        }
+
+        .hero-device-search-input::placeholder { color: #94a3b8; }
+        .hero-device-search-input:focus {
+            outline: none;
+            border-color: rgba(96, 165, 250, 0.9);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+        }
+
+        .hero-device-search-results {
+            margin-top: 0.75rem;
+            max-height: 18rem;
+            overflow-y: auto;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        .hero-device-search-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            padding: 0.72rem 0.85rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+            border-left: 0;
+            border-right: 0;
+            border-top: 0;
+            text-align: left;
+            transition: background-color .2s ease;
+            color: #f8fafc;
+            background: transparent;
+            cursor: pointer;
+        }
+        .hero-device-search-item:last-child { border-bottom: none; }
+        .hero-device-search-item:hover { background: rgba(51, 65, 85, 0.55); }
+        .hero-device-search-thumb {
+            width: 2.4rem;
+            height: 2.4rem;
+            border-radius: 0.55rem;
+            object-fit: cover;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            flex-shrink: 0;
+        }
+
+        .hero-device-search-empty {
+            color: #cbd5e1;
+            font-size: 0.92rem;
+            padding: 0.85rem 0.4rem 0.2rem;
+            text-align: center;
+        }
+
         .hero-phone-container {
             position: relative;
             height: 400px;
@@ -682,6 +756,20 @@
                             <a href="/track-order.html" class="w-full sm:w-auto bg-white/10 hover:bg-white/20 border border-white/30 text-white px-6 py-4 rounded-full font-semibold text-base inline-flex items-center justify-center gap-2 transition-colors">
                                 Already have an order? Track status here
                             </a>
+                        </div>
+
+                        <div class="hero-search-card" id="heroDeviceSearchCard">
+                            <label for="heroDeviceSearchInput" class="block text-sm font-semibold text-slate-200 mb-2">Search your device model</label>
+                            <input
+                                id="heroDeviceSearchInput"
+                                class="hero-device-search-input"
+                                type="search"
+                                autocomplete="off"
+                                placeholder="Try iPhone 15 Pro Max or Galaxy S24 Ultra"
+                                aria-label="Search devices"
+                            />
+                            <div id="heroDeviceSearchResults" class="hero-device-search-results hidden" aria-live="polite"></div>
+                            <p class="hero-device-search-empty" id="heroDeviceSearchHint">Start typing to find your iPhone or Samsung model.</p>
                         </div>
 
                         <!-- Trust Stats -->
@@ -1169,6 +1257,229 @@ const getModelDocBySlug = async (brand, slug) => {
 
     return matchedData;
 };
+
+const HERO_DEVICE_SEARCH_BRANDS = [
+    {
+        dbBrandPaths: ['Samsung', 'samsung'],
+        urlBrand: 'samsung',
+        fallbackImage: 'https://cdn.secondhandcell.com/images/assets/samsung.webp'
+    },
+    {
+        dbBrandPaths: ['iphone', 'iPhone', 'apple'],
+        urlBrand: 'iphone',
+        fallbackImage: 'https://cdn.secondhandcell.com/images/assets/apple.webp'
+    }
+];
+const HERO_DEVICE_IMAGE_EXTENSIONS = ['.webp', '.png', '.jpg', '.jpeg'];
+const HERO_IMAGE_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+const heroSearchState = {
+    loaded: false,
+    loadingPromise: null,
+    devices: []
+};
+
+const normalizeDeviceSlug = (value = '') => String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+
+const normalizeSearchValue = (value = '') => String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+
+const hasHeroImageExtension = (url) => /\.(png|jpe?g|webp)(\?.*)?$/i.test(url || '');
+const resolveHeroSearchImage = (baseUrl, imgEl, fallbackUrl) => {
+    if (!imgEl) return;
+    const fallback = fallbackUrl || HERO_IMAGE_PLACEHOLDER;
+    if (!baseUrl) {
+        imgEl.src = fallback;
+        return;
+    }
+    if (hasHeroImageExtension(baseUrl)) {
+        imgEl.src = baseUrl;
+        imgEl.onerror = () => { imgEl.src = fallback; };
+        return;
+    }
+
+    const candidates = HERO_DEVICE_IMAGE_EXTENSIONS.map((ext) => `${baseUrl}${ext}`);
+    let idx = 0;
+    const tryNext = () => {
+        if (idx >= candidates.length) {
+            imgEl.src = fallback;
+            return;
+        }
+        const testImg = new Image();
+        const candidate = candidates[idx];
+        testImg.onload = () => { imgEl.src = candidate; };
+        testImg.onerror = () => { idx += 1; tryNext(); };
+        testImg.src = candidate;
+    };
+    tryNext();
+};
+
+const loadHeroSearchDevices = async () => {
+    if (heroSearchState.loaded) return heroSearchState.devices;
+    if (heroSearchState.loadingPromise) return heroSearchState.loadingPromise;
+
+    heroSearchState.loadingPromise = (async () => {
+        await ensureFirebase();
+        const allDevices = [];
+        const seenDeviceKeys = new Set();
+
+        for (const brand of HERO_DEVICE_SEARCH_BRANDS) {
+            let loadedForBrand = false;
+
+            for (const dbBrandPath of brand.dbBrandPaths) {
+                try {
+                    const snap = await getDocs(collection(db, 'devices', dbBrandPath, 'models'));
+                    if (!snap.empty) loadedForBrand = true;
+
+                    snap.forEach((modelDoc) => {
+                        const data = modelDoc.data() || {};
+                        const name = String(data.name || modelDoc.id || '').trim();
+                        if (!name) return;
+                        const rawSlug = data.slug || data.modelID || modelDoc.id;
+                        const slug = normalizeDeviceSlug(rawSlug);
+                        if (!slug) return;
+
+                        const uniqueKey = `${brand.urlBrand}:${slug}`;
+                        if (seenDeviceKeys.has(uniqueKey)) return;
+                        seenDeviceKeys.add(uniqueKey);
+
+                        allDevices.push({
+                            id: `${brand.urlBrand}-${modelDoc.id}`,
+                            name,
+                            brand: brand.urlBrand,
+                            slug,
+                            imageUrl: data.imageUrl || '',
+                            fallbackImage: brand.fallbackImage,
+                            searchText: normalizeSearchValue([
+                                name,
+                                brand.urlBrand,
+                                modelDoc.id,
+                                data.slug,
+                                data.modelID
+                            ].filter(Boolean).join(' '))
+                        });
+                    });
+                } catch (error) {
+                    console.warn(`Hero search skipped brand path devices/${dbBrandPath}/models`, error);
+                }
+            }
+
+            if (!loadedForBrand) {
+                console.warn(`Hero search found no readable models for brand: ${brand.urlBrand}`);
+            }
+        }
+
+        allDevices.sort((a, b) => a.name.localeCompare(b.name));
+        heroSearchState.devices = allDevices;
+        heroSearchState.loaded = true;
+        return allDevices;
+    })();
+
+    try {
+        return await heroSearchState.loadingPromise;
+    } finally {
+        heroSearchState.loadingPromise = null;
+    }
+};
+
+function setupHeroDeviceSearch() {
+    const input = document.getElementById('heroDeviceSearchInput');
+    const results = document.getElementById('heroDeviceSearchResults');
+    const hint = document.getElementById('heroDeviceSearchHint');
+    const card = document.getElementById('heroDeviceSearchCard');
+    if (!input || !results || !hint || !card) return;
+
+    const hideResults = () => {
+        results.classList.add('hidden');
+        results.innerHTML = '';
+    };
+
+    const renderResults = (matches, query) => {
+        if (!query) {
+            hideResults();
+            hint.textContent = 'Start typing to find your iPhone or Samsung model.';
+            hint.classList.remove('hidden');
+            return;
+        }
+
+        if (!matches.length) {
+            results.innerHTML = '<p class="hero-device-search-empty">No devices found. Try another model name.</p>';
+            results.classList.remove('hidden');
+            hint.classList.add('hidden');
+            return;
+        }
+
+        const markup = matches.map((entry) => `
+            <button type="button" class="hero-device-search-item" data-device-brand="${entry.brand}" data-device-slug="${entry.slug}">
+                <img
+                    class="hero-device-search-thumb"
+                    src="${HERO_IMAGE_PLACEHOLDER}"
+                    data-base-url="${entry.imageUrl || ''}"
+                    data-fallback-url="${entry.fallbackImage || ''}"
+                    alt="${entry.name}"
+                    loading="lazy"
+                    decoding="async"
+                >
+                <span class="font-medium">${entry.name}</span>
+            </button>
+        `).join('');
+
+        results.innerHTML = markup;
+        results.querySelectorAll('.hero-device-search-thumb').forEach((imgEl) => {
+            resolveHeroSearchImage(
+                imgEl.getAttribute('data-base-url'),
+                imgEl,
+                imgEl.getAttribute('data-fallback-url')
+            );
+        });
+        results.classList.remove('hidden');
+        hint.classList.add('hidden');
+    };
+
+    input.addEventListener('focus', () => { loadHeroSearchDevices().catch((error) => console.error('Hero device prefetch failed:', error)); });
+
+    input.addEventListener('input', async (event) => {
+        const query = normalizeSearchValue(event.target.value || '');
+
+        try {
+            const devices = await loadHeroSearchDevices();
+            if (!query) {
+                renderResults([], '');
+                return;
+            }
+
+            const matches = devices
+                .filter((entry) => entry.searchText.includes(query))
+                .slice(0, 8);
+            renderResults(matches, query);
+        } catch (error) {
+            console.error('Failed to search hero devices:', error);
+            results.innerHTML = '<p class="hero-device-search-empty">Could not load devices right now.</p>';
+            results.classList.remove('hidden');
+            hint.classList.add('hidden');
+        }
+    });
+
+    results.addEventListener('click', (event) => {
+        const target = event.target.closest('.hero-device-search-item');
+        if (!target) return;
+        const brand = target.getAttribute('data-device-brand');
+        const slug = target.getAttribute('data-device-slug');
+        if (!brand || !slug) return;
+        window.location.href = `sell/?device=${encodeURIComponent(`${brand}-${slug}`)}`;
+    });
+
+    document.addEventListener('click', (event) => {
+        if (card.contains(event.target)) return;
+        hideResults();
+    });
+}
 
 const applyPopularPricing = async () => {
     await ensureFirebase();
@@ -1735,6 +2046,7 @@ function runAfterFirstPaint(callback) {
 }
 
 runAfterFirstPaint(initHomePageDomFeatures);
+runAfterFirstPaint(setupHeroDeviceSearch);
 
 function setupScrollAnimations() {
     const observerOptions = {
