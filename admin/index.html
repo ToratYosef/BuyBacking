@@ -2921,19 +2921,39 @@
     }
     function past14DaysBadgeHTML(order) {
       const status = normalizeStatusKey(order?.status);
-      if (status !== 'label_generated') return "";
-      
-      // Find when label was generated - check labelGeneratedAt or createdAt
-      const labelDate = toDateAny(order?.labelGeneratedAt || order?.createdAt);
-      if (!labelDate) return "";
-      
-      const daysSinceLabelGenerated = Math.floor((Date.now() - labelDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysSinceLabelGenerated <= 14) return "";
-      
+      const quoteDate = toDateAny(order?.createdAt);
+      const labelDate = toDateAny(order?.labelGeneratedAt || order?.kitLabelGeneratedAt || order?.createdAt);
+      if (!quoteDate || !labelDate) return "";
+
+      const nowMs = Date.now();
+      const dayMs = 1000 * 60 * 60 * 24;
+      const daysSinceQuote = Math.floor((nowMs - quoteDate.getTime()) / dayMs);
+      // Rule 1: while still in label generated, show after quote is 15+ days old.
+      const currentlyOverdueInLabelGen = status === "label_generated" && daysSinceQuote >= 15;
+
+      // Rule 2: once it became overdue in label generated, keep showing the badge on later statuses.
+      // We infer how long it sat in label_generated using labelGeneratedAt -> last status update.
+      const leftLabelGeneratedAt = toDateAny(
+        order?.lastStatusUpdateAt ||
+        order?.statusUpdatedAt ||
+        order?.updatedAt ||
+        order?.updated_at ||
+        order?.lastUpdatedAt
+      );
+      const daysInLabelGeneratedBeforeStatusChange = leftLabelGeneratedAt
+        ? Math.floor((leftLabelGeneratedAt.getTime() - labelDate.getTime()) / dayMs)
+        : null;
+      const wasOverdueBeforeStatusChanged =
+        status !== "label_generated" &&
+        Number.isFinite(daysInLabelGeneratedBeforeStatusChange) &&
+        daysInLabelGeneratedBeforeStatusChange >= 14;
+
+      if (!currentlyOverdueInLabelGen && !wasOverdueBeforeStatusChanged) return "";
+
       return `
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300">
           <i data-lucide="alert-triangle" style="width:12px;height:12px"></i>
-          ${daysSinceLabelGenerated}d overdue
+          Past 14 days — get new price (price lock is 14 days)
         </span>
       `;
     }
