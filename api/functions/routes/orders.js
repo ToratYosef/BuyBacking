@@ -98,6 +98,64 @@ function createOrdersRouter({
     account_country_code: process.env.SHIPENGINE_UPS_ACCOUNT_COUNTRY_CODE || 'US',
   };
 
+  function extractIpAddress(req = {}) {
+    const forwardedFor = req.headers?.['x-forwarded-for'];
+    const rawForwarded = Array.isArray(forwardedFor)
+      ? forwardedFor[0]
+      : String(forwardedFor || '');
+    const firstForwardedIp = rawForwarded.split(',').map((part) => part.trim()).find(Boolean);
+    const candidates = [
+      firstForwardedIp,
+      req.headers?.['cf-connecting-ip'],
+      req.headers?.['x-real-ip'],
+      req.ip,
+      req.connection?.remoteAddress,
+      req.socket?.remoteAddress,
+    ];
+
+    const resolved = candidates
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .find(Boolean);
+    return resolved || null;
+  }
+
+  function parseSubmitterClientDetails(userAgent = '') {
+    const normalizedUa = String(userAgent || '').toLowerCase();
+    const browser = normalizedUa.includes('edg/')
+      ? 'Microsoft Edge'
+      : normalizedUa.includes('opr/') || normalizedUa.includes('opera')
+        ? 'Opera'
+        : normalizedUa.includes('chrome/') && !normalizedUa.includes('edg/') && !normalizedUa.includes('opr/')
+          ? 'Google Chrome'
+          : normalizedUa.includes('safari/') && !normalizedUa.includes('chrome/')
+            ? 'Safari'
+            : normalizedUa.includes('firefox/')
+              ? 'Mozilla Firefox'
+              : 'Unknown';
+    const deviceType = /ipad|tablet/.test(normalizedUa)
+      ? 'tablet'
+      : /mobile|iphone|android/.test(normalizedUa)
+        ? 'mobile'
+        : 'desktop';
+    const os = normalizedUa.includes('iphone') || normalizedUa.includes('ipad')
+      ? 'iOS'
+      : normalizedUa.includes('android')
+        ? 'Android'
+        : normalizedUa.includes('win')
+          ? 'Windows'
+          : normalizedUa.includes('mac os')
+            ? 'macOS'
+            : normalizedUa.includes('linux')
+              ? 'Linux'
+              : 'Unknown';
+
+    return {
+      browser,
+      deviceType,
+      os,
+    };
+  }
+
   function normalizeShippingPreference(preference) {
     const value = String(preference || '').trim().toLowerCase();
 
@@ -1494,6 +1552,70 @@ function createOrdersRouter({
     }
   });
 
+  router.get('/orders/ip-conflicts', async (req, res) => {
+    try {
+      const rawLimit = Number(req.query?.limit);
+      const limit = Number.isFinite(rawLimit)
+        ? Math.max(1, Math.min(Math.floor(rawLimit), 2000))
+        : 500;
+      const snapshot = await ordersCollection.limit(limit).get();
+      const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+      const byIp = new Map();
+      orders.forEach((order) => {
+        const ipAddress = String(
+          order.submitterIpAddress ||
+          order.submitterContext?.ipAddress ||
+          order.metadata?.submitter?.ipAddress ||
+          ''
+        ).trim();
+        if (!ipAddress) return;
+
+        const customerName = String(order.shippingInfo?.fullName || '').trim() || '(missing name)';
+        if (!byIp.has(ipAddress)) {
+          byIp.set(ipAddress, {
+            ipAddress,
+            names: new Set(),
+            orders: [],
+          });
+        }
+        const bucket = byIp.get(ipAddress);
+        bucket.names.add(customerName.toLowerCase());
+        bucket.orders.push({
+          orderId: order.id,
+          createdAt: order.createdAt || order.created_at || null,
+          name: customerName,
+          email: order.shippingInfo?.email || null,
+          device: order.device || order.modelName || null,
+          submitterDeviceId: order.submitterDeviceId || order.submitterContext?.deviceId || null,
+          browser: order.submitterBrowser || order.submitterContext?.browser || null,
+          os: order.submitterOs || order.submitterContext?.os || null,
+          deviceType: order.submitterDeviceType || order.submitterContext?.deviceType || null,
+        });
+      });
+
+      const conflicts = Array.from(byIp.values())
+        .filter((entry) => entry.names.size > 1)
+        .map((entry) => ({
+          ipAddress: entry.ipAddress,
+          uniqueNameCount: entry.names.size,
+          names: Array.from(entry.names.values()),
+          orderCount: entry.orders.length,
+          orders: entry.orders,
+        }))
+        .sort((a, b) => b.orderCount - a.orderCount);
+
+      return res.json({
+        scannedOrders: orders.length,
+        conflictCount: conflicts.length,
+        conflicts,
+      });
+    } catch (error) {
+      console.error('Failed to fetch order IP conflicts:', error);
+      return res.status(500).json({ error: 'Failed to fetch order IP conflicts.' });
+    }
+  });
+
   router.post('/submit-order', async (req, res) => {
     try {
       const orderData = req.body;
@@ -1574,6 +1696,29 @@ function createOrdersRouter({
         normalizedOriginal ?? normalizedEstimated ?? normalizedTotal ?? payoutToPersist;
 
       orderData.originalQuote = originalToPersist;
+      const requestUserAgent = String(req.headers?.['user-agent'] || '').trim();
+      const requestIpAddress = extractIpAddress(req);
+      const submitterContext = typeof orderData.submitterContext === 'object' && orderData.submitterContext
+        ? orderData.submitterContext
+        : {};
+      const inferredClientDetails = parseSubmitterClientDetails(
+        submitterContext.userAgent || requestUserAgent
+      );
+      const mergedSubmitterContext = {
+        ...submitterContext,
+        userAgent: submitterContext.userAgent || requestUserAgent || '',
+        ipAddress: requestIpAddress || submitterContext.ipAddress || '',
+        browser: submitterContext.browser || inferredClientDetails.browser,
+        deviceType: submitterContext.deviceType || inferredClientDetails.deviceType,
+        os: submitterContext.os || inferredClientDetails.os,
+        deviceId: submitterContext.deviceId || '',
+      };
+      orderData.submitterContext = mergedSubmitterContext;
+      orderData.submitterIpAddress = mergedSubmitterContext.ipAddress || null;
+      orderData.submitterDeviceId = mergedSubmitterContext.deviceId || null;
+      orderData.submitterBrowser = mergedSubmitterContext.browser || null;
+      orderData.submitterDeviceType = mergedSubmitterContext.deviceType || null;
+      orderData.submitterOs = mergedSubmitterContext.os || null;
 
       const orderId = await generateNextOrderNumber();
       const finalPayout = payoutToPersist;
