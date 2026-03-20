@@ -101,14 +101,28 @@ async function loadConflicts() {
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'Loading...';
   try {
-    const payload = await apiGet(`/orders/ip-conflicts?limit=${encodeURIComponent(limit)}`, { authRequired: false });
+    const payload = await apiGet(`/orders/ip-conflicts?limit=${encodeURIComponent(limit)}`, { authRequired: true });
     logDebug('API response received for /orders/ip-conflicts.', payload);
     summaryEl.textContent = `Scanned ${payload.scannedOrders || 0} order(s). Found ${payload.conflictCount || 0} conflicting IP(s).`;
     renderConflicts(Array.isArray(payload.conflicts) ? payload.conflicts : []);
   } catch (error) {
+    const status = error?.status ? ` (HTTP ${error.status})` : '';
+    const safeMessage = error?.message || 'Unknown error';
+    const payloadCode = error?.payload?.code ? `Code: ${error.payload.code}` : '';
+    const requestId = error?.payload?.requestId ? `Request ID: ${error.payload.requestId}` : '';
+    const authHint = /auth|401|403|token|sign in/i.test(safeMessage)
+      ? 'Make sure you are signed in with an admin account so the API token is sent.'
+      : '';
     logDebug('Failed to load conflicts.', formatErrorDetails(error), 'error');
-    summaryEl.textContent = 'Failed to load IP conflicts.';
-    resultsEl.innerHTML = `<div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">${escapeHtml(error.message || 'Unknown error')}</div>`;
+    summaryEl.textContent = `Failed to load IP conflicts${status}.`;
+    resultsEl.innerHTML = `
+      <div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm space-y-2">
+        <div><strong>Error:</strong> ${escapeHtml(safeMessage)}</div>
+        ${payloadCode ? `<div><strong>${escapeHtml(payloadCode)}</strong></div>` : ''}
+        ${requestId ? `<div><strong>${escapeHtml(requestId)}</strong></div>` : ''}
+        ${authHint ? `<div>${escapeHtml(authHint)}</div>` : ''}
+      </div>
+    `;
   } finally {
     logDebug('Conflict load finished.');
     refreshBtn.disabled = false;
