@@ -4,6 +4,8 @@ const resultsEl = document.getElementById('results');
 const summaryEl = document.getElementById('summary');
 const refreshBtn = document.getElementById('refresh-btn');
 const limitInput = document.getElementById('scan-limit');
+const debugConsoleEl = document.getElementById('debug-console');
+const clearDebugBtn = document.getElementById('clear-debug-btn');
 
 function escapeHtml(value = '') {
   return String(value)
@@ -12,6 +14,43 @@ function escapeHtml(value = '') {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function formatErrorDetails(error) {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+  return JSON.stringify(
+    {
+      message: error.message || null,
+      status: error.status || null,
+      payload: error.payload || null,
+      stack: error.stack || null,
+      name: error.name || null,
+    },
+    null,
+    2
+  );
+}
+
+function logDebug(message, details = null, level = 'info') {
+  const now = new Date().toISOString();
+  const prefix = `[${now}] [${level.toUpperCase()}] ${message}`;
+  const detailsText =
+    details === null || typeof details === 'undefined'
+      ? ''
+      : `\n${typeof details === 'string' ? details : JSON.stringify(details, null, 2)}`;
+  const line = `${prefix}${detailsText}\n`;
+  if (debugConsoleEl) {
+    debugConsoleEl.textContent += line;
+    debugConsoleEl.scrollTop = debugConsoleEl.scrollHeight;
+  }
+  if (level === 'error') {
+    console.error(message, details);
+  } else if (level === 'warn') {
+    console.warn(message, details);
+  } else {
+    console.log(message, details);
+  }
 }
 
 function renderConflicts(conflicts = []) {
@@ -58,20 +97,46 @@ function renderConflicts(conflicts = []) {
 
 async function loadConflicts() {
   const limit = Number(limitInput.value) || 500;
+  logDebug('Starting conflict load.', { limit });
   refreshBtn.disabled = true;
   refreshBtn.textContent = 'Loading...';
   try {
     const payload = await apiGet(`/orders/ip-conflicts?limit=${encodeURIComponent(limit)}`, { authRequired: false });
+    logDebug('API response received for /orders/ip-conflicts.', payload);
     summaryEl.textContent = `Scanned ${payload.scannedOrders || 0} order(s). Found ${payload.conflictCount || 0} conflicting IP(s).`;
     renderConflicts(Array.isArray(payload.conflicts) ? payload.conflicts : []);
   } catch (error) {
+    logDebug('Failed to load conflicts.', formatErrorDetails(error), 'error');
     summaryEl.textContent = 'Failed to load IP conflicts.';
     resultsEl.innerHTML = `<div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 text-sm">${escapeHtml(error.message || 'Unknown error')}</div>`;
   } finally {
+    logDebug('Conflict load finished.');
     refreshBtn.disabled = false;
     refreshBtn.textContent = 'Refresh';
   }
 }
 
+window.addEventListener('error', (event) => {
+  logDebug('Unhandled window error captured.', {
+    message: event.message,
+    source: event.filename,
+    line: event.lineno,
+    column: event.colno,
+    stack: event.error?.stack || null,
+  }, 'error');
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  logDebug('Unhandled promise rejection captured.', formatErrorDetails(event.reason), 'error');
+});
+
+clearDebugBtn?.addEventListener('click', () => {
+  if (debugConsoleEl) {
+    debugConsoleEl.textContent = '';
+  }
+  logDebug('Debug console cleared by user.');
+});
+
 refreshBtn.addEventListener('click', loadConflicts);
+logDebug('Admin IP conflict page initialized.');
 loadConflicts();
