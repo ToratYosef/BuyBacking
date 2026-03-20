@@ -984,6 +984,56 @@ window.submitFinalOrder = async function() {
 const submitBtn = document.getElementById('submitFinalOrderBtn');
 const messageBox = document.getElementById('payment-message-box');
 clearPaymentMessage();
+const collectSubmitterContext = async () => {
+const userAgent = navigator.userAgent || '';
+const ua = userAgent.toLowerCase();
+const browser = ua.includes('edg/')
+? 'Microsoft Edge'
+: ua.includes('opr/') || ua.includes('opera')
+? 'Opera'
+: ua.includes('chrome/') && !ua.includes('edg/') && !ua.includes('opr/')
+? 'Google Chrome'
+: ua.includes('safari/') && !ua.includes('chrome/')
+? 'Safari'
+: ua.includes('firefox/')
+? 'Mozilla Firefox'
+: 'Unknown';
+const deviceType = /ipad|tablet/.test(ua)
+? 'tablet'
+: /mobile|iphone|android/.test(ua)
+? 'mobile'
+: 'desktop';
+const os = ua.includes('iphone') || ua.includes('ipad')
+? 'iOS'
+: ua.includes('android')
+? 'Android'
+: ua.includes('win')
+? 'Windows'
+: ua.includes('mac os')
+? 'macOS'
+: ua.includes('linux')
+? 'Linux'
+: 'Unknown';
+
+let deviceId = '';
+if (navigator.userAgentData?.getHighEntropyValues) {
+try {
+const hints = await navigator.userAgentData.getHighEntropyValues(['model']);
+deviceId = String(hints?.model || '').trim();
+} catch (error) {
+console.debug('Unable to read UA model hint:', error?.message || error);
+}
+}
+if (!deviceId) {
+if (ua.includes('iphone')) deviceId = 'iPhone';
+else if (ua.includes('ipad')) deviceId = 'iPad';
+else if (ua.includes('android')) deviceId = 'Android Device';
+else if (ua.includes('macintosh')) deviceId = 'Mac';
+else if (ua.includes('windows')) deviceId = 'Windows PC';
+else deviceId = 'Unknown Device';
+}
+return { deviceId, browser, deviceType, os, userAgent };
+};
 
 // 1. Re-validate payment fields
 if (!validatePaymentFields()) {
@@ -1015,6 +1065,7 @@ const shippingPreferenceLabel = rawShippingPreference === 'ship_kit' ? 'Shipping
 const labelCarrier = rawShippingPreference === 'faster_shipping' ? 'ups' : 'usps';
 const shippingKitFee = calculateShippingFee(rawShippingPreference);
 const finalPayoutForOrder = calculateFinalPayout(rawShippingPreference);
+const submitterContext = await collectSubmitterContext();
 const perDeviceItem = {
 device: document.getElementById('overviewDevice').textContent,
 brand: selectedBrand,
@@ -1066,6 +1117,7 @@ zipCode: document.getElementById('zip-code').value
 termsAccepted: document.getElementById('termsAccepted').checked,
 // Ensure we use the logged-in user ID if available, otherwise the anonymous ID
 userId: auth.currentUser?.uid || currentUserId,
+submitterContext,
 };
 
 if (selectedPayment.value === 'echeck') {
