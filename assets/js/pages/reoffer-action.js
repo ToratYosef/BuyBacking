@@ -121,7 +121,7 @@ emailContactLink.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&
 }
 
 if (smsContactLink) {
-smsContactLink.href = `sms:?&body=${encodeURIComponent(draftMessage)}`;
+smsContactLink.href = `sms:+13476880662?&body=${encodeURIComponent(draftMessage)}`;
 }
 };
 
