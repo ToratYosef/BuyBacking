@@ -343,6 +343,7 @@
       const payableDeviceKeys = [];
       const declinedDeviceKeys = [];
       let payableTotal = 0;
+      let eligibleDeviceCount = 0;
 
       for (const entry of entries) {
         const item = entry.item || {};
@@ -362,6 +363,8 @@
           continue;
         }
 
+        eligibleDeviceCount += 1;
+
         const qcPassedStatuses = new Set(['received', 'imei_checked', 'requote_accepted']);
         const isQcPassedPayable = hasQcData && qcPassedStatuses.has(normalizedStatus);
 
@@ -378,9 +381,23 @@
         payableDeviceKeys,
         payableCount: payableDeviceKeys.length,
         payableTotal,
+        eligibleDeviceCount,
         declinedDeviceKeys,
         declinedCount: declinedDeviceKeys.length,
       };
+    }
+    function getFinalPayableAmount(order, settlement = null) {
+      const resolvedSettlement = settlement || getOrderSettlementSummary(order);
+      const orderTotal = Number(order?.totalPayout ?? order?.estimatedQuote ?? order?.originalQuote ?? NaN);
+      const hasAllEligibleDevicesReady =
+        Number(resolvedSettlement?.eligibleDeviceCount || 0) > 0 &&
+        Number(resolvedSettlement?.payableCount || 0) === Number(resolvedSettlement?.eligibleDeviceCount || 0);
+
+      if (hasAllEligibleDevicesReady && Number.isFinite(orderTotal) && orderTotal >= 0) {
+        return orderTotal;
+      }
+
+      return Number(resolvedSettlement?.payableTotal || 0);
     }
     function formatCarrierLabel(carrierRaw) {
       const c = String(carrierRaw || '').trim().toLowerCase();
@@ -3728,7 +3745,7 @@
             // Manual re-offer can still be sent without running QC.
             groups.postReceive.push({ label: "Send Re-offer", action: "reOffer", class: "bg-purple-600 text-white hover:bg-purple-700" });
             if (hasQc && settlement.payableCount > 0) {
-              groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
+              groups.postReceive.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, settlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
             }
             if (settlement.declinedCount > 0) {
               groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
@@ -3746,7 +3763,7 @@
         }
         else if (status === "re-offered-accepted") {
             if (settlement.payableCount > 0) {
-              groups.primary.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
+              groups.primary.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, settlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
             }
         }
         else if (status === "re-offered-declined") {
@@ -3756,7 +3773,7 @@
         }
         else if (["requote_accepted", "completed"].includes(status)) {
             if (settlement.payableCount > 0) {
-              groups.postReceive.push({ label: `Pay Now ($${Number(settlement.payableTotal || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
+              groups.postReceive.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, settlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
             }
             if (settlement.declinedCount > 0) {
               groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
@@ -5636,7 +5653,7 @@
             const currentOrder = getSelectedOrder();
             if (!currentOrder) return;
             const settlement = state.paymentConfirmPayload || getOrderSettlementSummary(currentOrder);
-            const finalPrice = Number(settlement?.payableTotal || 0);
+            const finalPrice = Number(getFinalPayableAmount(currentOrder, settlement) || 0);
 
             const paymentMethodRaw = currentOrder?.paymentMethod || 'N/A';
             const paymentMethodFormatted = String(paymentMethodRaw).replace(/[_-]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
