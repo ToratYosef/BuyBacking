@@ -399,13 +399,6 @@
                 }
                 return FALLBACK_DEVICE_IMAGE;
             }; 
-            const splitTotalAcrossDevices = (total, count) => {
-                const safeCount = Math.max(1, Number(count || 1));
-                const cents = Math.max(0, Math.round(Number(total || 0) * 100));
-                const base = Math.floor(cents / safeCount);
-                const remainder = cents % safeCount;
-                return Array.from({ length: safeCount }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100);
-            };
             const currency = (value) => `$${Number(value || 0).toFixed(2)}`;
             const esc = (value) => String(value || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
             const deriveImageUrlFromItem = (item = {}) => {
@@ -614,18 +607,7 @@
                     expanded.push({ ...item, qty: 1 });
                 }
             });
-            const shouldNormalizeExpandedPayouts =
-                expanded.length > 1 &&
-                Number.isFinite(priceVal) &&
-                priceVal > 0 &&
-                expanded.every((item) => Number.isFinite(Number(item.unitPrice)) && Number(item.unitPrice) === priceVal);
 
-            if (shouldNormalizeExpandedPayouts) {
-                const splitPayouts = splitTotalAcrossDevices(priceVal, expanded.length);
-                expanded.forEach((item, index) => {
-                    item.unitPrice = splitPayouts[index] ?? 0;
-                });
-            }
             const basketTotalVal = deviceItems.reduce((sum, item) => {
                 const qty = Math.max(1, Number(item?.qty || 1));
                 const unit = Number(item?.unitPrice ?? item?.price ?? item?.payout ?? item?.offerAmount);
