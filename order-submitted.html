@@ -614,17 +614,27 @@
                     expanded.push({ ...item, qty: 1 });
                 }
             });
-            const shouldNormalizeExpandedPayouts =
-                expanded.length > 1 &&
-                Number.isFinite(priceVal) &&
-                priceVal > 0 &&
-                expanded.every((item) => Number.isFinite(Number(item.unitPrice)) && Number(item.unitPrice) === priceVal);
 
-            if (shouldNormalizeExpandedPayouts) {
-                const splitPayouts = splitTotalAcrossDevices(priceVal, expanded.length);
-                expanded.forEach((item, index) => {
-                    item.unitPrice = splitPayouts[index] ?? 0;
-                });
+            const expandedBaseTotal = expanded.reduce((sum, item) => {
+                const unit = Number(item?.unitPrice ?? 0);
+                return Number.isFinite(unit) ? sum + unit : sum;
+            }, 0);
+            const shouldAdjustExpandedPayouts =
+                expanded.length > 0 &&
+                Number.isFinite(priceVal) &&
+                priceVal >= 0 &&
+                Number.isFinite(expandedBaseTotal) &&
+                Math.abs(expandedBaseTotal - priceVal) >= 0.01;
+
+            if (shouldAdjustExpandedPayouts) {
+                if (expanded.length === 1) {
+                    expanded[0].unitPrice = priceVal;
+                } else {
+                    const splitPayouts = splitTotalAcrossDevices(priceVal, expanded.length);
+                    expanded.forEach((item, index) => {
+                        item.unitPrice = splitPayouts[index] ?? 0;
+                    });
+                }
             }
             const basketTotalVal = deviceItems.reduce((sum, item) => {
                 const qty = Math.max(1, Number(item?.qty || 1));
