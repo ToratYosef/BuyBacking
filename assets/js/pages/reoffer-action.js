@@ -40,9 +40,8 @@ const acceptOfferBtn = document.getElementById('acceptOfferBtn');
 const returnPhoneBtn = document.getElementById('returnPhoneBtn');
 const actionButtonsDiv = document.getElementById('actionButtons');
 const replySection = document.getElementById('replySection');
-const replyForm = document.getElementById('replyForm');
-const replyMessageInput = document.getElementById('replyMessageInput');
-const replyStatus = document.getElementById('replyStatus');
+const emailContactLink = document.getElementById('emailContactLink');
+const smsContactLink = document.getElementById('smsContactLink');
 const confirmPrompt = document.getElementById('confirmPrompt');
 const confirmMessage = document.getElementById('confirmMessage');
 const confirmYesBtn = document.getElementById('confirmYesBtn');
@@ -108,6 +107,22 @@ return null;
 const formatMoney = (amount) => {
 if (!Number.isFinite(Number(amount))) return 'N/A';
 return `$${Number(amount).toFixed(2)}`;
+};
+
+const buildSupportContactLinks = ({ orderId, customerName }) => {
+const safeOrderId = String(orderId || '').trim() || 'unknown';
+const safeCustomerName = String(customerName || '').trim() || 'there';
+const draftMessage = `Hi ${safeCustomerName}, my order ID is ${safeOrderId}. `;
+const email = 'sales@seconfhandcell.com';
+const subject = `Re-offer question for order ${safeOrderId}`;
+
+if (emailContactLink) {
+emailContactLink.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(draftMessage)}`;
+}
+
+if (smsContactLink) {
+smsContactLink.href = `sms:+13476880662?&body=${encodeURIComponent(draftMessage)}`;
+}
 };
 
 const firstValidAmount = (...values) => {
@@ -221,6 +236,10 @@ reofferReason.textContent = reasons.length ? reasons.join('\n') : 'No reason was
 reofferReason.style.whiteSpace = 'pre-line';
 reofferComments.textContent = offerToDisplay?.comments || 'No additional notes provided by our team.';
 buyerNameSpan.textContent = currentOrderData.shippingInfo?.fullName || 'Customer';
+buildSupportContactLinks({
+orderId,
+customerName: currentOrderData.shippingInfo?.fullName || 'Customer',
+});
 
 loadingState.classList.add('hidden');
 
@@ -321,33 +340,6 @@ confirmCancelBtn?.addEventListener('click', () => {
 confirmPrompt.classList.add('hidden');
 actionButtonsDiv.classList.remove('hidden');
 pendingAction = null;
-});
-
-replyForm?.addEventListener('submit', async (event) => {
-event.preventDefault();
-const message = replyMessageInput.value.trim();
-if (!message) {
-replyStatus.textContent = 'Please enter a message.';
-replyStatus.style.color = 'red';
-return;
-}
-
-replyStatus.textContent = 'Sending reply...';
-replyStatus.style.color = 'blue';
-
-try {
-const urlParams = new URLSearchParams(window.location.search);
-const orderId = urlParams.get('orderId');
-const replyBackendUrl = `/orders/${orderId}/add-buyer-reply`;
-await apiPost(replyBackendUrl, { replyMessage: message }, { authRequired: false });
-replyStatus.textContent = 'Reply sent successfully!';
-replyStatus.style.color = 'green';
-replyMessageInput.value = '';
-} catch (error) {
-console.error('Error sending reply:', error);
-replyStatus.textContent = `Error sending reply: ${error.message}`;
-replyStatus.style.color = 'red';
-}
 });
 
 // --- Login Modal Functions ---
