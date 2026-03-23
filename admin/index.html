@@ -2026,12 +2026,44 @@
     }
 
     async function runBulkVoidAgedOrders(buttonEl) {
+      const minDays = 27;
+      const minAgeMs = minDays * 24 * 60 * 60 * 1000;
+      if (normalizeStatusKey(state.currentActiveStatus) !== 'label_generated') {
+        toast('Open the Label Generated tab first. Bulk Void 27+ Day Orders only runs for Label Generated orders.', 'info');
+        return;
+      }
+
+      const labelGeneratedOrders = getBaseOrdersForStatus('label_generated');
+      const eligibleOrderIds = Array.from(new Set(
+        (Array.isArray(labelGeneratedOrders) ? labelGeneratedOrders : [])
+          .filter((order) => normalizeStatusKey(getOrderCurrentStatusValue(order)) === 'label_generated')
+          .filter((order) => {
+            const createdAtMs = toDateAny(order?.createdAt)?.getTime() || 0;
+            if (!createdAtMs) return false;
+            return (Date.now() - createdAtMs) >= minAgeMs;
+          })
+          .map((order) => String(order?.id || '').trim())
+          .filter(Boolean)
+      ));
+
+      if (!eligibleOrderIds.length) {
+        toast('No Label Generated orders are 27+ days old right now.', 'info');
+        return;
+      }
+
       return runAdminBulkVoidAction(buttonEl, {
         endpoint: '/orders/admin/bulk-void-aged',
-        confirmText: 'Void labels + cancel all eligible orders older than 27 days? This will NOT email customers.',
+        confirmText: `Void labels + cancel ${eligibleOrderIds.length} Label Generated order(s) that are 27+ days old? This will NOT email customers.`,
         loadingLabel: 'Voiding 27+ day orders…',
         inProgressStateKey: 'bulkVoidAgedInProgress',
-        body: { minDays: 27, limit: 12 },
+        body: {
+          minDays,
+          limit: 12,
+          orderIds: eligibleOrderIds,
+          status: 'label_generated',
+          onlyStatus: 'label_generated',
+          allowedStatuses: ['label_generated'],
+        },
       });
     }
 
