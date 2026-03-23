@@ -356,12 +356,20 @@
                 <div class="input-group">
                     <label>Email Address</label>
                     <div id="email-error" class="field-error-msg">Please complete this field.</div>
-                    <input type="email" id="email" class="input-field">
-                </div>
-                <div class="input-group">
-                    <label>Confirm Email Address</label>
-                    <div id="confirmEmail-error" class="field-error-msg">Please complete this field.</div>
-                    <input type="email" id="confirmEmail" class="input-field">
+                    <input
+                        type="email"
+                        id="email"
+                        class="input-field"
+                        autocomplete="off"
+                        autocorrect="off"
+                        autocapitalize="none"
+                        spellcheck="false"
+                        inputmode="email"
+                        name="contact_email_manual"
+                        data-lpignore="true"
+                        readonly
+                        onfocus="this.removeAttribute('readonly');"
+                    >
                 </div>
                 <div class="input-group md:col-span-2 address-required-field">
                     <label>Street Address</label>
@@ -651,8 +659,6 @@
             const emailField = document.getElementById('email');
             if (emailField) {
                 emailField.value = (user.email || '').trim().toLowerCase();
-                const confirmEmailField = document.getElementById('confirmEmail');
-                if (confirmEmailField) confirmEmailField.value = emailField.value;
                 emailField.readOnly = false;
             }
 
@@ -680,6 +686,49 @@
     const isValidEmail = (value) => {
         const email = normalizeEmail(value);
         return email.includes('@') && email.includes('.');
+    };
+    const EMAIL_DOMAIN_CORRECTIONS = [
+        [/g(n|m)?ail\.com$/i, 'gmail.com'],
+        [/gmai\.com$/i, 'gmail.com'],
+        [/gmal\.com$/i, 'gmail.com'],
+        [/gnail\.com$/i, 'gmail.com'],
+        [/gmai?l?\.(con|cm|co)$/i, 'gmail.com'],
+        [/i?clou?d\.(con|cm|co|om)$/i, 'icloud.com'],
+        [/iclou?d$/i, 'icloud.com'],
+        [/outlok\.com$/i, 'outlook.com'],
+        [/hotnail\.com$/i, 'hotmail.com'],
+        [/yaho\.com$/i, 'yahoo.com'],
+        [/\.con$/i, '.com']
+    ];
+    const suggestEmailCorrection = (email) => {
+        const normalized = normalizeEmail(email);
+        if (!normalized || !normalized.includes('@')) return null;
+        const [localPart, domainPart = ''] = normalized.split('@');
+        if (!localPart || !domainPart) return null;
+
+        let correctedDomain = domainPart;
+        EMAIL_DOMAIN_CORRECTIONS.forEach(([pattern, replacement]) => {
+            if (pattern.test(correctedDomain)) {
+                correctedDomain = correctedDomain.replace(pattern, replacement);
+            }
+        });
+        if (correctedDomain === domainPart) return null;
+        return `${localPart}@${correctedDomain}`;
+    };
+    const maybePromptEmailCorrection = () => {
+        const emailEl = document.getElementById('email');
+        const emailErr = document.getElementById('email-error');
+        if (!emailEl) return;
+        const suggestion = suggestEmailCorrection(emailEl.value);
+        if (!suggestion || normalizeEmail(suggestion) === normalizeEmail(emailEl.value)) return;
+        const shouldApply = window.confirm(`Did you mean ${suggestion}?`);
+        if (shouldApply) {
+            emailEl.value = suggestion;
+        } else if (emailErr) {
+            emailErr.textContent = `Please double-check your email. Did you mean ${suggestion}?`;
+            emailErr.style.display = 'block';
+            emailEl.classList.add('error-highlight');
+        }
     };
     const getSellProgressDocRef = (email) => {
         const normalized = normalizeEmail(email);
@@ -1236,13 +1285,9 @@
         placeSummaryByViewport();
 
         const checkoutEmailInput = document.getElementById('email');
-        const confirmCheckoutEmailInput = document.getElementById('confirmEmail');
         const fallbackEmail = normalizeEmail(params.get('email') || localStorage.getItem(EMAIL_STORAGE_KEY) || '');
         if (checkoutEmailInput && !checkoutEmailInput.value && fallbackEmail) {
             checkoutEmailInput.value = fallbackEmail;
-        }
-        if (confirmCheckoutEmailInput && !confirmCheckoutEmailInput.value && checkoutEmailInput?.value) {
-            confirmCheckoutEmailInput.value = checkoutEmailInput.value;
         }
 
         const checkoutEmail = normalizeEmail(checkoutEmailInput?.value || fallbackEmail || '');
@@ -1272,7 +1317,7 @@
         }
 
         // AUTO-REMOVE ERROR HIGHLIGHT ON INPUT
-        const requiredIds = ['fullName', 'phone', 'email', 'confirmEmail', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
         requiredIds.forEach(id => {
             const el = document.getElementById(id);
             const errEl = document.getElementById(`${id}-error`);
@@ -1280,6 +1325,9 @@
                 el.addEventListener('input', () => {
                     el.classList.remove('error-highlight');
                     if (errEl) errEl.style.display = 'none';
+                    if (id === 'email' && errEl) {
+                        errEl.textContent = 'Please complete this field.';
+                    }
                     if (['streetAddress', 'city', 'state', 'zip'].includes(id)) {
                         clearAddressVerifyError();
                     }
@@ -1295,6 +1343,14 @@
                 }
             }
         });
+        if (checkoutEmailInput) {
+            ['paste', 'copy', 'cut', 'drop'].forEach((eventName) => {
+                checkoutEmailInput.addEventListener(eventName, (event) => {
+                    event.preventDefault();
+                });
+            });
+            checkoutEmailInput.addEventListener('blur', maybePromptEmailCorrection);
+        }
 
         if (zipInput) {
             zipInput.addEventListener('input', () => {
@@ -1774,7 +1830,7 @@
     updatePaymentFields();
 
     submitOrderBtn.onclick = async () => {
-        const requiredIds = ['fullName', 'phone', 'email', 'confirmEmail', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
+        const requiredIds = ['fullName', 'phone', 'email', 'streetAddress', 'city', 'state', 'zip', 'payoutIdentifier'];
         let hasError = false;
         let firstErrorEl = null;
 
@@ -1798,6 +1854,8 @@
             document.getElementById(`${id}-error`).style.display = 'none';
             document.getElementById(id).classList.remove('error-highlight');
         });
+        const emailErrorEl = document.getElementById('email-error');
+        if (emailErrorEl) emailErrorEl.textContent = 'Please complete this field.';
         document.getElementById('terms-error').style.display = 'none';
         document.getElementById('terms-container').classList.remove('error-highlight');
         clearAddressVerifyError();
@@ -1819,20 +1877,22 @@
             if (!firstErrorEl) firstErrorEl = zipInput;
         }
 
-        const emailValue = normalizeEmail(document.getElementById('email')?.value || '');
-        const confirmEmailValue = normalizeEmail(document.getElementById('confirmEmail')?.value || '');
-        if (emailValue && confirmEmailValue && emailValue !== confirmEmailValue) {
-            const emailEl = document.getElementById('email');
-            const confirmEmailEl = document.getElementById('confirmEmail');
-            const confirmEmailErr = document.getElementById('confirmEmail-error');
-            if (emailEl) emailEl.classList.add('error-highlight');
-            if (confirmEmailEl) confirmEmailEl.classList.add('error-highlight');
-            if (confirmEmailErr) {
-                confirmEmailErr.textContent = 'Email addresses do not match.';
-                confirmEmailErr.style.display = 'block';
+        const emailEl = document.getElementById('email');
+        const emailErr = document.getElementById('email-error');
+        const emailSuggestion = suggestEmailCorrection(emailEl?.value || '');
+        if (emailSuggestion && emailEl && normalizeEmail(emailSuggestion) !== normalizeEmail(emailEl.value)) {
+            const shouldApply = window.confirm(`Did you mean ${emailSuggestion}?`);
+            if (shouldApply) {
+                emailEl.value = emailSuggestion;
+            } else {
+                emailEl.classList.add('error-highlight');
+                if (emailErr) {
+                    emailErr.textContent = `Please double-check your email. Did you mean ${emailSuggestion}?`;
+                    emailErr.style.display = 'block';
+                }
+                hasError = true;
+                if (!firstErrorEl) firstErrorEl = emailEl;
             }
-            hasError = true;
-            if (!firstErrorEl) firstErrorEl = confirmEmailEl || emailEl;
         }
 
         const termsCheck = document.getElementById('terms');
