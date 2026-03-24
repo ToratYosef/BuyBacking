@@ -388,16 +388,12 @@
     }
     function getFinalPayableAmount(order, settlement = null) {
       const resolvedSettlement = settlement || getOrderSettlementSummary(order);
-      const orderTotal = Number(order?.totalPayout ?? order?.estimatedQuote ?? order?.originalQuote ?? NaN);
-      const hasAllEligibleDevicesReady =
-        Number(resolvedSettlement?.eligibleDeviceCount || 0) > 0 &&
-        Number(resolvedSettlement?.payableCount || 0) === Number(resolvedSettlement?.eligibleDeviceCount || 0);
-
-      if (hasAllEligibleDevicesReady && Number.isFinite(orderTotal) && orderTotal >= 0) {
-        return orderTotal;
+      const payableTotal = Number(resolvedSettlement?.payableTotal);
+      if (Number.isFinite(payableTotal) && payableTotal >= 0) {
+        return payableTotal;
       }
-
-      return Number(resolvedSettlement?.payableTotal || 0);
+      const orderTotal = Number(order?.totalPayout ?? order?.estimatedQuote ?? order?.originalQuote ?? NaN);
+      return Number.isFinite(orderTotal) && orderTotal >= 0 ? orderTotal : 0;
     }
     function formatCarrierLabel(carrierRaw) {
       const c = String(carrierRaw || '').trim().toLowerCase();
