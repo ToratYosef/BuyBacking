@@ -1339,6 +1339,33 @@
         throw error;
       }
     }
+    async function markReturnLabelGeneratedAfterLabelCreate(orderId, declinedDeviceKeys = []) {
+      if (!orderId) return;
+      const uniqueKeys = Array.from(new Set((declinedDeviceKeys || []).filter(Boolean)));
+      const orderRef = doc(db, 'orders', orderId);
+      const currentOrder = state.allOrders.find((entry) => entry.id === orderId) || null;
+
+      if (uniqueKeys.length) {
+        const statusPayload = { updatedAt: new Date() };
+        const nextDeviceStatusByKey = { ...(currentOrder?.deviceStatusByKey || {}) };
+        uniqueKeys.forEach((deviceKey) => {
+          statusPayload[`deviceStatusByKey.${deviceKey}`] = 'return-label-generated';
+          nextDeviceStatusByKey[deviceKey] = 'return-label-generated';
+        });
+        const nextOrderStatus = currentOrder
+          ? computeOrderStatus({ ...currentOrder, deviceStatusByKey: nextDeviceStatusByKey })
+          : 'return-label-generated';
+        statusPayload.status = nextOrderStatus;
+        await withPerf(`firestore:updateReturnLabelStatus:${orderId}`, () => updateDoc(orderRef, statusPayload));
+        return;
+      }
+
+      const fallbackPayload = {
+        status: 'return-label-generated',
+        updatedAt: new Date()
+      };
+      await withPerf(`firestore:updateReturnLabelStatus:${orderId}`, () => updateDoc(orderRef, fallbackPayload));
+    }
     function getLastUpdateTimestamp(order) {
       return (
         order?.updatedAt ||
@@ -2383,6 +2410,7 @@
         let endpoint = "";
         let method = "POST";
         let body = options?.body ?? null;
+        let returnLabelDeclinedKeys = [];
         switch (actionType) {
           case "generateLabel": {
             await apiPost(`/generate-label/${orderId}`, {});
@@ -2414,6 +2442,7 @@
                 toast("No re-offer declined devices found for return label.", "error");
                 return;
               }
+              returnLabelDeclinedKeys = settlement.declinedDeviceKeys || [];
               const mailClass = settlement.declinedCount >= 5 ? "priority" : "first_class";
               endpoint = `/orders/${orderId}/return-label`;
               method = "POST";
@@ -2569,6 +2598,14 @@
         else if (method === "POST") actionResult = await apiPost(endpoint, body ?? {});
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
+
+        await hydrateSelectedOrderDetails(orderId);
+        // refresh order data by re-running filter (Firestore will also push updates)
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+
+        if (actionType === 'sendReturnLabel') {
+          await markReturnLabelGeneratedAfterLabelCreate(orderId, returnLabelDeclinedKeys);
+        }
 
         await hydrateSelectedOrderDetails(orderId);
         // refresh order data by re-running filter (Firestore will also push updates)
