@@ -1284,6 +1284,25 @@
       if (!orderId || !deviceKey || !newStatus) return;
       const orderRef = doc(db, 'orders', orderId);
       const order = state.allOrders.find((entry) => entry.id === orderId);
+      const previousDeviceStatus = order?.deviceStatusByKey?.[deviceKey] ?? null;
+      const previousOrderStatus = order?.status ?? null;
+      const previousSelectedSnapshotDeviceStatus = state.selectedOrderSnapshot?.id === orderId
+        ? state.selectedOrderSnapshot?.deviceStatusByKey?.[deviceKey]
+        : null;
+      const previousSelectedSnapshotOrderStatus = state.selectedOrderSnapshot?.id === orderId
+        ? state.selectedOrderSnapshot?.status
+        : null;
+
+      if (order) {
+        order.deviceStatusByKey = { ...(order.deviceStatusByKey || {}), [deviceKey]: newStatus };
+        order.status = computeOrderStatus(order);
+      }
+      if (state.selectedOrderSnapshot?.id === orderId) {
+        state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}), [deviceKey]: newStatus };
+        state.selectedOrderSnapshot.status = computeOrderStatus(state.selectedOrderSnapshot);
+      }
+      render();
+
       const payload = {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
         updatedAt: new Date()
@@ -1291,7 +1310,34 @@
       if (order && getOrderDeviceEntries(order).length === 1) {
         payload.status = newStatus;
       }
-      await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, payload));
+      try {
+        await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, payload));
+      } catch (error) {
+        if (order) {
+          order.deviceStatusByKey = { ...(order.deviceStatusByKey || {}) };
+          if (previousDeviceStatus === null || previousDeviceStatus === undefined) {
+            delete order.deviceStatusByKey[deviceKey];
+          } else {
+            order.deviceStatusByKey[deviceKey] = previousDeviceStatus;
+          }
+          if (previousOrderStatus !== null && previousOrderStatus !== undefined) {
+            order.status = previousOrderStatus;
+          }
+        }
+        if (state.selectedOrderSnapshot?.id === orderId) {
+          state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}) };
+          if (previousSelectedSnapshotDeviceStatus === null || previousSelectedSnapshotDeviceStatus === undefined) {
+            delete state.selectedOrderSnapshot.deviceStatusByKey[deviceKey];
+          } else {
+            state.selectedOrderSnapshot.deviceStatusByKey[deviceKey] = previousSelectedSnapshotDeviceStatus;
+          }
+          if (previousSelectedSnapshotOrderStatus !== null && previousSelectedSnapshotOrderStatus !== undefined) {
+            state.selectedOrderSnapshot.status = previousSelectedSnapshotOrderStatus;
+          }
+        }
+        render();
+        throw error;
+      }
     }
     function getLastUpdateTimestamp(order) {
       return (
@@ -1654,7 +1700,32 @@
     async function updateOrderStatusInline(orderId, newStatus, options = {}) {
       const body = { status: newStatus, ...(options?.body || {}) };
       if (options?.notifyCustomer === false) body.notifyCustomer = false;
-      return apiPut(`/orders/${orderId}/status`, body);
+      const order = state.allOrders.find((entry) => entry.id === orderId);
+      const previousOrderStatus = order?.status ?? null;
+      const previousSelectedSnapshotStatus = state.selectedOrderSnapshot?.id === orderId
+        ? state.selectedOrderSnapshot?.status
+        : null;
+
+      if (order) {
+        order.status = newStatus;
+      }
+      if (state.selectedOrderSnapshot?.id === orderId) {
+        state.selectedOrderSnapshot.status = newStatus;
+      }
+      render();
+
+      try {
+        return await apiPut(`/orders/${orderId}/status`, body);
+      } catch (error) {
+        if (order && previousOrderStatus !== null && previousOrderStatus !== undefined) {
+          order.status = previousOrderStatus;
+        }
+        if (state.selectedOrderSnapshot?.id === orderId && previousSelectedSnapshotStatus !== null && previousSelectedSnapshotStatus !== undefined) {
+          state.selectedOrderSnapshot.status = previousSelectedSnapshotStatus;
+        }
+        render();
+        throw error;
+      }
     }
     async function handleBulkPrintSlips() {
       if (state.isBulkSlipPrintInProgress) return;
@@ -2493,35 +2564,36 @@
             return;
         }
         let actionResult = null;
-        let labelWindow = null;
-        if (actionType === 'sendReturnLabel') {
-          labelWindow = window.open('', '_blank', 'noopener,noreferrer');
-        }
 
         if (method === "GET") actionResult = await apiGet(endpoint);
         else if (method === "POST") actionResult = await apiPost(endpoint, body ?? {});
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
 
-        if (actionType === 'sendReturnLabel') {
-          const returnLabelUrl = actionResult?.returnLabelUrl || actionResult?.labelUrl || null;
-          if (returnLabelUrl && labelWindow && !labelWindow.closed) {
-            labelWindow.location = returnLabelUrl;
-          } else if (labelWindow && !labelWindow.closed) {
-            labelWindow.close();
-          }
-
-          if (returnLabelUrl) {
-            toast('Return label opened in a new tab.', 'success');
-          } else {
-            toast('Return label generated, but no label URL was returned.', 'info');
-          }
-        }
-
         await hydrateSelectedOrderDetails(orderId);
-        toast(`Action ${actionType} success`, "success");
         // refresh order data by re-running filter (Firestore will also push updates)
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+
+        if (actionType === 'sendReturnLabel') {
+          const returnLabelUrl = actionResult?.returnLabelUrl || actionResult?.labelUrl || null;
+          const refreshedOrder = state.allOrders.find((entry) => entry.id === orderId);
+          const refreshedStatus = normalizeStatusKey(refreshedOrder?.status);
+          const isReturnLabelGenerated = refreshedStatus === 'return-label-generated';
+          if (!isReturnLabelGenerated) {
+            toast('Return label was not opened because status is not Return Label Generated yet.', 'error');
+            return { ok: false, error: new Error('Status is not return-label-generated') };
+          }
+          if (!returnLabelUrl) {
+            toast('Return label generated, but no label URL was returned.', 'info');
+            return { ok: true, data: actionResult };
+          }
+          window.open(returnLabelUrl, '_blank', 'noopener,noreferrer');
+          toast('Return label opened in a new tab.', 'success');
+          return { ok: true, data: actionResult };
+        }
+
+        toast(`Action ${actionType} success`, "success");
+        // refresh order data by re-running filter (Firestore will also push updates)
         return { ok: true, data: actionResult };
       } catch (e) {
         console.error(e);
@@ -5221,8 +5293,12 @@
           const newStatus = btn.getAttribute("data-set-status");
           state.statusDropdownOpen = false;
           render();
-          await updateOrderStatusInline(order.id, newStatus, { notifyCustomer: true });
-          toast(`Status updated to ${formatStatusLabel(newStatus)}`, "success");
+          try {
+            await updateOrderStatusInline(order.id, newStatus, { notifyCustomer: true });
+            toast(`Status updated to ${formatStatusLabel(newStatus)}`, "success");
+          } catch (error) {
+            toast(`Failed to update status: ${error?.message || 'Unknown error'}`, "error");
+          }
         });
       });
       document.querySelectorAll("[data-set-device-status]").forEach(btn => {
@@ -5237,8 +5313,12 @@
           const newStatus = btn.getAttribute("data-set-device-status");
           state.statusDropdownOpen = false;
           render();
-          await updateDeviceStatusInline(order.id, targetDeviceKey, newStatus);
-          toast(`Device status updated to ${formatStatusLabel(newStatus)}`, "success");
+          try {
+            await updateDeviceStatusInline(order.id, targetDeviceKey, newStatus);
+            toast(`Device status updated to ${formatStatusLabel(newStatus)}`, "success");
+          } catch (error) {
+            toast(`Failed to update device status: ${error?.message || 'Unknown error'}`, "error");
+          }
         });
       });
       // outside click closes status dropdown (best-effort)
