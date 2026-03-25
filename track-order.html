@@ -807,6 +807,17 @@
       }];
     }
 
+    function getEffectiveProgressStatus(order = {}) {
+      const deviceOffers = getDeviceReofferEntries(order);
+      if (deviceOffers.some((entry) => entry.status === 're-offered-pending' || entry.status === 're_offered_pending')) {
+        return 're_offered_pending';
+      }
+      if (deviceOffers.some((entry) => entry.status === 're-offered-declined' || entry.status === 're_offered_declined')) {
+        return 're_offered_declined';
+      }
+      return normalize(order?.status) || 'order_pending';
+    }
+
     function resetReofferPanel() {
       reofferPanel.classList.add('hidden');
       reofferMeta.classList.add('hidden');
@@ -830,8 +841,8 @@
 
       if (pendingOffers.length) {
         reofferMessage.textContent = pendingOffers.length > 1
-          ? 'Please review each device re-offer from QC below.'
-          : 'Please review your updated payout from our QC inspection.';
+          ? 'Some devices have new offers based on our team inspection. Please review each one below.'
+          : 'Your device has a new offer based on our team inspection. Please review it below.';
         reofferPrice.textContent = pendingOffers.length === 1 && pendingOffers[0].price != null
           ? formatCurrency(pendingOffers[0].price)
           : `${pendingOffers.length} pending re-offer${pendingOffers.length === 1 ? '' : 's'}`;
@@ -929,6 +940,7 @@
     function displayOrder(order) {
       currentOrder = order;
       const statusKey = normalize(order.status) || 'order_pending';
+      const progressStatusKey = getEffectiveProgressStatus(order);
       statusPill.textContent = friendlyStatus(statusKey);
       statusTitle.textContent = `Status: ${friendlyStatus(statusKey)}`;
       statusMessage.textContent = statusDetail(statusKey);
@@ -942,7 +954,7 @@
       const updated = resolveUpdatedAt(order);
       updatedValue.textContent = updated ? updated.toLocaleString() : '—';
 
-      renderProgress(statusKey);
+      renderProgress(progressStatusKey);
       renderReofferPanel(order);
       statusCard.classList.remove('hidden');
       statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
