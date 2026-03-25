@@ -322,6 +322,44 @@
       const fb = Number(fallbackOffer);
       return Number.isFinite(fb) && fb > 0 ? fb : null;
     }
+    function getDeviceLatestRequotePayout(order, deviceKey, fallbackOffer = null) {
+      const byKeyCandidates = [
+        order?.reOfferByDevice?.[deviceKey]?.newPrice,
+        order?.reofferByDevice?.[deviceKey]?.newPrice,
+        order?.deviceReofferByKey?.[deviceKey]?.newPrice,
+        order?.deviceReOfferByKey?.[deviceKey]?.newPrice,
+        order?.reOfferByDevice?.[deviceKey]?.amount,
+        order?.reofferByDevice?.[deviceKey]?.amount
+      ];
+      for (const candidate of byKeyCandidates) {
+        const value = Number(candidate);
+        if (Number.isFinite(value) && value > 0) return value;
+      }
+      const totalDevices = getOrderDeviceEntries(order).length;
+      if (totalDevices === 1) {
+        const orderLevelCandidates = [
+          order?.reOffer?.newPrice,
+          order?.reoffer?.newPrice,
+          order?.reOffer?.amount,
+          order?.reoffer?.amount,
+          order?.requoteAmount,
+          order?.requote?.amount,
+          order?.finalPayoutAmount,
+          order?.updatedQuote
+        ];
+        for (const candidate of orderLevelCandidates) {
+          const value = Number(candidate);
+          if (Number.isFinite(value) && value > 0) return value;
+        }
+      }
+      const fallback = Number(fallbackOffer);
+      return Number.isFinite(fallback) && fallback > 0 ? fallback : null;
+    }
+    function getEffectivePerDeviceOffer(order, item, deviceKey = null) {
+      const baseOffer = Number(getPerDeviceOffer(item, order) || 0);
+      const requote = getDeviceLatestRequotePayout(order, deviceKey, baseOffer);
+      return Number.isFinite(Number(requote)) ? Number(requote) : baseOffer;
+    }
     function getDeviceSummary(order) {
       const entries = getOrderDeviceEntries(order);
       const allKeys = entries.map((entry) => buildOrderDeviceKey(order.id, entry.deviceIndex));
@@ -369,9 +407,7 @@
         const isQcPassedPayable = hasQcData && qcPassedStatuses.has(normalizedStatus);
 
         if (acceptedReoffer || isQcPassedPayable) {
-          const baseOffer = Number(getPerDeviceOffer(item, order) || 0);
-          const acceptedOffer = Number(getDeviceAcceptedReofferPayout(order, deviceKey, baseOffer));
-          const payout = acceptedReoffer && Number.isFinite(acceptedOffer) && acceptedOffer > 0 ? acceptedOffer : baseOffer;
+          const payout = Number(getEffectivePerDeviceOffer(order, item, deviceKey) || 0);
           payableDeviceKeys.push(deviceKey);
           payableTotal += Number.isFinite(payout) ? payout : 0;
         }
@@ -1103,8 +1139,6 @@
     function validateReofferDraft({ price, reasons, comments }) {
       const fields = {};
       if (!Number.isFinite(price) || price <= 0) fields.price = true;
-      if (!String(reasons || "").trim()) fields.reasons = true;
-      if (!String(comments || "").trim()) fields.comments = true;
       const hasErrors = Object.keys(fields).length > 0;
       return {
         hasErrors,
@@ -1250,6 +1284,25 @@
       if (!orderId || !deviceKey || !newStatus) return;
       const orderRef = doc(db, 'orders', orderId);
       const order = state.allOrders.find((entry) => entry.id === orderId);
+      const previousDeviceStatus = order?.deviceStatusByKey?.[deviceKey] ?? null;
+      const previousOrderStatus = order?.status ?? null;
+      const previousSelectedSnapshotDeviceStatus = state.selectedOrderSnapshot?.id === orderId
+        ? state.selectedOrderSnapshot?.deviceStatusByKey?.[deviceKey]
+        : null;
+      const previousSelectedSnapshotOrderStatus = state.selectedOrderSnapshot?.id === orderId
+        ? state.selectedOrderSnapshot?.status
+        : null;
+
+      if (order) {
+        order.deviceStatusByKey = { ...(order.deviceStatusByKey || {}), [deviceKey]: newStatus };
+        order.status = computeOrderStatus(order);
+      }
+      if (state.selectedOrderSnapshot?.id === orderId) {
+        state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}), [deviceKey]: newStatus };
+        state.selectedOrderSnapshot.status = computeOrderStatus(state.selectedOrderSnapshot);
+      }
+      render();
+
       const payload = {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
         updatedAt: new Date()
@@ -1257,7 +1310,34 @@
       if (order && getOrderDeviceEntries(order).length === 1) {
         payload.status = newStatus;
       }
-      await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, payload));
+      try {
+        await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, payload));
+      } catch (error) {
+        if (order) {
+          order.deviceStatusByKey = { ...(order.deviceStatusByKey || {}) };
+          if (previousDeviceStatus === null || previousDeviceStatus === undefined) {
+            delete order.deviceStatusByKey[deviceKey];
+          } else {
+            order.deviceStatusByKey[deviceKey] = previousDeviceStatus;
+          }
+          if (previousOrderStatus !== null && previousOrderStatus !== undefined) {
+            order.status = previousOrderStatus;
+          }
+        }
+        if (state.selectedOrderSnapshot?.id === orderId) {
+          state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}) };
+          if (previousSelectedSnapshotDeviceStatus === null || previousSelectedSnapshotDeviceStatus === undefined) {
+            delete state.selectedOrderSnapshot.deviceStatusByKey[deviceKey];
+          } else {
+            state.selectedOrderSnapshot.deviceStatusByKey[deviceKey] = previousSelectedSnapshotDeviceStatus;
+          }
+          if (previousSelectedSnapshotOrderStatus !== null && previousSelectedSnapshotOrderStatus !== undefined) {
+            state.selectedOrderSnapshot.status = previousSelectedSnapshotOrderStatus;
+          }
+        }
+        render();
+        throw error;
+      }
     }
     function getLastUpdateTimestamp(order) {
       return (
@@ -1620,7 +1700,32 @@
     async function updateOrderStatusInline(orderId, newStatus, options = {}) {
       const body = { status: newStatus, ...(options?.body || {}) };
       if (options?.notifyCustomer === false) body.notifyCustomer = false;
-      return apiPut(`/orders/${orderId}/status`, body);
+      const order = state.allOrders.find((entry) => entry.id === orderId);
+      const previousOrderStatus = order?.status ?? null;
+      const previousSelectedSnapshotStatus = state.selectedOrderSnapshot?.id === orderId
+        ? state.selectedOrderSnapshot?.status
+        : null;
+
+      if (order) {
+        order.status = newStatus;
+      }
+      if (state.selectedOrderSnapshot?.id === orderId) {
+        state.selectedOrderSnapshot.status = newStatus;
+      }
+      render();
+
+      try {
+        return await apiPut(`/orders/${orderId}/status`, body);
+      } catch (error) {
+        if (order && previousOrderStatus !== null && previousOrderStatus !== undefined) {
+          order.status = previousOrderStatus;
+        }
+        if (state.selectedOrderSnapshot?.id === orderId && previousSelectedSnapshotStatus !== null && previousSelectedSnapshotStatus !== undefined) {
+          state.selectedOrderSnapshot.status = previousSelectedSnapshotStatus;
+        }
+        render();
+        throw error;
+      }
     }
     async function handleBulkPrintSlips() {
       if (state.isBulkSlipPrintInProgress) return;
@@ -2459,35 +2564,36 @@
             return;
         }
         let actionResult = null;
-        let labelWindow = null;
-        if (actionType === 'sendReturnLabel') {
-          labelWindow = window.open('', '_blank', 'noopener,noreferrer');
-        }
 
         if (method === "GET") actionResult = await apiGet(endpoint);
         else if (method === "POST") actionResult = await apiPost(endpoint, body ?? {});
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
 
-        if (actionType === 'sendReturnLabel') {
-          const returnLabelUrl = actionResult?.returnLabelUrl || actionResult?.labelUrl || null;
-          if (returnLabelUrl && labelWindow && !labelWindow.closed) {
-            labelWindow.location = returnLabelUrl;
-          } else if (labelWindow && !labelWindow.closed) {
-            labelWindow.close();
-          }
-
-          if (returnLabelUrl) {
-            toast('Return label opened in a new tab.', 'success');
-          } else {
-            toast('Return label generated, but no label URL was returned.', 'info');
-          }
-        }
-
         await hydrateSelectedOrderDetails(orderId);
-        toast(`Action ${actionType} success`, "success");
         // refresh order data by re-running filter (Firestore will also push updates)
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+
+        if (actionType === 'sendReturnLabel') {
+          const returnLabelUrl = actionResult?.returnLabelUrl || actionResult?.labelUrl || null;
+          const refreshedOrder = state.allOrders.find((entry) => entry.id === orderId);
+          const refreshedStatus = normalizeStatusKey(refreshedOrder?.status);
+          const isReturnLabelGenerated = refreshedStatus === 'return-label-generated';
+          if (!isReturnLabelGenerated) {
+            toast('Return label was not opened because status is not Return Label Generated yet.', 'error');
+            return { ok: false, error: new Error('Status is not return-label-generated') };
+          }
+          if (!returnLabelUrl) {
+            toast('Return label generated, but no label URL was returned.', 'info');
+            return { ok: true, data: actionResult };
+          }
+          window.open(returnLabelUrl, '_blank', 'noopener,noreferrer');
+          toast('Return label opened in a new tab.', 'success');
+          return { ok: true, data: actionResult };
+        }
+
+        toast(`Action ${actionType} success`, "success");
+        // refresh order data by re-running filter (Firestore will also push updates)
         return { ok: true, data: actionResult };
       } catch (e) {
         console.error(e);
@@ -3062,7 +3168,7 @@
         const trackingNumber = getAnyTrackingNumber(order) || "";
         const trackingLink = getTrackingLink(trackingNumber);
         const statusExtra = labelStatusExtraHTML(order);
-        const payoutTotal = getPerDeviceOffer(item, order);
+        const payoutTotal = getEffectivePerDeviceOffer(order, item, deviceKey);
         
         const deviceName = item?.device || item?.title || order?.device || "Device";
         const storage = item?.storage || order?.storage || "";
@@ -3318,7 +3424,7 @@
           const item = entry.item || {};
           const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
           const deviceStatus = getDeviceStatus(order, deviceKey);
-          const offer = getPerDeviceOffer(item, order);
+          const offer = getEffectivePerDeviceOffer(order, item, deviceKey);
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const isAcceptedReoffer = isAcceptedReofferStatus(deviceStatus);
           const isDeclinedReoffer = isDeclinedReofferStatus(deviceStatus);
@@ -5187,8 +5293,12 @@
           const newStatus = btn.getAttribute("data-set-status");
           state.statusDropdownOpen = false;
           render();
-          await updateOrderStatusInline(order.id, newStatus, { notifyCustomer: true });
-          toast(`Status updated to ${formatStatusLabel(newStatus)}`, "success");
+          try {
+            await updateOrderStatusInline(order.id, newStatus, { notifyCustomer: true });
+            toast(`Status updated to ${formatStatusLabel(newStatus)}`, "success");
+          } catch (error) {
+            toast(`Failed to update status: ${error?.message || 'Unknown error'}`, "error");
+          }
         });
       });
       document.querySelectorAll("[data-set-device-status]").forEach(btn => {
@@ -5203,8 +5313,12 @@
           const newStatus = btn.getAttribute("data-set-device-status");
           state.statusDropdownOpen = false;
           render();
-          await updateDeviceStatusInline(order.id, targetDeviceKey, newStatus);
-          toast(`Device status updated to ${formatStatusLabel(newStatus)}`, "success");
+          try {
+            await updateDeviceStatusInline(order.id, targetDeviceKey, newStatus);
+            toast(`Device status updated to ${formatStatusLabel(newStatus)}`, "success");
+          } catch (error) {
+            toast(`Failed to update device status: ${error?.message || 'Unknown error'}`, "error");
+          }
         });
       });
       // outside click closes status dropdown (best-effort)
@@ -5535,9 +5649,33 @@
           delete state.reofferValidation.fields[field];
           render();
         };
-        document.getElementById("reofferPrice")?.addEventListener("input", () => clearValidationField("price"));
-        document.getElementById("reofferReasons")?.addEventListener("input", () => clearValidationField("reasons"));
-        document.getElementById("reofferComments")?.addEventListener("input", () => clearValidationField("comments"));
+        document.getElementById("reofferPrice")?.addEventListener("input", (event) => {
+          if (state.reofferData) state.reofferData.newPrice = event?.target?.value ?? state.reofferData.newPrice;
+          clearValidationField("price");
+        });
+        document.getElementById("reofferReasons")?.addEventListener("input", (event) => {
+          if (state.reofferData) state.reofferData.reasons = event?.target?.value ?? "";
+          clearValidationField("reasons");
+        });
+        document.getElementById("reofferComments")?.addEventListener("input", (event) => {
+          if (state.reofferData) state.reofferData.comments = event?.target?.value ?? "";
+          clearValidationField("comments");
+        });
+        document.getElementById("reofferCarrier")?.addEventListener("input", (event) => {
+          if (state.reofferData) state.reofferData.carrier = event?.target?.value ?? "";
+        });
+        document.getElementById("reofferCondition")?.addEventListener("input", (event) => {
+          if (state.reofferData) state.reofferData.condition = event?.target?.value ?? "";
+        });
+        document.getElementById("reofferBrand")?.addEventListener("input", (event) => {
+          if (state.reofferData) state.reofferData.brand = event?.target?.value ?? "";
+        });
+        document.getElementById("reofferModel")?.addEventListener("input", (event) => {
+          if (state.reofferData) state.reofferData.modelId = event?.target?.value ?? "";
+        });
+        document.getElementById("reofferStorage")?.addEventListener("input", (event) => {
+          if (state.reofferData) state.reofferData.storage = event?.target?.value ?? "";
+        });
         document.getElementById("reofferDeviceKey")?.addEventListener("change", (event) => {
           const targetKey = event?.target?.value || '';
           if (!state.reofferData || !targetKey) return;
@@ -5562,6 +5700,17 @@
           const modelId = (document.getElementById("reofferModel")?.value || "").trim();
           const storage = (document.getElementById("reofferStorage")?.value || "").trim();
           const deviceKey = (document.getElementById("reofferDeviceKey")?.value || "").trim() || state.reofferData?.deviceKey || state.qcDeviceKey || state.selectedDeviceKey || null;
+          if (state.reofferData) {
+            state.reofferData.newPrice = Number.isFinite(price) && price > 0 ? price.toFixed(2) : (document.getElementById("reofferPrice")?.value || "");
+            state.reofferData.reasons = reasons;
+            state.reofferData.comments = comments;
+            state.reofferData.carrier = carrier;
+            state.reofferData.condition = condition;
+            state.reofferData.brand = brand;
+            state.reofferData.modelId = modelId;
+            state.reofferData.storage = storage;
+            state.reofferData.deviceKey = deviceKey || state.reofferData.deviceKey;
+          }
           const validation = validateReofferDraft({ price, reasons, comments });
           if (validation.hasErrors) {
             state.reofferValidation = validation;
@@ -5591,8 +5740,8 @@
           });
           if (!result?.ok) {
             state.reofferValidation = {
-              message: "We could not send this re-offer. Please fix the highlighted fields and try again.",
-              fields: { ...(state.reofferValidation?.fields || {}), comments: true }
+              message: result?.error?.message || "We could not send this re-offer. Please try again.",
+              fields: { ...(state.reofferValidation?.fields || {}) }
             };
             render();
             return;
