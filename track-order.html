@@ -5,7 +5,7 @@
     <script>
       window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
     </script>
-<script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/assets/css/tailwind.css">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Track My Order | SecondHandCell</title>
@@ -427,7 +427,34 @@
     await (window.shcComponentsReady || Promise.resolve());
     import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
     import { getFirebaseApp } from '/assets/js/firebase-app.js';
-    import { apiPost } from '/public/js/apiClient.js';
+
+    const resolveApiUrl = (path) => {
+      const base = String(window.SHC_API_BASE_URL || '/api').replace(/\/$/, '');
+      const endpoint = String(path || '').startsWith('/') ? path : `/${path}`;
+      return new URL(`${base}${endpoint}`, window.location.origin).toString();
+    };
+
+    const apiPost = async (path, payload) => {
+      const response = await fetch(resolveApiUrl(path), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload || {})
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      const data = contentType.includes('application/json')
+        ? await response.json()
+        : await response.text();
+
+      if (!response.ok) {
+        const message = data?.error || data?.message || response.statusText || 'Request failed';
+        throw new Error(message);
+      }
+
+      return data;
+    };
 
     const app = getFirebaseApp();
     const db = getFirestore(app);
