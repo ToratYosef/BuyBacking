@@ -2599,6 +2599,10 @@
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
 
+        await hydrateSelectedOrderDetails(orderId);
+        // refresh order data by re-running filter (Firestore will also push updates)
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+
         if (actionType === 'sendReturnLabel') {
           await markReturnLabelGeneratedAfterLabelCreate(orderId, returnLabelDeclinedKeys);
         }
