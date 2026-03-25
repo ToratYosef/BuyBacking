@@ -80,7 +80,7 @@ if (!window[INIT_FLAG]) {
           <ul>
             <li>Simple online quotes and a clear inspection process.</li>
             <li>Secure handling, certified data wiping, and legal compliance checks.</li>
-            <li>Real customer feedback and support at <a href="mailto:support@secondhandcell.com">support@secondhandcell.com</a>.</li>
+            <li>Real customer feedback and support at <a href="mailto:sales@secondhandcell.com">sales@secondhandcell.com</a>.</li>
           </ul>
           <p>See full customer reviews on our Trust page and Trustpilot profile.</p>
         `,
@@ -97,7 +97,7 @@ if (!window[INIT_FLAG]) {
             <li>To send optional marketing communications you can opt out of anytime.</li>
           </ul>
           <h3>Your choices</h3>
-          <p>You can request updates, deletion, or privacy support by emailing <a href="mailto:support@secondhandcell.com">support@secondhandcell.com</a>.</p>
+          <p>You can request updates, deletion, or privacy support by emailing <a href="mailto:sales@secondhandcell.com">sales@secondhandcell.com</a>.</p>
           <p><a href="/privacy.html">Read the full Privacy Policy</a>.</p>
         `,
       },

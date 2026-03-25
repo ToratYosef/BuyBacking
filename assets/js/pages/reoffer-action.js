@@ -113,7 +113,7 @@ const buildSupportContactLinks = ({ orderId, customerName }) => {
 const safeOrderId = String(orderId || '').trim() || 'unknown';
 const safeCustomerName = String(customerName || '').trim() || 'there';
 const draftMessage = `Hi ${safeCustomerName}, my order ID is ${safeOrderId}. `;
-const email = 'sales@seconfhandcell.com';
+const email = 'sales@secondhandcell.com';
 const subject = `Re-offer question for order ${safeOrderId}`;
 
 if (emailContactLink) {
@@ -121,7 +121,7 @@ emailContactLink.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&
 }
 
 if (smsContactLink) {
-smsContactLink.href = `sms:+13476880662?&body=${encodeURIComponent(draftMessage)}`;
+smsContactLink.href = `mailto:sales@secondhandcell.com?subject=${encodeURIComponent("Question about my offer")}&body=${encodeURIComponent(draftMessage)}`;
 }
 };
 
