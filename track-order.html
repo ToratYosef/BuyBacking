@@ -326,6 +326,32 @@
     .progress-item h4 { margin: 0 0 6px; font-size: 16px; color: #0f172a; }
     .progress-item p { margin: 0; color: var(--slate-700); line-height: 1.5; }
 
+    .next-step {
+      margin-top: 14px;
+      border: 1px dashed #bfdbfe;
+      background: #eff6ff;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .next-step-label {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #1d4ed8;
+    }
+    .next-step-title {
+      margin: 8px 0 6px;
+      font-size: 18px;
+      color: #0f172a;
+    }
+    .next-step-copy {
+      margin: 0;
+      color: var(--slate-700);
+      line-height: 1.55;
+    }
+
     .hidden { display: none; }
     .error { color: var(--red-600); }
     .inline-error { margin-top: 10px; }
@@ -404,6 +430,11 @@
         </div>
 
         <ol id="progressList" class="progress-list" aria-label="Order progress"></ol>
+        <div id="nextStepCard" class="next-step hidden" aria-live="polite">
+          <p class="next-step-label">Next step</p>
+          <h4 id="nextStepTitle" class="next-step-title"></h4>
+          <p id="nextStepCopy" class="next-step-copy"></p>
+        </div>
 
         <div id="reofferPanel" class="reoffer-panel hidden">
           <p class="reoffer-title">Updated Offer Available</p>
@@ -492,48 +523,58 @@
       cancelled: 'This order was cancelled. Reach out if you want to reopen it.',
     };
 
-    const stageOrder = [
-      { key: 'order_pending', label: 'Order received', copy: 'We have your order and are preparing your kit.' },
-      { key: 'shipping_kit_requested', label: 'Preparing your kit', copy: 'We are packaging your shipping kit or label.' },
-      { key: 'kit_sent', label: 'Kit or label sent', copy: 'Check your email or mailbox for instructions.' },
-      { key: 'kit_on_the_way_to_us', label: 'In transit to us', copy: 'We are tracking your package back to our facility.' },
-      { key: 'received', label: 'Device received', copy: 'Our team is inspecting your device.' },
-      { key: 'processing', label: 'Inspection in progress', copy: 'We are validating the condition you reported.' },
-      { key: 'completed', label: 'Payout sent', copy: 'We are wrapping up payment for this order.' },
-    ];
+    const stageDictionary = {
+      order_received: { key: 'order_received', label: 'Order received', copy: 'We have your order and are preparing your kit.' },
+      preparing_kit: { key: 'preparing_kit', label: 'Preparing your kit', copy: 'We are packaging your shipping kit or label.' },
+      return_label_ready: { key: 'return_label_ready', label: 'Return label ready', copy: 'Your printable return label is ready in your email.' },
+      kit_sent: { key: 'kit_sent', label: 'Kit or label sent', copy: 'Check your email or mailbox for instructions.' },
+      in_transit_to_us: { key: 'in_transit_to_us', label: 'In transit to us', copy: 'We are tracking your package back to our facility.' },
+      device_received: { key: 'device_received', label: 'Device received', copy: 'Our team is inspecting your device.' },
+      inspection_in_progress: { key: 'inspection_in_progress', label: 'Inspection in progress', copy: 'We are validating the condition you reported.' },
+      reoffer_pending: { key: 'reoffer_pending', label: 'Action needed: updated offer', copy: 'Please accept the updated offer or request return shipping.' },
+      reoffer_declined: { key: 'reoffer_declined', label: 'Offer declined', copy: 'We are preparing a return label to send your device back.' },
+      return_label_sent: { key: 'return_label_sent', label: 'Return label sent', copy: 'A return label has been sent with return instructions.' },
+      return_in_transit: { key: 'return_in_transit', label: 'Return in transit', copy: 'Your device is currently being shipped back to you.' },
+      payout_sent: { key: 'payout_sent', label: 'Payout sent', copy: 'We are wrapping up payment for this order.' }
+    };
 
     const stageMap = {
-      order_pending: 'order_pending',
-      shipping_kit_requested: 'shipping_kit_requested',
-      kit_needs_printing: 'shipping_kit_requested',
-      needs_printing: 'shipping_kit_requested',
-      label_generated: 'kit_sent',
-      emailed: 'kit_sent',
+      order_pending: 'order_received',
+      shipping_kit_requested: 'preparing_kit',
+      kit_needs_printing: 'preparing_kit',
+      needs_printing: 'preparing_kit',
+      label_generated: 'return_label_ready',
+      emailed: 'return_label_ready',
       kit_sent: 'kit_sent',
       kit_delivered: 'kit_sent',
-      kit_on_the_way_to_us: 'kit_on_the_way_to_us',
-      kit_in_transit: 'kit_on_the_way_to_us',
-      phone_on_the_way: 'kit_on_the_way_to_us',
-      received: 'received',
-      device_received: 'received',
-      imei_checked: 'received',
-      processing: 'processing',
-      inspected: 'processing',
-      're-offered-pending': 'processing',
-      re_offered_pending: 'processing',
-      're-offered-declined': 'processing',
-      re_offered_declined: 'processing',
-      're-offered-accepted': 'completed',
-      re_offered_accepted: 'completed',
-      requote_accepted: 'completed',
-      're-offered-auto-accepted': 'completed',
-      re_offered_auto_accepted: 'completed',
-      return_label_generated: 'processing',
-      return_label_sent: 'processing',
-      return_in_transit: 'processing',
-      completed: 'completed',
-      cancelled: 'completed',
+      kit_on_the_way_to_us: 'in_transit_to_us',
+      kit_in_transit: 'in_transit_to_us',
+      phone_on_the_way: 'in_transit_to_us',
+      received: 'device_received',
+      device_received: 'device_received',
+      imei_checked: 'device_received',
+      processing: 'inspection_in_progress',
+      inspected: 'inspection_in_progress',
+      're-offered-pending': 'reoffer_pending',
+      re_offered_pending: 'reoffer_pending',
+      're-offered-declined': 'reoffer_declined',
+      re_offered_declined: 'reoffer_declined',
+      return_label_generated: 'return_label_sent',
+      return_label_sent: 'return_label_sent',
+      return_in_transit: 'return_in_transit',
+      're-offered-accepted': 'payout_sent',
+      re_offered_accepted: 'payout_sent',
+      requote_accepted: 'payout_sent',
+      're-offered-auto-accepted': 'payout_sent',
+      re_offered_auto_accepted: 'payout_sent',
+      completed: 'payout_sent',
+      cancelled: 'payout_sent',
     };
+
+    const baseFlow = ['order_received', 'preparing_kit', 'kit_sent', 'in_transit_to_us', 'device_received', 'inspection_in_progress', 'payout_sent'];
+    const labelFlow = ['order_received', 'preparing_kit', 'return_label_ready', 'kit_sent', 'in_transit_to_us', 'device_received', 'inspection_in_progress', 'payout_sent'];
+    const reofferFlow = ['order_received', 'preparing_kit', 'kit_sent', 'in_transit_to_us', 'device_received', 'inspection_in_progress', 'reoffer_pending', 'payout_sent'];
+    const declinedReturnFlow = ['order_received', 'preparing_kit', 'kit_sent', 'in_transit_to_us', 'device_received', 'inspection_in_progress', 'reoffer_declined', 'return_label_sent', 'return_in_transit'];
 
     const orderIdInput = document.getElementById('orderId');
     const customerEmailInput = document.getElementById('customerEmail');
@@ -557,6 +598,9 @@
     const reofferReasonsList = document.getElementById('reofferReasonsList');
     const reofferActions = document.getElementById('reofferActions');
     const reofferNote = document.getElementById('reofferNote');
+    const nextStepCard = document.getElementById('nextStepCard');
+    const nextStepTitle = document.getElementById('nextStepTitle');
+    const nextStepCopy = document.getElementById('nextStepCopy');
     let currentOrder = null;
     let autoScrollToReoffer = false;
 
@@ -638,16 +682,27 @@
       return null;
     }
 
+    function resolveFlow(normalizedStatus) {
+      if (normalizedStatus === 'label_generated' || normalizedStatus === 'emailed') return labelFlow;
+      if (normalizedStatus === 're-offered-pending' || normalizedStatus === 're_offered_pending') return reofferFlow;
+      if (normalizedStatus === 're-offered-declined' || normalizedStatus === 're_offered_declined' || normalizedStatus === 'return_label_generated' || normalizedStatus === 'return_label_sent' || normalizedStatus === 'return_in_transit') return declinedReturnFlow;
+      return baseFlow;
+    }
+
     function renderProgress(statusKey) {
       const normalized = normalize(statusKey);
-      const stageKey = stageMap[normalized] || 'order_pending';
-      const currentIndex = stageOrder.findIndex((stage) => stage.key === stageKey);
+      const stageKey = stageMap[normalized] || 'order_received';
+      const flow = resolveFlow(normalized);
+      const currentIndex = flow.findIndex((key) => key === stageKey);
+      const lastVisibleIndex = currentIndex >= 0 ? currentIndex : 0;
       progressList.innerHTML = '';
-      stageOrder.forEach((stage, index) => {
+      flow.slice(0, lastVisibleIndex + 1).forEach((stageKeyInFlow, index) => {
+        const stage = stageDictionary[stageKeyInFlow];
+        if (!stage) return;
         const li = document.createElement('li');
         li.className = 'progress-item';
-        if (index < currentIndex) li.classList.add('complete');
-        if (index === currentIndex) li.classList.add('current');
+        if (index < lastVisibleIndex) li.classList.add('complete');
+        if (index === lastVisibleIndex) li.classList.add('current');
 
         const dot = document.createElement('span');
         dot.className = 'dot';
@@ -667,6 +722,17 @@
         li.appendChild(content);
         progressList.appendChild(li);
       });
+
+      const nextStage = flow[lastVisibleIndex + 1] ? stageDictionary[flow[lastVisibleIndex + 1]] : null;
+      if (nextStage) {
+        nextStepTitle.textContent = nextStage.label;
+        nextStepCopy.textContent = nextStage.copy;
+        nextStepCard.classList.remove('hidden');
+      } else {
+        nextStepCard.classList.add('hidden');
+        nextStepTitle.textContent = '';
+        nextStepCopy.textContent = '';
+      }
     }
 
     function resolveOrderEmail(order = {}) {
@@ -741,6 +807,17 @@
       }];
     }
 
+    function getEffectiveProgressStatus(order = {}) {
+      const deviceOffers = getDeviceReofferEntries(order);
+      if (deviceOffers.some((entry) => entry.status === 're-offered-pending' || entry.status === 're_offered_pending')) {
+        return 're_offered_pending';
+      }
+      if (deviceOffers.some((entry) => entry.status === 're-offered-declined' || entry.status === 're_offered_declined')) {
+        return 're_offered_declined';
+      }
+      return normalize(order?.status) || 'order_pending';
+    }
+
     function resetReofferPanel() {
       reofferPanel.classList.add('hidden');
       reofferMeta.classList.add('hidden');
@@ -764,8 +841,8 @@
 
       if (pendingOffers.length) {
         reofferMessage.textContent = pendingOffers.length > 1
-          ? 'Please review each device re-offer from QC below.'
-          : 'Please review your updated payout from our QC inspection.';
+          ? 'Some devices have new offers based on our team inspection. Please review each one below.'
+          : 'Your device has a new offer based on our team inspection. Please review it below.';
         reofferPrice.textContent = pendingOffers.length === 1 && pendingOffers[0].price != null
           ? formatCurrency(pendingOffers[0].price)
           : `${pendingOffers.length} pending re-offer${pendingOffers.length === 1 ? '' : 's'}`;
@@ -863,6 +940,7 @@
     function displayOrder(order) {
       currentOrder = order;
       const statusKey = normalize(order.status) || 'order_pending';
+      const progressStatusKey = getEffectiveProgressStatus(order);
       statusPill.textContent = friendlyStatus(statusKey);
       statusTitle.textContent = `Status: ${friendlyStatus(statusKey)}`;
       statusMessage.textContent = statusDetail(statusKey);
@@ -876,7 +954,7 @@
       const updated = resolveUpdatedAt(order);
       updatedValue.textContent = updated ? updated.toLocaleString() : '—';
 
-      renderProgress(statusKey);
+      renderProgress(progressStatusKey);
       renderReofferPanel(order);
       statusCard.classList.remove('hidden');
       statusCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
