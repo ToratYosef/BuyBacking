@@ -34,7 +34,7 @@
         <ul>
           <li>Simple online quotes and a clear inspection process.</li>
           <li>Secure handling, certified data wiping, and legal compliance checks.</li>
-          <li>Real customer support at <a href="mailto:support@secondhandcell.com">support@secondhandcell.com</a>.</li>
+          <li>Real customer support at <a href="mailto:sales@secondhandcell.com">sales@secondhandcell.com</a>.</li>
         </ul>
       `,
     },

@@ -315,7 +315,7 @@
         <div class="shc-footer-col">
           <h4>Support</h4>
           <ul>
-            <li><a href="mailto:support@secondhandcell.com">Email Support</a></li>
+            <li><a href="mailto:sales@secondhandcell.com">Email Sales</a></li>
             <li><a href="/login.html">Customer Portal</a></li>
             <li><a href="/privacy.html#faq">FAQ</a></li>
             <li><a href="/order-submitted.html">Track My Kit</a></li>
