@@ -376,12 +376,21 @@
       const s = normalizeStatusKey(status);
       return s === 're-offered-declined' || s === 're_offered_declined';
     }
+    function getOrderDeductionValue(order) {
+      const explicit = Number(order?.deductionValue ?? order?.deduction_value ?? order?.shippingKitFee);
+      if (Number.isFinite(explicit) && explicit > 0) return explicit;
+      const preference = normalizeStatusKey(order?.shippingPreferenceValue || order?.shippingPreference || order?.shipping_preference || '');
+      if (preference === 'ship_kit' || preference === 'shipping-kit-requested' || preference === 'shipping_kit_requested') return 25;
+      if (preference === 'faster_shipping' || preference === 'ups_label' || preference === 'ups-label-requested') return 5;
+      return 0;
+    }
     function getOrderSettlementSummary(order) {
       const entries = getOrderDeviceEntries(order);
       const payableDeviceKeys = [];
       const declinedDeviceKeys = [];
       let payableTotal = 0;
       let eligibleDeviceCount = 0;
+      let nonReofferPayableCount = 0;
 
       for (const entry of entries) {
         const item = entry.item || {};
@@ -410,13 +419,24 @@
           const payout = Number(getEffectivePerDeviceOffer(order, item, deviceKey) || 0);
           payableDeviceKeys.push(deviceKey);
           payableTotal += Number.isFinite(payout) ? payout : 0;
+          if (!acceptedReoffer) {
+            nonReofferPayableCount += 1;
+          }
         }
       }
+
+      const deductionValue = getOrderDeductionValue(order);
+      const deductionApplied = nonReofferPayableCount > 0 ? deductionValue : 0;
+      const finalPayable = Math.max(0, payableTotal - deductionApplied);
 
       return {
         payableDeviceKeys,
         payableCount: payableDeviceKeys.length,
         payableTotal,
+        nonReofferPayableCount,
+        deductionValue,
+        deductionApplied,
+        finalPayable,
         eligibleDeviceCount,
         declinedDeviceKeys,
         declinedCount: declinedDeviceKeys.length,
@@ -424,9 +444,9 @@
     }
     function getFinalPayableAmount(order, settlement = null) {
       const resolvedSettlement = settlement || getOrderSettlementSummary(order);
-      const payableTotal = Number(resolvedSettlement?.payableTotal);
-      if (Number.isFinite(payableTotal) && payableTotal >= 0) {
-        return payableTotal;
+      const finalPayable = Number(resolvedSettlement?.finalPayable);
+      if (Number.isFinite(finalPayable) && finalPayable >= 0) {
+        return finalPayable;
       }
       const orderTotal = Number(order?.totalPayout ?? order?.estimatedQuote ?? order?.originalQuote ?? NaN);
       return Number.isFinite(orderTotal) && orderTotal >= 0 ? orderTotal : 0;
@@ -4581,6 +4601,20 @@
                   <p class="text-2xl font-bold text-emerald-700" id="payoutAmount">--</p>
                   <p class="text-xs text-emerald-700 mt-1">Payment amount</p>
                 </div>
+                <div class="rounded-md border border-emerald-200 bg-white/70 p-3 text-xs text-emerald-900 space-y-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span>Payable subtotal</span>
+                    <span id="paymentSubtotalAmount">$0.00</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <span id="paymentDeductionLabel">Deduction</span>
+                    <span id="paymentDeductionAmount">$0.00</span>
+                  </div>
+                  <div class="flex items-center justify-between gap-2 border-t border-emerald-200 pt-1 font-semibold">
+                    <span>Final payout</span>
+                    <span id="paymentFinalAmount">$0.00</span>
+                  </div>
+                </div>
                 <div class="border-t border-emerald-300 pt-3 mt-3">
                   <p class="text-xs font-semibold text-emerald-800 mb-1">Payment Method:</p>
                   <p class="text-sm font-medium text-emerald-900" id="paymentMethod">--</p>
@@ -5868,6 +5902,11 @@
             if (!currentOrder) return;
             const settlement = state.paymentConfirmPayload || getOrderSettlementSummary(currentOrder);
             const finalPrice = Number(getFinalPayableAmount(currentOrder, settlement) || 0);
+            const subtotalPrice = Number(settlement?.payableTotal || 0);
+            const deductionApplied = Number(settlement?.deductionApplied || 0);
+            const deductionLabel = deductionApplied > 0
+              ? `Deduction (${Number(settlement?.nonReofferPayableCount || 0)} regular device${Number(settlement?.nonReofferPayableCount || 0) === 1 ? '' : 's'})`
+              : 'Deduction (not applied)';
 
             const paymentMethodRaw = currentOrder?.paymentMethod || 'N/A';
             const paymentMethodFormatted = String(paymentMethodRaw).replace(/[_-]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
@@ -5883,6 +5922,14 @@
             ].filter(Boolean);
 
             payoutAmountEl.textContent = `$${Number(finalPrice || 0).toFixed(2)}`;
+            const subtotalEl = document.getElementById('paymentSubtotalAmount');
+            const deductionLabelEl = document.getElementById('paymentDeductionLabel');
+            const deductionAmountEl = document.getElementById('paymentDeductionAmount');
+            const finalAmountEl = document.getElementById('paymentFinalAmount');
+            if (subtotalEl) subtotalEl.textContent = `$${Number(subtotalPrice || 0).toFixed(2)}`;
+            if (deductionLabelEl) deductionLabelEl.textContent = deductionLabel;
+            if (deductionAmountEl) deductionAmountEl.textContent = deductionApplied > 0 ? `-$${deductionApplied.toFixed(2)}` : '$0.00';
+            if (finalAmountEl) finalAmountEl.textContent = `$${Number(finalPrice || 0).toFixed(2)}`;
             const methodEl = document.getElementById('paymentMethod');
             const identifierEl = document.getElementById('paymentIdentifier');
             if (methodEl) methodEl.textContent = paymentMethodFormatted;
