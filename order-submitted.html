@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- CashMyCell Step 1: capture cmc_id on landing/entry pages as early as possible -->
+    <script src="/assets/js/cashmycell-tracking.js"></script>
+    <script>
+      window.CashMyCellTracking?.setCmcIdFromUrl();
+    </script>
     <link rel="icon" href="/favicon/favicon.ico">
     <script>
       window.SHC_API_BASE_URL = "https://api.secondhandcell.com/server";
@@ -632,6 +637,15 @@
                 };
                 window.gtag('event', 'order_submission_page_view', conversionPayload);
                 window.gtag('event', 'order_submitted_conversion', conversionPayload);
+            }
+
+            // CashMyCell Step 2: fire order-complete only on confirmed success page, once per order per session.
+            if (window.CashMyCellTracking?.trackCashMyCellOrderComplete) {
+                window.CashMyCellTracking.trackCashMyCellOrderComplete({
+                    orderValue: basketTotalForPixel,
+                    referenceId: transactionIdForPixel,
+                    guardKey: transactionIdForPixel || 'order-submitted-page'
+                });
             }
             const expandedWithImages = await Promise.all(expanded.map(async (item) => ({
                 ...item,
