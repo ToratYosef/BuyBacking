@@ -12,8 +12,8 @@ const db = getFirestore(app);
 let allDevices = [];
 let filteredDevices = [];
 const supportedBrands = ['iphone', 'samsung', 'ipad', 'macbook', 'other'];
-const conditions = ['flawless', 'good', 'fair', 'broken'];
-const exportConditions = ['flawless', 'good', 'fair', 'broken'];
+const conditions = ['flawless', 'good', 'fair', 'broken', 'no_power'];
+const exportConditions = ['flawless', 'good', 'fair', 'broken', 'no_power'];
 const primaryCarriers = ['att', 'verizon', 'tmobile', 'unlocked'];
 const connectivityMetadata = {
 att: {
@@ -61,6 +61,7 @@ flawless: 'Flawless',
 good: 'Good',
 fair: 'Fair',
 broken: 'Broken',
+no_power: 'No Power / Severely Damaged',
 damaged: 'Damaged'
 };
 const usdFormatter = new Intl.NumberFormat('en-US', {
@@ -212,6 +213,10 @@ if (normalized.broken === undefined || normalized.broken === null || normalized.
 normalized.broken = normalized.damaged;
 }
 delete normalized.damaged;
+}
+const brokenValue = Number(normalized.broken ?? 0);
+if (normalized.no_power === undefined || normalized.no_power === null || normalized.no_power === '') {
+normalized.no_power = Number.isFinite(brokenValue) ? Math.round((brokenValue * 0.5) * 100) / 100 : 0;
 }
 return normalized;
 };
@@ -1547,7 +1552,11 @@ const conditionMap = {
 'Good': 'good',
 'Fair': 'fair',
 'Damaged': 'broken',
-'Broken': 'broken'
+'Broken': 'broken',
+'No Power': 'no_power',
+'No Power / Severely Damaged': 'no_power',
+'No-Power': 'no_power',
+'NoPower': 'no_power'
 };
 const conditionHeaders = Object.keys(conditionMap);
 
