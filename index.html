@@ -276,64 +276,24 @@
             margin-top: 0.9rem;
             display: grid;
             grid-template-columns: 1fr;
-            gap: 0.7rem;
+            gap: 1.25rem;
         }
 
         .hero-device-search-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            display: block;
             width: 100%;
-            padding: 1.1rem 1rem 1rem;
-            border: 1px solid #d1d5db;
-            border-radius: 1.1rem;
-            text-align: center;
-            transition: background-color .2s ease, border-color .2s ease, transform .15s ease, box-shadow .2s ease;
-            color: #0f172a;
-            background: #f3f4f6;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            text-align: inherit;
+            color: inherit;
+            background: transparent;
             cursor: pointer;
         }
-        .hero-device-search-item:hover {
-            background: #ffffff;
-            border-color: rgba(37, 99, 235, 0.45);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
-        }
         .hero-device-search-thumb {
-            width: 100%;
-            max-width: 260px;
-            aspect-ratio: 1 / 1;
-            border-radius: 0.85rem;
+            max-height: 100%;
+            max-width: 100%;
             object-fit: contain;
-            background: #e5e7eb;
-            border: 1px solid #dbe1e8;
-            padding: 0.4rem;
-            flex-shrink: 0;
-            margin-bottom: 1rem;
-        }
-        .hero-device-search-title {
-            font-size: 1.95rem;
-            line-height: 1.15;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-            color: #0f172a;
-            margin: 0 0 0.65rem;
-        }
-        .hero-device-search-price {
-            color: #16a34a;
-            font-size: 1.15rem;
-            font-weight: 800;
-            margin: 0 0 1rem;
-        }
-        .hero-device-search-cta {
-            width: 100%;
-            border-radius: 0.9rem;
-            border: 1px solid #d5dae1;
-            background: #ffffff;
-            color: #334155;
-            font-size: 0.95rem;
-            font-weight: 700;
-            padding: 0.75rem 0.6rem;
         }
 
         .hero-device-search-empty {
@@ -354,9 +314,10 @@
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
-        @media (max-width: 640px) {
-            .hero-device-search-title { font-size: 1.5rem; }
-            .hero-device-search-price { font-size: 1rem; }
+        @media (min-width: 1024px) {
+            .hero-device-search-results {
+                grid-template-columns: repeat(5, minmax(0, 1fr));
+            }
         }
 
         .hero-phone-container {
@@ -1334,6 +1295,7 @@ const heroSearchState = {
     loadingPromise: null,
     devices: []
 };
+const heroSearchPriceCache = new Map();
 
 const normalizeDeviceSlug = (value = '') => String(value || '')
     .trim()
@@ -1445,6 +1407,24 @@ const loadHeroSearchDevices = async () => {
     }
 };
 
+const getHeroSearchHighestPrice = async (brand, slug) => {
+    const cacheKey = `${brand}:${slug}`;
+    if (heroSearchPriceCache.has(cacheKey)) return heroSearchPriceCache.get(cacheKey);
+
+    try {
+        const modelData = await getModelDocBySlug(brand, slug);
+        const highest = findHighestPrice(modelData?.prices || {});
+        const priceLabel = formatPrice(highest);
+        heroSearchPriceCache.set(cacheKey, priceLabel);
+        return priceLabel;
+    } catch (error) {
+        console.error(`Failed to load search pricing for ${brand}/${slug}:`, error);
+        const fallback = formatPrice(null);
+        heroSearchPriceCache.set(cacheKey, fallback);
+        return fallback;
+    }
+};
+
 function setupHeroDeviceSearch() {
     const input = document.getElementById('heroDeviceSearchInput');
     const results = document.getElementById('heroDeviceSearchResults');
@@ -1473,19 +1453,23 @@ function setupHeroDeviceSearch() {
         }
 
         const markup = matches.map((entry) => `
-            <button type="button" class="hero-device-search-item" data-device-brand="${entry.brand}" data-device-slug="${entry.slug}">
-                <img
-                    class="hero-device-search-thumb"
-                    src="${HERO_IMAGE_PLACEHOLDER}"
-                    data-base-url="${entry.imageUrl || ''}"
-                    data-fallback-url="${entry.fallbackImage || ''}"
-                    alt="${entry.name}"
-                    loading="lazy"
-                    decoding="async"
-                >
-                <p class="hero-device-search-title">${entry.name}</p>
-                <p class="hero-device-search-price">Up to top payout</p>
-                <span class="hero-device-search-cta">Get Offer</span>
+            <button type="button" class="hero-device-search-item animate-on-scroll homepage-card-link group h-full block" data-device-brand="${entry.brand}" data-device-slug="${entry.slug}">
+                <div class="homepage-card-inner card-modern p-6 flex flex-col h-full items-center text-center">
+                    <div class="h-48 w-full flex items-center justify-center mb-6 overflow-visible">
+                        <img
+                            class="hero-device-search-thumb group-hover:scale-110 transition-transform duration-300"
+                            src="${HERO_IMAGE_PLACEHOLDER}"
+                            data-base-url="${entry.imageUrl || ''}"
+                            data-fallback-url="${entry.fallbackImage || ''}"
+                            alt="${entry.name}"
+                            loading="lazy"
+                            decoding="async"
+                        >
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-900 mb-1">${entry.name}</h3>
+                    <p class="text-green-600 font-bold text-lg mb-6" data-hero-device-price data-price-key="${entry.brand}:${entry.slug}">Checking price...</p>
+                    <span class="mt-auto w-full py-2.5 rounded-lg border-2 border-slate-100 text-slate-700 font-semibold group-hover:border-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all">Get Offer</span>
+                </div>
             </button>
         `).join('');
 
@@ -1497,6 +1481,16 @@ function setupHeroDeviceSearch() {
                 imgEl.getAttribute('data-fallback-url')
             );
         });
+        const priceEls = results.querySelectorAll('[data-hero-device-price]');
+        void Promise.all(Array.from(priceEls).map(async (priceEl) => {
+            const key = priceEl.getAttribute('data-price-key') || '';
+            const [brand, slug] = key.split(':');
+            if (!brand || !slug) {
+                priceEl.textContent = formatPrice(null);
+                return;
+            }
+            priceEl.textContent = await getHeroSearchHighestPrice(brand, slug);
+        }));
         results.classList.remove('hidden');
         hint.classList.add('hidden');
     };
@@ -1515,7 +1509,7 @@ function setupHeroDeviceSearch() {
 
             const matches = devices
                 .filter((entry) => entry.searchText.includes(query))
-                .slice(0, 8);
+                .slice(0, 10);
             renderResults(matches, query);
         } catch (error) {
             console.error('Failed to search hero devices:', error);
