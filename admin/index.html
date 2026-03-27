@@ -1098,7 +1098,7 @@
       const storage = String((qcData?.storageMatch === 'no' ? qcData?.actualStorage : qcData?.storage) || item.storage || order.storage || '');
       const carrier = normalizeCarrierForPricing(qcData?.carrier || item.carrier || item.lock || order.carrier || order.lock || 'unlocked');
       const conditionRaw = String(qcData?.condition || item.condition || order.condition || 'good').toLowerCase();
-      const condition = conditionRaw === 'damaged' ? 'broken' : conditionRaw;
+      const condition = (conditionRaw === 'damaged' ? 'broken' : conditionRaw);
       if (!brand || !modelId || !storage) return null;
       try {
         const snap = await withPerf(`firestore:getModel:${brand}:${modelId}`, () => getDoc(doc(db, 'devices', brand, 'models', modelId)));
@@ -1109,8 +1109,14 @@
         if (!storageMap) return null;
         const carrierMap = storageMap[carrier] || storageMap.unlocked || storageMap.other;
         if (!carrierMap) return null;
-        const offer = Number(carrierMap[condition] || 0);
-        return Number.isFinite(offer) ? offer : null;
+        if (condition === 'no_power') {
+          const brokenOffer = Number(carrierMap.broken ?? carrierMap.damaged ?? 0);
+          const derivedNoPowerOffer = Number.isFinite(brokenOffer) ? Math.round((brokenOffer * 0.5) * 100) / 100 : 0;
+          return Number.isFinite(derivedNoPowerOffer) ? derivedNoPowerOffer : null;
+        }
+        const directOffer = Number(carrierMap[condition]);
+        if (Number.isFinite(directOffer) && directOffer > 0) return directOffer;
+        return null;
       } catch {
         return null;
       }
@@ -4196,9 +4202,9 @@
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-2">Quality / condition grade</label>
               <select id="qcCondition" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
-                ${["flawless","good","fair","broken"].map(v => `
+                ${["flawless","good","fair","broken","no_power"].map(v => `
                   <option value="${v}" ${state.qcData.condition === v ? "selected" : ""}>
-                    ${v === "flawless" ? "Flawless" : v === "good" ? "Good" : v === "fair" ? "Fair" : "Broken"}
+                    ${v === "flawless" ? "Flawless" : v === "good" ? "Good" : v === "fair" ? "Fair" : v === "broken" ? "Broken" : "No Power / Severely Damaged"}
                   </option>
                 `).join("")}
               </select>
