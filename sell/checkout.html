@@ -592,8 +592,16 @@
 
     const params = new URLSearchParams(window.location.search);
     const CART_STORAGE_KEYS = ['shc_cart', 'shcOrderSummary'];
-    const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken' };
+    const CONDITION_LABELS = { flawless: 'Flawless', good: 'Good', fair: 'Fair', broken: 'Broken', no_power: 'No Power / Severely Damaged' };
     const CONDITION_KEYS = Object.keys(CONDITION_LABELS);
+    const getConditionPriceMap = (rawMap = {}) => {
+        const normalized = { ...(rawMap || {}) };
+        const brokenPrice = Number(normalized.broken ?? normalized.damaged ?? 0);
+        if (normalized.no_power === undefined || normalized.no_power === null || normalized.no_power === '') {
+            normalized.no_power = Number.isFinite(brokenPrice) ? Math.round((brokenPrice * 0.5) * 100) / 100 : 0;
+        }
+        return normalized;
+    };
     const BRAND_OPTIONS = [
         { key: 'iphone', label: 'iPhone' },
         { key: 'samsung', label: 'Samsung' }
@@ -854,7 +862,7 @@
             storage: item.storage || item.capacity || '',
             lock: item.lock || item.carrier || '',
             condition: item.condition || item.condition_cosmetic || item.cosmeticCondition || '',
-            conditionPrices: item.conditionPrices || null
+            conditionPrices: getConditionPriceMap(item.conditionPrices || {})
         };
     };
     const getCart = () => {
@@ -1092,12 +1100,13 @@
     const ensureCartCondition = (item) => {
         const validKey = item.condition && CONDITION_LABELS[item.condition] ? item.condition : null;
         if (validKey) return validKey;
-        const priceKeys = Object.keys(item.conditionPrices || {});
+        const priceKeys = Object.keys(getConditionPriceMap(item.conditionPrices || {}));
         const matchedKey = priceKeys.find((key) => CONDITION_LABELS[key]);
         const fallbackKey = matchedKey || CONDITION_KEYS[0];
         item.condition = fallbackKey;
-        if (item.conditionPrices && item.conditionPrices[fallbackKey]) {
-            item.unitPrice = Number(item.conditionPrices[fallbackKey]);
+        const effectivePriceMap = getConditionPriceMap(item.conditionPrices || {});
+        if (effectivePriceMap && effectivePriceMap[fallbackKey] !== undefined) {
+            item.unitPrice = Number(effectivePriceMap[fallbackKey]);
         }
         return fallbackKey;
     };
@@ -1217,6 +1226,7 @@
         if (['flawless', 'excellent', 'like-new', 'likenew', 'mint'].includes(normalized)) return 'flawless';
         if (['good'].includes(normalized)) return 'good';
         if (['fair'].includes(normalized)) return 'fair';
+        if (['no-power', 'no_power', 'nopower', 'severly-damaged', 'severely-damaged', 'severly damaged', 'severely damaged'].includes(normalized)) return 'no_power';
         if (['broken', 'poor', 'damaged'].includes(normalized)) return 'broken';
         return '';
     };
@@ -1567,9 +1577,9 @@
                     carrier: item.lock,
                     lock: item.lock,
                     condition: condKey,
-                    condition_power_on: condKey === 'broken' ? 'No' : 'Yes',
-                    condition_functional: (condKey === 'broken') ? 'No' : 'Yes',
-                    condition_cracks: condKey === 'broken' ? 'Yes' : 'No',
+                    condition_power_on: ['broken', 'no_power'].includes(condKey) ? 'No' : 'Yes',
+                    condition_functional: (['broken', 'no_power'].includes(condKey)) ? 'No' : 'Yes',
+                    condition_cracks: ['broken', 'no_power'].includes(condKey) ? 'Yes' : 'No',
                     condition_cosmetic: condKey
                 };
                 return Array.from({ length: qty }, (_, index) => ({
@@ -1596,9 +1606,9 @@
                 carrier: firstItem.lock,
                 lock: firstItem.lock,
                 condition: firstItem.condition,
-                condition_power_on: firstItem.condition === 'broken' ? 'No' : 'Yes',
-                condition_functional: (firstItem.condition === 'broken') ? 'No' : 'Yes',
-                condition_cracks: firstItem.condition === 'broken' ? 'Yes' : 'No',
+                condition_power_on: ['broken', 'no_power'].includes(firstItem.condition) ? 'No' : 'Yes',
+                condition_functional: (['broken', 'no_power'].includes(firstItem.condition)) ? 'No' : 'Yes',
+                condition_cracks: ['broken', 'no_power'].includes(firstItem.condition) ? 'Yes' : 'No',
                 condition_cosmetic: firstItem.condition,
                 qty: totalQty,
                 items: itemsPayload,

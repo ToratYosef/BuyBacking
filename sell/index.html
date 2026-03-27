@@ -1070,6 +1070,18 @@
                 'iCloud / Activation Lock / Google Lock must be removed.',
                 'Device must not be lost or stolen with a clean IMEI and no unpaid balance.'
             ] 
+        },
+        {
+            key: 'no_power',
+            name: 'No Power / Severely Damaged',
+            desc: [
+                'Device does not power on, has severe frame/body damage, or major board-level failure.',
+                'Includes phones that are bent, heavily smashed, or structurally compromised.',
+                'This grade is priced at 50% of the Broken value for the same model, storage, and carrier.',
+                'We Do Not Accept devices with third-party, non-original, or aftermarket replacement parts.',
+                'iCloud / Activation Lock / Google Lock must be removed.',
+                'Device must not be lost or stolen with a clean IMEI and no unpaid balance.'
+            ]
         }
     ];
 
@@ -1077,7 +1089,17 @@
         flawless: 'Flawless',
         good: 'Good',
         fair: 'Fair',
-        broken: 'Broken'
+        broken: 'Broken',
+        no_power: 'No Power / Severely Damaged'
+    };
+
+    const getConditionPriceMap = (rawMap = {}) => {
+        const baseMap = { ...(rawMap || {}) };
+        const brokenPrice = Number(baseMap.broken ?? baseMap.damaged ?? 0);
+        if (baseMap.no_power === undefined || baseMap.no_power === null || baseMap.no_power === '') {
+            baseMap.no_power = Number.isFinite(brokenPrice) ? Math.round((brokenPrice * 0.5) * 100) / 100 : 0;
+        }
+        return baseMap;
     };
 
     // Inline transparent placeholder to avoid flashing a real fallback device image.
@@ -1458,7 +1480,7 @@
     };
     const addCurrentDeviceToCart = () => {
         if (!state.deviceData) return;
-        const priceMap = state.deviceData.prices?.[state.selections.storage]?.[state.selections.lock] || {};
+        const priceMap = getConditionPriceMap(state.deviceData.prices?.[state.selections.storage]?.[state.selections.lock] || {});
         const unitPrice = Number(priceMap[state.selections.condition] || 0);
         const cart = getCart();
         const key = [
@@ -2123,7 +2145,7 @@
             return;
         }
 
-        const priceMap = state.deviceData?.prices?.[state.selections.storage]?.[state.selections.lock] || {};
+        const priceMap = getConditionPriceMap(state.deviceData?.prices?.[state.selections.storage]?.[state.selections.lock] || {});
         const price = Number(priceMap[state.selections.condition] || 0);
         if (priceEl) priceEl.textContent = `$${price}`;
 
@@ -2207,6 +2229,7 @@
         if (['flawless', 'excellent', 'like-new', 'likenew', 'mint'].includes(normalized)) return 'flawless';
         if (['good'].includes(normalized)) return 'good';
         if (['fair'].includes(normalized)) return 'fair';
+        if (['no-power', 'no_power', 'nopower', 'severly-damaged', 'severely-damaged', 'severly damaged', 'severely damaged'].includes(normalized)) return 'no_power';
         if (['broken', 'poor', 'damaged'].includes(normalized)) return 'broken';
         return '';
     };
