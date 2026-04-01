@@ -217,6 +217,7 @@
     function formatStatusLabel(status) {
       const normalized = String(status || "").trim().toLowerCase();
       if (normalized === "kits") return "Kits";
+      if (normalized === "misc") return "Misc";
       if (normalized === "ready_to_pay" || normalized === "ready-to-pay") return "Ready To Pay";
       if (normalized === "issue_resolved") return "Pending Re-QC";
       return String(status).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
@@ -238,8 +239,24 @@
       "ready_to_pay",
       "return-label-generated",
       "completed",
+      "misc",
       "cancelled"
     ];
+    const EXPLICIT_STATUS_BUCKETS = new Set([
+      "order_pending",
+      "label_generated",
+      "kits",
+      "phone_on_the_way",
+      "delivered_to_us",
+      "received",
+      "emailed",
+      "issue_resolved",
+      "re-offered-pending",
+      "re-offered-declined",
+      "ready_to_pay",
+      "return-label-generated",
+      "completed",
+    ]);
     const KIT_PRINT_PENDING_STATUSES = new Set(["shipping_kit_requested", "kit_needs_printing", "needs_printing"]);
     const RECEIVED_VALUES = new Set(["received", "ready_to_pay", "imei_checked", "delivered_to_us", "phone_on_the_way"]);
     const PAST_RECEIVED_VALUES = new Set(["received", "ready_to_pay", "completed", "re-offered-accepted", "re-offered-declined", "re-offered-auto-accepted"]);
@@ -260,6 +277,11 @@
       const normalized = normalizeStatusKey(status);
       return normalized === "cancelled" || normalized === "canceled";
     }
+    function isMiscStatusValue(status) {
+      const normalized = normalizeStatusKey(status);
+      if (!normalized || normalized === "cancelled") return false;
+      return !EXPLICIT_STATUS_BUCKETS.has(normalized);
+    }
     function getOrderCurrentStatusValue(order) {
       // Deliberately read only current-status fields, never historical timelines.
       return normalizeStatusKey(order?.status ?? order?.currentStatus ?? order?.current_status);
@@ -273,6 +295,34 @@
     function isBalanceEmailStatus(order) {
       const s = normalizeStatusKey(order?.status);
       return s.includes("emailed_balance") || s.includes("emailed") && (order?.emailType === "balance");
+    }
+    function getStatusSortTimestamp(order, deviceKey, status) {
+      const normalized = normalizeStatusKey(status);
+      const issueEntries = deviceKey ? getDeviceIssueEntries(order, deviceKey) : [];
+      const issueUpdatedAt = issueEntries
+        .map((issue) => toDateAny(issue?.updatedAt || issue?.createdAt || issue?.emailSentAt || null)?.getTime() || 0)
+        .reduce((max, value) => Math.max(max, value), 0);
+      const reofferUpdatedAt = toDateAny(order?.reOffer?.updatedAt || order?.reOffer?.createdAt || order?.reOfferUpdatedAt || null)?.getTime() || 0;
+      const statusUpdatedAt = toDateAny(
+        order?.statusUpdatedAt ||
+        order?.updatedAt ||
+        order?.qcCompletedAt ||
+        order?.completedAt ||
+        order?.receivedAt ||
+        order?.lastConditionEmailSentAt ||
+        null
+      )?.getTime() || 0;
+
+      if (normalized === "issue_resolved") {
+        return Math.max(issueUpdatedAt, statusUpdatedAt);
+      }
+      if (normalized === "emailed") {
+        return Math.max(issueUpdatedAt, statusUpdatedAt);
+      }
+      if (normalized === "re-offered-pending" || normalized === "re-offered-declined" || normalized === "ready_to_pay") {
+        return Math.max(reofferUpdatedAt, statusUpdatedAt);
+      }
+      return statusUpdatedAt;
     }
     function isLabelGenerationStage(order) {
       const s = normalizeStatusKey(order?.status);
@@ -2421,7 +2471,7 @@
         const withCancelledDevices = visible.filter(o => orderHasDeviceWithStatus(o, "cancelled"));
         return [...cancelled, ...withCancelledDevices];
       }
-      if (s === "all") return visible; // default excludes cancelled
+      if (s === "all") return state.allOrders || [];
       // other statuses also based on visible, unless explicitly cancelled
       return visible;
     }
@@ -2529,6 +2579,8 @@
           allDevices = allDevices.filter(d => d.deviceStatus === "received");
         } else if (s === "ready_to_pay") {
           allDevices = allDevices.filter(d => d.deviceStatus === "ready_to_pay");
+        } else if (s === "misc") {
+          allDevices = allDevices.filter(d => isMiscStatusValue(d.deviceStatus));
         } else {
           // For all other statuses (including issue_resolved, completed, etc.)
           allDevices = allDevices.filter(d => d.deviceStatus === s);
@@ -2564,8 +2616,14 @@
           const bSort = Number.isFinite(bDue) ? bDue : Number.POSITIVE_INFINITY;
           if (aSort !== bSort) return aSort - bSort;
         }
-        const ta = toDateAny(a.order?.createdAt)?.getTime() || 0;
-        const tb = toDateAny(b.order?.createdAt)?.getTime() || 0;
+
+        const useStatusSort = s !== "all";
+        const ta = useStatusSort
+          ? getStatusSortTimestamp(a.order, a.deviceKey, a.deviceStatus) || (toDateAny(a.order?.createdAt)?.getTime() || 0)
+          : (toDateAny(a.order?.createdAt)?.getTime() || 0);
+        const tb = useStatusSort
+          ? getStatusSortTimestamp(b.order, b.deviceKey, b.deviceStatus) || (toDateAny(b.order?.createdAt)?.getTime() || 0)
+          : (toDateAny(b.order?.createdAt)?.getTime() || 0);
         if (tb !== ta) return tb - ta;
         // Secondary sort by device index within same order
         return a.deviceIndex - b.deviceIndex;
@@ -3962,12 +4020,15 @@
       const cancelledGroups = groupDevicesForTable(flattenOrdersToDevices(dedupedCancelledSource))
         .filter((group) => normalizeStatusKey(group?.deviceStatus) === "cancelled");
 
-      const statusCountAll = visibleGroups.length;
+      const miscCount = visibleGroups.filter((group) => isMiscStatusValue(group?.deviceStatus)).length;
+      statusCounts.set("misc", miscCount);
+      const statusCountAll = visibleGroups.length + cancelledGroups.length;
       const cancelledCount = cancelledGroups.length;
-      // live orders = visible excluding completed + return-label-generated
-      const liveOrders = visibleGroups.filter((group) => {
+      // live orders = all device groups excluding completed + return-label-generated + cancelled
+      const allGroups = groupDevicesForTable(flattenOrdersToDevices(state.allOrders || []));
+      const liveOrders = allGroups.filter((group) => {
         const s = normalizeStatusKey(group?.deviceStatus);
-        return s !== "completed" && s !== "return-label-generated";
+        return s !== "completed" && s !== "return-label-generated" && s !== "cancelled";
       }).length;
       return { statusCounts, statusCountAll, cancelledCount, liveOrders, visible };
     }
@@ -4095,6 +4156,12 @@
           count: isActive ? "bg-white/15 text-white" : "bg-emerald-100 text-emerald-700"
         };
       }
+      if (s === "misc") {
+        return {
+          pill: isActive ? "bg-fuchsia-700 text-white border border-fuchsia-700" : "bg-fuchsia-50 text-fuchsia-800 border border-fuchsia-200 hover:bg-fuchsia-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-fuchsia-100 text-fuchsia-700"
+        };
+      }
       if (s === "completed") {
         return {
           pill: isActive ? "bg-emerald-700 text-white border border-emerald-700" : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100",
@@ -4135,6 +4202,7 @@
         { key: "ready_to_pay", label: "Ready To Pay", count: statusCounts.get("ready_to_pay") || 0 },
         { key: "return-label-generated", label: "Return Label Generated", count: statusCounts.get("return-label-generated") || 0 },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
+        { key: "misc", label: "Misc", count: statusCounts.get("misc") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
       const renderPills = (rowItems) => rowItems.map(it => {

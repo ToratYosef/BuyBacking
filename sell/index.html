@@ -2328,6 +2328,10 @@
         else if (state.currentStep === 'condition') { /* stay on condition step */ }
         updateURL({ historyMode: 'push' });
         renderCurrentStep().then(() => {
+            if (state.currentStep === 'condition') {
+                scrollConditionSummaryIntoView();
+                return;
+            }
             window.scrollTo({ top: 0, behavior: 'smooth' });
         });
     };
@@ -2448,19 +2452,6 @@
 
     const isSmallScreen = () => window.matchMedia('(max-width: 640px)').matches;
 
-    const scrollToPriceIfNeeded = () => {
-        if (!isSmallScreen()) return;
-        const target = document.getElementById('condition-help-box') || document.getElementById('final-quote-action-card');
-        if (!target) return;
-
-        const rect = target.getBoundingClientRect();
-        const topOffset = 96;
-        const inView = rect.top >= topOffset && rect.bottom <= window.innerHeight;
-        if (inView) return;
-
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-
     const renderConditionGrid = () => {
         const grid = document.getElementById('final-condition-grid');
         grid.innerHTML = '';
@@ -2473,7 +2464,6 @@
                 updateURL({ historyMode: 'replace' });
                 renderConditionGrid();
                 updatePrice();
-                scrollToPriceIfNeeded();
             };
             grid.appendChild(card);
         });
