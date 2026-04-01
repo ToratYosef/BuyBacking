@@ -1,0 +1,389 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -4,8 +4,8 @@
+   "description": "BuyBack project.",
+   "main": "index.js",
+   "scripts": {
+     "start": "npm run dev",
+-    "dev": "sh -c 'npm run watch:site-css & npm run watch:admin-css & node server.js'",
+-    "serve": "node server.js",
++    "dev": "sh -c 'npm run watch:site-css & npm run watch:admin-css & PORT=${PORT:-3000} node server.js'",
++    "serve": "PORT=${PORT:-3000} node server.js",
+     "test": "echo \"Error: no test specified\" && exit 1",
+     "build": "npm run build:site-css && npm run build:admin-css",
+     "watch:site-css": "tailwindcss -c tailwind.config.js -i assets/css/input.css -o assets/css/tailwind.css --watch",
+diff --git a/assets/js/pages/reoffer-action.js b/assets/js/pages/reoffer-action.js
+--- a/assets/js/pages/reoffer-action.js
++++ b/assets/js/pages/reoffer-action.js
+@@ -19,6 +19,10 @@ const auth = getAuth(app);
+ const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+ let countdownInterval = null;
+ let pendingAction = null;
++
++const normalizeReofferStatus = (value) => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
++const isPendingReofferStatus = (value) => normalizeReofferStatus(value) === 're_offered_pending';
++const isAcceptedReofferStatus = (value) => ['re_offered_accepted', 're_offered_auto_accepted', 'requote_accepted'].includes(normalizeReofferStatus(value));
++const isDeclinedReofferStatus = (value) => normalizeReofferStatus(value) === 're_offered_declined';
+@@ -143,7 +147,7 @@ const getAutoAcceptDeadline = (order, selectedDeviceKey) => {
+ const deviceOffer = selectedDeviceKey
+ ? (order?.reOfferByDevice?.[selectedDeviceKey] || order?.reofferByDevice?.[selectedDeviceKey] || null)
+ : null;
+-const sourceOffer = deviceOffer || order?.reOffer || null;
++const sourceOffer = deviceOffer || order?.reOffer || order?.reoffer || null;
+@@ -161,8 +165,8 @@ const renderConfirmationState = (status, orderId) => {
+ clearInterval(countdownInterval);
+ countdownContainer.classList.add('hidden');
+
+-const accepted = status === 're-offered-accepted' || status === 're-offered-auto-accepted';
+-const declined = status === 're-offered-declined';
++const accepted = isAcceptedReofferStatus(status);
++const declined = isDeclinedReofferStatus(status);
+@@ -233,7 +237,7 @@ try {
+
+ const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData, selectedDeviceKey);
+
+-if ((String(deviceStatus) === 're-offered-pending') && autoAcceptDeadline) {
++if (isPendingReofferStatus(deviceStatus) && autoAcceptDeadline) {
+ offerDetailsState.classList.remove('hidden');
+ replySection.classList.remove('hidden');
+ actionButtonsDiv.classList.remove('hidden');
+@@ -256,13 +260,13 @@ const updateCountdown = () => {
+
+ updateCountdown();
+ countdownInterval = setInterval(updateCountdown, 1000);
+-} else if (String(deviceStatus) === 're-offered-pending') {
++} else if (isPendingReofferStatus(deviceStatus)) {
+ offerDetailsState.classList.remove('hidden');
+ replySection.classList.remove('hidden');
+ actionButtonsDiv.classList.remove('hidden');
+ countdownContainer.classList.add('hidden');
+
+-} else if (String(deviceStatus) === 're-offered-accepted' || String(deviceStatus) === 're-offered-auto-accepted') {
++} else if (isAcceptedReofferStatus(deviceStatus)) {
+ renderConfirmationState('re-offered-accepted', orderId);
+-} else if (String(deviceStatus) === 're-offered-declined') {
++} else if (isDeclinedReofferStatus(deviceStatus)) {
+ renderConfirmationState('re-offered-declined', orderId);
+ } else {
+ errorMessage.textContent = 'No pending offer found for this order, or it has been processed already.';
+diff --git a/track-order.html b/track-order.html
+--- a/track-order.html
++++ b/track-order.html
+@@ -967,6 +967,37 @@
+
+     form.addEventListener('submit', async (event) => {
+       event.preventDefault();
++      await runOrderLookup();
++    });
++
++    async function runOrderLookup() {
++      formError.classList.add('hidden');
++
++      const orderId = normalizeOrderIdInput(orderIdInput.value);
++      const email = customerEmailInput.value.trim();
++
++      if (!orderId) {
++        showError('Please enter your order ID.');
++        return false;
++      }
++
++      if (!email) {
++        showError('Please enter the email used on the order.');
++        return false;
++      }
++
++      orderIdInput.value = orderId;
++
++      try {
++        setLoading(true);
++        const order = await fetchOrder(orderId, email);
++        displayOrder(order);
++        return true;
++      } catch (error) {
++        showError(error.message || 'Unable to find your order. Please double-check the details.');
++        return false;
++      } finally {
++        setLoading(false);
++      }
++    }
++
++    async function applyPrefillFromUrl() {
+       formError.classList.add('hidden');
+
+       const orderId = normalizeOrderIdInput(orderIdInput.value);
+@@ -988,32 +1019,8 @@
+       } finally {
+         setLoading(false);
+       }
+-    });
+-
+-    function applyPrefillFromUrl() {
+-      const params = new URLSearchParams(window.location.search);
+-      const idFromUrl = params.get('orderId') || params.get('id');
+-      const emailFromUrl = params.get('email');
+-
+-      autoScrollToReoffer = params.get('scrollToReoffer') === '1' || params.get('fromReofferLink') === '1';
+-
+-      if (idFromUrl) {
+-        orderIdInput.value = normalizeOrderIdInput(idFromUrl);
+-      }
+-      if (emailFromUrl) {
+-        customerEmailInput.value = emailFromUrl;
+-      }
+-
+-      updateLookupUi();
+-      refreshLookupRequirements();
+-
+-      // Keep fields prefilled, but require an explicit user action to open details.
+     }
+
+-    applyPrefillFromUrl();
+-  </script>
+-
+-  <script type="module">
+-    await (window.shcComponentsReady || Promise.resolve());
+-    await window.shcLoadSharedSiteScripts?.({ includeAuth: true });
+-  </script>
++    async function applyPrefillFromUrl() {
++      const params = new URLSearchParams(window.location.search);
++      const idFromUrl = params.get('orderId') || params.get('id');
++      const emailFromUrl = params.get('email');
++
++      autoScrollToReoffer = params.get('scrollToReoffer') === '1' || params.get('fromReofferLink') === '1';
++
++      if (idFromUrl) {
++        orderIdInput.value = normalizeOrderIdInput(idFromUrl);
++      }
++      if (emailFromUrl) {
++        customerEmailInput.value = emailFromUrl;
++      }
++
++      updateLookupUi();
++      refreshLookupRequirements();
++
++      if (idFromUrl && emailFromUrl) {
++        await runOrderLookup();
++      }
++    }
++
++    applyPrefillFromUrl();
++  </script>
++
++  <script type="module">
++    await (window.shcComponentsReady || Promise.resolve());
++    await window.shcLoadSharedSiteScripts?.({ includeAuth: true });
++  </script>
+diff --git a/assets/js/page-tracker.js b/assets/js/page-tracker.js
+--- a/assets/js/page-tracker.js
++++ b/assets/js/page-tracker.js
+@@ -5,6 +5,13 @@
+
+   const STORAGE_KEY = "PAGE_TRACKER_LOGS";
+   const IP_CACHE_KEY = "PAGE_TRACKER_IP_CACHE";
+   const IP_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
++  const SESSION_COOKIE = "shc_aid";
++  const HEARTBEAT_MS = 30000;
++  const ANALYTICS_API_BASE =
++    (typeof window !== "undefined" &&
++      (window.SHC_API_BASE_URL || window.API_BASE_URL || window.API_BASE)) ||
++    "";
++  const COLLECT_ENDPOINT = `${String(ANALYTICS_API_BASE).replace(/\/+$/, "")}/analytics/collect`;
++  const HEARTBEAT_ENDPOINT = `${String(ANALYTICS_API_BASE).replace(/\/+$/, "")}/analytics/heartbeat`;
+@@ -28,6 +35,7 @@
+     type: "init",
+     timestamp: null,
+   };
++  let analyticsSessionId = null;
+@@ -49,6 +57,87 @@
+       return fallback;
+     }
+   };
++
++  const randomHex = (bytes) => {
++    const arr = new Uint8Array(bytes);
++    window.crypto.getRandomValues(arr);
++    return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
++  };
++
++  const getCookie = (name) => {
++    const all = document.cookie ? document.cookie.split("; ") : [];
++    for (const part of all) {
++      const idx = part.indexOf("=");
++      const key = idx > -1 ? decodeURIComponent(part.slice(0, idx)) : decodeURIComponent(part);
++      if (key === name) {
++        return idx > -1 ? decodeURIComponent(part.slice(idx + 1)) : "";
++      }
++    }
++    return "";
++  };
++
++  const setCookie = (name, value) => {
++    let cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; Path=/; SameSite=Lax`;
++    if (window.location.protocol === "https:") cookie += "; Secure";
++    document.cookie = cookie;
++  };
++
++  const getOrCreateSessionId = () => {
++    const existing = getCookie(SESSION_COOKIE);
++    if (existing) return existing;
++    const created = randomHex(16);
++    setCookie(SESSION_COOKIE, created);
++    return created;
++  };
++
++  const safeNumber = (value) => {
++    return Number.isFinite(Number(value)) ? Number(value) : null;
++  };
++
++  const collectClientContext = () => {
++    const nav = window.navigator || {};
++    const ua = nav.userAgent || "";
++    const uaLower = ua.toLowerCase();
++    let browser = null;
++    if (uaLower.includes("edg/")) browser = "Edge";
++    else if (uaLower.includes("opr/") || uaLower.includes("opera")) browser = "Opera";
++    else if (uaLower.includes("chrome/")) browser = "Chrome";
++    else if (uaLower.includes("safari/") && !uaLower.includes("chrome/")) browser = "Safari";
++    else if (uaLower.includes("firefox/")) browser = "Firefox";
++
++    let os = null;
++    if (uaLower.includes("windows nt")) os = "Windows";
++    else if (uaLower.includes("android")) os = "Android";
++    else if (uaLower.includes("iphone") || uaLower.includes("ipad") || uaLower.includes("ios")) os = "iOS";
++    else if (uaLower.includes("mac os x") || uaLower.includes("macintosh")) os = "macOS";
++    else if (uaLower.includes("linux")) os = "Linux";
++
++    let deviceType = null;
++    if (uaLower.includes("ipad") || uaLower.includes("tablet")) deviceType = "tablet";
++    else if (uaLower.includes("mobile") || uaLower.includes("iphone") || uaLower.includes("android")) deviceType = "mobile";
++    else deviceType = "desktop";
++
++    let deviceName = null;
++    if (uaLower.includes("iphone")) deviceName = "iPhone";
++    else if (uaLower.includes("ipad")) deviceName = "iPad";
++    else if (uaLower.includes("macintosh")) deviceName = "Mac";
++    else if (uaLower.includes("windows nt")) deviceName = "Windows PC";
++    else if (uaLower.includes("android")) {
++      const buildMatch = ua.match(/Android [^;)]*;\s*([^;)]+?)\s+Build/i);
++      deviceName = buildMatch?.[1]?.trim() || "Android Device";
++    } else {
++      deviceName = deviceType === "desktop" ? "Desktop" : "Device";
++    }
++
++    return {
++      browser, os, deviceType, deviceName,
++      platform: nav.platform || null,
++      language: nav.language || null,
++      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
++      screenWidth: safeNumber(window.screen?.width),
++      screenHeight: safeNumber(window.screen?.height),
++      viewportWidth: safeNumber(window.innerWidth),
++      viewportHeight: safeNumber(window.innerHeight),
++      cookieEnabled: typeof nav.cookieEnabled === "boolean" ? nav.cookieEnabled : null,
++      touchPoints: safeNumber(nav.maxTouchPoints),
++      hardwareConcurrency: safeNumber(nav.hardwareConcurrency),
++      deviceMemory: safeNumber(nav.deviceMemory),
++    };
++  };
++
++  const sendAnalyticsPayload = (url, payload) => {
++    if (!url) return;
++    const body = JSON.stringify(payload);
++    if (navigator.sendBeacon) {
++      const blob = new Blob([body], { type: "application/json" });
++      navigator.sendBeacon(url, blob);
++      return;
++    }
++    fetch(url, {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body,
++      keepalive: true,
++      credentials: "same-origin",
++    }).catch(() => {});
++  };
++
++  const sendAnalyticsEvent = (event) => {
++    analyticsSessionId = analyticsSessionId || getOrCreateSessionId();
++    sendAnalyticsPayload(COLLECT_ENDPOINT, {
++      session_id: analyticsSessionId,
++      events: [event],
++    });
++  };
++
++  const sendHeartbeat = () => {
++    if (document.visibilityState !== "visible") return;
++    analyticsSessionId = analyticsSessionId || getOrCreateSessionId();
++    sendAnalyticsPayload(HEARTBEAT_ENDPOINT, {
++      session_id: analyticsSessionId,
++      ts: nowIso(),
++      page_url: window.location.href,
++      referrer: document.referrer || "",
++      extra: { client: collectClientContext() },
++    });
++  };
+@@ -557,6 +646,17 @@
+       visitedAt,
+       source: sourceLabel || SOURCE_FALLBACK,
+       visitor,
+     });
++
++    sendAnalyticsEvent({
++      event_type: "pageview",
++      ts: visitedAt,
++      page_url: url,
++      path,
++      referrer: referrer.url || "",
++      extra: {
++        title,
++        source: sourceLabel || SOURCE_FALLBACK,
++        client: collectClientContext(),
++      },
++    });
+   };
+@@ -677,10 +777,30 @@
+       label,
+       conversion,
+     });
+
++    sendAnalyticsEvent({
++      event_type: "conversion",
++      ts: occurredAt,
++      page_url: window.location.href || "",
++      path,
++      referrer,
++      extra: {
++        label,
++        source: source || SOURCE_FALLBACK,
++        conversion,
++        client: collectClientContext(),
++      },
++    });
++
+     return true;
+   };
+
+   const start = async () => {
++    analyticsSessionId = getOrCreateSessionId();
+     if (document.visibilityState === "prerender") {
+       const onVisible = () => {
+         document.removeEventListener("visibilitychange", onVisible);
+         resolveIp().then(recordView);
+       };
+@@ -703,6 +823,14 @@
+
+   exposeTracker();
+   dispatchReady(ensureStoreShape(readStore()));
++
++  document.addEventListener("visibilitychange", () => {
++    if (document.visibilityState === "hidden") {
++      sendHeartbeat();
++    }
++  });
++  window.addEventListener("beforeunload", sendHeartbeat);
++  window.addEventListener("pagehide", sendHeartbeat);
++  window.setInterval(sendHeartbeat, HEARTBEAT_MS);
+
+   if (document.readyState === "loading") {
+     document.addEventListener("DOMContentLoaded", () => {

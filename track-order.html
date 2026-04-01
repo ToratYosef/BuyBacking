@@ -486,14 +486,14 @@
     const db = getFirestore(app);
 
     const statusDescriptions = {
-      order_pending: 'We have your order and are preparing your shipping kit details.',
-      shipping_kit_requested: 'We are preparing your shipping kit.',
-      kit_needs_printing: 'Your kit is in the print queue and will be packed shortly.',
-      needs_printing: 'Your kit is in the print queue and will be packed shortly.',
+      order_pending: 'We have your order and are preparing your shipping details.',
+      shipping_kit_requested: 'We are preparing your prepaid shipping label.',
+      kit_needs_printing: 'Your prepaid label is being prepared now.',
+      needs_printing: 'Your prepaid label is being prepared now.',
       label_generated: 'Your return label is ready—check your email for download links.',
       emailed: 'Your return label is ready—check your email for download links.',
-      kit_sent: 'Your shipping kit is on the way to you.',
-      kit_delivered: 'Your kit has been delivered. Pack up your device and drop it off.',
+      kit_sent: 'Your shipping instructions are ready—check your email and tracking details.',
+      kit_delivered: 'Your shipping details are ready. Package your device and send it in.',
       kit_on_the_way_to_us: 'We see your package in transit back to us.',
       kit_in_transit: 'We see your package in transit back to us.',
       phone_on_the_way: 'We see your package in transit back to us.',
@@ -520,15 +520,15 @@
     };
 
     const stageDictionary = {
-      order_received: { key: 'order_received', label: 'Order received', copy: 'We have your order and are preparing your kit.' },
-      preparing_kit: { key: 'preparing_kit', label: 'Preparing your kit', copy: 'We are packaging your shipping kit or label.' },
+      order_received: { key: 'order_received', label: 'Order received', copy: 'We have your order and are preparing your shipping details.' },
+      preparing_kit: { key: 'preparing_kit', label: 'Preparing shipment', copy: 'We are preparing your prepaid label and shipping instructions.' },
       return_label_ready: { key: 'return_label_ready', label: 'Return label ready', copy: 'Your printable return label is ready in your email.' },
-      kit_sent: { key: 'kit_sent', label: 'Kit or label sent', copy: 'Check your email or mailbox for instructions.' },
+      kit_sent: { key: 'kit_sent', label: 'Label sent', copy: 'Check your email for instructions and your prepaid label.' },
       in_transit_to_us: { key: 'in_transit_to_us', label: 'In transit to us', copy: 'We are tracking your package back to our facility.' },
       delivered_to_us: { key: 'delivered_to_us', label: 'Delivered to us', copy: 'Your package was delivered after hours and is queued for our team to check in.' },
       device_received: { key: 'device_received', label: 'Device received', copy: 'Our team is inspecting your device.' },
       inspection_in_progress: { key: 'inspection_in_progress', label: 'Inspection in progress', copy: 'We are validating the condition you reported.' },
-      reoffer_pending: { key: 'reoffer_pending', label: 'Action needed: updated offer', copy: 'Please accept the updated offer or request return shipping.' },
+      reoffer_pending: { key: 'reoffer_pending', label: 'Action needed: updated offer', copy: 'Please accept the updated offer or decline it for a free device return. If we do not hear back within 7 regular days, the updated offer will be auto-accepted per our guidelines.' },
       reoffer_declined: { key: 'reoffer_declined', label: 'Offer declined', copy: 'We are preparing a return label to send your device back.' },
       return_label_sent: { key: 'return_label_sent', label: 'Return label sent', copy: 'A return label has been sent with return instructions.' },
       return_in_transit: { key: 'return_in_transit', label: 'Return in transit', copy: 'Your device is currently being shipped back to you.' },
@@ -831,7 +831,7 @@
           ? formatCurrency(pendingOffers[0].price)
           : `${pendingOffers.length} pending re-offer${pendingOffers.length === 1 ? '' : 's'}`;
         reofferActions.classList.remove('hidden');
-        reofferNote.textContent = 'Please respond to each device offer. Each decision is final.';
+        reofferNote.textContent = 'Please respond to each device offer. If we do not hear back within 7 regular days, the updated offer will be auto-accepted. If you decline, we can return the device to you free of charge.';
 
         pendingOffers.forEach((entry) => {
           const wrapper = document.createElement('div');
@@ -968,6 +968,10 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      await runOrderLookup();
+    });
+
+    async function runOrderLookup() {
       formError.classList.add('hidden');
 
       const orderId = normalizeOrderIdInput(orderIdInput.value);
@@ -975,12 +979,12 @@
 
       if (!orderId) {
         showError('Please enter your order ID.');
-        return;
+        return false;
       }
 
       if (!email) {
         showError('Please enter the email used on the order.');
-        return;
+        return false;
       }
 
       orderIdInput.value = orderId;
@@ -989,14 +993,16 @@
         setLoading(true);
         const order = await fetchOrder(orderId, email);
         displayOrder(order);
+        return true;
       } catch (error) {
         showError(error.message || 'Unable to find your order. Please double-check the details.');
+        return false;
       } finally {
         setLoading(false);
       }
-    });
+    }
 
-    function applyPrefillFromUrl() {
+    async function applyPrefillFromUrl() {
       const params = new URLSearchParams(window.location.search);
       const idFromUrl = params.get('orderId') || params.get('id');
       const emailFromUrl = params.get('email');
@@ -1013,7 +1019,9 @@
       updateLookupUi();
       refreshLookupRequirements();
 
-      // Keep fields prefilled, but require an explicit user action to open details.
+      if (idFromUrl && emailFromUrl) {
+        await runOrderLookup();
+      }
     }
 
     applyPrefillFromUrl();
@@ -1023,5 +1031,6 @@
     await (window.shcComponentsReady || Promise.resolve());
     await window.shcLoadSharedSiteScripts?.({ includeAuth: true });
   </script>
+  <script type="module" src="/assets/js/live-chat-widget.js?v=20260329c"></script>
 </body>
 </html>

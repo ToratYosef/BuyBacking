@@ -625,7 +625,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 name: 'Sarah Johnson',
                 role: 'Galaxy S23 Ultra',
                 rating: 4.5,
-                review: 'I requested the paid shipping kit and it arrived quickly with everything packed clearly. Their portal kept me updated until the payout cleared the next morning.',
+                review: 'I used the prepaid label and everything was clear and easy. Their portal kept me updated until the payout cleared the next morning.',
                 avatar: 'https://cdn.secondhandcell.com/images/assets/faces/5.webp'
             },
             {
@@ -900,4 +900,3 @@ function setupScrollAnimations() {
     initNavToggle();
   }
 })();
-

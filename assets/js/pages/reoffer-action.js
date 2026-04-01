@@ -23,6 +23,11 @@ const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 let countdownInterval = null;
 let pendingAction = null;
 
+const normalizeReofferStatus = (value) => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+const isPendingReofferStatus = (value) => normalizeReofferStatus(value) === 're_offered_pending';
+const isAcceptedReofferStatus = (value) => ['re_offered_accepted', 're_offered_auto_accepted', 'requote_accepted'].includes(normalizeReofferStatus(value));
+const isDeclinedReofferStatus = (value) => normalizeReofferStatus(value) === 're_offered_declined';
+
 
 const loadingState = document.getElementById('loadingState');
 const offerDetailsState = document.getElementById('offerDetailsState');
@@ -155,7 +160,7 @@ const getAutoAcceptDeadline = (order, selectedDeviceKey) => {
 const deviceOffer = selectedDeviceKey
 ? (order?.reOfferByDevice?.[selectedDeviceKey] || order?.reofferByDevice?.[selectedDeviceKey] || null)
 : null;
-const sourceOffer = deviceOffer || order?.reOffer || null;
+const sourceOffer = deviceOffer || order?.reOffer || order?.reoffer || null;
 
 if (!sourceOffer) return null;
 const explicit = extractTimestampMillis(sourceOffer.autoAcceptDate);
@@ -173,8 +178,8 @@ actionButtonsDiv.classList.add('hidden');
 clearInterval(countdownInterval);
 countdownContainer.classList.add('hidden');
 
-const accepted = status === 're-offered-accepted' || status === 're-offered-auto-accepted';
-const declined = status === 're-offered-declined';
+const accepted = isAcceptedReofferStatus(status);
+const declined = isDeclinedReofferStatus(status);
 
 if (accepted) {
 confirmationHeading.textContent = 'Offer Accepted! ✅';
@@ -245,7 +250,7 @@ loadingState.classList.add('hidden');
 
 const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData, selectedDeviceKey);
 
-if ((String(deviceStatus) === 're-offered-pending') && autoAcceptDeadline) {
+if (isPendingReofferStatus(deviceStatus) && autoAcceptDeadline) {
 offerDetailsState.classList.remove('hidden');
 replySection.classList.remove('hidden');
 actionButtonsDiv.classList.remove('hidden');
@@ -266,15 +271,15 @@ countdownTimer.textContent = formatTimeRemaining(timeRemaining);
 
 updateCountdown();
 countdownInterval = setInterval(updateCountdown, 1000);
-} else if (String(deviceStatus) === 're-offered-pending') {
+} else if (isPendingReofferStatus(deviceStatus)) {
 offerDetailsState.classList.remove('hidden');
 replySection.classList.remove('hidden');
 actionButtonsDiv.classList.remove('hidden');
 countdownContainer.classList.add('hidden');
 
-} else if (String(deviceStatus) === 're-offered-accepted' || String(deviceStatus) === 're-offered-auto-accepted') {
+} else if (isAcceptedReofferStatus(deviceStatus)) {
 renderConfirmationState('re-offered-accepted', orderId);
-} else if (String(deviceStatus) === 're-offered-declined') {
+} else if (isDeclinedReofferStatus(deviceStatus)) {
 renderConfirmationState('re-offered-declined', orderId);
 } else {
 errorMessage.textContent = 'No pending offer found for this order, or it has been processed already.';

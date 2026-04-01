@@ -20,6 +20,9 @@
 
     gtag('config', 'G-HMR9KFETRZ');
   </script>
+  <!-- TrustBox script -->
+  <script type="text/javascript" src="//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js" async></script>
+  <!-- End TrustBox script -->
 <link rel="stylesheet" href="/assets/css/tailwind.css" />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -173,17 +176,17 @@
                 <div id="kitOptionCard" class="hidden border border-indigo-200 rounded-xl p-6 bg-indigo-50 ring-2 ring-indigo-400">
                     <div class="flex items-center justify-between mb-4">
                         <div>
-                            <p class="text-xs uppercase tracking-wide text-indigo-700 font-semibold">Method: Shipping Kit</p>
-                            <h3 class="text-lg font-bold text-slate-900">Receive a prepaid shipping kit in the mail</h3>
+                            <p class="text-xs uppercase tracking-wide text-indigo-700 font-semibold">Method: Shipping Label</p>
+                            <h3 class="text-lg font-bold text-slate-900">Use your prepaid shipping label</h3>
                         </div>
                         <span class="px-3 py-1 bg-indigo-600 text-white text-xs font-bold rounded-full">Selected</span>
                     </div>
                     <ol class="list-decimal list-inside space-y-3 text-slate-700 text-sm">
-                        <li>Wait for your padded kit to arrive (usually 3-5 business days).</li>
-                        <li>Prep device: Sign out of accounts, turn off locks, and perform a full factory reset.</li>
-                        <li>Place your device in the included protective sleeve and add any extra padding.</li>
-                        <li>Seal the kit mailer securely and attach the included prepaid return label.</li>
-                        <li>Drop at your local USPS office and keep your tracking receipt for your records.</li>
+                        <li>Download and print your prepaid label from the section above or your email.</li>
+                        <li>Prep device: sign out of accounts, turn off locks, and perform a full factory reset.</li>
+                        <li>Package the device safely with protective padding inside a sturdy box or mailer.</li>
+                        <li>Attach the prepaid label securely and include your order number inside the package.</li>
+                        <li>Drop it off with the carrier listed on your label and keep your tracking receipt for your records.</li>
                     </ol>
                 </div>
             </div>
@@ -220,11 +223,12 @@
             </div>
 
             <div class="text-center mb-10 space-y-3">
-                <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block text-lg font-semibold text-emerald-600 hover:text-emerald-700 transition-colors">Review us on Trustpilot</a>
-                <div>
-                    <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener" class="inline-block">
-                        <img src="https://secondhandcell.com/assets/stars-4.5.svg" alt="Trustpilot stars" class="h-12 mx-auto">
-                    </a>
+                <div class="inline-block w-full max-w-[340px]">
+                    <!-- TrustBox widget - Review Collector -->
+                    <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76">
+                        <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
+                    </div>
+                    <!-- End TrustBox widget -->
                 </div>
             </div>
 
@@ -678,11 +682,9 @@
             // Handle Instruction Card Visibility (Only show chosen option)
             const kitCard = document.getElementById('kitOptionCard');
             const emailCard = document.getElementById('emailOptionCard');
-            const isKitShipping = shippingPref === 'ship_kit' || shippingPref === 'ship kit requested';
+            const isKitShipping = false;
             const isFasterShipping = shippingPref === 'faster_shipping' || shippingPref === 'faster shipping';
-            const shippingMethodText = isKitShipping
-                ? 'Shipping Kit'
-                : (isFasterShipping ? 'Faster Shipping Option (UPS)' : 'Regular Shipping (USPS)');
+            const shippingMethodText = isFasterShipping ? 'Faster Shipping Option (UPS)' : 'Regular Shipping (USPS)';
             document.getElementById('summaryShippingMethod').textContent = shippingMethodText;
 
             const renderLabelPdf = async (labelUrl) => {
@@ -858,12 +860,8 @@
                 Array.isArray(sessionSummary?.warnings) ? sessionSummary.warnings.join(' ') : ''
             );
 
-            if (isKitShipping) {
-                kitCard.classList.remove('hidden');
-                emailCard.classList.add('hidden');
-            } else {
-                emailCard.classList.remove('hidden');
-                kitCard.classList.add('hidden');
+            emailCard.classList.remove('hidden');
+            kitCard.classList.add('hidden');
                 await showLabelResult({
                     labelUrl: existingLabelUrl,
                     trackingNumber: existingTrackingNumber,
@@ -871,7 +869,6 @@
                         ? (labelWarning || 'Label auto-generation is still pending. Please generate your label in the next step.')
                         : labelWarning
                 });
-            }
 
             // Affiliate Tracking Pixel (must fire on every order confirmation page load)
             const pixel = document.createElement('iframe');
@@ -910,5 +907,6 @@
     await (window.shcComponentsReady || Promise.resolve());
     await window.shcLoadSharedSiteScripts?.({ includeAuth: true });
   </script>
+  <script type="module" src="/assets/js/live-chat-widget.js?v=20260329c"></script>
 </body>
 </html>

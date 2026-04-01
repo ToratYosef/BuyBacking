@@ -1,4 +1,14 @@
 (() => {
+  function ensureTrustpilotWidgetScript() {
+    if (document.querySelector('script[data-trustpilot-widget-script="true"]')) return;
+    const script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src = "//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js";
+    script.async = true;
+    script.setAttribute("data-trustpilot-widget-script", "true");
+    document.head.appendChild(script);
+  }
+
   const styleId = "shc-shared-layout";
   if (!document.getElementById(styleId)) {
     const style = document.createElement("style");
@@ -326,9 +336,13 @@
           <ul>
             <li><a href="/privacy.html">Privacy Policy</a></li>
             <li><a href="/terms.html">Terms of Service</a></li>
-            <li><a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noreferrer">Trustpilot Reviews</a></li>
             <li><a href="/unsubscribe/">Unsubscribe</a></li>
           </ul>
+          <div style="margin-top:16px;max-width:320px;">
+            <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76">
+              <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
+            </div>
+          </div>
         </div>
       </div>
       <div class="shc-footer-bottom">
@@ -523,6 +537,7 @@
   function bootstrapSharedLayout() {
     if (layoutBootstrapped) return;
     layoutBootstrapped = true;
+    ensureTrustpilotWidgetScript();
     removeLegacySections();
     appendIfMissing('.shc-global-header', headerHtml, 'afterbegin');
     appendIfMissing('.shc-global-footer', footerHtml, 'beforeend');

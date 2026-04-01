@@ -99,7 +99,7 @@
     await (window.shcComponentsReady || Promise.resolve());
         import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAmUGWbpbJIWLrBMJpZb8iMpFt-uc24J0k",
@@ -164,15 +164,41 @@
             }).join('');
         };
 
+        const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+        const getCreatedAtMillis = (value) => {
+            if (!value) return 0;
+            if (typeof value.toDate === 'function') return value.toDate().getTime();
+            if (typeof value?.seconds === 'number') return value.seconds * 1000;
+            const parsed = new Date(value);
+            return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+        };
+
         const loadOrders = async (user) => {
             const container = document.getElementById('account-orders');
             if (!container) return;
             container.innerHTML = '<div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 text-slate-500">Loading your orders...</div>';
             try {
                 const ordersRef = collection(db, 'orders');
-                const ordersQuery = query(ordersRef, where('userId', '==', user.uid), orderBy('createdAt', 'desc'));
-                const snapshot = await getDocs(ordersQuery);
-                const orders = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+                const normalizedEmail = normalizeEmail(user.email);
+                const queries = [
+                    query(ordersRef, where('userId', '==', user.uid)),
+                ];
+                if (normalizedEmail) {
+                    queries.push(query(ordersRef, where('shippingInfo.email', '==', normalizedEmail)));
+                    queries.push(query(ordersRef, where('email', '==', normalizedEmail)));
+                    queries.push(query(ordersRef, where('customerEmail', '==', normalizedEmail)));
+                    queries.push(query(ordersRef, where('userEmail', '==', normalizedEmail)));
+                }
+
+                const snapshots = await Promise.all(queries.map((ordersQuery) => getDocs(ordersQuery)));
+                const ordersById = new Map();
+                snapshots.forEach((snapshot) => {
+                    snapshot.docs.forEach((orderDoc) => {
+                        ordersById.set(orderDoc.id, { id: orderDoc.id, ...orderDoc.data() });
+                    });
+                });
+
+                const orders = Array.from(ordersById.values()).sort((a, b) => getCreatedAtMillis(b.createdAt) - getCreatedAtMillis(a.createdAt));
                 renderOrders(orders);
             } catch (error) {
                 console.error('Failed to load orders:', error);
@@ -221,5 +247,6 @@
     await (window.shcComponentsReady || Promise.resolve());
     await window.shcLoadSharedSiteScripts?.({ includeAuth: true });
   </script>
+  <script type="module" src="/assets/js/live-chat-widget.js?v=20260329c"></script>
 </body>
 </html>

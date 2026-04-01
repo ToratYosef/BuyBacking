@@ -6,6 +6,7 @@ setLogLevel('error');
 
 const app = firebaseApp;
 const db = getFirestore(app);
+const SIGNED_UP_EMAILS_COLLECTION = 'signed_up_emails';
 
 const form = document.getElementById('unsubscribeForm');
 const emailInput = document.getElementById('emailInput');
@@ -32,7 +33,7 @@ showStatus('Processing...', 'loading');
 
 try {
 // Query the database for the document with the matching email
-const q = query(collection(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/public/data/signed_up_emails`), where("email", "==", email));
+const q = query(collection(db, SIGNED_UP_EMAILS_COLLECTION), where("email", "==", email));
 const querySnapshot = await getDocs(q);
 
 if (querySnapshot.empty) {
@@ -40,7 +41,7 @@ showStatus("This email is not on our mailing list, or it has already been unsubs
 } else {
 // Assuming email is a unique field, there should only be one document
 const docToDelete = querySnapshot.docs[0];
-await deleteDoc(doc(db, `artifacts/${typeof __app_id !== 'undefined' ? __app_id : 'default-app-id'}/public/data/signed_up_emails`, docToDelete.id));
+await deleteDoc(doc(db, SIGNED_UP_EMAILS_COLLECTION, docToDelete.id));
 showStatus("You have been successfully unsubscribed.", 'success');
 }
 } catch (error) {

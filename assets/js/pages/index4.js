@@ -188,14 +188,14 @@ const testimonialData = [
         name: 'Jennifer Martinez',
         role: 'iPhone 15 Pro Max Seller',
         rating: 5,
-        review: 'SecondHandCell handled my iPhone trade-in in days. The shipping kit arrived quickly, inspection was honest, and the payout hit my account the same afternoon.',
+        review: 'SecondHandCell handled my iPhone trade-in in days. The prepaid label was easy to use, inspection was honest, and the payout hit my account the same afternoon.',
         avatar: 'https://thispersondoesnotexist.com/?id=shc1'
     },
     {
         name: 'Robert Johnson',
         role: 'Galaxy S23 Ultra Seller',
         rating: 4.5,
-        review: 'The $10 shipping kit deduction was worth it—everything I needed was in the box. Their portal kept me updated until the payout cleared the next morning.',
+        review: 'The faster shipping upgrade was worth it. Their portal kept me updated until the payout cleared the next morning.',
         avatar: 'https://thispersondoesnotexist.com/?id=shc2'
     },
     {

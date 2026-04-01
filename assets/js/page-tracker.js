@@ -3,9 +3,22 @@
     return;
   }
 
+  const currentPath = String(window.location.pathname || "");
+  if (currentPath === "/admin" || currentPath.startsWith("/admin/")) {
+    return;
+  }
+
   const STORAGE_KEY = "PAGE_TRACKER_LOGS";
   const IP_CACHE_KEY = "PAGE_TRACKER_IP_CACHE";
   const IP_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+  const SESSION_COOKIE = "shc_aid";
+  const HEARTBEAT_MS = 30000;
+  const ANALYTICS_API_BASE =
+    (typeof window !== "undefined" &&
+      (window.SHC_API_BASE_URL || window.API_BASE_URL || window.API_BASE)) ||
+    "https://api.secondhandcell.com/server";
+  const COLLECT_ENDPOINT = `${String(ANALYTICS_API_BASE).replace(/\/+$/, "")}/analytics/collect`;
+  const HEARTBEAT_ENDPOINT = `${String(ANALYTICS_API_BASE).replace(/\/+$/, "")}/analytics/heartbeat`;
 
   const SOURCE_FALLBACK = "Direct";
   const DEFAULT_CONVERSION_LABEL = "default";
@@ -25,6 +38,13 @@
     type: "init",
     timestamp: null,
   };
+  let analyticsSessionId = null;
+  let pageEnteredAtMs = Date.now();
+  const trackedFieldValues = new Map();
+  const trackedClickKeys = new Set();
+  let leaveEventSent = false;
+  let pendingLeaveReason = "";
+  let refreshIntent = false;
 
   const nowIso = () => new Date().toISOString();
 
@@ -52,6 +72,201 @@
     } catch (error) {
       return fallback;
     }
+  };
+
+  const randomHex = (bytes) => {
+    const arr = new Uint8Array(bytes);
+    window.crypto.getRandomValues(arr);
+    return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("");
+  };
+
+  const getCookie = (name) => {
+    const all = document.cookie ? document.cookie.split("; ") : [];
+    for (const part of all) {
+      const idx = part.indexOf("=");
+      const key = idx > -1 ? decodeURIComponent(part.slice(0, idx)) : decodeURIComponent(part);
+      if (key === name) {
+        return idx > -1 ? decodeURIComponent(part.slice(idx + 1)) : "";
+      }
+    }
+    return "";
+  };
+
+  const setCookie = (name, value) => {
+    let cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; Path=/; SameSite=Lax`;
+    if (window.location.protocol === "https:") cookie += "; Secure";
+    document.cookie = cookie;
+  };
+
+  const getOrCreateSessionId = () => {
+    const existing = getCookie(SESSION_COOKIE);
+    if (existing) return existing;
+    const created = randomHex(16);
+    setCookie(SESSION_COOKIE, created);
+    return created;
+  };
+
+  const safeNumber = (value) => {
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+  };
+
+  const collectClientContext = () => {
+    const nav = window.navigator || {};
+    const ua = nav.userAgent || "";
+    const uaLower = ua.toLowerCase();
+    let browser = null;
+    if (uaLower.includes("edg/")) browser = "Edge";
+    else if (uaLower.includes("opr/") || uaLower.includes("opera")) browser = "Opera";
+    else if (uaLower.includes("chrome/")) browser = "Chrome";
+    else if (uaLower.includes("safari/") && !uaLower.includes("chrome/")) browser = "Safari";
+    else if (uaLower.includes("firefox/")) browser = "Firefox";
+
+    let os = null;
+    if (uaLower.includes("windows nt")) os = "Windows";
+    else if (uaLower.includes("android")) os = "Android";
+    else if (uaLower.includes("iphone") || uaLower.includes("ipad") || uaLower.includes("ios")) os = "iOS";
+    else if (uaLower.includes("mac os x") || uaLower.includes("macintosh")) os = "macOS";
+    else if (uaLower.includes("linux")) os = "Linux";
+
+    let deviceType = null;
+    if (uaLower.includes("ipad") || uaLower.includes("tablet")) deviceType = "tablet";
+    else if (uaLower.includes("mobile") || uaLower.includes("iphone") || uaLower.includes("android")) deviceType = "mobile";
+    else deviceType = "desktop";
+
+    let deviceName = null;
+    if (uaLower.includes("iphone")) deviceName = "iPhone";
+    else if (uaLower.includes("ipad")) deviceName = "iPad";
+    else if (uaLower.includes("macintosh")) deviceName = "Mac";
+    else if (uaLower.includes("windows nt")) deviceName = "Windows PC";
+    else if (uaLower.includes("android")) {
+      const buildMatch = ua.match(/Android [^;)]*;\s*([^;)]+?)\s+Build/i);
+      deviceName = buildMatch?.[1]?.trim() || "Android Device";
+    } else {
+      deviceName = deviceType === "desktop" ? "Desktop" : "Device";
+    }
+
+    return {
+      browser,
+      os,
+      deviceType,
+      deviceName,
+      platform: nav.platform || null,
+      language: nav.language || null,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+      screenWidth: safeNumber(window.screen?.width),
+      screenHeight: safeNumber(window.screen?.height),
+      viewportWidth: safeNumber(window.innerWidth),
+      viewportHeight: safeNumber(window.innerHeight),
+      cookieEnabled: typeof nav.cookieEnabled === "boolean" ? nav.cookieEnabled : null,
+      touchPoints: safeNumber(nav.maxTouchPoints),
+      hardwareConcurrency: safeNumber(nav.hardwareConcurrency),
+      deviceMemory: safeNumber(nav.deviceMemory),
+    };
+  };
+
+  const sendAnalyticsPayload = (url, payload) => {
+    if (!url) {
+      return;
+    }
+    const body = JSON.stringify(payload);
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], { type: "application/json" });
+      navigator.sendBeacon(url, blob);
+      return;
+    }
+
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+      credentials: "same-origin",
+    }).catch(() => {});
+  };
+
+  const sendAnalyticsEvent = (event) => {
+    analyticsSessionId = analyticsSessionId || getOrCreateSessionId();
+    sendAnalyticsPayload(COLLECT_ENDPOINT, {
+      session_id: analyticsSessionId,
+      events: [event],
+    });
+  };
+
+  const sendHeartbeat = () => {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    analyticsSessionId = analyticsSessionId || getOrCreateSessionId();
+    sendAnalyticsPayload(HEARTBEAT_ENDPOINT, {
+      session_id: analyticsSessionId,
+      ts: nowIso(),
+      page_url: window.location.href,
+      referrer: document.referrer || "",
+      extra: {
+        client: collectClientContext(),
+      },
+    });
+  };
+
+  const sendLeaveEvent = (reason = "pagehide") => {
+    if (leaveEventSent) {
+      return;
+    }
+    leaveEventSent = true;
+    sendInteractionEvent("leave", {
+      notes: [`Left page after ${Math.round(getElapsedMs() / 1000)}s (${reason})`],
+      element: {
+        tag: "window",
+        id: null,
+        text: null,
+        href: null,
+      },
+    });
+  };
+
+  const isSameOriginUrl = (value) => {
+    if (!value) return false;
+    try {
+      const parsed = new URL(value, window.location.href);
+      return parsed.origin === window.location.origin;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const markInternalNavigation = (target) => {
+    if (!target) return;
+    if (target instanceof HTMLAnchorElement) {
+      const href = target.getAttribute("href") || "";
+      if (href && !href.startsWith("#") && isSameOriginUrl(href)) {
+        pendingLeaveReason = "internal navigation";
+      }
+      return;
+    }
+
+    if (target instanceof HTMLFormElement) {
+      const action = target.getAttribute("action") || window.location.href;
+      if (isSameOriginUrl(action)) {
+        pendingLeaveReason = "internal navigation";
+      }
+      return;
+    }
+
+    if (
+      target instanceof HTMLButtonElement ||
+      (target instanceof HTMLInputElement &&
+        ["submit", "button"].includes(String(target.type || "").toLowerCase()))
+    ) {
+      pendingLeaveReason = "internal navigation";
+    }
+  };
+
+  const inferLeaveReason = (fallback = "pagehide") => {
+    if (pendingLeaveReason) return pendingLeaveReason;
+    if (refreshIntent) return "refresh";
+    if (fallback === "hidden") return "tab/window hidden";
+    if (fallback === "beforeunload" || fallback === "pagehide") return "tab/window close";
+    return fallback;
   };
 
   const ensureStoreShape = (store) => {
@@ -103,6 +318,128 @@
       return "/";
     }
     return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  };
+
+  const buildCurrentPageKey = () => {
+    const pathname = normalisePath(window.location.pathname || "/");
+    const search = window.location.search || "";
+    return `${pathname}${search}` || pathname;
+  };
+
+  const getElapsedMs = () => Math.max(0, Date.now() - pageEnteredAtMs);
+
+  const getPageParamsString = () => {
+    const search = window.location.search || "";
+    return search ? search.replace(/^\?/, "") : "";
+  };
+
+  const truncate = (value, max = 220) => {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  };
+
+  const getElementText = (el) => {
+    if (!el) return "";
+    const aria = el.getAttribute && el.getAttribute("aria-label");
+    const text =
+      aria ||
+      el.getAttribute?.("title") ||
+      el.dataset?.trackingLabel ||
+      el.textContent ||
+      el.value ||
+      "";
+    return truncate(text.replace(/\s+/g, " "), 140);
+  };
+
+  const getFieldLabel = (field) => {
+    if (!field) return "";
+    const directLabel =
+      field.labels && field.labels[0] ? field.labels[0].textContent : "";
+    const containerLabel =
+      field.closest("label") ? field.closest("label").textContent : "";
+    const ariaLabel = field.getAttribute?.("aria-label") || "";
+    const name = field.getAttribute?.("name") || field.id || "";
+    return truncate(
+      (directLabel || containerLabel || ariaLabel || name).replace(/\s+/g, " "),
+      120
+    );
+  };
+
+  const getTrackableField = (target) => {
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement
+    ) {
+      return target;
+    }
+    return null;
+  };
+
+  const getFieldValue = (field) => {
+    if (!field) return "";
+    if (field instanceof HTMLSelectElement) {
+      const selectedText =
+        field.selectedOptions && field.selectedOptions[0]
+          ? field.selectedOptions[0].textContent
+          : field.value;
+      return truncate(String(selectedText || "").trim(), 180);
+    }
+    return truncate(String(field.value || "").trim(), 180);
+  };
+
+  const commitFieldValue = (field) => {
+    const trackableField = getTrackableField(field);
+    if (!trackableField) return;
+
+    const fieldType = (trackableField.type || "").toLowerCase();
+    if (["hidden", "password", "checkbox", "radio", "submit", "button"].includes(fieldType)) {
+      return;
+    }
+
+    const value = getFieldValue(trackableField);
+    if (!value) return;
+
+    const fieldKey = `${buildCurrentPageKey()}|${trackableField.id || trackableField.name || fieldType}`;
+    if (trackedFieldValues.get(fieldKey) === value) return;
+    trackedFieldValues.set(fieldKey, value);
+
+    const label = getFieldLabel(trackableField);
+    sendInteractionEvent("input", {
+      notes: [`Completed ${label || trackableField.name || trackableField.id || "form field"}: ${value} after ${Math.round(getElapsedMs() / 1000)}s`],
+      element: {
+        tag: trackableField.tagName.toLowerCase(),
+        id: trackableField.id || null,
+        name: trackableField.name || null,
+        type: fieldType || null,
+        label: label || null,
+        value,
+      },
+    });
+  };
+
+  const sendInteractionEvent = (eventType, payload = {}) => {
+    const pageKey = buildCurrentPageKey();
+    const notes = Array.isArray(payload.notes)
+      ? payload.notes.filter(Boolean).map((entry) => truncate(entry, 240))
+      : [];
+
+    sendAnalyticsEvent({
+      event_type: eventType,
+      ts: nowIso(),
+      page_url: window.location.href || "",
+      path: pageKey,
+      referrer: document.referrer || "",
+      element: payload.element || null,
+      extra: {
+        source: latestContext.source || SOURCE_FALLBACK,
+        elapsedMs: getElapsedMs(),
+        pageParams: getPageParamsString(),
+        notes,
+        client: collectClientContext(),
+      },
+    });
   };
 
   const dispatchUpdate = (data, context) => {
@@ -399,10 +736,12 @@
       store.pages = {};
     }
 
-    const path = normalisePath(window.location.pathname || "/");
+    const path = buildCurrentPageKey();
     const title = document.title ? String(document.title).slice(0, 256) : "";
     const url = window.location.href || "";
     const visitedAt = nowIso();
+    pageEnteredAtMs = Date.now();
+    trackedClickKeys.clear();
 
     if (!store.pages[path] || typeof store.pages[path] !== "object") {
       store.pages[path] = {
@@ -562,6 +901,21 @@
       source: sourceLabel || SOURCE_FALLBACK,
       visitor,
     });
+
+    sendAnalyticsEvent({
+      event_type: "pageview",
+      ts: visitedAt,
+      page_url: url,
+      path,
+      referrer: referrer.url || "",
+      extra: {
+        title,
+        source: sourceLabel || SOURCE_FALLBACK,
+        pageParams: getPageParamsString(),
+        notes: getPageParamsString() ? [`Page params: ${getPageParamsString()}`] : [],
+        client: collectClientContext(),
+      },
+    });
   };
 
   const recordConversion = (input) => {
@@ -574,7 +928,7 @@
     const suppliedIp = input && typeof input.ip === "string" ? input.ip.trim() : "";
     const ip = suppliedIp || latestContext.ip || "unknown";
     const path = normalisePath(
-      input && typeof input.path === "string" && input.path ? input.path : window.location.pathname || "/"
+      input && typeof input.path === "string" && input.path ? input.path : buildCurrentPageKey()
     );
     const label = input && typeof input.label === "string" && input.label.trim()
       ? input.label.trim()
@@ -684,10 +1038,25 @@
       conversion,
     });
 
+    sendAnalyticsEvent({
+      event_type: "conversion",
+      ts: occurredAt,
+      page_url: window.location.href || "",
+      path,
+      referrer,
+      extra: {
+        label,
+        source: source || SOURCE_FALLBACK,
+        conversion,
+        client: collectClientContext(),
+      },
+    });
+
     return true;
   };
 
   const start = async () => {
+    analyticsSessionId = getOrCreateSessionId();
     if (document.visibilityState === "prerender") {
       const onVisible = () => {
         document.removeEventListener("visibilitychange", onVisible);
@@ -714,6 +1083,85 @@
 
   exposeTracker();
   dispatchReady(ensureStoreShape(readStore()));
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      const target = event.target instanceof Element ? event.target.closest("button, a, [role='button'], input[type='submit'], input[type='button']") : null;
+      if (!target) return;
+      if (target instanceof HTMLAnchorElement) {
+        markInternalNavigation(target);
+      }
+      const label = getElementText(target);
+      const tag = target.tagName ? target.tagName.toLowerCase() : "element";
+      const clickKey = `${tag}|${label}|${buildCurrentPageKey()}|${Math.floor(getElapsedMs() / 1000)}`;
+      if (trackedClickKeys.has(clickKey)) return;
+      trackedClickKeys.add(clickKey);
+      sendInteractionEvent("click", {
+        notes: [`Clicked ${tag}${label ? `: ${label}` : ""} after ${Math.round(getElapsedMs() / 1000)}s`],
+        element: {
+          tag,
+          id: target.id || null,
+          text: label || null,
+          href: target.getAttribute?.("href") || null,
+        },
+      });
+    },
+    true
+  );
+
+  document.addEventListener(
+    "focusout",
+    (event) => {
+      commitFieldValue(event.target);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "change",
+    (event) => {
+      commitFieldValue(event.target);
+    },
+    true
+  );
+
+  document.addEventListener(
+    "submit",
+    (event) => {
+      if (event.target instanceof HTMLFormElement) {
+        markInternalNavigation(event.target);
+      }
+    },
+    true
+  );
+
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      const key = String(event.key || "").toLowerCase();
+      if (key === "f5" || ((event.ctrlKey || event.metaKey) && key === "r")) {
+        refreshIntent = true;
+      }
+    },
+    true
+  );
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      sendLeaveEvent(inferLeaveReason("hidden"));
+      sendHeartbeat();
+    }
+  });
+  window.addEventListener("beforeunload", () => {
+    sendLeaveEvent(inferLeaveReason("beforeunload"));
+    sendHeartbeat();
+  });
+  window.addEventListener("pagehide", () => {
+    sendLeaveEvent(inferLeaveReason("pagehide"));
+    sendHeartbeat();
+  });
+  window.setInterval(sendHeartbeat, HEARTBEAT_MS);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {

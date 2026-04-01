@@ -45,7 +45,7 @@
         <p><strong>Summary from our Privacy Policy:</strong> we collect contact details, device/transaction details, payout details, and technical data required to operate our service.</p>
         <h3>How we use information</h3>
         <ul>
-          <li>Process quotes, orders, shipping kits, inspections, and payouts.</li>
+          <li>Process quotes, orders, shipping labels, inspections, and payouts.</li>
           <li>Provide support, account access, fraud prevention, and compliance checks.</li>
           <li>Send optional marketing communications that can be unsubscribed from.</li>
         </ul>

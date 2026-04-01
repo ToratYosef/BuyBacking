@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     case 're-offered-pending': return 'status-re-offered-pending';
     case 're-offered-declined': return 'status-re-offered-declined';
     case 'order_pending': return 'status-order_pending';
-    case 'shipping_kit_requested': return 'status-shipping_kit_requested';
+    case 'shipping_kit_requested': return 'status-label_generated';
     case 'label_generated': return 'status-label_generated';
     case 'received':
     case 'imei_checked':
@@ -151,22 +151,22 @@ document.addEventListener('DOMContentLoaded', () => {
   return 'Order Pending';
   }
   if (status === 'shipping_kit_requested') {
-  return 'Shipping Kit Requested';
+  return 'Label Generated';
   }
   if (status === 'label_generated') {
-  return 'Shipping Kit on the Way';
+  return 'Label Generated';
   }
   if (status === 'kit_sent') {
-  return 'Kit Sent';
+  return 'Label Sent';
   }
   if (status === 'kit_on_the_way_to_customer') {
-  return 'Kit On The Way To Customer';
+  return 'Label Sent';
   }
   if (status === 'kit_delivered') {
-  return 'Kit Delivered';
+  return 'Label Ready';
   }
   if (status === 'kit_on_the_way_to_us') {
-  return 'Kit On The Way To Us';
+  return 'Phone On The Way To Us';
   }
   if (status === 'delivered_to_us') {
   return 'Delivered To Us';
@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
   {
   id: 'kit-prepared',
   title: 'Kit or label prepared',
-  description: 'Your shipping kit or email label is ready to go.',
+  description: 'Your prepaid label is ready to go.',
   completedFromStatus: 'label_generated',
   timestampFields: ['labelGeneratedAt', 'needsPrintingAt', 'kitSentAt']
   },
@@ -644,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   }
 
-  if (order.shippingPreference === 'Shipping Kit Requested') {
+  if (String(order.shippingPreference || '').toLowerCase() === 'shipping kit requested') {
   labelInfoSection.classList.remove('hidden');
   if (order.outboundTrackingNumber) {
   outboundTrackingLink.href = `https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${order.outboundTrackingNumber}`;
@@ -704,7 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
   } else if (order.status === 'label_generated' && order.uspsLabelUrl) {
   modalActionButtons.appendChild(createButton('Print Shipping Label', () => window.open(order.uspsLabelUrl, '_blank')));
   } else if (order.status === 'shipping_kit_requested' && order.outboundTrackingNumber) {
-  modalActionButtons.appendChild(createButton('Track Shipping Kit', () => window.open(`https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${order.outboundTrackingNumber}`, '_blank')));
+  modalActionButtons.appendChild(createButton('Track Shipment', () => window.open(`https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=${order.outboundTrackingNumber}`, '_blank')));
   } else if (order.status === 're-offered-declined' && order.returnLabelUrl) {
   modalActionButtons.appendChild(createButton('Print Return Label', () => window.open(order.returnLabelUrl, '_blank'), 'bg-red-600 hover:bg-red-700'));
   }

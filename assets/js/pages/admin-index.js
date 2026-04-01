@@ -58,6 +58,7 @@ const REFRESH_TRACKING_FUNCTION_URL = '/refresh-tracking';
 const FEED_PRICING_URL = '/feeds/feed.xml';
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTO_REQUOTE_WAIT_MS = 7 * 24 * 60 * 60 * 1000;
+const NO_EMAIL_RESPONSE_STATUS = 'no-email-response';
 const LABEL_NAME_OVERRIDES = {
 primary: 'Primary Shipping Label',
 inbounddevice: 'Inbound Device Label',
@@ -70,17 +71,18 @@ const STATUS_CHART_CONFIG = [
   { key: 'order_pending', label: 'Order Pending', color: '#6366f1' },
   { key: 'kit_needs_printing', label: 'Needs Printing', color: '#8b5cf6' },
   { key: 'kit_sent', label: 'Kit Sent', color: '#f97316' },
-  { key: 'kit_on_the_way_to_customer', label: 'Kit On The Way To Customer', color: '#f59e0b' },
+  { key: 'kit_delivered_to_customer', label: 'Kit Delivered To Customer', color: '#f59e0b' },
+  { key: 'kit_in_transit', label: 'Kit In Transit', color: '#0f766e' },
   { key: 'kit_delivered', label: 'Kit Delivered', color: '#10b981' },
-  { key: 'kit_on_the_way_to_us', label: 'Kit On The Way To Us', color: '#0f766e' },
-  { key: 'delivered_to_us', label: 'Delivered To Us', color: '#0d9488' },
   { key: 'label_generated', label: 'Label Generated', color: '#f59e0b' },
   { key: 'emailed', label: 'Balance Email Sent', color: '#38bdf8' },
   { key: 'phone_on_the_way', label: 'Phone On The Way', color: '#0ea5e9' },
+  { key: 'delivered_to_us', label: 'Delivered', color: '#14b8a6' },
   { key: 'received', label: 'Received', color: '#0ea5e9' },
 { key: 'completed', label: 'Completed', color: '#22c55e' },
   { key: 're-offered-pending', label: 'Reoffer Pending', color: '#facc15' },
   { key: 're-offered-accepted', label: 'Reoffer Accepted', color: '#14b8a6' },
+  { key: NO_EMAIL_RESPONSE_STATUS, label: 'No Email Response', color: '#f97316' },
   { key: 're-offered-declined', label: 'Reoffer Declined', color: '#ef4444' },
   { key: 'return-label-generated', label: 'Return Label', color: '#64748b' },
   { key: 'cancelled', label: 'Canceled', color: '#94a3b8' },
@@ -92,17 +94,18 @@ const STATUS_DROPDOWN_OPTIONS = [
   'kit_needs_printing',
   'needs_printing',
   'kit_sent',
-  'kit_on_the_way_to_customer',
+  'kit_delivered_to_customer',
+  'kit_in_transit',
   'kit_delivered',
-  'kit_on_the_way_to_us',
-  'delivered_to_us',
   'label_generated',
   'emailed',
   'phone_on_the_way',
+  'delivered_to_us',
   'received',
   'completed',
   're-offered-pending',
   're-offered-accepted',
+  NO_EMAIL_RESPONSE_STATUS,
   're-offered-declined',
   're-offered-auto-accepted',
   'return-label-generated',
@@ -112,11 +115,15 @@ const STATUS_DROPDOWN_OPTIONS = [
 const STATUS_LABEL_OVERRIDES = Object.freeze({
   shipping_kit_requested: 'Shipping Kit Requested',
   needs_printing: 'Needs Printing',
-  kit_in_transit: 'Kit On The Way To Customer',
-  kit_on_the_way_to_customer: 'Kit On The Way To Customer',
+  kit_delivered_to_customer: 'Kit Delivered To Customer',
+  kit_in_transit: 'Kit In Transit',
+  kit_on_the_way_to_customer: 'Kit Sent',
+  kit_on_the_way_to_us: 'Kit In Transit',
+  delivered_to_us: 'Delivered',
   phone_on_the_way: 'Phone On The Way',
   're-offered-pending': 'Reoffer Pending',
   're-offered-accepted': 'Reoffer Accepted',
+  [NO_EMAIL_RESPONSE_STATUS]: 'No Email Response',
   're-offered-declined': 'Reoffer Declined',
   're-offered-auto-accepted': 'Reoffer Auto Accepted',
   'return-label-generated': 'Return Label Generated',
@@ -130,6 +137,7 @@ const SHIPPING_STATUS_KEYS = new Set([
   'kit_needs_printing',
   'needs_printing',
   'kit_sent',
+  'kit_delivered_to_customer',
   'kit_in_transit',
   'kit_on_the_way_to_customer',
   'kit_delivered',
@@ -231,6 +239,9 @@ function isLegacyEmailLabelStatus(order = {}) {
 function isLabelGenerationStage(order = {}) {
   const normalized = (order.status || '').toLowerCase();
   if (!normalized) {
+    return false;
+  }
+  if (matchesKitTrackingHints(order) && normalizeStatus(order) !== 'delivered_to_us') {
     return false;
   }
   if (normalized === 'label_generated') {
@@ -669,10 +680,22 @@ let analyticsTimeseriesChart = null;
 
 function getBaseOrdersForStatus(status) {
   if (status === 'cancelled') {
-    return allOrders.filter(order => order.status === 'cancelled');
+    return allOrders.filter(order => normalizeStatus(order) === 'cancelled');
   }
 
-  return allOrders.filter(order => order.status !== 'cancelled');
+  if (status === 're-offered-accepted') {
+    return allOrders.filter((order) => {
+      const normalizedStatus = normalizeStatus(order);
+      return normalizedStatus !== 'cancelled' && (
+        normalizedStatus === 're-offered-accepted' ||
+        normalizedStatus === 're-offered-auto-accepted' ||
+        normalizedStatus === 'requote_accepted' ||
+        normalizedStatus === NO_EMAIL_RESPONSE_STATUS
+      );
+    });
+  }
+
+  return allOrders.filter(order => normalizeStatus(order) !== 'cancelled');
 }
 
 function syncSearchInputs(term = '') {
@@ -819,6 +842,65 @@ async function handleBulkStatusUpdate() {
   updateBulkSelectionUI();
 }
 
+function resolveAdminLabelEndpoint(order = {}) {
+  const shippingInfo = order?.shippingInfo || {};
+  const candidates = [
+    order.labelDeliveryMethod,
+    order.labelCarrier,
+    order.shippingLabelCarrier,
+    order.selectedShippingLabelCarrier,
+    order.selectedLabelCarrier,
+    order.labelProvider,
+    order.shippingLabelProvider,
+    order.shippingMethod,
+    order.selectedShippingMethod,
+    order.selectedShippingOption,
+    order.preferredLabelCarrier,
+    order.preferredShippingCarrier,
+    order.requestedLabelCarrier,
+    order.shippingCarrier,
+    order.shipCarrier,
+    order.labelType,
+    order.selectedLabelType,
+    order.requestedLabelType,
+    order.labelServiceCode,
+    order.selectedLabelServiceCode,
+    shippingInfo.labelDeliveryMethod,
+    shippingInfo.labelCarrier,
+    shippingInfo.shippingLabelCarrier,
+    shippingInfo.selectedLabelCarrier,
+    shippingInfo.selectedShippingLabelCarrier,
+    shippingInfo.shippingMethod,
+    shippingInfo.selectedShippingMethod,
+    shippingInfo.selectedShippingOption,
+    shippingInfo.requestedLabelCarrier,
+    shippingInfo.labelServiceCode,
+    order.upsLabelUrl ? 'ups' : '',
+    order.uspsLabelUrl ? 'usps' : '',
+    String(order.trackingNumber || '').trim().toUpperCase().startsWith('1Z') ? 'ups' : '',
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = String(candidate || '').trim().toLowerCase();
+    if (!normalized) continue;
+    if (normalized === 'ups' || normalized.includes('ups') || normalized.includes('ups_ground') || normalized.includes('ground')) {
+      return '/api/shipping/generate-ups-label';
+    }
+    if (
+      normalized === 'usps' ||
+      normalized.includes('usps') ||
+      normalized.includes('stamps_com') ||
+      normalized.includes('postal') ||
+      normalized.includes('first_class') ||
+      normalized.includes('priority_mail')
+    ) {
+      return '/api/shipping/generate-usps-label';
+    }
+  }
+
+  return '/api/shipping/generate-usps-label';
+}
+
 async function handleBulkLabelGeneration() {
   if (isBulkLabelGenerationInProgress) {
     return;
@@ -843,7 +925,8 @@ async function handleBulkLabelGeneration() {
       continue;
     }
     try {
-      await apiPost(`/generate-label/${orderId}`, {}, { authRequired: true });
+      const order = allOrders.find((entry) => entry.id === orderId) || {};
+      await apiPost(resolveAdminLabelEndpoint(order), { orderId }, { authRequired: true });
       successCount += 1;
     } catch (error) {
       console.error(`Bulk label generation failed for ${deviceKey}:`, error);
@@ -4508,17 +4591,24 @@ function updateDashboardCounts(ordersData) {
     'order_pending': visibleOrders.filter(o => o.status === 'order_pending').length,
     'kit_needs_printing': visibleOrders.filter(o => KIT_PRINT_PENDING_STATUSES.includes(o.status)).length,
     'kit_sent': visibleOrders.filter(o => o.status === 'kit_sent').length,
-    'kit_on_the_way_to_customer': visibleOrders.filter(o => o.status === 'kit_on_the_way_to_customer' || o.status === 'kit_in_transit').length,
+    'kit_delivered_to_customer': visibleOrders.filter(o => o.status === 'kit_delivered_to_customer').length,
+    'kit_in_transit': visibleOrders.filter(o => o.status === 'kit_in_transit').length,
     'kit_delivered': visibleOrders.filter(o => o.status === 'kit_delivered').length,
-    'kit_on_the_way_to_us': visibleOrders.filter(o => o.status === 'kit_on_the_way_to_us').length,
-    'delivered_to_us': visibleOrders.filter(o => o.status === 'delivered_to_us').length,
     'label_generated': visibleOrders.filter(order => isLabelGenerationStage(order)).length,
     'emailed': visibleOrders.filter(order => isBalanceEmailStatus(order)).length,
     'phone_on_the_way': visibleOrders.filter(o => o.status === 'phone_on_the_way').length,
+    'delivered_to_us': visibleOrders.filter(o => o.status === 'delivered_to_us').length,
     'received': visibleOrders.filter(o => isReceivedStatusValue(o.status)).length,
     'completed': visibleOrders.filter(o => o.status === 'completed').length,
     're-offered-pending': visibleOrders.filter(o => o.status === 're-offered-pending').length,
-    're-offered-accepted': visibleOrders.filter(o => o.status === 're-offered-accepted').length,
+    're-offered-accepted': visibleOrders.filter(o => {
+      const status = normalizeStatus(o);
+      return status === 're-offered-accepted'
+        || status === 're-offered-auto-accepted'
+        || status === 'requote_accepted'
+        || status === NO_EMAIL_RESPONSE_STATUS;
+    }).length,
+    [NO_EMAIL_RESPONSE_STATUS]: visibleOrders.filter(o => normalizeStatus(o) === NO_EMAIL_RESPONSE_STATUS).length,
     're-offered-declined': visibleOrders.filter(o => o.status === 're-offered-declined').length,
     'return-label-generated': visibleOrders.filter(o => o.status === 'return-label-generated').length,
     'cancelled': cancelledOrders.length,
@@ -4534,13 +4624,13 @@ if (kitSentCount) {
   kitSentCount.textContent = statusCounts['kit_sent'];
 }
 if (kitOnTheWayToCustomerCount) {
-  kitOnTheWayToCustomerCount.textContent = statusCounts['kit_on_the_way_to_customer'];
+  kitOnTheWayToCustomerCount.textContent = statusCounts['kit_delivered_to_customer'];
 }
 if (kitDeliveredCount) {
   kitDeliveredCount.textContent = statusCounts['kit_delivered'];
 }
 if (kitOnTheWayToUsCount) {
-  kitOnTheWayToUsCount.textContent = statusCounts['kit_on_the_way_to_us'];
+  kitOnTheWayToUsCount.textContent = statusCounts['kit_in_transit'];
 }
 if (deliveredToUsCount) {
   deliveredToUsCount.textContent = statusCounts['delivered_to_us'];
@@ -4931,8 +5021,32 @@ function normalizeStatus(order = {}) {
     .trim()
     .toLowerCase();
 
-  if (normalized === 'kit_in_transit') {
-    return 'kit_on_the_way_to_customer';
+  if (
+    normalized === 'completed' &&
+    order?.autoRequote?.automatic === true &&
+    String(order?.autoRequote?.initiatedBy || '').trim().toLowerCase() === 'system_auto_requote_7_day_unresolved'
+  ) {
+    return NO_EMAIL_RESPONSE_STATUS;
+  }
+
+  if (normalized === 'canceled' || normalized === 'order_cancelled') {
+    return 'cancelled';
+  }
+
+  if (normalized === 'delivered') {
+    return 'delivered_to_us';
+  }
+
+  if (normalized === 'kit_on_the_way_to_customer') {
+    return 'kit_sent';
+  }
+
+  if (normalized === 'kit_on_the_way_to_us') {
+    return 'kit_in_transit';
+  }
+
+  if (normalized === 'delivered_to_us' && normalizeShippingPreference(order) === 'shipping kit requested') {
+    return 'kit_delivered';
   }
 
   if (normalized === 'phone_on_the_way_to_us') {
@@ -5039,6 +5153,10 @@ function matchesKitTrackingHints(order = {}) {
 }
 
 function matchesEmailTrackingHints(order = {}) {
+  if (matchesKitTrackingHints(order) && normalizeStatus(order) !== 'delivered_to_us') {
+    return false;
+  }
+
   const preference = normalizeShippingPreference(order);
   if (preference) {
     if (preference === 'email label requested' || preference === 'email_label') {
@@ -5151,16 +5269,46 @@ function shouldAutoMarkKitSent(order = {}) {
   const normalizedStatus = normalizeStatus(order);
   const lockedStatuses = new Set([
     'kit_sent',
+    'kit_delivered_to_customer',
     'kit_on_the_way_to_customer',
+    'kit_in_transit',
     'kit_delivered',
     'kit_on_the_way_to_us',
+    'delivered_to_us',
   ]);
 
   if (lockedStatuses.has(normalizedStatus)) {
     return false;
   }
 
-  return collectKitLabelIdentifiers(order).length >= 2;
+  const labelIdentifiers = collectKitLabelIdentifiers(order);
+  if (labelIdentifiers.length >= 2) {
+    return true;
+  }
+
+  if (
+    hasTrackingValue(order.outboundTrackingNumber) &&
+    (
+      hasTrackingValue(order.inboundTrackingNumber) ||
+      hasTrackingValue(order.trackingNumber) ||
+      labelIdentifiers.length >= 1
+    )
+  ) {
+    return true;
+  }
+
+  const labels = order.shipEngineLabels && typeof order.shipEngineLabels === 'object'
+    ? order.shipEngineLabels
+    : null;
+  if (labels) {
+    const hasOutboundLabel = Boolean(labels.outbound || labels.kit);
+    const hasInboundLabel = Boolean(labels.inbound || labels.customer || labels.return);
+    if (hasOutboundLabel && hasInboundLabel) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function labelsContainTrackingNumber(labels) {
@@ -5886,17 +6034,17 @@ return 'Needs Printing';
 if (normalizedStatus === 'kit_sent') {
 return 'Kit Sent';
 }
-if (normalizedStatus === 'kit_on_the_way_to_customer' || normalizedStatus === 'kit_in_transit') {
-return 'Kit On The Way To Customer';
+if (normalizedStatus === 'kit_delivered_to_customer') {
+return 'Kit Delivered To Customer';
 }
-if (normalizedStatus === 'kit_delivered') {
+if (normalizedStatus === 'kit_in_transit') {
+return 'Kit In Transit';
+}
+  if (normalizedStatus === 'kit_delivered') {
 return 'Kit Delivered';
 }
-if (normalizedStatus === 'kit_on_the_way_to_us') {
-return isInTransit || hasEta ? 'Pending Return To Us' : 'Kit Delivered';
-}
   if (normalizedStatus === 'delivered_to_us') {
-    return 'Delivered To Us';
+    return 'Delivered';
   }
   if (isReceivedStatusValue(normalizedStatus)) {
     return 'Device Received';
@@ -6148,13 +6296,15 @@ case 'kit_needs_printing':
 case 'needs_printing':
 return 'bg-indigo-100 text-indigo-800 status-bubble';
 case 'kit_sent':
-case 'kit_in_transit':
-case 'kit_on_the_way_to_customer':
 return 'bg-orange-100 text-orange-800 status-bubble';
+case 'kit_delivered_to_customer':
+return 'bg-amber-100 text-amber-800 status-bubble';
+case 'kit_in_transit':
+return 'bg-teal-100 text-teal-800 status-bubble';
 case 'kit_delivered':
 return 'bg-emerald-100 text-emerald-800 status-bubble';
-case 'kit_on_the_way_to_us':
-return 'bg-teal-100 text-teal-800 status-bubble';
+case 'delivered_to_us':
+  return 'bg-teal-100 text-teal-800 status-bubble';
 case 'label_generated': return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'emailed': return 'bg-yellow-100 text-yellow-800 status-bubble';
 case 'phone_on_the_way':
@@ -6167,6 +6317,7 @@ case 're-offered-pending': return 'bg-orange-100 text-orange-800 status-bubble';
 case 're-offered-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
 case 're-offered-auto-accepted': return 'bg-teal-100 text-teal-800 status-bubble';
 case 'requote_accepted': return 'bg-teal-100 text-teal-800 status-bubble';
+case NO_EMAIL_RESPONSE_STATUS: return 'bg-orange-100 text-orange-800 status-bubble';
 case 're-offered-declined': return 'bg-red-100 text-red-800 status-bubble';
 case 'return-label-generated': return 'bg-slate-200 text-slate-800 status-bubble';
 case 'cancelled': return 'bg-gray-200 text-gray-700 status-bubble';
@@ -7272,9 +7423,10 @@ function renderActionButtons(order) {
       primaryActions.push(createButton('Generate USPS Label', () => handleAction(order.id, 'generateLabel')));
       primaryActions.push(createButton('Order Manually Fulfilled', () => showManualFulfillmentForm(order), 'bg-gray-600 hover:bg-gray-700'));
       break;
-    case 'kit_on_the_way_to_us':
+    case 'kit_in_transit':
       shippingActions.push(appendMarkAsReceivedButton());
       break;
+    case 'kit_delivered_to_customer':
     case 'kit_delivered':
       shippingActions.push(appendMarkAsReceivedButton());
       break;
@@ -7320,6 +7472,7 @@ function renderActionButtons(order) {
       break;
     case 'return-label-generated':
       break;
+    case NO_EMAIL_RESPONSE_STATUS:
     case 'requote_accepted':
     case 'completed':
       receivedActions.push(createButton('Send Review Request Email', () => handleAction(order.id, 'sendReviewRequest'), 'bg-amber-600 hover:bg-amber-700'));
@@ -7823,8 +7976,9 @@ let method = 'PUT';
 
 switch(actionType) {
 case 'generateLabel':
-url = `/generate-label/${orderId}`;
+url = resolveAdminLabelEndpoint(targetOrder || {});
 method = 'POST';
+body = { orderId };
 break;
 case 'markReceived':
 url = `/orders/${orderId}/status`;
@@ -8635,15 +8789,23 @@ function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options =
 
   if (!hasSearchTerm && status !== 'all') {
     if (status === 'kit_needs_printing') {
-      filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(order.status));
+      filtered = filtered.filter(order => KIT_PRINT_PENDING_STATUSES.includes(normalizeStatus(order)));
     } else if (status === 'label_generated') {
       filtered = filtered.filter(order => isLabelGenerationStage(order));
     } else if (status === 'emailed') {
       filtered = filtered.filter(order => isBalanceEmailStatus(order));
     } else if (status === 'received') {
-      filtered = filtered.filter(order => isReceivedStatusValue(order.status));
+      filtered = filtered.filter(order => isReceivedStatusValue(normalizeStatus(order)));
+    } else if (status === 're-offered-accepted') {
+      filtered = filtered.filter((order) => {
+        const normalizedStatus = normalizeStatus(order);
+        return normalizedStatus === 're-offered-accepted'
+          || normalizedStatus === 're-offered-auto-accepted'
+          || normalizedStatus === 'requote_accepted'
+          || normalizedStatus === NO_EMAIL_RESPONSE_STATUS;
+      });
     } else {
-      filtered = filtered.filter(order => order.status === status);
+      filtered = filtered.filter(order => normalizeStatus(order) === status);
     }
   }
 

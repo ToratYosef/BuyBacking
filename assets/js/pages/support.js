@@ -7,10 +7,6 @@ import {
   collection,
   addDoc,
   serverTimestamp,
-  query,
-  where,
-  getDocs,
-  orderBy,
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getFirebaseApp } from "../firebase-app.js";
 
@@ -21,12 +17,8 @@ const db = getFirestore(app);
 const faqList = document.getElementById("faqList");
 const supportForm = document.getElementById("supportForm");
 const supportStatus = document.getElementById("supportStatus");
-const orderSelect = document.getElementById("orderSelect");
-const orderHint = document.getElementById("orderHint");
-const phoneInput = document.getElementById("phoneInput");
-const preferPhoneBtn = document.getElementById("preferPhoneBtn");
+const orderIdInput = document.getElementById("orderIdInput");
 
-let prefersPhone = false;
 let signedInUser = null;
 
 const faqs = [
@@ -53,7 +45,7 @@ const faqs = [
   {
     question: "How do I track my order?",
     answer:
-      "You can view status updates from your account. If you linked an order here, we'll reference it in our reply.",
+      "You can view status updates from your account or from the tracking link in your emails. Include your order ID in the form if you need help with a specific trade-in.",
   },
 ];
 
@@ -83,69 +75,6 @@ function renderFaqs() {
   });
 }
 
-function formatPhone(value) {
-  const digits = value.replace(/\D/g, "").slice(0, 10);
-  const parts = [];
-  if (digits.length > 0) {
-    parts.push("(" + digits.slice(0, 3));
-  }
-  if (digits.length >= 4) {
-    parts[0] += ")" + digits.slice(3, 6);
-  }
-  if (digits.length >= 7) {
-    parts.push("-" + digits.slice(6, 10));
-  }
-  return parts.join("");
-}
-
-function updatePhonePreferenceState() {
-  const digits = phoneInput.value.replace(/\D/g, "");
-  preferPhoneBtn.disabled = digits.length !== 10;
-  preferPhoneBtn.classList.toggle("bg-indigo-500", prefersPhone);
-  preferPhoneBtn.classList.toggle("text-white", prefersPhone);
-  preferPhoneBtn.classList.toggle("border-indigo-400", prefersPhone);
-  preferPhoneBtn.classList.toggle("bg-slate-800/70", !prefersPhone);
-  preferPhoneBtn.classList.toggle("text-slate-300", !prefersPhone);
-}
-
-async function loadOrdersForUser(user) {
-  if (!user) {
-    orderHint.textContent = "Sign in to see yours";
-    orderSelect.innerHTML = '<option value="">Select an order (optional)</option>';
-    orderSelect.disabled = true;
-    return;
-  }
-
-  orderSelect.disabled = false;
-  orderHint.textContent = "Orders linked to your account";
-  orderSelect.innerHTML = '<option value="">Select an order (optional)</option>';
-
-  try {
-    const ordersRef = collection(db, "orders");
-    const userOrdersQuery = query(
-      ordersRef,
-      where("userId", "==", user.uid),
-      orderBy("createdAt", "desc")
-    );
-    const snapshot = await getDocs(userOrdersQuery);
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      const labelParts = [docSnap.id];
-      if (data.device) labelParts.push(data.device);
-      if (data.storage) labelParts.push(data.storage);
-      const option = document.createElement("option");
-      option.value = docSnap.id;
-      option.dataset.summary = labelParts.join(" • ");
-      option.textContent = labelParts.join(" • ");
-      orderSelect.appendChild(option);
-    });
-  } catch (error) {
-    console.error("Failed to load orders for user", error);
-    orderHint.textContent = "Could not load orders";
-    orderSelect.disabled = true;
-  }
-}
-
 function showStatus(message, isError = false) {
   supportStatus.textContent = message;
   supportStatus.className = isError ? "text-sm text-red-400" : "text-sm text-green-300";
@@ -156,26 +85,9 @@ function resetStatus() {
 }
 
 renderFaqs();
-updatePhonePreferenceState();
-
-phoneInput.addEventListener("input", (event) => {
-  const formatted = formatPhone(event.target.value);
-  phoneInput.value = formatted;
-  if (prefersPhone && phoneInput.value.replace(/\D/g, "").length !== 10) {
-    prefersPhone = false;
-  }
-  updatePhonePreferenceState();
-});
-
-preferPhoneBtn.addEventListener("click", () => {
-  if (preferPhoneBtn.disabled) return;
-  prefersPhone = !prefersPhone;
-  updatePhonePreferenceState();
-});
 
 onAuthStateChanged(auth, (user) => {
   signedInUser = user;
-  loadOrdersForUser(user);
   if (user && user.email) {
     const emailField = document.getElementById("supportEmail");
     if (emailField && !emailField.value) {
@@ -192,23 +104,16 @@ supportForm.addEventListener("submit", async (event) => {
   const subject = document.getElementById("supportSubject").value.trim();
   const message = document.getElementById("supportMessage").value.trim();
   const consent = document.getElementById("consentCheckbox").checked;
-  const digits = phoneInput.value.replace(/\D/g, "");
-  const phone = digits ? formatPhone(digits) : "";
-  const orderId = orderSelect.value || "";
-  const orderLabel = orderSelect.selectedOptions[0]?.dataset.summary || "";
+  const manualOrderId = String(orderIdInput?.value || "").trim().toUpperCase();
+  const orderId = manualOrderId || "";
 
   if (!email || !subject || !message) {
     showStatus("Email, subject, and message are required.", true);
     return;
   }
 
-  if (prefersPhone && digits.length !== 10) {
-    showStatus("Enter a 10-digit phone number to request phone support.", true);
-    return;
-  }
-
   if (!consent) {
-    showStatus("Please acknowledge message & data rates.", true);
+    showStatus("Please acknowledge email updates for this ticket.", true);
     return;
   }
 
@@ -218,10 +123,8 @@ supportForm.addEventListener("submit", async (event) => {
     subject,
     message,
     dataConsent: consent,
-    phone: phone || null,
-    prefersPhone,
     orderId: orderId || null,
-    orderLabel: orderLabel || null,
+    orderLabel: orderId || null,
     userId: signedInUser?.uid || null,
     customerName: signedInUser?.displayName || null,
     ticketNumber,
@@ -232,8 +135,6 @@ supportForm.addEventListener("submit", async (event) => {
   try {
     await addDoc(collection(db, "support_tickets"), payload);
     supportForm.reset();
-    prefersPhone = false;
-    updatePhonePreferenceState();
     showStatus(`Ticket submitted! Your number is ${ticketNumber}.`);
   } catch (error) {
     console.error("Error submitting support ticket", error);
@@ -242,7 +143,5 @@ supportForm.addEventListener("submit", async (event) => {
 });
 
 supportForm.addEventListener("reset", () => {
-  prefersPhone = false;
-  updatePhonePreferenceState();
   resetStatus();
 });

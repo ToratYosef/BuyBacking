@@ -6,7 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BuyBacking Admin (No Build)</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script type="text/javascript" src="//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js" async></script>
   <style>
+    html, body { max-width: 100%; overflow-x: hidden; }
     .animate-in { animation: fadeIn .18s ease-out; }
     @keyframes fadeIn { from { opacity:0; transform: translateY(4px);} to {opacity:1; transform:none;} }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -15,6 +17,24 @@
     .density-compact .order-meta { gap: .25rem !important; }
     /* Tighter default density (still readable) */
     .density-default tr td { padding-top: .65rem !important; padding-bottom: .65rem !important; }
+    #root { max-width: 100%; overflow-x: hidden; }
+    .admin-table { width: 100%; table-layout: fixed; }
+    .admin-pill-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .admin-bulk-grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: .75rem; }
+    .admin-action-grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: .5rem; }
+    .admin-drawer-tabs { display: flex; flex-wrap: wrap; gap: .25rem .9rem; }
+    .admin-drawer-footer-grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: .5rem; }
+    .admin-break-anywhere { overflow-wrap: anywhere; word-break: break-word; }
+    .admin-table td, .admin-table th { min-width: 0; }
+    @media (min-width: 900px) {
+      .admin-bulk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .admin-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .admin-drawer-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (min-width: 1400px) {
+      .admin-bulk-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .admin-drawer-footer-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
     @media (max-width: 640px) {
       #ordersTableBody tr td { padding-left: .6rem !important; padding-right: .6rem !important; }
       #ordersTableBody .text-sm { font-size: .78rem; }
@@ -29,15 +49,31 @@
     // window.IS_AGING_PAGE = true;
   </script>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-50 text-slate-900 overflow-x-hidden">
   <div id="root"></div>
+  <div id="adminBootOverlay" class="fixed inset-0 z-[100000] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm">
+    <div class="w-[92vw] max-w-2xl rounded-3xl border border-slate-800 bg-slate-900/95 px-6 py-7 shadow-2xl">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <div class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Admin Loading</div>
+          <div id="adminBootLabel" class="mt-2 text-2xl font-bold text-white">Loading admin workspace…</div>
+        </div>
+        <div id="adminBootPercent" class="text-3xl font-extrabold text-indigo-300">0%</div>
+      </div>
+      <div class="mt-5 h-3 overflow-hidden rounded-full bg-slate-800">
+        <div id="adminBootBar" class="h-full rounded-full bg-gradient-to-r from-indigo-500 via-blue-500 to-cyan-400 transition-all duration-300" style="width:0%"></div>
+      </div>
+      <div class="mt-4 text-sm text-slate-400">Preparing auth, notifications, and the full orders dataset.</div>
+    </div>
+  </div>
   <div id="runtimeErrors" class="fixed bottom-4 right-4 z-[99999] w-[92vw] max-w-xl hidden"></div>
   <!-- Lucide icons (vanilla) -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, where, orderBy, limit, startAfter, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-messaging.js";
     // ----------------------------
     // CONFIG
     // ----------------------------
@@ -53,8 +89,10 @@
     const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    let messaging = null;
     const API_BASE_URL = window.SHC_API_BASE_URL || "https://api.secondhandcell.com/server";
     const PRINT_API_BASE_URL = "https://api.secondhandcell.com";
+    const VAPID_KEY = "BDZVvbv6VgxZsBCPYUQyAwUbnSRwYB8F20IzCDh5SpkhTnw4PywqjoWq1dHDsv_xywTBeq7_LL142dheHTWR8uU";
     // Spec flags
     const IS_AGING_PAGE = !!window.IS_AGING_PAGE;
     const MIN_AGING_MS = 1000 * 60 * 60 * 24 * 7; // 7 days (safe default if not provided)
@@ -72,11 +110,27 @@
     const ADMIN_ORDERS_INITIAL_LIMIT = 150;
     const ADMIN_ORDERS_CHUNK_SIZE = 150;
     const ADMIN_UI_CACHE_KEY = 'shc_admin_ui_cache_v1';
+    const ADMIN_ORDERS_CACHE_DB = 'shc_admin_orders_cache_v1';
+    const ADMIN_ORDERS_CACHE_STORE = 'snapshots';
+    const ADMIN_ORDERS_CACHE_KEY = 'orders';
     // ----------------------------
     // DOM HELPERS
     // ----------------------------
     const $root = document.getElementById("root");
     const $runtimeErrors = document.getElementById("runtimeErrors");
+    const $bootOverlay = document.getElementById("adminBootOverlay");
+    const $bootBar = document.getElementById("adminBootBar");
+    const $bootLabel = document.getElementById("adminBootLabel");
+    const $bootPercent = document.getElementById("adminBootPercent");
+    function setAdminBootOverlay(show, progress = 0, label = "Loading admin workspace…") {
+      if (!$bootOverlay || !$bootBar || !$bootLabel || !$bootPercent) return;
+      const safeProgress = Math.max(0, Math.min(100, Math.round(progress)));
+      $bootOverlay.classList.toggle("hidden", !show);
+      $bootBar.style.width = `${safeProgress}%`;
+      $bootLabel.textContent = label;
+      $bootPercent.textContent = `${safeProgress}%`;
+      $root.style.visibility = show ? "hidden" : "visible";
+    }
     function reportUiError(message, meta = "") {
       if (!$runtimeErrors) return;
       const line = document.createElement("div");
@@ -131,6 +185,28 @@
       if (!d) return "N/A";
       return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(d);
     }
+    function getLastCustomerEmailMillis(order = {}) {
+      const candidates = [
+        order.lastCustomerEmailSentAt,
+        order.lastReminderSentAt,
+        order.expiringReminderSentAt,
+        order.kitReminderSentAt,
+        order.reminderSentAt,
+        order.reminderEmailSentAt,
+        order.lastReminderAt,
+        order.reviewRequestSentAt,
+        order.returnLabelEmailSentAt,
+        order.cancellationNotifiedAt,
+      ];
+      let latest = 0;
+      for (const value of candidates) {
+        const d = toDateAny(value);
+        if (!d) continue;
+        const time = d.getTime();
+        if (time > latest) latest = time;
+      }
+      return latest > 0 ? latest : null;
+    }
     function getOrderAge(ts) {
       const d = toDateAny(ts);
       if (!d) return "0 days";
@@ -139,6 +215,10 @@
       return `${diffDays} day${diffDays !== 1 ? "s" : ""} old`;
     }
     function formatStatusLabel(status) {
+      const normalized = String(status || "").trim().toLowerCase();
+      if (normalized === "kits") return "Kits";
+      if (normalized === "ready_to_pay" || normalized === "ready-to-pay") return "Ready To Pay";
+      if (normalized === "issue_resolved") return "Pending Re-QC";
       return String(status).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
     }
     // ----------------------------
@@ -146,33 +226,35 @@
     // ----------------------------
     const STATUS_DROPDOWN_OPTIONS = [
       "order_pending",
-      "pending_customer_send",
-      "shipping_kit_requested",
-      "kit_needs_printing",
-      "needs_printing",
-      "kit_on_the_way_to_customer",
-      "kit_delivered",
-      "kit_on_the_way_to_us",
-      "delivered_to_us",
       "label_generated",
+      "kits",
+      "phone_on_the_way",
+      "delivered_to_us",
+      "received",
       "emailed",
       "issue_resolved",
-      "phone_on_the_way",
-      "received",
-      "completed",
       "re-offered-pending",
-      "re-offered-accepted",
       "re-offered-declined",
-      "re-offered-auto-accepted",
+      "ready_to_pay",
       "return-label-generated",
+      "completed",
       "cancelled"
     ];
     const KIT_PRINT_PENDING_STATUSES = new Set(["shipping_kit_requested", "kit_needs_printing", "needs_printing"]);
-    const RECEIVED_VALUES = new Set(["received", "imei_checked", "delivered_to_us", "phone_on_the_way"]);
-    const PAST_RECEIVED_VALUES = new Set(["received", "completed", "re-offered-accepted", "re-offered-declined", "re-offered-auto-accepted"]);
+    const RECEIVED_VALUES = new Set(["received", "ready_to_pay", "imei_checked", "delivered_to_us", "phone_on_the_way"]);
+    const PAST_RECEIVED_VALUES = new Set(["received", "ready_to_pay", "completed", "re-offered-accepted", "re-offered-declined", "re-offered-auto-accepted"]);
     function normalizeStatusKey(status) {
       const normalized = String(status || "").trim().toLowerCase();
-      return normalized === "kit_sent" ? "kit_on_the_way_to_customer" : normalized;
+      if (normalized === "re-offered-accepted" || normalized === "re_offered_accepted" || normalized === "re-offered-auto-accepted" || normalized === "re_offered_auto_accepted" || normalized === "requote_accepted") {
+        return "ready_to_pay";
+      }
+      if (normalized === "auto_75_less" || normalized === "auto-75-less") {
+        return "re-offered-pending";
+      }
+      if (normalized === "shipping_kit_requested" || normalized === "kit_needs_printing" || normalized === "kit_sent" || normalized === "kit_on_the_way_to_customer" || normalized === "kit_delivered" || normalized === "kit_on_the_way_to_us" || normalized === "kit_in_transit") {
+        return "kits";
+      }
+      return normalized;
     }
     function isCancelledStatusValue(status) {
       const normalized = normalizeStatusKey(status);
@@ -194,15 +276,16 @@
     }
     function isLabelGenerationStage(order) {
       const s = normalizeStatusKey(order?.status);
-      return s === "label_generated" || s === "needs_printing" || s === "kit_needs_printing";
+      return s === "label_generated" || s === "needs_printing";
     }
     function getStatusClass(status) {
       const s = normalizeStatusKey(status);
       if (!s || s === "unknown") return "bg-slate-100 text-slate-800 border-slate-200";
       if (s.includes("cancel")) return "bg-slate-100 text-slate-600 border-slate-200";
-      if (s.includes("pending") || s.includes("needs_printing") || s.includes("kit_needs_printing")) return "bg-amber-100 text-amber-800 border-amber-200";
-      if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-100 text-blue-800 border-blue-200";
-      if (s.includes("issue_resolved") || s === "issue_resolved") return "bg-green-100 text-green-800 border-green-200";
+      if (s.includes("pending") || s.includes("needs_printing")) return "bg-amber-100 text-amber-800 border-amber-200";
+      if (s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-100 text-blue-800 border-blue-200";
+      if (s.includes("issue_resolved") || s === "issue_resolved") return "bg-rose-100 text-rose-800 border-rose-200";
+      if (s === "ready_to_pay") return "bg-emerald-100 text-emerald-800 border-emerald-200";
       if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-100 text-indigo-800 border-indigo-200";
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-100 text-emerald-800 border-emerald-200";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-100 text-purple-800 border-purple-200";
@@ -212,9 +295,9 @@
       const s = normalizeStatusKey(status);
       if (!s || s === "unknown") return "bg-slate-300";
       if (s.includes("cancel")) return "bg-slate-300";
-      if (s.includes("pending") || s.includes("needs_printing") || s.includes("kit_needs_printing")) return "bg-amber-400";
-      if (s.includes("kit") || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-500";
-      if (s.includes("issue_resolved") || s === "issue_resolved") return "bg-green-500";
+      if (s.includes("pending") || s.includes("needs_printing")) return "bg-amber-400";
+      if (s.includes("label") || s.includes("transit") || s.includes("delivered_to_us") || s.includes("phone_on_the_way")) return "bg-blue-500";
+      if (s.includes("issue_resolved") || s === "issue_resolved") return "bg-rose-500";
       if (s.includes("emailed") || s.includes("received") || s.includes("imei_checked")) return "bg-indigo-500";
       if (s.includes("completed") || s.includes("paid")) return "bg-emerald-500";
       if (s.includes("re-offer") || s.includes("re_offer")) return "bg-purple-500";
@@ -380,12 +463,12 @@
       const explicit = Number(order?.deductionValue ?? order?.deduction_value ?? order?.shippingKitFee ?? order?.fasterShippingFee);
       if (Number.isFinite(explicit) && explicit > 0) return explicit;
       const preference = normalizeStatusKey(order?.shippingPreferenceValue || order?.shippingPreference || order?.shipping_preference || '');
-      if (preference === 'ship_kit' || preference === 'shipping-kit-requested' || preference === 'shipping_kit_requested') return 25;
       if (preference === 'faster_shipping' || preference === 'faster-shipping' || preference === 'ups_label' || preference === 'ups-label-requested') return 5;
       return 0;
     }
-    function getOrderSettlementSummary(order) {
+    function getOrderSettlementSummary(order, targetDeviceKeys = null) {
       const entries = getOrderDeviceEntries(order);
+      const targetSet = Array.isArray(targetDeviceKeys) && targetDeviceKeys.length ? new Set(targetDeviceKeys) : null;
       const payableDeviceKeys = [];
       const declinedDeviceKeys = [];
       let payableTotal = 0;
@@ -395,6 +478,7 @@
       for (const entry of entries) {
         const item = entry.item || {};
         const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+        if (targetSet && !targetSet.has(deviceKey)) continue;
         const deviceStatus = getDeviceStatus(order, deviceKey);
         const hasQcData = !!(order?.qcDataByDevice?.[deviceKey] && Object.keys(order.qcDataByDevice[deviceKey]).length);
         const acceptedReoffer = isAcceptedReofferStatus(deviceStatus);
@@ -412,7 +496,7 @@
 
         eligibleDeviceCount += 1;
 
-        const qcPassedStatuses = new Set(['received', 'imei_checked', 'requote_accepted']);
+        const qcPassedStatuses = new Set(['ready_to_pay', 'requote_accepted']);
         const isQcPassedPayable = hasQcData && qcPassedStatuses.has(normalizedStatus);
 
         if (acceptedReoffer || isQcPassedPayable) {
@@ -695,6 +779,68 @@
       return candidates.find((value) => typeof value === "string" && value.trim()) || null;
     }
 
+    function collectOrderLabelArtifacts(order = {}) {
+      const items = [];
+      const seen = new Set();
+      const addItem = ({ kind = "label", type = "Label", trackingNumber = "", url = "", carrier = "", source = "" }) => {
+        const normalizedTracking = String(trackingNumber || "").trim();
+        const normalizedUrl = String(url || "").trim();
+        const key = [kind, type, normalizedTracking, normalizedUrl, carrier, source].join("|").toLowerCase();
+        if (!normalizedTracking && !normalizedUrl) return;
+        if (seen.has(key)) return;
+        seen.add(key);
+        items.push({ kind, type, trackingNumber: normalizedTracking, url: normalizedUrl, carrier: String(carrier || "").trim(), source });
+      };
+
+      addItem({
+        type: "Primary Label",
+        trackingNumber: order?.trackingNumber || order?.labelTrackingNumber || order?.uspsTrackingNumber || order?.uspsLabelTrackingNumber || order?.labelTrackingStatus?.trackingNumber || order?.labelTrackingStatus?.tracking_number,
+        url: order?.uspsLabelUrl,
+        carrier: order?.labelTrackingStatus?.carrierCode || order?.labelTrackingStatus?.carrier_code,
+        source: "primary",
+      });
+
+      addItem({
+        type: "Outbound Kit Label",
+        trackingNumber: order?.outboundTrackingNumber,
+        url: order?.outboundLabelUrl,
+        carrier: order?.kitTrackingStatus?.carrierCode || order?.kitTrackingStatus?.carrier_code,
+        source: "outbound_kit",
+      });
+
+      addItem({
+        type: "Inbound Kit Label",
+        trackingNumber: order?.inboundTrackingNumber || order?.kitTrackingStatus?.trackingNumber || order?.kitTrackingStatus?.tracking_number,
+        url: order?.inboundLabelUrl,
+        carrier: order?.kitTrackingStatus?.carrierCode || order?.kitTrackingStatus?.carrier_code,
+        source: "inbound_kit",
+      });
+
+      addItem({
+        type: "Return Label",
+        trackingNumber: order?.returnTrackingNumber || order?.return_label_tracking_number || order?.returnLabelTrackingNumber,
+        url: getReturnLabelUrl(order),
+        carrier: order?.returnTrackingCarrier || order?.return_label_carrier || "",
+        source: "return",
+      });
+
+      getShipEngineLabelEntries(order).forEach(({ key, value }, index) => {
+        const inferredType = /return/i.test(key) ? "Return Label"
+          : /outbound|customer|kit/i.test(key) ? "Outbound Kit Label"
+          : /inbound|return_to_us|to_us/i.test(key) ? "Inbound Kit Label"
+          : `Label ${index + 1}`;
+        addItem({
+          type: inferredType,
+          trackingNumber: value?.trackingNumber || value?.tracking_number,
+          url: value?.labelDownload || value?.labelDownloadUrl || value?.downloadUrl || value?.url || value?.href || value?.pdfUrl,
+          carrier: value?.carrierCode || value?.carrier_code || "",
+          source: `shipengine:${key}`,
+        });
+      });
+
+      return items;
+    }
+
     async function fetchOrderPrintData(orderId) {
       const response = await authorizedFetch(`${API_BASE_URL}/orders/${orderId}`, { method: "GET" });
       const data = await response.json().catch(() => ({}));
@@ -702,6 +848,57 @@
         throw new Error(data.message || data.error || "Failed to fetch order labels");
       }
       return data?.order || data;
+    }
+
+    function normalizeAdminOrderRecord(orderData = {}) {
+      const createdAtMillis = orderData?.createdAt?.seconds
+        ? orderData.createdAt.seconds * 1000
+        : (toDateAny(orderData?.createdAt)?.getTime() || 0);
+      return {
+        ...orderData,
+        createdAtMillis,
+      };
+    }
+
+    function upsertOrderInState(orderData = {}) {
+      const normalizedOrder = normalizeAdminOrderRecord(orderData);
+      if (!normalizedOrder?.id) return null;
+
+      const nextOrders = Array.isArray(state.allOrders) ? [...state.allOrders] : [];
+      const existingIndex = nextOrders.findIndex((entry) => entry.id === normalizedOrder.id);
+      if (existingIndex >= 0) {
+        nextOrders[existingIndex] = {
+          ...nextOrders[existingIndex],
+          ...normalizedOrder,
+        };
+      } else {
+        nextOrders.push(normalizedOrder);
+      }
+
+      nextOrders.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+      state.allOrders = nextOrders;
+      schedulePersistOrdersCache();
+
+      if (state.selectedOrderId === normalizedOrder.id) {
+        state.selectedOrderSnapshot = {
+          ...(state.selectedOrderSnapshot || {}),
+          ...normalizedOrder,
+        };
+      }
+
+      return normalizedOrder;
+    }
+    async function hydrateOrdersFromLocalCache() {
+      const cached = await readAdminOrdersCache();
+      if (!cached?.orders || !Array.isArray(cached.orders) || !cached.orders.length) return false;
+      state.allOrders = cached.orders.map((entry) => normalizeAdminOrderRecord(entry));
+      state.ordersCacheHydrated = true;
+      state.ordersCacheLoadedAt = Number(cached.savedAt || 0);
+      state.ordersLoading = false;
+      state.appBooting = false;
+      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+      render();
+      return true;
     }
 
     async function openPdfEndpointInNewTab(endpoint, failureMessage) {
@@ -748,12 +945,43 @@
       } catch (_) {}
     };
     const cachedUi = readAdminUiCache();
+    const ADMIN_AUTH_CACHE_KEY = "shc_admin_auth_cache_v1";
+    function readAdminAuthCache() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(ADMIN_AUTH_CACHE_KEY) || "null");
+        if (!parsed || typeof parsed !== "object") return null;
+        const uid = String(parsed.uid || "").trim();
+        if (!uid) return null;
+        return {
+          uid,
+          email: String(parsed.email || "").trim(),
+          displayName: String(parsed.displayName || "").trim(),
+        };
+      } catch (_) {
+        return null;
+      }
+    }
+    function writeAdminAuthCache(user) {
+      try {
+        if (!user?.uid) {
+          localStorage.removeItem(ADMIN_AUTH_CACHE_KEY);
+          return;
+        }
+        localStorage.setItem(ADMIN_AUTH_CACHE_KEY, JSON.stringify({
+          uid: user.uid,
+          email: user.email || "",
+          displayName: user.displayName || "",
+          updatedAt: Date.now(),
+        }));
+      } catch (_) {}
+    }
+    const cachedAdminUser = readAdminAuthCache();
     // ----------------------------
     // SPEC: GLOBAL STATE
     // ----------------------------
     const state = {
-      user: null,
-      authLoading: true,
+      user: cachedAdminUser,
+      authLoading: !cachedAdminUser,
       authError: "",
       sidebarOpen: false,
       // orders master + filtered
@@ -777,6 +1005,7 @@
       selectedOrderId: null,
       selectedOrderSnapshot: null,
       selectedDeviceKey: null,
+      selectedDeviceGroupKeys: [],
       drawerTab: "overview",
       // QC modal (your existing)
       qcOpen: false,
@@ -801,6 +1030,7 @@
       bulkTrackingRefreshInProgress: false,
       bulkKitReloadInProgress: false,
       bulkVoidAgedInProgress: false,
+      bulkAuto75LessInProgress: false,
       bulkVoidTestInProgress: false,
       bulkDeleteCancelledInProgress: false,
       bulkSeparateKitSentInProgress: false,
@@ -828,6 +1058,14 @@
       shippingLabelSubmitting: false,
       shippingLabelPreviewUrl: "",
       shippingLabelTrackingNumber: "",
+      customerEmailEditOpen: false,
+      customerEmailDraft: "",
+      customerEmailSaving: false,
+      ordersCacheHydrated: false,
+      ordersCacheLoadedAt: 0,
+      appBooting: true,
+      appBootProgress: 0,
+      appBootLabel: "Loading admin workspace…",
       shippingLabelForm: {
         fullName: "",
         streetAddress: "",
@@ -836,7 +1074,76 @@
         zipCode: "",
       },
       deferredOrdersRenderTimer: null,
+      pendingOrdersRenderWhileOverlay: false,
+      notificationsReady: false,
+      notificationsPermission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+      notificationToken: "",
     };
+    let adminOrdersCacheDbPromise = null;
+    let ordersCachePersistTimer = null;
+    function openAdminOrdersCacheDb() {
+      if (!("indexedDB" in window)) return Promise.resolve(null);
+      if (adminOrdersCacheDbPromise) return adminOrdersCacheDbPromise;
+      adminOrdersCacheDbPromise = new Promise((resolve) => {
+        try {
+          const request = window.indexedDB.open(ADMIN_ORDERS_CACHE_DB, 1);
+          request.onupgradeneeded = () => {
+            const dbRef = request.result;
+            if (!dbRef.objectStoreNames.contains(ADMIN_ORDERS_CACHE_STORE)) {
+              dbRef.createObjectStore(ADMIN_ORDERS_CACHE_STORE);
+            }
+          };
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => resolve(null);
+        } catch (_) {
+          resolve(null);
+        }
+      });
+      return adminOrdersCacheDbPromise;
+    }
+    async function readAdminOrdersCache() {
+      const dbRef = await openAdminOrdersCacheDb();
+      if (!dbRef) return null;
+      return new Promise((resolve) => {
+        try {
+          const tx = dbRef.transaction(ADMIN_ORDERS_CACHE_STORE, "readonly");
+          const store = tx.objectStore(ADMIN_ORDERS_CACHE_STORE);
+          const request = store.get(ADMIN_ORDERS_CACHE_KEY);
+          request.onsuccess = () => resolve(request.result || null);
+          request.onerror = () => resolve(null);
+        } catch (_) {
+          resolve(null);
+        }
+      });
+    }
+    async function writeAdminOrdersCacheNow(orders) {
+      const dbRef = await openAdminOrdersCacheDb();
+      if (!dbRef) return;
+      const payload = {
+        orders: JSON.parse(JSON.stringify(Array.isArray(orders) ? orders : [])),
+        savedAt: Date.now(),
+      };
+      return new Promise((resolve) => {
+        try {
+          const tx = dbRef.transaction(ADMIN_ORDERS_CACHE_STORE, "readwrite");
+          const store = tx.objectStore(ADMIN_ORDERS_CACHE_STORE);
+          store.put(payload, ADMIN_ORDERS_CACHE_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+          tx.onabort = () => resolve();
+        } catch (_) {
+          resolve();
+        }
+      });
+    }
+    function schedulePersistOrdersCache() {
+      if (ordersCachePersistTimer) clearTimeout(ordersCachePersistTimer);
+      ordersCachePersistTimer = setTimeout(() => {
+        ordersCachePersistTimer = null;
+        void writeAdminOrdersCacheNow(state.allOrders || []);
+      }, 350);
+    }
+    let scheduledRenderFrame = 0;
     function prefillShippingLabelForm(order = null) {
       const info = order?.shippingInfo || {};
       state.shippingLabelForm = {
@@ -855,7 +1162,7 @@
       state.shippingLabelTrackingNumber = "";
       prefillShippingLabelForm(null);
       state.shippingLabelModalOpen = true;
-      render();
+      scheduleRender();
       writeAdminUiCache();
     }
 
@@ -890,7 +1197,12 @@
       state.shippingLabelSubmitting = false;
       state.shippingLabelPreviewUrl = "";
       state.shippingLabelTrackingNumber = "";
-      render();
+      if (hasTransientOverlayOpen()) {
+        state.pendingOrdersRenderWhileOverlay = true;
+      } else {
+        state.pendingOrdersRenderWhileOverlay = false;
+        render();
+      }
       writeAdminUiCache();
     }
 
@@ -948,11 +1260,9 @@
         const detailSnap = await withPerf(`firestore:order-detail:${orderId}`, () => getDoc(doc(db, "orders", orderId)));
         if (!detailSnap.exists() || state.selectedOrderId !== orderId) return;
         const data = detailSnap.data() || {};
-        const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
-        const detailedOrder = { id: detailSnap.id, ...data, createdAtMillis };
+        const detailedOrder = normalizeAdminOrderRecord({ id: detailSnap.id, ...data });
         state.selectedOrderSnapshot = detailedOrder;
-        const idx = state.allOrders.findIndex((o) => o.id === orderId);
-        if (idx >= 0) state.allOrders[idx] = { ...state.allOrders[idx], ...detailedOrder };
+        upsertOrderInState(detailedOrder);
         render();
       } catch (error) {
         console.error('Failed to load order details', error);
@@ -1033,6 +1343,58 @@
       if (reasons.length !== 1 || reasons[0] !== 'password_locked') return false;
       const lockIssue = issues.password_locked;
       return Boolean(lockIssue?.resolved || lockIssue?.resolvedAt);
+    }
+    const DEVICE_ISSUE_REASON_LABELS = {
+      outstanding_balance: 'Balance due',
+      password_locked: 'Password locked',
+      stolen: 'Blacklist / stolen',
+      fmi_active: 'FMI / activation lock',
+    };
+    function getDeviceIssueEntries(order, deviceKey) {
+      if (!order || !deviceKey) return [];
+      const issueMap = order?.qcIssuesByDevice?.[deviceKey];
+      if (!issueMap || typeof issueMap !== 'object' || Array.isArray(issueMap)) return [];
+      return Object.entries(issueMap)
+        .map(([rawReason, issue]) => {
+          const normalizedReason = String(issue?.reason || rawReason || '').trim().toLowerCase();
+          const updatedAt = toDateAny(issue?.updatedAt || issue?.createdAt || issue?.emailSentAt || order?.lastConditionEmailSentAt || null);
+          const resolved = Boolean(issue?.resolved || issue?.resolvedAt);
+          return {
+            reason: normalizedReason,
+            label: DEVICE_ISSUE_REASON_LABELS[normalizedReason] || normalizedReason.replace(/_/g, ' '),
+            resolved,
+            updatedAt,
+          };
+        })
+        .filter((entry) => entry.reason);
+    }
+    function getUnresolvedDeviceIssues(order, deviceKey) {
+      return getDeviceIssueEntries(order, deviceKey).filter((entry) => !entry.resolved);
+    }
+    function getDeviceResponseDueAtMillis(order, deviceKey) {
+      const unresolvedIssues = getUnresolvedDeviceIssues(order, deviceKey);
+      if (!unresolvedIssues.length) return null;
+      const oldestIssueAt = unresolvedIssues
+        .map((entry) => entry.updatedAt)
+        .filter(Boolean)
+        .sort((a, b) => a.getTime() - b.getTime())[0] || null;
+      if (!oldestIssueAt) return null;
+      return oldestIssueAt.getTime() + (7 * 24 * 60 * 60 * 1000);
+    }
+    function formatResponseTimeLeft(targetDate) {
+      const due = toDateAny(targetDate);
+      if (!due) return '';
+      const diffMs = due.getTime() - Date.now();
+      if (diffMs <= 0) return 'timer expired';
+      const dayMs = 1000 * 60 * 60 * 24;
+      const hourMs = 1000 * 60 * 60;
+      const minuteMs = 1000 * 60;
+      const days = Math.floor(diffMs / dayMs);
+      const hours = Math.floor((diffMs % dayMs) / hourMs);
+      const minutes = Math.floor((diffMs % hourMs) / minuteMs);
+      if (days > 0) return `${days}d ${hours}h left`;
+      if (hours > 0) return `${hours}h ${minutes}m left`;
+      return `${Math.max(1, minutes)}m left`;
     }
 
     function normalizeCarrierForPricing(value) {
@@ -1173,6 +1535,29 @@
       };
     }
 
+    function buildSeventyFiveLessReofferDraft(order, deviceKey = null, currentStatus = '') {
+      const targetDeviceKey = deviceKey || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order?.id, 0);
+      const originalPrice = Number(getOriginalReofferCap(order, targetDeviceKey));
+      if (!Number.isFinite(originalPrice) || originalPrice <= 0) return null;
+      const reducedPrice = Number((originalPrice * 0.25).toFixed(2));
+      if (!Number.isFinite(reducedPrice) || reducedPrice <= 0) return null;
+
+      const normalizedStatus = normalizeStatusKey(currentStatus || getDeviceStatus(order, targetDeviceKey) || order?.status || '');
+      let reasonText = 'Revised offer set at 75% less than the quoted amount after post-receipt review.';
+      if (normalizedStatus === 'emailed') {
+        reasonText = 'Required issue remains unresolved, so this revised offer is set at 75% less than the quoted amount.';
+      } else if (normalizedStatus === 'issue_resolved') {
+        reasonText = 'Device returned from the resolution flow, and this revised offer is set at 75% less than the quoted amount.';
+      }
+
+      return {
+        deviceKey: targetDeviceKey,
+        newPrice: reducedPrice,
+        reasons: [reasonText],
+        comments: `75%-less re-offer sent from admin. Original quote: $${originalPrice.toFixed(2)}. Revised offer: $${reducedPrice.toFixed(2)}.`
+      };
+    }
+
     async function openReofferModal(order, qcData = null) {
       const entries = getOrderDeviceEntries(order);
       const selectedKey = state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
@@ -1184,6 +1569,10 @@
       const computedPrice = await getQcOfferFromDb(order, qcData);
       const finalPrice = Number.isFinite(computedPrice) ? computedPrice : fallbackPrice;
       const reasons = composeReofferReasoning(order, qcData, computedPrice);
+      const requiresManualReofferPrice =
+        normalizeStatusKey(qcData?.carrier) === 'other' ||
+        normalizeStatusKey(qcData?.actualBrand) === 'other' ||
+        normalizeStatusKey(qcData?.actualModelId) === 'other';
       const availableDevices = entries.map((entry) => {
         const item = entry.item || order;
         const key = buildOrderDeviceKey(order.id, entry.deviceIndex);
@@ -1193,13 +1582,13 @@
       state.reofferData = {
         deviceKey: selectedDeviceKey,
         availableDevices,
-        newPrice: Number(finalPrice || 0).toFixed(2),
+        newPrice: requiresManualReofferPrice ? '' : Number(finalPrice || 0).toFixed(2),
         reasons: reasons.join('\n'),
         comments: qcData?.deviceMatch === 'no' ? `Device mismatch: ${qcData?.deviceName || 'updated in QC'}` : '',
         carrier: qcData?.carrier || selectedItem?.carrier || selectedItem?.lock || order?.carrier || order?.lock || '',
         condition: qcData?.condition || selectedItem?.condition || order?.condition || 'good',
-        brand: qcData?.actualBrand || selectedItem?.brand || order?.brand || '',
-        modelId: qcData?.actualModelId || selectedItem?.modelId || selectedItem?.model || order?.modelId || order?.model || '',
+        brand: (qcData?.actualBrand === 'other' ? qcData?.actualBrandOther : qcData?.actualBrand) || selectedItem?.brand || order?.brand || '',
+        modelId: ((qcData?.actualBrand === 'other' || qcData?.actualModelId === 'other') ? qcData?.actualModelOther : qcData?.actualModelId) || selectedItem?.modelId || selectedItem?.model || order?.modelId || order?.model || '',
         storage: (qcData?.storageMatch === 'no' ? qcData?.actualStorage : qcData?.storage) || selectedItem?.storage || order?.storage || ''
       };
       state.reofferValidation = { message: "", fields: {} };
@@ -1218,9 +1607,56 @@
       const label = `Device ${entry.deviceIndex + 1} of ${entries.length}`;
       return { isFocused: true, deviceKey, entry, entries, label };
     }
+    function getFocusedDeviceGroup(order) {
+      const entries = getOrderDeviceEntries(order);
+      if (!entries.length || state.selectedDeviceKey) {
+        return { isGrouped: false, deviceKeys: [], entries: [], status: null, label: `Devices (${entries.length})` };
+      }
+      const selectedKeys = Array.isArray(state.selectedDeviceGroupKeys) ? state.selectedDeviceGroupKeys.filter(Boolean) : [];
+      if (!selectedKeys.length) {
+        return { isGrouped: false, deviceKeys: [], entries: [], status: null, label: `Devices (${entries.length})` };
+      }
+      const matchingKeys = selectedKeys.filter((key) => parseOrderDeviceKey(key)?.orderId === order?.id);
+      if (matchingKeys.length < 2) {
+        return { isGrouped: false, deviceKeys: [], entries: [], status: null, label: `Devices (${entries.length})` };
+      }
+      const matchingEntries = matchingKeys
+        .map((key) => {
+          const parsed = parseOrderDeviceKey(key);
+          return entries.find((entry) => entry.deviceIndex === parsed?.deviceIndex) || null;
+        })
+        .filter(Boolean);
+      if (matchingEntries.length < 2) {
+        return { isGrouped: false, deviceKeys: [], entries: [], status: null, label: `Devices (${entries.length})` };
+      }
+      const statuses = [...new Set(matchingKeys.map((key) => getDeviceStatus(order, key)).filter(Boolean))];
+      const groupedStatus = statuses.length === 1 ? statuses[0] : null;
+      return {
+        isGrouped: true,
+        deviceKeys: matchingKeys,
+        entries: matchingEntries,
+        status: groupedStatus,
+        label: groupedStatus ? `${formatStatusLabel(groupedStatus)} Devices (${matchingEntries.length})` : `Selected Devices (${matchingEntries.length})`
+      };
+    }
     function getDeviceStatus(order, deviceKey) {
       if (!order || !deviceKey) return normalizeStatusKey(order?.status || 'order_pending');
-      return normalizeStatusKey(order?.deviceStatusByKey?.[deviceKey] || order?.status || 'order_pending');
+      const rawStatus = normalizeStatusKey(order?.deviceStatusByKey?.[deviceKey] || order?.status || 'order_pending');
+      const unresolvedIssues = getUnresolvedDeviceIssues(order, deviceKey);
+      if (
+        rawStatus === 'ready_to_pay' ||
+        rawStatus === 'completed' ||
+        rawStatus === 'return-label-generated' ||
+        rawStatus === 're-offered-pending' ||
+        rawStatus === 're_offered_pending' ||
+        rawStatus === 're-offered-declined' ||
+        rawStatus === 're_offered_declined'
+      ) {
+        return rawStatus;
+      }
+      if (unresolvedIssues.length) return 'emailed';
+      if (rawStatus === 'emailed' && getDeviceIssueEntries(order, deviceKey).length) return 'issue_resolved';
+      return rawStatus;
     }
 
     function getEffectiveOrderStatus(order) {
@@ -1254,7 +1690,7 @@
       
       // If order hasn't been received yet, use order-level status
       const currentOrderStatus = normalizeStatusKey(order.status);
-      const preReceiveStatuses = ['order_pending', 'needs_printing', 'kit_needs_printing', 'shipping_kit_requested', 'label_generated', 'kit_on_the_way_to_us', 'phone_on_the_way', 'delivered_to_us'];
+      const preReceiveStatuses = ['order_pending', 'needs_printing', 'label_generated', 'kits', 'phone_on_the_way', 'delivered_to_us'];
       if (preReceiveStatuses.includes(currentOrderStatus)) {
         return currentOrderStatus;
       }
@@ -1277,11 +1713,11 @@
       // Status priority for aggregation (higher index = more progressed)
       const statusPriority = {
         'received': 0,
-        'imei_checked': 1,
-        'emailed': 2,
-        're-offered-pending': 3,
-        're-offered-declined': 4,
-        're-offered-accepted': 5,
+        'ready_to_pay': 1,
+        'imei_checked': 2,
+        'emailed': 3,
+        're-offered-pending': 4,
+        're-offered-declined': 5,
         'completed': 6,
         'return-label-generated': 7
       };
@@ -1424,6 +1860,123 @@
       const sourceText = String(meta.source || '').includes('admin') ? 'admin manual' : 'system automatic';
       return `Last tracking refresh: ${formatTimeOnly(meta.at)} (${sourceText})`;
     }
+    function getOrderCustomerEmail(order) {
+      return String(
+        order?.shippingInfo?.email ||
+        order?.email ||
+        order?.customerEmail ||
+        order?.userEmail ||
+        ""
+      ).trim();
+    }
+    function getDeviceImeiValue(order, entry, deviceKey) {
+      return String(
+        order?.qcDataByDevice?.[deviceKey]?.imei ||
+        (entry?.deviceIndex === 0 ? order?.qcData?.imei : "") ||
+        entry?.item?.imei ||
+        order?.imei ||
+        ""
+      ).trim();
+    }
+    function beginCustomerEmailEdit(order) {
+      state.customerEmailEditOpen = true;
+      state.customerEmailDraft = getOrderCustomerEmail(order);
+      render();
+      requestAnimationFrame(() => {
+        const input = document.getElementById("admin-customer-email-input");
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      });
+    }
+    function cancelCustomerEmailEdit() {
+      state.customerEmailEditOpen = false;
+      state.customerEmailDraft = "";
+      state.customerEmailSaving = false;
+      render();
+    }
+    async function saveCustomerEmail(orderId) {
+      const order = state.allOrders.find((entry) => entry.id === orderId) || state.selectedOrderSnapshot || null;
+      if (!orderId || !order) return;
+      const nextEmail = String(state.customerEmailDraft || "").trim().toLowerCase();
+      const currentEmail = getOrderCustomerEmail(order).toLowerCase();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(nextEmail)) {
+        toast("Enter a valid email address.", "error");
+        return;
+      }
+      if (nextEmail === currentEmail) {
+        cancelCustomerEmailEdit();
+        return;
+      }
+
+      state.customerEmailSaving = true;
+      render();
+
+      const payload = {
+        "shippingInfo.email": nextEmail,
+        updatedAt: new Date(),
+      };
+      if (!order.email || String(order.email).trim().toLowerCase() === currentEmail) payload.email = nextEmail;
+      if (!order.customerEmail || String(order.customerEmail).trim().toLowerCase() === currentEmail) payload.customerEmail = nextEmail;
+      if (!order.userEmail || String(order.userEmail).trim().toLowerCase() === currentEmail) payload.userEmail = nextEmail;
+
+      const previousValues = {
+        shippingInfoEmail: order?.shippingInfo?.email,
+        email: order?.email,
+        customerEmail: order?.customerEmail,
+        userEmail: order?.userEmail,
+      };
+
+      const applyLocalEmail = (target) => {
+        if (!target) return;
+        target.shippingInfo = { ...(target.shippingInfo || {}), email: nextEmail };
+        if (Object.prototype.hasOwnProperty.call(payload, "email")) target.email = nextEmail;
+        if (Object.prototype.hasOwnProperty.call(payload, "customerEmail")) target.customerEmail = nextEmail;
+        if (Object.prototype.hasOwnProperty.call(payload, "userEmail")) target.userEmail = nextEmail;
+      };
+      const revertLocalEmail = (target) => {
+        if (!target) return;
+        target.shippingInfo = { ...(target.shippingInfo || {}) };
+        if (previousValues.shippingInfoEmail === undefined) delete target.shippingInfo.email;
+        else target.shippingInfo.email = previousValues.shippingInfoEmail;
+        if (Object.prototype.hasOwnProperty.call(payload, "email")) {
+          if (previousValues.email === undefined) delete target.email;
+          else target.email = previousValues.email;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, "customerEmail")) {
+          if (previousValues.customerEmail === undefined) delete target.customerEmail;
+          else target.customerEmail = previousValues.customerEmail;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, "userEmail")) {
+          if (previousValues.userEmail === undefined) delete target.userEmail;
+          else target.userEmail = previousValues.userEmail;
+        }
+      };
+
+      applyLocalEmail(order);
+      if (state.selectedOrderSnapshot?.id === orderId && state.selectedOrderSnapshot !== order) {
+        applyLocalEmail(state.selectedOrderSnapshot);
+      }
+
+      try {
+        await withPerf(`firestore:updateCustomerEmail:${orderId}`, () => updateDoc(doc(db, "orders", orderId), payload));
+        state.customerEmailEditOpen = false;
+        state.customerEmailDraft = "";
+        state.customerEmailSaving = false;
+        render();
+        toast("Customer email updated.", "success");
+      } catch (error) {
+        revertLocalEmail(order);
+        if (state.selectedOrderSnapshot?.id === orderId && state.selectedOrderSnapshot !== order) {
+          revertLocalEmail(state.selectedOrderSnapshot);
+        }
+        state.customerEmailSaving = false;
+        render();
+        toast(error?.message || "Failed to update email.", "error");
+      }
+    }
     // ----------------------------
     // FIRESTORE LISTENER
     // ----------------------------
@@ -1437,11 +1990,16 @@
       return activeId === "searchInput" || activeId === "mobileSearchInput";
     }
     function renderOrdersWithInteractionGuard() {
+      if (hasTransientOverlayOpen()) {
+        state.pendingOrdersRenderWhileOverlay = true;
+        return;
+      }
       if (!shouldDeferOrdersRenderDuringLoading()) {
         if (state.deferredOrdersRenderTimer) {
           clearTimeout(state.deferredOrdersRenderTimer);
           state.deferredOrdersRenderTimer = null;
         }
+        state.pendingOrdersRenderWhileOverlay = false;
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
         return;
       }
@@ -1451,73 +2009,363 @@
         renderOrdersWithInteractionGuard();
       }, 250);
     }
+    let activeNotificationUid = null;
+    let activeNotificationToken = "";
+    let messageUnsubscribe = null;
+    let lastNotificationSetupUid = null;
+    let notificationHeartbeatTimer = null;
+    let pendingSignedOutTimer = null;
+
+    function clearPendingSignedOutTimer() {
+      if (!pendingSignedOutTimer) return;
+      clearTimeout(pendingSignedOutTimer);
+      pendingSignedOutTimer = null;
+    }
+
+    function getAdminBrowserTokenDocId() {
+      const storageKey = "shc_admin_browser_push_doc_id_v1";
+      try {
+        let existing = window.localStorage.getItem(storageKey);
+        if (existing) return existing;
+        const created = `browser_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+        window.localStorage.setItem(storageKey, created);
+        return created;
+      } catch (_) {
+        return "browser_fallback";
+      }
+    }
+
+    async function removeStoredNotificationToken(uid = activeNotificationUid, token = activeNotificationToken) {
+      if (!uid || !token) return;
+      try {
+        await deleteDoc(doc(db, `admins/${uid}/fcmTokens`, getAdminBrowserTokenDocId()));
+      } catch (error) {
+        console.warn("Failed to delete admin FCM token:", error);
+      }
+      if (uid === activeNotificationUid && token === activeNotificationToken) {
+        activeNotificationToken = "";
+        state.notificationToken = "";
+        state.notificationsReady = false;
+      }
+    }
+
+    function stopNotificationHeartbeat() {
+      if (notificationHeartbeatTimer) {
+        clearInterval(notificationHeartbeatTimer);
+        notificationHeartbeatTimer = null;
+      }
+    }
+
+    async function touchNotificationToken() {
+      if (!activeNotificationUid || !activeNotificationToken) return;
+      try {
+        await setDoc(doc(db, `admins/${activeNotificationUid}/fcmTokens`, getAdminBrowserTokenDocId()), {
+          token: activeNotificationToken,
+          page: "admin_dashboard",
+          userAgent: navigator.userAgent,
+          lastSeenAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      } catch (error) {
+        console.warn("Failed to update admin FCM token heartbeat:", error);
+      }
+    }
+
+    async function detachAdminNotifications() {
+      stopNotificationHeartbeat();
+      if (typeof messageUnsubscribe === "function") {
+        try { messageUnsubscribe(); } catch (_) {}
+      }
+      messageUnsubscribe = null;
+      lastNotificationSetupUid = null;
+      await removeStoredNotificationToken();
+      activeNotificationUid = null;
+      state.notificationsReady = false;
+    }
+
+    async function setupAdminNotifications(user) {
+      if (!user?.uid) return;
+      if (lastNotificationSetupUid === user.uid && activeNotificationToken) {
+        await touchNotificationToken();
+        return;
+      }
+      if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+        state.notificationsPermission = "unsupported";
+        return;
+      }
+
+      let supported = false;
+      try {
+        supported = await isMessagingSupported();
+      } catch (_) {
+        supported = false;
+      }
+      if (!supported) {
+        state.notificationsPermission = "unsupported";
+        return;
+      }
+
+      state.notificationsPermission = Notification.permission;
+      let permission = Notification.permission;
+      if (permission === "default") {
+        permission = await Notification.requestPermission();
+        state.notificationsPermission = permission;
+      }
+      if (permission !== "granted") {
+        state.notificationsReady = false;
+        return;
+      }
+
+      try {
+        await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+        const registration = await navigator.serviceWorker.ready;
+        if (!registration || !registration.pushManager) {
+          console.warn("Admin notifications skipped: push manager unavailable.");
+          state.notificationsReady = false;
+          return;
+        }
+        if (!messaging) {
+          messaging = getMessaging(app);
+        }
+        const token = await getToken(messaging, {
+          vapidKey: VAPID_KEY,
+          serviceWorkerRegistration: registration,
+        });
+
+        if (!token) {
+          state.notificationsReady = false;
+          return;
+        }
+
+        if (activeNotificationUid && activeNotificationToken && (activeNotificationUid !== user.uid || activeNotificationToken !== token)) {
+          await removeStoredNotificationToken(activeNotificationUid, activeNotificationToken);
+        }
+
+        activeNotificationUid = user.uid;
+        activeNotificationToken = token;
+        lastNotificationSetupUid = user.uid;
+        state.notificationToken = token;
+
+        await setDoc(doc(db, `admins/${user.uid}/fcmTokens`, getAdminBrowserTokenDocId()), {
+          token,
+          page: "admin_dashboard",
+          userAgent: navigator.userAgent,
+          createdAt: serverTimestamp(),
+          lastSeenAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+
+        if (typeof messageUnsubscribe === "function") {
+          try { messageUnsubscribe(); } catch (_) {}
+        }
+        messageUnsubscribe = onMessage(messaging, (payload) => {
+          const title = payload?.notification?.title || payload?.data?.title || "SecondHandCell";
+          const body = payload?.notification?.body || payload?.data?.body || "You have a new admin notification.";
+          toast(`${title} — ${body}`, "success");
+        });
+
+        stopNotificationHeartbeat();
+        notificationHeartbeatTimer = setInterval(() => {
+          void touchNotificationToken();
+        }, 5 * 60 * 1000);
+
+        state.notificationsReady = true;
+      } catch (error) {
+        console.error("Failed to set up admin push notifications:", error);
+        state.notificationsReady = false;
+      }
+    }
+
+    function finalizeSignedOutState() {
+      state.user = null;
+      state.authLoading = false;
+      state.authError = "";
+      writeAdminAuthCache(null);
+      resetAdminState();
+      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+    }
+
     async function startOrdersListener() {
       if (unsubscribeOrders) unsubscribeOrders();
       const loadVersion = ++ordersLoadVersion;
+      const hasSeedData = Array.isArray(state.allOrders) && state.allOrders.length > 0;
       state.ordersLoading = true;
-      state.allOrders = [];
-      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+      if (!hasSeedData) {
+        state.appBooting = true;
+        state.appBootProgress = 28;
+        state.appBootLabel = "Loading all orders…";
+        state.allOrders = [];
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+      } else {
+        state.appBooting = false;
+        state.appBootProgress = 100;
+        state.appBootLabel = "Refreshing cached orders…";
+        updateAdminBootUi();
+      }
 
       try {
-        let cursor = null;
-        let loaded = [];
-        while (true) {
-          if (loadVersion !== ordersLoadVersion) return;
-          const ordersQuery = cursor
-            ? query(collection(db, "orders"), orderBy("createdAt", "desc"), startAfter(cursor), limit(ADMIN_ORDERS_CHUNK_SIZE))
-            : query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_CHUNK_SIZE));
-
-          const snapshot = await withPerf(`firestore:orders-chunk:${loaded.length}`, () => getDocs(ordersQuery));
-          if (loadVersion !== ordersLoadVersion) return;
-          if (snapshot.empty) break;
-
-          const chunkOrders = snapshot.docs.map((d) => {
-            const data = d.data();
-            const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
-            return { id: d.id, ...data, createdAtMillis };
+        const attachLiveOrdersSnapshot = () => {
+          const liveOrdersRef = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_INITIAL_LIMIT));
+          unsubscribeOrders = onSnapshot(liveOrdersRef, (snapshot) => {
+            const byId = new Map((state.allOrders || []).map((order) => [order.id, order]));
+            snapshot.docs.forEach((d) => {
+              const data = d.data();
+              const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+              byId.set(d.id, { id: d.id, ...data, createdAtMillis });
+            });
+            state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+            schedulePersistOrdersCache();
+            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+          }, (err) => {
+            console.error("Firestore Error:", err);
+            toast("Live updates failed", "error");
           });
+        };
 
-          loaded = loaded.concat(chunkOrders);
-          loaded.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
-          state.allOrders = loaded;
+        if (!hasSeedData) {
+          let cursor = null;
+          let loaded = [];
+          let chunkCount = 0;
+          while (true) {
+            if (loadVersion !== ordersLoadVersion) return;
+            const ordersQuery = cursor
+              ? query(collection(db, "orders"), orderBy("createdAt", "desc"), startAfter(cursor), limit(ADMIN_ORDERS_CHUNK_SIZE))
+              : query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_CHUNK_SIZE));
 
-          if (loaded.length === chunkOrders.length) {
-            perfMark('admin:first-data-rendered');
+            const snapshot = await withPerf(`firestore:orders-chunk:${loaded.length}`, () => getDocs(ordersQuery));
+            if (loadVersion !== ordersLoadVersion) return;
+            if (snapshot.empty) break;
+
+            const chunkOrders = snapshot.docs.map((d) => {
+              const data = d.data();
+              const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+              return { id: d.id, ...data, createdAtMillis };
+            });
+
+            loaded = loaded.concat(chunkOrders);
+            loaded.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+            chunkCount += 1;
+            state.appBootProgress = Math.min(88, 28 + (chunkCount * 12));
+            state.appBootLabel = `Loading orders… ${loaded.length} loaded`;
+            updateAdminBootUi();
+
+            cursor = snapshot.docs[snapshot.docs.length - 1] || null;
+            if (snapshot.size < ADMIN_ORDERS_CHUNK_SIZE) break;
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
           }
-          renderOrdersWithInteractionGuard();
 
-          cursor = snapshot.docs[snapshot.docs.length - 1] || null;
-          if (snapshot.size < ADMIN_ORDERS_CHUNK_SIZE) break;
-
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          if (loadVersion !== ordersLoadVersion) return;
+          state.ordersLoading = false;
+          state.allOrders = loaded;
+          state.ordersCacheHydrated = true;
+          state.ordersCacheLoadedAt = Date.now();
+          schedulePersistOrdersCache();
+          perfMark('admin:first-data-rendered');
+          perfMark('admin:all-data-loaded');
+          state.appBootProgress = 96;
+          state.appBootLabel = "Finalizing admin workspace…";
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+          requestAnimationFrame(() => {
+            state.appBootProgress = 100;
+            state.appBootLabel = "Ready";
+            updateAdminBootUi();
+            setTimeout(() => {
+              state.appBooting = false;
+              updateAdminBootUi();
+            }, 120);
+          });
+        } else {
+          const latestCreatedAt = toDateAny(state.allOrders?.[0]?.createdAt)
+            || (state.allOrders?.[0]?.createdAtMillis ? new Date(state.allOrders[0].createdAtMillis) : null);
+          if (latestCreatedAt) {
+            const deltaQuery = query(
+              collection(db, "orders"),
+              where("createdAt", ">", latestCreatedAt),
+              orderBy("createdAt", "desc"),
+              limit(ADMIN_ORDERS_INITIAL_LIMIT)
+            );
+            const deltaSnapshot = await withPerf("firestore:orders-delta-refresh", () => getDocs(deltaQuery));
+            if (loadVersion !== ordersLoadVersion) return;
+            if (!deltaSnapshot.empty) {
+              const byId = new Map((state.allOrders || []).map((order) => [order.id, order]));
+              deltaSnapshot.docs.forEach((d) => {
+                const data = d.data();
+                const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
+                byId.set(d.id, { id: d.id, ...data, createdAtMillis });
+              });
+              state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
+            }
+          }
+          state.ordersLoading = false;
+          schedulePersistOrdersCache();
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
         }
 
-        if (loadVersion !== ordersLoadVersion) return;
-        state.ordersLoading = false;
-        perfMark('admin:all-data-loaded');
-        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-
-        const liveOrdersRef = query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_INITIAL_LIMIT));
-        unsubscribeOrders = onSnapshot(liveOrdersRef, (snapshot) => {
-          const byId = new Map((state.allOrders || []).map((order) => [order.id, order]));
-          snapshot.docs.forEach((d) => {
-            const data = d.data();
-            const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
-            byId.set(d.id, { id: d.id, ...data, createdAtMillis });
-          });
-          state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
-          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
-        }, (err) => {
-          console.error("Firestore Error:", err);
-          toast("Live updates failed", "error");
-        });
+        attachLiveOrdersSnapshot();
       } catch (err) {
         state.ordersLoading = false;
+        state.appBooting = false;
         console.error("Failed loading orders:", err);
         toast("Failed to load orders", "error");
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
     }
+
+    window.addEventListener('focus', () => {
+      if (!state.user && auth.currentUser) {
+        state.user = auth.currentUser;
+        state.authLoading = false;
+        state.authError = "";
+        writeAdminAuthCache(auth.currentUser);
+        render();
+      }
+      if (auth.currentUser) {
+        void setupAdminNotifications(auth.currentUser);
+      }
+      if (!hasTransientOverlayOpen()) {
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
+      if (state.selectedOrderId && !hasTransientOverlayOpen()) {
+        hydrateSelectedOrderDetails(state.selectedOrderId);
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!state.user && auth.currentUser) {
+        state.user = auth.currentUser;
+        state.authLoading = false;
+        state.authError = "";
+        writeAdminAuthCache(auth.currentUser);
+        render();
+      }
+      if (auth.currentUser) {
+        void setupAdminNotifications(auth.currentUser);
+      }
+      if (!hasTransientOverlayOpen()) {
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
+      if (state.selectedOrderId && !hasTransientOverlayOpen()) {
+        hydrateSelectedOrderDetails(state.selectedOrderId);
+      }
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== ADMIN_AUTH_CACHE_KEY) return;
+      const cachedUser = readAdminAuthCache();
+      if (!cachedUser && !auth.currentUser) {
+        finalizeSignedOutState();
+        render();
+        return;
+      }
+      if (cachedUser && !state.user) {
+        state.user = cachedUser;
+        state.authLoading = false;
+        state.authError = "";
+        render();
+      }
+    });
     // ----------------------------
     // SPEC: CANCELLED HANDLING + BASE ORDERS
     // ----------------------------
@@ -1667,6 +2515,8 @@
       if (s !== "all") {
         if (s === "kit_needs_printing") {
           allDevices = allDevices.filter(d => KIT_PRINT_PENDING_STATUSES.has(d.deviceStatus));
+        } else if (s === "kits") {
+          allDevices = allDevices.filter(d => d.deviceStatus === "kits");
         } else if (s === "label_generated") {
           allDevices = allDevices.filter(d => d.deviceStatus === "label_generated");
         } else if (s === "emailed") {
@@ -1677,6 +2527,8 @@
           allDevices = allDevices.filter(d => d.deviceStatus === "delivered_to_us");
         } else if (s === "received") {
           allDevices = allDevices.filter(d => d.deviceStatus === "received");
+        } else if (s === "ready_to_pay") {
+          allDevices = allDevices.filter(d => d.deviceStatus === "ready_to_pay");
         } else {
           // For all other statuses (including issue_resolved, completed, etc.)
           allDevices = allDevices.filter(d => d.deviceStatus === s);
@@ -1703,8 +2555,15 @@
         allDevices = allDevices.filter(d => isAgingCandidate(d.order));
       }
       
-      // Sort devices by order creation date (newest first)
+      // Sort devices by the most relevant urgency for the current tab.
       allDevices.sort((a, b) => {
+        if (s === "emailed") {
+          const aDue = getDeviceResponseDueAtMillis(a.order, a.deviceKey);
+          const bDue = getDeviceResponseDueAtMillis(b.order, b.deviceKey);
+          const aSort = Number.isFinite(aDue) ? aDue : Number.POSITIVE_INFINITY;
+          const bSort = Number.isFinite(bDue) ? bDue : Number.POSITIVE_INFINITY;
+          if (aSort !== bSort) return aSort - bSort;
+        }
         const ta = toDateAny(a.order?.createdAt)?.getTime() || 0;
         const tb = toDateAny(b.order?.createdAt)?.getTime() || 0;
         if (tb !== ta) return tb - ta;
@@ -1836,9 +2695,14 @@
         toast("No eligible kit orders found", "info");
         return;
       }
-      const ok = confirm(
-        `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_on_the_way_to_customer" and will NOT notify customers.`
-      );
+      const ok = await showConfirmation({
+        title: 'Separate Kit Orders',
+        message:
+          `Separate kit orders for ${eligible.length} orders?\n\nThis will set status to "kit_on_the_way_to_customer" and will NOT notify customers.`,
+        confirmText: 'Separate Orders',
+        cancelText: 'Cancel',
+        confirmClass: 'bg-cyan-600 hover:bg-cyan-700',
+      });
       if (!ok) return;
       let success = 0, failed = 0;
       for (const o of eligible) {
@@ -1867,9 +2731,13 @@
         return;
       }
 
-      const ok = confirm(
-        `Move ${eligible.length} order${eligible.length === 1 ? '' : 's'} to \"kit_on_the_way_to_customer\"?\n\nThis will NOT notify customers.`
-      );
+      const ok = await showConfirmation({
+        title: 'Separate Kit Orders',
+        message: `Move ${eligible.length} order${eligible.length === 1 ? '' : 's'} to "kit_on_the_way_to_customer"?\n\nThis will NOT notify customers.`,
+        confirmText: 'Move Orders',
+        cancelText: 'Cancel',
+        confirmClass: 'bg-cyan-600 hover:bg-cyan-700',
+      });
       if (!ok) return;
 
       state.bulkSeparateKitSentInProgress = true;
@@ -1916,7 +2784,13 @@
         toast(`No ${t} tracking candidates found`, "info");
         return;
       }
-      const ok = confirm(`Refresh ${t.toUpperCase()} tracking for ${candidates.length} orders?`);
+      const ok = await showConfirmation({
+        title: 'Refresh Tracking',
+        message: `Refresh ${t.toUpperCase()} tracking for ${candidates.length} orders?`,
+        confirmText: 'Refresh',
+        cancelText: 'Cancel',
+        confirmClass: 'bg-blue-600 hover:bg-blue-700',
+      });
       if (!ok) return;
       const originalText = buttonEl?.textContent;
       if (buttonEl) {
@@ -1946,12 +2820,15 @@
         buttonEl.disabled = false;
         buttonEl.textContent = originalText || "Refresh";
       }
-      alert(
-        `Refresh ${t} tracking complete.\n\n` +
-        `Success: ${success}\n` +
-        `Failed: ${failed}\n\n` +
-        (samples.failed.length ? `Failed samples:\n- ${samples.failed.join("\n- ")}\n` : "")
-      );
+      await showInfoModal({
+        title: 'Tracking Refresh Complete',
+        message:
+          `Refresh ${t} tracking complete.\n\n` +
+          `Success: ${success}\n` +
+          `Failed: ${failed}\n\n` +
+          (samples.failed.length ? `Failed samples:\n- ${samples.failed.join("\n- ")}\n` : ''),
+        confirmText: 'Done',
+      });
       filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
     }
     async function handleBulkReloadKit(buttonEl) {
@@ -1967,23 +2844,23 @@
     async function refreshLabelGeneratedAndPhoneOnWay(buttonEl) {
       const base = state.currentFilteredOrders?.length ? state.currentFilteredOrders : getBaseOrdersForStatus("all");
       const allowed = new Set(["label_generated", "phone_on_the_way"]);
-      const scopedCandidates = base.filter(o => {
+      const candidates = base.filter(o => {
         const status = normalizeStatusKey(o?.status);
         return allowed.has(status);
       });
 
-      const skippedUpsOrders = scopedCandidates.filter(isUpsTrackingOrder);
-      const candidates = scopedCandidates.filter((order) => !isUpsTrackingOrder(order));
-
       if (!candidates.length) {
-        const message = skippedUpsOrders.length
-          ? "Only UPS labels found. Skipping UPS in bulk refresh to avoid incorrect Phone On The Way status flips."
-          : "No label-generated / phone-on-the-way tracking candidates found";
-        toast(message, "info");
+        toast("No label-generated / phone-on-the-way tracking candidates found", "info");
         return;
       }
 
-      const ok = confirm(`Refresh tracking for ${candidates.length} orders in Label Generated / Phone On The Way${skippedUpsOrders.length ? `\n\n(UPS skipped: ${skippedUpsOrders.length} order${skippedUpsOrders.length === 1 ? "" : "s"})` : ""}?`);
+      const ok = await showConfirmation({
+        title: 'Refresh Tracking',
+        message: `Refresh tracking for ${candidates.length} orders in Label Generated / Phone On The Way?`,
+        confirmText: 'Refresh',
+        cancelText: 'Cancel',
+        confirmClass: 'bg-blue-600 hover:bg-blue-700',
+      });
       if (!ok) return;
 
       const originalText = buttonEl?.textContent;
@@ -2054,7 +2931,6 @@
           refreshed: success,
           statusChanged,
           failed,
-          skippedUps: skippedUpsOrders.length,
           statusCounts: nowCounts,
           completedAtLabel: `Completed ${formatTimeOnly(new Date())} (admin manual)`,
         };
@@ -2079,7 +2955,13 @@
       if (!buttonEl || !endpoint || !inProgressStateKey) return;
       if (state[inProgressStateKey]) return;
 
-      const ok = confirm(confirmText || "Run bulk void action?");
+      const ok = await showConfirmation({
+        title: 'Confirm Bulk Action',
+        message: confirmText || 'Run bulk void action?',
+        confirmText: 'Run',
+        cancelText: 'Cancel',
+        confirmClass: 'bg-rose-600 hover:bg-rose-700',
+      });
       if (!ok) return;
 
       const originalText = buttonEl.textContent;
@@ -2153,15 +3035,17 @@
         state.bulkVoidProgressDetails = `Done: scanned ${totalScanned}, cancelled ${totalCancelled}, skipped ${totalSkipped}, failed ${totalFailed}`;
         render();
 
-        alert(
-          `Bulk void complete.\n\n` +
-          `Scanned: ${totalScanned}\n` +
-          `Cancelled: ${totalCancelled}\n` +
-          `Skipped: ${totalSkipped}\n` +
-          `Failed: ${totalFailed}\n\n` +
-          (skippedSamples.length ? `Skipped samples:\n- ${skippedSamples.join("\n- ")}\n\n` : "") +
-          (failedSamples.length ? `Failed samples:\n- ${failedSamples.join("\n- ")}\n` : "")
-        );
+        await showInfoModal({
+          title: 'Bulk Void Complete',
+          message:
+            `Scanned: ${totalScanned}\n` +
+            `Cancelled: ${totalCancelled}\n` +
+            `Skipped: ${totalSkipped}\n` +
+            `Failed: ${totalFailed}\n\n` +
+            (skippedSamples.length ? `Skipped samples:\n- ${skippedSamples.join("\n- ")}\n\n` : '') +
+            (failedSamples.length ? `Failed samples:\n- ${failedSamples.join("\n- ")}\n` : ''),
+          confirmText: 'Done',
+        });
       } catch (error) {
         toast(error?.message || "Bulk void action failed", "error");
       } finally {
@@ -2182,11 +3066,6 @@
     async function runBulkVoidAgedOrders(buttonEl) {
       const minDays = 27;
       const minAgeMs = minDays * 24 * 60 * 60 * 1000;
-      if (normalizeStatusKey(state.currentActiveStatus) !== 'label_generated') {
-        toast('Open the Label Generated tab first. Bulk Void 27+ Day Orders only runs for Label Generated orders.', 'info');
-        return;
-      }
-
       const labelGeneratedOrders = getBaseOrdersForStatus('label_generated');
       const eligibleOrderIds = Array.from(new Set(
         (Array.isArray(labelGeneratedOrders) ? labelGeneratedOrders : [])
@@ -2229,6 +3108,110 @@
         inProgressStateKey: 'bulkVoidTestInProgress',
         body: { limit: 12 },
       });
+    }
+
+    async function runBulkAuto75Less(buttonEl) {
+      if (!buttonEl || state.bulkAuto75LessInProgress) return;
+
+      const candidates = (state.allOrders || []).filter((order) => {
+        const orderStatus = normalizeStatusKey(order?.status);
+        if (orderStatus !== 'emailed') return false;
+        if (!order?.qcAwaitingResponse) return false;
+        if (order?.autoRequote?.automatic === true || order?.autoRequote?.manual === true) return false;
+        const lastEmailMs = getLastCustomerEmailMillis(order);
+        return Number.isFinite(lastEmailMs) && (Date.now() - lastEmailMs) >= (7 * 24 * 60 * 60 * 1000);
+      });
+
+      if (!candidates.length) {
+        toast('No emailed orders are past the 7-day response window right now.', 'info');
+        return;
+      }
+
+      const ok = await showConfirmation({
+        title: 'Run Auto 75% Less',
+        message: `Apply the automatic 75%-less payout stage to ${candidates.length} expired emailed order(s)? This will email customers per terms.`,
+        confirmText: 'Run Auto 75% Less',
+        cancelText: 'Cancel',
+        confirmClass: 'bg-red-600 hover:bg-red-700',
+      });
+      if (!ok) return;
+
+      const originalText = buttonEl.textContent;
+      state.bulkAuto75LessInProgress = true;
+      state.bulkVoidProgressVisible = true;
+      state.bulkVoidProgressLabel = 'Running auto 75% less…';
+      state.bulkVoidProgressPercent = 0;
+      state.bulkVoidProgressDetails = 'Starting…';
+      buttonEl.disabled = true;
+      buttonEl.textContent = 'Running Auto 75% Less…';
+      render();
+
+      try {
+        let totalProcessed = 0;
+        let totalSkipped = 0;
+        let totalFailed = 0;
+        let totalScanned = 0;
+        let batchCount = 0;
+        let hasMore = true;
+        const processedSamples = [];
+        const failedSamples = [];
+
+        while (hasMore) {
+          batchCount += 1;
+          const result = await apiPost('/orders/admin/bulk-auto-75-less', { limit: 25 });
+          const processed = Number(result?.processed || 0);
+          const skipped = Number(result?.skipped || 0);
+          const failed = Number(result?.failed || 0);
+          const scanned = Number(result?.scanned || 0);
+
+          totalProcessed += processed;
+          totalSkipped += skipped;
+          totalFailed += failed;
+          totalScanned += scanned;
+
+          (Array.isArray(result?.processedEntries) ? result.processedEntries : []).slice(0, 5).forEach((entry) => {
+            if (processedSamples.length >= 5) return;
+            processedSamples.push(`#${entry.orderId}: $${Number(entry.reducedTo || 0).toFixed(2)}`);
+          });
+          (Array.isArray(result?.failedEntries) ? result.failedEntries : []).slice(0, 5).forEach((entry) => {
+            if (failedSamples.length >= 5) return;
+            failedSamples.push(`#${entry.orderId}: ${entry.reason || 'failed'}`);
+          });
+
+          hasMore = Boolean(result?.hasMore) && scanned > 0;
+          state.bulkVoidProgressPercent = hasMore ? Math.min(97, batchCount * 20) : 100;
+          state.bulkVoidProgressDetails = `Batch ${batchCount}: scanned ${totalScanned}, moved ${totalProcessed}, skipped ${totalSkipped}, failed ${totalFailed}`;
+          render();
+
+          if (!hasMore) break;
+        }
+
+        await showInfoModal({
+          title: 'Bulk Auto 75% Less Complete',
+          message:
+            `Scanned: ${totalScanned}\n` +
+            `Moved: ${totalProcessed}\n` +
+            `Skipped: ${totalSkipped}\n` +
+            `Failed: ${totalFailed}\n\n` +
+            (processedSamples.length ? `Processed samples:\n- ${processedSamples.join('\n- ')}\n\n` : '') +
+            (failedSamples.length ? `Failed samples:\n- ${failedSamples.join('\n- ')}\n` : ''),
+          confirmText: 'Done',
+        });
+      } catch (error) {
+        toast(error?.message || 'Bulk auto 75% less failed', 'error');
+      } finally {
+        state.bulkAuto75LessInProgress = false;
+        state.bulkVoidProgressVisible = false;
+        state.bulkVoidProgressLabel = '';
+        state.bulkVoidProgressPercent = 0;
+        state.bulkVoidProgressDetails = '';
+        const liveBtn = document.getElementById(buttonEl.id) || buttonEl;
+        if (liveBtn) {
+          liveBtn.disabled = false;
+          liveBtn.textContent = originalText || 'Bulk Auto 75% Less';
+        }
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      }
     }
 
     async function runBulkDeleteCancelledOrders(buttonEl) {
@@ -2346,6 +3329,17 @@
       if (order?.easypostLabelId && !seenIds.has(String(order.easypostLabelId))) {
         opts.push({ key: "easypost", id: String(order.easypostLabelId), label: "EasyPost Label" });
       }
+      const returnLabelId =
+        order?.returnLabelId ||
+        order?.shipEngineLabels?.returnLabel?.id ||
+        order?.shipEngineLabels?.returnLabel?.labelId ||
+        order?.shipEngineLabels?.returnLabel?.label_id ||
+        null;
+      if (returnLabelId && !seenIds.has(String(returnLabelId))) {
+        const tracking = order?.returnTrackingNumber || order?.shipEngineLabels?.returnLabel?.trackingNumber || order?.shipEngineLabels?.returnLabel?.tracking_number || "";
+        opts.push({ key: "returnLabel", id: String(returnLabelId), label: `Return Label${tracking ? ` (${tracking})` : ""}` });
+        seenIds.add(String(returnLabelId));
+      }
       return opts;
     }
     async function requestVoidLabels(orderId, selections) {
@@ -2384,10 +3378,9 @@
     // ----------------------------
     // SPEC: MODAL ACTION SWITCH (exact endpoints)
     // ----------------------------
-    async function printPackingSlip(orderId, deviceIndex = null) {
-      const query = Number.isInteger(deviceIndex) ? `?deviceIndex=${deviceIndex}` : '';
-      await openPdfEndpointInNewTab(`/orders/packing-slip/${orderId}${query}`, "Failed to generate packing slip");
-      toast("Packing slip opened in a new tab", "success");
+    async function printPackingSlip(orderId) {
+      await openPdfEndpointInNewTab(`/orders/print-bundle/${orderId}?includeAllPackingSlips=true&includeLabels=false`, "Failed to generate print bundle");
+      toast("Print bundle opened in a new tab", "success");
     }
 
     async function printBundle(orderId, { includeAllPackingSlips = false, deviceIndex = null } = {}) {
@@ -2402,11 +3395,12 @@
     async function handleAction(orderId, actionType, options = {}) {
       try {
         // Add confirmations for critical actions
-        if (['reOffer', 'markCompleted', 'autoRequote', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
+        if (['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
           const confirmMessages = {
             'reOffer': 'Send re-offer to customer?\n\nThis will notify the customer with updated pricing and conditions.',
+            'reOffer75Less': 'Send a re-offer for 75% less?\n\nThis sends a normal re-offer email and the customer can accept or decline it on the re-offer page.',
             'markCompleted': 'Mark this order as completed?\n\nThis will finalize the order and may trigger payment processing.',
-            'autoRequote': 'Finalize 75% reduced payout?\n\nThis will automatically adjust the payout to 75% of original amount.',
+            'autoRequote': 'Send 75%-less re-offer?\n\nThis will email the customer per terms and move the selected device(s) to Re-offer Pending at 75% less.',
             'cancelOrder': 'Cancel this order?\n\nThis action will cancel the order and may void any labels.',
             'deleteOrder': 'Delete this order permanently?\n\nThis action cannot be undone!'
           };
@@ -2415,6 +3409,7 @@
             'cancelOrder': 'bg-orange-600 hover:bg-orange-700',
             'autoRequote': 'bg-amber-600 hover:bg-amber-700',
             'reOffer': 'bg-purple-600 hover:bg-purple-700',
+            'reOffer75Less': 'bg-violet-600 hover:bg-violet-700',
             'markCompleted': 'bg-emerald-600 hover:bg-emerald-700'
           };
           const confirmed = await showConfirmation({
@@ -2433,22 +3428,80 @@
           toast("Skipping tracking refresh: order is past received", "info");
           return;
         }
+        const resolveAdminLabelEndpoint = (targetOrder = {}) => {
+          const shippingInfo = targetOrder?.shippingInfo || {};
+          const candidates = [
+            targetOrder.labelDeliveryMethod,
+            targetOrder.labelCarrier,
+            targetOrder.shippingLabelCarrier,
+            targetOrder.selectedShippingLabelCarrier,
+            targetOrder.selectedLabelCarrier,
+            targetOrder.labelProvider,
+            targetOrder.shippingLabelProvider,
+            targetOrder.shippingMethod,
+            targetOrder.selectedShippingMethod,
+            targetOrder.selectedShippingOption,
+            targetOrder.preferredLabelCarrier,
+            targetOrder.preferredShippingCarrier,
+            targetOrder.requestedLabelCarrier,
+            targetOrder.shippingCarrier,
+            targetOrder.shipCarrier,
+            targetOrder.labelType,
+            targetOrder.selectedLabelType,
+            targetOrder.requestedLabelType,
+            targetOrder.labelServiceCode,
+            targetOrder.selectedLabelServiceCode,
+            shippingInfo.labelDeliveryMethod,
+            shippingInfo.labelCarrier,
+            shippingInfo.shippingLabelCarrier,
+            shippingInfo.selectedLabelCarrier,
+            shippingInfo.selectedShippingLabelCarrier,
+            shippingInfo.shippingMethod,
+            shippingInfo.selectedShippingMethod,
+            shippingInfo.selectedShippingOption,
+            shippingInfo.requestedLabelCarrier,
+            shippingInfo.labelServiceCode,
+            targetOrder.upsLabelUrl ? 'ups' : '',
+            targetOrder.uspsLabelUrl ? 'usps' : '',
+            String(targetOrder.trackingNumber || '').trim().toUpperCase().startsWith('1Z') ? 'ups' : '',
+          ];
+
+          for (const candidate of candidates) {
+            const normalized = String(candidate || '').trim().toLowerCase();
+            if (!normalized) continue;
+            if (normalized === 'ups' || normalized.includes('ups') || normalized.includes('ups_ground') || normalized.includes('ground')) {
+              return '/api/shipping/generate-ups-label';
+            }
+            if (
+              normalized === 'usps' ||
+              normalized.includes('usps') ||
+              normalized.includes('stamps_com') ||
+              normalized.includes('postal') ||
+              normalized.includes('first_class') ||
+              normalized.includes('priority_mail')
+            ) {
+              return '/api/shipping/generate-usps-label';
+            }
+          }
+
+          return '/api/shipping/generate-usps-label';
+        };
         let endpoint = "";
         let method = "POST";
         let body = options?.body ?? null;
         let returnLabelDeclinedKeys = [];
         switch (actionType) {
           case "generateLabel": {
-            await apiPost(`/generate-label/${orderId}`, {});
-            const refreshedOrder = await fetchOrderPrintData(orderId);
+            await apiPost(resolveAdminLabelEndpoint(order || {}), { orderId });
+            const refreshedOrder = upsertOrderInState(await fetchOrderPrintData(orderId));
             const labelUrls = getSavedLabelUrls(refreshedOrder);
+            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
             if (labelUrls.length) {
               labelUrls.forEach((labelUrl) => window.open(labelUrl, "_blank", "noopener,noreferrer"));
               toast(`Opened ${labelUrls.length} label${labelUrls.length === 1 ? "" : "s"} in new tab${labelUrls.length === 1 ? "" : "s"}`, "success");
             } else {
               toast("Label generated, but no saved label URLs were returned yet", "info");
             }
-            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
             return;
           }
           case "markReceived":
@@ -2496,7 +3549,7 @@
           case "autoRequote":
             endpoint = `/orders/${orderId}/auto-requote`;
             method = "POST";
-            body = {}; // ensured non-null
+            body = { ...(options?.body || {}) };
             break;
           case "refreshKitTracking":
             endpoint = `/refresh-tracking`;
@@ -2536,23 +3589,32 @@
             method = "POST";
             body = options?.body ?? {}; // { newPrice, reasons, comments }
             break;
-          // New Actions from JSON Spec
-          case "manualFulfill":
-            // "Order Manually Fulfilled" -> usually implies marking it completed or kit to customer without generating label
-            // For now, prompt for intended status or set to kit_on_the_way_to_customer/completed?
-            // Spec says "Order Manually Fulfilled", typically this means "mark as completed" in simple systems, 
-            // or "kit to customer" manually. I'll default to marking kit to customer for now or completed if the user confirms.
-            const manualOk = await showConfirmation({
-              title: 'Manual Fulfillment',
-              message: 'Mark this order as manually fulfilled (completed)?',
-              confirmText: 'Mark Completed',
-              confirmClass: 'bg-emerald-600 hover:bg-emerald-700'
-            });
-            if(!manualOk) return;
-            endpoint = `/orders/${orderId}/status`;
-            method = "PUT";
-            body = { status: "completed", manual: true };
+          case "reOffer75Less": {
+            const targetDeviceKey =
+              options?.body?.deviceKey ||
+              state.qcDeviceKey ||
+              state.selectedDeviceKey ||
+              getActiveDeviceKey(order) ||
+              buildOrderDeviceKey(orderId, 0);
+            const draft = buildSeventyFiveLessReofferDraft(
+              order,
+              targetDeviceKey,
+              getDeviceStatus(order, targetDeviceKey) || order?.status || ''
+            );
+            if (!draft) {
+              toast("Could not calculate the 75%-less re-offer amount for this device.", "error");
+              return;
+            }
+            endpoint = `/orders/${orderId}/re-offer`;
+            method = "POST";
+            body = {
+              ...draft,
+              ...(options?.body || {}),
+              deviceKey: targetDeviceKey,
+            };
             break;
+          }
+          // New Actions from JSON Spec
           case "emailBalance":
             endpoint = `/orders/${orderId}/send-condition-email`;
             method = "POST";
@@ -2592,7 +3654,7 @@
             });
             return;
           case "printPacking":
-            await printPackingSlip(orderId, options?.deviceIndex);
+            await printPackingSlip(orderId);
             return;
           case "viewReturnLabel": {
             const returnLabelUrl = getReturnLabelUrl(order);
@@ -2625,12 +3687,26 @@
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
 
+        try {
+          const latestOrder = await fetchOrderPrintData(orderId);
+          upsertOrderInState(latestOrder);
+        } catch (refreshError) {
+          console.warn(`Failed to refresh admin order state for ${orderId}:`, refreshError);
+        }
+
         await hydrateSelectedOrderDetails(orderId);
         // refresh order data by re-running filter (Firestore will also push updates)
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
 
         if (actionType === 'sendReturnLabel') {
           await markReturnLabelGeneratedAfterLabelCreate(orderId, returnLabelDeclinedKeys);
+          try {
+            const latestOrder = await fetchOrderPrintData(orderId);
+            upsertOrderInState(latestOrder);
+          } catch (refreshError) {
+            console.warn(`Failed to refresh admin order state after return label for ${orderId}:`, refreshError);
+          }
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
         }
 
         await hydrateSelectedOrderDetails(orderId);
@@ -2683,8 +3759,8 @@
           return;
         }
         
-        // Set device-level status to "received" after QC
-        const deviceStatus = "received";
+        // Good QC moves the device into a payable state.
+        const deviceStatus = "ready_to_pay";
         
         // Temporarily update order in memory to compute new status
         const tempOrder = {
@@ -2870,71 +3946,95 @@
     function computeStatusCounts() {
       const { visible, cancelled } = splitCancelled(state.allOrders);
       const statusCounts = new Map();
-      
-      // Count orders by order-level status AND by device-level statuses
-      for (const o of visible) {
-        const orderStatus = normalizeStatusKey(o?.status) || "unknown";
-        
-        // Count order-level status
-        statusCounts.set(orderStatus, (statusCounts.get(orderStatus) || 0) + 1);
-        
-        // Also count any device-level statuses
-        if (o?.deviceStatusByKey) {
-          const deviceStatuses = new Set();
-          for (const deviceStatus of Object.values(o.deviceStatusByKey)) {
-            const normalized = normalizeStatusKey(deviceStatus);
-            // Only count each unique device status once per order to avoid duplicates
-            if (normalized && !deviceStatuses.has(normalized) && normalized !== orderStatus) {
-              deviceStatuses.add(normalized);
-              statusCounts.set(normalized, (statusCounts.get(normalized) || 0) + 1);
-            }
-          }
-        }
+      const visibleGroups = groupDevicesForTable(flattenOrdersToDevices(visible));
+      for (const group of visibleGroups) {
+        const status = normalizeStatusKey(group?.deviceStatus) || "unknown";
+        statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
       }
-      
-      const statusCountAll = visible.length;
-      const cancelledCount = cancelled.length;
+
+      const cancelledSource = [...cancelled, ...visible.filter((order) => orderHasDeviceWithStatus(order, "cancelled"))];
+      const seenCancelled = new Set();
+      const dedupedCancelledSource = cancelledSource.filter((order) => {
+        if (!order?.id || seenCancelled.has(order.id)) return false;
+        seenCancelled.add(order.id);
+        return true;
+      });
+      const cancelledGroups = groupDevicesForTable(flattenOrdersToDevices(dedupedCancelledSource))
+        .filter((group) => normalizeStatusKey(group?.deviceStatus) === "cancelled");
+
+      const statusCountAll = visibleGroups.length;
+      const cancelledCount = cancelledGroups.length;
       // live orders = visible excluding completed + return-label-generated
-      const liveOrders = visible.filter(o => {
-        const s = normalizeStatusKey(o?.status);
+      const liveOrders = visibleGroups.filter((group) => {
+        const s = normalizeStatusKey(group?.deviceStatus);
         return s !== "completed" && s !== "return-label-generated";
       }).length;
       return { statusCounts, statusCountAll, cancelledCount, liveOrders, visible };
     }
     function updateGlassMetricsHTML() {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const { visible } = splitCancelled(state.allOrders);
-      const ordersToday = visible.filter(o => (toDateAny(o?.createdAt)?.getTime() || 0) >= todayStart).length;
-      const initialOrderCount = visible.filter(o => Number(o?.estimatedQuote || 0) > 0).length;
-      const completedOrdersCount = visible.filter(o => {
-        const s = normalizeStatusKey(o?.status);
-        return s === "completed" || s === "re-offered-accepted";
-      }).length;
-      const conversionRate = initialOrderCount ? Math.round((completedOrdersCount / initialOrderCount) * 100) : 0;
-      const receivedDevicesCount = visible.filter(o => orderHasDeviceWithStatus(o, "received")).length;
+      const { statusCounts } = computeStatusCounts();
+      const actionCards = [
+        {
+          key: "delivered_to_us",
+          label: "Delivered",
+          helper: "Just arrived, needs check-in",
+          count: statusCounts.get("delivered_to_us") || 0,
+          tone: "border-blue-200 bg-blue-50 text-blue-900",
+          countTone: "bg-blue-100 text-blue-700",
+        },
+        {
+          key: "received",
+          label: "Received",
+          helper: "Waiting on QC",
+          count: statusCounts.get("received") || 0,
+          tone: "border-indigo-200 bg-indigo-50 text-indigo-900",
+          countTone: "bg-indigo-100 text-indigo-700",
+        },
+        {
+          key: "issue_resolved",
+          label: "Pending Re-QC",
+          helper: "Customer responded, recheck needed",
+          count: statusCounts.get("issue_resolved") || 0,
+          tone: "border-rose-200 bg-rose-50 text-rose-900",
+          countTone: "bg-rose-100 text-rose-700",
+        },
+        {
+          key: "ready_to_pay",
+          label: "Ready To Pay",
+          helper: "Clear for payout",
+          count: statusCounts.get("ready_to_pay") || 0,
+          tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
+          countTone: "bg-emerald-100 text-emerald-700",
+        },
+        {
+          key: "re-offered-declined",
+          label: "Re-offer Declined",
+          helper: "Needs return handling",
+          count: statusCounts.get("re-offered-declined") || 0,
+          tone: "border-purple-200 bg-purple-50 text-purple-900",
+          countTone: "bg-purple-100 text-purple-700",
+        },
+      ];
       return `
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-6">
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Orders Today</div>
-            <div class="text-2xl font-bold">${ordersToday}</div>
-          </div>
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Initial Quotes</div>
-            <div class="text-2xl font-bold">${initialOrderCount}</div>
-          </div>
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Completed</div>
-            <div class="text-2xl font-bold">${completedOrdersCount}</div>
-          </div>
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Conversion</div>
-            <div class="text-2xl font-bold">${conversionRate}%</div>
-          </div>
-          <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <div class="text-[11px] font-semibold text-slate-500 uppercase">Received</div>
-            <div class="text-2xl font-bold">${receivedDevicesCount}</div>
-          </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-6">
+          ${actionCards.map((card) => `
+            <button
+              type="button"
+              data-status-tab="${esc(card.key)}"
+              class="text-left rounded-xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${card.tone}"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] opacity-70">Need To Do</div>
+                  <div class="mt-2 text-xl font-bold leading-tight">${esc(card.label)}</div>
+                  <div class="mt-1 text-sm opacity-80">${esc(card.helper)}</div>
+                </div>
+                <span class="inline-flex min-w-[42px] items-center justify-center rounded-full px-3 py-1 text-lg font-extrabold ${card.countTone}">
+                  ${card.count}
+                </span>
+              </div>
+            </button>
+          `).join("")}
         </div>
       `;
     }
@@ -2943,66 +4043,78 @@
       const s = normalizeStatusKey(key);
       if (s === "all") {
         return {
-          pill: isActive ? "bg-slate-900 text-white shadow-md" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50",
+          pill: isActive ? "bg-slate-900 text-white border border-slate-900" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50",
           count: isActive ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
         };
       }
       if (s === "cancelled") {
         return {
-          pill: isActive ? "bg-slate-700 text-white shadow-md" : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200",
+          pill: isActive ? "bg-slate-700 text-white border border-slate-700" : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100",
           count: isActive ? "bg-white/15 text-white" : "bg-white/70 text-slate-600"
         };
       }
-      if (s === "order_pending" || s === "kit_needs_printing") {
+      if (s === "order_pending") {
         return {
-          pill: isActive ? "bg-amber-500 text-white shadow-md" : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100",
+          pill: isActive ? "bg-amber-600 text-white border border-amber-600" : "bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100",
           count: isActive ? "bg-white/15 text-white" : "bg-amber-100 text-amber-700"
         };
       }
       if (s === "label_generated") {
         return {
-          pill: isActive ? "bg-blue-500 text-white shadow-md" : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100",
+          pill: isActive ? "bg-blue-600 text-white border border-blue-600" : "bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100",
           count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
+        };
+      }
+      if (s === "kits") {
+        return {
+          pill: isActive ? "bg-cyan-700 text-white border border-cyan-700" : "bg-cyan-50 text-cyan-800 border border-cyan-200 hover:bg-cyan-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-cyan-100 text-cyan-700"
         };
       }
       if (s === "phone_on_the_way" || s === "delivered_to_us") {
         return {
-          pill: isActive ? "bg-blue-500 text-white shadow-md" : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100",
+          pill: isActive ? "bg-blue-600 text-white border border-blue-600" : "bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100",
           count: isActive ? "bg-white/15 text-white" : "bg-blue-100 text-blue-700"
-        };
-      }
-      if (s === "shipping_kit_requested" || s === "kit_on_the_way_to_customer" || s === "kit_delivered" || s === "kit_on_the_way_to_us") {
-        return {
-          pill: isActive ? "bg-cyan-600 text-white shadow-md" : "bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100",
-          count: isActive ? "bg-white/15 text-white" : "bg-cyan-100 text-cyan-700"
         };
       }
       if (s === "emailed" || s === "received") {
         return {
-          pill: isActive ? "bg-indigo-500 text-white shadow-md" : "bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100",
+          pill: isActive ? "bg-indigo-600 text-white border border-indigo-600" : "bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100",
           count: isActive ? "bg-white/15 text-white" : "bg-indigo-100 text-indigo-700"
+        };
+      }
+      if (s === "issue_resolved") {
+        return {
+          pill: isActive ? "bg-rose-600 text-white border border-rose-600" : "bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-rose-100 text-rose-700"
+        };
+      }
+      if (s === "ready_to_pay") {
+        return {
+          pill: isActive ? "bg-emerald-600 text-white border border-emerald-600" : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100",
+          count: isActive ? "bg-white/15 text-white" : "bg-emerald-100 text-emerald-700"
         };
       }
       if (s === "completed") {
         return {
-          pill: isActive ? "bg-emerald-500 text-white shadow-md" : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100",
+          pill: isActive ? "bg-emerald-700 text-white border border-emerald-700" : "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100",
           count: isActive ? "bg-white/15 text-white" : "bg-emerald-100 text-emerald-700"
         };
       }
-      if (s === "re-offered-pending" || s === "re-offered-accepted" || s === "re-offered-declined") {
+      if (s === "re-offered-pending" || s === "re-offered-declined") {
         return {
-          pill: isActive ? "bg-purple-500 text-white shadow-md" : "bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100",
+          pill: isActive ? "bg-purple-600 text-white border border-purple-600" : "bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100",
           count: isActive ? "bg-white/15 text-white" : "bg-purple-100 text-purple-700"
         };
       }
       if (s === "return-label-generated") {
         return {
-          pill: isActive ? "bg-slate-600 text-white shadow-md" : "bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100",
+          pill: isActive ? "bg-slate-700 text-white border border-slate-700" : "bg-slate-50 text-slate-700 border border-slate-300 hover:bg-slate-100",
           count: isActive ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"
         };
       }
       return {
-        pill: isActive ? "bg-slate-700 text-white shadow-md" : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200",
+        pill: isActive ? "bg-slate-700 text-white border border-slate-700" : "bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100",
         count: isActive ? "bg-white/15 text-white" : "bg-white/70 text-slate-600"
       };
     }
@@ -3011,45 +4123,35 @@
       const items = [
         { key: "all", label: "All", count: statusCountAll },
         { key: "order_pending", label: "Order Pending", count: statusCounts.get("order_pending") || 0 },
-        { key: "shipping_kit_requested", label: "Kit Requested", count: statusCounts.get("shipping_kit_requested") || 0 },
-        { key: "kit_needs_printing", label: "Kit Needs Printing", count: visible.filter(o => KIT_PRINT_PENDING_STATUSES.has(normalizeStatusKey(o?.status))).length },
-        { key: "kit_on_the_way_to_customer", label: "Kit To Customer", count: statusCounts.get("kit_on_the_way_to_customer") || 0 },
-        { key: "kit_delivered", label: "Kit Delivered", count: statusCounts.get("kit_delivered") || 0 },
-        { key: "kit_on_the_way_to_us", label: "Kit On The Way To Us", count: statusCounts.get("kit_on_the_way_to_us") || 0 },
-        { key: "label_generated", label: "Label Generated", count: visible.filter(isLabelGenerationStage).length },
-        { key: "phone_on_the_way", label: "Phone On The Way To Us", count: visible.filter(o => normalizeStatusKey(o?.status) === "phone_on_the_way").length },
-        { key: "delivered_to_us", label: "Delivered", count: visible.filter(o => normalizeStatusKey(o?.status) === "delivered_to_us").length },
-        { key: "emailed", label: "Emailed", count: visible.filter(o => isBalanceEmailStatus(o) || normalizeStatusKey(o?.status)==="emailed").length },
-        { key: "issue_resolved", label: "Resolved", count: statusCounts.get("issue_resolved") || 0 },
+        { key: "label_generated", label: "Label Generated", count: statusCounts.get("label_generated") || 0 },
+        { key: "kits", label: "Kits", count: statusCounts.get("kits") || 0 },
+        { key: "phone_on_the_way", label: "Phone On The Way To Us", count: statusCounts.get("phone_on_the_way") || 0 },
+        { key: "delivered_to_us", label: "Delivered", count: statusCounts.get("delivered_to_us") || 0 },
+        { key: "received", label: "Received", count: statusCounts.get("received") || 0 },
+        { key: "emailed", label: "Emailed", count: statusCounts.get("emailed") || 0 },
+        { key: "issue_resolved", label: "Pending Re-QC", count: statusCounts.get("issue_resolved") || 0 },
         { key: "re-offered-pending", label: "Re-offer Pending", count: statusCounts.get("re-offered-pending") || 0 },
-        { key: "re-offered-accepted", label: "Re-offer Accepted", count: statusCounts.get("re-offered-accepted") || 0 },
         { key: "re-offered-declined", label: "Re-offer Declined", count: statusCounts.get("re-offered-declined") || 0 },
+        { key: "ready_to_pay", label: "Ready To Pay", count: statusCounts.get("ready_to_pay") || 0 },
         { key: "return-label-generated", label: "Return Label Generated", count: statusCounts.get("return-label-generated") || 0 },
-        { key: "received", label: "Received", count: visible.filter(o => orderHasDeviceWithStatus(o, "received")).length },
         { key: "completed", label: "Completed", count: statusCounts.get("completed") || 0 },
         { key: "cancelled", label: "Cancelled", count: cancelledCount },
       ];
-      const splitIndex = Math.ceil(items.length / 2);
-      const firstRow = items.slice(0, splitIndex);
-      const secondRow = items.slice(splitIndex);
       const renderPills = (rowItems) => rowItems.map(it => {
         const classes = getStatusPillClasses(it.key, state.currentActiveStatus === it.key);
         return `
           <button data-status-tab="${esc(it.key)}"
-            class="px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${classes.pill}"
+            class="px-4 py-2 rounded-xl text-[15px] font-semibold whitespace-nowrap transition-colors ${classes.pill}"
             role="button" tabindex="0">
             ${esc(it.label)}
-            <span class="ml-2 inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs ${classes.count}">${it.count}</span>
+            <span class="ml-2 inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-lg text-xs font-semibold ${classes.count}">${it.count}</span>
           </button>
         `;
       }).join("");
       return `
-        <div class="space-y-2 mb-4">
-          <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            ${renderPills(firstRow)}
-          </div>
-          <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            ${renderPills(secondRow)}
+        <div class="mb-4">
+          <div class="admin-pill-row">
+            ${renderPills(items)}
           </div>
         </div>
       `;
@@ -3060,8 +4162,8 @@
     function renderBulkBar() {
       return `
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-4">
-          <div class="flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
-            <div class="flex flex-row items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <div class="flex flex-col gap-3">
+            <div class="admin-bulk-grid">
               <button id="bulk-print-slips"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${
                   (state.selectedOrderIds.size > 0 && !state.isBulkSlipPrintInProgress)
@@ -3077,28 +4179,22 @@
                 <i data-lucide="refresh-cw" style="width:18px;height:18px"></i>
                 Refresh Label + Phone Tracking
               </button>
-              <button id="bulk-reload-kit"
-                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkKitReloadInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-sky-600 hover:bg-sky-700 text-white shadow-md shadow-sky-200'}"
-                ${state.bulkKitReloadInProgress ? 'disabled' : ''}>
-                <i data-lucide="package-check" class="${state.bulkKitReloadInProgress ? 'animate-pulse' : ''}" style="width:18px;height:18px"></i>
-                ${state.bulkKitReloadInProgress ? 'Reloading Kits…' : 'Bulk Reload Kit'}
-              </button>
               <button id="bulk-void-aged-orders"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidAgedInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-600 hover:bg-rose-700 text-white shadow-md shadow-rose-200'}"
                 ${state.bulkVoidAgedInProgress ? 'disabled' : ''}>
                 <i data-lucide="shield-x" style="width:18px;height:18px"></i>
                 ${state.bulkVoidAgedInProgress ? 'Voiding 27+ Day Orders…' : 'Bulk Void 27+ Day Orders'}
               </button>
+              <button id="bulk-auto-75-less"
+                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkAuto75LessInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-200'}"
+                ${state.bulkAuto75LessInProgress ? 'disabled' : ''}>
+                <i data-lucide="badge-percent" style="width:18px;height:18px"></i>
+                ${state.bulkAuto75LessInProgress ? 'Running Auto 75% Less…' : 'Bulk Auto 75% Less'}
+              </button>
               <button id="bulk-generate-shipping-label"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-200">
                 <i data-lucide="package-plus" style="width:18px;height:18px"></i>
                 Generate Shipping Label
-              </button>
-              <button id="bulk-separate-kit-sent"
-                class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkSeparateKitSentInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-cyan-200'}"
-                ${state.bulkSeparateKitSentInProgress ? 'disabled' : ''}>
-                <i data-lucide="git-branch-plus" class="${state.bulkSeparateKitSentInProgress ? 'animate-pulse' : ''}" style="width:18px;height:18px"></i>
-                ${state.bulkSeparateKitSentInProgress ? 'Separating Kits…' : 'Separate Phone-On-The-Way Kits'}
               </button>
               <button id="bulk-void-test-orders"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidTestInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200'}"
@@ -3172,25 +4268,38 @@
       `;
     }
     
-    function awaitingResponseBadgeForDevice(deviceStatus) {
+    function awaitingResponseBadgeForDevice(order, deviceKey, deviceStatus) {
       const status = normalizeStatusKey(deviceStatus);
       
       // Show "Awaiting Response" for devices with "emailed" status
       if (status === 'emailed') {
+        const unresolvedIssues = getUnresolvedDeviceIssues(order, deviceKey);
+        const problemSummary = unresolvedIssues.length
+          ? unresolvedIssues.map((issue) => issue.label).join(' • ')
+          : 'Customer issue pending';
+        const oldestIssueAt = unresolvedIssues
+          .map((issue) => issue.updatedAt)
+          .filter(Boolean)
+          .sort((a, b) => a.getTime() - b.getTime())[0] || null;
+        const timeLeft = oldestIssueAt ? formatResponseTimeLeft(new Date(oldestIssueAt.getTime() + (7 * 24 * 60 * 60 * 1000))) : '';
         return `
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
-            <i data-lucide="mail" style="width:12px;height:12px"></i>
-            Awaiting Response
-          </span>
+          <div class="mt-2 flex flex-col gap-1">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 w-fit animate-pulse">
+              <i data-lucide="mail" style="width:12px;height:12px"></i>
+              Awaiting Response
+            </span>
+            <div class="text-[11px] font-medium text-amber-700">${esc(problemSummary)}</div>
+            ${timeLeft ? `<div class="text-[11px] font-semibold text-rose-600">7-day timer: ${esc(timeLeft)}</div>` : ''}
+          </div>
         `;
       }
       
-      // Show "Resolved - Awaiting QC" for devices with "issue_resolved" status
+      // Show "Pending Re-QC" for devices with "issue_resolved" status
       if (status === 'issue_resolved') {
         return `
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-50 text-green-700 border border-green-200">
-            <i data-lucide="check-circle" style="width:12px;height:12px"></i>
-            Resolved - Awaiting QC
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+            <i data-lucide="rotate-ccw" style="width:12px;height:12px"></i>
+            Pending Re-QC
           </span>
         `;
       }
@@ -3207,94 +4316,128 @@
       if (labTN) parts.push(`Label: ${esc(labTN)}`);
       return parts.join(" • ");
     }
+    function groupDevicesForTable(devices = []) {
+      const groups = [];
+      for (const deviceEntry of devices) {
+        const order = deviceEntry.order;
+        const status = normalizeStatusKey(deviceEntry.deviceStatus);
+        const lastGroup = groups[groups.length - 1];
+        if (lastGroup && lastGroup.order.id === order.id && lastGroup.deviceStatus === status) {
+          lastGroup.entries.push(deviceEntry);
+          lastGroup.deviceKeys.push(deviceEntry.deviceKey);
+        } else {
+          groups.push({
+            order,
+            deviceStatus: status,
+            entries: [deviceEntry],
+            deviceKeys: [deviceEntry.deviceKey],
+          });
+        }
+      }
+      return groups;
+    }
     function renderOrdersTable() {
       const devices = state.currentFilteredDevices || [];
-      const total = devices.length;
+      const groupedRows = groupDevicesForTable(devices);
+      const total = groupedRows.length;
       const totalPages = Math.max(1, Math.ceil(total / state.ORDERS_PER_PAGE));
       const page = Math.min(Math.max(1, state.currentPage), totalPages);
       const start = (page - 1) * state.ORDERS_PER_PAGE;
       const end = start + state.ORDERS_PER_PAGE;
-      const pageDevices = devices.slice(start, end);
-      // build per-device rows & track lastRenderedDeviceKeys
+      const pageGroups = groupedRows.slice(start, end);
+      // build grouped rows & track lastRenderedDeviceKeys
       state.lastRenderedDeviceKeys = [];
       const rowHtml = [];
-      for (const deviceEntry of pageDevices) {
-        const order = deviceEntry.order;
-        const deviceIndex = deviceEntry.deviceIndex;
-        const item = deviceEntry.item;
-        const deviceStatus = deviceEntry.deviceStatus;
-        const deviceKey = deviceEntry.deviceKey;
-        
-        state.lastRenderedDeviceKeys.push(deviceKey);
+      for (const group of pageGroups) {
+        const order = group.order;
+        const deviceStatus = group.deviceStatus;
+        const groupEntries = group.entries;
+        const deviceKey = groupEntries.length === 1 ? groupEntries[0].deviceKey : "";
+        const deviceGroupKeysAttr = esc(group.deviceKeys.join(","));
+
+        group.deviceKeys.forEach((key) => state.lastRenderedDeviceKeys.push(key));
         const createdAt = order?.createdAt;
         const lastUp = getLastUpdateTimestamp(order);
         const trackingNumber = getAnyTrackingNumber(order) || "";
         const trackingLink = getTrackingLink(trackingNumber);
         const statusExtra = labelStatusExtraHTML(order);
-        const payoutTotal = getEffectivePerDeviceOffer(order, item, deviceKey);
-        
-        const deviceName = item?.device || item?.title || order?.device || "Device";
-        const storage = item?.storage || order?.storage || "";
-        const carrier = item?.carrier || order?.carrier || "";
-        const model = item?.model || order?.model || "";
-        const condition = item?.condition || order?.condition || "";
-        const deviceDetails = [storage, carrier, model].filter(Boolean).join(" • ");
-        
-        // Show device number if this order has multiple devices on this page
-        const devicesFromSameOrder = pageDevices.filter(d => d.order.id === order.id);
-        const showDeviceNum = devicesFromSameOrder.length > 1;
+        const payoutTotal = groupEntries.reduce((sum, entry) => sum + Number(getEffectivePerDeviceOffer(order, entry.item, entry.deviceKey) || 0), 0);
+        const deviceSummaries = groupEntries.map((entry) => {
+          const item = entry.item || {};
+          const deviceName = item?.device || item?.title || order?.device || "Device";
+          const storage = item?.storage || order?.storage || "";
+          const carrier = item?.carrier || order?.carrier || "";
+          const model = item?.model || order?.model || "";
+          const deviceDetails = [storage, carrier, model].filter(Boolean).join(" • ");
+          return {
+            label: `${deviceName}${deviceDetails ? ` • ${deviceDetails}` : ""}`,
+            condition: item?.condition || order?.condition || "",
+          };
+        });
+        const primaryDevice = deviceSummaries[0] || { label: "Device", condition: "" };
+        const showGrouped = groupEntries.length > 1;
+        const groupedLabel = showGrouped
+          ? `${groupEntries.length} devices together`
+          : "";
+        const responseBadgeHtml = showGrouped
+          ? groupEntries.map((groupEntry) => awaitingResponseBadgeForDevice(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
+          : awaitingResponseBadgeForDevice(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
 
-        // Device row
         rowHtml.push(`
-          <tr class="bg-white border-t border-slate-200 cursor-pointer hover:bg-slate-50" data-order-row="${esc(order.id)}" data-device-index="${deviceIndex}">
+          <tr class="bg-white border-t border-slate-200 cursor-pointer hover:bg-slate-50" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
             <td class="px-4 py-3 align-top">
               <div class="flex items-start gap-3">
                 <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
                 <span class="inline-block w-1.5 h-full min-h-[40px] rounded-full ${getStatusAccentBgClass(deviceStatus)}" aria-hidden="true"></span>
               </div>
             </td>
-            <td class="px-4 py-3 align-top">
-              <div class="flex flex-col gap-1">
+            <td class="px-4 py-3 align-top min-w-0">
+              <div class="flex flex-col gap-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span class="font-bold text-slate-900">#${esc(order.id)}</span>
-                  ${showDeviceNum ? `<span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Device ${deviceIndex + 1}</span>` : ''}
+                  <span class="font-bold text-slate-900 admin-break-anywhere">#${esc(order.id)}</span>
+                  ${showGrouped ? `<span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">${esc(groupedLabel)}</span>` : (orderHasDeviceWithStatus(order, deviceStatus) && getOrderDeviceEntries(order).length > 1 && groupEntries.length === 1 ? `<span class="text-xs font-semibold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Split status</span>` : '')}
                   <span class="text-xs text-slate-500">${esc(formatDate(createdAt))}</span>
                   <span class="text-xs text-slate-400">•</span>
                   <span class="text-xs text-slate-500">${esc(getOrderAge(createdAt))}</span>
                   ${past14DaysBadgeHTML(order)}
                 </div>
-                <div class="text-xs text-slate-500">
+                <div class="text-xs text-slate-500 admin-break-anywhere">
                   <span class="font-semibold text-slate-700">${esc(order?.shippingInfo?.fullName || "Guest")}</span>
                   ${order?.shippingInfo?.phone ? ` • <span>${esc(order.shippingInfo.phone)}</span>` : ""}
                   ${order?.shippingInfo?.email ? ` • <span>${esc(order.shippingInfo.email)}</span>` : ""}
                 </div>
-                <div class="text-sm text-slate-800 font-semibold mt-1">
-                  ${esc(deviceName)}${deviceDetails ? ` • ${esc(deviceDetails)}` : ""}
-                  ${awaitingResponseBadgeForDevice(deviceStatus)}
+                <div class="text-sm text-slate-800 font-semibold mt-1 admin-break-anywhere">
+                  ${esc(primaryDevice.label)}
+                  ${responseBadgeHtml}
                 </div>
+                ${showGrouped ? `
+                  <div class="text-xs text-slate-500 space-y-1 mt-1">
+                    ${deviceSummaries.map((summary) => `<div>• ${esc(summary.label)}${summary.condition ? ` • ${esc(summary.condition)}` : ""}</div>`).join("")}
+                  </div>
+                ` : ""}
                 <div class="text-xs font-bold text-emerald-700 mt-0.5">
                   Payout: $${esc(Number(payoutTotal || 0).toFixed(2))}
                 </div>
                 ${lastUp ? `<div class="text-[11px] text-slate-400">Last update: ${esc(formatDate(lastUp))}</div>` : ""}
               </div>
             </td>
-            <td class="px-4 py-3 align-top">
+            <td class="px-4 py-3 align-top min-w-0">
               ${statusBadgeHTML(deviceStatus, statusExtra)}
             </td>
-            <td class="px-4 py-3 align-top">
+            <td class="px-4 py-3 align-top min-w-0">
               ${trackingNumber ? `
-                <a class="text-sm font-semibold text-indigo-700 hover:underline" href="${trackingLink}" target="_blank" rel="noreferrer">
+                <a class="text-sm font-semibold text-indigo-700 hover:underline admin-break-anywhere" href="${trackingLink}" target="_blank" rel="noreferrer">
                   ${esc(trackingNumber)}
                 </a>
               ` : `<span class="text-sm text-slate-400">N/A</span>`}
             </td>
             <td class="px-4 py-3 align-top">
-              <div class="flex flex-wrap gap-2 justify-end">
-                <button type="button" data-view-order="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
+              <div class="admin-action-grid">
+                <button type="button" data-view-order="${esc(order.id)}" ${deviceKey ? `data-view-device-key="${esc(deviceKey)}"` : ""} data-view-device-group-keys="${deviceGroupKeysAttr}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800">
                   View
                 </button>
-                <button type="button" data-print-device-slip="${esc(order.id)}" data-device-index="${deviceIndex}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50">
-                  Print slip for this device
+                <button type="button" data-print-order-slip="${esc(order.id)}" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                  Print packing slip
                 </button>
               </div>
             </td>
@@ -3318,8 +4461,8 @@
       const densityClass = state.compactDensity ? "density-compact" : "density-default";
       return `
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+          <div class="w-full overflow-hidden">
+            <table class="admin-table text-left border-collapse">
               <thead>
                 <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
                   <th class="px-4 py-4 w-10">
@@ -3338,7 +4481,7 @@
           </div>
           <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <span class="text-xs text-slate-500">
-              Showing <b>${Math.min(end, total)}</b> of <b>${total}</b> devices • Page <b>${page}</b> / <b>${totalPages}</b>
+              Showing <b>${Math.min(end, total)}</b> of <b>${total}</b> rows • Page <b>${page}</b> / <b>${totalPages}</b>
             </span>
             <div class="flex gap-2">
               <button data-page="first" class="px-3 py-1.5 border border-slate-300 bg-white rounded text-xs font-semibold hover:bg-slate-50 ${page===1 ? "opacity-50 cursor-not-allowed" : ""}" ${page===1 ? "disabled" : ""}>First</button>
@@ -3352,9 +4495,9 @@
     }
     function renderOrdersPage() {
       return `
-        <main class="flex-1 p-4 sm:p-6 overflow-y-auto">
-          <div class="flex flex-col gap-5">
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <main class="flex-1 min-w-0 p-4 sm:p-6">
+          <div class="mx-auto flex max-w-[1600px] flex-col gap-5">
+            <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
               <div>
                 <h2 class="text-2xl font-bold text-slate-900 tracking-tight">${IS_AGING_PAGE ? "Aging Orders" : "Order Management"}</h2>
                 <p class="text-sm text-slate-500 mt-1">Filter, bulk-process, and manage fulfillment without breaking backend routes.</p>
@@ -3369,11 +4512,11 @@
             ${updateGlassMetricsHTML()}
             ${renderStatusBreakdown()}
             ${renderBulkBar()}
-            <div class="w-full flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div class="w-full flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <i data-lucide="search" class="text-slate-400" style="width:18px;height:18px"></i>
               <input id="searchInput" type="text" value="${esc(state.currentSearchTerm)}"
                 placeholder="Search by ID, customer, device, storage, tracking…"
-                class="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
+                class="min-w-[240px] flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400" />
               ${state.currentSearchTerm ? `<button id="clearSearchInlineBtn" type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">Clear</button>` : ""}
             </div>
             ${renderOrdersTable()}
@@ -3384,15 +4527,15 @@
     // ----------------------------
     // DRAWER (kept, but actions/status edit aligned to spec)
     // ----------------------------
-    function workflowStepperHTML(order) {
-      const status = order.status || "order_pending";
+    function workflowStepperHTML(order, statusOverride = null) {
+      const status = statusOverride || order.status || "order_pending";
       const hasLabel = !!getAnyTrackingNumber(order) || String(order.status || "").includes("label");
       const hasQc = !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length));
       let activeStep = 0;
-      const s = String(status).toLowerCase();
-      if (s.includes("completed") || s.includes("paid") || s.includes("re-offered-accepted")) activeStep = 4;
-      else if (s.includes("re-offer")) activeStep = 3;
-      else if (hasQc || s.includes("received") || s.includes("emailed")) activeStep = 2;
+      const s = normalizeStatusKey(status);
+      if (s.includes("completed") || s.includes("paid")) activeStep = 4;
+      else if (s.includes("ready_to_pay") || s.includes("emailed") || s.includes("issue_resolved") || s.includes("re-offer")) activeStep = 3;
+      else if (hasQc || s.includes("received")) activeStep = 2;
       else if (hasLabel || s.includes("label") || s.includes("transit") || s.includes("delivered_to_us")) activeStep = 1;
       else if (s.includes("pending") || s.includes("printing")) activeStep = 0;
       else if (s.includes("cancel")) activeStep = -1;
@@ -3407,7 +4550,7 @@
         { label: "Pending", icon: "clock" },
         { label: "Label / Transit", icon: "truck" },
         { label: "Received / QC", icon: "shield-check" },
-        { label: "Re-Offer", icon: "alert-triangle" },
+        { label: "Ready / Re-Offer", icon: "alert-triangle" },
         { label: "Paid & Done", icon: "check-circle" },
       ];
       const pct = Math.max(0, Math.min(100, (activeStep / (steps.length - 1)) * 100));
@@ -3469,9 +4612,14 @@
       ];
       const entries = getOrderDeviceEntries(order);
       const focused = getFocusedDevice(order);
-      const headerStatus = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order);
+      const focusedGroup = getFocusedDeviceGroup(order);
+      const headerStatus = focusedGroup.isGrouped
+        ? (focusedGroup.status || getEffectiveOrderStatus(order))
+        : (focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order));
       tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
-      const visibleEntries = entries;
+      const visibleEntries = focusedGroup.isGrouped
+        ? focusedGroup.entries
+        : (focused.isFocused && focused.entry ? [focused.entry] : entries);
       if (noLabelCustomerSend && state.drawerTab === "shipping") {
         state.drawerTab = "overview";
       }
@@ -3487,6 +4635,7 @@
           const item = entry.item || {};
           const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
           const deviceStatus = getDeviceStatus(order, deviceKey);
+          const imeiValue = getDeviceImeiValue(order, entry, deviceKey);
           const offer = getEffectivePerDeviceOffer(order, item, deviceKey);
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
           const isAcceptedReoffer = isAcceptedReofferStatus(deviceStatus);
@@ -3525,7 +4674,7 @@
                   <div class="flex items-center gap-2 flex-wrap">
                     <h4 class="text-base font-bold text-slate-900 leading-tight">${esc(item.device || order.device || "")}</h4>
                     ${deviceStatusBadge}
-                    ${awaitingResponseBadgeForDevice(deviceStatus)}
+                    ${awaitingResponseBadgeForDevice(order, deviceKey, deviceStatus)}
                   </div>
                   <div class="flex flex-wrap gap-1.5 mt-1.5">
                     <span class="bg-slate-100 px-2 py-0.5 rounded-md text-[11px] font-semibold border border-slate-200">${esc(item.storage || order.storage || "")}</span>
@@ -3535,6 +4684,12 @@
                   <div class="mt-2">
                     ${qcStatusBadge}
                   </div>
+                  ${imeiValue ? `
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                      <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">IMEI</span>
+                      <span class="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-semibold text-slate-700">${esc(imeiValue)}</span>
+                    </div>
+                  ` : ""}
                 </div>
                 <div class="text-right">
                   <div class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Offer</div>
@@ -3571,7 +4726,7 @@
               <div class="p-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/50">
                 <h3 class="font-semibold text-slate-700 flex items-center gap-2">
                   <i data-lucide="smartphone" class="text-slate-400" style="width:18px;height:18px"></i>
-                  Devices (${entries.length})
+                  ${esc(focusedGroup.isGrouped ? focusedGroup.label : (focused.isFocused ? focused.label : `Devices (${entries.length})`))}
                 </h3>
                 <div class="flex items-center gap-2"></div>
               </div>
@@ -3597,10 +4752,43 @@
                 </div>
                 <div>
                   <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Email Address</label>
-                  <div class="text-sm font-medium text-slate-900 flex items-center gap-2 break-all">
-                    ${esc(order.shippingInfo?.email || "N/A")}
-                    ${order.shippingInfo?.email ? `<a href="mailto:${esc(order.shippingInfo.email)}" class="text-indigo-600 hover:text-indigo-800"><i data-lucide="mail" style="width:14px;height:14px"></i></a>` : ""}
-                  </div>
+                  ${state.customerEmailEditOpen ? `
+                    <div class="space-y-2">
+                      <input
+                        id="admin-customer-email-input"
+                        type="email"
+                        value="${esc(state.customerEmailDraft || "")}"
+                        class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100"
+                        placeholder="customer@example.com"
+                      />
+                      <div class="flex flex-wrap items-center gap-2">
+                        <button
+                          data-save-customer-email="${esc(order.id)}"
+                          class="inline-flex items-center rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                          ${state.customerEmailSaving ? "disabled" : ""}
+                        >${state.customerEmailSaving ? "Saving..." : "Save Email"}</button>
+                        <button
+                          data-cancel-customer-email-edit="1"
+                          class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                          ${state.customerEmailSaving ? "disabled" : ""}
+                        >Cancel</button>
+                      </div>
+                    </div>
+                  ` : `
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="text-sm font-medium text-slate-900 flex items-center gap-2 break-all">
+                        ${esc(getOrderCustomerEmail(order) || "N/A")}
+                        ${getOrderCustomerEmail(order) ? `<a href="mailto:${esc(getOrderCustomerEmail(order))}" class="text-indigo-600 hover:text-indigo-800"><i data-lucide="mail" style="width:14px;height:14px"></i></a>` : ""}
+                      </div>
+                      <button
+                        data-edit-customer-email="${esc(order.id)}"
+                        class="shrink-0 inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                      >
+                        <i data-lucide="pencil" style="width:13px;height:13px"></i>
+                        Edit
+                      </button>
+                    </div>
+                  `}
                 </div>
                 <div>
                   <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Payout Method</label>
@@ -3616,10 +4804,7 @@
         `;
       }
       function shippingHTML() {
-        const tracking = getAnyTrackingNumber(order) || "N/A";
-        const trackingHref = tracking && tracking !== "N/A"
-          ? getTrackingLink(tracking)
-          : "";
+        const labelArtifacts = collectOrderLabelArtifacts(order);
         return `
           <div class="space-y-6">
             <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -3630,21 +4815,45 @@
                 </h3>
               </div>
               <div class="p-5 space-y-4">
-                <div>
-                  <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Tracking Number</label>
-                  <div class="flex gap-2">
-                    <input type="text" readonly value="${esc(tracking)}"
-                      class="flex-1 bg-slate-50 border border-slate-300 rounded-md text-sm text-slate-600 focus:ring-0 px-3 py-2" />
-                    ${trackingHref ? `
-                      <a href="${trackingHref}" target="_blank" rel="noreferrer"
-                        class="px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-600 hover:bg-slate-50 flex items-center justify-center">
-                        <i data-lucide="external-link" style="width:16px;height:16px"></i>
-                      </a>
-                    ` : ""}
-                  </div>
+                <div class="space-y-3">
+                  <label class="text-xs font-medium text-slate-400 uppercase block">All Labels & Tracking Numbers</label>
+                  ${labelArtifacts.length ? `
+                    <div class="space-y-3">
+                      ${labelArtifacts.map((artifact) => {
+                        const trackingHref = artifact.trackingNumber ? getTrackingLink(artifact.trackingNumber) : "";
+                        return `
+                          <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <span class="inline-flex items-center rounded-full bg-white border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-700">${esc(artifact.type)}</span>
+                              ${artifact.carrier ? `<span class="inline-flex items-center rounded-full bg-white border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 uppercase">${esc(artifact.carrier)}</span>` : ``}
+                            </div>
+                            <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+                              <input type="text" readonly value="${esc(artifact.trackingNumber || "No tracking number saved")}" class="w-full bg-white border border-slate-300 rounded-md text-sm text-slate-700 focus:ring-0 px-3 py-2" />
+                              ${trackingHref ? `
+                                <a href="${trackingHref}" target="_blank" rel="noreferrer" class="px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-600 hover:bg-slate-50 flex items-center justify-center gap-2 text-sm font-semibold">
+                                  <i data-lucide="map-pinned" style="width:16px;height:16px"></i>
+                                  Track
+                                </a>
+                              ` : `<div></div>`}
+                              ${artifact.url ? `
+                                <a href="${esc(artifact.url)}" target="_blank" rel="noreferrer" class="px-3 py-2 bg-white border border-slate-300 rounded-md text-slate-600 hover:bg-slate-50 flex items-center justify-center gap-2 text-sm font-semibold">
+                                  <i data-lucide="file-text" style="width:16px;height:16px"></i>
+                                  Open Label
+                                </a>
+                              ` : `<div></div>`}
+                            </div>
+                          </div>
+                        `;
+                      }).join("")}
+                    </div>
+                  ` : `
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                      No saved labels or tracking numbers were found for this order yet.
+                    </div>
+                  `}
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <button data-action="${matchesKitTrackingHints(order) ? "refreshKitTracking" : "updateTracking"}" class="px-3 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">${matchesKitTrackingHints(order) ? "Reload Kit" : "Refresh Tracking"}</button>
+                  <button data-action="updateTracking" class="px-3 py-2 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Refresh Tracking</button>
                 </div>
                 <div class="pt-3 border-t border-slate-100">
                   <div class="text-xs font-semibold text-slate-400 uppercase mb-2">Void Labels</div>
@@ -3840,7 +5049,7 @@
       return `
         <div class="fixed inset-0 z-[1002] flex justify-end">
           <div class="absolute inset-0 bg-slate-900/30 backdrop-blur-sm transition-opacity" data-close-drawer="1"></div>
-          <div class="relative w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col">
+          <div class="relative w-full max-w-[1120px] bg-white h-full shadow-2xl flex flex-col">
             <div class="relative bg-white z-[1009] px-6 py-4 flex justify-between items-start">
               <div class="relative">
                 <div class="flex items-center gap-3 mb-1">
@@ -3862,8 +5071,8 @@
                 <i data-lucide="x" style="width:24px;height:24px"></i>
               </button>
             </div>
-            ${workflowStepperHTML(order)}
-            <div class="px-6 border-b border-slate-200 bg-slate-50/50 flex space-x-6 overflow-x-auto scrollbar-hide">
+            ${workflowStepperHTML(order, headerStatus)}
+            <div class="px-6 border-b border-slate-200 bg-slate-50/50 admin-drawer-tabs">
               ${tabs.map(t => `
                 <button data-drawer-tab="${t.id}"
                   class="flex items-center gap-2 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -3876,10 +5085,10 @@
                 </button>
               `).join("")}
             </div>
-            <div class="p-6 space-y-6 flex-1 overflow-y-auto bg-slate-50/30">
+            <div class="p-5 lg:p-6 space-y-6 flex-1 overflow-y-auto bg-slate-50/30">
               ${tabContent}
             </div>
-            <div class="border-t border-slate-200 p-6 bg-white z-10">
+            <div class="border-t border-slate-200 p-4 lg:p-5 bg-white z-10">
               ${renderDrawerFooter(order)}
             </div>
           </div>
@@ -3888,9 +5097,17 @@
     }
     function renderDrawerFooter(order) {
         const focused = getFocusedDevice(order);
-        const status = focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order);
-        const hasQc = focused.isFocused ? !!(order?.qcDataByDevice?.[focused.deviceKey]) : !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length));
-      const settlement = getOrderSettlementSummary(order);
+        const focusedGroup = getFocusedDeviceGroup(order);
+        const scopedDeviceKeys = focusedGroup.isGrouped
+          ? focusedGroup.deviceKeys
+          : (focused.isFocused ? [focused.deviceKey] : null);
+        const status = focusedGroup.isGrouped
+          ? (focusedGroup.status || getEffectiveOrderStatus(order))
+          : (focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order));
+        const hasQc = focusedGroup.isGrouped
+          ? focusedGroup.deviceKeys.every((deviceKey) => !!(order?.qcDataByDevice?.[deviceKey] && Object.keys(order.qcDataByDevice[deviceKey]).length))
+          : (focused.isFocused ? !!(order?.qcDataByDevice?.[focused.deviceKey]) : !!(order.qcData || (order.qcDataByDevice && Object.keys(order.qcDataByDevice).length)));
+      const settlement = getOrderSettlementSummary(order, scopedDeviceKeys);
         const groups = {
             primary: [],
             shipping: [],
@@ -3900,8 +5117,6 @@
         };
         // Helpers
         const hasLabels = !!(getAnyTrackingNumber(order) || getShipEngineLabelEntries(order).length);
-        const isKitReq = order.shippingPreference === "Shipping Kit Requested";
-        const isEmailReq = order.shippingPreference === "Email Label Requested";
         const isNoLabelCustomerSend = normalizeStatusKey(order.shippingPreferenceNormalized) === "no_label_customer_send"
           || normalizeStatusKey(order.shippingPreference) === "no_label_customer_send"
           || normalizeStatusKey(order.shippingPreference).includes("no label")
@@ -3911,64 +5126,49 @@
         if (status === "pending_customer_send") {
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
         }
-        else if (["order_pending", "kit_needs_printing", "needs_printing"].includes(status)) {
+        else if (["order_pending", "needs_printing"].includes(status)) {
             if (!hasLabels) groups.primary.push({ label: "Generate USPS Label", action: "generateLabel", class: "bg-indigo-600 text-white" });
-            groups.primary.push({ label: "Order Manually Fulfilled", action: "manualFulfill", class: "bg-slate-100 text-slate-800" });
         }
-        else if (status === "shipping_kit_requested") {
-            // ALWAYS show generate label
-            groups.primary.push({ label: "Generate USPS Label", action: "generateLabel", class: "bg-indigo-600 text-white" });
-            groups.primary.push({ label: "Order Manually Fulfilled", action: "manualFulfill", class: "bg-slate-100 text-slate-800" });
-        }
-        else if (["kit_on_the_way_to_us", "kit_delivered", "phone_on_the_way", "delivered_to_us"].includes(status)) {
+        else if (["phone_on_the_way", "delivered_to_us"].includes(status)) {
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
-          if (isKitReq && (order.outboundTrackingNumber || order.inboundTrackingNumber || order.trackingNumber)) {
-            groups.shipping.push({ label: "Reload Kit", action: "refreshKitTracking", class: "bg-blue-50 border-blue-200 text-blue-700" });
-          } else if (["phone_on_the_way", "delivered_to_us"].includes(status)) {
-            groups.shipping.push({ label: "Update Tracking", action: "updateTracking", class: "bg-blue-50 border-blue-200 text-blue-700" });
-          }
+          groups.shipping.push({ label: "Update Tracking", action: "updateTracking", class: "bg-blue-50 border-blue-200 text-blue-700" });
         }
         else if (status === "label_generated") {
-            if (isKitReq) groups.shipping.push({ label: "Mark Kit To Customer", action: "markKitSent", class: "bg-white border-slate-200 text-slate-700" });
             groups.shipping.push({ label: "Mark as Received", action: "markReceived", class: "bg-white border-slate-200 text-slate-700" });
-          groups.shipping.push({
-            label: isKitReq ? "Reload Kit" : "Update Tracking",
-            action: isKitReq ? "refreshKitTracking" : "updateTracking",
-            class: "bg-blue-50 border-blue-200 text-blue-700"
-          });
+          groups.shipping.push({ label: "Update Tracking", action: "updateTracking", class: "bg-blue-50 border-blue-200 text-blue-700" });
         }
         else if (["received", "imei_checked"].includes(status)) {
-            // QC is now opened only from overview section by clicking devices
-            // Manual re-offer can still be sent without running QC.
-            groups.postReceive.push({ label: "Send Re-offer", action: "reOffer", class: "bg-purple-600 text-white hover:bg-purple-700" });
-            if (hasQc && settlement.payableCount > 0) {
-              groups.postReceive.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, settlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
-            }
-            if (settlement.declinedCount > 0) {
-              groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
-            }
+            // Intake/QC stage only. Use the device cards above to continue QC.
         }
         else if (status === "emailed") {
             // QC is now opened only from overview section by clicking devices
             groups.postReceive.push({ label: "Send Re-offer", action: "reOffer", class: "bg-purple-600 text-white hover:bg-purple-700" });
+            groups.postReceive.push({ label: "Send 75%-Less Re-Offer", action: "reOffer75Less", class: "bg-violet-600 text-white hover:bg-violet-700" });
+            groups.postReceive.push({ label: "Run Auto 75% Deduction", action: "autoRequote", class: "bg-red-600 text-white hover:bg-red-700" });
             if (settlement.declinedCount > 0) {
               groups.postReceive.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700" });
             }
         }
+        else if (status === "issue_resolved") {
+            // Awaiting re-QC. Resume QC from the device cards above.
+        }
         else if (status === "re-offered-pending") {
              // No footer action button for re-offer pending per admin workflow request.
-        }
-        else if (status === "re-offered-accepted") {
-            if (settlement.payableCount > 0) {
-              groups.primary.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, settlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
-            }
         }
         else if (status === "re-offered-declined") {
             if (settlement.declinedCount > 0) {
               groups.primary.push({ label: "Generate Return Label", action: "sendReturnLabel", class: "bg-rose-600 text-white hover:bg-rose-700", fullWidth: true });
             }
         }
-        else if (["requote_accepted", "completed"].includes(status)) {
+        else if (status === "ready_to_pay") {
+            groups.postReceive.push({ label: "Send Re-offer", action: "reOffer", class: "bg-purple-600 text-white hover:bg-purple-700" });
+            groups.postReceive.push({ label: "Send 75%-Less Re-Offer", action: "reOffer75Less", class: "bg-violet-600 text-white hover:bg-violet-700" });
+            if (settlement.payableCount > 0) {
+              groups.postReceive.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, settlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
+            }
+            groups.postReceive.push({ label: "Send Review Request", action: "sendReviewRequest", class: "bg-white border-slate-200" });
+        }
+        else if (status === "completed") {
             if (settlement.payableCount > 0) {
               groups.postReceive.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, settlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
             }
@@ -3993,11 +5193,11 @@
 
         // Tracking - reordered with better styling
         // Print docs (mock check for URL)
-        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "shipping_kit_requested", "kit_needs_printing", "needs_printing", "kit_on_the_way_to_customer"].includes(status)) {
+        if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "needs_printing"].includes(status)) {
              groups.tracking.unshift({ label: "Print all packing slips", action: "printDocs", options: { includeAllPackingSlips: true }, class: "bg-white border-slate-200" });
         }
         // Print Packing Slip with better styling
-        groups.tracking.push({ label: focused.isFocused ? `Print Packing Slip (Device ${focused.entry.deviceIndex + 1})` : "Print Packing Slip", action: "printPacking", options: { deviceIndex: focused.isFocused ? focused.entry.deviceIndex : null }, class: "bg-blue-600 text-white hover:bg-blue-700" });
+        groups.tracking.push({ label: "Print Packing Slip", action: "printPacking", class: "bg-blue-600 text-white hover:bg-blue-700" });
         // Delete and Cancel buttons on same line
         if (status !== 'cancelled') {
           groups.tracking.push({ label: "Cancel Order", action: "cancelOrder", class: "text-white bg-orange-600 hover:bg-orange-700" });
@@ -4014,16 +5214,16 @@
         let html = '<div class="space-y-4">';
 
         if (groups.primary.length) {
-             html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${groups.primary.map(renderBtn).join("")}</div>`;
+             html += `<div class="admin-drawer-footer-grid">${groups.primary.map(renderBtn).join("")}</div>`;
         }
         if (groups.shipping.length) {
-             html += `<div class="p-3 bg-blue-50/50 rounded-xl border border-blue-100"><div class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Shipping & Intake</div><div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${groups.shipping.map(renderBtn).join("")}</div></div>`;
+             html += `<div class="p-3 bg-blue-50/50 rounded-xl border border-blue-100"><div class="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-2">Shipping & Intake</div><div class="admin-drawer-footer-grid">${groups.shipping.map(renderBtn).join("")}</div></div>`;
         }
         if (groups.postReceive.length) {
-             html += `<div class="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100"><div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">Post-Receive</div><div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${groups.postReceive.map(renderBtn).join("")}</div></div>`;
+             html += `<div class="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100"><div class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">Post-Receive</div><div class="admin-drawer-footer-grid">${groups.postReceive.map(renderBtn).join("")}</div></div>`;
         }
         if (groups.tracking.length) {
-             html += `<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">${groups.tracking.map(renderBtn).join("")}</div>`;
+             html += `<div class="admin-drawer-footer-grid">${groups.tracking.map(renderBtn).join("")}</div>`;
         }
         if (groups.admin.length) {
              html += `<div class="pt-3 border-t border-slate-100 flex flex-wrap gap-2 items-center">
@@ -4057,6 +5257,8 @@
           carrier: currentItem.carrier || currentItem.lock || order.carrier || order.lock || "unlocked",
           actualBrand: (currentItem.brand || order.brand || '').toLowerCase(),
           actualModelId: currentItem.modelId || currentItem.model || order.modelId || order.model || "",
+          actualBrandOther: "",
+          actualModelOther: "",
           actualStorage: currentItem.storage || order.storage || "",
           storageMatch: "yes",
           isFunctional: "yes",
@@ -4152,15 +5354,29 @@
                 <div>
                   <label class="block text-xs font-semibold text-slate-500 mb-1">Brand</label>
                   <select id="qcActualBrand" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
-                    ${[['iphone','Apple iPhone'],['samsung','Samsung']].map(([v,l]) => `<option value="${v}" ${state.qcData.actualBrand === v ? 'selected' : ''}>${l}</option>`).join('')}
+                    ${[['iphone','Apple iPhone'],['samsung','Samsung'],['other','Other']].map(([v,l]) => `<option value="${v}" ${state.qcData.actualBrand === v ? 'selected' : ''}>${l}</option>`).join('')}
                   </select>
                 </div>
+                ${state.qcData.actualBrand === "other" ? `
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Other Brand</label>
+                    <input id="qcActualBrandOther" type="text" value="${esc(state.qcData.actualBrandOther || "")}" placeholder="Enter brand" class="w-full border border-slate-300 rounded-md px-3 py-2.5 text-sm focus:ring-indigo-500 focus:border-indigo-500" />
+                  </div>
+                ` : ``}
                 <div>
                   <label class="block text-xs font-semibold text-slate-500 mb-1">Model</label>
                   <select id="qcActualModelId" class="w-full border border-slate-300 rounded-md text-sm py-2.5 focus:ring-indigo-500 focus:border-indigo-500">
-                    ${(state.qcModelCache?.[state.qcData.actualBrand] || []).map(m => `<option value="${esc(m.id)}" ${state.qcData.actualModelId === m.id ? 'selected' : ''}>${esc(m.name || m.id)}</option>`).join('') || '<option value="">Select model</option>'}
+                    ${state.qcData.actualBrand === "other"
+                      ? `<option value="other" selected>Other</option>`
+                      : `${(state.qcModelCache?.[state.qcData.actualBrand] || []).map(m => `<option value="${esc(m.id)}" ${state.qcData.actualModelId === m.id ? 'selected' : ''}>${esc(m.name || m.id)}</option>`).join('')}<option value="other" ${state.qcData.actualModelId === 'other' ? 'selected' : ''}>Other</option>` || '<option value="">Select model</option>'}
                   </select>
                 </div>
+                ${(state.qcData.actualBrand === "other" || state.qcData.actualModelId === "other") ? `
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-500 mb-1">Other Model</label>
+                    <input id="qcActualModelOther" type="text" value="${esc(state.qcData.actualModelOther || "")}" placeholder="Enter model" class="w-full border border-slate-300 rounded-md px-3 py-2.5 text-sm focus:ring-indigo-500 focus:border-indigo-500" />
+                  </div>
+                ` : ``}
               </div>
             ` : ""}
             <div>
@@ -4501,6 +5717,7 @@
     function renderConfirmModal() {
       if (!state.confirmModalOpen || !state.confirmModalData) return "";
       const { title, message, confirmText, cancelText, confirmClass, onConfirm } = state.confirmModalData;
+      const showCancel = cancelText !== null && cancelText !== false;
       return `
         <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" style="z-index: 999999;">
           <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 animate-in">
@@ -4511,9 +5728,11 @@
               <p class="text-sm text-slate-700 whitespace-pre-wrap">${esc(message || 'Are you sure you want to proceed?')}</p>
             </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
-              <button id="confirmModalCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700">
-                ${esc(cancelText || 'Cancel')}
-              </button>
+              ${showCancel ? `
+                <button id="confirmModalCancelBtn" class="px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700">
+                  ${esc(cancelText || 'Cancel')}
+                </button>
+              ` : ``}
               <button id="confirmModalConfirmBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white ${confirmClass || 'bg-indigo-600 hover:bg-indigo-700'}">
                 ${esc(confirmText || 'Confirm')}
               </button>
@@ -4530,6 +5749,15 @@
         };
         state.confirmModalOpen = true;
         render();
+      });
+    }
+    async function showInfoModal(options = {}) {
+      return showConfirmation({
+        title: options.title || 'Notice',
+        message: options.message || '',
+        confirmText: options.confirmText || 'OK',
+        cancelText: null,
+        confirmClass: options.confirmClass || 'bg-indigo-600 hover:bg-indigo-700',
       });
     }
     function renderTrackingReportModal() {
@@ -4555,13 +5783,12 @@
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-3"><span class="text-slate-500">Status Changed</span><div class="font-bold text-indigo-700">${Number(d.statusChanged || 0)}</div></div>
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-3"><span class="text-slate-500">Failed</span><div class="font-bold text-rose-700">${Number(d.failed || 0)}</div></div>
               </div>
-              ${Number(d.skippedUps || 0) > 0 ? `<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Skipped UPS labels: <span class="font-bold">${Number(d.skippedUps || 0)}</span> (UPS is excluded from this bulk refresh to prevent incorrect status changes)</div>` : ""}
               <div>
                 <div class="text-xs font-semibold text-slate-500 uppercase mb-2">Current Status Counts</div>
                 <div class="grid grid-cols-3 gap-2 text-xs">
                   <div class="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-800">Label Generated: <span class="font-bold">${Number(statusCounts.label_generated || 0)}</span></div>
                   <div class="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-800">Phone On The Way: <span class="font-bold">${Number(statusCounts.phone_on_the_way || 0)}</span></div>
-                  <div class="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-800">Delivered To Us: <span class="font-bold">${Number(statusCounts.delivered_to_us || 0)}</span></div>
+                  <div class="rounded-lg border border-blue-100 bg-blue-50 p-2 text-blue-800">Delivered: <span class="font-bold">${Number(statusCounts.delivered_to_us || 0)}</span></div>
                 </div>
               </div>
             </div>
@@ -4749,9 +5976,11 @@
             `}
             <footer class="border-t border-slate-200 bg-white px-4 sm:px-8 py-4">
               <div class="flex flex-wrap items-center justify-center gap-4 sm:justify-end">
-                <a href="https://www.trustpilot.com/evaluate/secondhandcell.com" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center">
-                  <img src="https://secondhandcell.com/assets/stars-4.5.svg" alt="Trustpilot 5 star rating" loading="lazy" class="h-10 w-auto object-contain">
-                </a>
+                <div class="w-full max-w-[320px]">
+                  <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76">
+                    <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
+                  </div>
+                </div>
               </div>
             </footer>
           </div>
@@ -4771,6 +6000,9 @@
     }
     function hasBlockingOverlayOpen() {
       return !!(getSelectedOrder() || state.qcOpen || state.reofferOpen || state.reofferPriceGuardOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen || state.shippingLabelModalOpen);
+    }
+    function hasTransientOverlayOpen() {
+      return !!(state.qcOpen || state.reofferOpen || state.reofferPriceGuardOpen || state.orderTextImportOpen || state.confirmModalOpen || state.trackingReportModalOpen || state.paymentConfirmModalOpen || state.unlockInfoModalOpen || state.shippingLabelModalOpen);
     }
     function restoreModalScrollPositions() {
       const qcBody = document.getElementById("qcModalBody");
@@ -4794,15 +6026,19 @@
       document.documentElement.style.overflow = lock ? "hidden" : "";
       document.body.style.overflow = lock ? "hidden" : "";
     }
+    function updateAdminBootUi() {
+      setAdminBootOverlay(!!state.appBooting, state.appBootProgress || 0, state.appBootLabel || "Loading admin workspace…");
+    }
 
-    function render() {
-      if (state.authLoading) {
+    function doRender() {
+      if (state.authLoading && !state.user) {
         $root.innerHTML = `
           <div class="h-screen w-full flex items-center justify-center bg-slate-50">
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
           </div>
         `;
         syncBodyScrollLock();
+        updateAdminBootUi();
         return;
       }
       if (!state.user) {
@@ -4810,6 +6046,7 @@
         lucide.createIcons();
         bindLogin();
         syncBodyScrollLock();
+        updateAdminBootUi();
         return;
       }
       $root.innerHTML = renderApp();
@@ -4818,6 +6055,21 @@
       restoreModalScrollPositions();
       updateSelectAllCheckboxUI();
       syncBodyScrollLock();
+      updateAdminBootUi();
+    }
+    function scheduleRender() {
+      if (scheduledRenderFrame) return;
+      scheduledRenderFrame = requestAnimationFrame(() => {
+        scheduledRenderFrame = 0;
+        doRender();
+      });
+    }
+    function render() {
+      if (scheduledRenderFrame) {
+        cancelAnimationFrame(scheduledRenderFrame);
+        scheduledRenderFrame = 0;
+      }
+      doRender();
     }
     // ----------------------------
     // EVENTS
@@ -4982,11 +6234,14 @@
             event.preventDefault();
             event.stopPropagation();
             const orderId = orderBtn.getAttribute("data-view-order");
+            const deviceKey = orderBtn.getAttribute("data-view-device-key");
+            const groupedKeys = (orderBtn.getAttribute("data-view-device-group-keys") || "").split(",").map((value) => value.trim()).filter(Boolean);
             if (!orderId) return;
             state.selectedOrderId = orderId;
             state.selectedOrderSnapshot = state.allOrders.find(o => o.id === orderId) || state.selectedOrderSnapshot || null;
-            state.selectedDeviceKey = null;
-            state.qcDeviceKey = null;
+            state.selectedDeviceKey = deviceKey || null;
+            state.selectedDeviceGroupKeys = (!deviceKey && groupedKeys.length > 1) ? groupedKeys : [];
+            state.qcDeviceKey = deviceKey || null;
             state.drawerTab = "overview";
             state.statusDropdownOpen = false;
             state.qcOpen = false;
@@ -5002,14 +6257,13 @@
             return;
           }
 
-          const printDeviceSlipBtn = event.target.closest("[data-print-device-slip]");
-          if (printDeviceSlipBtn) {
+          const printOrderSlipBtn = event.target.closest("[data-print-order-slip]");
+          if (printOrderSlipBtn) {
             event.preventDefault();
             event.stopPropagation();
-            const orderId = printDeviceSlipBtn.getAttribute("data-print-device-slip");
-            const deviceIndex = Number.parseInt(printDeviceSlipBtn.getAttribute("data-device-index") || "0", 10);
+            const orderId = printOrderSlipBtn.getAttribute("data-print-order-slip");
             if (!orderId) return;
-            printPackingSlip(orderId, Number.isFinite(deviceIndex) ? deviceIndex : 0);
+            printPackingSlip(orderId);
             return;
           }
 
@@ -5023,6 +6277,7 @@
             state.selectedOrderId = parsed.orderId;
             state.selectedOrderSnapshot = state.allOrders.find(o => o.id === parsed.orderId) || state.selectedOrderSnapshot || null;
             state.selectedDeviceKey = deviceKey;
+            state.selectedDeviceGroupKeys = [];
             state.qcDeviceKey = deviceKey;
             state.drawerTab = "qc";
             state.statusDropdownOpen = false;
@@ -5064,6 +6319,44 @@
         clearSearchBtn.addEventListener("click", () => {
           debouncedApplySearchTerm.cancel();
           applySearchTerm("", "searchInput");
+        });
+      }
+      const editCustomerEmailBtn = document.querySelector("[data-edit-customer-email]");
+      if (editCustomerEmailBtn) {
+        editCustomerEmailBtn.addEventListener("click", () => {
+          const order = getSelectedOrder();
+          if (!order) return;
+          beginCustomerEmailEdit(order);
+        });
+      }
+      const cancelCustomerEmailEditBtn = document.querySelector("[data-cancel-customer-email-edit]");
+      if (cancelCustomerEmailEditBtn) {
+        cancelCustomerEmailEditBtn.addEventListener("click", cancelCustomerEmailEdit);
+      }
+      const saveCustomerEmailBtn = document.querySelector("[data-save-customer-email]");
+      if (saveCustomerEmailBtn) {
+        saveCustomerEmailBtn.addEventListener("click", () => {
+          const orderId = saveCustomerEmailBtn.getAttribute("data-save-customer-email");
+          if (!orderId || state.customerEmailSaving) return;
+          void saveCustomerEmail(orderId);
+        });
+      }
+      const customerEmailInput = document.getElementById("admin-customer-email-input");
+      if (customerEmailInput) {
+        customerEmailInput.addEventListener("input", (event) => {
+          state.customerEmailDraft = String(event.target?.value || "");
+        });
+        customerEmailInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            const order = getSelectedOrder();
+            if (!order || state.customerEmailSaving) return;
+            void saveCustomerEmail(order.id);
+          }
+          if (event.key === "Escape" && !state.customerEmailSaving) {
+            event.preventDefault();
+            cancelCustomerEmailEdit();
+          }
         });
       }
       const clearSearchInlineBtn = document.getElementById("clearSearchInlineBtn");
@@ -5129,10 +6422,14 @@
         row.addEventListener("click", (e) => {
           if (e.target.closest("a,button,input,label,[data-view-device]")) return;
           const orderId = row.getAttribute("data-order-row");
+          const deviceKey = row.getAttribute("data-device-key");
+          const groupedKeys = (row.getAttribute("data-device-group-keys") || "").split(",").map((value) => value.trim()).filter(Boolean);
           if (!orderId) return;
           state.selectedOrderId = orderId;
           state.selectedOrderSnapshot = state.allOrders.find(o => o.id === orderId) || state.selectedOrderSnapshot || null;
-          state.selectedDeviceKey = null;
+          state.selectedDeviceKey = deviceKey || null;
+          state.selectedDeviceGroupKeys = (!deviceKey && groupedKeys.length > 1) ? groupedKeys : [];
+          state.qcDeviceKey = deviceKey || null;
           state.drawerTab = "overview";
           state.unlockInfoModalOpen = false;
           state.unlockInfoModalData = null;
@@ -5156,6 +6453,10 @@
       if (btnBulkVoidAgedOrders) {
         btnBulkVoidAgedOrders.addEventListener("click", () => runBulkVoidAgedOrders(btnBulkVoidAgedOrders));
       }
+      const btnBulkAuto75Less = document.getElementById("bulk-auto-75-less");
+      if (btnBulkAuto75Less) {
+        btnBulkAuto75Less.addEventListener("click", () => runBulkAuto75Less(btnBulkAuto75Less));
+      }
       const btnBulkVoidTestOrders = document.getElementById("bulk-void-test-orders");
       if (btnBulkVoidTestOrders) {
         btnBulkVoidTestOrders.addEventListener("click", () => runBulkVoidTestOrders(btnBulkVoidTestOrders));
@@ -5178,6 +6479,7 @@
           state.selectedOrderId = null;
           state.selectedOrderSnapshot = null;
           state.selectedDeviceKey = null;
+          state.selectedDeviceGroupKeys = [];
           state.qcDeviceKey = null;
           state.statusDropdownOpen = false;
           state.qcOpen = false;
@@ -5217,6 +6519,7 @@
           }
 
           state.selectedDeviceKey = deviceKey;
+          state.selectedDeviceGroupKeys = [];
           state.qcDeviceKey = deviceKey;
           state.drawerTab = "overview";
 
@@ -5328,6 +6631,7 @@
           
           // Open QC modal for editing
           state.selectedDeviceKey = deviceKey;
+          state.selectedDeviceGroupKeys = [];
           state.qcDeviceKey = deviceKey;
           state.qcOpen = true;
           state.modalScrollTop.qc = 0;
@@ -5387,6 +6691,7 @@
           const targetDeviceKey = btn.getAttribute("data-device-key") || getActiveDeviceKey(order);
           if (!targetDeviceKey) return;
           state.selectedDeviceKey = targetDeviceKey;
+          state.selectedDeviceGroupKeys = [];
           const newStatus = btn.getAttribute("data-set-device-status");
           state.statusDropdownOpen = false;
           render();
@@ -5411,12 +6716,22 @@
           btn.addEventListener("click", async (e) => {
             e.stopPropagation();
             const action = btn.getAttribute("data-action");
+            const focusedGroup = getFocusedDeviceGroup(order);
+            const scopedDeviceKeys = focusedGroup.isGrouped
+              ? focusedGroup.deviceKeys
+              : (state.selectedDeviceKey ? [state.selectedDeviceKey] : null);
             if (action === "cancelOrder") {
               await handleCancelOrder(order);
               return;
             }
             if (action === "deleteOrder") {
-              const ok = confirm("Delete this order? This cannot be undone.");
+              const ok = await showConfirmation({
+                title: 'Delete Order',
+                message: 'Delete this order? This cannot be undone.',
+                confirmText: 'Delete',
+                cancelText: 'Cancel',
+                confirmClass: 'bg-rose-600 hover:bg-rose-700',
+              });
               if (!ok) return;
               await handleAction(order.id, "deleteOrder");
               state.selectedOrderId = null;
@@ -5427,12 +6742,38 @@
               return;
             }
             if (action === "reOffer") {
+              if (focusedGroup.isGrouped) {
+                toast("Open a specific device to send a re-offer.", "error");
+                return;
+              }
               await openReofferModal(order, state.qcData);
               render();
               return;
             }
+            if (action === "reOffer75Less") {
+              if (focusedGroup.isGrouped) {
+                toast("Open a specific device to send a re-offer.", "error");
+                return;
+              }
+              const targetDeviceKey = getActiveDeviceKey(order) || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
+              const result = await handleAction(order.id, "reOffer75Less", { body: { deviceKey: targetDeviceKey } });
+              if (result?.ok) {
+                toast("75%-less re-offer sent successfully.", "success");
+              }
+              return;
+            }
+            if (action === "autoRequote") {
+              const targetDeviceKeys = focusedGroup.isGrouped
+                ? focusedGroup.deviceKeys
+                : [getActiveDeviceKey(order) || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0)];
+              const result = await handleAction(order.id, "autoRequote", { body: { deviceKeys: targetDeviceKeys } });
+              if (result?.ok) {
+                toast("75%-less deduction applied and customer emailed.", "success");
+              }
+              return;
+            }
             if (action === "payNow") {
-              const settlement = getOrderSettlementSummary(order);
+              const settlement = getOrderSettlementSummary(order, scopedDeviceKeys);
               if (!settlement.payableCount) {
                 toast("No payable devices available. Complete QC or accept re-offers first.", "error");
                 return;
@@ -5553,18 +6894,36 @@
           const actualBrand = document.getElementById("qcActualBrand");
           if (actualBrand) actualBrand.addEventListener("change", async () => {
             state.qcData.actualBrand = actualBrand.value;
+            if (state.qcData.actualBrand === "other") {
+              state.qcData.actualModelId = "other";
+              state.qcData.actualStorage = state.qcData.actualStorage || "";
+              render();
+              return;
+            }
             const models = await getModelsForBrand(state.qcData.actualBrand);
             state.qcData.actualModelId = models[0]?.id || "";
             const storages = await getStorageForModel(state.qcData.actualBrand, state.qcData.actualModelId);
             state.qcData.actualStorage = storages[0] || "";
             render();
           });
+          const actualBrandOther = document.getElementById("qcActualBrandOther");
+          if (actualBrandOther) actualBrandOther.addEventListener("input", () => {
+            state.qcData.actualBrandOther = actualBrandOther.value;
+          });
           const actualModel = document.getElementById("qcActualModelId");
           if (actualModel) actualModel.addEventListener("change", async () => {
             state.qcData.actualModelId = actualModel.value;
+            if (state.qcData.actualModelId === "other" || state.qcData.actualBrand === "other") {
+              render();
+              return;
+            }
             const storages = await getStorageForModel(state.qcData.actualBrand, state.qcData.actualModelId);
             if (!storages.includes(state.qcData.actualStorage)) state.qcData.actualStorage = storages[0] || "";
             render();
+          });
+          const actualModelOther = document.getElementById("qcActualModelOther");
+          if (actualModelOther) actualModelOther.addEventListener("input", () => {
+            state.qcData.actualModelOther = actualModelOther.value;
           });
           const actualStorage = document.getElementById("qcActualStorage");
           if (actualStorage) actualStorage.addEventListener("change", () => {
@@ -6165,6 +7524,12 @@
       state.bulkVoidProgressDetails = "";
       state.modalScrollTop = { qc: 0, reoffer: 0, import: 0 };
       state.sidebarOpen = false;
+      state.ordersLoading = false;
+      state.ordersCacheHydrated = false;
+      state.ordersCacheLoadedAt = 0;
+      state.appBooting = false;
+      state.appBootProgress = 0;
+      state.appBootLabel = "Loading admin workspace…";
     }
 
     async function isUidAdmin(uid) {
@@ -6178,12 +7543,26 @@
     onAuthStateChanged(auth, async (u) => {
       perfMark('admin:auth-resolved');
       const currentCheckVersion = ++authCheckVersion;
+      clearPendingSignedOutTimer();
 
       if (!u) {
-        state.user = null;
-        state.authLoading = false;
-        resetAdminState();
-        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+        const hadCachedAdmin = !!state.user || !!readAdminAuthCache();
+        if (hadCachedAdmin) {
+          state.authLoading = true;
+          render();
+          pendingSignedOutTimer = setTimeout(async () => {
+            pendingSignedOutTimer = null;
+            if (auth.currentUser) {
+              return;
+            }
+            await detachAdminNotifications();
+            finalizeSignedOutState();
+            render();
+          }, 1200);
+          return;
+        }
+        await detachAdminNotifications();
+        finalizeSignedOutState();
         return;
       }
 
@@ -6195,9 +7574,11 @@
         if (currentCheckVersion !== authCheckVersion) return;
 
         if (!allowed) {
+          await detachAdminNotifications();
           state.user = null;
           state.authLoading = false;
           state.authError = "Access denied. This account is not listed in admins.";
+          writeAdminAuthCache(null);
           resetAdminState();
           try { await signOut(auth); } catch (signOutErr) { console.error(signOutErr); }
           filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
@@ -6206,28 +7587,45 @@
 
         state.authError = "";
         state.user = u;
+        writeAdminAuthCache(u);
         state.authLoading = false;
-        state.ordersLoading = true;
-        // Render the full admin layout immediately, then stream Firestore data in chunks.
-        // This avoids a blank/blocked experience while network requests are in flight.
-        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
-        perfMark('admin:layout-rendered-before-fetch');
+        const hydratedFromCache = state.ordersCacheHydrated || await hydrateOrdersFromLocalCache();
+        state.ordersLoading = !hydratedFromCache;
+        if (!hydratedFromCache) {
+          state.appBooting = true;
+          state.appBootProgress = 14;
+          state.appBootLabel = "Preparing admin workspace…";
+          updateAdminBootUi();
+          render();
+        }
+        await setupAdminNotifications(u);
+        if (!hydratedFromCache) {
+          state.appBootProgress = 22;
+          state.appBootLabel = "Connecting to orders…";
+          updateAdminBootUi();
+        }
         requestAnimationFrame(() => {
           void startOrdersListener();
         });
       } catch (err) {
         console.error("Admin access check failed:", err);
-        state.user = null;
         state.authLoading = false;
+        if (state.user || readAdminAuthCache()) {
+          state.user = state.user || readAdminAuthCache();
+          state.authError = "";
+          render();
+          toast("Admin session check failed. Keeping current view and retrying on next sync.", "error");
+          return;
+        }
+        await detachAdminNotifications();
+        state.user = null;
         state.authError = "Could not verify admin access. Please try again.";
         resetAdminState();
-        try { await signOut(auth); } catch (signOutErr) { console.error(signOutErr); }
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
       }
     });
     // first paint (auth spinner)
     render();
   </script>
-  <script src="/assets/js/page-tracker.js" defer></script>
 </body>
 </html>
