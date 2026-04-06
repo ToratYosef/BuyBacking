@@ -690,7 +690,8 @@ function getBaseOrdersForStatus(status) {
         normalizedStatus === 're-offered-accepted' ||
         normalizedStatus === 're-offered-auto-accepted' ||
         normalizedStatus === 'requote_accepted' ||
-        normalizedStatus === NO_EMAIL_RESPONSE_STATUS
+        normalizedStatus === NO_EMAIL_RESPONSE_STATUS ||
+        normalizedStatus === 'ready_to_pay'
       );
     });
   }
@@ -4606,7 +4607,8 @@ function updateDashboardCounts(ordersData) {
       return status === 're-offered-accepted'
         || status === 're-offered-auto-accepted'
         || status === 'requote_accepted'
-        || status === NO_EMAIL_RESPONSE_STATUS;
+        || status === NO_EMAIL_RESPONSE_STATUS
+        || status === 'ready_to_pay';
     }).length,
     [NO_EMAIL_RESPONSE_STATUS]: visibleOrders.filter(o => normalizeStatus(o) === NO_EMAIL_RESPONSE_STATUS).length,
     're-offered-declined': visibleOrders.filter(o => o.status === 're-offered-declined').length,
@@ -7072,6 +7074,16 @@ if (normalized.includes('unlock')) return 'unlocked';
 return normalized.replace(/\s+/g, '');
 }
 
+function shouldAdvanceQcToReadyToPay({ hasMismatches = false, hasConditionEmailSelected = false, reofferEnabled = true } = {}) {
+  if (hasConditionEmailSelected) {
+    return false;
+  }
+  if (hasMismatches && reofferEnabled) {
+    return false;
+  }
+  return true;
+}
+
 function getQcConditionKey(conditionMap, qcResult) {
 if (!conditionMap) return '';
 const availableKeys = Object.keys(conditionMap);
@@ -7245,6 +7257,19 @@ if (qcEmailStolen?.checked) {
 sendConditionEmail(currentOrderDetails.id, 'stolen', 'Lost/Stolen notice');
 }
 
+const hasConditionEmailSelected = Boolean(
+  qcEmailBalance?.checked ||
+  qcEmailFmi?.checked ||
+  qcEmailPassword?.checked ||
+  qcEmailStolen?.checked
+);
+const shouldTriggerReoffer = mismatches.length && qcReofferToggle?.checked !== false;
+const shouldMoveToReadyToPay = shouldAdvanceQcToReadyToPay({
+  hasMismatches: mismatches.length > 0,
+  hasConditionEmailSelected,
+  reofferEnabled: qcReofferToggle?.checked !== false,
+});
+
 try {
 const orderRef = doc(db, 'orders', currentOrderDetails.id);
 const payload = {
@@ -7265,9 +7290,19 @@ currentOrderDetails.imei = qcResult.imei || currentOrderDetails.imei;
 console.error('Failed to save QC intake fields:', error);
 }
 
+if (shouldMoveToReadyToPay) {
+  try {
+    await updateOrderStatusInline(currentOrderDetails.id, 'ready_to_pay', { notifyCustomer: false });
+    currentOrderDetails.status = 'ready_to_pay';
+  } catch (statusError) {
+    console.error('Failed to advance QC status to ready_to_pay:', statusError);
+    displayModalMessage(`QC saved, but failed to move status to Ready to Pay: ${statusError.message}`, 'error');
+  }
+}
+
 qcModal.classList.add('hidden');
 
-if (mismatches.length && qcReofferToggle?.checked !== false) {
+if (shouldTriggerReoffer) {
 showReofferForm(currentOrderDetails.id);
 const suggestedPrice = await getQcSuggestedPrice(currentOrderDetails, qcResult);
 if (suggestedPrice !== null && reofferNewPrice) {
@@ -7292,7 +7327,12 @@ reofferComments.value = `QC results differ from customer submission.\n${summaryP
 }
 displayModalMessage('QC differs from customer submission. Review the suggested re-offer below.', 'info');
 } else {
-displayModalMessage('QC checklist saved. No mismatch with customer submission.', 'success');
+if (shouldMoveToReadyToPay) {
+  displayModalMessage('QC checklist saved and order moved to Ready to Pay.', 'success');
+} else {
+  displayModalMessage('QC checklist saved. No mismatch with customer submission.', 'success');
+}
+openOrderDetailsModal(currentOrderDetails.id);
 }
 }
 
@@ -8803,7 +8843,8 @@ function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options =
         return normalizedStatus === 're-offered-accepted'
           || normalizedStatus === 're-offered-auto-accepted'
           || normalizedStatus === 'requote_accepted'
-          || normalizedStatus === NO_EMAIL_RESPONSE_STATUS;
+          || normalizedStatus === NO_EMAIL_RESPONSE_STATUS
+          || normalizedStatus === 'ready_to_pay';
       });
     } else {
       filtered = filtered.filter(order => normalizeStatus(order) === status);
