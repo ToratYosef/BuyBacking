@@ -338,10 +338,8 @@
             <li><a href="/terms.html">Terms of Service</a></li>
             <li><a href="/unsubscribe/">Unsubscribe</a></li>
           </ul>
-          <div style="margin-top:16px;max-width:320px;">
-            <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76">
-              <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
-            </div>
+          <div class="mx-auto mt-10 max-w-sm">
+            <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76"><a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a></div>
           </div>
         </div>
       </div>

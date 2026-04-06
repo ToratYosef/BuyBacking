@@ -585,6 +585,41 @@
       const orderTotal = Number(order?.totalPayout ?? order?.estimatedQuote ?? order?.originalQuote ?? NaN);
       return Number.isFinite(orderTotal) && orderTotal >= 0 ? orderTotal : 0;
     }
+    function buildReadyToPaySettlementFallback(order, targetDeviceKeys = []) {
+      if (!order) return null;
+      const requestedKeys = Array.isArray(targetDeviceKeys) && targetDeviceKeys.length
+        ? targetDeviceKeys
+        : [getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0)];
+      const targetSet = new Set(requestedKeys);
+      const entries = getOrderDeviceEntries(order);
+      const payableDeviceKeys = [];
+      let payableTotal = 0;
+
+      for (const entry of entries) {
+        const item = entry.item || {};
+        const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
+        if (!targetSet.has(deviceKey)) continue;
+        const normalizedStatus = normalizeStatusKey(getDeviceStatus(order, deviceKey));
+        if (normalizedStatus === 'completed' || normalizedStatus === 'return-label-generated') continue;
+        const payout = Number(getEffectivePerDeviceOffer(order, item, deviceKey) || 0);
+        payableDeviceKeys.push(deviceKey);
+        payableTotal += Number.isFinite(payout) ? payout : 0;
+      }
+
+      if (!payableDeviceKeys.length) return null;
+      return {
+        payableDeviceKeys,
+        payableCount: payableDeviceKeys.length,
+        payableTotal,
+        nonReofferPayableCount: payableDeviceKeys.length,
+        deductionValue: 0,
+        deductionApplied: 0,
+        finalPayable: payableTotal,
+        eligibleDeviceCount: payableDeviceKeys.length,
+        declinedDeviceKeys: [],
+        declinedCount: 0,
+      };
+    }
     function formatCarrierLabel(carrierRaw) {
       const c = String(carrierRaw || '').trim().toLowerCase();
       if (!c) return 'N/A';
@@ -1111,6 +1146,7 @@
       customerEmailEditOpen: false,
       customerEmailDraft: "",
       customerEmailSaving: false,
+      customerEmailResending: false,
       ordersCacheHydrated: false,
       ordersCacheLoadedAt: 0,
       appBooting: true,
@@ -1597,14 +1633,16 @@
       if (normalizedStatus === 'emailed') {
         reasonText = 'Required issue remains unresolved, so this revised offer is set at 75% less than the quoted amount.';
       } else if (normalizedStatus === 'issue_resolved') {
-        reasonText = 'Device returned from the resolution flow, and this revised offer is set at 75% less than the quoted amount.';
+        reasonText = 'The reported issue was still unsolved, so this revised offer is set at 75% less than the quoted amount.';
       }
 
       return {
         deviceKey: targetDeviceKey,
         newPrice: reducedPrice,
         reasons: [reasonText],
-        comments: `75%-less re-offer sent from admin. Original quote: $${originalPrice.toFixed(2)}. Revised offer: $${reducedPrice.toFixed(2)}.`
+        comments: normalizedStatus === 'issue_resolved'
+          ? `75%-less re-offer sent from admin because the reported issue was still unsolved. Original quote: $${originalPrice.toFixed(2)}. Revised offer: $${reducedPrice.toFixed(2)}.`
+          : `75%-less re-offer sent from admin. Original quote: $${originalPrice.toFixed(2)}. Revised offer: $${reducedPrice.toFixed(2)}.`
       };
     }
 
@@ -1944,9 +1982,10 @@
       state.customerEmailEditOpen = false;
       state.customerEmailDraft = "";
       state.customerEmailSaving = false;
+      state.customerEmailResending = false;
       render();
     }
-    async function saveCustomerEmail(orderId) {
+    async function saveCustomerEmail(orderId, { resendEmails = false } = {}) {
       const order = state.allOrders.find((entry) => entry.id === orderId) || state.selectedOrderSnapshot || null;
       if (!orderId || !order) return;
       const nextEmail = String(state.customerEmailDraft || "").trim().toLowerCase();
@@ -1961,7 +2000,8 @@
         return;
       }
 
-      state.customerEmailSaving = true;
+      state.customerEmailSaving = !resendEmails;
+      state.customerEmailResending = resendEmails;
       render();
 
       const payload = {
@@ -2011,20 +2051,26 @@
       }
 
       try {
-        await withPerf(`firestore:updateCustomerEmail:${orderId}`, () => updateDoc(doc(db, "orders", orderId), payload));
+        if (resendEmails) {
+          await apiPost(`/orders/${orderId}/admin-update-email-and-resend`, { email: nextEmail });
+        } else {
+          await withPerf(`firestore:updateCustomerEmail:${orderId}`, () => updateDoc(doc(db, "orders", orderId), payload));
+        }
         state.customerEmailEditOpen = false;
         state.customerEmailDraft = "";
         state.customerEmailSaving = false;
+        state.customerEmailResending = false;
         render();
-        toast("Customer email updated.", "success");
+        toast(resendEmails ? "Customer email updated and emails resent." : "Customer email updated.", "success");
       } catch (error) {
         revertLocalEmail(order);
         if (state.selectedOrderSnapshot?.id === orderId && state.selectedOrderSnapshot !== order) {
           revertLocalEmail(state.selectedOrderSnapshot);
         }
         state.customerEmailSaving = false;
+        state.customerEmailResending = false;
         render();
-        toast(error?.message || "Failed to update email.", "error");
+        toast(error?.message || (resendEmails ? "Failed to update email and resend emails." : "Failed to update email."), "error");
       }
     }
     // ----------------------------
@@ -3453,7 +3499,7 @@
     async function handleAction(orderId, actionType, options = {}) {
       try {
         // Add confirmations for critical actions
-        if (['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
+        if (!options?.skipConfirmation && ['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
           const confirmMessages = {
             'reOffer': 'Send re-offer to customer?\n\nThis will notify the customer with updated pricing and conditions.',
             'reOffer75Less': 'Send a re-offer for 75% less?\n\nThis sends a normal re-offer email and the customer can accept or decline it on the re-offer page.',
@@ -4833,12 +4879,17 @@
                         <button
                           data-save-customer-email="${esc(order.id)}"
                           class="inline-flex items-center rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
-                          ${state.customerEmailSaving ? "disabled" : ""}
+                          ${(state.customerEmailSaving || state.customerEmailResending) ? "disabled" : ""}
                         >${state.customerEmailSaving ? "Saving..." : "Save Email"}</button>
+                        <button
+                          data-save-resend-customer-email="${esc(order.id)}"
+                          class="inline-flex items-center rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                          ${(state.customerEmailSaving || state.customerEmailResending) ? "disabled" : ""}
+                        >${state.customerEmailResending ? "Saving + Resending..." : "Save + Resend Emails"}</button>
                         <button
                           data-cancel-customer-email-edit="1"
                           class="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-                          ${state.customerEmailSaving ? "disabled" : ""}
+                          ${(state.customerEmailSaving || state.customerEmailResending) ? "disabled" : ""}
                         >Cancel</button>
                       </div>
                     </div>
@@ -5229,12 +5280,10 @@
             }
         }
         else if (status === "ready_to_pay") {
-            groups.postReceive.push({ label: "Send Re-offer", action: "reOffer", class: "bg-purple-600 text-white hover:bg-purple-700" });
-            groups.postReceive.push({ label: "Send 75%-Less Re-Offer", action: "reOffer75Less", class: "bg-violet-600 text-white hover:bg-violet-700" });
-            if (settlement.payableCount > 0) {
-              groups.postReceive.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, settlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
-            }
-            groups.postReceive.push({ label: "Send Review Request", action: "sendReviewRequest", class: "bg-white border-slate-200" });
+            const readyToPaySettlement = settlement.payableCount > 0
+              ? settlement
+              : (buildReadyToPaySettlementFallback(order, scopedDeviceKeys) || settlement);
+            groups.postReceive.push({ label: `Pay Now ($${Number(getFinalPayableAmount(order, readyToPaySettlement) || 0).toFixed(2)})`, action: "payNow", class: "bg-emerald-600 text-white" });
         }
         else if (status === "completed") {
             if (settlement.payableCount > 0) {
@@ -5956,12 +6005,23 @@
 
       const info = state.unlockInfoModalData || {};
       const unlock = info.unlockInfo || null;
+      const issueEntries = Array.isArray(info.issueEntries) ? info.issueEntries : [];
       const method = String(unlock?.method || '').trim().toLowerCase();
       const hasUnlockData = !!(unlock && method && (unlock.value || (Array.isArray(unlock.patternPath) && unlock.patternPath.length)));
       const patternPath = Array.isArray(unlock?.patternPath) ? unlock.patternPath : [];
+      const issueDetailsHtml = issueEntries.length
+        ? `
+            <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div class="text-xs font-semibold uppercase text-slate-500 mb-3">Issue Being Re-Checked</div>
+              <div class="flex flex-wrap gap-2">
+                ${issueEntries.map((entry) => `<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-800">${esc(entry.label || formatStatusLabel(entry.reason || 'Issue'))}</span>`).join('')}
+              </div>
+            </div>
+          `
+        : '';
 
       const detailHtml = !hasUnlockData
-        ? `<div class="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm font-medium">No unlock details were submitted by customer for this device.</div>`
+        ? ''
         : method === 'pin'
           ? `<div class="rounded-xl border border-indigo-200 bg-indigo-50 p-5"><div class="text-xs font-semibold uppercase text-indigo-600 mb-2">PIN</div><div class="text-4xl font-extrabold tracking-widest text-indigo-900 font-mono">${esc(unlock.value)}</div></div>`
           : method === 'password'
@@ -5979,23 +6039,25 @@
           <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden">
             <div class="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-3">
               <div>
-                <h3 class="text-lg font-bold text-slate-900">Unlock Info</h3>
-                <p class="text-xs text-slate-500 mt-1">Order ${esc(order.id)} • ${esc(info.deviceLabel || 'Device')}</p>
+                <h3 class="text-lg font-bold text-slate-900">Was The Issue Fixed?</h3>
+                <p class="text-sm text-slate-500 mt-1">Order ${esc(order.id)} • ${esc(info.deviceLabel || 'Device')}</p>
               </div>
               <button id="unlockInfoCloseBtn" class="text-slate-400 hover:text-slate-600">
                 <i data-lucide="x" style="width:20px;height:20px"></i>
               </button>
             </div>
             <div class="px-6 py-5 space-y-4">
+              <p class="text-sm text-slate-600">If the issue was fixed, continue with the normal QC flow. If not, send the customer a 75%-less re-offer and move this device into regular re-offer pending.</p>
               <div class="text-xs text-slate-500 uppercase font-semibold">Current Device Status</div>
               <div class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(info.deviceStatus || '')}">${esc(formatStatusLabel(info.deviceStatus || 'unknown'))}</div>
+              ${issueDetailsHtml}
               ${detailHtml}
             </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
               <div class="flex flex-wrap items-center justify-end gap-2 w-full">
                 <button id="unlockInfoCloseBtnFooter" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Close</button>
-                <button id="unlockInfoContinueQcBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">It worked, continue with QC</button>
-                <button id="unlockInfoPasswordWrongBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700">Didn’t work</button>
+                <button id="unlockInfoContinueQcBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700">Yes, Continue QC</button>
+                <button id="unlockInfoPasswordWrongBtn" class="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700">No, Send 75%-Less Re-Offer</button>
               </div>
             </div>
           </div>
@@ -6044,10 +6106,8 @@
             `}
             <footer class="border-t border-slate-200 bg-white px-4 sm:px-8 py-4">
               <div class="flex flex-wrap items-center justify-center gap-4 sm:justify-end">
-                <div class="w-full max-w-[320px]">
-                  <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76">
-                    <a href="https://www.trustpilot.com/review/secondhandcell.com" target="_blank" rel="noopener">Trustpilot</a>
-                  </div>
+                <div class="mx-auto mt-10 max-w-sm">
+                  <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="68c8cb56da935f8a761f99a9" data-style-height="52px" data-style-width="100%" data-token="5b88bae4-1400-45d0-81d4-480b85d61b76" style="position: relative;"><iframe title="Customer reviews powered by Trustpilot" loading="auto" src="https://widget.trustpilot.com/trustboxes/56278e9abfbbba0bdcd568bc/index.html?templateId=56278e9abfbbba0bdcd568bc&amp;businessunitId=68c8cb56da935f8a761f99a9#locale=en-US&amp;styleHeight=52px&amp;styleWidth=100%25&amp;token=5b88bae4-1400-45d0-81d4-480b85d61b76" style="position: relative; height: 52px; width: 100%; border-style: none; display: block; overflow: hidden;"></iframe></div>
                 </div>
               </div>
             </footer>
@@ -6405,8 +6465,16 @@
       if (saveCustomerEmailBtn) {
         saveCustomerEmailBtn.addEventListener("click", () => {
           const orderId = saveCustomerEmailBtn.getAttribute("data-save-customer-email");
-          if (!orderId || state.customerEmailSaving) return;
+          if (!orderId || state.customerEmailSaving || state.customerEmailResending) return;
           void saveCustomerEmail(orderId);
+        });
+      }
+      const saveResendCustomerEmailBtn = document.querySelector("[data-save-resend-customer-email]");
+      if (saveResendCustomerEmailBtn) {
+        saveResendCustomerEmailBtn.addEventListener("click", () => {
+          const orderId = saveResendCustomerEmailBtn.getAttribute("data-save-resend-customer-email");
+          if (!orderId || state.customerEmailSaving || state.customerEmailResending) return;
+          void saveCustomerEmail(orderId, { resendEmails: true });
         });
       }
       const customerEmailInput = document.getElementById("admin-customer-email-input");
@@ -6418,10 +6486,10 @@
           if (event.key === "Enter") {
             event.preventDefault();
             const order = getSelectedOrder();
-            if (!order || state.customerEmailSaving) return;
+            if (!order || state.customerEmailSaving || state.customerEmailResending) return;
             void saveCustomerEmail(order.id);
           }
-          if (event.key === "Escape" && !state.customerEmailSaving) {
+          if (event.key === "Escape" && !state.customerEmailSaving && !state.customerEmailResending) {
             event.preventDefault();
             cancelCustomerEmailEdit();
           }
@@ -6596,50 +6664,54 @@
           const entry = entries.find((item) => item.deviceIndex === parsed.deviceIndex) || entries[0] || { item: order };
           const item = entry.item || order;
 
-          if (isScreenLockOnlyResolved(order, deviceKey)) {
+          if (deviceStatus === 'issue_resolved') {
             state.qcOpen = false;
             state.qcData = null;
-            try {
-              const unlockInfoResponse = await fetchReqcUnlockInfo(order.id, deviceKey);
-              state.unlockInfoModalData = {
-                orderId: order.id,
-                deviceKey,
-                deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
-                deviceStatus,
-                issueResolved: Boolean(unlockInfoResponse?.issueResolved),
-                issueNotes: unlockInfoResponse?.issueNotes || null,
-                adminReview: unlockInfoResponse?.adminReview || null,
-                unlockInfo: unlockInfoResponse?.unlockInfo || null,
-              };
-              state.unlockInfoModalOpen = true;
-              render();
-            } catch (error) {
-              console.error('Failed to load re-QC unlock info', error);
-              const fallbackUnlock = getDeviceUnlockInfo(order, deviceKey);
-              if (fallbackUnlock) {
+            const baseModalData = {
+              orderId: order.id,
+              deviceKey,
+              deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
+              deviceStatus,
+              issueEntries: getDeviceIssueEntries(order, deviceKey),
+            };
+            if (isScreenLockOnlyResolved(order, deviceKey)) {
+              try {
+                const unlockInfoResponse = await fetchReqcUnlockInfo(order.id, deviceKey);
                 state.unlockInfoModalData = {
-                  orderId: order.id,
-                  deviceKey,
-                  deviceLabel: item.device || item.deviceName || item.model || `Device ${parsed.deviceIndex + 1}`,
-                  deviceStatus,
-                  unlockInfo: fallbackUnlock,
+                  ...baseModalData,
+                  issueResolved: Boolean(unlockInfoResponse?.issueResolved),
+                  issueNotes: unlockInfoResponse?.issueNotes || null,
+                  adminReview: unlockInfoResponse?.adminReview || null,
+                  unlockInfo: unlockInfoResponse?.unlockInfo || null,
                 };
                 state.unlockInfoModalOpen = true;
                 render();
-                toast('Unable to load server unlock context; showing saved unlock details.', 'info');
                 return;
+              } catch (error) {
+                console.error('Failed to load re-QC unlock info', error);
+                const fallbackUnlock = getDeviceUnlockInfo(order, deviceKey);
+                if (fallbackUnlock) {
+                  state.unlockInfoModalData = {
+                    ...baseModalData,
+                    unlockInfo: fallbackUnlock,
+                  };
+                  state.unlockInfoModalOpen = true;
+                  render();
+                  toast('Unable to load server unlock context; showing saved unlock details.', 'info');
+                  return;
+                }
               }
-              state.unlockInfoModalOpen = false;
-              state.unlockInfoModalData = null;
-              toast(error?.message || 'Unlock info unavailable for this device.', 'error');
             }
+            state.unlockInfoModalData = baseModalData;
+            state.unlockInfoModalOpen = true;
+            render();
             return;
           }
 
           state.unlockInfoModalOpen = false;
           state.unlockInfoModalData = null;
 
-          if (deviceStatus === 'issue_resolved' || deviceStatus === 'emailed') {
+          if (deviceStatus === 'emailed') {
             state.qcOpen = true;
             state.modalScrollTop.qc = 0;
             state.qcStep = 1;
@@ -6842,11 +6914,15 @@
             }
             if (action === "payNow") {
               const settlement = getOrderSettlementSummary(order, scopedDeviceKeys);
-              if (!settlement.payableCount) {
+              const readyToPayFallback = normalizeStatusKey(focusedGroup.status || order?.status || '') === 'ready_to_pay'
+                ? buildReadyToPaySettlementFallback(order, scopedDeviceKeys)
+                : null;
+              const paymentSettlement = settlement.payableCount > 0 ? settlement : readyToPayFallback;
+              if (!paymentSettlement?.payableCount) {
                 toast("No payable devices available. Complete QC or accept re-offers first.", "error");
                 return;
               }
-              state.paymentConfirmPayload = settlement;
+              state.paymentConfirmPayload = paymentSettlement;
               state.paymentConfirmModalOpen = true;
               render();
               return;
@@ -7448,19 +7524,22 @@
             const order = getSelectedOrder();
             const orderId = state.unlockInfoModalData?.orderId || order?.id;
             const deviceKey = state.unlockInfoModalData?.deviceKey || state.selectedDeviceKey;
+            const hasUnlockInfo = Boolean(state.unlockInfoModalData?.unlockInfo);
             if (!orderId || !deviceKey) {
               closeUnlockModal();
               return;
             }
 
             try {
-              const result = await submitReqcUnlockResult(orderId, {
-                deviceKey,
-                result: 'worked',
-                notes: 'Unlocked successfully in re-QC',
-              });
-              if (result?.nextAction !== 'continue_qc') {
-                throw new Error('Unexpected re-QC response from server.');
+              if (hasUnlockInfo) {
+                const result = await submitReqcUnlockResult(orderId, {
+                  deviceKey,
+                  result: 'worked',
+                  notes: 'Issue marked fixed in re-QC. Continue with QC.',
+                });
+                if (result?.nextAction !== 'continue_qc') {
+                  throw new Error('Unexpected re-QC response from server.');
+                }
               }
               await hydrateSelectedOrderDetails(orderId);
               state.selectedDeviceKey = deviceKey;
@@ -7472,10 +7551,10 @@
               state.qcStep = 1;
               state.qcData = null;
               render();
-              toast('Re-QC unlock marked as worked. Continue QC.', 'success');
+              toast('Issue marked fixed. Continue QC.', 'success');
               filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
             } catch (error) {
-              console.error('Failed to submit worked re-QC unlock result', error);
+              console.error('Failed to continue re-QC flow', error);
               toast(error?.message || 'Failed to save re-QC result.', 'error');
             }
           });
@@ -7491,21 +7570,19 @@
               return;
             }
             try {
-              const result = await submitReqcUnlockResult(orderId, {
-                deviceKey,
-                result: 'failed',
-                notes: "PIN/password provided did not unlock device during re-QC.",
+              const result = await handleAction(orderId, 'autoRequote', {
+                skipConfirmation: true,
+                body: { deviceKeys: [deviceKey] }
               });
-              if (result?.nextAction !== 'await_customer_resubmission') {
-                throw new Error('Unexpected re-QC response from server.');
+              if (!result?.ok) {
+                throw result?.error || new Error('Failed to send 75%-less re-offer.');
               }
-              await hydrateSelectedOrderDetails(orderId);
-              toast('Marked as failed and resent email to customer.', 'success');
               closeUnlockModal();
+              toast('75%-less re-offer sent. Device moved to Re-offer Pending.', 'success');
               filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
             } catch (error) {
-              console.error('Failed to submit failed re-QC unlock result', error);
-              toast(error?.message || 'Failed to send password incorrect email.', 'error');
+              console.error('Failed to send re-QC 75%-less re-offer', error);
+              toast(error?.message || 'Failed to send 75%-less re-offer.', 'error');
             }
           });
         }

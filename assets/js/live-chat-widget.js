@@ -21,6 +21,7 @@ const VISITOR_KEY = "shc_live_chat_visitor_id";
 const SESSION_KEY = "shc_live_chat_session_id";
 const WIDGET_STATE_KEY = "shc_live_chat_open";
 const SUPPORT_REP_ICON = "/assets/img/chat-support-rep.webp";
+const LIVE_CHAT_WIDGET_ENABLED = false;
 
 const QUICK_ACTIONS = [
   { id: "track_order", label: "Track an order" },
@@ -1006,6 +1007,7 @@ async function handleAutoResponse(state, rawText, explicitIntent = null, options
 }
 
 async function bootWidget() {
+  if (!LIVE_CHAT_WIDGET_ENABLED) return;
   injectStyles();
 
   const state = {

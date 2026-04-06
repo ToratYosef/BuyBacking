@@ -7457,6 +7457,7 @@ function renderActionButtons(order) {
       }
       break;
     case 're-offered-accepted':
+    case 'ready_to_pay':
       if (order.paymentMethod === 'zelle') {
         primaryActions.push(
           createButton('Mark Paid', () => handleAction(order.id, 'markCompleted'), 'bg-emerald-600 hover:bg-emerald-700')

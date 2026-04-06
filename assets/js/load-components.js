@@ -1,6 +1,7 @@
 const componentCache = new Map();
 let componentsPromise = null;
 let sharedScriptsPromise = null;
+let trustpilotScriptPromise = null;
 const COMPONENT_CACHE_PREFIX = "shc:component:v1:";
 
 function getCachedComponent(path) {
@@ -102,6 +103,54 @@ function loadScriptTag(src, { type = "text/javascript", defer = true } = {}) {
   });
 }
 
+function ensureTrustpilotWidgetScript() {
+  const existing = document.querySelector('script[data-trustpilot-widget-script="true"]')
+    || document.querySelector('script[src="//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js"]')
+    || document.querySelector('script[src="https://widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js"]');
+  if (existing) {
+    trustpilotScriptPromise = trustpilotScriptPromise || Promise.resolve(existing);
+    return trustpilotScriptPromise;
+  }
+
+  trustpilotScriptPromise = trustpilotScriptPromise || new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src = "//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js";
+    script.async = true;
+    script.setAttribute("data-trustpilot-widget-script", "true");
+    script.onload = () => resolve(script);
+    script.onerror = () => reject(new Error("Failed to load Trustpilot widget script"));
+    document.head.appendChild(script);
+  });
+
+  return trustpilotScriptPromise;
+}
+
+function initTrustpilotWidgets(scope = document) {
+  const widgets = Array.from((scope || document).querySelectorAll('.trustpilot-widget'));
+  if (!widgets.length) return;
+  const loadWidget = () => {
+    if (!window.Trustpilot || typeof window.Trustpilot.loadFromElement !== "function") return;
+    widgets.forEach((widget) => {
+      try {
+        window.Trustpilot.loadFromElement(widget, true);
+      } catch (_) {
+        // Ignore per-widget bootstrap failures so the rest of the page can continue.
+      }
+    });
+  };
+
+  ensureTrustpilotWidgetScript()
+    .then(() => {
+      if (window.Trustpilot && typeof window.Trustpilot.loadFromElement === "function") {
+        loadWidget();
+      } else {
+        requestAnimationFrame(loadWidget);
+      }
+    })
+    .catch(() => {});
+}
+
 function injectComponent(targetId, html, eventName) {
   const slot = document.getElementById(targetId);
   if (!slot || !html) return false;
@@ -110,12 +159,18 @@ function injectComponent(targetId, html, eventName) {
     if (targetId === "site-header") {
       applyOptimisticAuthUi();
     }
+    if (targetId === "site-footer") {
+      initTrustpilotWidgets(slot);
+    }
     return true;
   }
   slot.innerHTML = html;
   slot.setAttribute("data-loaded", "1");
   if (targetId === "site-header") {
     applyOptimisticAuthUi();
+  }
+  if (targetId === "site-footer") {
+    initTrustpilotWidgets(slot);
   }
   if (eventName) dispatchChromeEvent(eventName);
   return true;
