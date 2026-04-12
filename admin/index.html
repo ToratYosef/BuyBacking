@@ -11,6 +11,14 @@
     html, body { max-width: 100%; overflow-x: hidden; }
     .animate-in { animation: fadeIn .18s ease-out; }
     @keyframes fadeIn { from { opacity:0; transform: translateY(4px);} to {opacity:1; transform:none;} }
+    @keyframes adminToastSlideIn {
+      from { opacity: 0; transform: translateY(10px) scale(.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes adminToastSlideOut {
+      from { opacity: 1; transform: translateY(0) scale(1); }
+      to { opacity: 0; transform: translateY(8px) scale(.98); }
+    }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
     .density-compact tr td { padding-top: .4rem !important; padding-bottom: .4rem !important; }
@@ -41,6 +49,20 @@
       #ordersTableBody .text-xs { font-size: .68rem; }
       #ordersTableBody button { padding: .35rem .55rem !important; }
     }
+    .admin-toast {
+      animation: adminToastSlideIn .18s ease-out;
+    }
+    .admin-toast.is-leaving {
+      animation: adminToastSlideOut .18s ease-in forwards;
+    }
+    .admin-toast-progress {
+      transform-origin: left center;
+      animation: adminToastProgress var(--toast-duration, 5000ms) linear forwards;
+    }
+    @keyframes adminToastProgress {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
   </style>
   <script>
     // Optional override:
@@ -66,13 +88,12 @@
       <div class="mt-4 text-sm text-slate-400">Preparing auth, notifications, and the full orders dataset.</div>
     </div>
   </div>
-  <div id="runtimeErrors" class="fixed bottom-4 right-4 z-[99999] w-[92vw] max-w-xl hidden"></div>
   <!-- Lucide icons (vanilla) -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, where, orderBy, limit, startAfter, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, where, orderBy, limit, startAfter, deleteDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
     import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-messaging.js";
     // ----------------------------
     // CONFIG
@@ -117,7 +138,6 @@
     // DOM HELPERS
     // ----------------------------
     const $root = document.getElementById("root");
-    const $runtimeErrors = document.getElementById("runtimeErrors");
     const $bootOverlay = document.getElementById("adminBootOverlay");
     const $bootBar = document.getElementById("adminBootBar");
     const $bootLabel = document.getElementById("adminBootLabel");
@@ -131,37 +151,6 @@
       $bootPercent.textContent = `${safeProgress}%`;
       $root.style.visibility = show ? "hidden" : "visible";
     }
-    function reportUiError(message, meta = "") {
-      if (!$runtimeErrors) return;
-      const line = document.createElement("div");
-      line.className = "mb-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 px-3 py-2 text-xs shadow";
-      const ts = new Date().toLocaleTimeString();
-      line.textContent = `[${ts}] ${String(message || "Unknown error")}${meta ? ` — ${meta}` : ""}`;
-      $runtimeErrors.prepend(line);
-      $runtimeErrors.classList.remove("hidden");
-      while ($runtimeErrors.children.length > 6) $runtimeErrors.removeChild($runtimeErrors.lastChild);
-    }
-
-    const originalConsoleError = console.error.bind(console);
-    console.error = (...args) => {
-      originalConsoleError(...args);
-      const msg = args.map(a => {
-        if (a instanceof Error) return a.message;
-        if (typeof a === "object") {
-          try { return JSON.stringify(a); } catch { return String(a); }
-        }
-        return String(a);
-      }).join(" ");
-      reportUiError(msg);
-    };
-
-    window.addEventListener("error", (event) => {
-      reportUiError(event.message || "Unhandled runtime error", `${event.filename || ""}:${event.lineno || ""}`);
-    });
-    window.addEventListener("unhandledrejection", (event) => {
-      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason || "Promise rejected");
-      reportUiError(reason, "Unhandled Promise rejection");
-    });
     function esc(s) {
       return String(s ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[m]));
     }
@@ -296,6 +285,14 @@
       const s = normalizeStatusKey(order?.status);
       return s.includes("emailed_balance") || s.includes("emailed") && (order?.emailType === "balance");
     }
+    function buildAdminActivityLogEntry(message, type = "status", metadata = {}) {
+      return {
+        type,
+        message,
+        metadata: metadata && typeof metadata === "object" ? metadata : {},
+        at: new Date(),
+      };
+    }
     function getStatusSortTimestamp(order, deviceKey, status) {
       const normalized = normalizeStatusKey(status);
       const issueEntries = deviceKey ? getDeviceIssueEntries(order, deviceKey) : [];
@@ -303,6 +300,16 @@
         .map((issue) => toDateAny(issue?.updatedAt || issue?.createdAt || issue?.emailSentAt || null)?.getTime() || 0)
         .reduce((max, value) => Math.max(max, value), 0);
       const reofferUpdatedAt = toDateAny(order?.reOffer?.updatedAt || order?.reOffer?.createdAt || order?.reOfferUpdatedAt || null)?.getTime() || 0;
+      const completedActivityAt = Array.isArray(order?.activityLog)
+        ? order.activityLog
+          .filter((entry) => {
+            const typeValue = String(entry?.type || "").toLowerCase();
+            const messageValue = String(entry?.message || "").toLowerCase();
+            return typeValue.includes("status") && messageValue.includes("completed");
+          })
+          .map((entry) => toDateAny(entry?.at || entry?.createdAt || null)?.getTime() || 0)
+          .reduce((max, value) => Math.max(max, value), 0)
+        : 0;
       const statusUpdatedAt = toDateAny(
         order?.statusUpdatedAt ||
         order?.updatedAt ||
@@ -321,6 +328,13 @@
       }
       if (normalized === "re-offered-pending" || normalized === "re-offered-declined" || normalized === "ready_to_pay") {
         return Math.max(reofferUpdatedAt, statusUpdatedAt);
+      }
+      if (normalized === "completed") {
+        return Math.max(
+          toDateAny(order?.completedAt || null)?.getTime() || 0,
+          completedActivityAt,
+          statusUpdatedAt
+        );
       }
       return statusUpdatedAt;
     }
@@ -998,15 +1012,62 @@
     }
     const SHC_HARDCODED_ADDRESS = "1602 McDonald Ave Ste Rear";
     function toast(msg, type="info") {
+      const palette = type === "error"
+        ? {
+            shell: "border-rose-200 bg-white text-slate-900",
+            iconWrap: "bg-rose-100 text-rose-600",
+            progress: "bg-rose-500",
+            icon: "!"
+          }
+        : type === "success"
+          ? {
+              shell: "border-emerald-200 bg-white text-slate-900",
+              iconWrap: "bg-emerald-100 text-emerald-600",
+              progress: "bg-emerald-500",
+              icon: "✓"
+            }
+          : {
+              shell: "border-slate-200 bg-white text-slate-900",
+              iconWrap: "bg-slate-100 text-slate-600",
+              progress: "bg-slate-500",
+              icon: "i"
+            };
+      const duration = type === "error" ? 5000 : 4200;
+      let host = document.getElementById("admin-toast-stack");
+      if (!host) {
+        host = document.createElement("div");
+        host.id = "admin-toast-stack";
+        host.className = "fixed bottom-4 right-4 z-[1002] flex w-[min(92vw,380px)] flex-col gap-3";
+        document.body.appendChild(host);
+      }
+
       const el = document.createElement("div");
-      el.className = `fixed bottom-4 left-1/2 -translate-x-1/2 z-[1002] px-4 py-2 rounded-lg text-sm font-medium shadow-lg border ${
-        type === "error" ? "bg-rose-50 text-rose-800 border-rose-200"
-        : type === "success" ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-        : "bg-white text-slate-800 border-slate-200"
-      }`;
-      el.textContent = msg;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 2800);
+      el.className = `admin-toast relative overflow-hidden rounded-2xl border shadow-[0_14px_40px_rgba(15,23,42,0.16)] backdrop-blur ${palette.shell}`;
+      el.style.setProperty("--toast-duration", `${duration}ms`);
+      el.innerHTML = `
+        <div class="flex items-start gap-3 px-4 py-3.5">
+          <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${palette.iconWrap}">${palette.icon}</div>
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-semibold leading-5">${type === "error" ? "Error" : type === "success" ? "Success" : "Notice"}</div>
+            <div class="mt-1 text-sm leading-5 text-slate-600">${esc(String(msg || ""))}</div>
+          </div>
+        </div>
+        <div class="absolute inset-x-0 bottom-0 h-1 bg-slate-100">
+          <div class="admin-toast-progress h-full ${palette.progress}"></div>
+        </div>
+      `;
+      host.appendChild(el);
+
+      const removeToast = () => {
+        if (!el.isConnected) return;
+        el.classList.add("is-leaving");
+        setTimeout(() => {
+          el.remove();
+          if (host && !host.children.length) host.remove();
+        }, 180);
+      };
+
+      setTimeout(removeToast, duration);
     }
     const readAdminUiCache = () => {
       try {
@@ -1417,6 +1478,13 @@
     async function submitReqcUnlockResult(orderId, payload) {
       if (!orderId) throw new Error('Missing order context');
       return apiPost(`/orders/${orderId}/reqc-unlock-result`, payload || {});
+    }
+
+    function hasPasswordIssueEntry(order, deviceKey) {
+      if (!order || !deviceKey) return false;
+      const issues = order?.qcIssuesByDevice?.[deviceKey];
+      if (!issues || typeof issues !== 'object') return false;
+      return Object.prototype.hasOwnProperty.call(issues, 'password_locked');
     }
 
     function isScreenLockOnlyResolved(order, deviceKey) {
@@ -1859,6 +1927,17 @@
       };
       if (order && getOrderDeviceEntries(order).length === 1) {
         payload.status = newStatus;
+      }
+      if (normalizeStatusKey(newStatus) === "completed") {
+        payload.completedAt = new Date();
+        payload.lastStatusUpdateAt = new Date();
+        if (payload.status === "completed") {
+          payload.activityLog = arrayUnion(buildAdminActivityLogEntry("Order changed status to completed.", "status", {
+            status: "completed",
+            source: "admin_payment_confirmation",
+            deviceKey,
+          }));
+        }
       }
       try {
         await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, payload));
@@ -2318,7 +2397,7 @@
           });
         };
 
-        if (!hasSeedData) {
+        const loadAllOrdersInChunks = async ({ showBootProgress = false } = {}) => {
           let cursor = null;
           let loaded = [];
           let chunkCount = 0;
@@ -2341,19 +2420,25 @@
             loaded = loaded.concat(chunkOrders);
             loaded.sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
             chunkCount += 1;
-            state.appBootProgress = Math.min(88, 28 + (chunkCount * 12));
-            state.appBootLabel = `Loading orders… ${loaded.length} loaded`;
-            updateAdminBootUi();
+            if (showBootProgress) {
+              state.appBootProgress = Math.min(88, 28 + (chunkCount * 12));
+              state.appBootLabel = `Loading orders… ${loaded.length} loaded`;
+              updateAdminBootUi();
+            }
 
             cursor = snapshot.docs[snapshot.docs.length - 1] || null;
             if (snapshot.size < ADMIN_ORDERS_CHUNK_SIZE) break;
 
             await new Promise((resolve) => setTimeout(resolve, 0));
           }
+          return loaded;
+        };
 
+        if (!hasSeedData) {
+          const loaded = await loadAllOrdersInChunks({ showBootProgress: true });
           if (loadVersion !== ordersLoadVersion) return;
           state.ordersLoading = false;
-          state.allOrders = loaded;
+          state.allOrders = loaded || [];
           state.ordersCacheHydrated = true;
           state.ordersCacheLoadedAt = Date.now();
           schedulePersistOrdersCache();
@@ -2372,26 +2457,12 @@
             }, 120);
           });
         } else {
-          const latestCreatedAt = toDateAny(state.allOrders?.[0]?.createdAt)
-            || (state.allOrders?.[0]?.createdAtMillis ? new Date(state.allOrders[0].createdAtMillis) : null);
-          if (latestCreatedAt) {
-            const deltaQuery = query(
-              collection(db, "orders"),
-              where("createdAt", ">", latestCreatedAt),
-              orderBy("createdAt", "desc"),
-              limit(ADMIN_ORDERS_INITIAL_LIMIT)
-            );
-            const deltaSnapshot = await withPerf("firestore:orders-delta-refresh", () => getDocs(deltaQuery));
-            if (loadVersion !== ordersLoadVersion) return;
-            if (!deltaSnapshot.empty) {
-              const byId = new Map((state.allOrders || []).map((order) => [order.id, order]));
-              deltaSnapshot.docs.forEach((d) => {
-                const data = d.data();
-                const createdAtMillis = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : (toDateAny(data.createdAt)?.getTime() || 0);
-                byId.set(d.id, { id: d.id, ...data, createdAtMillis });
-              });
-              state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
-            }
+          const loaded = await loadAllOrdersInChunks({ showBootProgress: false });
+          if (loadVersion !== ordersLoadVersion) return;
+          if (Array.isArray(loaded) && loaded.length) {
+            state.allOrders = loaded;
+            state.ordersCacheHydrated = true;
+            state.ordersCacheLoadedAt = Date.now();
           }
           state.ordersLoading = false;
           schedulePersistOrdersCache();
@@ -3745,12 +3816,14 @@
             body = { reason: "fmi_active", label: "Email FMI / Activation Lock Notice", ...(options?.body || {}) };
             break;
           case "markPaid":
-          case "payNow":
             // Re-offered accepted payment flow
             endpoint = `/orders/${orderId}/status`;
             method = "PUT";
             body = { status: "completed" };
             break;
+          case "payNow":
+            toast("Use the Pay Now confirmation flow to complete payment.", "error");
+            return;
           case "printDocs":
             await printBundle(orderId, {
               includeAllPackingSlips: options?.includeAllPackingSlips !== false,
@@ -4984,9 +5057,14 @@
                         ${esc(opt.label)}
                       </label>
                     `).join("") : `<div class="text-sm text-slate-500">No voidable labels detected.</div>`)}
-                    <button id="void-label-submit" class="mt-2 px-3 py-2 rounded-lg text-sm font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 ${getLabelOptions(order).length ? "" : "opacity-50 cursor-not-allowed"}" ${getLabelOptions(order).length ? "" : "disabled"}>
-                      Void Selected Labels
-                    </button>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                      <button id="void-label-submit" class="px-3 py-2 rounded-lg text-sm font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 ${getLabelOptions(order).length ? "" : "opacity-50 cursor-not-allowed"}" ${getLabelOptions(order).length ? "" : "disabled"}>
+                        Void Selected Labels
+                      </button>
+                      <button id="void-all-labels-submit" class="px-3 py-2 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 ${getLabelOptions(order).length ? "" : "opacity-50 cursor-not-allowed"}" ${getLabelOptions(order).length ? "" : "disabled"}>
+                        Void All Labels
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -6006,6 +6084,7 @@
       const info = state.unlockInfoModalData || {};
       const unlock = info.unlockInfo || null;
       const issueEntries = Array.isArray(info.issueEntries) ? info.issueEntries : [];
+      const hasPasswordIssue = issueEntries.some((entry) => String(entry?.reason || "").toLowerCase() === "password_locked");
       const method = String(unlock?.method || '').trim().toLowerCase();
       const hasUnlockData = !!(unlock && method && (unlock.value || (Array.isArray(unlock.patternPath) && unlock.patternPath.length)));
       const patternPath = Array.isArray(unlock?.patternPath) ? unlock.patternPath : [];
@@ -6033,13 +6112,17 @@
                 </div>
                 <div class="mt-3 text-sm text-slate-600"><strong>Order:</strong> ${esc(patternPath.join(' → '))}</div>
               </div>`;
+      const modalTitle = hasPasswordIssue && hasUnlockData ? 'Password' : 'Did It Work?';
+      const modalIntro = hasPasswordIssue && hasUnlockData
+        ? 'Use the saved password details below, then confirm whether it worked. If it worked, continue with normal QC. If not, send the 75%-less re-offer.'
+        : 'If it worked, continue with the normal QC flow. If not, send the customer a 75%-less re-offer and move this device into regular re-offer pending.';
 
       return `
         <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" id="unlockInfoOverlay" style="z-index:999999;">
           <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden">
             <div class="px-6 py-5 border-b border-slate-100 flex items-start justify-between gap-3">
               <div>
-                <h3 class="text-lg font-bold text-slate-900">Was The Issue Fixed?</h3>
+                <h3 class="text-lg font-bold text-slate-900">${esc(modalTitle)}</h3>
                 <p class="text-sm text-slate-500 mt-1">Order ${esc(order.id)} • ${esc(info.deviceLabel || 'Device')}</p>
               </div>
               <button id="unlockInfoCloseBtn" class="text-slate-400 hover:text-slate-600">
@@ -6047,11 +6130,14 @@
               </button>
             </div>
             <div class="px-6 py-5 space-y-4">
-              <p class="text-sm text-slate-600">If the issue was fixed, continue with the normal QC flow. If not, send the customer a 75%-less re-offer and move this device into regular re-offer pending.</p>
+              <p class="text-sm text-slate-600">${esc(modalIntro)}</p>
               <div class="text-xs text-slate-500 uppercase font-semibold">Current Device Status</div>
               <div class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${getStatusClass(info.deviceStatus || '')}">${esc(formatStatusLabel(info.deviceStatus || 'unknown'))}</div>
               ${issueDetailsHtml}
               ${detailHtml}
+              <div class="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                <div class="text-sm font-semibold text-slate-900">Did it work?</div>
+              </div>
             </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
               <div class="flex flex-wrap items-center justify-end gap-2 w-full">
@@ -6674,7 +6760,7 @@
               deviceStatus,
               issueEntries: getDeviceIssueEntries(order, deviceKey),
             };
-            if (isScreenLockOnlyResolved(order, deviceKey)) {
+            if (hasPasswordIssueEntry(order, deviceKey)) {
               try {
                 const unlockInfoResponse = await fetchReqcUnlockInfo(order.id, deviceKey);
                 state.unlockInfoModalData = {
@@ -6930,6 +7016,28 @@
             if (state.selectedDeviceKey && (action === "markReceived" || action === "markCompleted")) {
               const nextDeviceStatus = action === "markCompleted" ? "completed" : "received";
               await updateDeviceStatusInline(order.id, state.selectedDeviceKey, nextDeviceStatus);
+
+              if (action === "markReceived") {
+                const refreshedOrderSnap = await withPerf(`firestore:getOrderAfterReceived:${order.id}`, () => getDoc(doc(db, 'orders', order.id)));
+                if (refreshedOrderSnap.exists()) {
+                  const latest = { id: refreshedOrderSnap.id, ...refreshedOrderSnap.data() };
+                  const aggregatedStatus = computeOrderStatus(latest);
+                  if (aggregatedStatus === "received") {
+                    await updateOrderStatusInline(order.id, "received");
+                    try {
+                      const latestOrder = await fetchOrderPrintData(order.id);
+                      upsertOrderInState(latestOrder);
+                    } catch (refreshError) {
+                      console.warn(`Failed to refresh admin order state after received email for ${order.id}:`, refreshError);
+                    }
+                    await hydrateSelectedOrderDetails(order.id);
+                    filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+                    toast("Device marked as received and customer emailed.", "success");
+                    return;
+                  }
+                }
+              }
+
               toast(`Device status updated to ${formatStatusLabel(nextDeviceStatus)}`, "success");
               return;
             }
@@ -6940,6 +7048,17 @@
         });
         // void labels submit
         const voidBtn = document.getElementById("void-label-submit");
+        const voidAllBtn = document.getElementById("void-all-labels-submit");
+        const refreshAfterVoid = async () => {
+          try {
+            const latestOrder = await fetchOrderPrintData(order.id);
+            upsertOrderInState(latestOrder);
+            await hydrateSelectedOrderDetails(order.id);
+            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+          } catch (refreshError) {
+            console.warn(`Failed to refresh admin order state after void for ${order.id}:`, refreshError);
+          }
+        };
         if (voidBtn) {
           voidBtn.addEventListener("click", async (e) => {
             e.preventDefault();
@@ -6955,6 +7074,28 @@
             }));
             try {
               const res = await requestVoidLabels(order.id, selections);
+              await refreshAfterVoid();
+              toast(summarizeVoidResults(res), "success");
+            } catch (err) {
+              toast(`Void failed: ${err?.message || "error"}`, "error");
+            }
+          });
+        }
+        if (voidAllBtn) {
+          voidAllBtn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const selections = getLabelOptions(order).map(opt => ({
+              key: opt.key,
+              id: opt.id,
+            }));
+            if (!selections.length) {
+              toast("No voidable labels detected.", "error");
+              return;
+            }
+            try {
+              const res = await requestVoidLabels(order.id, selections);
+              await refreshAfterVoid();
               toast(summarizeVoidResults(res), "success");
             } catch (err) {
               toast(`Void failed: ${err?.message || "error"}`, "error");
@@ -7486,11 +7627,34 @@
             if (refreshedOrder.exists()) {
               const latest = { id: refreshedOrder.id, ...refreshedOrder.data() };
               const aggregatedStatus = computeOrderStatus(latest);
-              await withPerf(`firestore:updateOrderStatusAfterPayment:${order.id}`, () => updateDoc(doc(db, 'orders', order.id), {
-                status: aggregatedStatus,
-                updatedAt: new Date()
-              }));
+              const completionStamp = new Date();
+
+              if (aggregatedStatus === "completed") {
+                await updateOrderStatusInline(order.id, "completed");
+                const latestOrder = state.allOrders.find((entry) => entry.id === order.id);
+                if (latestOrder) {
+                  latestOrder.completedAt = completionStamp;
+                }
+                if (state.selectedOrderSnapshot?.id === order.id) {
+                  state.selectedOrderSnapshot.completedAt = completionStamp;
+                }
+              } else {
+                await withPerf(`firestore:updateOrderStatusAfterPayment:${order.id}`, () => updateDoc(doc(db, 'orders', order.id), {
+                  status: aggregatedStatus,
+                  updatedAt: completionStamp,
+                }));
+              }
             }
+
+            try {
+              const latestOrder = await fetchOrderPrintData(order.id);
+              upsertOrderInState(latestOrder);
+            } catch (refreshError) {
+              console.warn(`Failed to refresh admin order state after payment for ${order.id}:`, refreshError);
+            }
+
+            await hydrateSelectedOrderDetails(order.id);
+            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
             toast(`Marked ${keys.length} device${keys.length === 1 ? '' : 's'} as paid/completed.`, "success");
 
             state.paymentConfirmModalOpen = false;

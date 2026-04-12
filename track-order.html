@@ -490,14 +490,14 @@
       shipping_kit_requested: 'We are preparing your prepaid shipping label.',
       kit_needs_printing: 'Your prepaid label is being prepared now.',
       needs_printing: 'Your prepaid label is being prepared now.',
-      label_generated: 'Your return label is ready—check your email for download links.',
-      emailed: 'Your return label is ready—check your email for download links.',
+      label_generated: 'Your shipping label is ready. Please pack your device and send it to us when you are ready.',
+      emailed: 'Your shipping label is ready. Please pack your device and send it to us when you are ready.',
       kit_sent: 'Your shipping instructions are ready—check your email and tracking details.',
       kit_delivered: 'Your shipping details are ready. Package your device and send it in.',
       kit_on_the_way_to_us: 'We see your package in transit back to us.',
       kit_in_transit: 'We see your package in transit back to us.',
-      phone_on_the_way: 'We see your package in transit back to us.',
-      delivered_to_us: 'Delivered to us after hours—your package is waiting for our team to begin device testing.',
+      phone_on_the_way: 'Your package is on the way to us. We are waiting to receive your device.',
+      delivered_to_us: 'Your package has reached our facility and is waiting for our team to check it in.',
       received: 'We received your device and are inspecting it.',
       device_received: 'We received your device and are inspecting it.',
       imei_checked: 'We received your device and are inspecting it.',
@@ -522,17 +522,18 @@
     const stageDictionary = {
       order_received: { key: 'order_received', label: 'Order received', copy: 'We have your order and are preparing your shipping details.' },
       preparing_kit: { key: 'preparing_kit', label: 'Preparing shipment', copy: 'We are preparing your prepaid label and shipping instructions.' },
-      return_label_ready: { key: 'return_label_ready', label: 'Return label ready', copy: 'Your printable return label is ready in your email.' },
-      kit_sent: { key: 'kit_sent', label: 'Label sent', copy: 'Check your email for instructions and your prepaid label.' },
-      in_transit_to_us: { key: 'in_transit_to_us', label: 'In transit to us', copy: 'We are tracking your package back to our facility.' },
-      delivered_to_us: { key: 'delivered_to_us', label: 'Delivered to us', copy: 'Your package was delivered after hours and is queued for our team to check in.' },
+      label_ready_to_send: { key: 'label_ready_to_send', label: 'Ready for shipment', copy: 'Your prepaid shipping label is ready. Please send your device to us when you are ready.' },
+      kit_sent: { key: 'kit_sent', label: 'Label sent', copy: 'Your shipping details are ready. Please package your device and send it in.' },
+      in_transit_to_us: { key: 'in_transit_to_us', label: 'On the way to us', copy: 'Your package is on the way to us and we are waiting to receive it.' },
+      delivered_to_us: { key: 'delivered_to_us', label: 'Delivered to us', copy: 'Your package has arrived at our facility and is waiting for check-in.' },
       device_received: { key: 'device_received', label: 'Device received', copy: 'Our team is inspecting your device.' },
       inspection_in_progress: { key: 'inspection_in_progress', label: 'Inspection in progress', copy: 'We are validating the condition you reported.' },
       reoffer_pending: { key: 'reoffer_pending', label: 'Action needed: updated offer', copy: 'Please accept the updated offer or decline it for a free device return. If we do not hear back within 7 regular days, the updated offer will be auto-accepted per our guidelines.' },
       reoffer_declined: { key: 'reoffer_declined', label: 'Offer declined', copy: 'We are preparing a return label to send your device back.' },
       return_label_sent: { key: 'return_label_sent', label: 'Return label sent', copy: 'A return label has been sent with return instructions.' },
       return_in_transit: { key: 'return_in_transit', label: 'Return in transit', copy: 'Your device is currently being shipped back to you.' },
-      payout_sent: { key: 'payout_sent', label: 'Payout sent', copy: 'We are wrapping up payment for this order.' }
+      payout_sent: { key: 'payout_sent', label: 'Payout sent', copy: 'We are wrapping up payment for this order.' },
+      cancelled: { key: 'cancelled', label: 'Order cancelled', copy: 'This order was cancelled.' }
     };
 
     const stageMap = {
@@ -540,8 +541,8 @@
       shipping_kit_requested: 'preparing_kit',
       kit_needs_printing: 'preparing_kit',
       needs_printing: 'preparing_kit',
-      label_generated: 'return_label_ready',
-      emailed: 'return_label_ready',
+      label_generated: 'label_ready_to_send',
+      emailed: 'label_ready_to_send',
       kit_sent: 'kit_sent',
       kit_delivered: 'kit_sent',
       kit_on_the_way_to_us: 'in_transit_to_us',
@@ -566,13 +567,14 @@
       're-offered-auto-accepted': 'payout_sent',
       re_offered_auto_accepted: 'payout_sent',
       completed: 'payout_sent',
-      cancelled: 'payout_sent',
+      cancelled: 'cancelled',
     };
 
     const baseFlow = ['order_received', 'preparing_kit', 'kit_sent', 'in_transit_to_us', 'delivered_to_us', 'device_received', 'inspection_in_progress', 'payout_sent'];
-    const labelFlow = ['order_received', 'preparing_kit', 'return_label_ready', 'kit_sent', 'in_transit_to_us', 'delivered_to_us', 'device_received', 'inspection_in_progress', 'payout_sent'];
+    const labelFlow = ['order_received', 'preparing_kit', 'label_ready_to_send', 'kit_sent', 'in_transit_to_us', 'delivered_to_us', 'device_received', 'inspection_in_progress', 'payout_sent'];
     const reofferFlow = ['order_received', 'preparing_kit', 'kit_sent', 'in_transit_to_us', 'delivered_to_us', 'device_received', 'inspection_in_progress', 'reoffer_pending', 'payout_sent'];
     const declinedReturnFlow = ['order_received', 'preparing_kit', 'kit_sent', 'in_transit_to_us', 'delivered_to_us', 'device_received', 'inspection_in_progress', 'reoffer_declined', 'return_label_sent', 'return_in_transit'];
+    const cancelledFlow = ['cancelled'];
 
     const orderIdInput = document.getElementById('orderId');
     const customerEmailInput = document.getElementById('customerEmail');
@@ -678,6 +680,7 @@
     }
 
     function resolveFlow(normalizedStatus) {
+      if (normalizedStatus === 'cancelled') return cancelledFlow;
       if (normalizedStatus === 'label_generated' || normalizedStatus === 'emailed') return labelFlow;
       if (normalizedStatus === 're-offered-pending' || normalizedStatus === 're_offered_pending') return reofferFlow;
       if (normalizedStatus === 're-offered-declined' || normalizedStatus === 're_offered_declined' || normalizedStatus === 'return_label_generated' || normalizedStatus === 'return_label_sent' || normalizedStatus === 'return_in_transit') return declinedReturnFlow;
