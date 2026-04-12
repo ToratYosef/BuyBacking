@@ -3170,6 +3170,7 @@
 
       try {
         let totalCancelled = 0;
+        let totalDeleted = 0;
         let totalSkipped = 0;
         let totalFailed = 0;
         let totalScanned = 0;
@@ -3182,12 +3183,14 @@
           batchCount += 1;
           const result = await apiPost(endpoint, body);
           const cancelled = Number(result?.cancelled || 0);
+          const deleted = Number(result?.deleted || 0);
           const skipped = Number(result?.skipped || 0);
           const failed = Number(result?.failed || 0);
           const scanned = Number(result?.scanned || 0);
           const totalCandidates = Number(result?.totalCandidates || scanned);
 
           totalCancelled += cancelled;
+          totalDeleted += deleted;
           totalSkipped += skipped;
           totalFailed += failed;
           totalScanned += scanned;
@@ -3217,7 +3220,7 @@
 
           state.bulkVoidProgressLabel = loadingLabel || "Processing…";
           state.bulkVoidProgressPercent = progressPercent;
-          state.bulkVoidProgressDetails = `Batch ${batchCount}: scanned ${totalScanned}, cancelled ${totalCancelled}, skipped ${totalSkipped}, failed ${totalFailed}`;
+          state.bulkVoidProgressDetails = `Batch ${batchCount}: scanned ${totalScanned}, cancelled ${totalCancelled}, deleted ${totalDeleted}, skipped ${totalSkipped}, failed ${totalFailed}`;
           render();
 
           if (!hasMore) {
@@ -3226,14 +3229,15 @@
         }
 
         state.bulkVoidProgressPercent = 100;
-        state.bulkVoidProgressDetails = `Done: scanned ${totalScanned}, cancelled ${totalCancelled}, skipped ${totalSkipped}, failed ${totalFailed}`;
+        state.bulkVoidProgressDetails = `Done: scanned ${totalScanned}, cancelled ${totalCancelled}, deleted ${totalDeleted}, skipped ${totalSkipped}, failed ${totalFailed}`;
         render();
 
         await showInfoModal({
-          title: 'Bulk Void Complete',
+          title: 'Bulk Action Complete',
           message:
             `Scanned: ${totalScanned}\n` +
             `Cancelled: ${totalCancelled}\n` +
+            `Deleted: ${totalDeleted}\n` +
             `Skipped: ${totalSkipped}\n` +
             `Failed: ${totalFailed}\n\n` +
             (skippedSamples.length ? `Skipped samples:\n- ${skippedSamples.join("\n- ")}\n\n` : '') +
@@ -3294,13 +3298,100 @@
       });
     }
 
+    function normalizeInternalCleanupText(value) {
+      return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function normalizeInternalCleanupPhone(value) {
+      return String(value || '').replace(/\D+/g, '');
+    }
+
+    function isInternalCleanupMatch(order = {}) {
+      const matchingNames = new Set(['saul setton', 'eli setton']);
+      const matchingEmails = new Set(['eesetton@gmail.com', 'saulsetton16@gmail.com']);
+      const matchingPhones = new Set(['9295845753', '3475859892']);
+      const matchingAddresses = ['1966 w 3rd st', '1966 west 3rd st'];
+
+      const fullName = normalizeInternalCleanupText(
+        order?.shippingInfo?.fullName ||
+        order?.shippingInfo?.name ||
+        order?.shippingAddress?.fullName ||
+        order?.shippingAddress?.name ||
+        order?.customerName ||
+        order?.name ||
+        ''
+      );
+
+      const email = String(
+        order?.shippingInfo?.email ||
+        order?.email ||
+        order?.customerEmail ||
+        order?.userEmail ||
+        ''
+      ).trim().toLowerCase();
+
+      const phone = normalizeInternalCleanupPhone(
+        order?.shippingInfo?.phone ||
+        order?.shippingAddress?.phone ||
+        order?.phone ||
+        order?.customerPhone ||
+        ''
+      );
+
+      const address = String([
+        order?.shippingInfo?.address,
+        order?.shippingInfo?.address1,
+        order?.shippingInfo?.addressLine1,
+        order?.shippingInfo?.street,
+        order?.shippingAddress?.address,
+        order?.shippingAddress?.address1,
+        order?.shippingAddress?.addressLine1,
+        order?.shippingAddress?.street,
+      ].filter(Boolean).join(' '))
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+
+      if (matchingNames.has(fullName)) return true;
+      if (matchingEmails.has(email)) return true;
+      if (matchingPhones.has(phone)) return true;
+      return matchingAddresses.some((needle) => address.includes(needle));
+    }
+
+    function getInternalCleanupOrderIds() {
+      return Array.from(new Set(
+        (Array.isArray(state.allOrders) ? state.allOrders : [])
+          .filter((order) => isInternalCleanupMatch(order))
+          .map((order) => String(order?.id || '').trim())
+          .filter(Boolean)
+      ));
+    }
+
+    function getInternalCleanupMatchCount() {
+      return getInternalCleanupOrderIds().length;
+    }
+
     async function runBulkVoidTestOrders(buttonEl) {
+      const matchedOrderIds = getInternalCleanupOrderIds();
+      if (!matchedOrderIds.length) {
+        toast('No matching internal orders found for cleanup.', 'info');
+        return;
+      }
+
       return runAdminBulkVoidAction(buttonEl, {
         endpoint: '/orders/admin/bulk-void-test-orders',
-        confirmText: 'Auto-pick test orders (emails/address rule), void labels, and cancel them now? This will NOT email customers.',
-        loadingLabel: 'Deleting test orders…',
+        confirmText: `Found ${matchedOrderIds.length} matching internal order(s). Cancel them first, void any labels, and permanently delete them now? This will NOT email customers.`,
+        loadingLabel: 'Deleting internal orders…',
         inProgressStateKey: 'bulkVoidTestInProgress',
-        body: { limit: 12 },
+        body: {
+          limit: matchedOrderIds.length,
+          orderIds: matchedOrderIds,
+        },
       });
     }
 
@@ -4391,6 +4482,7 @@
     // SPEC: ORDERS TABLE RENDER (with per-device rows + selection)
     // ----------------------------
     function renderBulkBar() {
+      const internalCleanupCount = getInternalCleanupMatchCount();
       return `
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-4">
           <div class="flex flex-col gap-3">
@@ -4431,7 +4523,7 @@
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkVoidTestInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-200'}"
                 ${state.bulkVoidTestInProgress ? 'disabled' : ''}>
                 <i data-lucide="trash-2" style="width:18px;height:18px"></i>
-                ${state.bulkVoidTestInProgress ? 'Deleting Test Orders…' : 'Delete Our Orders'}
+                ${state.bulkVoidTestInProgress ? 'Deleting Our Orders…' : `Delete Our Orders (${internalCleanupCount})`}
               </button>
               <button id="bulk-delete-cancelled-orders"
                 class="px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 ${state.bulkDeleteCancelledInProgress ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-700 hover:bg-rose-800 text-white shadow-md shadow-rose-200'}"
