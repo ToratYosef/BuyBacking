@@ -249,6 +249,18 @@
     const KIT_PRINT_PENDING_STATUSES = new Set(["shipping_kit_requested", "kit_needs_printing", "needs_printing"]);
     const RECEIVED_VALUES = new Set(["received", "ready_to_pay", "imei_checked", "delivered_to_us", "phone_on_the_way"]);
     const PAST_RECEIVED_VALUES = new Set(["received", "ready_to_pay", "completed", "re-offered-accepted", "re-offered-declined", "re-offered-auto-accepted"]);
+    const SENT_TO_US_VALUES = new Set([
+      "phone_on_the_way",
+      "delivered_to_us",
+      "received",
+      "emailed",
+      "issue_resolved",
+      "re-offered-pending",
+      "re-offered-declined",
+      "ready_to_pay",
+      "return-label-generated",
+      "completed",
+    ]);
     function normalizeStatusKey(status) {
       const normalized = String(status || "").trim().toLowerCase();
       if (normalized === "re-offered-accepted" || normalized === "re_offered_accepted" || normalized === "re-offered-auto-accepted" || normalized === "re_offered_auto_accepted" || normalized === "requote_accepted") {
@@ -266,6 +278,10 @@
       const normalized = normalizeStatusKey(status);
       return normalized === "cancelled" || normalized === "canceled";
     }
+    function isAutoCancelledAfter28Days(order) {
+      const reason = String(order?.cancelReason || "").trim().toLowerCase();
+      return Boolean(order?.autoCancelled) || reason === "label_voided_no_response_28_days";
+    }
     function isMiscStatusValue(status) {
       const normalized = normalizeStatusKey(status);
       if (!normalized || normalized === "cancelled") return false;
@@ -280,6 +296,9 @@
     }
     function isStatusPastReceived(status) {
       return PAST_RECEIVED_VALUES.has(normalizeStatusKey(status));
+    }
+    function isSentToUsStatusValue(status) {
+      return SENT_TO_US_VALUES.has(normalizeStatusKey(status));
     }
     function isBalanceEmailStatus(order) {
       const s = normalizeStatusKey(order?.status);
@@ -4149,11 +4168,36 @@
         const s = normalizeStatusKey(group?.deviceStatus);
         return s !== "completed" && s !== "return-label-generated" && s !== "cancelled";
       }).length;
-      return { statusCounts, statusCountAll, cancelledCount, liveOrders, visible };
+      const turnaroundBaseGroups = allGroups;
+      const sentToUsCount = turnaroundBaseGroups.filter((group) => isSentToUsStatusValue(group?.deviceStatus)).length;
+      const turnaroundRate = turnaroundBaseGroups.length
+        ? Math.round((sentToUsCount / turnaroundBaseGroups.length) * 100)
+        : 0;
+      return {
+        statusCounts,
+        statusCountAll,
+        cancelledCount,
+        liveOrders,
+        visible,
+        turnaroundStats: {
+          sentToUsCount,
+          baseCount: turnaroundBaseGroups.length,
+          rate: turnaroundRate,
+        },
+      };
     }
     function updateGlassMetricsHTML() {
-      const { statusCounts } = computeStatusCounts();
+      const { statusCounts, turnaroundStats } = computeStatusCounts();
       const actionCards = [
+        {
+          key: "turnaround_rate",
+          label: "Turnaround Rate",
+          helper: `${turnaroundStats.sentToUsCount} of ${turnaroundStats.baseCount} actually sent to us`,
+          count: `${turnaroundStats.rate}%`,
+          tone: "border-slate-200 bg-white text-slate-900",
+          countTone: "bg-slate-100 text-slate-700",
+          nonFilter: true,
+        },
         {
           key: "delivered_to_us",
           label: "Delivered",
@@ -4196,12 +4240,12 @@
         },
       ];
       return `
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-6">
           ${actionCards.map((card) => `
             <button
               type="button"
-              data-status-tab="${esc(card.key)}"
-              class="text-left rounded-xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${card.tone}"
+              ${card.nonFilter ? '' : `data-status-tab="${esc(card.key)}"`}
+              class="text-left rounded-xl border p-4 shadow-sm transition-all ${card.nonFilter ? '' : 'hover:-translate-y-0.5 hover:shadow-md'} ${card.tone}"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
@@ -4727,9 +4771,12 @@
       else if (s.includes("pending") || s.includes("printing")) activeStep = 0;
       else if (s.includes("cancel")) activeStep = -1;
       if (activeStep === -1) {
+        const cancellationText = isAutoCancelledAfter28Days(order)
+          ? "This order was cancelled automatically after 28 days with no device sent in."
+          : "This order has been cancelled.";
         return `
           <div class="px-6 py-3 bg-rose-50 border-b border-rose-100 flex items-center justify-center gap-2 text-rose-700 font-medium text-sm">
-            <i data-lucide="ban" style="width:16px;height:16px"></i> This order has been cancelled.
+            <i data-lucide="ban" style="width:16px;height:16px"></i> ${esc(cancellationText)}
           </div>
         `;
       }
