@@ -1006,6 +1006,33 @@
 
       return normalizedOrder;
     }
+
+    function removeOrderFromState(orderId) {
+      const normalizedOrderId = String(orderId || '').trim();
+      if (!normalizedOrderId) return false;
+
+      const existingOrders = Array.isArray(state.allOrders) ? state.allOrders : [];
+      const nextOrders = existingOrders.filter((entry) => String(entry?.id || '').trim() !== normalizedOrderId);
+      const removed = nextOrders.length !== existingOrders.length;
+      if (!removed) return false;
+
+      state.allOrders = nextOrders;
+      state.selectedOrderIds.delete(normalizedOrderId);
+      state.expandedOrderIds.delete(normalizedOrderId);
+
+      if (state.selectedOrderId === normalizedOrderId) {
+        state.selectedOrderId = null;
+        state.selectedOrderSnapshot = null;
+        state.selectedDeviceKey = null;
+        state.selectedDeviceGroupKeys = [];
+        state.qcDeviceKey = null;
+        state.drawerTab = "overview";
+      }
+
+      schedulePersistOrdersCache();
+      return true;
+    }
+
     async function hydrateOrdersFromLocalCache() {
       const cached = await readAdminOrdersCache();
       if (!cached?.orders || !Array.isArray(cached.orders) || !cached.orders.length) return false;
@@ -3973,6 +4000,13 @@
         else if (method === "POST") actionResult = await apiPost(endpoint, body ?? {});
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
+
+        if (actionType === "deleteOrder") {
+          removeOrderFromState(orderId);
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+          render();
+          return { ok: true, deleted: true };
+        }
 
         try {
           const latestOrder = await fetchOrderPrintData(orderId);
