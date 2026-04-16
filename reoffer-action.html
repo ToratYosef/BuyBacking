@@ -254,6 +254,106 @@
             box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
         }
 
+        .device-summary-grid {
+            display: grid;
+            gap: 0.9rem;
+        }
+
+        .device-summary-card {
+            border-radius: 1rem;
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            padding: 1rem 1.05rem;
+        }
+
+        .device-summary-card--active {
+            border-color: #16a34a;
+            background: #f0fdf4;
+            box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.18);
+        }
+
+        .device-summary-meta {
+            margin-top: 0.45rem;
+            font-size: 0.93rem;
+            line-height: 1.6;
+            color: #475569;
+        }
+
+        .device-summary-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.8rem;
+        }
+
+        .device-summary-badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 9999px;
+            padding: 0.34rem 0.72rem;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .device-summary-badge--active {
+            background: #16a34a;
+            color: #ffffff;
+        }
+
+        .device-summary-badge--neutral {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+        }
+
+        .device-summary-badge--status {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .multi-offer-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .multi-offer-card {
+            border-radius: 1rem;
+            border: 1px solid #dbeafe;
+            background: #f8fbff;
+            padding: 1.15rem;
+        }
+
+        .multi-offer-price-grid {
+            display: grid;
+            gap: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        .multi-offer-price-box {
+            border-radius: 0.9rem;
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            padding: 0.95rem 1rem;
+        }
+
+        .multi-offer-actions {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        @media (min-width: 768px) {
+            .multi-offer-price-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .multi-offer-actions {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
         .countdown-box {
             border-radius: 1rem;
         }
@@ -431,41 +531,55 @@
                         </div>
                     </div>
 
-                    <div id="countdownContainer" class="countdown-box mb-6 hidden border border-amber-200 bg-amber-50 px-5 py-5 text-amber-900">
-                        <p class="countdown-title">Decision window</p>
-                        <p id="countdownTimer" class="countdown-value"></p>
-                        <p class="countdown-note text-amber-700">If we do not hear back within 7 regular days, this updated offer will be auto-accepted per our guidelines. If you are not happy with the re-quote, you can decline and have the device returned to you free of charge.</p>
+                    <div class="card-panel mb-6">
+                        <h2 class="section-heading">Devices In This Order</h2>
+                        <p class="section-body mt-3">This shows every device on the order so it is clear which one was re-offered and which ones were not.</p>
+                        <div id="deviceSummaryList" class="device-summary-grid mt-4"></div>
                     </div>
 
-                    <div class="mb-6 grid gap-4 md:grid-cols-2">
-                        <div class="stat-card rounded-2xl border border-slate-200 bg-slate-50">
-                            <p class="stat-label text-slate-500">Original quote</p>
-                            <p id="oldOfferPrice" class="stat-value text-slate-800">N/A</p>
-                        </div>
-                        <div class="stat-card rounded-2xl border border-emerald-200 bg-emerald-50">
-                            <p class="stat-label text-emerald-700">New offer</p>
-                            <p id="newOfferPrice" class="stat-value text-emerald-700">N/A</p>
-                        </div>
+                    <div id="multiOfferSection" class="card-panel mb-6 hidden">
+                        <h2 class="section-heading">Pending Re-Offers In This Order</h2>
+                        <p class="section-body mt-3">Multiple devices on this order have active re-offers. Review each one below and respond device by device.</p>
+                        <div id="multiOfferList" class="multi-offer-grid mt-4"></div>
                     </div>
 
-                    <div class="mb-8 grid gap-4 md:grid-cols-2">
-                        <div class="card-panel">
-                            <h2 class="section-heading">Reason for re-offer</h2>
-                            <p id="reofferReason" class="section-body"></p>
+                    <div id="singleOfferSection">
+                        <div id="countdownContainer" class="countdown-box mb-6 hidden border border-amber-200 bg-amber-50 px-5 py-5 text-amber-900">
+                            <p class="countdown-title">Decision window</p>
+                            <p id="countdownTimer" class="countdown-value"></p>
+                            <p class="countdown-note text-amber-700">If we do not hear back within 7 regular days, this updated offer will be auto-accepted per our guidelines. If you are not happy with the re-quote, you can decline and have the device returned to you free of charge.</p>
                         </div>
-                        <div class="card-panel">
-                            <h2 class="section-heading">Inspector notes</h2>
-                            <p id="reofferComments" class="section-body"></p>
-                        </div>
-                    </div>
 
-                    <div id="actionButtons" class="mb-8 space-y-3 md:flex md:space-y-0 md:space-x-4">
-                        <button id="acceptOfferBtn" class="action-btn w-full flex-1 bg-emerald-600 px-6 py-4 text-white transition hover:bg-emerald-700">
-                            Accept Revised Offer
-                        </button>
-                        <button id="returnPhoneBtn" class="action-btn w-full flex-1 bg-rose-600 px-6 py-4 text-white transition hover:bg-rose-700">
-                            Decline &amp; Return Device
-                        </button>
+                        <div class="mb-6 grid gap-4 md:grid-cols-2">
+                            <div class="stat-card rounded-2xl border border-slate-200 bg-slate-50">
+                                <p class="stat-label text-slate-500">Original quote</p>
+                                <p id="oldOfferPrice" class="stat-value text-slate-800">N/A</p>
+                            </div>
+                            <div class="stat-card rounded-2xl border border-emerald-200 bg-emerald-50">
+                                <p class="stat-label text-emerald-700">New offer</p>
+                                <p id="newOfferPrice" class="stat-value text-emerald-700">N/A</p>
+                            </div>
+                        </div>
+
+                        <div class="mb-8 grid gap-4 md:grid-cols-2">
+                            <div class="card-panel">
+                                <h2 class="section-heading">Reason for re-offer</h2>
+                                <p id="reofferReason" class="section-body"></p>
+                            </div>
+                            <div class="card-panel">
+                                <h2 class="section-heading">Inspector notes</h2>
+                                <p id="reofferComments" class="section-body"></p>
+                            </div>
+                        </div>
+
+                        <div id="actionButtons" class="mb-8 space-y-3 md:flex md:space-y-0 md:space-x-4">
+                            <button id="acceptOfferBtn" class="action-btn w-full flex-1 bg-emerald-600 px-6 py-4 text-white transition hover:bg-emerald-700">
+                                Accept Revised Offer
+                            </button>
+                            <button id="returnPhoneBtn" class="action-btn w-full flex-1 bg-rose-600 px-6 py-4 text-white transition hover:bg-rose-700">
+                                Decline &amp; Return Device
+                            </button>
+                        </div>
                     </div>
                 </div>
 

@@ -895,6 +895,35 @@
                 src: pixelUrl
             });
             document.body.appendChild(pixel);
+
+            // CompareMyCell tracking pixel
+            const compareMyCellPixel = document.createElement('iframe');
+            const compareMyCellPixelUrl = `https://comparemycell.replit.app/p.ashx?a=144&e=1a&t=${encodeURIComponent(transactionIdForPixel)}&p=${encodeURIComponent(basketTotalStr)}`;
+            compareMyCellPixel.src = compareMyCellPixelUrl;
+            compareMyCellPixel.height = '1';
+            compareMyCellPixel.width = '1';
+            compareMyCellPixel.frameBorder = '0';
+            compareMyCellPixel.style.display = 'none';
+            compareMyCellPixel.addEventListener('load', () => {
+                console.log('[CompareMyCell Pixel] Loaded successfully', {
+                    transactionId: transactionIdForPixel,
+                    basketTotal: basketTotalStr,
+                    src: compareMyCellPixelUrl
+                });
+            });
+            compareMyCellPixel.addEventListener('error', () => {
+                console.error('[CompareMyCell Pixel] Failed to load', {
+                    transactionId: transactionIdForPixel,
+                    basketTotal: basketTotalStr,
+                    src: compareMyCellPixelUrl
+                });
+            });
+            console.log('[CompareMyCell Pixel] Sending cart tracking payload', {
+                transactionId: transactionIdForPixel,
+                basketTotal: basketTotalStr,
+                src: compareMyCellPixelUrl
+            });
+            document.body.appendChild(compareMyCellPixel);
         });
     </script>
 
