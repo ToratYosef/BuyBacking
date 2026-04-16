@@ -22,6 +22,8 @@ const auth = getAuth(app);
 const AUTO_ACCEPT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 let countdownInterval = null;
 let pendingAction = null;
+let focusedMultiOfferDeviceKey = null;
+let lastLoadedReofferOrder = null;
 
 const normalizeReofferStatus = (value) => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 const isPendingReofferStatus = (value) => normalizeReofferStatus(value) === 're_offered_pending';
@@ -53,6 +55,10 @@ const confirmYesBtn = document.getElementById('confirmYesBtn');
 const confirmCancelBtn = document.getElementById('confirmCancelBtn');
 const countdownContainer = document.getElementById('countdownContainer');
 const countdownTimer = document.getElementById('countdownTimer');
+const deviceSummaryList = document.getElementById('deviceSummaryList');
+const multiOfferSection = document.getElementById('multiOfferSection');
+const multiOfferList = document.getElementById('multiOfferList');
+const singleOfferSection = document.getElementById('singleOfferSection');
 
 // Login Modal Elements
 const loginModal = document.getElementById('loginModal');
@@ -114,6 +120,102 @@ if (!Number.isFinite(Number(amount))) return 'N/A';
 return `$${Number(amount).toFixed(2)}`;
 };
 
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (character) => (
+({
+'&': '&amp;',
+'<': '&lt;',
+'>': '&gt;',
+'"': '&quot;',
+"'": '&#39;',
+}[character])
+));
+
+const prettifyStatus = (value) => String(value || '')
+.trim()
+.replace(/[_-]+/g, ' ')
+.replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Status On File';
+
+const normalizeConditionLabel = (value) => {
+const normalized = String(value || '').trim().toLowerCase();
+if (!normalized) return 'Condition On File';
+if (normalized === 'no_power' || normalized === 'no power' || normalized === 'no power / severely damaged') {
+return 'No Power / Severely Damaged';
+}
+return normalized.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+};
+
+const resolveOrderDeviceEntries = (order = {}) => {
+const items = Array.isArray(order?.items) && order.items.length
+? order.items
+: [order];
+
+return items.map((item, index) => {
+const fallbackKey = `${order?.id || 'order'}::${index}`;
+const deviceKey = String(item?.deviceKey || item?.id || fallbackKey).trim();
+const offer = order?.reOfferByDevice?.[deviceKey] || order?.reofferByDevice?.[deviceKey] || null;
+const deviceStatus = order?.deviceStatusByKey?.[deviceKey] || order?.status || '';
+const modelName = item?.modelName || item?.model || item?.device || order?.device || `Device ${index + 1}`;
+const metaParts = [
+item?.brand || order?.brand || '',
+item?.storage || order?.storage || '',
+item?.carrier || item?.lock || order?.carrier || order?.lock || '',
+].filter(Boolean);
+
+return {
+deviceKey,
+index,
+modelName,
+condition: item?.condition || order?.condition || '',
+metaLabel: metaParts.join(' • '),
+offer,
+deviceStatus,
+};
+});
+};
+
+const renderOrderDeviceSummary = (order, selectedDeviceKey) => {
+if (!deviceSummaryList) return;
+
+const entries = resolveOrderDeviceEntries(order);
+if (!entries.length) {
+deviceSummaryList.innerHTML = '';
+return;
+}
+
+deviceSummaryList.innerHTML = entries.map((entry) => {
+const hasReoffer = Boolean(entry.offer);
+const isActiveReofferDevice = selectedDeviceKey
+? String(entry.deviceKey) === String(selectedDeviceKey)
+: hasReoffer;
+const offerAmount = entry.offer?.newPrice;
+const originalAmount = resolveOriginalOfferAmount(order, entry.offer, entry.deviceKey);
+const statusLabel = prettifyStatus(entry.deviceStatus);
+const jumpAttr = hasReoffer ? `data-reoffer-jump="${escapeHtml(entry.deviceKey)}"` : 'disabled';
+
+return `
+<button type="button" class="device-summary-card${hasReoffer ? ' device-summary-card--active' : ''}${isActiveReofferDevice ? ' device-summary-card--linked' : ''}" ${jumpAttr}>
+<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+<div class="min-w-0">
+<p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Device ${entry.index + 1}</p>
+<h3 class="mt-2 text-lg font-extrabold text-slate-900">${escapeHtml(entry.modelName)}</h3>
+<p class="device-summary-meta">${escapeHtml(entry.metaLabel || 'Specs on file')}</p>
+<div class="device-summary-badges">
+<span class="device-summary-badge ${hasReoffer ? 'device-summary-badge--active' : 'device-summary-badge--neutral'}">${hasReoffer ? 'This Device Was Re-Offered' : 'Not This Re-Offer'}</span>
+<span class="device-summary-badge device-summary-badge--status">${escapeHtml(statusLabel)}</span>
+<span class="device-summary-badge device-summary-badge--neutral">${escapeHtml(normalizeConditionLabel(entry.condition))}</span>
+</div>
+</div>
+<div class="md:text-right">
+<p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">${hasReoffer ? 'Re-Offered To' : 'Current Offer'}</p>
+<p class="mt-2 text-2xl font-extrabold ${hasReoffer ? 'text-emerald-700' : 'text-slate-900'}">${formatMoney(hasReoffer ? offerAmount : originalAmount)}</p>
+${hasReoffer ? `<p class="mt-2 text-sm text-slate-500">Originally ${escapeHtml(formatMoney(originalAmount))}</p>` : ''}
+</div>
+</div>
+</button>
+`;
+}).join('');
+};
+
 const buildSupportContactLinks = ({ orderId, customerName }) => {
 const safeOrderId = String(orderId || '').trim() || 'unknown';
 const safeCustomerName = String(customerName || '').trim() || 'there';
@@ -169,6 +271,108 @@ const created = extractTimestampMillis(sourceOffer.createdAt);
 return created ? created + AUTO_ACCEPT_WINDOW_MS : null;
 };
 
+const getPendingReofferEntries = (order = {}) => {
+const byDeviceOffers = order?.reOfferByDevice || order?.reofferByDevice || {};
+const orderDeviceEntries = resolveOrderDeviceEntries(order);
+const deviceMetaByKey = new Map(orderDeviceEntries.map((entry) => [entry.deviceKey, entry]));
+
+return Object.entries(byDeviceOffers)
+.map(([deviceKey, offer]) => {
+const status = order?.deviceStatusByKey?.[deviceKey] || order?.status || '';
+if (!isPendingReofferStatus(status)) return null;
+const deviceMeta = deviceMetaByKey.get(deviceKey) || null;
+return {
+deviceKey,
+offer: offer || {},
+status,
+deviceMeta,
+deadline: getAutoAcceptDeadline(order, deviceKey),
+originalAmount: resolveOriginalOfferAmount(order, offer, deviceKey),
+newAmount: firstValidAmount(offer?.newPrice),
+};
+})
+.filter(Boolean);
+};
+
+const formatDeadlineLabel = (deadlineMs) => {
+if (!deadlineMs) return 'Decision window unavailable';
+const remaining = deadlineMs - Date.now();
+if (remaining <= 0) return 'Decision window expired';
+return `${formatTimeRemaining(remaining)} remaining`;
+};
+
+const renderMultiOfferState = (order, pendingEntries) => {
+if (!multiOfferSection || !multiOfferList) return;
+
+multiOfferSection.classList.remove('hidden');
+multiOfferList.innerHTML = pendingEntries.map((entry, index) => {
+const reasons = Array.isArray(entry.offer?.reasons) ? entry.offer.reasons.filter(Boolean).join(', ') : 'No reason provided.';
+const comments = entry.offer?.comments || 'No additional notes provided by our team.';
+const modelName = entry.deviceMeta?.modelName || `Device ${index + 1}`;
+const metaBits = [
+entry.deviceMeta?.metaLabel || '',
+normalizeConditionLabel(entry.deviceMeta?.condition || ''),
+].filter(Boolean).join(' • ');
+const isFocused = focusedMultiOfferDeviceKey
+? String(focusedMultiOfferDeviceKey) === String(entry.deviceKey)
+: false;
+
+return `
+<div id="reoffer-card-${escapeHtml(entry.deviceKey)}" class="multi-offer-card${isFocused ? ' multi-offer-card--focused' : ''}">
+<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+<div>
+<p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Re-Offer For Device ${Number((entry.deviceMeta?.index ?? index)) + 1}</p>
+<h3 class="mt-2 text-xl font-extrabold text-slate-900">${escapeHtml(modelName)}</h3>
+<p class="mt-2 text-sm text-slate-600">${escapeHtml(metaBits || 'Specs on file')}</p>
+</div>
+<div class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-amber-800">
+${escapeHtml(formatDeadlineLabel(entry.deadline))}
+</div>
+</div>
+<div class="multi-offer-price-grid">
+<div class="multi-offer-price-box">
+<p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Original Quote</p>
+<p class="mt-2 text-2xl font-extrabold text-slate-900">${formatMoney(entry.originalAmount)}</p>
+</div>
+<div class="multi-offer-price-box">
+<p class="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">New Offer</p>
+<p class="mt-2 text-2xl font-extrabold text-emerald-700">${formatMoney(entry.newAmount)}</p>
+</div>
+</div>
+<div class="mt-4 grid gap-4 md:grid-cols-2">
+<div class="card-panel">
+<h4 class="section-heading">Reason For Re-Offer</h4>
+<p class="section-body mt-3">${escapeHtml(reasons)}</p>
+</div>
+<div class="card-panel">
+<h4 class="section-heading">Inspector Notes</h4>
+<p class="section-body mt-3">${escapeHtml(comments)}</p>
+</div>
+</div>
+<div class="multi-offer-actions">
+<button type="button" class="action-btn w-full bg-emerald-600 px-6 py-4 text-white transition hover:bg-emerald-700" data-reoffer-action="accept-offer" data-device-key="${escapeHtml(entry.deviceKey)}">Accept Revised Offer</button>
+<button type="button" class="action-btn w-full bg-rose-600 px-6 py-4 text-white transition hover:bg-rose-700" data-reoffer-action="return-phone" data-device-key="${escapeHtml(entry.deviceKey)}">Decline &amp; Return Device</button>
+</div>
+</div>
+`;
+}).join('');
+};
+
+const focusMultiOfferCard = (deviceKey) => {
+focusedMultiOfferDeviceKey = deviceKey ? String(deviceKey) : null;
+if (lastLoadedReofferOrder) {
+renderOrderDeviceSummary(lastLoadedReofferOrder, focusedMultiOfferDeviceKey);
+const pendingEntries = getPendingReofferEntries(lastLoadedReofferOrder);
+renderMultiOfferState(lastLoadedReofferOrder, pendingEntries);
+}
+if (!focusedMultiOfferDeviceKey) return;
+const target = document.getElementById(`reoffer-card-${focusedMultiOfferDeviceKey}`);
+if (!target) return;
+requestAnimationFrame(() => {
+target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+};
+
 const renderConfirmationState = (status, orderId) => {
 offerDetailsState.classList.add('hidden');
 loadingState.classList.add('hidden');
@@ -177,6 +381,8 @@ confirmPrompt.classList.add('hidden');
 actionButtonsDiv.classList.add('hidden');
 clearInterval(countdownInterval);
 countdownContainer.classList.add('hidden');
+multiOfferSection?.classList.add('hidden');
+singleOfferSection?.classList.add('hidden');
 
 const accepted = isAcceptedReofferStatus(status);
 const declined = isDeclinedReofferStatus(status);
@@ -218,20 +424,34 @@ confirmPrompt.classList.add('hidden');
 errorMessage.classList.add('hidden');
 replySection.classList.add('hidden');
 clearInterval(countdownInterval);
+multiOfferSection?.classList.add('hidden');
+singleOfferSection?.classList.remove('hidden');
 
 try {
 const currentOrderData = await apiGet(`/orders/${orderId}`, { authRequired: false });
-const deviceOffer = selectedDeviceKey
-? (currentOrderData?.reOfferByDevice?.[selectedDeviceKey] || currentOrderData?.reofferByDevice?.[selectedDeviceKey] || null)
+lastLoadedReofferOrder = currentOrderData;
+const pendingEntries = getPendingReofferEntries(currentOrderData);
+const hasMultiplePendingEntries = pendingEntries.length > 1;
+const resolvedDeviceKey = hasMultiplePendingEntries
+? ''
+: (selectedDeviceKey || (pendingEntries.length === 1 ? pendingEntries[0].deviceKey : ''));
+const effectiveSelectedDeviceKey = hasMultiplePendingEntries
+? (selectedDeviceKey || pendingEntries[0]?.deviceKey || '')
+: resolvedDeviceKey;
+const deviceOffer = effectiveSelectedDeviceKey
+? (currentOrderData?.reOfferByDevice?.[effectiveSelectedDeviceKey] || currentOrderData?.reofferByDevice?.[effectiveSelectedDeviceKey] || null)
 : null;
-const deviceStatus = selectedDeviceKey
-? (currentOrderData?.deviceStatusByKey?.[selectedDeviceKey] || currentOrderData?.status)
+const effectiveOffer = resolvedDeviceKey
+? (currentOrderData?.reOfferByDevice?.[resolvedDeviceKey] || currentOrderData?.reofferByDevice?.[resolvedDeviceKey] || null)
+: null;
+const deviceStatus = resolvedDeviceKey
+? (currentOrderData?.deviceStatusByKey?.[resolvedDeviceKey] || currentOrderData?.status)
 : currentOrderData?.status;
 
 orderIdDisplay.textContent = `#${orderId}`;
-const offerToDisplay = deviceOffer || currentOrderData.reOffer || null;
+const offerToDisplay = effectiveOffer || currentOrderData.reOffer || null;
 const newOfferAmount = firstValidAmount(offerToDisplay?.newPrice, currentOrderData?.estimatedQuote);
-const originalAmount = resolveOriginalOfferAmount(currentOrderData, offerToDisplay, selectedDeviceKey);
+const originalAmount = resolveOriginalOfferAmount(currentOrderData, offerToDisplay, resolvedDeviceKey);
 
 newOfferPrice.textContent = formatMoney(newOfferAmount);
 oldOfferPrice.textContent = formatMoney(originalAmount);
@@ -241,6 +461,7 @@ reofferReason.textContent = reasons.length ? reasons.join('\n') : 'No reason was
 reofferReason.style.whiteSpace = 'pre-line';
 reofferComments.textContent = offerToDisplay?.comments || 'No additional notes provided by our team.';
 buyerNameSpan.textContent = currentOrderData.shippingInfo?.fullName || 'Customer';
+renderOrderDeviceSummary(currentOrderData, effectiveSelectedDeviceKey);
 buildSupportContactLinks({
 orderId,
 customerName: currentOrderData.shippingInfo?.fullName || 'Customer',
@@ -248,7 +469,26 @@ customerName: currentOrderData.shippingInfo?.fullName || 'Customer',
 
 loadingState.classList.add('hidden');
 
-const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData, selectedDeviceKey);
+const autoAcceptDeadline = getAutoAcceptDeadline(currentOrderData, resolvedDeviceKey);
+
+if (hasMultiplePendingEntries) {
+offerDetailsState.classList.remove('hidden');
+replySection.classList.remove('hidden');
+actionButtonsDiv.classList.add('hidden');
+countdownContainer.classList.add('hidden');
+multiOfferSection?.classList.remove('hidden');
+singleOfferSection?.classList.add('hidden');
+focusedMultiOfferDeviceKey = effectiveSelectedDeviceKey || null;
+renderMultiOfferState(currentOrderData, pendingEntries);
+if (focusedMultiOfferDeviceKey) {
+setTimeout(() => focusMultiOfferCard(focusedMultiOfferDeviceKey), 0);
+}
+return;
+}
+
+multiOfferSection?.classList.add('hidden');
+if (multiOfferList) multiOfferList.innerHTML = '';
+singleOfferSection?.classList.remove('hidden');
 
 if (isPendingReofferStatus(deviceStatus) && autoAcceptDeadline) {
 offerDetailsState.classList.remove('hidden');
@@ -294,7 +534,7 @@ loadingState.classList.add('hidden');
 }
 };
 
-const handleAction = async (actionType) => {
+const handleAction = async (actionType, overrideDeviceKey = null) => {
 loadingState.classList.remove('hidden');
 offerDetailsState.classList.add('hidden');
 confirmPrompt.classList.add('hidden');
@@ -304,7 +544,7 @@ clearInterval(countdownInterval);
 try {
 const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('orderId');
-const deviceKey = urlParams.get('deviceKey');
+const deviceKey = overrideDeviceKey || urlParams.get('deviceKey');
 const actionEndpoint = `/${actionType}-action`;
 await apiPost(actionEndpoint, { orderId: orderId, deviceKey: deviceKey || null }, { authRequired: false });
 
@@ -322,14 +562,14 @@ countdownContainer.classList.remove('hidden');
 };
 
 acceptOfferBtn?.addEventListener('click', () => {
-pendingAction = 'accept-offer';
+pendingAction = { type: 'accept-offer', deviceKey: null };
 confirmMessage.textContent = 'Do you want to accept the new offer?';
 confirmPrompt.classList.remove('hidden');
 actionButtonsDiv.classList.add('hidden');
 });
 
 returnPhoneBtn?.addEventListener('click', () => {
-pendingAction = 'return-phone';
+pendingAction = { type: 'return-phone', deviceKey: null };
 confirmMessage.textContent = 'Do you want to decline the offer and have your phone returned?';
 confirmPrompt.classList.remove('hidden');
 actionButtonsDiv.classList.add('hidden');
@@ -337,14 +577,40 @@ actionButtonsDiv.classList.add('hidden');
 
 confirmYesBtn?.addEventListener('click', () => {
 if (pendingAction) {
-handleAction(pendingAction);
+handleAction(pendingAction.type, pendingAction.deviceKey || null);
 }
 });
 
 confirmCancelBtn?.addEventListener('click', () => {
 confirmPrompt.classList.add('hidden');
+if (singleOfferSection && !singleOfferSection.classList.contains('hidden')) {
 actionButtonsDiv.classList.remove('hidden');
+}
 pendingAction = null;
+});
+
+multiOfferList?.addEventListener('click', (event) => {
+const trigger = event.target.closest('[data-reoffer-action]');
+if (!trigger) return;
+
+const actionType = trigger.getAttribute('data-reoffer-action');
+const deviceKey = trigger.getAttribute('data-device-key') || null;
+if (!actionType || !deviceKey) return;
+
+pendingAction = { type: actionType, deviceKey };
+confirmMessage.textContent = actionType === 'accept-offer'
+? 'Do you want to accept the new offer for this device?'
+: 'Do you want to decline the offer for this device and have it returned?';
+confirmPrompt.classList.remove('hidden');
+actionButtonsDiv.classList.add('hidden');
+});
+
+deviceSummaryList?.addEventListener('click', (event) => {
+const trigger = event.target.closest('[data-reoffer-jump]');
+if (!trigger) return;
+const deviceKey = trigger.getAttribute('data-reoffer-jump');
+if (!deviceKey) return;
+focusMultiOfferCard(deviceKey);
 });
 
 // --- Login Modal Functions ---
