@@ -7495,6 +7495,9 @@ function renderActionButtons(order) {
         reOfferDiv.innerHTML = `<p class="text-sm"><strong>Proposed New Price:</strong> $${order.reOffer.newPrice.toFixed(2)}</p><p class="text-sm"><strong>Reasons:</strong> ${order.reOffer.reasons.join(', ')}</p><p class="text-sm"><strong>Comments:</strong> ${order.reOffer.comments}</p>`;
         primaryActions.push(reOfferDiv);
       }
+      primaryActions.push(
+        createButton('Cancel Re-offer', () => handleAction(order.id, 'cancelReoffer'), 'bg-slate-600 hover:bg-slate-700')
+      );
       break;
     case 're-offered-accepted':
     case 'ready_to_pay':
@@ -8028,6 +8031,21 @@ break;
 case 'markCompleted':
 url = `/orders/${orderId}/status`;
 body = { status: 'completed' };
+break;
+case 'cancelReoffer':
+url = `/orders/${orderId}/status`;
+body = {
+status: 'received',
+reOffer: null,
+reoffer: null,
+qcCompletedAt: null,
+qcDeviceMatch: null,
+qcDeviceName: null,
+qcStorage: null,
+qcColor: null,
+qcHistory: [],
+qcResults: null
+};
 break;
 case 'payNow':
 if (!targetOrder) {
