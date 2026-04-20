@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Debug | Database Testing</title>
+  <link rel="stylesheet" href="/assets/css/tailwind.css" />
+</head>
+<body class="bg-slate-900 text-slate-100">
+  <main class="max-w-4xl mx-auto p-6 space-y-4">
+    <h1 class="text-2xl font-bold">Database Testing Debug</h1>
+    <div class="flex gap-3">
+      <button id="list" class="bg-blue-600 px-4 py-2 rounded">Fetch Orders</button>
+      <button id="create" class="bg-green-600 px-4 py-2 rounded">Create Dummy Order</button>
+    </div>
+    <pre id="output" class="bg-slate-800 rounded p-4 overflow-auto min-h-80"></pre>
+  </main>
+
+  <script src="./assets/js/common.js"></script>
+  <script>
+    const output = document.getElementById('output');
+    const log = (value) => {
+      output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      console.log('[database-testing/debug]', value);
+    };
+
+    document.getElementById('list').addEventListener('click', async () => {
+      try {
+        log(await window.DatabaseTestingApi.listOrders());
+      } catch (error) {
+        log(error.message);
+      }
+    });
+
+    document.getElementById('create').addEventListener('click', async () => {
+      try {
+        const payload = {
+          device: { brand: 'Apple', model: 'iPhone 12', condition: 'Good' },
+          customer: { fullName: 'Debug User', email: 'debug@example.com' },
+          shippingInfo: { fullName: 'Debug User', address1: '1 Test St', city: 'Austin', state: 'TX', zip: '78701' },
+          offerPrice: 120,
+          status: 'debug_created',
+        };
+        const created = await window.DatabaseTestingApi.createOrder(payload);
+        log(created);
+      } catch (error) {
+        log(error.message);
+      }
+    });
+  </script>
+</body>
+</html>

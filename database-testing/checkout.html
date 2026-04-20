@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checkout | Database Testing</title>
+  <link rel="stylesheet" href="/assets/css/tailwind.css" />
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <main class="max-w-3xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-3">Checkout (Mongo Test)</h1>
+    <div id="offerBox" class="mb-5 p-4 rounded bg-green-100 border"></div>
+
+    <form id="checkoutForm" class="space-y-4 bg-white border rounded-xl p-6">
+      <input required name="fullName" class="w-full border rounded px-3 py-2" placeholder="Full Name" />
+      <input required name="email" type="email" class="w-full border rounded px-3 py-2" placeholder="Email" />
+      <input required name="phone" class="w-full border rounded px-3 py-2" placeholder="Phone" />
+      <input required name="address1" class="w-full border rounded px-3 py-2" placeholder="Address" />
+      <input required name="city" class="w-full border rounded px-3 py-2" placeholder="City" />
+      <input required name="state" class="w-full border rounded px-3 py-2" placeholder="State" />
+      <input required name="zip" class="w-full border rounded px-3 py-2" placeholder="ZIP" />
+      <button class="bg-green-700 text-white px-4 py-2 rounded" type="submit">Submit Order</button>
+    </form>
+    <p id="status" class="mt-4 text-sm"></p>
+  </main>
+
+  <script src="./assets/js/common.js"></script>
+  <script>
+    const draft = JSON.parse(localStorage.getItem('databaseTestingDraftOrder') || '{}');
+    document.getElementById('offerBox').textContent = `Offer: $${draft.offerPrice || 0} for ${draft.device?.brand || ''} ${draft.device?.model || ''}`;
+
+    document.getElementById('checkoutForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const status = document.getElementById('status');
+      const form = new FormData(event.target);
+      const payload = {
+        device: draft.device || {},
+        offerPrice: draft.offerPrice || null,
+        customer: {
+          fullName: form.get('fullName'),
+          email: form.get('email'),
+          phone: form.get('phone'),
+        },
+        shippingInfo: {
+          fullName: form.get('fullName'),
+          email: form.get('email'),
+          phone: form.get('phone'),
+          address1: form.get('address1'),
+          city: form.get('city'),
+          state: form.get('state'),
+          zip: form.get('zip'),
+        },
+        status: 'submitted',
+      };
+
+      try {
+        status.textContent = 'Creating order in MongoDB...';
+        const order = await window.DatabaseTestingApi.createOrder(payload);
+        localStorage.setItem('databaseTestingLastOrder', JSON.stringify(order));
+        window.location.href = `./order-submitted.html?orderId=${encodeURIComponent(order.orderId)}`;
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    });
+  </script>
+</body>
+</html>

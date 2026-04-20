@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin | Database Testing</title>
+  <link rel="stylesheet" href="/assets/css/tailwind.css" />
+</head>
+<body class="bg-slate-100 text-slate-900">
+  <main class="max-w-6xl mx-auto p-6">
+    <h1 class="text-3xl font-bold mb-4">Database Testing Admin</h1>
+    <p class="mb-4">Use token auth (query or header). Default local token: <code>database-testing-admin</code>.</p>
+    <div class="mb-4 flex gap-2">
+      <input id="token" class="border rounded px-3 py-2 flex-1" placeholder="Admin token" value="database-testing-admin" />
+      <button id="load" class="bg-slate-900 text-white px-4 rounded">Load</button>
+    </div>
+    <section class="grid md:grid-cols-2 gap-4">
+      <div class="bg-white border rounded p-4">
+        <h2 class="font-semibold mb-2">Users</h2>
+        <pre id="users" class="text-xs overflow-auto max-h-96"></pre>
+      </div>
+      <div class="bg-white border rounded p-4">
+        <h2 class="font-semibold mb-2">Orders</h2>
+        <pre id="orders" class="text-xs overflow-auto max-h-96"></pre>
+      </div>
+    </section>
+  </main>
+  <script src="../assets/js/common.js"></script>
+  <script>
+    async function loadData() {
+      const token = document.getElementById('token').value;
+      const [users, orders] = await Promise.all([
+        window.DatabaseTestingApi.listUsers(),
+        window.DatabaseTestingApi.listAdminOrders(token),
+      ]);
+      document.getElementById('users').textContent = JSON.stringify(users, null, 2);
+      document.getElementById('orders').textContent = JSON.stringify(orders, null, 2);
+    }
+
+    document.getElementById('load').addEventListener('click', async () => {
+      try {
+        await loadData();
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+
+    loadData().catch(() => {});
+  </script>
+</body>
+</html>
