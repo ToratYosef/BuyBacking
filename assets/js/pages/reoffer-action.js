@@ -193,7 +193,7 @@ const statusLabel = prettifyStatus(entry.deviceStatus);
 const jumpAttr = hasReoffer ? `data-reoffer-jump="${escapeHtml(entry.deviceKey)}"` : 'disabled';
 
 return `
-<button type="button" class="device-summary-card${hasReoffer ? ' device-summary-card--active' : ''}${isActiveReofferDevice ? ' device-summary-card--linked' : ''}" ${jumpAttr}>
+<button type="button" class="device-summary-card${hasReoffer ? ' device-summary-card--active' : ''}${isActiveReofferDevice ? ' device-summary-card--linked' : ''}" data-device-summary-key="${escapeHtml(entry.deviceKey)}" ${jumpAttr}>
 <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 <div class="min-w-0">
 <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Device ${entry.index + 1}</p>
@@ -318,7 +318,7 @@ const isFocused = focusedMultiOfferDeviceKey
 : false;
 
 return `
-<div id="reoffer-card-${escapeHtml(entry.deviceKey)}" class="multi-offer-card${isFocused ? ' multi-offer-card--focused' : ''}">
+<div id="reoffer-card-${escapeHtml(entry.deviceKey)}" data-multi-offer-card="${escapeHtml(entry.deviceKey)}" class="multi-offer-card${isFocused ? ' multi-offer-card--focused' : ''}">
 <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
 <div>
 <p class="text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Re-Offer For Device ${Number((entry.deviceMeta?.index ?? index)) + 1}</p>
@@ -358,19 +358,39 @@ ${escapeHtml(formatDeadlineLabel(entry.deadline))}
 }).join('');
 };
 
-const focusMultiOfferCard = (deviceKey) => {
+const syncFocusedOfferUi = (deviceKey, { shouldScroll = true, updateUrl = true } = {}) => {
 focusedMultiOfferDeviceKey = deviceKey ? String(deviceKey) : null;
-if (lastLoadedReofferOrder) {
-renderOrderDeviceSummary(lastLoadedReofferOrder, focusedMultiOfferDeviceKey);
-const pendingEntries = getPendingReofferEntries(lastLoadedReofferOrder);
-renderMultiOfferState(lastLoadedReofferOrder, pendingEntries);
+
+if (deviceSummaryList) {
+Array.from(deviceSummaryList.querySelectorAll('[data-device-summary-key]')).forEach((element) => {
+const isFocused = focusedMultiOfferDeviceKey && element.getAttribute('data-device-summary-key') === focusedMultiOfferDeviceKey;
+element.classList.toggle('device-summary-card--linked', Boolean(isFocused));
+});
 }
-if (!focusedMultiOfferDeviceKey) return;
+
+if (multiOfferList) {
+Array.from(multiOfferList.querySelectorAll('[data-multi-offer-card]')).forEach((element) => {
+const isFocused = focusedMultiOfferDeviceKey && element.getAttribute('data-multi-offer-card') === focusedMultiOfferDeviceKey;
+element.classList.toggle('multi-offer-card--focused', Boolean(isFocused));
+});
+}
+
+if (focusedMultiOfferDeviceKey && updateUrl) {
+const url = new URL(window.location.href);
+url.searchParams.set('deviceKey', focusedMultiOfferDeviceKey);
+window.history.replaceState({}, '', url.toString());
+}
+
+if (!focusedMultiOfferDeviceKey || !shouldScroll) return;
 const target = document.getElementById(`reoffer-card-${focusedMultiOfferDeviceKey}`);
 if (!target) return;
 requestAnimationFrame(() => {
 target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
+};
+
+const focusMultiOfferCard = (deviceKey) => {
+syncFocusedOfferUi(deviceKey, { shouldScroll: true, updateUrl: true });
 };
 
 const renderConfirmationState = (status, orderId) => {
@@ -481,7 +501,7 @@ singleOfferSection?.classList.add('hidden');
 focusedMultiOfferDeviceKey = effectiveSelectedDeviceKey || null;
 renderMultiOfferState(currentOrderData, pendingEntries);
 if (focusedMultiOfferDeviceKey) {
-setTimeout(() => focusMultiOfferCard(focusedMultiOfferDeviceKey), 0);
+syncFocusedOfferUi(focusedMultiOfferDeviceKey, { shouldScroll: true, updateUrl: false });
 }
 return;
 }
