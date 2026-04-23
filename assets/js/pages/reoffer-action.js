@@ -24,6 +24,7 @@ let countdownInterval = null;
 let pendingAction = null;
 let focusedMultiOfferDeviceKey = null;
 let lastLoadedReofferOrder = null;
+let expiredOfferRefreshAttempted = false;
 
 const normalizeReofferStatus = (value) => String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 const isPendingReofferStatus = (value) => normalizeReofferStatus(value) === 're_offered_pending';
@@ -522,8 +523,14 @@ const updateCountdown = () => {
 const timeRemaining = autoAcceptDeadline - Date.now();
 if (timeRemaining <= 0) {
 clearInterval(countdownInterval);
-countdownTimer.textContent = 'Offer expired and has been auto-accepted.';
-location.reload();
+countdownTimer.textContent = 'Decision window expired. We are refreshing your offer status.';
+actionButtonsDiv.classList.add('hidden');
+if (!expiredOfferRefreshAttempted) {
+expiredOfferRefreshAttempted = true;
+setTimeout(() => {
+loadOfferDetails();
+}, 1200);
+}
 } else {
 countdownTimer.textContent = formatTimeRemaining(timeRemaining);
 }
@@ -532,16 +539,20 @@ countdownTimer.textContent = formatTimeRemaining(timeRemaining);
 updateCountdown();
 countdownInterval = setInterval(updateCountdown, 1000);
 } else if (isPendingReofferStatus(deviceStatus)) {
+expiredOfferRefreshAttempted = false;
 offerDetailsState.classList.remove('hidden');
 replySection.classList.remove('hidden');
 actionButtonsDiv.classList.remove('hidden');
 countdownContainer.classList.add('hidden');
 
 } else if (isAcceptedReofferStatus(deviceStatus)) {
+expiredOfferRefreshAttempted = false;
 renderConfirmationState('re-offered-accepted', orderId);
 } else if (isDeclinedReofferStatus(deviceStatus)) {
+expiredOfferRefreshAttempted = false;
 renderConfirmationState('re-offered-declined', orderId);
 } else {
+expiredOfferRefreshAttempted = false;
 errorMessage.textContent = 'No pending offer found for this order, or it has been processed already.';
 errorMessage.classList.remove('hidden');
 }
