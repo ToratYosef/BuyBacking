@@ -5784,6 +5784,12 @@ ordersPage.forEach((order) => {
     const quoteText = Number.isFinite(perDeviceQuote) ? `$${perDeviceQuote.toFixed(2)}` : 'N/A';
     const itemDetails = [item?.storage || order.storage, carrierLabel].filter(Boolean).join(' • ');
     const deviceNumber = Number.isFinite(deviceIndex) ? deviceIndex + 1 : idx + 1;
+    const isReofferPending = normalizeStatusValueLocal(order.status) === 're-offered-pending';
+    const cancelReofferButtonHtml = isReofferPending
+      ? `<button data-order-id="${order.id}" class="cancel-reoffer-btn text-slate-700 hover:text-slate-900 rounded-md py-1 px-3 border border-slate-500 hover:border-slate-700 transition-colors duration-200">
+          Cancel Re-offer
+        </button>`
+      : '';
 
     deviceRow.innerHTML = `
       <td class="select-column">
@@ -5809,6 +5815,7 @@ ordersPage.forEach((order) => {
         <button data-order-id="${order.id}" class="packing-slip-btn text-purple-600 hover:text-purple-800 rounded-md py-1 px-3 border border-purple-600 hover:border-purple-800 transition-colors duration-200">
           Packing Slip
         </button>
+        ${cancelReofferButtonHtml}
       </td>
     `;
 
@@ -5851,6 +5858,14 @@ ordersPage.forEach((order) => {
       packingSlipButton.addEventListener('click', (event) => {
         event.preventDefault();
         printPackingSlip(order, deviceIndex);
+      });
+    }
+
+    const cancelReofferButton = deviceRow.querySelector('.cancel-reoffer-btn');
+    if (cancelReofferButton) {
+      cancelReofferButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        handleAction(order.id, 'cancelReoffer');
       });
     }
   });
