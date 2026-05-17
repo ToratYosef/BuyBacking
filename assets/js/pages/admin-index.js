@@ -690,8 +690,7 @@ function getBaseOrdersForStatus(status) {
         normalizedStatus === 're-offered-accepted' ||
         normalizedStatus === 're-offered-auto-accepted' ||
         normalizedStatus === 'requote_accepted' ||
-        normalizedStatus === NO_EMAIL_RESPONSE_STATUS ||
-        normalizedStatus === 'ready_to_pay'
+        normalizedStatus === NO_EMAIL_RESPONSE_STATUS
       );
     });
   }
@@ -4607,8 +4606,7 @@ function updateDashboardCounts(ordersData) {
       return status === 're-offered-accepted'
         || status === 're-offered-auto-accepted'
         || status === 'requote_accepted'
-        || status === NO_EMAIL_RESPONSE_STATUS
-        || status === 'ready_to_pay';
+        || status === NO_EMAIL_RESPONSE_STATUS;
     }).length,
     [NO_EMAIL_RESPONSE_STATUS]: visibleOrders.filter(o => normalizeStatus(o) === NO_EMAIL_RESPONSE_STATUS).length,
     're-offered-declined': visibleOrders.filter(o => o.status === 're-offered-declined').length,
@@ -5784,12 +5782,6 @@ ordersPage.forEach((order) => {
     const quoteText = Number.isFinite(perDeviceQuote) ? `$${perDeviceQuote.toFixed(2)}` : 'N/A';
     const itemDetails = [item?.storage || order.storage, carrierLabel].filter(Boolean).join(' • ');
     const deviceNumber = Number.isFinite(deviceIndex) ? deviceIndex + 1 : idx + 1;
-    const isReofferPending = normalizeStatusValueLocal(order.status) === 're-offered-pending';
-    const cancelReofferButtonHtml = isReofferPending
-      ? `<button data-order-id="${order.id}" class="cancel-reoffer-btn text-slate-700 hover:text-slate-900 rounded-md py-1 px-3 border border-slate-500 hover:border-slate-700 transition-colors duration-200">
-          Cancel Re-offer
-        </button>`
-      : '';
 
     deviceRow.innerHTML = `
       <td class="select-column">
@@ -5815,7 +5807,6 @@ ordersPage.forEach((order) => {
         <button data-order-id="${order.id}" class="packing-slip-btn text-purple-600 hover:text-purple-800 rounded-md py-1 px-3 border border-purple-600 hover:border-purple-800 transition-colors duration-200">
           Packing Slip
         </button>
-        ${cancelReofferButtonHtml}
       </td>
     `;
 
@@ -5858,14 +5849,6 @@ ordersPage.forEach((order) => {
       packingSlipButton.addEventListener('click', (event) => {
         event.preventDefault();
         printPackingSlip(order, deviceIndex);
-      });
-    }
-
-    const cancelReofferButton = deviceRow.querySelector('.cancel-reoffer-btn');
-    if (cancelReofferButton) {
-      cancelReofferButton.addEventListener('click', (event) => {
-        event.preventDefault();
-        handleAction(order.id, 'cancelReoffer');
       });
     }
   });
@@ -7089,16 +7072,6 @@ if (normalized.includes('unlock')) return 'unlocked';
 return normalized.replace(/\s+/g, '');
 }
 
-function shouldAdvanceQcToReadyToPay({ hasMismatches = false, hasConditionEmailSelected = false, reofferEnabled = true } = {}) {
-  if (hasConditionEmailSelected) {
-    return false;
-  }
-  if (hasMismatches && reofferEnabled) {
-    return false;
-  }
-  return true;
-}
-
 function getQcConditionKey(conditionMap, qcResult) {
 if (!conditionMap) return '';
 const availableKeys = Object.keys(conditionMap);
@@ -7272,19 +7245,6 @@ if (qcEmailStolen?.checked) {
 sendConditionEmail(currentOrderDetails.id, 'stolen', 'Lost/Stolen notice');
 }
 
-const hasConditionEmailSelected = Boolean(
-  qcEmailBalance?.checked ||
-  qcEmailFmi?.checked ||
-  qcEmailPassword?.checked ||
-  qcEmailStolen?.checked
-);
-const shouldTriggerReoffer = mismatches.length && qcReofferToggle?.checked !== false;
-const shouldMoveToReadyToPay = shouldAdvanceQcToReadyToPay({
-  hasMismatches: mismatches.length > 0,
-  hasConditionEmailSelected,
-  reofferEnabled: qcReofferToggle?.checked !== false,
-});
-
 try {
 const orderRef = doc(db, 'orders', currentOrderDetails.id);
 const payload = {
@@ -7305,19 +7265,9 @@ currentOrderDetails.imei = qcResult.imei || currentOrderDetails.imei;
 console.error('Failed to save QC intake fields:', error);
 }
 
-if (shouldMoveToReadyToPay) {
-  try {
-    await updateOrderStatusInline(currentOrderDetails.id, 'ready_to_pay', { notifyCustomer: false });
-    currentOrderDetails.status = 'ready_to_pay';
-  } catch (statusError) {
-    console.error('Failed to advance QC status to ready_to_pay:', statusError);
-    displayModalMessage(`QC saved, but failed to move status to Ready to Pay: ${statusError.message}`, 'error');
-  }
-}
-
 qcModal.classList.add('hidden');
 
-if (shouldTriggerReoffer) {
+if (mismatches.length && qcReofferToggle?.checked !== false) {
 showReofferForm(currentOrderDetails.id);
 const suggestedPrice = await getQcSuggestedPrice(currentOrderDetails, qcResult);
 if (suggestedPrice !== null && reofferNewPrice) {
@@ -7342,12 +7292,7 @@ reofferComments.value = `QC results differ from customer submission.\n${summaryP
 }
 displayModalMessage('QC differs from customer submission. Review the suggested re-offer below.', 'info');
 } else {
-if (shouldMoveToReadyToPay) {
-  displayModalMessage('QC checklist saved and order moved to Ready to Pay.', 'success');
-} else {
-  displayModalMessage('QC checklist saved. No mismatch with customer submission.', 'success');
-}
-openOrderDetailsModal(currentOrderDetails.id);
+displayModalMessage('QC checklist saved. No mismatch with customer submission.', 'success');
 }
 }
 
@@ -7511,7 +7456,11 @@ function renderActionButtons(order) {
         primaryActions.push(reOfferDiv);
       }
       primaryActions.push(
-        createButton('Cancel Re-offer', () => handleAction(order.id, 'cancelReoffer'), 'bg-slate-600 hover:bg-slate-700')
+        createButton(
+          'Cancel Re-offer',
+          () => handleAction(order.id, 'cancelReoffer', { body: { deviceKey: buildOrderDeviceKey(order.id, getModalSelectedDeviceIndex()) } }),
+          'bg-amber-600 hover:bg-amber-700'
+        )
       );
       break;
     case 're-offered-accepted':
@@ -8047,21 +7996,6 @@ case 'markCompleted':
 url = `/orders/${orderId}/status`;
 body = { status: 'completed' };
 break;
-case 'cancelReoffer':
-url = `/orders/${orderId}/status`;
-body = {
-status: 'received',
-reOffer: null,
-reoffer: null,
-qcCompletedAt: null,
-qcDeviceMatch: null,
-qcDeviceName: null,
-qcStorage: null,
-qcColor: null,
-qcHistory: [],
-qcResults: null
-};
-break;
 case 'payNow':
 if (!targetOrder) {
 throw new Error('Order data not found locally.');
@@ -8095,6 +8029,13 @@ url = `/orders/${orderId}/auto-requote`;
 method = 'POST';
 if (body === null) {
 body = {};
+}
+break;
+case 'cancelReoffer':
+url = `/orders/${orderId}/cancel-reoffer`;
+method = 'POST';
+if (body === null) {
+body = { deviceKey: buildOrderDeviceKey(orderId, getModalSelectedDeviceIndex()) };
 }
 break;
   case 'refreshKitTracking':
@@ -8876,8 +8817,7 @@ function filterAndRenderOrders(status, searchTerm = currentSearchTerm, options =
         return normalizedStatus === 're-offered-accepted'
           || normalizedStatus === 're-offered-auto-accepted'
           || normalizedStatus === 'requote_accepted'
-          || normalizedStatus === NO_EMAIL_RESPONSE_STATUS
-          || normalizedStatus === 'ready_to_pay';
+          || normalizedStatus === NO_EMAIL_RESPONSE_STATUS;
       });
     } else {
       filtered = filtered.filter(order => normalizeStatus(order) === status);

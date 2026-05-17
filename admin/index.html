@@ -3892,6 +3892,11 @@
             method = "POST";
             body = { ...(options?.body || {}) };
             break;
+          case "cancelReoffer":
+            endpoint = `/orders/${orderId}/cancel-reoffer`;
+            method = "POST";
+            body = { ...(options?.body || {}) };
+            break;
           case "refreshKitTracking":
             endpoint = `/refresh-tracking`;
             method = "POST";
@@ -5557,7 +5562,14 @@
             // Awaiting re-QC. Resume QC from the device cards above.
         }
         else if (status === "re-offered-pending") {
-             // No footer action button for re-offer pending per admin workflow request.
+            const cancelReofferDeviceKey = getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0);
+            groups.primary.push({
+              label: "Cancel Re-offer",
+              action: "cancelReoffer",
+              class: "bg-white border border-amber-200 text-amber-700 hover:bg-amber-50",
+              options: { body: { deviceKey: cancelReofferDeviceKey } },
+              fullWidth: true
+            });
         }
         else if (status === "re-offered-declined") {
             if (settlement.declinedCount > 0) {
