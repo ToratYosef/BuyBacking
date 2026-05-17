@@ -438,6 +438,33 @@
       const s = normalizeStatusKey(status);
       return s === 're-offered-accepted' || s === 're_offered_accepted' || s === 're-offered-auto-accepted' || s === 're_offered_auto_accepted' || s === 'requote_accepted';
     }
+    function isAnyReofferStatus(status) {
+      const s = normalizeStatusKey(status);
+      return s === 're-offered-pending'
+        || s === 're_offered_pending'
+        || s === 're-offered-declined'
+        || s === 're_offered_declined'
+        || s === 're-offered-accepted'
+        || s === 're_offered_accepted'
+        || s === 're-offered-auto-accepted'
+        || s === 're_offered_auto_accepted'
+        || s === 'requote_accepted';
+    }
+    function hasObjectEntries(value) {
+      return !!(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length);
+    }
+    function hasAnyReofferHistory(order = {}) {
+      if (!order || typeof order !== 'object') return false;
+      if (hasObjectEntries(order.reOffer) || hasObjectEntries(order.reoffer)) return true;
+      if (hasObjectEntries(order.reOfferByDevice) || hasObjectEntries(order.reofferByDevice)) return true;
+      if (hasObjectEntries(order.deviceReofferByKey) || hasObjectEntries(order.deviceReOfferByKey)) return true;
+      if (Array.isArray(order.reOfferHistory) && order.reOfferHistory.length) return true;
+      if (Array.isArray(order.reofferHistory) && order.reofferHistory.length) return true;
+      if (Array.isArray(order.reOfferEvents) && order.reOfferEvents.length) return true;
+      if (Array.isArray(order.reofferEvents) && order.reofferEvents.length) return true;
+      if (isAnyReofferStatus(order.status) || isAnyReofferStatus(order.currentStatus) || isAnyReofferStatus(order.current_status)) return true;
+      return Object.values(order.deviceStatusByKey || {}).some((status) => isAnyReofferStatus(status));
+    }
     function getAcceptedReofferPayout(order) {
       const candidates = [order?.reOffer?.newPrice, order?.reoffer?.newPrice, order?.finalPayoutAmount, order?.requoteAmount, order?.requote?.amount, order?.updatedQuote];
       for (const c of candidates) {
@@ -3707,18 +3734,20 @@
     async function handleAction(orderId, actionType, options = {}) {
       try {
         // Add confirmations for critical actions
-        if (!options?.skipConfirmation && ['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
+        if (!options?.skipConfirmation && ['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'cancelReoffer', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
           const confirmMessages = {
             'reOffer': 'Send re-offer to customer?\n\nThis will notify the customer with updated pricing and conditions.',
             'reOffer75Less': 'Send a re-offer for 75% less?\n\nThis sends a normal re-offer email and the customer can accept or decline it on the re-offer page.',
             'markCompleted': 'Mark this order as completed?\n\nThis will finalize the order and may trigger payment processing.',
             'autoRequote': 'Send 75%-less re-offer?\n\nThis will email the customer per terms and move the selected device(s) to Re-offer Pending at 75% less.',
+            'cancelReoffer': 'Cancel this order re-offer?\n\nThis removes all saved re-offer data/history from Firebase for this order. The order status itself is left unchanged unless the backend chooses to normalize re-offer device statuses.',
             'cancelOrder': 'Cancel this order?\n\nThis action will cancel the order and may void any labels.',
             'deleteOrder': 'Delete this order permanently?\n\nThis action cannot be undone!'
           };
           const confirmClasses = {
             'deleteOrder': 'bg-rose-600 hover:bg-rose-700',
             'cancelOrder': 'bg-orange-600 hover:bg-orange-700',
+            'cancelReoffer': 'bg-rose-600 hover:bg-rose-700',
             'autoRequote': 'bg-amber-600 hover:bg-amber-700',
             'reOffer': 'bg-purple-600 hover:bg-purple-700',
             'reOffer75Less': 'bg-violet-600 hover:bg-violet-700',
@@ -3900,6 +3929,11 @@
             endpoint = `/orders/${orderId}/re-offer`;
             method = "POST";
             body = options?.body ?? {}; // { newPrice, reasons, comments }
+            break;
+          case "cancelReoffer":
+            endpoint = `/orders/${orderId}/re-offer`;
+            method = "DELETE";
+            body = null;
             break;
           case "reOffer75Less": {
             const targetDeviceKey =
@@ -5558,6 +5592,10 @@
            if (["received", "imei_checked"].includes(status)) {
              // Reduced payout finalization is now automated after unresolved issue timeout.
            }
+
+        if (hasAnyReofferHistory(order)) {
+          groups.admin.push({ label: "Cancel Reoffer", action: "cancelReoffer", class: "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100" });
+        }
 
         // Tracking - reordered with better styling
         // Print docs (mock check for URL)
