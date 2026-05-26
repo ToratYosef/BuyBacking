@@ -4778,6 +4778,47 @@
       if (t.waitingOn === "customer") badges.push('<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Waiting on customer</span>');
       return `<div class="mt-2 flex flex-wrap gap-1">${badges.join("")}</div>`;
     }
+    function cleanCustomerReplyBody(input = "") {
+      let text = String(input || "").replace(/\r\n/g, "\n").trim();
+      if (!text) return "";
+      const truncationPatterns = [
+        /^On\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/im,
+        /^On\s+.+wrote:$/im,
+        /^-+\s*Original Message\s*-+$/im,
+        /^From:\s*SecondHandCell/im,
+        /^From:\s*.*$/im,
+      ];
+      let cutAt = -1;
+      for (const pattern of truncationPatterns) {
+        const match = text.match(pattern);
+        if (match && typeof match.index === "number") {
+          cutAt = cutAt < 0 ? match.index : Math.min(cutAt, match.index);
+        }
+      }
+      if (cutAt >= 0) text = text.slice(0, cutAt);
+      text = text
+        .split("\n")
+        .filter((line) => !/^\s*>/.test(line))
+        .filter((line) => !/secondhandcell\.com/i.test(line))
+        .filter((line) => !/Turn Your Old Phone Into Cash!/i.test(line))
+        .filter((line) => !/Order confirmation/i.test(line))
+        .join("\n")
+        .trim();
+      return text;
+    }
+    function inferSentEmailType(msg = {}) {
+      const subject = String(msg.subject || "").toLowerCase();
+      const source = `${subject} ${String(msg.templateType || "")} ${String(msg.emailType || "")}`.toLowerCase();
+      if (/re-?offer/.test(source)) return "Reoffer email";
+      if (/fmi|icloud|frp|google lock|lock/.test(source)) return "FMI email";
+      if (/payment|payout|paid/.test(source)) return "Payment update email";
+      if (/shipping label|usps label|label inside/.test(source)) return "Shipping label email";
+      if (/order complete|completed/.test(source)) return "Order complete email";
+      if (/device received|received by us/.test(source)) return "Device received email";
+      if (/order received/.test(source)) return "Order received email";
+      if (/offer/.test(source)) return "Offer email";
+      return "Sent email";
+    }
     
     function labelStatusExtraHTML(order) {
       // show small details about kit/label tracking statuses if present
@@ -5094,7 +5135,7 @@
         ? (focusedGroup.status || getEffectiveOrderStatus(order))
         : (focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order));
       tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
-      tabs.splice(3, 0, { id: "ticket", label: "Ticket", icon: "mail" });
+      tabs.splice(3, 0, { id: "ticket", label: "Emails", icon: "mail" });
       const visibleEntries = focusedGroup.isGrouped
         ? focusedGroup.entries
         : (focused.isFocused && focused.entry ? [focused.entry] : entries);
@@ -5109,22 +5150,34 @@
         const composeSubject = state.ticketComposeSubject || defaultSubject;
         const timeline = (ticket.messages || []).map((msg) => {
           const isReceived = msg.direction === "received";
-          const body = isReceived ? (msg.cleanedEmailBody || msg.rawEmailBody || "") : (msg.rawAdminMessage || "");
+          const cleanedBody = cleanCustomerReplyBody(msg.cleanedEmailBody || msg.rawEmailBody || "");
+          const sentType = inferSentEmailType(msg);
           return `
             <div class="rounded-lg border ${isReceived ? "border-amber-200 bg-amber-50/50" : "border-slate-200 bg-white"} p-3">
-              <div class="flex items-center justify-between text-xs">
-                <div><strong>${isReceived ? "Received" : "Sent"}</strong> • ${esc(msg.subject || "No subject")}</div>
+              <div class="flex items-center justify-between text-xs gap-2">
+                <div><strong>${isReceived ? "CUSTOMER REPLY" : "SENT BY US"}</strong></div>
                 <div>${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
               </div>
-              <div class="text-xs text-slate-500 mt-1">${esc(msg.fromEmail || "")} → ${esc(msg.toEmail || "")}</div>
-              ${isReceived ? `<pre class="mt-2 text-sm whitespace-pre-wrap font-sans">${esc(body)}</pre>` : `<div class="mt-2 text-sm text-slate-600">Sent to customer. Use preview to view full template.</div>`}
+              ${isReceived ? `
+                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
+                ${(msg.fromName || msg.fromEmail) ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(msg.fromName || "")}${msg.fromEmail ? ` &lt;${esc(msg.fromEmail)}&gt;` : ""}</div>` : ``}
+                <div class="text-sm mt-1"><span class="font-semibold">Received:</span> ${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
+                ${cleanedBody ? `<pre class="mt-3 text-sm whitespace-pre-wrap font-sans">${esc(cleanedBody)}</pre>` : `<div class="mt-3 text-sm text-slate-500">Customer reply</div>`}
+              ` : `
+                <div class="text-sm mt-1">${esc(sentType)}</div>
+                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
+                ${msg.toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(msg.toEmail)}</div>` : ``}
+                <div class="text-sm mt-1"><span class="font-semibold">Sent:</span> ${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
+                ${msg.status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(msg.status)}</div>` : ``}
+                <button type="button" data-view-full-email="${esc(msg.id || msg.gmailMessageId || "")}" class="mt-2 px-2.5 py-1.5 rounded border text-xs">View email</button>
+              `}
             </div>`;
         }).join("");
         return `
           <div class="space-y-4">
             <div class="bg-white border rounded-xl p-4">
               ${renderTicketBadges(order)}
-              <div class="text-sm text-slate-600 mt-2">Ticket ${esc(ticket.ticketId)} • Status: ${esc(ticket.status)}</div>
+              <div class="text-sm text-slate-600 mt-2">Status: ${esc(ticket.status)}</div>
             </div>
             <div class="bg-white border rounded-xl p-4 space-y-3">
               <h3 class="font-semibold">Email Timeline</h3>
@@ -7365,6 +7418,11 @@
             }
             toast("Send endpoint hook ready. Connect to backend send API.", "success");
           }
+        });
+      });
+      document.querySelectorAll("[data-view-full-email]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          toast("Full email preview is available when rendered HTML is provided by backend.", "info");
         });
       });
       // Drawer close
