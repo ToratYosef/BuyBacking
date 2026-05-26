@@ -1307,6 +1307,9 @@
       ticketComposeSubject: "",
       ticketComposeTo: "",
       ticketComposeMessage: "",
+      emailPreviewOpen: false,
+      emailPreviewHtml: "",
+      emailPreviewSubject: "",
       ordersCacheHydrated: false,
       ordersCacheLoadedAt: 0,
       appBooting: true,
@@ -4817,6 +4820,7 @@
       if (/device received|received by us/.test(source)) return "Device received email";
       if (/order received/.test(source)) return "Order received email";
       if (/offer/.test(source)) return "Offer email";
+      if (/admin|manual/.test(source)) return "Manual admin email";
       return "Sent email";
     }
     
@@ -5154,28 +5158,40 @@
         const defaultSubject = `Update about your order #${order.id}`;
         const composeTo = state.ticketComposeTo || customerEmail;
         const composeSubject = state.ticketComposeSubject || defaultSubject;
-        const timeline = (ticket.messages || []).map((msg) => {
-          const isReceived = msg.direction === "received";
-          const cleanedBody = cleanCustomerReplyBody(msg.cleanedEmailBody || msg.rawEmailBody || "");
-          const sentType = inferSentEmailType(msg);
+        const timeline = (ticket.messages || []).map((msg, idx) => {
+          const direction = String(msg.direction || "").toLowerCase();
+          const isSent = direction === "sent";
+          const isReceived = direction === "received";
+          const fallbackBody = msg.rawEmailBody ? cleanCustomerReplyBody(msg.rawEmailBody) : "";
+          const cleanedBody = (msg.cleanedEmailBody || fallbackBody || "").trim();
+          const sentType = String(msg.emailTypeLabel || "").trim() || inferSentEmailType(msg) || "Sent email";
+          const messageKey = esc(msg.id || msg.gmailMessageId || `msg-${idx}`);
+          const timestamp = toDateAny(msg.timestamp);
+          const timestampLabel = timestamp ? `${formatDate(msg.timestamp)} ${formatTimeOnly(msg.timestamp)}` : "";
           return `
-            <div class="rounded-lg border ${isReceived ? "border-amber-200 bg-amber-50/50" : "border-slate-200 bg-white"} p-3">
+            <div class="rounded-lg border ${isReceived ? "border-amber-200 bg-amber-50/50" : isSent ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50"} p-3">
               <div class="flex items-center justify-between text-xs gap-2">
-                <div><strong>${isReceived ? "CUSTOMER REPLY" : "SENT BY US"}</strong></div>
-                <div>${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
+                <div><strong>${isReceived ? "CUSTOMER REPLY" : isSent ? "SENT BY US" : "EMAIL MESSAGE"}</strong></div>
+                ${timestampLabel ? `<div>${esc(timestampLabel)}</div>` : ``}
               </div>
-              ${isReceived ? `
-                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
-                ${(msg.fromName || msg.fromEmail) ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(msg.fromName || "")}${msg.fromEmail ? ` &lt;${esc(msg.fromEmail)}&gt;` : ""}</div>` : ``}
-                <div class="text-sm mt-1"><span class="font-semibold">Received:</span> ${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
-                ${cleanedBody ? `<pre class="mt-3 text-sm whitespace-pre-wrap font-sans">${esc(cleanedBody)}</pre>` : `<div class="mt-3 text-sm text-slate-500">Customer reply</div>`}
-              ` : `
-                <div class="text-sm mt-1">${esc(sentType)}</div>
+              ${isSent ? `
+                <div class="text-sm mt-1">${esc(sentType || "Sent email")}</div>
                 ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
                 ${msg.toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(msg.toEmail)}</div>` : ``}
-                <div class="text-sm mt-1"><span class="font-semibold">Sent:</span> ${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
+                ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Sent:</span> ${esc(timestampLabel)}</div>` : ``}
                 ${msg.status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(msg.status)}</div>` : ``}
-                <button type="button" data-view-full-email="${esc(msg.id || msg.gmailMessageId || "")}" class="mt-2 px-2.5 py-1.5 rounded border text-xs">View email</button>
+                ${msg.renderedHtmlEmail ? `<button type="button" data-view-full-email="${messageKey}" class="mt-2 px-2.5 py-1.5 rounded border text-xs">View email</button>` : ``}
+              ` : isReceived ? `
+                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
+                ${msg.fromEmail ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(msg.fromName || "")}${msg.fromName ? " " : ""}&lt;${esc(msg.fromEmail)}&gt;</div>` : ``}
+                ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Received:</span> ${esc(timestampLabel)}</div>` : ``}
+                <pre class="mt-3 text-sm whitespace-pre-wrap font-sans">${esc(cleanedBody || "No message body available")}</pre>
+              ` : `
+                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
+                ${msg.fromEmail ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(msg.fromEmail)}</div>` : ``}
+                ${msg.toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(msg.toEmail)}</div>` : ``}
+                ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Time:</span> ${esc(timestampLabel)}</div>` : ``}
+                ${msg.status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(msg.status)}</div>` : ``}
               `}
             </div>`;
         }).join("");
@@ -5201,6 +5217,20 @@
                 <button data-ticket-action="clear" class="px-3 py-2 rounded-lg border text-sm">Clear</button>
               </div>
             </div>
+            ${state.emailPreviewOpen ? `
+              <div class="fixed inset-0 z-[1200] flex items-center justify-center">
+                <button type="button" class="absolute inset-0 bg-slate-900/60" data-close-email-preview="1"></button>
+                <div class="relative w-[95vw] max-w-4xl max-h-[90vh] overflow-hidden rounded-xl bg-white border border-slate-200 shadow-2xl">
+                  <div class="px-4 py-3 border-b flex items-center justify-between">
+                    <div class="font-semibold">${esc(state.emailPreviewSubject || "Email preview")}</div>
+                    <button type="button" data-close-email-preview="1" class="px-2 py-1 border rounded text-xs">Close</button>
+                  </div>
+                  <div class="p-3 overflow-auto max-h-[75vh]">
+                    <iframe class="w-full min-h-[70vh] border rounded" srcdoc="${esc(state.emailPreviewHtml || "")}"></iframe>
+                  </div>
+                </div>
+              </div>
+            ` : ``}
           </div>`;
       }
       function overviewHTML() {
@@ -7428,7 +7458,26 @@
       });
       document.querySelectorAll("[data-view-full-email]").forEach(btn => {
         btn.addEventListener("click", () => {
-          toast("Full email preview is available when rendered HTML is provided by backend.", "info");
+          const messageId = btn.getAttribute("data-view-full-email");
+          const selected = getSelectedOrder();
+          const ticket = getOrderTicketSummary(selected || {});
+          const message = (ticket.messages || []).find((m, idx) => String(m.id || m.gmailMessageId || `msg-${idx}`) === String(messageId || ""));
+          if (!message?.renderedHtmlEmail) {
+            toast("Rendered email preview not available for this message.", "info");
+            return;
+          }
+          state.emailPreviewHtml = String(message.renderedHtmlEmail || "");
+          state.emailPreviewSubject = String(message.subject || "Email preview");
+          state.emailPreviewOpen = true;
+          render();
+        });
+      });
+      document.querySelectorAll("[data-close-email-preview]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.emailPreviewOpen = false;
+          state.emailPreviewHtml = "";
+          state.emailPreviewSubject = "";
+          render();
         });
       });
       // Drawer close
