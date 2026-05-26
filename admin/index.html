@@ -1215,6 +1215,7 @@
       authLoading: !cachedAdminUser,
       authError: "",
       sidebarOpen: false,
+      mobileTopbarMenuOpen: false,
       // orders master + filtered
       allOrders: [],
       currentFilteredOrders: [],
@@ -4310,17 +4311,21 @@
       const gmail = state.gmailStatus || {};
       const gmailConnected = gmail.connected || gmail.status === "connected";
       return `
-        <header class="h-16 bg-white border-b border-slate-200 sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between gap-4">
-          <div class="flex flex-col justify-center">
-            <h1 class="text-base sm:text-lg font-semibold text-slate-900">Admin Dashboard</h1>
-            <p class="text-xs text-slate-500 hidden sm:block">Manage orders, fulfillment, and QC workflows.</p>
-          </div>
-          <div class="hidden md:flex items-center gap-3">
-            <div class="text-xs text-slate-500">
-              ${trackingMeta ? esc(getTrackingRefreshLabel(trackingMeta)) : ""}
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-20 px-3 sm:px-8 py-2.5">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex flex-col justify-center min-w-0">
+              <h1 class="text-base sm:text-lg font-semibold text-slate-900 truncate">Admin Dashboard</h1>
+              <p class="text-xs text-slate-500 hidden sm:block">Manage orders, fulfillment, and QC workflows.</p>
             </div>
-          </div>
-          <div class="flex items-center gap-4">
+            <button id="mobileTopbarMenuBtn" class="sm:hidden inline-flex items-center justify-center p-2 rounded-lg border border-slate-300 text-slate-700" aria-label="Open admin menu">
+              <i data-lucide="menu" style="width:18px;height:18px"></i>
+            </button>
+            <div class="hidden md:flex items-center gap-3">
+              <div class="text-xs text-slate-500">
+                ${trackingMeta ? esc(getTrackingRefreshLabel(trackingMeta)) : ""}
+              </div>
+            </div>
+            <div class="hidden sm:flex items-center gap-4">
             <button id="admin-orders-tab-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border ${state.activeTab === "orders" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"} px-3 py-2 text-xs font-semibold">
               <i data-lucide="package" style="width:14px;height:14px"></i>
               Orders
@@ -4348,6 +4353,16 @@
               ${esc(initial)}
             </div>
           </div>
+          </div>
+          ${state.mobileTopbarMenuOpen ? `
+            <div class="sm:hidden mt-2 border-t border-slate-200 pt-2 flex flex-wrap gap-2">
+              <button id="admin-orders-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "orders" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="package" style="width:14px;height:14px"></i>Orders</button>
+              <button id="admin-email-inbox-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "email-inbox" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="inbox" style="width:14px;height:14px"></i>Inbox</button>
+              <button id="gmail-sync-btn-mobile" class="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i>Sync Gmail</button>
+              <button id="gmail-connect-btn-mobile" class="inline-flex items-center gap-2 rounded-full ${gmailConnected ? "border border-slate-300 bg-white text-slate-700" : "bg-indigo-600 text-white"} px-3 py-2 text-xs font-semibold"><i data-lucide="mail" style="width:14px;height:14px"></i>${gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}</button>
+              <button id="logoutBtnMobile" class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"><i data-lucide="log-out" style="width:14px;height:14px"></i>Sign out</button>
+            </div>
+          ` : ""}
         </header>
       `;
     }
@@ -4987,7 +5002,7 @@
       const densityClass = state.compactDensity ? "density-compact" : "density-default";
       return `
         <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div class="w-full overflow-hidden">
+          <div class="w-full overflow-x-auto">
             <table class="admin-table text-left border-collapse">
               <thead>
                 <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
@@ -5852,7 +5867,7 @@
               </button>
             </div>
             ${workflowStepperHTML(order, headerStatus)}
-            <div class="px-6 border-b border-slate-200 bg-slate-50/50 admin-drawer-tabs">
+            <div class="px-3 sm:px-6 border-b border-slate-200 bg-slate-50/50 admin-drawer-tabs overflow-x-auto whitespace-nowrap">
               ${tabs.map(t => `
                 <button data-drawer-tab="${t.id}"
                   class="flex items-center gap-2 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
@@ -5865,10 +5880,10 @@
                 </button>
               `).join("")}
             </div>
-            <div class="p-5 lg:p-6 space-y-6 flex-1 overflow-y-auto bg-slate-50/30">
+            <div class="p-3 sm:p-5 lg:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto bg-slate-50/30">
               ${tabContent}
             </div>
-            <div class="border-t border-slate-200 p-4 lg:p-5 bg-white z-10">
+            <div class="border-t border-slate-200 p-3 sm:p-4 lg:p-5 bg-white z-10 max-h-[34vh] overflow-y-auto">
               ${renderDrawerFooter(order)}
             </div>
           </div>
@@ -7320,7 +7335,20 @@
       // Logout
       const logoutBtn = document.getElementById("logoutBtn");
       if (logoutBtn) logoutBtn.addEventListener("click", () => signOut(auth));
-      const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
+      
+      const mobileTopbarMenuBtn = document.getElementById("mobileTopbarMenuBtn");
+      if (mobileTopbarMenuBtn) mobileTopbarMenuBtn.addEventListener("click", () => { state.mobileTopbarMenuOpen = !state.mobileTopbarMenuOpen; render(); });
+      const adminOrdersTabBtnMobile = document.getElementById("admin-orders-tab-btn-mobile");
+      if (adminOrdersTabBtnMobile) adminOrdersTabBtnMobile.addEventListener("click", () => { state.activeTab = "orders"; state.mobileTopbarMenuOpen = false; render(); });
+      const adminEmailInboxTabBtnMobile = document.getElementById("admin-email-inbox-tab-btn-mobile");
+      if (adminEmailInboxTabBtnMobile) adminEmailInboxTabBtnMobile.addEventListener("click", () => { state.activeTab = "email-inbox"; state.mobileTopbarMenuOpen = false; render(); });
+      const gmailSyncBtnMobile = document.getElementById("gmail-sync-btn-mobile");
+      if (gmailSyncBtnMobile) gmailSyncBtnMobile.addEventListener("click", () => { state.mobileTopbarMenuOpen = false; void syncGmailNow(); });
+      const gmailConnectBtnMobile = document.getElementById("gmail-connect-btn-mobile");
+      if (gmailConnectBtnMobile) gmailConnectBtnMobile.addEventListener("click", () => { state.mobileTopbarMenuOpen = false; void connectGmailWorkspace(); });
+      const logoutBtnMobile = document.getElementById("logoutBtnMobile");
+      if (logoutBtnMobile) logoutBtnMobile.addEventListener("click", async () => { state.mobileTopbarMenuOpen = false; await signOut(auth); });
+const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
       if (adminOrdersTabBtn) {
         adminOrdersTabBtn.addEventListener("click", () => {
           state.activeTab = "orders";
