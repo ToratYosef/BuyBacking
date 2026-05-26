@@ -4823,6 +4823,14 @@
       if (/admin|manual/.test(source)) return "Manual admin email";
       return "Sent email";
     }
+    function cleanDisplayValue(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return "";
+      if (/^n\/a$/i.test(text)) return "";
+      if (/^null$/i.test(text)) return "";
+      if (/^undefined$/i.test(text)) return "";
+      return text;
+    }
     
     function labelStatusExtraHTML(order) {
       // show small details about kit/label tracking statuses if present
@@ -5159,12 +5167,17 @@
         const composeTo = state.ticketComposeTo || customerEmail;
         const composeSubject = state.ticketComposeSubject || defaultSubject;
         const timeline = (ticket.messages || []).map((msg, idx) => {
-          const direction = String(msg.direction || "").toLowerCase();
+          const direction = String(msg.direction || "").trim().toLowerCase();
           const isSent = direction === "sent";
           const isReceived = direction === "received";
-          const fallbackBody = msg.rawEmailBody ? cleanCustomerReplyBody(msg.rawEmailBody) : "";
-          const cleanedBody = (msg.cleanedEmailBody || fallbackBody || "").trim();
-          const sentType = String(msg.emailTypeLabel || "").trim() || inferSentEmailType(msg) || "Sent email";
+          const fallbackBody = cleanDisplayValue(msg.rawEmailBody) ? cleanCustomerReplyBody(msg.rawEmailBody) : "";
+          const cleanedBody = (cleanDisplayValue(msg.cleanedEmailBody) || fallbackBody || "").trim();
+          const sentType = cleanDisplayValue(msg.emailTypeLabel) || inferSentEmailType(msg) || "Sent email";
+          const subject = cleanDisplayValue(msg.subject);
+          const toEmail = cleanDisplayValue(msg.toEmail);
+          const fromEmail = cleanDisplayValue(msg.fromEmail);
+          const fromName = cleanDisplayValue(msg.fromName);
+          const status = cleanDisplayValue(msg.status);
           const messageKey = esc(msg.id || msg.gmailMessageId || `msg-${idx}`);
           const timestamp = toDateAny(msg.timestamp);
           const timestampLabel = timestamp ? `${formatDate(msg.timestamp)} ${formatTimeOnly(msg.timestamp)}` : "";
@@ -5176,22 +5189,23 @@
               </div>
               ${isSent ? `
                 <div class="text-sm mt-1">${esc(sentType || "Sent email")}</div>
-                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
-                ${msg.toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(msg.toEmail)}</div>` : ``}
+                ${subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(subject)}</div>` : ``}
+                ${toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(toEmail)}</div>` : ``}
                 ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Sent:</span> ${esc(timestampLabel)}</div>` : ``}
-                ${msg.status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(msg.status)}</div>` : ``}
+                ${status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(status)}</div>` : ``}
                 ${msg.renderedHtmlEmail ? `<button type="button" data-view-full-email="${messageKey}" class="mt-2 px-2.5 py-1.5 rounded border text-xs">View email</button>` : ``}
               ` : isReceived ? `
-                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
-                ${msg.fromEmail ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(msg.fromName || "")}${msg.fromName ? " " : ""}&lt;${esc(msg.fromEmail)}&gt;</div>` : ``}
+                ${subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(subject)}</div>` : ``}
+                ${fromEmail ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${fromName ? `${esc(fromName)} ` : ""}&lt;${esc(fromEmail)}&gt;</div>` : ``}
                 ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Received:</span> ${esc(timestampLabel)}</div>` : ``}
                 <pre class="mt-3 text-sm whitespace-pre-wrap font-sans">${esc(cleanedBody || "No message body available")}</pre>
               ` : `
-                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
-                ${msg.fromEmail ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(msg.fromEmail)}</div>` : ``}
-                ${msg.toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(msg.toEmail)}</div>` : ``}
+                <div class="text-[11px] mt-1 text-amber-700">Unable to determine email direction</div>
+                ${subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(subject)}</div>` : ``}
+                ${fromEmail ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(fromEmail)}</div>` : ``}
+                ${toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(toEmail)}</div>` : ``}
                 ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Time:</span> ${esc(timestampLabel)}</div>` : ``}
-                ${msg.status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(msg.status)}</div>` : ``}
+                ${status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(status)}</div>` : ``}
               `}
             </div>`;
         }).join("");
