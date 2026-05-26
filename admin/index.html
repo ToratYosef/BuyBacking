@@ -154,6 +154,18 @@
     function esc(s) {
       return String(s ?? "").replace(/[&<>"']/g, m => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[m]));
     }
+    function stripHtmlForDisplay(html = "") {
+      return String(html || "")
+        .replace(/<style[\s\S]*?<\/style>/gi, " ")
+        .replace(/<script[\s\S]*?<\/script>/gi, " ")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n\n")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+\n/g, "\n")
+        .replace(/\n\s+/g, "\n")
+        .replace(/[ \t]{2,}/g, " ")
+        .trim();
+    }
     function safeUpperTrim(s) { return String(s ?? "").trim().toUpperCase(); }
     function toDateAny(ts) {
       if (!ts) return null;
@@ -1226,6 +1238,17 @@
       selectedDeviceKey: null,
       selectedDeviceGroupKeys: [],
       drawerTab: "overview",
+      emailTicketsByOrder: {},
+      emailTicketLoadingByOrder: {},
+      emailTicketSendingByOrder: {},
+      emailTicketDraftsByOrder: {},
+      emailInboxTickets: [],
+      emailInboxLoading: false,
+      emailInboxFilter: "all",
+      emailInboxAssigning: {},
+      emailInboxAssignDrafts: {},
+      gmailStatus: null,
+      gmailStatusLoading: false,
       // QC modal (your existing)
       qcOpen: false,
       qcStep: 1,
@@ -4281,6 +4304,8 @@
     function renderTopbar() {
       const initial = state.user?.email ? state.user.email.charAt(0).toUpperCase() : "A";
       const trackingMeta = getLatestTrackingRefreshMeta();
+      const gmail = state.gmailStatus || {};
+      const gmailConnected = gmail.connected || gmail.status === "connected";
       return `
         <header class="h-16 bg-white border-b border-slate-200 sticky top-0 z-10 px-4 sm:px-8 flex items-center justify-between gap-4">
           <div class="flex flex-col justify-center">
@@ -4293,6 +4318,26 @@
             </div>
           </div>
           <div class="flex items-center gap-4">
+            <button id="admin-orders-tab-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border ${state.activeTab === "orders" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"} px-3 py-2 text-xs font-semibold">
+              <i data-lucide="package" style="width:14px;height:14px"></i>
+              Orders
+            </button>
+            <button id="admin-email-inbox-tab-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border ${state.activeTab === "email-inbox" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"} px-3 py-2 text-xs font-semibold">
+              <i data-lucide="inbox" style="width:14px;height:14px"></i>
+              Inbox
+            </button>
+            <div class="hidden lg:flex items-center gap-2 rounded-full border ${gmailConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"} px-3 py-1.5 text-xs font-semibold">
+              <span class="h-2 w-2 rounded-full ${gmailConnected ? "bg-emerald-500" : "bg-amber-500"}"></span>
+              ${gmailConnected ? `Gmail: ${esc(gmail.mailboxEmail || "connected")}` : "Gmail not connected"}
+            </div>
+            <button id="gmail-sync-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Sync Gmail replies">
+              <i data-lucide="refresh-cw" style="width:14px;height:14px"></i>
+              Sync Gmail
+            </button>
+            <button id="gmail-connect-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full ${gmailConnected ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50" : "bg-indigo-600 text-white hover:bg-indigo-700"} px-3 py-2 text-xs font-semibold" title="Connect Gmail / Google Workspace">
+              <i data-lucide="mail" style="width:14px;height:14px"></i>
+              ${gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}
+            </button>
             <button id="logoutBtn" class="p-2 text-rose-600 hover:bg-rose-50 rounded-full transition-colors" title="Sign out">
               <i data-lucide="log-out" style="width:18px;height:18px"></i>
             </button>
@@ -5080,6 +5125,7 @@
       const tabs = [
         { id: "overview", label: "Overview", icon: "layout-dashboard" },
         ...(!noLabelCustomerSend ? [{ id: "shipping", label: "Shipping & Tracking", icon: "truck" }] : []),
+        { id: "emails", label: `Emails${Number(order?.emailTicketUnreadCount || 0) ? ` (${Number(order.emailTicketUnreadCount || 0)})` : ""}`, icon: "mail" },
         { id: "logs", label: "Activity Logs", icon: "file-text" },
       ];
       const entries = getOrderDeviceEntries(order);
@@ -5456,6 +5502,85 @@
           </div>
         `;
       }
+      function emailsHTML() {
+        const ticket = state.emailTicketsByOrder?.[order.id] || null;
+        const isLoading = !!state.emailTicketLoadingByOrder?.[order.id];
+        const isSending = !!state.emailTicketSendingByOrder?.[order.id];
+        const draft = state.emailTicketDraftsByOrder?.[order.id] || {};
+        const customerEmail = getOrderCustomerEmail(order) || "";
+        const defaultSubject = `Order ${order.id}`;
+        const messages = Array.isArray(ticket?.messages) ? ticket.messages : [];
+        const messageRows = messages.map((msg) => {
+          const direction = String(msg.direction || "").toLowerCase();
+          const outbound = direction === "outbound";
+          const failed = String(msg.status || "").includes("failed");
+          const bubbleClass = failed
+            ? "bg-rose-50 border-rose-200 text-rose-900"
+            : outbound
+              ? "bg-indigo-50 border-indigo-100 text-slate-900"
+              : "bg-emerald-50 border-emerald-100 text-slate-900";
+          return `
+            <div class="rounded-xl border p-4 ${bubbleClass}">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="text-xs font-bold uppercase tracking-wide ${outbound ? "text-indigo-500" : "text-emerald-600"}">${outbound ? "Sent by us" : "Customer reply"}</div>
+                <div class="text-xs text-slate-500">${esc(formatDate(msg.sentAt || msg.receivedAt || msg.createdAt))}</div>
+              </div>
+              <div class="mt-2 text-sm font-semibold text-slate-900">${esc(msg.subject || "(No subject)")}</div>
+              <div class="mt-1 text-xs text-slate-500 break-all">${esc(outbound ? `To: ${msg.to || ""}` : `From: ${msg.from || ""}`)}</div>
+              <div class="mt-3 text-sm leading-6 text-slate-700 whitespace-pre-wrap">${esc(msg.text || msg.snippet || stripHtmlForDisplay(msg.html || ""))}</div>
+              ${failed ? `<div class="mt-3 rounded-lg bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-700">${esc(msg.error || "This email failed to send.")}</div>` : ""}
+            </div>
+          `;
+        }).join("");
+        return `
+          <div class="space-y-5">
+            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="font-semibold text-slate-700 flex items-center gap-2">
+                    <i data-lucide="mail" class="text-slate-400" style="width:18px;height:18px"></i>
+                    Ticket ${esc(order.id)}
+                  </h3>
+                  <p class="mt-1 text-xs text-slate-500">${ticket ? `${Number(ticket.messageCount || messages.length || 0)} message${Number(ticket.messageCount || messages.length || 0) === 1 ? "" : "s"}${Number(ticket.unreadCount || 0) ? ` • ${Number(ticket.unreadCount || 0)} unread` : ""}` : "Order emails will be saved here."}</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button data-refresh-email-ticket="${esc(order.id)}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">${isLoading ? "Loading..." : "Refresh"}</button>
+                  <button data-mark-email-ticket-read="${esc(order.id)}" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Mark Read</button>
+                </div>
+              </div>
+              <div class="p-5 space-y-3">
+                ${isLoading && !ticket ? `<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">Loading email ticket...</div>` : ""}
+                ${!isLoading && !messages.length ? `<div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">No emails yet. Send the first tracked order email below.</div>` : ""}
+                ${messageRows}
+              </div>
+            </div>
+            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+                <h3 class="font-semibold text-slate-700">Send tracked email</h3>
+                <p class="mt-1 text-xs text-slate-500">This sends from sales@secondhandcell.com and saves the message inside this order ticket.</p>
+              </div>
+              <div class="p-5 space-y-3">
+                <div>
+                  <label class="text-xs font-medium text-slate-400 uppercase block mb-1">To</label>
+                  <input data-email-ticket-to="${esc(order.id)}" value="${esc(draft.to ?? customerEmail)}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Subject</label>
+                  <input data-email-ticket-subject="${esc(order.id)}" value="${esc(draft.subject ?? defaultSubject)}" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
+                </div>
+                <div>
+                  <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Message</label>
+                  <textarea data-email-ticket-message="${esc(order.id)}" rows="6" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Type your message...">${esc(draft.message || "")}</textarea>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button data-send-email-ticket="${esc(order.id)}" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60" ${isSending ? "disabled" : ""}>${isSending ? "Sending..." : "Send Email"}</button>
+                  <button data-clear-email-ticket-draft="${esc(order.id)}" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Clear</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
       function priceHistoryHTML() {
         const totalEntries = visibleEntries.length;
         const cards = visibleEntries.map((entry) => {
@@ -5582,6 +5707,7 @@
       const tabContent =
         state.drawerTab === "overview" ? overviewHTML()
         : state.drawerTab === "shipping" ? shippingHTML()
+        : state.drawerTab === "emails" ? emailsHTML()
         : state.drawerTab === "price-history" ? priceHistoryHTML()
         : state.drawerTab === "ticket" ? ticketHTML()
         : logsHTML();
@@ -6536,7 +6662,9 @@
           ${renderSidebar()}
           <div class="flex-1 flex flex-col transition-all duration-300">
             ${renderTopbar()}
-            ${state.activeTab === "orders" ? renderOrdersPage() : `
+            ${state.activeTab === "orders" ? renderOrdersPage()
+              : state.activeTab === "email-inbox" ? renderEmailInboxPage()
+              : `
               <main class="flex-1 p-8">
                 <div class="bg-white border border-slate-200 rounded-xl p-6">
                   <div class="text-sm text-slate-600">Tab <b>${esc(state.activeTab)}</b> is a placeholder in this no-build version.</div>
@@ -6593,8 +6721,193 @@
       document.documentElement.style.overflow = lock ? "hidden" : "";
       document.body.style.overflow = lock ? "hidden" : "";
     }
+    async function loadEmailTicket(orderId, { markRead = false } = {}) {
+      if (!orderId) return;
+      state.emailTicketLoadingByOrder[orderId] = true;
+      render();
+      try {
+        if (markRead) {
+          await apiPost(`/orders/${orderId}/email-ticket/read`, {});
+        }
+        const result = await apiGet(`/orders/${orderId}/email-ticket`);
+        state.emailTicketsByOrder[orderId] = result.ticket || null;
+      } catch (error) {
+        toast(error?.message || "Failed to load email ticket", "error");
+      } finally {
+        state.emailTicketLoadingByOrder[orderId] = false;
+        render();
+      }
+    }
+    function updateEmailTicketDraft(orderId) {
+      if (!orderId) return;
+      state.emailTicketDraftsByOrder[orderId] = {
+        to: document.querySelector(`[data-email-ticket-to="${CSS.escape(orderId)}"]`)?.value || "",
+        subject: document.querySelector(`[data-email-ticket-subject="${CSS.escape(orderId)}"]`)?.value || "",
+        message: document.querySelector(`[data-email-ticket-message="${CSS.escape(orderId)}"]`)?.value || "",
+      };
+    }
+    async function sendEmailTicketMessage(orderId) {
+      if (!orderId || state.emailTicketSendingByOrder[orderId]) return;
+      updateEmailTicketDraft(orderId);
+      const draft = state.emailTicketDraftsByOrder[orderId] || {};
+      if (!String(draft.to || "").trim() || !String(draft.subject || "").trim() || !String(draft.message || "").trim()) {
+        toast("To, subject, and message are required.", "error");
+        return;
+      }
+      state.emailTicketSendingByOrder[orderId] = true;
+      render();
+      try {
+        const result = await apiPost(`/orders/${orderId}/email-ticket/send`, draft);
+        state.emailTicketsByOrder[orderId] = result.ticket || state.emailTicketsByOrder[orderId] || null;
+        state.emailTicketDraftsByOrder[orderId] = { to: draft.to, subject: draft.subject, message: "" };
+        toast("Email sent and saved to ticket.", "success");
+      } catch (error) {
+        toast(error?.message || "Failed to send tracked email", "error");
+      } finally {
+        state.emailTicketSendingByOrder[orderId] = false;
+        render();
+      }
+    }
+    async function loadGmailStatus({ silent = false } = {}) {
+      if (state.gmailStatusLoading) return;
+      state.gmailStatusLoading = true;
+      if (!silent) render();
+      try {
+        const status = await apiGet("/admin/gmail/status");
+        state.gmailStatus = status;
+      } catch (error) {
+        if (!silent) toast(error?.message || "Failed to load Gmail status", "error");
+      } finally {
+        state.gmailStatusLoading = false;
+        if (!silent) render();
+      }
+    }
+    async function connectGmailWorkspace() {
+      try {
+        const result = await apiPost("/admin/gmail/connect-url", {});
+        if (!result?.url) throw new Error("Missing Google connect URL.");
+        window.location.href = result.url;
+      } catch (error) {
+        toast(error?.message || "Failed to start Gmail connection", "error");
+      }
+    }
+    async function syncGmailNow() {
+      try {
+        toast("Syncing Gmail replies...", "info");
+        const result = await apiPost("/admin/gmail/sync", { maxResults: 75 });
+        toast(`Gmail sync complete: ${result?.result?.imported || 0} imported, ${result?.result?.unassigned || 0} unassigned`, "success");
+        const order = getSelectedOrder();
+        if (order?.id && state.drawerTab === "emails") {
+          await loadEmailTicket(order.id);
+        }
+        if (state.activeTab === "email-inbox") {
+          await loadEmailInbox({ silent: true });
+        }
+        await loadGmailStatus({ silent: true });
+      } catch (error) {
+        toast(error?.message || "Failed to sync Gmail", "error");
+      }
+    }
+    async function loadEmailInbox({ filter = state.emailInboxFilter || "all", silent = false } = {}) {
+      state.emailInboxFilter = filter;
+      state.emailInboxLoading = true;
+      if (!silent) render();
+      try {
+        const result = await apiGet(`/admin/email-inbox?filter=${encodeURIComponent(filter)}&limit=75`);
+        state.emailInboxTickets = Array.isArray(result.tickets) ? result.tickets : [];
+      } catch (error) {
+        toast(error?.message || "Failed to load email inbox", "error");
+      } finally {
+        state.emailInboxLoading = false;
+        render();
+      }
+    }
+    function updateUnassignedAssignDraft(unassignedId) {
+      if (!unassignedId) return;
+      state.emailInboxAssignDrafts[unassignedId] =
+        document.querySelector(`[data-unassigned-order-input="${CSS.escape(unassignedId)}"]`)?.value || "";
+    }
+    async function assignUnassignedEmail(unassignedId) {
+      if (!unassignedId || state.emailInboxAssigning[unassignedId]) return;
+      updateUnassignedAssignDraft(unassignedId);
+      const orderId = String(state.emailInboxAssignDrafts[unassignedId] || "").trim();
+      if (!orderId) {
+        toast("Enter the order number to assign this email.", "error");
+        return;
+      }
+      state.emailInboxAssigning[unassignedId] = true;
+      render();
+      try {
+        const result = await apiPost("/admin/email-inbox/assign", { unassignedId, orderId });
+        toast(`Email assigned to ${result.orderId || orderId}.`, "success");
+        delete state.emailInboxAssignDrafts[unassignedId];
+        await loadEmailInbox({ filter: state.emailInboxFilter, silent: true });
+      } catch (error) {
+        toast(error?.message || "Failed to assign email", "error");
+      } finally {
+        state.emailInboxAssigning[unassignedId] = false;
+        render();
+      }
+    }
     function updateAdminBootUi() {
       setAdminBootOverlay(!!state.appBooting, state.appBootProgress || 0, state.appBootLabel || "Loading admin workspace…");
+    }
+    function renderEmailInboxPage() {
+      const filters = [
+        { key: "all", label: "All" },
+        { key: "unread", label: "Unread" },
+        { key: "unassigned", label: "Unassigned" },
+      ];
+      const tickets = Array.isArray(state.emailInboxTickets) ? state.emailInboxTickets : [];
+      return `
+        <main class="flex-1 p-4 sm:p-8">
+          <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-2xl font-bold text-slate-900">Inbox / Tickets</h2>
+              <p class="mt-1 text-sm text-slate-500">Customer replies and tracked order email conversations from sales@secondhandcell.com.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              ${filters.map((filter) => `
+                <button data-email-inbox-filter="${filter.key}" class="rounded-full px-4 py-2 text-sm font-semibold border ${state.emailInboxFilter === filter.key ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}">${filter.label}</button>
+              `).join("")}
+              <button id="email-inbox-refresh-btn" class="rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">${state.emailInboxLoading ? "Loading..." : "Refresh"}</button>
+            </div>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            ${state.emailInboxLoading && !tickets.length ? `<div class="p-10 text-center text-sm text-slate-500">Loading tickets...</div>` : ""}
+            ${!state.emailInboxLoading && !tickets.length ? `<div class="p-10 text-center text-sm text-slate-500">No tracked ticket emails yet.</div>` : ""}
+            ${tickets.map((ticket) => {
+              const unassigned = ticket.unassigned || ticket.type === "unassigned";
+              const attrs = unassigned ? "" : `data-view-order="${esc(ticket.orderId || ticket.id)}" data-open-order-email-ticket="1"`;
+              const tag = unassigned ? "div" : "button";
+              return `
+              <${tag} ${attrs} class="w-full text-left p-4 sm:p-5 border-b border-slate-100 last:border-b-0 ${unassigned ? "bg-amber-50/40" : "hover:bg-slate-50 transition"}">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="text-sm font-bold text-slate-900">${esc(unassigned ? "Unassigned email" : (ticket.ticketId || ticket.orderId || ticket.id))}</span>
+                      ${Number(ticket.unreadCount || 0) ? `<span class="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-700">${Number(ticket.unreadCount || 0)} unread</span>` : ""}
+                      <span class="rounded-full ${unassigned ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"} px-2.5 py-1 text-xs font-semibold">${esc(unassigned ? "Needs assignment" : (ticket.waitingOn === "us" ? "Waiting on us" : "Waiting on customer"))}</span>
+                    </div>
+                    <div class="mt-1 text-sm font-semibold text-slate-700">${esc(ticket.customerName || ticket.from || "Customer")} ${ticket.customerEmail || ticket.fromEmail ? `<span class="font-normal text-slate-400">• ${esc(ticket.customerEmail || ticket.fromEmail)}</span>` : ""}</div>
+                    <div class="mt-2 max-w-3xl truncate text-sm text-slate-500">${esc(ticket.lastMessagePreview || ticket.snippet || "No preview")}</div>
+                    ${unassigned ? `
+                      <div class="mt-3 flex max-w-xl flex-wrap items-center gap-2">
+                        <input data-unassigned-order-input="${esc(ticket.id)}" value="${esc(state.emailInboxAssignDrafts[ticket.id] || "")}" placeholder="SHC-12345" class="min-w-[180px] flex-1 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" />
+                        <button data-assign-unassigned-email="${esc(ticket.id)}" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60" ${state.emailInboxAssigning[ticket.id] ? "disabled" : ""}>${state.emailInboxAssigning[ticket.id] ? "Assigning..." : "Assign to order"}</button>
+                      </div>
+                    ` : ""}
+                  </div>
+                  <div class="text-right text-xs text-slate-500">
+                    <div>${esc(formatDate(ticket.lastMessageAt || ticket.receivedAt || ticket.updatedAt || ticket.createdAt))}</div>
+                    <div class="mt-1 font-semibold uppercase tracking-wide">${esc(unassigned ? "unassigned" : (ticket.lastMessageDirection || ""))}</div>
+                  </div>
+                </div>
+              </${tag}>
+            `;}).join("")}
+          </div>
+        </main>
+      `;
     }
 
     function doRender() {
@@ -6802,6 +7115,7 @@
             event.stopPropagation();
             const orderId = orderBtn.getAttribute("data-view-order");
             const deviceKey = orderBtn.getAttribute("data-view-device-key");
+            const openEmailTicket = orderBtn.hasAttribute("data-open-order-email-ticket");
             const groupedKeys = (orderBtn.getAttribute("data-view-device-group-keys") || "").split(",").map((value) => value.trim()).filter(Boolean);
             if (!orderId) return;
             state.selectedOrderId = orderId;
@@ -6809,7 +7123,7 @@
             state.selectedDeviceKey = deviceKey || null;
             state.selectedDeviceGroupKeys = (!deviceKey && groupedKeys.length > 1) ? groupedKeys : [];
             state.qcDeviceKey = deviceKey || null;
-            state.drawerTab = "overview";
+            state.drawerTab = openEmailTicket ? "emails" : "overview";
             state.statusDropdownOpen = false;
             state.qcOpen = false;
             state.qcStep = 1;
@@ -6821,6 +7135,9 @@
             state.unlockInfoModalData = null;
             render();
             hydrateSelectedOrderDetails(orderId);
+            if (openEmailTicket) {
+              loadEmailTicket(orderId);
+            }
             return;
           }
 
@@ -6866,6 +7183,36 @@
       // Logout
       const logoutBtn = document.getElementById("logoutBtn");
       if (logoutBtn) logoutBtn.addEventListener("click", () => signOut(auth));
+      const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
+      if (adminOrdersTabBtn) {
+        adminOrdersTabBtn.addEventListener("click", () => {
+          state.activeTab = "orders";
+          render();
+        });
+      }
+      const adminEmailInboxTabBtn = document.getElementById("admin-email-inbox-tab-btn");
+      if (adminEmailInboxTabBtn) {
+        adminEmailInboxTabBtn.addEventListener("click", () => {
+          state.activeTab = "email-inbox";
+          render();
+          if (!state.emailInboxTickets.length) loadEmailInbox();
+        });
+      }
+      const gmailConnectBtn = document.getElementById("gmail-connect-btn");
+      if (gmailConnectBtn) gmailConnectBtn.addEventListener("click", connectGmailWorkspace);
+      const gmailSyncBtn = document.getElementById("gmail-sync-btn");
+      if (gmailSyncBtn) gmailSyncBtn.addEventListener("click", syncGmailNow);
+      const emailInboxRefreshBtn = document.getElementById("email-inbox-refresh-btn");
+      if (emailInboxRefreshBtn) emailInboxRefreshBtn.addEventListener("click", () => loadEmailInbox());
+      document.querySelectorAll("[data-email-inbox-filter]").forEach(btn => {
+        btn.addEventListener("click", () => loadEmailInbox({ filter: btn.getAttribute("data-email-inbox-filter") || "all" }));
+      });
+      document.querySelectorAll("[data-unassigned-order-input]").forEach(input => {
+        input.addEventListener("input", () => updateUnassignedAssignDraft(input.getAttribute("data-unassigned-order-input")));
+      });
+      document.querySelectorAll("[data-assign-unassigned-email]").forEach(btn => {
+        btn.addEventListener("click", () => assignUnassignedEmail(btn.getAttribute("data-assign-unassigned-email")));
+      });
       // Search inputs
       const search = document.getElementById("searchInput");
       if (search) {
@@ -7105,6 +7452,50 @@
         btn.addEventListener("click", () => {
           state.drawerTab = btn.getAttribute("data-drawer-tab");
           render();
+          const order = getSelectedOrder();
+          if (state.drawerTab === "emails" && order?.id && !state.emailTicketsByOrder[order.id]) {
+            loadEmailTicket(order.id);
+          }
+        });
+      });
+      document.querySelectorAll("[data-refresh-email-ticket]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const orderId = btn.getAttribute("data-refresh-email-ticket");
+          if (orderId) loadEmailTicket(orderId);
+        });
+      });
+      document.querySelectorAll("[data-mark-email-ticket-read]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const orderId = btn.getAttribute("data-mark-email-ticket-read");
+          if (orderId) loadEmailTicket(orderId, { markRead: true });
+        });
+      });
+      document.querySelectorAll("[data-send-email-ticket]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const orderId = btn.getAttribute("data-send-email-ticket");
+          if (orderId) sendEmailTicketMessage(orderId);
+        });
+      });
+      document.querySelectorAll("[data-clear-email-ticket-draft]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const orderId = btn.getAttribute("data-clear-email-ticket-draft");
+          if (!orderId) return;
+          const order = getSelectedOrder();
+          state.emailTicketDraftsByOrder[orderId] = {
+            to: getOrderCustomerEmail(order || {}) || "",
+            subject: `Order ${orderId}`,
+            message: "",
+          };
+          render();
+        });
+      });
+      document.querySelectorAll("[data-email-ticket-to],[data-email-ticket-subject],[data-email-ticket-message]").forEach(input => {
+        input.addEventListener("input", () => {
+          const orderId =
+            input.getAttribute("data-email-ticket-to") ||
+            input.getAttribute("data-email-ticket-subject") ||
+            input.getAttribute("data-email-ticket-message");
+          if (orderId) updateEmailTicketDraft(orderId);
         });
       });
       document.querySelectorAll("[data-open-qc-device]").forEach(btn => {
@@ -8291,6 +8682,10 @@
           render();
         }
         await setupAdminNotifications(u);
+        void loadGmailStatus({ silent: true });
+        if (state.activeTab === "email-inbox") {
+          void loadEmailInbox({ silent: true });
+        }
         if (!hydratedFromCache) {
           state.appBootProgress = 22;
           state.appBootLabel = "Connecting to orders…";
