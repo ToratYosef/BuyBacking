@@ -1281,6 +1281,12 @@
       customerEmailDraft: "",
       customerEmailSaving: false,
       customerEmailResending: false,
+      ticketComposeSubject: "",
+      ticketComposeTo: "",
+      ticketComposeMessage: "",
+      emailPreviewOpen: false,
+      emailPreviewHtml: "",
+      emailPreviewSubject: "",
       ordersCacheHydrated: false,
       ordersCacheLoadedAt: 0,
       appBooting: true,
@@ -4702,6 +4708,84 @@
       
       return "";
     }
+
+    function getOrderTicketSummary(order = {}) {
+      const ticket = order.ticket || order.emailTicket || {};
+      const messages = Array.isArray(ticket.messages) ? ticket.messages : [];
+      const latestMessage = ticket.latestMessage || messages[messages.length - 1] || null;
+      const unreadCount = Number(ticket.unreadCount || order.unreadTicketCount || 0) || 0;
+      const waitingOn = String(ticket.waitingOn || order.waitingOn || "").toLowerCase();
+      return {
+        ticketId: ticket.ticketId || ticket.id || order.id,
+        status: ticket.status || "open",
+        unreadCount,
+        messageCount: messages.length,
+        waitingOn,
+        latestMessage,
+        messages,
+      };
+    }
+    function renderTicketBadges(order = {}) {
+      const t = getOrderTicketSummary(order);
+      if (!t.messageCount && !t.unreadCount) return "";
+      const badges = [];
+      badges.push('<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">Email activity</span>');
+      if (t.unreadCount > 0) badges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">${t.unreadCount} unread</span>`);
+      if (t.messageCount > 0) badges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">${t.messageCount} messages</span>`);
+      if (t.waitingOn === "us") badges.push('<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Waiting on us</span>');
+      if (t.waitingOn === "customer") badges.push('<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Waiting on customer</span>');
+      return `<div class="mt-2 flex flex-wrap gap-1">${badges.join("")}</div>`;
+    }
+    function cleanCustomerReplyBody(input = "") {
+      let text = String(input || "").replace(/\r\n/g, "\n").trim();
+      if (!text) return "";
+      const truncationPatterns = [
+        /^On\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/im,
+        /^On\s+.+wrote:$/im,
+        /^-+\s*Original Message\s*-+$/im,
+        /^From:\s*SecondHandCell/im,
+        /^From:\s*.*$/im,
+      ];
+      let cutAt = -1;
+      for (const pattern of truncationPatterns) {
+        const match = text.match(pattern);
+        if (match && typeof match.index === "number") {
+          cutAt = cutAt < 0 ? match.index : Math.min(cutAt, match.index);
+        }
+      }
+      if (cutAt >= 0) text = text.slice(0, cutAt);
+      text = text
+        .split("\n")
+        .filter((line) => !/^\s*>/.test(line))
+        .filter((line) => !/secondhandcell\.com/i.test(line))
+        .filter((line) => !/Turn Your Old Phone Into Cash!/i.test(line))
+        .filter((line) => !/Order confirmation/i.test(line))
+        .join("\n")
+        .trim();
+      return text;
+    }
+    function inferSentEmailType(msg = {}) {
+      const subject = String(msg.subject || "").toLowerCase();
+      const source = `${subject} ${String(msg.templateType || "")} ${String(msg.emailType || "")}`.toLowerCase();
+      if (/re-?offer/.test(source)) return "Reoffer email";
+      if (/fmi|icloud|frp|google lock|lock/.test(source)) return "FMI email";
+      if (/payment|payout|paid/.test(source)) return "Payment update email";
+      if (/shipping label|usps label|label inside/.test(source)) return "Shipping label email";
+      if (/order complete|completed/.test(source)) return "Order complete email";
+      if (/device received|received by us/.test(source)) return "Device received email";
+      if (/order received/.test(source)) return "Order received email";
+      if (/offer/.test(source)) return "Offer email";
+      if (/admin|manual/.test(source)) return "Manual admin email";
+      return "Sent email";
+    }
+    function cleanDisplayValue(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return "";
+      if (/^n\/a$/i.test(text)) return "";
+      if (/^null$/i.test(text)) return "";
+      if (/^undefined$/i.test(text)) return "";
+      return text;
+    }
     
     function labelStatusExtraHTML(order) {
       // show small details about kit/label tracking statuses if present
@@ -4805,6 +4889,7 @@
                 <div class="text-sm text-slate-800 font-semibold mt-1 admin-break-anywhere">
                   ${esc(primaryDevice.label)}
                   ${responseBadgeHtml}
+                  ${renderTicketBadges(order)}
                 </div>
                 ${showGrouped ? `
                   <div class="text-xs text-slate-500 space-y-1 mt-1">
@@ -5016,11 +5101,124 @@
         ? (focusedGroup.status || getEffectiveOrderStatus(order))
         : (focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order));
       tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
+      const nonEmailTabs = tabs.filter((tab) => !/email|ticket/i.test(String(tab.id || "")) && !/email|ticket/i.test(String(tab.label || "")));
+      nonEmailTabs.splice(3, 0, { id: "emails", label: "Emails", icon: "mail" });
+      tabs.length = 0;
+      tabs.push(...nonEmailTabs);
       const visibleEntries = focusedGroup.isGrouped
         ? focusedGroup.entries
         : (focused.isFocused && focused.entry ? [focused.entry] : entries);
       if (noLabelCustomerSend && state.drawerTab === "shipping") {
         state.drawerTab = "overview";
+      }
+      if (state.drawerTab === "ticket") {
+        state.drawerTab = "emails";
+      }
+      function emailsHTML() {
+        const ticket = getOrderTicketSummary(order);
+        const customerEmail = order?.shippingInfo?.email || "";
+        const defaultSubject = `Update about your order #${order.id}`;
+        const composeTo = state.ticketComposeTo || customerEmail;
+        const composeSubject = state.ticketComposeSubject || defaultSubject;
+        const timeline = (ticket.messages || []).map((message, idx) => {
+          console.log("[EmailsTab message]", {
+            id: message.id,
+            direction: message.direction,
+            fromEmail: message.fromEmail,
+            toEmail: message.toEmail,
+            subject: message.subject,
+            emailType: message.emailType,
+            emailTypeLabel: message.emailTypeLabel,
+            timestamp: message.timestamp,
+            gmailMessageId: message.gmailMessageId,
+            gmailThreadId: message.gmailThreadId,
+            labelIds: message.labelIds
+          });
+          const direction = String(message.direction || "").trim().toLowerCase();
+          const isSent = direction === "sent";
+          const isReceived = direction === "received";
+          const fallbackBody = cleanDisplayValue(message.rawEmailBody) ? cleanCustomerReplyBody(message.rawEmailBody) : "";
+          const cleanedBody = (cleanDisplayValue(message.cleanedEmailBody) || fallbackBody || "").trim();
+          const sentType = cleanDisplayValue(message.emailTypeLabel) || inferSentEmailType(message) || "Sent email";
+          const subject = cleanDisplayValue(message.subject) || "No subject";
+          const toEmail = cleanDisplayValue(message.toEmail);
+          const fromEmail = cleanDisplayValue(message.fromEmail);
+          const fromName = cleanDisplayValue(message.fromName);
+          const status = cleanDisplayValue(message.status);
+          const messageKey = esc(message.id || message.gmailMessageId || `msg-${idx}`);
+          const timestamp = toDateAny(message.timestamp);
+          const timestampLabel = timestamp ? `${formatDate(message.timestamp)} ${formatTimeOnly(message.timestamp)}` : "";
+          return `
+            <div class="rounded-lg border ${isReceived ? "border-amber-200 bg-amber-50/50" : isSent ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50"} p-3">
+              <div class="flex items-center justify-between text-xs gap-2">
+                <div><strong>${isReceived ? "CUSTOMER REPLY" : isSent ? "SENT BY US" : "EMAIL MESSAGE"}</strong></div>
+                ${timestampLabel ? `<div>${esc(timestampLabel)}</div>` : ``}
+              </div>
+              ${isSent ? `
+                <div class="text-sm mt-1">${esc(sentType || "Sent email")}</div>
+                <div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(subject)}</div>
+                ${toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(toEmail)}</div>` : ``}
+                ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Sent:</span> ${esc(timestampLabel)}</div>` : ``}
+                ${status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(status)}</div>` : ``}
+                ${message.renderedHtmlEmail ? `<button type="button" data-view-full-email="${messageKey}" class="mt-2 px-2.5 py-1.5 rounded border text-xs">View email</button>` : ``}
+              ` : isReceived ? `
+                <div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(subject)}</div>
+                ${fromEmail ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${fromName ? `${esc(fromName)} ` : ""}&lt;${esc(fromEmail)}&gt;</div>` : ``}
+                ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Received:</span> ${esc(timestampLabel)}</div>` : ``}
+                <pre class="mt-3 text-sm whitespace-pre-wrap font-sans">${esc(cleanedBody || "No message body available")}</pre>
+              ` : `
+                <div class="text-[11px] mt-1 text-amber-700">Unable to determine email direction</div>
+                <div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(subject)}</div>
+                ${fromEmail ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(fromEmail)}</div>` : ``}
+                ${toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(toEmail)}</div>` : ``}
+                ${timestampLabel ? `<div class="text-sm mt-1"><span class="font-semibold">Time:</span> ${esc(timestampLabel)}</div>` : ``}
+                ${status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(status)}</div>` : ``}
+              `}
+              <div class="mt-2 text-[10px] text-slate-500 border-t pt-2">
+                direction: ${esc(cleanDisplayValue(message.direction) || "(missing)")} •
+                fromEmail: ${esc(fromEmail || "(missing)")} •
+                toEmail: ${esc(toEmail || "(missing)")} •
+                gmailThreadId: ${esc(cleanDisplayValue(message.gmailThreadId) || "(missing)")}
+              </div>
+            </div>`;
+        }).join("");
+        return `
+          <div class="space-y-4">
+            <div class="bg-white border rounded-xl p-4">
+              ${renderTicketBadges(order)}
+              <div class="text-sm text-slate-600 mt-2">Status: ${esc(ticket.status)}</div>
+            </div>
+            <div class="bg-white border rounded-xl p-4 space-y-3">
+              <h3 class="font-semibold">Email Timeline</h3>
+              ${timeline || '<div class="text-sm text-slate-500">No email history yet.</div>'}
+            </div>
+            <div class="bg-white border rounded-xl p-4 space-y-3">
+              <h3 class="font-semibold">Reply to customer</h3>
+              <p class="text-xs text-slate-500">Type plain text only. Backend adds greeting, branding, and HTML template.</p>
+              <input id="ticketToInput" class="w-full border rounded-lg px-3 py-2 text-sm" value="${esc(composeTo)}" placeholder="To" />
+              <input id="ticketSubjectInput" class="w-full border rounded-lg px-3 py-2 text-sm" value="${esc(composeSubject)}" placeholder="Subject" />
+              <textarea id="ticketMessageInput" class="w-full border rounded-lg px-3 py-2 text-sm min-h-[120px]" placeholder="Type plain message">${esc(state.ticketComposeMessage || "")}</textarea>
+              <div class="flex gap-2">
+                <button data-ticket-action="preview" class="px-3 py-2 rounded-lg border text-sm">Preview</button>
+                <button data-ticket-action="send" class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm">Send</button>
+                <button data-ticket-action="clear" class="px-3 py-2 rounded-lg border text-sm">Clear</button>
+              </div>
+            </div>
+            ${state.emailPreviewOpen ? `
+              <div class="fixed inset-0 z-[1200] flex items-center justify-center">
+                <button type="button" class="absolute inset-0 bg-slate-900/60" data-close-email-preview="1"></button>
+                <div class="relative w-[95vw] max-w-4xl max-h-[90vh] overflow-hidden rounded-xl bg-white border border-slate-200 shadow-2xl">
+                  <div class="px-4 py-3 border-b flex items-center justify-between">
+                    <div class="font-semibold">${esc(state.emailPreviewSubject || "Email preview")}</div>
+                    <button type="button" data-close-email-preview="1" class="px-2 py-1 border rounded text-xs">Close</button>
+                  </div>
+                  <div class="p-3 overflow-auto max-h-[75vh]">
+                    <iframe class="w-full min-h-[70vh] border rounded" srcdoc="${esc(state.emailPreviewHtml || "")}"></iframe>
+                  </div>
+                </div>
+              </div>
+            ` : ``}
+          </div>`;
       }
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
@@ -5454,6 +5652,7 @@
         state.drawerTab === "overview" ? overviewHTML()
         : state.drawerTab === "shipping" ? shippingHTML()
         : state.drawerTab === "price-history" ? priceHistoryHTML()
+        : (state.drawerTab === "ticket" || state.drawerTab === "emails") ? emailsHTML()
         : logsHTML();
       return `
         <div class="fixed inset-0 z-[1002] flex justify-end">
@@ -6918,6 +7117,55 @@
       if (btnBulkSeparateKitSent) {
         btnBulkSeparateKitSent.addEventListener("click", () => handleBulkSeparatePhoneOnWayKits(btnBulkSeparateKitSent));
       }
+      document.querySelectorAll("[data-ticket-action]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.ticketComposeTo = document.getElementById("ticketToInput")?.value || "";
+          state.ticketComposeSubject = document.getElementById("ticketSubjectInput")?.value || "";
+          state.ticketComposeMessage = document.getElementById("ticketMessageInput")?.value || "";
+          const action = btn.getAttribute("data-ticket-action");
+          if (action === "clear") {
+            state.ticketComposeMessage = "";
+            toast("Composer cleared.", "info");
+            render();
+            return;
+          }
+          if (action === "preview") {
+            toast("Preview endpoint hook ready. Connect to backend preview API.", "info");
+            return;
+          }
+          if (action === "send") {
+            if (!state.ticketComposeMessage.trim()) {
+              toast("Message body is required.", "error");
+              return;
+            }
+            toast("Send endpoint hook ready. Connect to backend send API.", "success");
+          }
+        });
+      });
+      document.querySelectorAll("[data-view-full-email]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const messageId = btn.getAttribute("data-view-full-email");
+          const selected = getSelectedOrder();
+          const ticket = getOrderTicketSummary(selected || {});
+          const message = (ticket.messages || []).find((m, idx) => String(m.id || m.gmailMessageId || `msg-${idx}`) === String(messageId || ""));
+          if (!message?.renderedHtmlEmail) {
+            toast("Rendered email preview not available for this message.", "info");
+            return;
+          }
+          state.emailPreviewHtml = String(message.renderedHtmlEmail || "");
+          state.emailPreviewSubject = String(message.subject || "Email preview");
+          state.emailPreviewOpen = true;
+          render();
+        });
+      });
+      document.querySelectorAll("[data-close-email-preview]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.emailPreviewOpen = false;
+          state.emailPreviewHtml = "";
+          state.emailPreviewSubject = "";
+          render();
+        });
+      });
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
         el.addEventListener("click", () => {
