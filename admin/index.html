@@ -6836,7 +6836,24 @@
       document.documentElement.style.overflow = lock ? "hidden" : "";
       document.body.style.overflow = lock ? "hidden" : "";
     }
-    async function loadEmailTicket(orderId, { markRead = false } = {}) {
+    async function syncEmailTicketGmail(orderId) {
+      if (!orderId) return null;
+      const attempts = [
+        () => apiPost(`/orders/${orderId}/email-ticket/sync`, {}),
+        () => apiPost(`/admin/orders/${orderId}/emails/sync`, {}),
+        () => apiPost("/admin/gmail/sync", { orderId, maxResults: 75 }),
+      ];
+      let lastError = null;
+      for (const attempt of attempts) {
+        try {
+          return await attempt();
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error("Could not sync Gmail replies. Please try again.");
+    }
+    async function loadEmailTicket(orderId, { markRead = false, sync = false } = {}) {
       if (!orderId) return;
       state.emailTicketLoadingByOrder[orderId] = true;
       render();
@@ -6844,10 +6861,15 @@
         if (markRead) {
           await apiPost(`/orders/${orderId}/email-ticket/read`, {});
         }
+        if (sync) {
+          await syncEmailTicketGmail(orderId);
+        }
         const result = await apiGet(`/orders/${orderId}/email-ticket`);
+        const messages = Array.isArray(result?.ticket?.messages) ? result.ticket.messages : [];
+        console.log("[EmailsTab refresh result]", messages);
         state.emailTicketsByOrder[orderId] = result.ticket || null;
       } catch (error) {
-        toast(error?.message || "Failed to load email ticket", "error");
+        toast(error?.message || (sync ? "Could not sync Gmail replies. Please try again." : "Failed to load email ticket"), "error");
       } finally {
         state.emailTicketLoadingByOrder[orderId] = false;
         render();
@@ -7595,7 +7617,7 @@
       document.querySelectorAll("[data-refresh-email-ticket]").forEach(btn => {
         btn.addEventListener("click", () => {
           const orderId = btn.getAttribute("data-refresh-email-ticket");
-          if (orderId) loadEmailTicket(orderId);
+          if (orderId) loadEmailTicket(orderId, { sync: true });
         });
       });
       document.querySelectorAll("[data-mark-email-ticket-read]").forEach(btn => {
