@@ -1281,6 +1281,9 @@
       customerEmailDraft: "",
       customerEmailSaving: false,
       customerEmailResending: false,
+      ticketComposeSubject: "",
+      ticketComposeTo: "",
+      ticketComposeMessage: "",
       ordersCacheHydrated: false,
       ordersCacheLoadedAt: 0,
       appBooting: true,
@@ -4702,6 +4705,75 @@
       
       return "";
     }
+
+    function getOrderTicketSummary(order = {}) {
+      const ticket = order.ticket || order.emailTicket || {};
+      const messages = Array.isArray(ticket.messages) ? ticket.messages : [];
+      const latestMessage = ticket.latestMessage || messages[messages.length - 1] || null;
+      const unreadCount = Number(ticket.unreadCount || order.unreadTicketCount || 0) || 0;
+      const waitingOn = String(ticket.waitingOn || order.waitingOn || "").toLowerCase();
+      return {
+        ticketId: ticket.ticketId || ticket.id || order.id,
+        status: ticket.status || "open",
+        unreadCount,
+        messageCount: messages.length,
+        waitingOn,
+        latestMessage,
+        messages,
+      };
+    }
+    function renderTicketBadges(order = {}) {
+      const t = getOrderTicketSummary(order);
+      if (!t.messageCount && !t.unreadCount) return "";
+      const badges = [];
+      badges.push('<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">Email activity</span>');
+      if (t.unreadCount > 0) badges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">${t.unreadCount} unread</span>`);
+      if (t.messageCount > 0) badges.push(`<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">${t.messageCount} messages</span>`);
+      if (t.waitingOn === "us") badges.push('<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Waiting on us</span>');
+      if (t.waitingOn === "customer") badges.push('<span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Waiting on customer</span>');
+      return `<div class="mt-2 flex flex-wrap gap-1">${badges.join("")}</div>`;
+    }
+    function cleanCustomerReplyBody(input = "") {
+      let text = String(input || "").replace(/\r\n/g, "\n").trim();
+      if (!text) return "";
+      const truncationPatterns = [
+        /^On\s+(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/im,
+        /^On\s+.+wrote:$/im,
+        /^-+\s*Original Message\s*-+$/im,
+        /^From:\s*SecondHandCell/im,
+        /^From:\s*.*$/im,
+      ];
+      let cutAt = -1;
+      for (const pattern of truncationPatterns) {
+        const match = text.match(pattern);
+        if (match && typeof match.index === "number") {
+          cutAt = cutAt < 0 ? match.index : Math.min(cutAt, match.index);
+        }
+      }
+      if (cutAt >= 0) text = text.slice(0, cutAt);
+      text = text
+        .split("\n")
+        .filter((line) => !/^\s*>/.test(line))
+        .filter((line) => !/secondhandcell\.com/i.test(line))
+        .filter((line) => !/Turn Your Old Phone Into Cash!/i.test(line))
+        .filter((line) => !/Order confirmation/i.test(line))
+        .join("\n")
+        .trim();
+      return text;
+    }
+    function inferSentEmailType(msg = {}) {
+      const subject = String(msg.subject || "").toLowerCase();
+      const source = `${subject} ${String(msg.templateType || "")} ${String(msg.emailType || "")}`.toLowerCase();
+      if (/re-?offer/.test(source)) return "Reoffer email";
+      if (/fmi|icloud|frp|google lock|lock/.test(source)) return "FMI email";
+      if (/payment|payout|paid/.test(source)) return "Payment update email";
+      if (/shipping label|usps label|label inside/.test(source)) return "Shipping label email";
+      if (/order complete|completed/.test(source)) return "Order complete email";
+      if (/device received|received by us/.test(source)) return "Device received email";
+      if (/order received/.test(source)) return "Order received email";
+      if (/offer/.test(source)) return "Offer email";
+      return "Sent email";
+    }
     
     function labelStatusExtraHTML(order) {
       // show small details about kit/label tracking statuses if present
@@ -4805,6 +4877,7 @@
                 <div class="text-sm text-slate-800 font-semibold mt-1 admin-break-anywhere">
                   ${esc(primaryDevice.label)}
                   ${responseBadgeHtml}
+                  ${renderTicketBadges(order)}
                 </div>
                 ${showGrouped ? `
                   <div class="text-xs text-slate-500 space-y-1 mt-1">
@@ -5016,11 +5089,67 @@
         ? (focusedGroup.status || getEffectiveOrderStatus(order))
         : (focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order));
       tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
+      tabs.splice(3, 0, { id: "ticket", label: "Emails", icon: "mail" });
       const visibleEntries = focusedGroup.isGrouped
         ? focusedGroup.entries
         : (focused.isFocused && focused.entry ? [focused.entry] : entries);
       if (noLabelCustomerSend && state.drawerTab === "shipping") {
         state.drawerTab = "overview";
+      }
+      function ticketHTML() {
+        const ticket = getOrderTicketSummary(order);
+        const customerEmail = order?.shippingInfo?.email || "";
+        const defaultSubject = `Update about your order #${order.id}`;
+        const composeTo = state.ticketComposeTo || customerEmail;
+        const composeSubject = state.ticketComposeSubject || defaultSubject;
+        const timeline = (ticket.messages || []).map((msg) => {
+          const isReceived = msg.direction === "received";
+          const cleanedBody = cleanCustomerReplyBody(msg.cleanedEmailBody || msg.rawEmailBody || "");
+          const sentType = inferSentEmailType(msg);
+          return `
+            <div class="rounded-lg border ${isReceived ? "border-amber-200 bg-amber-50/50" : "border-slate-200 bg-white"} p-3">
+              <div class="flex items-center justify-between text-xs gap-2">
+                <div><strong>${isReceived ? "CUSTOMER REPLY" : "SENT BY US"}</strong></div>
+                <div>${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
+              </div>
+              ${isReceived ? `
+                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
+                ${(msg.fromName || msg.fromEmail) ? `<div class="text-sm mt-1"><span class="font-semibold">From:</span> ${esc(msg.fromName || "")}${msg.fromEmail ? ` &lt;${esc(msg.fromEmail)}&gt;` : ""}</div>` : ``}
+                <div class="text-sm mt-1"><span class="font-semibold">Received:</span> ${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
+                ${cleanedBody ? `<pre class="mt-3 text-sm whitespace-pre-wrap font-sans">${esc(cleanedBody)}</pre>` : `<div class="mt-3 text-sm text-slate-500">Customer reply</div>`}
+              ` : `
+                <div class="text-sm mt-1">${esc(sentType)}</div>
+                ${msg.subject ? `<div class="text-sm mt-1"><span class="font-semibold">Subject:</span> ${esc(msg.subject)}</div>` : ``}
+                ${msg.toEmail ? `<div class="text-sm mt-1"><span class="font-semibold">To:</span> ${esc(msg.toEmail)}</div>` : ``}
+                <div class="text-sm mt-1"><span class="font-semibold">Sent:</span> ${esc(formatDate(msg.timestamp))} ${esc(formatTimeOnly(msg.timestamp))}</div>
+                ${msg.status ? `<div class="text-sm mt-1"><span class="font-semibold">Status:</span> ${esc(msg.status)}</div>` : ``}
+                <button type="button" data-view-full-email="${esc(msg.id || msg.gmailMessageId || "")}" class="mt-2 px-2.5 py-1.5 rounded border text-xs">View email</button>
+              `}
+            </div>`;
+        }).join("");
+        return `
+          <div class="space-y-4">
+            <div class="bg-white border rounded-xl p-4">
+              ${renderTicketBadges(order)}
+              <div class="text-sm text-slate-600 mt-2">Status: ${esc(ticket.status)}</div>
+            </div>
+            <div class="bg-white border rounded-xl p-4 space-y-3">
+              <h3 class="font-semibold">Email Timeline</h3>
+              ${timeline || '<div class="text-sm text-slate-500">No email history yet.</div>'}
+            </div>
+            <div class="bg-white border rounded-xl p-4 space-y-3">
+              <h3 class="font-semibold">Reply to customer</h3>
+              <p class="text-xs text-slate-500">Type plain text only. Backend adds greeting, branding, and HTML template.</p>
+              <input id="ticketToInput" class="w-full border rounded-lg px-3 py-2 text-sm" value="${esc(composeTo)}" placeholder="To" />
+              <input id="ticketSubjectInput" class="w-full border rounded-lg px-3 py-2 text-sm" value="${esc(composeSubject)}" placeholder="Subject" />
+              <textarea id="ticketMessageInput" class="w-full border rounded-lg px-3 py-2 text-sm min-h-[120px]" placeholder="Type plain message">${esc(state.ticketComposeMessage || "")}</textarea>
+              <div class="flex gap-2">
+                <button data-ticket-action="preview" class="px-3 py-2 rounded-lg border text-sm">Preview</button>
+                <button data-ticket-action="send" class="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm">Send</button>
+                <button data-ticket-action="clear" class="px-3 py-2 rounded-lg border text-sm">Clear</button>
+              </div>
+            </div>
+          </div>`;
       }
       function overviewHTML() {
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
@@ -5454,6 +5583,7 @@
         state.drawerTab === "overview" ? overviewHTML()
         : state.drawerTab === "shipping" ? shippingHTML()
         : state.drawerTab === "price-history" ? priceHistoryHTML()
+        : state.drawerTab === "ticket" ? ticketHTML()
         : logsHTML();
       return `
         <div class="fixed inset-0 z-[1002] flex justify-end">
@@ -6918,6 +7048,36 @@
       if (btnBulkSeparateKitSent) {
         btnBulkSeparateKitSent.addEventListener("click", () => handleBulkSeparatePhoneOnWayKits(btnBulkSeparateKitSent));
       }
+      document.querySelectorAll("[data-ticket-action]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.ticketComposeTo = document.getElementById("ticketToInput")?.value || "";
+          state.ticketComposeSubject = document.getElementById("ticketSubjectInput")?.value || "";
+          state.ticketComposeMessage = document.getElementById("ticketMessageInput")?.value || "";
+          const action = btn.getAttribute("data-ticket-action");
+          if (action === "clear") {
+            state.ticketComposeMessage = "";
+            toast("Composer cleared.", "info");
+            render();
+            return;
+          }
+          if (action === "preview") {
+            toast("Preview endpoint hook ready. Connect to backend preview API.", "info");
+            return;
+          }
+          if (action === "send") {
+            if (!state.ticketComposeMessage.trim()) {
+              toast("Message body is required.", "error");
+              return;
+            }
+            toast("Send endpoint hook ready. Connect to backend send API.", "success");
+          }
+        });
+      });
+      document.querySelectorAll("[data-view-full-email]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          toast("Full email preview is available when rendered HTML is provided by backend.", "info");
+        });
+      });
       // Drawer close
       document.querySelectorAll("[data-close-drawer]").forEach(el => {
         el.addEventListener("click", () => {
