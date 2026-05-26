@@ -5135,14 +5135,20 @@
         ? (focusedGroup.status || getEffectiveOrderStatus(order))
         : (focused.isFocused ? getDeviceStatus(order, focused.deviceKey) : getEffectiveOrderStatus(order));
       tabs.splice(2, 0, { id: "price-history", label: "Pricing Activity", icon: "trending-down" });
-      tabs.splice(3, 0, { id: "ticket", label: "Emails", icon: "mail" });
+      const nonEmailTabs = tabs.filter((tab) => !/email|ticket/i.test(String(tab.id || "")) && !/email|ticket/i.test(String(tab.label || "")));
+      nonEmailTabs.splice(3, 0, { id: "emails", label: "Emails", icon: "mail" });
+      tabs.length = 0;
+      tabs.push(...nonEmailTabs);
       const visibleEntries = focusedGroup.isGrouped
         ? focusedGroup.entries
         : (focused.isFocused && focused.entry ? [focused.entry] : entries);
       if (noLabelCustomerSend && state.drawerTab === "shipping") {
         state.drawerTab = "overview";
       }
-      function ticketHTML() {
+      if (state.drawerTab === "ticket") {
+        state.drawerTab = "emails";
+      }
+      function emailsHTML() {
         const ticket = getOrderTicketSummary(order);
         const customerEmail = order?.shippingInfo?.email || "";
         const defaultSubject = `Update about your order #${order.id}`;
@@ -5709,7 +5715,7 @@
         : state.drawerTab === "shipping" ? shippingHTML()
         : state.drawerTab === "emails" ? emailsHTML()
         : state.drawerTab === "price-history" ? priceHistoryHTML()
-        : state.drawerTab === "ticket" ? ticketHTML()
+        : (state.drawerTab === "ticket" || state.drawerTab === "emails") ? emailsHTML()
         : logsHTML();
       return `
         <div class="fixed inset-0 z-[1002] flex justify-end">
