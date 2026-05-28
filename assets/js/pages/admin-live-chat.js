@@ -5,6 +5,7 @@ import {
   getFirestore,
   collection,
   query,
+  where,
   orderBy,
   onSnapshot,
   doc,
@@ -428,6 +429,29 @@ function getAdminBrowserTokenDocId() {
   }
 }
 
+
+async function cleanupDuplicateNotificationTokens(uid, token, keepDocId = getAdminBrowserTokenDocId()) {
+  if (!uid || !token) return;
+  const tokenCollectionPath = `admins/${uid}/fcmTokens`;
+  const deletions = [];
+  try {
+    const matchingDocs = await getDocs(query(collection(db, tokenCollectionPath), where("token", "==", token)));
+    matchingDocs.forEach((tokenDoc) => {
+      if (tokenDoc.id !== keepDocId) {
+        deletions.push(deleteDoc(doc(db, tokenCollectionPath, tokenDoc.id)));
+      }
+    });
+  } catch (error) {
+    console.warn("Failed to query duplicate admin chat FCM tokens:", error);
+  }
+  if (token !== keepDocId) {
+    deletions.push(deleteDoc(doc(db, tokenCollectionPath, token)).catch(() => {}));
+  }
+  if (deletions.length) {
+    await Promise.allSettled(deletions);
+  }
+}
+
 async function removeStoredNotificationToken(uid = activeNotificationUid, token = activeNotificationToken) {
   if (!uid || !token) return;
   try {
@@ -508,7 +532,9 @@ async function setupAdminNotifications(user) {
     activeNotificationUid = user.uid;
     activeNotificationToken = token;
 
-    await setDoc(doc(db, `admins/${user.uid}/fcmTokens`, getAdminBrowserTokenDocId()), {
+    const notificationTokenDocId = getAdminBrowserTokenDocId();
+    await cleanupDuplicateNotificationTokens(user.uid, token, notificationTokenDocId);
+    await setDoc(doc(db, `admins/${user.uid}/fcmTokens`, notificationTokenDocId), {
       token,
       page: "admin_chat",
       userAgent: navigator.userAgent,
