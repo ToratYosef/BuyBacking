@@ -2319,6 +2319,29 @@
       }
     }
 
+
+    async function cleanupDuplicateNotificationTokens(uid, token, keepDocId = getAdminBrowserTokenDocId()) {
+      if (!uid || !token) return;
+      const tokenCollectionPath = `admins/${uid}/fcmTokens`;
+      const deletions = [];
+      try {
+        const matchingDocs = await getDocs(query(collection(db, tokenCollectionPath), where("token", "==", token)));
+        matchingDocs.forEach((tokenDoc) => {
+          if (tokenDoc.id !== keepDocId) {
+            deletions.push(deleteDoc(doc(db, tokenCollectionPath, tokenDoc.id)));
+          }
+        });
+      } catch (error) {
+        console.warn("Failed to query duplicate admin FCM tokens:", error);
+      }
+      if (token !== keepDocId) {
+        deletions.push(deleteDoc(doc(db, tokenCollectionPath, token)).catch(() => {}));
+      }
+      if (deletions.length) {
+        await Promise.allSettled(deletions);
+      }
+    }
+
     async function removeStoredNotificationToken(uid = activeNotificationUid, token = activeNotificationToken) {
       if (!uid || !token) return;
       try {
@@ -2430,7 +2453,9 @@
         lastNotificationSetupUid = user.uid;
         state.notificationToken = token;
 
-        await setDoc(doc(db, `admins/${user.uid}/fcmTokens`, getAdminBrowserTokenDocId()), {
+        const notificationTokenDocId = getAdminBrowserTokenDocId();
+        await cleanupDuplicateNotificationTokens(user.uid, token, notificationTokenDocId);
+        await setDoc(doc(db, `admins/${user.uid}/fcmTokens`, notificationTokenDocId), {
           token,
           page: "admin_dashboard",
           userAgent: navigator.userAgent,

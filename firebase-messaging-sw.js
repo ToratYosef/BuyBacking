@@ -22,6 +22,18 @@ firebase.initializeApp(firebaseConfig);
 // Retrieve an instance of Firebase Messaging so that it can handle background
 // messages.
 const messaging = firebase.messaging();
+const NOTIFICATION_ICON_URL = 'https://cdn.secondhandcell.com/images/assets/logo.webp';
+const NOTIFICATION_BADGE_URL = '/favicon/favicon.ico';
+
+function buildNotificationTag(payload) {
+    const data = payload?.data || {};
+    const docType = data.relatedDocType || data.type || 'admin';
+    const docId = data.relatedDocId || data.orderId || data.chatId || data.id || '';
+    if (docId) return `shc-${docType}-${docId}`;
+    const title = payload?.notification?.title || data.title || 'SecondHandCell';
+    const body = payload?.notification?.body || data.body || 'notification';
+    return `shc-${title}-${body}`.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 120);
+}
 
 /**
  * This is the magic part for background notifications.
@@ -37,7 +49,11 @@ messaging.onBackgroundMessage(function(payload) {
     
     const notificationOptions = {
         body: notificationBody,
-        icon: 'https://cdn.secondhandcell.com/images/assets/logo.webp', // Updated icon path
+        icon: payload.notification?.icon || payload.data?.icon || NOTIFICATION_ICON_URL,
+        badge: payload.data?.badge || NOTIFICATION_BADGE_URL,
+        image: payload.data?.image || undefined,
+        tag: buildNotificationTag(payload),
+        renotify: false,
         data: payload.data // Pass along custom data for click handling
     };
 
