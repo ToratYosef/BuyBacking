@@ -7971,14 +7971,27 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
               return;
             }
             if (action === "reOffer75Less") {
-              if (focusedGroup.isGrouped) {
-                toast("Open a specific device to send a re-offer.", "error");
+              const targetDeviceKeys = focusedGroup.isGrouped
+                ? focusedGroup.deviceKeys
+                : [getActiveDeviceKey(order) || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0)];
+              const uniqueTargetDeviceKeys = [...new Set(targetDeviceKeys.filter(Boolean))];
+              if (!uniqueTargetDeviceKeys.length) {
+                toast("No devices were available for a 75%-less re-offer.", "error");
                 return;
               }
-              const targetDeviceKey = getActiveDeviceKey(order) || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
-              const result = await handleAction(order.id, "reOffer75Less", { body: { deviceKey: targetDeviceKey } });
-              if (result?.ok) {
-                toast("75%-less re-offer sent successfully.", "success");
+
+              const results = [];
+              for (const deviceKey of uniqueTargetDeviceKeys) {
+                results.push(await handleAction(order.id, "reOffer75Less", { body: { deviceKey } }));
+              }
+
+              const sentCount = results.filter((result) => result?.ok).length;
+              if (sentCount === uniqueTargetDeviceKeys.length) {
+                toast(sentCount === 1
+                  ? "75%-less re-offer sent successfully."
+                  : `75%-less re-offers sent successfully for ${sentCount} devices.`, "success");
+              } else if (sentCount > 0) {
+                toast(`75%-less re-offers sent for ${sentCount} of ${uniqueTargetDeviceKeys.length} devices.`, "error");
               }
               return;
             }
