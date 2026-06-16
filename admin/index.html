@@ -2049,15 +2049,14 @@
         state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}), [deviceKey]: newStatus };
         state.selectedOrderSnapshot.status = computeOrderStatus(state.selectedOrderSnapshot);
       }
+      const nextOrderStatus = order?.status || (state.selectedOrderSnapshot?.id === orderId ? state.selectedOrderSnapshot.status : null);
       render();
 
       const payload = {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
+        ...(nextOrderStatus ? { status: nextOrderStatus } : {}),
         updatedAt: new Date()
       };
-      if (order && getOrderDeviceEntries(order).length === 1) {
-        payload.status = newStatus;
-      }
       if (normalizeStatusKey(newStatus) === "completed") {
         payload.completedAt = new Date();
         payload.lastStatusUpdateAt = new Date();
@@ -4257,13 +4256,14 @@
         // Compute new order status based on all devices
         const newOrderStatus = computeOrderStatus(tempOrder);
         
+        const qcCompletedAt = new Date();
         try {
           await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
             [`qcDataByDevice.${safeDeviceKey}`]: qcData,
             [`deviceStatusByKey.${safeDeviceKey}`]: deviceStatus,
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
-            qcCompletedAt: new Date()
+            qcCompletedAt
           }));
         } catch (e) {
           await withPerf(`firestore:setOrder:${orderId}`, () => setDoc(orderRef, {
@@ -4271,10 +4271,20 @@
             deviceStatusByKey: { [safeDeviceKey]: deviceStatus },
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
-            qcCompletedAt: new Date()
+            qcCompletedAt
           }, { merge: true }));
         }
+        const updatedOrder = upsertOrderInState({
+          ...order,
+          qcDataByDevice: { ...(order.qcDataByDevice || {}), [safeDeviceKey]: qcData },
+          deviceStatusByKey: { ...(order.deviceStatusByKey || {}), [safeDeviceKey]: deviceStatus },
+          ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
+          status: newOrderStatus,
+          qcCompletedAt
+        });
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
         toast("QC saved", "success");
+        return updatedOrder;
       } catch (e) {
         console.error(e);
         toast("Failed to save QC", "error");
@@ -8780,6 +8790,7 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
                 }
               }
               await hydrateSelectedOrderDetails(orderId);
+              await updateDeviceStatusInline(orderId, deviceKey, 'issue_resolved');
               state.selectedDeviceKey = deviceKey;
               state.qcDeviceKey = deviceKey;
               state.unlockInfoModalOpen = false;
