@@ -2977,6 +2977,11 @@
       
       // Sort devices by the most relevant urgency for the current tab.
       allDevices.sort((a, b) => {
+        if (s === "ready_to_pay") {
+          const aPay = getPaymentMethodGroup(a.order);
+          const bPay = getPaymentMethodGroup(b.order);
+          if (aPay.key !== bPay.key) return aPay.label.localeCompare(bPay.label);
+        }
         if (s === "emailed") {
           const aDue = getDeviceResponseDueAtMillis(a.order, a.deviceKey);
           const bDue = getDeviceResponseDueAtMillis(b.order, b.deviceKey);
@@ -5074,6 +5079,15 @@
       return text;
     }
     
+    function getPaymentMethodGroup(order = {}) {
+      const method = normalizeStatusKey(order?.paymentMethod || 'other');
+      if (method === 'cashapp' || method === 'cash_app' || method === 'cash-app') return { key: 'cashapp', label: 'Cash App', rowClass: 'bg-emerald-50/70 hover:bg-emerald-100/80', headerClass: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+      if (method === 'zelle') return { key: 'zelle', label: 'Zelle', rowClass: 'bg-purple-50/70 hover:bg-purple-100/80', headerClass: 'bg-purple-100 text-purple-800 border-purple-200' };
+      if (method === 'paypal' || method === 'pay_pal') return { key: 'paypal', label: 'PayPal', rowClass: 'bg-orange-50/70 hover:bg-orange-100/80', headerClass: 'bg-orange-100 text-orange-800 border-orange-200' };
+      if (method === 'check' || method === 'echeck' || method === 'e_check') return { key: method === 'check' ? 'check' : 'echeck', label: method === 'check' ? 'Check' : 'E-Check', rowClass: 'bg-blue-50/70 hover:bg-blue-100/80', headerClass: 'bg-blue-100 text-blue-800 border-blue-200' };
+      return { key: method || 'other', label: method ? formatStatusLabel(method) : 'Other', rowClass: 'bg-slate-50/70 hover:bg-slate-100/80', headerClass: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+
     function labelStatusExtraHTML(order) {
       // show small details about kit/label tracking statuses if present
       const kitTN = order?.kitTrackingStatus?.trackingNumber || order?.kitTrackingStatus?.tracking_number || "";
@@ -5115,6 +5129,8 @@
       // build grouped rows & track lastRenderedDeviceKeys
       state.lastRenderedDeviceKeys = [];
       const rowHtml = [];
+      let lastReadyToPayPaymentGroupKey = null;
+      const showReadyToPayPaymentGroups = normalizeStatusKey(state.currentActiveStatus) === 'ready_to_pay';
       for (const group of pageGroups) {
         const order = group.order;
         const deviceStatus = group.deviceStatus;
@@ -5152,9 +5168,23 @@
         const acceptanceBadgeHtml = showGrouped
           ? groupEntries.map((groupEntry) => readyToPayAcceptanceBadgeHTML(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
           : readyToPayAcceptanceBadgeHTML(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
+        const paymentGroup = getPaymentMethodGroup(order);
+        if (showReadyToPayPaymentGroups && paymentGroup.key !== lastReadyToPayPaymentGroupKey) {
+          lastReadyToPayPaymentGroupKey = paymentGroup.key;
+          rowHtml.push(`
+            <tr class="border-t border-slate-200">
+              <td colspan="5" class="px-4 py-2">
+                <div class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${paymentGroup.headerClass}">
+                  ${esc(paymentGroup.label)} payouts
+                </div>
+              </td>
+            </tr>
+          `);
+        }
+        const readyToPayPaymentRowClass = showReadyToPayPaymentGroups ? paymentGroup.rowClass : 'bg-white hover:bg-slate-50';
 
         rowHtml.push(`
-          <tr class="bg-white border-t border-slate-200 cursor-pointer hover:bg-slate-50" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
+          <tr class="${readyToPayPaymentRowClass} border-t border-slate-200 cursor-pointer" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
             <td class="px-4 py-3 align-top">
               <div class="flex items-start gap-3">
                 <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
