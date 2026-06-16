@@ -4218,7 +4218,43 @@
         return { ok: false, error: e };
       }
     }
-    async function saveQc(orderId, deviceKey, qcData) {
+    function getQcDisposition(order, qcData = {}, deviceKey = null) {
+      const entries = getOrderDeviceEntries(order);
+      const parsed = parseOrderDeviceKey(deviceKey || buildOrderDeviceKey(order?.id, 0));
+      const entry = entries.find((item) => item.deviceIndex === parsed?.deviceIndex) || entries[0] || { deviceIndex: 0, item: order };
+      const customerItem = entry.item || order || {};
+      const normalizeStr = (value) => String(value || '').toLowerCase().trim();
+
+      const customerCondition = normalizeStr(customerItem.condition || order?.condition || 'good');
+      const qcCondition = normalizeStr(qcData.condition || 'good');
+      const customerCarrier = normalizeStr(customerItem.carrier || customerItem.lock || order?.carrier || order?.lock || 'unlocked');
+      const qcCarrier = normalizeStr(qcData.carrier || 'unlocked');
+      const customerStorage = normalizeStr(customerItem.storage || order?.storage || '');
+      const qcStorage = normalizeStr(qcData.actualStorage || qcData.storage || '');
+
+      const conditionMatches = customerCondition === qcCondition;
+      const carrierMatches = customerCarrier === qcCarrier;
+      const storageMatches = !customerStorage || !qcStorage || customerStorage === qcStorage || qcData.storageMatch === 'yes';
+      const allInputsMatch = conditionMatches && carrierMatches && storageMatches;
+      const emailActions = [];
+      if (qcData?.hasFmi === "yes") emailActions.push("emailFmi");
+      if (qcData?.isLocked === "yes") emailActions.push("emailLocked");
+      if (qcData?.hasBalance === "yes") emailActions.push("emailBalance");
+      if (qcData?.hasBlacklisted === "yes") emailActions.push("emailBlacklisted");
+      const hasBlockingIssues = emailActions.length > 0;
+
+      return {
+        allInputsMatch,
+        conditionMatches,
+        carrierMatches,
+        storageMatches,
+        emailActions,
+        hasBlockingIssues,
+        requiresReoffer: !allInputsMatch && !hasBlockingIssues,
+      };
+    }
+
+    async function saveQc(orderId, deviceKey, qcData, options = {}) {
       try {
         const orderRef = doc(db, "orders", orderId);
         const safeDeviceKey = deviceKey || buildOrderDeviceKey(orderId, 0);
@@ -4237,8 +4273,7 @@
           return;
         }
         
-        // Good QC moves the device into a payable state.
-        const deviceStatus = "ready_to_pay";
+        const deviceStatus = normalizeStatusKey(options.deviceStatus || "ready_to_pay");
         
         // Temporarily update order in memory to compute new status
         const tempOrder = {
@@ -4292,11 +4327,7 @@
     }
 
     async function processQcOutcome(order, qcData, deviceKey) {
-      const emailActions = [];
-      if (qcData?.hasFmi === "yes") emailActions.push("emailFmi");
-      if (qcData?.isLocked === "yes") emailActions.push("emailLocked");
-      if (qcData?.hasBalance === "yes") emailActions.push("emailBalance");
-      if (qcData?.hasBlacklisted === "yes") emailActions.push("emailBlacklisted");
+      const { emailActions } = getQcDisposition(order, qcData, deviceKey);
 
       for (const action of emailActions) {
         try {
@@ -7876,8 +7907,16 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             return;
           }
 
-          const hasQcData = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
-          if (hasQcData) {
+          const qcDataForDevice = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
+          const hasQcData = !!qcDataForDevice;
+          const shouldResumeReoffer = hasQcData
+            && ['received', 'imei_checked'].includes(normalizeStatusKey(deviceStatus))
+            && getQcDisposition(order, qcDataForDevice, deviceKey).requiresReoffer;
+          if (shouldResumeReoffer) {
+            state.qcOpen = false;
+            state.qcData = null;
+            await openReofferModal(order, qcDataForDevice);
+          } else if (hasQcData) {
             state.qcOpen = false;
             state.qcData = null;
           } else {
@@ -8386,44 +8425,20 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             render();
             return;
           }
-          await saveQc(order.id, deviceKey, qcSnapshot);
+          const qcDisposition = getQcDisposition(order, qcSnapshot, deviceKey);
+          const savedDeviceStatus = qcDisposition.requiresReoffer || qcDisposition.hasBlockingIssues ? 'received' : 'ready_to_pay';
+          await saveQc(order.id, deviceKey, qcSnapshot, { deviceStatus: savedDeviceStatus });
           const qcOutcome = await processQcOutcome(order, qcSnapshot, deviceKey);
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
           state.qcDeviceKey = null;
           
-          // Get the device's customer-declared data
-          const entries = getOrderDeviceEntries(order);
-          const parsed = parseOrderDeviceKey(deviceKey);
-          const entry = entries.find(e => e.deviceIndex === parsed.deviceIndex) || entries[0] || { deviceIndex: 0, item: order, qtyIndex: 0 };
-          const customerItem = entry.item || order;
-          
-          // Normalize and compare customer input with QC assessment
-          const normalizeStr = (s) => String(s || '').toLowerCase().trim();
-          
-          const customerCondition = normalizeStr(customerItem.condition || order.condition || 'good');
-          const qcCondition = normalizeStr(qcSnapshot.condition || 'good');
-          
-          const customerCarrier = normalizeStr(customerItem.carrier || customerItem.lock || order.carrier || order.lock || 'unlocked');
-          const qcCarrier = normalizeStr(qcSnapshot.carrier || 'unlocked');
-          
-          const customerStorage = normalizeStr(customerItem.storage || order.storage || '');
-          const qcStorage = normalizeStr(qcSnapshot.actualStorage || qcSnapshot.storage || '');
-          
-          // Check if QC matches customer's declared values
-          const conditionMatches = customerCondition === qcCondition;
-          const carrierMatches = customerCarrier === qcCarrier;
-          const storageMatches = !customerStorage || !qcStorage || customerStorage === qcStorage || qcSnapshot.storageMatch === 'yes';
-          
-          const allInputsMatch = conditionMatches && carrierMatches && storageMatches;
-          const hasBlockingIssues = qcOutcome.sentEmails; // FMI, locks, balance, blacklist
-          
-          if (allInputsMatch && !hasBlockingIssues) {
+          if (qcDisposition.allInputsMatch && !qcDisposition.hasBlockingIssues) {
             // Admin's QC matches customer input - skip reoffer, proceed to payment
             toast("QC completed! Admin assessment matches customer input.", "success");
             render();
-          } else if (hasBlockingIssues) {
+          } else if (qcDisposition.hasBlockingIssues || qcOutcome.sentEmails) {
             // Blocking issues detected - emails sent, waiting for customer
             toast("QC saved. Required customer emails sent. Waiting for response.", "info");
             render();
