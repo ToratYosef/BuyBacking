@@ -2705,9 +2705,11 @@
         void setupAdminNotifications(auth.currentUser);
       }
       if (!hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
       if (state.selectedOrderId && !hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
         hydrateSelectedOrderDetails(state.selectedOrderId);
       }
     });
@@ -2725,9 +2727,11 @@
         void setupAdminNotifications(auth.currentUser);
       }
       if (!hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
       if (state.selectedOrderId && !hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
         hydrateSelectedOrderDetails(state.selectedOrderId);
       }
     });
@@ -7364,6 +7368,21 @@
       `;
     }
 
+    function preserveWindowScrollForNextRender() {
+      state.pendingWindowScrollRestore = {
+        x: window.scrollX || window.pageXOffset || 0,
+        y: window.scrollY || window.pageYOffset || 0,
+      };
+    }
+    function restoreWindowScrollAfterRender() {
+      const restore = state.pendingWindowScrollRestore;
+      if (!restore) return;
+      state.pendingWindowScrollRestore = null;
+      requestAnimationFrame(() => {
+        window.scrollTo(Number(restore.x || 0), Number(restore.y || 0));
+      });
+    }
+
     function doRender() {
       if (state.authLoading && !state.user) {
         $root.innerHTML = `
@@ -7390,6 +7409,7 @@
       updateSelectAllCheckboxUI();
       syncBodyScrollLock();
       updateAdminBootUi();
+      restoreWindowScrollAfterRender();
     }
     function scheduleRender() {
       if (scheduledRenderFrame) return;
@@ -9117,6 +9137,7 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
       state.bulkVoidProgressDetails = "";
       state.modalScrollTop = { qc: 0, reoffer: 0, import: 0 };
       state.sidebarOpen = false;
+      state.pendingWindowScrollRestore = null;
       state.ordersLoading = false;
       state.ordersCacheHydrated = false;
       state.ordersCacheLoadedAt = 0;
