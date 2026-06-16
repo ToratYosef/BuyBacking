@@ -6969,6 +6969,13 @@
                   </a>
                   <p class="text-xs text-emerald-700 mt-2" id="paymentDeepLinkHint"></p>
                 </div>
+                <div id="cashAppIframeWrap" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white overflow-hidden">
+                  <div class="flex items-center justify-between gap-3 border-b border-emerald-100 bg-emerald-50 px-3 py-2">
+                    <p class="text-xs font-semibold text-emerald-900">Cash App payment link</p>
+                    <a id="cashAppIframeOpenLink" href="#" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-emerald-700 hover:underline">Open in new tab</a>
+                  </div>
+                  <iframe id="cashAppPaymentIframe" src="about:blank" class="h-[520px] w-full bg-white" title="Cash App payment"></iframe>
+                </div>
               </div>
             </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
@@ -8825,6 +8832,9 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         const payoutAmountEl = document.getElementById("payoutAmount");
         const deepLinkBtn = document.getElementById("paymentDeepLinkBtn");
         const deepLinkHint = document.getElementById("paymentDeepLinkHint");
+        const cashAppIframeWrap = document.getElementById("cashAppIframeWrap");
+        const cashAppPaymentIframe = document.getElementById("cashAppPaymentIframe");
+        const cashAppIframeOpenLink = document.getElementById("cashAppIframeOpenLink");
         
         if (paymentCancelBtn) {
           paymentCancelBtn.addEventListener("click", () => {
@@ -8893,6 +8903,11 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             if (deepLinkHint) {
               deepLinkHint.textContent = deepLink?.note || 'Use the account details above to send payment.';
             }
+            const isCashApp = normalizeStatusKey(paymentMethodRaw) === 'cashapp';
+            const showCashAppFrame = isCashApp && !!deepLink?.url;
+            if (cashAppIframeWrap) cashAppIframeWrap.classList.toggle('hidden', !showCashAppFrame);
+            if (cashAppPaymentIframe) cashAppPaymentIframe.src = showCashAppFrame ? deepLink.url : 'about:blank';
+            if (cashAppIframeOpenLink) cashAppIframeOpenLink.href = showCashAppFrame ? deepLink.url : '#';
           })();
         }
         
