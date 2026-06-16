@@ -99,7 +99,7 @@
   <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, where, orderBy, limit, startAfter, deleteDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, getDocsFromServer, query, where, orderBy, limit, startAfter, deleteDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
     import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-messaging.js";
     // ----------------------------
     // CONFIG
@@ -456,6 +456,35 @@
       const s = normalizeStatusKey(status);
       return s === 're-offered-accepted' || s === 're_offered_accepted' || s === 're-offered-auto-accepted' || s === 're_offered_auto_accepted' || s === 'requote_accepted';
     }
+    function getReofferAcceptanceSource(order = {}, deviceKey = null, status = '') {
+      const normalizedStatus = normalizeStatusKey(status || '');
+      const deviceOffer = deviceKey ? (
+        order?.reOfferByDevice?.[deviceKey]
+        || order?.reofferByDevice?.[deviceKey]
+        || order?.deviceReofferByKey?.[deviceKey]
+        || order?.deviceReOfferByKey?.[deviceKey]
+      ) : null;
+      const offer = deviceOffer || order?.reOffer || order?.reoffer || order?.requote || {};
+      const haystack = [
+        normalizedStatus,
+        offer?.acceptedBy, offer?.acceptedByType, offer?.acceptedSource, offer?.acceptanceSource, offer?.source, offer?.status, offer?.acceptedVia, offer?.acceptedMethod,
+        order?.acceptedBy, order?.acceptedByType, order?.acceptedSource, order?.acceptanceSource, order?.reofferAcceptedBy, order?.reofferAcceptanceSource, order?.requoteAcceptedBy, order?.requoteAcceptanceSource
+      ].map((value) => normalizeStatusKey(value)).filter(Boolean).join(' ');
+      if (normalizedStatus === 're-offered-auto-accepted' || normalizedStatus === 're_offered_auto_accepted' || offer?.autoAcceptedAt || offer?.autoAccepted || order?.autoAcceptedAt || /auto/.test(haystack)) return 'auto';
+      if (offer?.adminAcceptedAt || offer?.adminAccepted || order?.adminAcceptedAt || /admin|manual|staff/.test(haystack)) return 'admin';
+      if (normalizedStatus === 're-offered-accepted' || normalizedStatus === 're_offered_accepted' || normalizedStatus === 'requote_accepted' || offer?.customerAcceptedAt || order?.customerAcceptedAt || /customer|buyer|user/.test(haystack)) return 'customer';
+      if (hasAnyReofferHistory(order) && normalizeStatusKey(order?.status) === 'ready_to_pay') return 'customer';
+      return null;
+    }
+    function readyToPayAcceptanceBadgeHTML(order = {}, deviceKey = null, status = '') {
+      const normalizedStatus = normalizeStatusKey(status || '');
+      if (normalizedStatus !== 'ready_to_pay' && !isAcceptedReofferStatus(normalizedStatus)) return '';
+      const source = getReofferAcceptanceSource(order, deviceKey, normalizedStatus);
+      if (source === 'customer') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Customer accepted</span>';
+      if (source === 'auto') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">Auto accepted</span>';
+      if (source === 'admin') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">Admin accepted</span>';
+      return '';
+    }
     function isAnyReofferStatus(status) {
       const s = normalizeStatusKey(status);
       return s === 're-offered-pending'
@@ -588,8 +617,34 @@
       return s === 're-offered-declined' || s === 're_offered_declined';
     }
     function getOrderDeductionValue(order) {
-      const explicit = Number(order?.deductionValue ?? order?.deduction_value ?? order?.shippingKitFee ?? order?.fasterShippingFee);
-      if (Number.isFinite(explicit) && explicit > 0) return explicit;
+      const explicitTotal = Number(order?.totalDeductions ?? order?.total_deductions ?? NaN);
+      if (Number.isFinite(explicitTotal) && explicitTotal > 0) return explicitTotal;
+      const directValues = [
+        order?.deductionValue,
+        order?.deduction_value,
+        order?.shippingKitFee,
+        order?.fasterShippingFee,
+        order?.shippingDeduction,
+        order?.shipping_deduction,
+        order?.kitDeduction,
+        order?.kit_deduction,
+      ];
+      let total = directValues.reduce((sum, value) => {
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? sum + n : sum;
+      }, 0);
+      if (Array.isArray(order?.deductions)) {
+        total += order.deductions.reduce((sum, entry) => {
+          const n = Number(typeof entry === 'object' ? (entry.amount ?? entry.value ?? entry.price) : entry);
+          return Number.isFinite(n) && n > 0 ? sum + n : sum;
+        }, 0);
+      } else if (order?.deductions && typeof order.deductions === 'object') {
+        total += Object.values(order.deductions).reduce((sum, entry) => {
+          const n = Number(typeof entry === 'object' ? (entry.amount ?? entry.value ?? entry.price) : entry);
+          return Number.isFinite(n) && n > 0 ? sum + n : sum;
+        }, 0);
+      }
+      if (total > 0) return total;
       const preference = normalizeStatusKey(order?.shippingPreferenceValue || order?.shippingPreference || order?.shipping_preference || '');
       if (preference === 'faster_shipping' || preference === 'faster-shipping' || preference === 'ups_label' || preference === 'ups-label-requested') return 5;
       return 0;
@@ -638,7 +693,7 @@
       }
 
       const deductionValue = getOrderDeductionValue(order);
-      const deductionApplied = nonReofferPayableCount > 0 ? deductionValue : 0;
+      const deductionApplied = payableDeviceKeys.length > 0 ? deductionValue : 0;
       const finalPayable = Math.max(0, payableTotal - deductionApplied);
 
       return {
@@ -685,14 +740,16 @@
       }
 
       if (!payableDeviceKeys.length) return null;
+      const deductionValue = getOrderDeductionValue(order);
+      const deductionApplied = payableDeviceKeys.length > 0 ? deductionValue : 0;
       return {
         payableDeviceKeys,
         payableCount: payableDeviceKeys.length,
         payableTotal,
         nonReofferPayableCount: payableDeviceKeys.length,
-        deductionValue: 0,
-        deductionApplied: 0,
-        finalPayable: payableTotal,
+        deductionValue,
+        deductionApplied,
+        finalPayable: Math.max(0, payableTotal - deductionApplied),
         eligibleDeviceCount: payableDeviceKeys.length,
         declinedDeviceKeys: [],
         declinedCount: 0,
@@ -1319,6 +1376,7 @@
       emailPreviewSubject: "",
       ordersCacheHydrated: false,
       ordersCacheLoadedAt: 0,
+      orderStatusCacheRefreshing: false,
       appBooting: true,
       appBootProgress: 0,
       appBootLabel: "Loading admin workspace…",
@@ -1384,6 +1442,26 @@
           const tx = dbRef.transaction(ADMIN_ORDERS_CACHE_STORE, "readwrite");
           const store = tx.objectStore(ADMIN_ORDERS_CACHE_STORE);
           store.put(payload, ADMIN_ORDERS_CACHE_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+          tx.onabort = () => resolve();
+        } catch (_) {
+          resolve();
+        }
+      });
+    }
+    async function clearAdminOrdersCacheNow() {
+      if (ordersCachePersistTimer) {
+        clearTimeout(ordersCachePersistTimer);
+        ordersCachePersistTimer = null;
+      }
+      const dbRef = await openAdminOrdersCacheDb();
+      if (!dbRef) return;
+      return new Promise((resolve) => {
+        try {
+          const tx = dbRef.transaction(ADMIN_ORDERS_CACHE_STORE, "readwrite");
+          const store = tx.objectStore(ADMIN_ORDERS_CACHE_STORE);
+          store.delete(ADMIN_ORDERS_CACHE_KEY);
           tx.oncomplete = () => resolve();
           tx.onerror = () => resolve();
           tx.onabort = () => resolve();
@@ -2028,15 +2106,14 @@
         state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}), [deviceKey]: newStatus };
         state.selectedOrderSnapshot.status = computeOrderStatus(state.selectedOrderSnapshot);
       }
+      const nextOrderStatus = order?.status || (state.selectedOrderSnapshot?.id === orderId ? state.selectedOrderSnapshot.status : null);
       render();
 
       const payload = {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
+        ...(nextOrderStatus ? { status: nextOrderStatus } : {}),
         updatedAt: new Date()
       };
-      if (order && getOrderDeviceEntries(order).length === 1) {
-        payload.status = newStatus;
-      }
       if (normalizeStatusKey(newStatus) === "completed") {
         payload.completedAt = new Date();
         payload.lastStatusUpdateAt = new Date();
@@ -2266,12 +2343,15 @@
     // ----------------------------
     let unsubscribeOrders = null;
     let ordersLoadVersion = 0;
+    function isSearchInputActive() {
+      const activeId = document.activeElement?.id || "";
+      return activeId === "searchInput" || activeId === "mobileSearchInput";
+    }
     function shouldDeferOrdersRenderDuringLoading() {
+      if (isSearchInputActive()) return true;
       if (!state.ordersLoading) return false;
       if (state.selectedOrderId) return true;
-      const active = document.activeElement;
-      const activeId = active?.id || "";
-      return activeId === "searchInput" || activeId === "mobileSearchInput";
+      return false;
     }
     function renderOrdersWithInteractionGuard() {
       if (hasTransientOverlayOpen()) {
@@ -2524,7 +2604,7 @@
             });
             state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
             schedulePersistOrdersCache();
-            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+            renderOrdersWithInteractionGuard();
           }, (err) => {
             console.error("Firestore Error:", err);
             toast("Live updates failed", "error");
@@ -2541,7 +2621,7 @@
               ? query(collection(db, "orders"), orderBy("createdAt", "desc"), startAfter(cursor), limit(ADMIN_ORDERS_CHUNK_SIZE))
               : query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_CHUNK_SIZE));
 
-            const snapshot = await withPerf(`firestore:orders-chunk:${loaded.length}`, () => getDocs(ordersQuery));
+            const snapshot = await withPerf(`firestore:orders-chunk:${loaded.length}`, () => (state.orderStatusCacheRefreshing ? getDocsFromServer(ordersQuery) : getDocs(ordersQuery)));
             if (loadVersion !== ordersLoadVersion) return;
             if (snapshot.empty) break;
 
@@ -2670,6 +2750,43 @@
     // ----------------------------
     // SPEC: CANCELLED HANDLING + BASE ORDERS
     // ----------------------------
+    async function refreshAllOrderStatusesFromServer() {
+      if (state.orderStatusCacheRefreshing) return;
+      state.orderStatusCacheRefreshing = true;
+      try {
+        await clearAdminOrdersCacheNow();
+        if (unsubscribeOrders) {
+          unsubscribeOrders();
+          unsubscribeOrders = null;
+        }
+        state.allOrders = [];
+        state.filteredOrders = [];
+        state.selectedOrderIds.clear();
+        state.expandedOrderIds.clear();
+        state.selectedOrderId = null;
+        state.selectedOrderSnapshot = null;
+        state.selectedDeviceKey = null;
+        state.selectedDeviceGroupKeys = [];
+        state.qcDeviceKey = null;
+        state.ordersCacheHydrated = false;
+        state.ordersCacheLoadedAt = 0;
+        state.ordersLoading = true;
+        state.appBooting = true;
+        state.appBootProgress = 18;
+        state.appBootLabel = "Clearing cached order statuses…";
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+        render();
+        await startOrdersListener();
+        toast("Order status cache cleared. Orders reloaded from the server.", "success");
+      } catch (error) {
+        console.error("Failed to refresh order status cache:", error);
+        toast(error?.message || "Failed to refresh order status cache", "error");
+      } finally {
+        state.orderStatusCacheRefreshing = false;
+        render();
+      }
+    }
+
     function splitCancelled(orders) {
       const cancelled = [];
       const visible = [];
@@ -2860,6 +2977,11 @@
       
       // Sort devices by the most relevant urgency for the current tab.
       allDevices.sort((a, b) => {
+        if (s === "ready_to_pay") {
+          const aPay = getPaymentMethodGroup(a.order);
+          const bPay = getPaymentMethodGroup(b.order);
+          if (aPay.key !== bPay.key) return aPay.label.localeCompare(bPay.label);
+        }
         if (s === "emailed") {
           const aDue = getDeviceResponseDueAtMillis(a.order, a.deviceKey);
           const bDue = getDeviceResponseDueAtMillis(b.order, b.deviceKey);
@@ -2890,7 +3012,15 @@
       } else {
         state.currentPage = 1;
       }
-      render();
+      if (options?.preservePage && isSearchInputActive()) {
+        if (state.deferredOrdersRenderTimer) clearTimeout(state.deferredOrdersRenderTimer);
+        state.deferredOrdersRenderTimer = setTimeout(() => {
+          state.deferredOrdersRenderTimer = null;
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+        }, 250);
+      } else {
+        render();
+      }
       writeAdminUiCache();
     }
     // ----------------------------
@@ -4161,7 +4291,43 @@
         return { ok: false, error: e };
       }
     }
-    async function saveQc(orderId, deviceKey, qcData) {
+    function getQcDisposition(order, qcData = {}, deviceKey = null) {
+      const entries = getOrderDeviceEntries(order);
+      const parsed = parseOrderDeviceKey(deviceKey || buildOrderDeviceKey(order?.id, 0));
+      const entry = entries.find((item) => item.deviceIndex === parsed?.deviceIndex) || entries[0] || { deviceIndex: 0, item: order };
+      const customerItem = entry.item || order || {};
+      const normalizeStr = (value) => String(value || '').toLowerCase().trim();
+
+      const customerCondition = normalizeStr(customerItem.condition || order?.condition || 'good');
+      const qcCondition = normalizeStr(qcData.condition || 'good');
+      const customerCarrier = normalizeStr(customerItem.carrier || customerItem.lock || order?.carrier || order?.lock || 'unlocked');
+      const qcCarrier = normalizeStr(qcData.carrier || 'unlocked');
+      const customerStorage = normalizeStr(customerItem.storage || order?.storage || '');
+      const qcStorage = normalizeStr(qcData.actualStorage || qcData.storage || '');
+
+      const conditionMatches = customerCondition === qcCondition;
+      const carrierMatches = customerCarrier === qcCarrier;
+      const storageMatches = !customerStorage || !qcStorage || customerStorage === qcStorage || qcData.storageMatch === 'yes';
+      const allInputsMatch = conditionMatches && carrierMatches && storageMatches;
+      const emailActions = [];
+      if (qcData?.hasFmi === "yes") emailActions.push("emailFmi");
+      if (qcData?.isLocked === "yes") emailActions.push("emailLocked");
+      if (qcData?.hasBalance === "yes") emailActions.push("emailBalance");
+      if (qcData?.hasBlacklisted === "yes") emailActions.push("emailBlacklisted");
+      const hasBlockingIssues = emailActions.length > 0;
+
+      return {
+        allInputsMatch,
+        conditionMatches,
+        carrierMatches,
+        storageMatches,
+        emailActions,
+        hasBlockingIssues,
+        requiresReoffer: !allInputsMatch && !hasBlockingIssues,
+      };
+    }
+
+    async function saveQc(orderId, deviceKey, qcData, options = {}) {
       try {
         const orderRef = doc(db, "orders", orderId);
         const safeDeviceKey = deviceKey || buildOrderDeviceKey(orderId, 0);
@@ -4180,8 +4346,7 @@
           return;
         }
         
-        // Good QC moves the device into a payable state.
-        const deviceStatus = "ready_to_pay";
+        const deviceStatus = normalizeStatusKey(options.deviceStatus || "ready_to_pay");
         
         // Temporarily update order in memory to compute new status
         const tempOrder = {
@@ -4199,13 +4364,14 @@
         // Compute new order status based on all devices
         const newOrderStatus = computeOrderStatus(tempOrder);
         
+        const qcCompletedAt = new Date();
         try {
           await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
             [`qcDataByDevice.${safeDeviceKey}`]: qcData,
             [`deviceStatusByKey.${safeDeviceKey}`]: deviceStatus,
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
-            qcCompletedAt: new Date()
+            qcCompletedAt
           }));
         } catch (e) {
           await withPerf(`firestore:setOrder:${orderId}`, () => setDoc(orderRef, {
@@ -4213,10 +4379,20 @@
             deviceStatusByKey: { [safeDeviceKey]: deviceStatus },
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
-            qcCompletedAt: new Date()
+            qcCompletedAt
           }, { merge: true }));
         }
+        const updatedOrder = upsertOrderInState({
+          ...order,
+          qcDataByDevice: { ...(order.qcDataByDevice || {}), [safeDeviceKey]: qcData },
+          deviceStatusByKey: { ...(order.deviceStatusByKey || {}), [safeDeviceKey]: deviceStatus },
+          ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
+          status: newOrderStatus,
+          qcCompletedAt
+        });
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
         toast("QC saved", "success");
+        return updatedOrder;
       } catch (e) {
         console.error(e);
         toast("Failed to save QC", "error");
@@ -4224,11 +4400,7 @@
     }
 
     async function processQcOutcome(order, qcData, deviceKey) {
-      const emailActions = [];
-      if (qcData?.hasFmi === "yes") emailActions.push("emailFmi");
-      if (qcData?.isLocked === "yes") emailActions.push("emailLocked");
-      if (qcData?.hasBalance === "yes") emailActions.push("emailBalance");
-      if (qcData?.hasBlacklisted === "yes") emailActions.push("emailBlacklisted");
+      const { emailActions } = getQcDisposition(order, qcData, deviceKey);
 
       for (const action of emailActions) {
         try {
@@ -4335,6 +4507,25 @@
     // ----------------------------
     // RENDER: APP SHELL
     // ----------------------------
+    async function copyTextToClipboard(text) {
+      const value = String(text || '');
+      if (!value) return false;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      textarea.remove();
+      return ok;
+    }
+
     function renderSidebar() { return ""; }
     function renderTopbar() {
       const initial = state.user?.email ? state.user.email.charAt(0).toUpperCase() : "A";
@@ -4369,6 +4560,10 @@
               <span class="h-2 w-2 rounded-full ${gmailConnected ? "bg-emerald-500" : "bg-amber-500"}"></span>
               ${gmailConnected ? `Gmail: ${esc(gmail.mailboxEmail || "connected")}` : "Gmail not connected"}
             </div>
+            <button id="refresh-order-status-cache-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border ${state.orderStatusCacheRefreshing ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"} px-3 py-2 text-xs font-semibold" title="Clear cached order statuses and reload every order from the server" ${state.orderStatusCacheRefreshing ? "disabled" : ""}>
+              <i data-lucide="${state.orderStatusCacheRefreshing ? "loader" : "rotate-ccw"}" class="${state.orderStatusCacheRefreshing ? "animate-spin" : ""}" style="width:14px;height:14px"></i>
+              ${state.orderStatusCacheRefreshing ? "Refreshing…" : "Refresh Status Cache"}
+            </button>
             <button id="gmail-sync-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Sync Gmail replies">
               <i data-lucide="refresh-cw" style="width:14px;height:14px"></i>
               Sync Gmail
@@ -4389,6 +4584,7 @@
             <div class="sm:hidden mt-2 border-t border-slate-200 pt-2 flex flex-wrap gap-2">
               <button id="admin-orders-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "orders" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="package" style="width:14px;height:14px"></i>Orders</button>
               <button id="admin-email-inbox-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "email-inbox" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="inbox" style="width:14px;height:14px"></i>Inbox</button>
+              <button id="refresh-order-status-cache-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.orderStatusCacheRefreshing ? "border-slate-200 bg-slate-100 text-slate-400" : "border-blue-200 bg-blue-50 text-blue-700"} px-3 py-2 text-xs font-semibold" ${state.orderStatusCacheRefreshing ? "disabled" : ""}><i data-lucide="${state.orderStatusCacheRefreshing ? "loader" : "rotate-ccw"}" class="${state.orderStatusCacheRefreshing ? "animate-spin" : ""}" style="width:14px;height:14px"></i>${state.orderStatusCacheRefreshing ? "Refreshing…" : "Refresh Statuses"}</button>
               <button id="gmail-sync-btn-mobile" class="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i>Sync Gmail</button>
               <button id="gmail-connect-btn-mobile" class="inline-flex items-center gap-2 rounded-full ${gmailConnected ? "border border-slate-300 bg-white text-slate-700" : "bg-indigo-600 text-white"} px-3 py-2 text-xs font-semibold"><i data-lucide="mail" style="width:14px;height:14px"></i>${gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}</button>
               <button id="logoutBtnMobile" class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"><i data-lucide="log-out" style="width:14px;height:14px"></i>Sign out</button>
@@ -4883,6 +5079,15 @@
       return text;
     }
     
+    function getPaymentMethodGroup(order = {}) {
+      const method = normalizeStatusKey(order?.paymentMethod || 'other');
+      if (method === 'cashapp' || method === 'cash_app' || method === 'cash-app') return { key: 'cashapp', label: 'Cash App', rowClass: 'bg-emerald-50/70 hover:bg-emerald-100/80', headerClass: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+      if (method === 'zelle') return { key: 'zelle', label: 'Zelle', rowClass: 'bg-purple-50/70 hover:bg-purple-100/80', headerClass: 'bg-purple-100 text-purple-800 border-purple-200' };
+      if (method === 'paypal' || method === 'pay_pal') return { key: 'paypal', label: 'PayPal', rowClass: 'bg-orange-50/70 hover:bg-orange-100/80', headerClass: 'bg-orange-100 text-orange-800 border-orange-200' };
+      if (method === 'check' || method === 'echeck' || method === 'e_check') return { key: method === 'check' ? 'check' : 'echeck', label: method === 'check' ? 'Check' : 'E-Check', rowClass: 'bg-blue-50/70 hover:bg-blue-100/80', headerClass: 'bg-blue-100 text-blue-800 border-blue-200' };
+      return { key: method || 'other', label: method ? formatStatusLabel(method) : 'Other', rowClass: 'bg-slate-50/70 hover:bg-slate-100/80', headerClass: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+
     function labelStatusExtraHTML(order) {
       // show small details about kit/label tracking statuses if present
       const kitTN = order?.kitTrackingStatus?.trackingNumber || order?.kitTrackingStatus?.tracking_number || "";
@@ -4924,6 +5129,8 @@
       // build grouped rows & track lastRenderedDeviceKeys
       state.lastRenderedDeviceKeys = [];
       const rowHtml = [];
+      let lastReadyToPayPaymentGroupKey = null;
+      const showReadyToPayPaymentGroups = normalizeStatusKey(state.currentActiveStatus) === 'ready_to_pay';
       for (const group of pageGroups) {
         const order = group.order;
         const deviceStatus = group.deviceStatus;
@@ -4958,9 +5165,26 @@
         const responseBadgeHtml = showGrouped
           ? groupEntries.map((groupEntry) => awaitingResponseBadgeForDevice(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
           : awaitingResponseBadgeForDevice(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
+        const acceptanceBadgeHtml = showGrouped
+          ? groupEntries.map((groupEntry) => readyToPayAcceptanceBadgeHTML(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
+          : readyToPayAcceptanceBadgeHTML(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
+        const paymentGroup = getPaymentMethodGroup(order);
+        if (showReadyToPayPaymentGroups && paymentGroup.key !== lastReadyToPayPaymentGroupKey) {
+          lastReadyToPayPaymentGroupKey = paymentGroup.key;
+          rowHtml.push(`
+            <tr class="border-t border-slate-200">
+              <td colspan="5" class="px-4 py-2">
+                <div class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${paymentGroup.headerClass}">
+                  ${esc(paymentGroup.label)} payouts
+                </div>
+              </td>
+            </tr>
+          `);
+        }
+        const readyToPayPaymentRowClass = showReadyToPayPaymentGroups ? paymentGroup.rowClass : 'bg-white hover:bg-slate-50';
 
         rowHtml.push(`
-          <tr class="bg-white border-t border-slate-200 cursor-pointer hover:bg-slate-50" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
+          <tr class="${readyToPayPaymentRowClass} border-t border-slate-200 cursor-pointer" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
             <td class="px-4 py-3 align-top">
               <div class="flex items-start gap-3">
                 <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
@@ -4999,7 +5223,10 @@
               </div>
             </td>
             <td class="px-4 py-3 align-top min-w-0">
-              ${statusBadgeHTML(deviceStatus, statusExtra)}
+              <div class="flex flex-col items-start gap-1">
+                ${statusBadgeHTML(deviceStatus, statusExtra)}
+                ${acceptanceBadgeHtml}
+              </div>
             </td>
             <td class="px-4 py-3 align-top min-w-0">
               ${trackingNumber ? `
@@ -5318,6 +5545,33 @@
           </div>`;
       }
       function overviewHTML() {
+        const renderCustomerCopyButton = (value, label = 'value') => {
+          const copyValue = String(value || '').trim();
+          if (!copyValue || copyValue === 'N/A') return '';
+          return `
+            <button
+              type="button"
+              data-copy-customer-info="${esc(copyValue)}"
+              class="shrink-0 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+              title="Copy ${esc(label)}"
+              aria-label="Copy ${esc(label)}"
+            >
+              <i data-lucide="copy" style="width:13px;height:13px"></i>
+            </button>
+          `;
+        };
+        const renderCustomerInfoValue = (label, value, { valueClass = '', extra = '' } = {}) => `
+          <div>
+            <label class="text-xs font-medium text-slate-400 uppercase block mb-1">${esc(label)}</label>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0 text-sm font-medium text-slate-900 break-all ${valueClass}">${esc(value || 'N/A')}</div>
+              <div class="flex shrink-0 items-center gap-1">${extra}${renderCustomerCopyButton(value, label)}</div>
+            </div>
+          </div>
+        `;
+        const customerEmailValue = getOrderCustomerEmail(order) || 'N/A';
+        const payoutMethodDisplay = String(order.paymentMethod || 'N/A').replace(/[_-]+/g, ' ');
+        const payoutInfoDisplay = getPayoutInfoDisplay(order);
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
         const reofferAccepted = isAcceptedReofferStatus(order?.status);
         const acceptedTotal = getAcceptedReofferPayout(order);
@@ -5337,7 +5591,8 @@
           const showAcceptedOfferSwap = (isAcceptedReoffer || isDeclinedReoffer)
             && Number.isFinite(acceptedDeviceOffer)
             && Math.abs(Number(acceptedDeviceOffer || 0) - Number(offer || 0)) > 0.009;
-          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>`;
+          const acceptanceBadgeHtml = readyToPayAcceptanceBadgeHTML(order, deviceKey, deviceStatus);
+          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>${acceptanceBadgeHtml ? ` ${acceptanceBadgeHtml}` : ''}`;
           
           // Check if QC has been completed for this device
           const qcData = order?.qcDataByDevice?.[deviceKey];
@@ -5436,14 +5691,9 @@
                 </h3>
               </div>
               <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Full Name</label>
-                  <div class="text-sm font-medium text-slate-900">${esc(order.shippingInfo?.fullName || "N/A")}</div>
-                </div>
-                <div>
-                  <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Phone Number</label>
-                  <div class="text-sm font-medium text-slate-900">${esc(order.shippingInfo?.phone || "N/A")}</div>
-                </div>
+                ${renderCustomerInfoValue('Order ID', order.id || 'N/A')}
+                ${renderCustomerInfoValue('Full Name', order.shippingInfo?.fullName || 'N/A')}
+                ${renderCustomerInfoValue('Phone Number', order.shippingInfo?.phone || 'N/A')}
                 <div>
                   <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Email Address</label>
                   ${state.customerEmailEditOpen ? `
@@ -5475,26 +5725,35 @@
                     </div>
                   ` : `
                     <div class="flex items-start justify-between gap-3">
-                      <div class="text-sm font-medium text-slate-900 flex items-center gap-2 break-all">
-                        ${esc(getOrderCustomerEmail(order) || "N/A")}
-                        ${getOrderCustomerEmail(order) ? `<a href="mailto:${esc(getOrderCustomerEmail(order))}" class="text-indigo-600 hover:text-indigo-800"><i data-lucide="mail" style="width:14px;height:14px"></i></a>` : ""}
+                      <div class="min-w-0 text-sm font-medium text-slate-900 flex items-center gap-2 break-all">
+                        ${esc(customerEmailValue)}
+                        ${customerEmailValue !== 'N/A' ? `<a href="mailto:${esc(customerEmailValue)}" class="text-indigo-600 hover:text-indigo-800"><i data-lucide="mail" style="width:14px;height:14px"></i></a>` : ""}
                       </div>
-                      <button
-                        data-edit-customer-email="${esc(order.id)}"
-                        class="shrink-0 inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-                      >
-                        <i data-lucide="pencil" style="width:13px;height:13px"></i>
-                        Edit
-                      </button>
+                      <div class="flex shrink-0 items-center gap-1">
+                        ${renderCustomerCopyButton(customerEmailValue, 'Email Address')}
+                        <button
+                          data-edit-customer-email="${esc(order.id)}"
+                          class="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          <i data-lucide="pencil" style="width:13px;height:13px"></i>
+                          Edit
+                        </button>
+                      </div>
                     </div>
                   `}
                 </div>
                 <div>
                   <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Payout Method</label>
-                  <div class="text-sm font-medium text-slate-900 capitalize">${esc(String(order.paymentMethod || "N/A").replace(/[_-]+/g, " "))}</div>
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0 text-sm font-medium text-slate-900 capitalize break-all">${esc(payoutMethodDisplay)}</div>
+                    ${renderCustomerCopyButton(payoutMethodDisplay, 'Payout Method')}
+                  </div>
                   <div class="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
                     <label class="text-[11px] font-medium text-slate-400 uppercase block mb-1">Payout Info</label>
-                    <div class="text-sm font-semibold text-slate-900 break-all">${esc(getPayoutInfoDisplay(order))}</div>
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0 text-sm font-semibold text-slate-900 break-all">${esc(payoutInfoDisplay)}</div>
+                      ${renderCustomerCopyButton(payoutInfoDisplay, 'Payout Info')}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -6652,7 +6911,7 @@
       
       return `
         <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" style="z-index: 999999;">
-          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 animate-in max-h-[90vh] overflow-hidden flex flex-col">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 animate-in max-h-[90vh] overflow-hidden flex flex-col">
             <div class="px-6 py-5 border-b border-slate-100">
               <h3 class="text-lg font-bold text-slate-900">💰 Payment Confirmation</h3>
             </div>
@@ -6705,6 +6964,13 @@
                     Open Payment App
                   </a>
                   <p class="text-xs text-emerald-700 mt-2" id="paymentDeepLinkHint"></p>
+                </div>
+                <div id="cashAppIframeWrap" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white overflow-hidden">
+                  <div class="flex items-center justify-between gap-3 border-b border-emerald-100 bg-emerald-50 px-3 py-2">
+                    <p class="text-xs font-semibold text-emerald-900">Cash App payment link</p>
+                    <a id="cashAppIframeOpenLink" href="#" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-emerald-700 hover:underline">Open in new tab</a>
+                  </div>
+                  <iframe id="cashAppPaymentIframe" src="about:blank" class="h-[520px] w-full bg-white" title="Cash App payment"></iframe>
                 </div>
               </div>
             </div>
@@ -7378,6 +7644,10 @@
       if (adminOrdersTabBtnMobile) adminOrdersTabBtnMobile.addEventListener("click", () => { state.activeTab = "orders"; state.mobileTopbarMenuOpen = false; render(); });
       const adminEmailInboxTabBtnMobile = document.getElementById("admin-email-inbox-tab-btn-mobile");
       if (adminEmailInboxTabBtnMobile) adminEmailInboxTabBtnMobile.addEventListener("click", () => { state.activeTab = "email-inbox"; state.mobileTopbarMenuOpen = false; render(); });
+      const refreshOrderStatusCacheBtn = document.getElementById("refresh-order-status-cache-btn");
+      if (refreshOrderStatusCacheBtn) refreshOrderStatusCacheBtn.addEventListener("click", () => refreshAllOrderStatusesFromServer());
+      const refreshOrderStatusCacheBtnMobile = document.getElementById("refresh-order-status-cache-btn-mobile");
+      if (refreshOrderStatusCacheBtnMobile) refreshOrderStatusCacheBtnMobile.addEventListener("click", () => { state.mobileTopbarMenuOpen = false; void refreshAllOrderStatusesFromServer(); });
       const gmailSyncBtnMobile = document.getElementById("gmail-sync-btn-mobile");
       if (gmailSyncBtnMobile) gmailSyncBtnMobile.addEventListener("click", () => { state.mobileTopbarMenuOpen = false; void syncGmailNow(); });
       const gmailConnectBtnMobile = document.getElementById("gmail-connect-btn-mobile");
@@ -7436,6 +7706,20 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
           applySearchTerm("", "searchInput");
         });
       }
+      document.querySelectorAll("[data-copy-customer-info]").forEach((btn) => {
+        btn.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const value = btn.getAttribute("data-copy-customer-info") || "";
+          try {
+            await copyTextToClipboard(value);
+            toast("Copied to clipboard", "success");
+          } catch (error) {
+            console.error("Failed to copy customer info", error);
+            toast("Failed to copy", "error");
+          }
+        });
+      });
       const editCustomerEmailBtn = document.querySelector("[data-edit-customer-email]");
       if (editCustomerEmailBtn) {
         editCustomerEmailBtn.addEventListener("click", () => {
@@ -7799,8 +8083,16 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             return;
           }
 
-          const hasQcData = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
-          if (hasQcData) {
+          const qcDataForDevice = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
+          const hasQcData = !!qcDataForDevice;
+          const shouldResumeReoffer = hasQcData
+            && ['received', 'imei_checked'].includes(normalizeStatusKey(deviceStatus))
+            && getQcDisposition(order, qcDataForDevice, deviceKey).requiresReoffer;
+          if (shouldResumeReoffer) {
+            state.qcOpen = false;
+            state.qcData = null;
+            await openReofferModal(order, qcDataForDevice);
+          } else if (hasQcData) {
             state.qcOpen = false;
             state.qcData = null;
           } else {
@@ -7971,14 +8263,27 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
               return;
             }
             if (action === "reOffer75Less") {
-              if (focusedGroup.isGrouped) {
-                toast("Open a specific device to send a re-offer.", "error");
+              const targetDeviceKeys = focusedGroup.isGrouped
+                ? focusedGroup.deviceKeys
+                : [getActiveDeviceKey(order) || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0)];
+              const uniqueTargetDeviceKeys = [...new Set(targetDeviceKeys.filter(Boolean))];
+              if (!uniqueTargetDeviceKeys.length) {
+                toast("No devices were available for a 75%-less re-offer.", "error");
                 return;
               }
-              const targetDeviceKey = getActiveDeviceKey(order) || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
-              const result = await handleAction(order.id, "reOffer75Less", { body: { deviceKey: targetDeviceKey } });
-              if (result?.ok) {
-                toast("75%-less re-offer sent successfully.", "success");
+
+              const results = [];
+              for (const deviceKey of uniqueTargetDeviceKeys) {
+                results.push(await handleAction(order.id, "reOffer75Less", { body: { deviceKey } }));
+              }
+
+              const sentCount = results.filter((result) => result?.ok).length;
+              if (sentCount === uniqueTargetDeviceKeys.length) {
+                toast(sentCount === 1
+                  ? "75%-less re-offer sent successfully."
+                  : `75%-less re-offers sent successfully for ${sentCount} devices.`, "success");
+              } else if (sentCount > 0) {
+                toast(`75%-less re-offers sent for ${sentCount} of ${uniqueTargetDeviceKeys.length} devices.`, "error");
               }
               return;
             }
@@ -8296,44 +8601,20 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             render();
             return;
           }
-          await saveQc(order.id, deviceKey, qcSnapshot);
+          const qcDisposition = getQcDisposition(order, qcSnapshot, deviceKey);
+          const savedDeviceStatus = qcDisposition.requiresReoffer || qcDisposition.hasBlockingIssues ? 'received' : 'ready_to_pay';
+          await saveQc(order.id, deviceKey, qcSnapshot, { deviceStatus: savedDeviceStatus });
           const qcOutcome = await processQcOutcome(order, qcSnapshot, deviceKey);
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
           state.qcDeviceKey = null;
           
-          // Get the device's customer-declared data
-          const entries = getOrderDeviceEntries(order);
-          const parsed = parseOrderDeviceKey(deviceKey);
-          const entry = entries.find(e => e.deviceIndex === parsed.deviceIndex) || entries[0] || { deviceIndex: 0, item: order, qtyIndex: 0 };
-          const customerItem = entry.item || order;
-          
-          // Normalize and compare customer input with QC assessment
-          const normalizeStr = (s) => String(s || '').toLowerCase().trim();
-          
-          const customerCondition = normalizeStr(customerItem.condition || order.condition || 'good');
-          const qcCondition = normalizeStr(qcSnapshot.condition || 'good');
-          
-          const customerCarrier = normalizeStr(customerItem.carrier || customerItem.lock || order.carrier || order.lock || 'unlocked');
-          const qcCarrier = normalizeStr(qcSnapshot.carrier || 'unlocked');
-          
-          const customerStorage = normalizeStr(customerItem.storage || order.storage || '');
-          const qcStorage = normalizeStr(qcSnapshot.actualStorage || qcSnapshot.storage || '');
-          
-          // Check if QC matches customer's declared values
-          const conditionMatches = customerCondition === qcCondition;
-          const carrierMatches = customerCarrier === qcCarrier;
-          const storageMatches = !customerStorage || !qcStorage || customerStorage === qcStorage || qcSnapshot.storageMatch === 'yes';
-          
-          const allInputsMatch = conditionMatches && carrierMatches && storageMatches;
-          const hasBlockingIssues = qcOutcome.sentEmails; // FMI, locks, balance, blacklist
-          
-          if (allInputsMatch && !hasBlockingIssues) {
+          if (qcDisposition.allInputsMatch && !qcDisposition.hasBlockingIssues) {
             // Admin's QC matches customer input - skip reoffer, proceed to payment
             toast("QC completed! Admin assessment matches customer input.", "success");
             render();
-          } else if (hasBlockingIssues) {
+          } else if (qcDisposition.hasBlockingIssues || qcOutcome.sentEmails) {
             // Blocking issues detected - emails sent, waiting for customer
             toast("QC saved. Required customer emails sent. Waiting for response.", "info");
             render();
@@ -8531,6 +8812,9 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         const payoutAmountEl = document.getElementById("payoutAmount");
         const deepLinkBtn = document.getElementById("paymentDeepLinkBtn");
         const deepLinkHint = document.getElementById("paymentDeepLinkHint");
+        const cashAppIframeWrap = document.getElementById("cashAppIframeWrap");
+        const cashAppPaymentIframe = document.getElementById("cashAppPaymentIframe");
+        const cashAppIframeOpenLink = document.getElementById("cashAppIframeOpenLink");
         
         if (paymentCancelBtn) {
           paymentCancelBtn.addEventListener("click", () => {
@@ -8549,8 +8833,8 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             const subtotalPrice = Number(settlement?.payableTotal || 0);
             const deductionApplied = Number(settlement?.deductionApplied || 0);
             const deductionLabel = deductionApplied > 0
-              ? `Deduction (${Number(settlement?.nonReofferPayableCount || 0)} regular device${Number(settlement?.nonReofferPayableCount || 0) === 1 ? '' : 's'})`
-              : 'Deduction (not applied)';
+              ? 'Deductions applied'
+              : 'Deductions (none)';
 
             const paymentMethodRaw = currentOrder?.paymentMethod || 'N/A';
             const paymentMethodFormatted = String(paymentMethodRaw).replace(/[_-]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
@@ -8599,6 +8883,11 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             if (deepLinkHint) {
               deepLinkHint.textContent = deepLink?.note || 'Use the account details above to send payment.';
             }
+            const isCashApp = normalizeStatusKey(paymentMethodRaw) === 'cashapp';
+            const showCashAppFrame = isCashApp && !!deepLink?.url;
+            if (cashAppIframeWrap) cashAppIframeWrap.classList.toggle('hidden', !showCashAppFrame);
+            if (cashAppPaymentIframe) cashAppPaymentIframe.src = showCashAppFrame ? deepLink.url : 'about:blank';
+            if (cashAppIframeOpenLink) cashAppIframeOpenLink.href = showCashAppFrame ? deepLink.url : '#';
           })();
         }
         
@@ -8700,6 +8989,7 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
                 }
               }
               await hydrateSelectedOrderDetails(orderId);
+              await updateDeviceStatusInline(orderId, deviceKey, 'issue_resolved');
               state.selectedDeviceKey = deviceKey;
               state.qcDeviceKey = deviceKey;
               state.unlockInfoModalOpen = false;
@@ -8830,6 +9120,7 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
       state.ordersLoading = false;
       state.ordersCacheHydrated = false;
       state.ordersCacheLoadedAt = 0;
+      state.orderStatusCacheRefreshing = false;
       state.appBooting = false;
       state.appBootProgress = 0;
       state.appBootLabel = "Loading admin workspace…";
