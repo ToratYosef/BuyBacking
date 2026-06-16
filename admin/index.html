@@ -456,6 +456,35 @@
       const s = normalizeStatusKey(status);
       return s === 're-offered-accepted' || s === 're_offered_accepted' || s === 're-offered-auto-accepted' || s === 're_offered_auto_accepted' || s === 'requote_accepted';
     }
+    function getReofferAcceptanceSource(order = {}, deviceKey = null, status = '') {
+      const normalizedStatus = normalizeStatusKey(status || '');
+      const deviceOffer = deviceKey ? (
+        order?.reOfferByDevice?.[deviceKey]
+        || order?.reofferByDevice?.[deviceKey]
+        || order?.deviceReofferByKey?.[deviceKey]
+        || order?.deviceReOfferByKey?.[deviceKey]
+      ) : null;
+      const offer = deviceOffer || order?.reOffer || order?.reoffer || order?.requote || {};
+      const haystack = [
+        normalizedStatus,
+        offer?.acceptedBy, offer?.acceptedByType, offer?.acceptedSource, offer?.acceptanceSource, offer?.source, offer?.status, offer?.acceptedVia, offer?.acceptedMethod,
+        order?.acceptedBy, order?.acceptedByType, order?.acceptedSource, order?.acceptanceSource, order?.reofferAcceptedBy, order?.reofferAcceptanceSource, order?.requoteAcceptedBy, order?.requoteAcceptanceSource
+      ].map((value) => normalizeStatusKey(value)).filter(Boolean).join(' ');
+      if (normalizedStatus === 're-offered-auto-accepted' || normalizedStatus === 're_offered_auto_accepted' || offer?.autoAcceptedAt || offer?.autoAccepted || order?.autoAcceptedAt || /auto/.test(haystack)) return 'auto';
+      if (offer?.adminAcceptedAt || offer?.adminAccepted || order?.adminAcceptedAt || /admin|manual|staff/.test(haystack)) return 'admin';
+      if (normalizedStatus === 're-offered-accepted' || normalizedStatus === 're_offered_accepted' || normalizedStatus === 'requote_accepted' || offer?.customerAcceptedAt || order?.customerAcceptedAt || /customer|buyer|user/.test(haystack)) return 'customer';
+      if (hasAnyReofferHistory(order) && normalizeStatusKey(order?.status) === 'ready_to_pay') return 'customer';
+      return null;
+    }
+    function readyToPayAcceptanceBadgeHTML(order = {}, deviceKey = null, status = '') {
+      const normalizedStatus = normalizeStatusKey(status || '');
+      if (normalizedStatus !== 'ready_to_pay' && !isAcceptedReofferStatus(normalizedStatus)) return '';
+      const source = getReofferAcceptanceSource(order, deviceKey, normalizedStatus);
+      if (source === 'customer') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Customer accepted</span>';
+      if (source === 'auto') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">Auto accepted</span>';
+      if (source === 'admin') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">Admin accepted</span>';
+      return '';
+    }
     function isAnyReofferStatus(status) {
       const s = normalizeStatusKey(status);
       return s === 're-offered-pending'
@@ -2286,12 +2315,15 @@
     // ----------------------------
     let unsubscribeOrders = null;
     let ordersLoadVersion = 0;
+    function isSearchInputActive() {
+      const activeId = document.activeElement?.id || "";
+      return activeId === "searchInput" || activeId === "mobileSearchInput";
+    }
     function shouldDeferOrdersRenderDuringLoading() {
+      if (isSearchInputActive()) return true;
       if (!state.ordersLoading) return false;
       if (state.selectedOrderId) return true;
-      const active = document.activeElement;
-      const activeId = active?.id || "";
-      return activeId === "searchInput" || activeId === "mobileSearchInput";
+      return false;
     }
     function renderOrdersWithInteractionGuard() {
       if (hasTransientOverlayOpen()) {
@@ -2544,7 +2576,7 @@
             });
             state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
             schedulePersistOrdersCache();
-            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+            renderOrdersWithInteractionGuard();
           }, (err) => {
             console.error("Firestore Error:", err);
             toast("Live updates failed", "error");
@@ -2947,7 +2979,15 @@
       } else {
         state.currentPage = 1;
       }
-      render();
+      if (options?.preservePage && isSearchInputActive()) {
+        if (state.deferredOrdersRenderTimer) clearTimeout(state.deferredOrdersRenderTimer);
+        state.deferredOrdersRenderTimer = setTimeout(() => {
+          state.deferredOrdersRenderTimer = null;
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+        }, 250);
+      } else {
+        render();
+      }
       writeAdminUiCache();
     }
     // ----------------------------
@@ -5081,6 +5121,9 @@
         const responseBadgeHtml = showGrouped
           ? groupEntries.map((groupEntry) => awaitingResponseBadgeForDevice(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
           : awaitingResponseBadgeForDevice(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
+        const acceptanceBadgeHtml = showGrouped
+          ? groupEntries.map((groupEntry) => readyToPayAcceptanceBadgeHTML(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
+          : readyToPayAcceptanceBadgeHTML(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
 
         rowHtml.push(`
           <tr class="bg-white border-t border-slate-200 cursor-pointer hover:bg-slate-50" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
@@ -5122,7 +5165,10 @@
               </div>
             </td>
             <td class="px-4 py-3 align-top min-w-0">
-              ${statusBadgeHTML(deviceStatus, statusExtra)}
+              <div class="flex flex-col items-start gap-1">
+                ${statusBadgeHTML(deviceStatus, statusExtra)}
+                ${acceptanceBadgeHtml}
+              </div>
             </td>
             <td class="px-4 py-3 align-top min-w-0">
               ${trackingNumber ? `
@@ -5487,7 +5533,8 @@
           const showAcceptedOfferSwap = (isAcceptedReoffer || isDeclinedReoffer)
             && Number.isFinite(acceptedDeviceOffer)
             && Math.abs(Number(acceptedDeviceOffer || 0) - Number(offer || 0)) > 0.009;
-          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>`;
+          const acceptanceBadgeHtml = readyToPayAcceptanceBadgeHTML(order, deviceKey, deviceStatus);
+          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>${acceptanceBadgeHtml ? ` ${acceptanceBadgeHtml}` : ''}`;
           
           // Check if QC has been completed for this device
           const qcData = order?.qcDataByDevice?.[deviceKey];
