@@ -695,6 +695,32 @@
       toast('Auto accepted badge removed for this device.', 'success');
     }
 
+    function applyCancelReofferResult(orderId, response = {}, requestBody = {}) {
+      const deviceKey = response?.deviceKey || requestBody?.deviceKey || '';
+      if (!deviceKey) return null;
+      const order = state.allOrders.find((entry) => entry.id === orderId) || (state.selectedOrderSnapshot?.id === orderId ? state.selectedOrderSnapshot : null);
+      if (!order) return null;
+
+      const nextReOfferByDevice = { ...(order.reOfferByDevice || {}) };
+      const nextReofferByDevice = { ...(order.reofferByDevice || {}) };
+      delete nextReOfferByDevice[deviceKey];
+      delete nextReofferByDevice[deviceKey];
+
+      const nextOrder = {
+        ...order,
+        deviceStatusByKey: { ...(order.deviceStatusByKey || {}), [deviceKey]: 'received' },
+        reOfferByDevice: nextReOfferByDevice,
+        reofferByDevice: nextReofferByDevice,
+        status: normalizeStatusKey(response?.status || '') || computeOrderStatus({
+          ...order,
+          deviceStatusByKey: { ...(order.deviceStatusByKey || {}), [deviceKey]: 'received' },
+          reOfferByDevice: nextReOfferByDevice,
+          reofferByDevice: nextReofferByDevice,
+        }),
+      };
+      return upsertOrderInState(nextOrder);
+    }
+
     function hasAnyReofferHistory(order = {}) {
       if (!order || typeof order !== 'object') return false;
       if (hasObjectEntries(order.reOffer) || hasObjectEntries(order.reoffer)) return true;
@@ -4302,11 +4328,17 @@
             body = autoAcceptBody;
             break;
           }
-          case "cancelReoffer":
+          case "cancelReoffer": {
+            const cancelBody = { ...(options?.body || {}) };
+            if (typeof cancelBody.deviceKey !== 'string' || !cancelBody.deviceKey.trim()) {
+              toast('Open or select the specific pending re-offer device to cancel.', 'error');
+              return;
+            }
             endpoint = `/orders/${orderId}/cancel-reoffer`;
             method = "POST";
-            body = { ...(options?.body || {}) };
+            body = cancelBody;
             break;
+          }
           case "refreshKitTracking":
             endpoint = `/refresh-tracking`;
             method = "POST";
@@ -4344,11 +4376,6 @@
             endpoint = `/orders/${orderId}/re-offer`;
             method = "POST";
             body = options?.body ?? {}; // { newPrice, reasons, comments }
-            break;
-          case "cancelReoffer":
-            endpoint = `/orders/${orderId}/re-offer`;
-            method = "DELETE";
-            body = null;
             break;
           case "reOffer75Less": {
             const targetDeviceKey =
@@ -4455,6 +4482,14 @@
           filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
           render();
           toast(actionResult?.message || 'Overdue re-offer auto-accepted successfully.', 'success');
+          return { ok: true, data: actionResult };
+        }
+
+        if (actionType === 'cancelReoffer') {
+          applyCancelReofferResult(orderId, actionResult, body || {});
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+          render();
+          toast(actionResult?.message || 'Re-offer canceled for this device.', 'success');
           return { ok: true, data: actionResult };
         }
 
@@ -6484,7 +6519,9 @@
         else if (status === "re-offered-pending") {
             const pendingReofferKeys = focusedGroup.isGrouped
               ? focusedGroup.deviceKeys
-              : [focused.isFocused ? focused.deviceKey : (getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0))];
+              : (focused.isFocused
+                ? [focused.deviceKey]
+                : getOrderDeviceEntries(order).map((entry) => buildOrderDeviceKey(order.id, entry.deviceIndex)));
             const overdueReofferKeys = getOverduePendingReofferDeviceKeys(order, pendingReofferKeys);
             if (overdueReofferKeys.length === 1) {
               groups.primary.push({
@@ -6505,14 +6542,26 @@
                 });
               });
             }
-            const cancelReofferDeviceKey = getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0);
-            groups.primary.push({
-              label: "Cancel Re-offer",
-              action: "cancelReoffer",
-              class: "bg-white border border-amber-200 text-amber-700 hover:bg-amber-50",
-              options: { body: { deviceKey: cancelReofferDeviceKey } },
-              fullWidth: true
-            });
+            const cancelReofferKeys = pendingReofferKeys.filter((deviceKey) => normalizeStatusKey(getDeviceStatus(order, deviceKey)) === 're-offered-pending');
+            if (cancelReofferKeys.length === 1) {
+              groups.primary.push({
+                label: "Cancel Re-offer",
+                action: "cancelReoffer",
+                class: "bg-white border border-amber-200 text-amber-700 hover:bg-amber-50",
+                options: { body: { deviceKey: cancelReofferKeys[0] } },
+                fullWidth: true
+              });
+            } else if (cancelReofferKeys.length > 1) {
+              cancelReofferKeys.forEach((deviceKey) => {
+                groups.primary.push({
+                  label: `Cancel: ${esc(getDeviceDisplayLabel(order, deviceKey))}`,
+                  action: "cancelReoffer",
+                  class: "bg-white border border-amber-200 text-amber-700 hover:bg-amber-50",
+                  options: { body: { deviceKey } },
+                  fullWidth: true
+                });
+              });
+            }
         }
         else if (status === "re-offered-declined") {
             if (settlement.declinedCount > 0) {
@@ -7231,6 +7280,25 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
                     <button id="paymentDestinationCopyBtn" type="button" data-copy-payment="" class="hidden rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">Copy destination</button>
+                  </div>
+                </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
                   </div>
                 </div>
                 <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
