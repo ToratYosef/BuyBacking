@@ -504,10 +504,16 @@
     function readyToPayAcceptanceBadgeHTML(order = {}, deviceKey = null, status = '') {
       const normalizedStatus = normalizeStatusKey(status || '');
       const normalizedOrderStatus = normalizeStatusKey(order?.status || '');
+      if (deviceKey && normalizedStatus !== 'ready_to_pay' && !isAcceptedReofferStatus(status)) return '';
       if (normalizedStatus !== 'ready_to_pay' && !isAcceptedReofferStatus(status) && normalizedOrderStatus !== 'ready_to_pay' && !isAcceptedReofferStatus(order?.status) && !isReadyToPayQueueOrder(order)) return '';
       const source = getReofferAcceptanceSource(order, deviceKey, status);
       if (source === 'customer') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Customer accepted</span>';
-      if (source === 'auto') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">Auto accepted</span>';
+      if (source === 'auto') {
+        const removeButton = deviceKey
+          ? `<button type="button" title="Remove auto accepted badge" aria-label="Remove auto accepted badge" data-remove-auto-accepted-device="${esc(deviceKey)}" data-order-id="${esc(order?.id || '')}" class="ml-1 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-cyan-100 text-cyan-700 opacity-0 transition-opacity hover:bg-cyan-200 group-hover:opacity-100 focus:opacity-100">×</button>`
+          : '';
+        return `<span class="group inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">Auto accepted${removeButton}</span>`;
+      }
       if (source === 'admin') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">Admin accepted</span>';
       return '';
     }
@@ -643,6 +649,50 @@
       };
       nextOrder.status = computeOrderStatus(nextOrder);
       return upsertOrderInState(nextOrder);
+    }
+
+    async function removeAutoAcceptedDeviceBadge(orderId, deviceKey) {
+      if (!orderId || !deviceKey) return;
+      const confirmed = await showConfirmation({
+        title: 'Remove Auto Accepted Badge?',
+        message: 'This only resets the selected device back to Re-offer Pending so you can fix a mistaken auto-accept click.',
+        confirmText: 'Remove Badge',
+        cancelText: 'Cancel',
+        confirmClass: 'bg-cyan-600 hover:bg-cyan-700',
+      });
+      if (!confirmed) return;
+
+      const orderRef = doc(db, 'orders', orderId);
+      const payload = {
+        [`deviceStatusByKey.${deviceKey}`]: 're-offered-pending',
+        [`reOfferByDevice.${deviceKey}.acceptedAutomatically`]: false,
+        [`reOfferByDevice.${deviceKey}.autoAccepted`]: false,
+        [`reOfferByDevice.${deviceKey}.status`]: 're-offered-pending',
+        updatedAt: serverTimestamp(),
+      };
+      await withPerf(`firestore:removeAutoAcceptedBadge:${orderId}:${deviceKey}`, () => updateDoc(orderRef, payload));
+
+      const order = state.allOrders.find((entry) => entry.id === orderId) || (state.selectedOrderSnapshot?.id === orderId ? state.selectedOrderSnapshot : null);
+      if (order) {
+        const nextOrder = {
+          ...order,
+          deviceStatusByKey: { ...(order.deviceStatusByKey || {}), [deviceKey]: 're-offered-pending' },
+          reOfferByDevice: {
+            ...(order.reOfferByDevice || order.reofferByDevice || {}),
+            [deviceKey]: {
+              ...((order.reOfferByDevice || order.reofferByDevice || {})[deviceKey] || {}),
+              acceptedAutomatically: false,
+              autoAccepted: false,
+              status: 're-offered-pending',
+            },
+          },
+        };
+        nextOrder.status = computeOrderStatus(nextOrder);
+        upsertOrderInState(nextOrder);
+      }
+      filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+      render();
+      toast('Auto accepted badge removed for this device.', 'success');
     }
 
     function hasAnyReofferHistory(order = {}) {
@@ -7297,6 +7347,25 @@
                     <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
                   </div>
                 </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                </div>
                 <div id="checkAddressRow" class="mt-2 hidden">
                   <p class="text-xs font-semibold text-emerald-800 mb-1">Mail Check To:</p>
                   <p class="text-sm font-medium text-emerald-900 whitespace-pre-line" id="checkAddressText">--</p>
@@ -8094,6 +8163,20 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
           } catch (error) {
             console.error("Failed to copy payment info", error);
             toast("Failed to copy", "error");
+          }
+        });
+      });
+      document.querySelectorAll("[data-remove-auto-accepted-device]").forEach((btn) => {
+        btn.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const deviceKey = btn.getAttribute("data-remove-auto-accepted-device") || "";
+          const orderId = btn.getAttribute("data-order-id") || state.selectedOrderId || "";
+          try {
+            await removeAutoAcceptedDeviceBadge(orderId, deviceKey);
+          } catch (error) {
+            console.error("Failed to remove auto accepted badge", error);
+            toast(error?.message || "Failed to remove auto accepted badge", "error");
           }
         });
       });
