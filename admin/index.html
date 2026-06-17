@@ -591,6 +591,16 @@
       });
     }
 
+    function getDeviceDisplayLabel(order = {}, deviceKey = null) {
+      const entries = getOrderDeviceEntries(order);
+      const parsed = parseOrderDeviceKey(deviceKey || '');
+      const entry = entries.find((candidate) => candidate.deviceIndex === parsed?.deviceIndex) || entries[0] || {};
+      const item = entry.item || order || {};
+      const deviceName = item?.device || item?.title || order?.device || `Device ${(entry.deviceIndex ?? 0) + 1}`;
+      const details = [item?.storage || order?.storage, item?.carrier || order?.carrier, item?.model || order?.model].filter(Boolean).join(' • ');
+      return `${deviceName}${details ? ` • ${details}` : ''}`;
+    }
+
     function hasAnyReofferHistory(order = {}) {
       if (!order || typeof order !== 'object') return false;
       if (hasObjectEntries(order.reOffer) || hasObjectEntries(order.reoffer)) return true;
@@ -6366,13 +6376,23 @@
               ? focusedGroup.deviceKeys
               : [focused.isFocused ? focused.deviceKey : (getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0))];
             const overdueReofferKeys = getOverduePendingReofferDeviceKeys(order, pendingReofferKeys);
-            if (overdueReofferKeys.length) {
+            if (overdueReofferKeys.length === 1) {
               groups.primary.push({
-                label: overdueReofferKeys.length === 1 ? "Auto Accept Overdue Re-offer" : `Auto Accept ${overdueReofferKeys.length} Overdue Re-offers`,
+                label: "Auto Accept Overdue Re-offer",
                 action: "autoAcceptReoffer",
                 class: "bg-emerald-600 text-white hover:bg-emerald-700",
-                options: { body: overdueReofferKeys.length === 1 ? { deviceKey: overdueReofferKeys[0], force: true, sendCustomerEmail: true } : { deviceKeys: overdueReofferKeys, force: true, sendCustomerEmail: true } },
+                options: { body: { deviceKey: overdueReofferKeys[0], force: true, sendCustomerEmail: true } },
                 fullWidth: true
+              });
+            } else if (overdueReofferKeys.length > 1) {
+              overdueReofferKeys.forEach((deviceKey) => {
+                groups.primary.push({
+                  label: `Auto Accept: ${esc(getDeviceDisplayLabel(order, deviceKey))}`,
+                  action: "autoAcceptReoffer",
+                  class: "bg-emerald-600 text-white hover:bg-emerald-700",
+                  options: { body: { deviceKey, force: true, sendCustomerEmail: true } },
+                  fullWidth: true
+                });
               });
             }
             const cancelReofferDeviceKey = getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0);
@@ -7101,6 +7121,25 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
                     <button id="paymentDestinationCopyBtn" type="button" data-copy-payment="" class="hidden rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">Copy destination</button>
+                  </div>
+                </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
                   </div>
                 </div>
                 <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
