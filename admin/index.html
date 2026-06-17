@@ -579,6 +579,18 @@
       return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${colorClass}">${esc(text)}</span>`;
     }
 
+    function getOverduePendingReofferDeviceKeys(order = {}, deviceKeys = null) {
+      const keys = Array.isArray(deviceKeys) && deviceKeys.length
+        ? deviceKeys.filter(Boolean)
+        : getOrderDeviceEntries(order).map((entry) => buildOrderDeviceKey(order.id, entry.deviceIndex));
+      return [...new Set(keys)].filter((deviceKey) => {
+        const status = getDeviceStatus(order, deviceKey);
+        if (normalizeStatusKey(status) !== 're-offered-pending') return false;
+        const deadline = getReofferDeadlineMillis(order, deviceKey);
+        return Number.isFinite(deadline) && deadline > 0 && deadline <= Date.now();
+      });
+    }
+
     function hasAnyReofferHistory(order = {}) {
       if (!order || typeof order !== 'object') return false;
       if (hasObjectEntries(order.reOffer) || hasObjectEntries(order.reoffer)) return true;
@@ -4013,12 +4025,13 @@
     async function handleAction(orderId, actionType, options = {}) {
       try {
         // Add confirmations for critical actions
-        if (!options?.skipConfirmation && ['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'cancelReoffer', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
+        if (!options?.skipConfirmation && ['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'autoAcceptReoffer', 'cancelReoffer', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
           const confirmMessages = {
             'reOffer': 'Send re-offer to customer?\n\nThis will notify the customer with updated pricing and conditions.',
             'reOffer75Less': 'Send a re-offer for 75% less?\n\nThis sends a normal re-offer email and the customer can accept or decline it on the re-offer page.',
             'markCompleted': 'Mark this order as completed?\n\nThis will finalize the order and may trigger payment processing.',
             'autoRequote': 'Send 75%-less re-offer?\n\nThis will email the customer per terms and move the selected device(s) to Re-offer Pending at 75% less.',
+            'autoAcceptReoffer': 'Auto-accept overdue re-offer?\n\nThis marks the selected overdue pending re-offer device(s) as auto accepted, moves them to Ready To Pay, and emails the customer.',
             'cancelReoffer': 'Cancel this order re-offer?\n\nThis removes all saved re-offer data/history from Firebase for this order. The order status itself is left unchanged unless the backend chooses to normalize re-offer device statuses.',
             'cancelOrder': 'Cancel this order?\n\nThis action will cancel the order and may void any labels.',
             'deleteOrder': 'Delete this order permanently?\n\nThis action cannot be undone!'
@@ -4028,6 +4041,7 @@
             'cancelOrder': 'bg-orange-600 hover:bg-orange-700',
             'cancelReoffer': 'bg-rose-600 hover:bg-rose-700',
             'autoRequote': 'bg-amber-600 hover:bg-amber-700',
+            'autoAcceptReoffer': 'bg-emerald-600 hover:bg-emerald-700',
             'reOffer': 'bg-purple-600 hover:bg-purple-700',
             'reOffer75Less': 'bg-violet-600 hover:bg-violet-700',
             'markCompleted': 'bg-emerald-600 hover:bg-emerald-700'
@@ -4170,6 +4184,11 @@
             endpoint = `/orders/${orderId}/auto-requote`;
             method = "POST";
             body = { ...(options?.body || {}) };
+            break;
+          case "autoAcceptReoffer":
+            endpoint = `/orders/${orderId}/re-offer/auto-accept`;
+            method = "POST";
+            body = { force: true, sendCustomerEmail: true, ...(options?.body || {}) };
             break;
           case "cancelReoffer":
             endpoint = `/orders/${orderId}/cancel-reoffer`;
@@ -4367,6 +4386,11 @@
           }
           window.open(returnLabelUrl, '_blank', 'noopener,noreferrer');
           toast('Return label opened in a new tab.', 'success');
+          return { ok: true, data: actionResult };
+        }
+
+        if (actionType === 'autoAcceptReoffer') {
+          toast(actionResult?.message || 'Overdue re-offer auto-accepted successfully.', 'success');
           return { ok: true, data: actionResult };
         }
 
@@ -6338,6 +6362,19 @@
             // Awaiting re-QC. Resume QC from the device cards above.
         }
         else if (status === "re-offered-pending") {
+            const pendingReofferKeys = focusedGroup.isGrouped
+              ? focusedGroup.deviceKeys
+              : [focused.isFocused ? focused.deviceKey : (getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0))];
+            const overdueReofferKeys = getOverduePendingReofferDeviceKeys(order, pendingReofferKeys);
+            if (overdueReofferKeys.length) {
+              groups.primary.push({
+                label: overdueReofferKeys.length === 1 ? "Auto Accept Overdue Re-offer" : `Auto Accept ${overdueReofferKeys.length} Overdue Re-offers`,
+                action: "autoAcceptReoffer",
+                class: "bg-emerald-600 text-white hover:bg-emerald-700",
+                options: { body: overdueReofferKeys.length === 1 ? { deviceKey: overdueReofferKeys[0], force: true, sendCustomerEmail: true } : { deviceKeys: overdueReofferKeys, force: true, sendCustomerEmail: true } },
+                fullWidth: true
+              });
+            }
             const cancelReofferDeviceKey = getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0);
             groups.primary.push({
               label: "Cancel Re-offer",
@@ -7064,6 +7101,25 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
                     <button id="paymentDestinationCopyBtn" type="button" data-copy-payment="" class="hidden rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">Copy destination</button>
+                  </div>
+                </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
                   </div>
                 </div>
                 <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
