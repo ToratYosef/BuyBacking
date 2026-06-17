@@ -99,7 +99,7 @@
   <script type="module">
     import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
     import { getAuth, onAuthStateChanged, signOut, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
-    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, query, where, orderBy, limit, startAfter, deleteDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+    import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, getDocsFromServer, query, where, orderBy, limit, startAfter, deleteDoc, serverTimestamp, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
     import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-messaging.js";
     // ----------------------------
     // CONFIG
@@ -452,12 +452,67 @@
       if (Number.isFinite(total)) return qty > 1 ? (total / qty) : total;
       return 0;
     }
+    function statusToken(status) {
+      return String(status || '').trim().toLowerCase();
+    }
     function isAcceptedReofferStatus(status) {
-      const s = normalizeStatusKey(status);
+      const s = statusToken(status);
       return s === 're-offered-accepted' || s === 're_offered_accepted' || s === 're-offered-auto-accepted' || s === 're_offered_auto_accepted' || s === 'requote_accepted';
     }
+    function isReadyToPayQueueOrder(order = {}) {
+      return order?.readyToPay === true || order?.paymentReady === true;
+    }
+    function getReofferAcceptanceSource(order = {}, deviceKey = null, status = '') {
+      const normalizedStatus = normalizeStatusKey(status || '');
+      const normalizedOrderStatus = normalizeStatusKey(order?.status || '');
+      const normalizedDeviceStatus = deviceKey ? normalizeStatusKey(order?.deviceStatusByKey?.[deviceKey] || '') : '';
+      const rawStatus = statusToken(status);
+      const rawOrderStatus = statusToken(order?.status);
+      const rawDeviceStatus = deviceKey ? statusToken(order?.deviceStatusByKey?.[deviceKey]) : '';
+      const deviceOffer = deviceKey ? (
+        order?.reOfferByDevice?.[deviceKey]
+        || order?.reofferByDevice?.[deviceKey]
+        || order?.deviceReofferByKey?.[deviceKey]
+        || order?.deviceReOfferByKey?.[deviceKey]
+      ) : null;
+      const offer = deviceOffer || order?.reOffer || order?.reoffer || order?.requote || {};
+      const haystack = [
+        normalizedStatus, normalizedOrderStatus, normalizedDeviceStatus, rawStatus, rawOrderStatus, rawDeviceStatus,
+        order?.paymentReadyReason,
+        offer?.acceptedBy, offer?.acceptedByType, offer?.acceptedSource, offer?.acceptanceSource, offer?.source, offer?.status, offer?.acceptedVia, offer?.acceptedMethod,
+        order?.acceptedBy, order?.acceptedByType, order?.acceptedSource, order?.acceptanceSource, order?.reofferAcceptedBy, order?.reofferAcceptanceSource, order?.requoteAcceptedBy, order?.requoteAcceptanceSource
+      ].map((value) => normalizeStatusKey(value)).filter(Boolean).join(' ');
+      if (
+        rawStatus === 're-offered-auto-accepted'
+        || rawStatus === 're_offered_auto_accepted'
+        || rawOrderStatus === 're-offered-auto-accepted'
+        || rawOrderStatus === 're_offered_auto_accepted'
+        || rawDeviceStatus === 're-offered-auto-accepted'
+        || rawDeviceStatus === 're_offered_auto_accepted'
+        || normalizeStatusKey(order?.paymentReadyReason) === 'auto_reoffer_accepted'
+        || order?.autoRequote?.acceptedAutomatically === true
+        || offer?.autoAcceptedAt
+        || offer?.autoAccepted
+        || order?.autoAcceptedAt
+        || /auto/.test(haystack)
+      ) return 'auto';
+      if (offer?.adminAcceptedAt || offer?.adminAccepted || order?.adminAcceptedAt || /admin|manual|staff/.test(haystack)) return 'admin';
+      if (rawStatus === 're-offered-accepted' || rawStatus === 're_offered_accepted' || rawOrderStatus === 're-offered-accepted' || rawOrderStatus === 're_offered_accepted' || rawDeviceStatus === 're-offered-accepted' || rawDeviceStatus === 're_offered_accepted' || rawStatus === 'requote_accepted' || offer?.customerAcceptedAt || order?.customerAcceptedAt || /customer|buyer|user/.test(haystack)) return 'customer';
+      if (hasAnyReofferHistory(order) && normalizeStatusKey(order?.status) === 'ready_to_pay') return 'customer';
+      return null;
+    }
+    function readyToPayAcceptanceBadgeHTML(order = {}, deviceKey = null, status = '') {
+      const normalizedStatus = normalizeStatusKey(status || '');
+      const normalizedOrderStatus = normalizeStatusKey(order?.status || '');
+      if (normalizedStatus !== 'ready_to_pay' && !isAcceptedReofferStatus(status) && normalizedOrderStatus !== 'ready_to_pay' && !isAcceptedReofferStatus(order?.status) && !isReadyToPayQueueOrder(order)) return '';
+      const source = getReofferAcceptanceSource(order, deviceKey, status);
+      if (source === 'customer') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Customer accepted</span>';
+      if (source === 'auto') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">Auto accepted</span>';
+      if (source === 'admin') return '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">Admin accepted</span>';
+      return '';
+    }
     function isAnyReofferStatus(status) {
-      const s = normalizeStatusKey(status);
+      const s = statusToken(status);
       return s === 're-offered-pending'
         || s === 're_offered_pending'
         || s === 're-offered-declined'
@@ -471,6 +526,81 @@
     function hasObjectEntries(value) {
       return !!(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length);
     }
+    function getDeviceReofferOffer(order = {}, deviceKey = null) {
+      if (deviceKey) {
+        return order?.reOfferByDevice?.[deviceKey]
+          || order?.reofferByDevice?.[deviceKey]
+          || order?.deviceReofferByKey?.[deviceKey]
+          || order?.deviceReOfferByKey?.[deviceKey]
+          || null;
+      }
+      return order?.reOffer || order?.reoffer || order?.requote || null;
+    }
+    function getReofferCreatedAtMillis(order = {}, deviceKey = null) {
+      const offer = getDeviceReofferOffer(order, deviceKey) || order?.reOffer || order?.reoffer || {};
+      const candidates = [
+        offer?.createdAt,
+        offer?.sentAt,
+        offer?.updatedAt,
+        order?.reOfferCreatedAt,
+        order?.reofferCreatedAt,
+        order?.reOfferUpdatedAt,
+        order?.reofferUpdatedAt,
+        order?.statusUpdatedAt,
+        order?.lastStatusUpdateAt,
+      ];
+      for (const candidate of candidates) {
+        const ms = toDateAny(candidate)?.getTime();
+        if (Number.isFinite(ms) && ms > 0) return ms;
+      }
+      return 0;
+    }
+    function getReofferDeadlineMillis(order = {}, deviceKey = null) {
+      const offer = getDeviceReofferOffer(order, deviceKey) || order?.reOffer || order?.reoffer || {};
+      const explicit = toDateAny(offer?.autoAcceptDate || offer?.autoAcceptAt || offer?.deadlineAt || offer?.expiresAt || order?.reOfferAutoAcceptDate || order?.reofferAutoAcceptDate)?.getTime();
+      if (Number.isFinite(explicit) && explicit > 0) return explicit;
+      const created = getReofferCreatedAtMillis(order, deviceKey);
+      return created ? created + (7 * 24 * 60 * 60 * 1000) : 0;
+    }
+    function reofferPendingAgeBadgeHTML(order = {}, deviceKey = null, status = '') {
+      if (normalizeStatusKey(status) !== 're-offered-pending') return '';
+      const deadline = getReofferDeadlineMillis(order, deviceKey);
+      if (!deadline) return '';
+      const remainingMs = deadline - Date.now();
+      const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+      const text = remainingDays > 0
+        ? `${remainingDays} day${remainingDays === 1 ? '' : 's'} left`
+        : `Past 7 days${remainingDays < 0 ? ` by ${Math.abs(remainingDays)} day${Math.abs(remainingDays) === 1 ? '' : 's'}` : ''}`;
+      const colorClass = remainingDays <= 0
+        ? 'bg-rose-50 text-rose-700 border-rose-200'
+        : remainingDays <= 2
+          ? 'bg-amber-50 text-amber-700 border-amber-200'
+          : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${colorClass}">${esc(text)}</span>`;
+    }
+
+    function getOverduePendingReofferDeviceKeys(order = {}, deviceKeys = null) {
+      const keys = Array.isArray(deviceKeys) && deviceKeys.length
+        ? deviceKeys.filter(Boolean)
+        : getOrderDeviceEntries(order).map((entry) => buildOrderDeviceKey(order.id, entry.deviceIndex));
+      return [...new Set(keys)].filter((deviceKey) => {
+        const status = getDeviceStatus(order, deviceKey);
+        if (normalizeStatusKey(status) !== 're-offered-pending') return false;
+        const deadline = getReofferDeadlineMillis(order, deviceKey);
+        return Number.isFinite(deadline) && deadline > 0 && deadline <= Date.now();
+      });
+    }
+
+    function getDeviceDisplayLabel(order = {}, deviceKey = null) {
+      const entries = getOrderDeviceEntries(order);
+      const parsed = parseOrderDeviceKey(deviceKey || '');
+      const entry = entries.find((candidate) => candidate.deviceIndex === parsed?.deviceIndex) || entries[0] || {};
+      const item = entry.item || order || {};
+      const deviceName = item?.device || item?.title || order?.device || `Device ${(entry.deviceIndex ?? 0) + 1}`;
+      const details = [item?.storage || order?.storage, item?.carrier || order?.carrier, item?.model || order?.model].filter(Boolean).join(' • ');
+      return `${deviceName}${details ? ` • ${details}` : ''}`;
+    }
+
     function hasAnyReofferHistory(order = {}) {
       if (!order || typeof order !== 'object') return false;
       if (hasObjectEntries(order.reOffer) || hasObjectEntries(order.reoffer)) return true;
@@ -588,8 +718,34 @@
       return s === 're-offered-declined' || s === 're_offered_declined';
     }
     function getOrderDeductionValue(order) {
-      const explicit = Number(order?.deductionValue ?? order?.deduction_value ?? order?.shippingKitFee ?? order?.fasterShippingFee);
-      if (Number.isFinite(explicit) && explicit > 0) return explicit;
+      const explicitTotal = Number(order?.totalDeductions ?? order?.total_deductions ?? NaN);
+      if (Number.isFinite(explicitTotal) && explicitTotal > 0) return explicitTotal;
+      const directValues = [
+        order?.deductionValue,
+        order?.deduction_value,
+        order?.shippingKitFee,
+        order?.fasterShippingFee,
+        order?.shippingDeduction,
+        order?.shipping_deduction,
+        order?.kitDeduction,
+        order?.kit_deduction,
+      ];
+      let total = directValues.reduce((sum, value) => {
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? sum + n : sum;
+      }, 0);
+      if (Array.isArray(order?.deductions)) {
+        total += order.deductions.reduce((sum, entry) => {
+          const n = Number(typeof entry === 'object' ? (entry.amount ?? entry.value ?? entry.price) : entry);
+          return Number.isFinite(n) && n > 0 ? sum + n : sum;
+        }, 0);
+      } else if (order?.deductions && typeof order.deductions === 'object') {
+        total += Object.values(order.deductions).reduce((sum, entry) => {
+          const n = Number(typeof entry === 'object' ? (entry.amount ?? entry.value ?? entry.price) : entry);
+          return Number.isFinite(n) && n > 0 ? sum + n : sum;
+        }, 0);
+      }
+      if (total > 0) return total;
       const preference = normalizeStatusKey(order?.shippingPreferenceValue || order?.shippingPreference || order?.shipping_preference || '');
       if (preference === 'faster_shipping' || preference === 'faster-shipping' || preference === 'ups_label' || preference === 'ups-label-requested') return 5;
       return 0;
@@ -638,7 +794,7 @@
       }
 
       const deductionValue = getOrderDeductionValue(order);
-      const deductionApplied = nonReofferPayableCount > 0 ? deductionValue : 0;
+      const deductionApplied = payableDeviceKeys.length > 0 ? deductionValue : 0;
       const finalPayable = Math.max(0, payableTotal - deductionApplied);
 
       return {
@@ -685,14 +841,16 @@
       }
 
       if (!payableDeviceKeys.length) return null;
+      const deductionValue = getOrderDeductionValue(order);
+      const deductionApplied = payableDeviceKeys.length > 0 ? deductionValue : 0;
       return {
         payableDeviceKeys,
         payableCount: payableDeviceKeys.length,
         payableTotal,
         nonReofferPayableCount: payableDeviceKeys.length,
-        deductionValue: 0,
-        deductionApplied: 0,
-        finalPayable: payableTotal,
+        deductionValue,
+        deductionApplied,
+        finalPayable: Math.max(0, payableTotal - deductionApplied),
         eligibleDeviceCount: payableDeviceKeys.length,
         declinedDeviceKeys: [],
         declinedCount: 0,
@@ -1273,7 +1431,7 @@
       statusDropdownOpen: false,
       // order text import (placeholder modal)
       orderTextImportOpen: false,
-      modalScrollTop: { qc: 0, reoffer: 0, import: 0 },
+      modalScrollTop: { qc: 0, reoffer: 0, import: 0, drawer: 0 },
       // bulk states
       isBulkSlipPrintInProgress: false,
       bulkTrackingRefreshInProgress: false,
@@ -1319,6 +1477,7 @@
       emailPreviewSubject: "",
       ordersCacheHydrated: false,
       ordersCacheLoadedAt: 0,
+      orderStatusCacheRefreshing: false,
       appBooting: true,
       appBootProgress: 0,
       appBootLabel: "Loading admin workspace…",
@@ -1384,6 +1543,26 @@
           const tx = dbRef.transaction(ADMIN_ORDERS_CACHE_STORE, "readwrite");
           const store = tx.objectStore(ADMIN_ORDERS_CACHE_STORE);
           store.put(payload, ADMIN_ORDERS_CACHE_KEY);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+          tx.onabort = () => resolve();
+        } catch (_) {
+          resolve();
+        }
+      });
+    }
+    async function clearAdminOrdersCacheNow() {
+      if (ordersCachePersistTimer) {
+        clearTimeout(ordersCachePersistTimer);
+        ordersCachePersistTimer = null;
+      }
+      const dbRef = await openAdminOrdersCacheDb();
+      if (!dbRef) return;
+      return new Promise((resolve) => {
+        try {
+          const tx = dbRef.transaction(ADMIN_ORDERS_CACHE_STORE, "readwrite");
+          const store = tx.objectStore(ADMIN_ORDERS_CACHE_STORE);
+          store.delete(ADMIN_ORDERS_CACHE_KEY);
           tx.oncomplete = () => resolve();
           tx.onerror = () => resolve();
           tx.onabort = () => resolve();
@@ -2028,15 +2207,14 @@
         state.selectedOrderSnapshot.deviceStatusByKey = { ...(state.selectedOrderSnapshot.deviceStatusByKey || {}), [deviceKey]: newStatus };
         state.selectedOrderSnapshot.status = computeOrderStatus(state.selectedOrderSnapshot);
       }
+      const nextOrderStatus = order?.status || (state.selectedOrderSnapshot?.id === orderId ? state.selectedOrderSnapshot.status : null);
       render();
 
       const payload = {
         [`deviceStatusByKey.${deviceKey}`]: newStatus,
+        ...(nextOrderStatus ? { status: nextOrderStatus } : {}),
         updatedAt: new Date()
       };
-      if (order && getOrderDeviceEntries(order).length === 1) {
-        payload.status = newStatus;
-      }
       if (normalizeStatusKey(newStatus) === "completed") {
         payload.completedAt = new Date();
         payload.lastStatusUpdateAt = new Date();
@@ -2266,12 +2444,15 @@
     // ----------------------------
     let unsubscribeOrders = null;
     let ordersLoadVersion = 0;
+    function isSearchInputActive() {
+      const activeId = document.activeElement?.id || "";
+      return activeId === "searchInput" || activeId === "mobileSearchInput";
+    }
     function shouldDeferOrdersRenderDuringLoading() {
+      if (isSearchInputActive()) return true;
       if (!state.ordersLoading) return false;
       if (state.selectedOrderId) return true;
-      const active = document.activeElement;
-      const activeId = active?.id || "";
-      return activeId === "searchInput" || activeId === "mobileSearchInput";
+      return false;
     }
     function renderOrdersWithInteractionGuard() {
       if (hasTransientOverlayOpen()) {
@@ -2524,7 +2705,7 @@
             });
             state.allOrders = Array.from(byId.values()).sort((a, b) => (b.createdAtMillis || 0) - (a.createdAtMillis || 0));
             schedulePersistOrdersCache();
-            filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+            renderOrdersWithInteractionGuard();
           }, (err) => {
             console.error("Firestore Error:", err);
             toast("Live updates failed", "error");
@@ -2541,7 +2722,7 @@
               ? query(collection(db, "orders"), orderBy("createdAt", "desc"), startAfter(cursor), limit(ADMIN_ORDERS_CHUNK_SIZE))
               : query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_ORDERS_CHUNK_SIZE));
 
-            const snapshot = await withPerf(`firestore:orders-chunk:${loaded.length}`, () => getDocs(ordersQuery));
+            const snapshot = await withPerf(`firestore:orders-chunk:${loaded.length}`, () => (state.orderStatusCacheRefreshing ? getDocsFromServer(ordersQuery) : getDocs(ordersQuery)));
             if (loadVersion !== ordersLoadVersion) return;
             if (snapshot.empty) break;
 
@@ -2625,9 +2806,11 @@
         void setupAdminNotifications(auth.currentUser);
       }
       if (!hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
       if (state.selectedOrderId && !hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
         hydrateSelectedOrderDetails(state.selectedOrderId);
       }
     });
@@ -2645,9 +2828,11 @@
         void setupAdminNotifications(auth.currentUser);
       }
       if (!hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
         filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
       }
       if (state.selectedOrderId && !hasTransientOverlayOpen()) {
+        preserveWindowScrollForNextRender();
         hydrateSelectedOrderDetails(state.selectedOrderId);
       }
     });
@@ -2670,6 +2855,43 @@
     // ----------------------------
     // SPEC: CANCELLED HANDLING + BASE ORDERS
     // ----------------------------
+    async function refreshAllOrderStatusesFromServer() {
+      if (state.orderStatusCacheRefreshing) return;
+      state.orderStatusCacheRefreshing = true;
+      try {
+        await clearAdminOrdersCacheNow();
+        if (unsubscribeOrders) {
+          unsubscribeOrders();
+          unsubscribeOrders = null;
+        }
+        state.allOrders = [];
+        state.filteredOrders = [];
+        state.selectedOrderIds.clear();
+        state.expandedOrderIds.clear();
+        state.selectedOrderId = null;
+        state.selectedOrderSnapshot = null;
+        state.selectedDeviceKey = null;
+        state.selectedDeviceGroupKeys = [];
+        state.qcDeviceKey = null;
+        state.ordersCacheHydrated = false;
+        state.ordersCacheLoadedAt = 0;
+        state.ordersLoading = true;
+        state.appBooting = true;
+        state.appBootProgress = 18;
+        state.appBootLabel = "Clearing cached order statuses…";
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: false });
+        render();
+        await startOrdersListener();
+        toast("Order status cache cleared. Orders reloaded from the server.", "success");
+      } catch (error) {
+        console.error("Failed to refresh order status cache:", error);
+        toast(error?.message || "Failed to refresh order status cache", "error");
+      } finally {
+        state.orderStatusCacheRefreshing = false;
+        render();
+      }
+    }
+
     function splitCancelled(orders) {
       const cancelled = [];
       const visible = [];
@@ -2829,7 +3051,7 @@
         } else if (s === "received") {
           allDevices = allDevices.filter(d => d.deviceStatus === "received");
         } else if (s === "ready_to_pay") {
-          allDevices = allDevices.filter(d => d.deviceStatus === "ready_to_pay");
+          allDevices = allDevices.filter(d => d.deviceStatus === "ready_to_pay" || isReadyToPayQueueOrder(d.order));
         } else if (s === "misc") {
           allDevices = allDevices.filter(d => isMiscStatusValue(d.deviceStatus));
         } else {
@@ -2860,6 +3082,16 @@
       
       // Sort devices by the most relevant urgency for the current tab.
       allDevices.sort((a, b) => {
+        if (s === "ready_to_pay") {
+          const aPay = getPaymentMethodGroup(a.order);
+          const bPay = getPaymentMethodGroup(b.order);
+          if (aPay.key !== bPay.key) return aPay.label.localeCompare(bPay.label);
+        }
+        if (s === "re-offered-pending") {
+          const aCreated = getReofferCreatedAtMillis(a.order, a.deviceKey) || 0;
+          const bCreated = getReofferCreatedAtMillis(b.order, b.deviceKey) || 0;
+          if (aCreated !== bCreated) return bCreated - aCreated;
+        }
         if (s === "emailed") {
           const aDue = getDeviceResponseDueAtMillis(a.order, a.deviceKey);
           const bDue = getDeviceResponseDueAtMillis(b.order, b.deviceKey);
@@ -2890,7 +3122,15 @@
       } else {
         state.currentPage = 1;
       }
-      render();
+      if (options?.preservePage && isSearchInputActive()) {
+        if (state.deferredOrdersRenderTimer) clearTimeout(state.deferredOrdersRenderTimer);
+        state.deferredOrdersRenderTimer = setTimeout(() => {
+          state.deferredOrdersRenderTimer = null;
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+        }, 250);
+      } else {
+        render();
+      }
       writeAdminUiCache();
     }
     // ----------------------------
@@ -3795,12 +4035,13 @@
     async function handleAction(orderId, actionType, options = {}) {
       try {
         // Add confirmations for critical actions
-        if (!options?.skipConfirmation && ['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'cancelReoffer', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
+        if (!options?.skipConfirmation && ['reOffer', 'reOffer75Less', 'markCompleted', 'autoRequote', 'autoAcceptReoffer', 'cancelReoffer', 'cancelOrder', 'deleteOrder'].includes(actionType)) {
           const confirmMessages = {
             'reOffer': 'Send re-offer to customer?\n\nThis will notify the customer with updated pricing and conditions.',
             'reOffer75Less': 'Send a re-offer for 75% less?\n\nThis sends a normal re-offer email and the customer can accept or decline it on the re-offer page.',
             'markCompleted': 'Mark this order as completed?\n\nThis will finalize the order and may trigger payment processing.',
             'autoRequote': 'Send 75%-less re-offer?\n\nThis will email the customer per terms and move the selected device(s) to Re-offer Pending at 75% less.',
+            'autoAcceptReoffer': 'Auto-accept overdue re-offer?\n\nThis marks the selected overdue pending re-offer device(s) as auto accepted, moves them to Ready To Pay, and emails the customer.',
             'cancelReoffer': 'Cancel this order re-offer?\n\nThis removes all saved re-offer data/history from Firebase for this order. The order status itself is left unchanged unless the backend chooses to normalize re-offer device statuses.',
             'cancelOrder': 'Cancel this order?\n\nThis action will cancel the order and may void any labels.',
             'deleteOrder': 'Delete this order permanently?\n\nThis action cannot be undone!'
@@ -3810,6 +4051,7 @@
             'cancelOrder': 'bg-orange-600 hover:bg-orange-700',
             'cancelReoffer': 'bg-rose-600 hover:bg-rose-700',
             'autoRequote': 'bg-amber-600 hover:bg-amber-700',
+            'autoAcceptReoffer': 'bg-emerald-600 hover:bg-emerald-700',
             'reOffer': 'bg-purple-600 hover:bg-purple-700',
             'reOffer75Less': 'bg-violet-600 hover:bg-violet-700',
             'markCompleted': 'bg-emerald-600 hover:bg-emerald-700'
@@ -3952,6 +4194,11 @@
             endpoint = `/orders/${orderId}/auto-requote`;
             method = "POST";
             body = { ...(options?.body || {}) };
+            break;
+          case "autoAcceptReoffer":
+            endpoint = `/orders/${orderId}/re-offer/auto-accept`;
+            method = "POST";
+            body = { force: true, sendCustomerEmail: true, ...(options?.body || {}) };
             break;
           case "cancelReoffer":
             endpoint = `/orders/${orderId}/cancel-reoffer`;
@@ -4152,6 +4399,11 @@
           return { ok: true, data: actionResult };
         }
 
+        if (actionType === 'autoAcceptReoffer') {
+          toast(actionResult?.message || 'Overdue re-offer auto-accepted successfully.', 'success');
+          return { ok: true, data: actionResult };
+        }
+
         toast(`Action ${actionType} success`, "success");
         // refresh order data by re-running filter (Firestore will also push updates)
         return { ok: true, data: actionResult };
@@ -4161,7 +4413,43 @@
         return { ok: false, error: e };
       }
     }
-    async function saveQc(orderId, deviceKey, qcData) {
+    function getQcDisposition(order, qcData = {}, deviceKey = null) {
+      const entries = getOrderDeviceEntries(order);
+      const parsed = parseOrderDeviceKey(deviceKey || buildOrderDeviceKey(order?.id, 0));
+      const entry = entries.find((item) => item.deviceIndex === parsed?.deviceIndex) || entries[0] || { deviceIndex: 0, item: order };
+      const customerItem = entry.item || order || {};
+      const normalizeStr = (value) => String(value || '').toLowerCase().trim();
+
+      const customerCondition = normalizeStr(customerItem.condition || order?.condition || 'good');
+      const qcCondition = normalizeStr(qcData.condition || 'good');
+      const customerCarrier = normalizeStr(customerItem.carrier || customerItem.lock || order?.carrier || order?.lock || 'unlocked');
+      const qcCarrier = normalizeStr(qcData.carrier || 'unlocked');
+      const customerStorage = normalizeStr(customerItem.storage || order?.storage || '');
+      const qcStorage = normalizeStr(qcData.actualStorage || qcData.storage || '');
+
+      const conditionMatches = customerCondition === qcCondition;
+      const carrierMatches = customerCarrier === qcCarrier;
+      const storageMatches = !customerStorage || !qcStorage || customerStorage === qcStorage || qcData.storageMatch === 'yes';
+      const allInputsMatch = conditionMatches && carrierMatches && storageMatches;
+      const emailActions = [];
+      if (qcData?.hasFmi === "yes") emailActions.push("emailFmi");
+      if (qcData?.isLocked === "yes") emailActions.push("emailLocked");
+      if (qcData?.hasBalance === "yes") emailActions.push("emailBalance");
+      if (qcData?.hasBlacklisted === "yes") emailActions.push("emailBlacklisted");
+      const hasBlockingIssues = emailActions.length > 0;
+
+      return {
+        allInputsMatch,
+        conditionMatches,
+        carrierMatches,
+        storageMatches,
+        emailActions,
+        hasBlockingIssues,
+        requiresReoffer: !allInputsMatch && !hasBlockingIssues,
+      };
+    }
+
+    async function saveQc(orderId, deviceKey, qcData, options = {}) {
       try {
         const orderRef = doc(db, "orders", orderId);
         const safeDeviceKey = deviceKey || buildOrderDeviceKey(orderId, 0);
@@ -4180,8 +4468,7 @@
           return;
         }
         
-        // Good QC moves the device into a payable state.
-        const deviceStatus = "ready_to_pay";
+        const deviceStatus = normalizeStatusKey(options.deviceStatus || "ready_to_pay");
         
         // Temporarily update order in memory to compute new status
         const tempOrder = {
@@ -4199,13 +4486,14 @@
         // Compute new order status based on all devices
         const newOrderStatus = computeOrderStatus(tempOrder);
         
+        const qcCompletedAt = new Date();
         try {
           await withPerf(`firestore:updateOrder:${orderId}`, () => updateDoc(orderRef, {
             [`qcDataByDevice.${safeDeviceKey}`]: qcData,
             [`deviceStatusByKey.${safeDeviceKey}`]: deviceStatus,
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
-            qcCompletedAt: new Date()
+            qcCompletedAt
           }));
         } catch (e) {
           await withPerf(`firestore:setOrder:${orderId}`, () => setDoc(orderRef, {
@@ -4213,10 +4501,20 @@
             deviceStatusByKey: { [safeDeviceKey]: deviceStatus },
             ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
             status: newOrderStatus,
-            qcCompletedAt: new Date()
+            qcCompletedAt
           }, { merge: true }));
         }
+        const updatedOrder = upsertOrderInState({
+          ...order,
+          qcDataByDevice: { ...(order.qcDataByDevice || {}), [safeDeviceKey]: qcData },
+          deviceStatusByKey: { ...(order.deviceStatusByKey || {}), [safeDeviceKey]: deviceStatus },
+          ...(safeDeviceKey.endsWith("::0") ? { qcData } : {}),
+          status: newOrderStatus,
+          qcCompletedAt
+        });
+        filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
         toast("QC saved", "success");
+        return updatedOrder;
       } catch (e) {
         console.error(e);
         toast("Failed to save QC", "error");
@@ -4224,11 +4522,7 @@
     }
 
     async function processQcOutcome(order, qcData, deviceKey) {
-      const emailActions = [];
-      if (qcData?.hasFmi === "yes") emailActions.push("emailFmi");
-      if (qcData?.isLocked === "yes") emailActions.push("emailLocked");
-      if (qcData?.hasBalance === "yes") emailActions.push("emailBalance");
-      if (qcData?.hasBlacklisted === "yes") emailActions.push("emailBlacklisted");
+      const { emailActions } = getQcDisposition(order, qcData, deviceKey);
 
       for (const action of emailActions) {
         try {
@@ -4335,6 +4629,25 @@
     // ----------------------------
     // RENDER: APP SHELL
     // ----------------------------
+    async function copyTextToClipboard(text) {
+      const value = String(text || '');
+      if (!value) return false;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      textarea.remove();
+      return ok;
+    }
+
     function renderSidebar() { return ""; }
     function renderTopbar() {
       const initial = state.user?.email ? state.user.email.charAt(0).toUpperCase() : "A";
@@ -4369,6 +4682,10 @@
               <span class="h-2 w-2 rounded-full ${gmailConnected ? "bg-emerald-500" : "bg-amber-500"}"></span>
               ${gmailConnected ? `Gmail: ${esc(gmail.mailboxEmail || "connected")}` : "Gmail not connected"}
             </div>
+            <button id="refresh-order-status-cache-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border ${state.orderStatusCacheRefreshing ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"} px-3 py-2 text-xs font-semibold" title="Clear cached order statuses and reload every order from the server" ${state.orderStatusCacheRefreshing ? "disabled" : ""}>
+              <i data-lucide="${state.orderStatusCacheRefreshing ? "loader" : "rotate-ccw"}" class="${state.orderStatusCacheRefreshing ? "animate-spin" : ""}" style="width:14px;height:14px"></i>
+              ${state.orderStatusCacheRefreshing ? "Refreshing…" : "Refresh Status Cache"}
+            </button>
             <button id="gmail-sync-btn" class="hidden sm:inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Sync Gmail replies">
               <i data-lucide="refresh-cw" style="width:14px;height:14px"></i>
               Sync Gmail
@@ -4389,6 +4706,7 @@
             <div class="sm:hidden mt-2 border-t border-slate-200 pt-2 flex flex-wrap gap-2">
               <button id="admin-orders-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "orders" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="package" style="width:14px;height:14px"></i>Orders</button>
               <button id="admin-email-inbox-tab-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.activeTab === "email-inbox" ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-slate-700"} px-3 py-2 text-xs font-semibold"><i data-lucide="inbox" style="width:14px;height:14px"></i>Inbox</button>
+              <button id="refresh-order-status-cache-btn-mobile" class="inline-flex items-center gap-2 rounded-full border ${state.orderStatusCacheRefreshing ? "border-slate-200 bg-slate-100 text-slate-400" : "border-blue-200 bg-blue-50 text-blue-700"} px-3 py-2 text-xs font-semibold" ${state.orderStatusCacheRefreshing ? "disabled" : ""}><i data-lucide="${state.orderStatusCacheRefreshing ? "loader" : "rotate-ccw"}" class="${state.orderStatusCacheRefreshing ? "animate-spin" : ""}" style="width:14px;height:14px"></i>${state.orderStatusCacheRefreshing ? "Refreshing…" : "Refresh Statuses"}</button>
               <button id="gmail-sync-btn-mobile" class="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700"><i data-lucide="refresh-cw" style="width:14px;height:14px"></i>Sync Gmail</button>
               <button id="gmail-connect-btn-mobile" class="inline-flex items-center gap-2 rounded-full ${gmailConnected ? "border border-slate-300 bg-white text-slate-700" : "bg-indigo-600 text-white"} px-3 py-2 text-xs font-semibold"><i data-lucide="mail" style="width:14px;height:14px"></i>${gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}</button>
               <button id="logoutBtnMobile" class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700"><i data-lucide="log-out" style="width:14px;height:14px"></i>Sign out</button>
@@ -4408,6 +4726,8 @@
         const status = normalizeStatusKey(group?.deviceStatus) || "unknown";
         statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
       }
+      const readyToPayQueueCount = visibleGroups.filter((group) => normalizeStatusKey(group?.deviceStatus) === "ready_to_pay" || isReadyToPayQueueOrder(group?.order)).length;
+      statusCounts.set("ready_to_pay", readyToPayQueueCount);
 
       const cancelledSource = [...cancelled, ...visible.filter((order) => orderHasDeviceWithStatus(order, "cancelled"))];
       const seenCancelled = new Set();
@@ -4883,6 +5203,15 @@
       return text;
     }
     
+    function getPaymentMethodGroup(order = {}) {
+      const method = normalizeStatusKey(order?.paymentMethod || 'other');
+      if (method === 'cashapp' || method === 'cash_app' || method === 'cash-app') return { key: 'cashapp', label: 'Cash App', rowClass: 'bg-emerald-50/70 hover:bg-emerald-100/80', headerClass: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+      if (method === 'zelle') return { key: 'zelle', label: 'Zelle', rowClass: 'bg-purple-50/70 hover:bg-purple-100/80', headerClass: 'bg-purple-100 text-purple-800 border-purple-200' };
+      if (method === 'paypal' || method === 'pay_pal') return { key: 'paypal', label: 'PayPal', rowClass: 'bg-orange-50/70 hover:bg-orange-100/80', headerClass: 'bg-orange-100 text-orange-800 border-orange-200' };
+      if (method === 'check' || method === 'echeck' || method === 'e_check') return { key: method === 'check' ? 'check' : 'echeck', label: method === 'check' ? 'Check' : 'E-Check', rowClass: 'bg-blue-50/70 hover:bg-blue-100/80', headerClass: 'bg-blue-100 text-blue-800 border-blue-200' };
+      return { key: method || 'other', label: method ? formatStatusLabel(method) : 'Other', rowClass: 'bg-slate-50/70 hover:bg-slate-100/80', headerClass: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+
     function labelStatusExtraHTML(order) {
       // show small details about kit/label tracking statuses if present
       const kitTN = order?.kitTrackingStatus?.trackingNumber || order?.kitTrackingStatus?.tracking_number || "";
@@ -4924,6 +5253,8 @@
       // build grouped rows & track lastRenderedDeviceKeys
       state.lastRenderedDeviceKeys = [];
       const rowHtml = [];
+      let lastReadyToPayPaymentGroupKey = null;
+      const showReadyToPayPaymentGroups = normalizeStatusKey(state.currentActiveStatus) === 'ready_to_pay';
       for (const group of pageGroups) {
         const order = group.order;
         const deviceStatus = group.deviceStatus;
@@ -4958,9 +5289,29 @@
         const responseBadgeHtml = showGrouped
           ? groupEntries.map((groupEntry) => awaitingResponseBadgeForDevice(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
           : awaitingResponseBadgeForDevice(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
+        const acceptanceBadgeHtml = showGrouped
+          ? groupEntries.map((groupEntry) => readyToPayAcceptanceBadgeHTML(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
+          : readyToPayAcceptanceBadgeHTML(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
+        const reofferAgeBadgeHtml = showGrouped
+          ? groupEntries.map((groupEntry) => reofferPendingAgeBadgeHTML(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
+          : reofferPendingAgeBadgeHTML(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
+        const paymentGroup = getPaymentMethodGroup(order);
+        if (showReadyToPayPaymentGroups && paymentGroup.key !== lastReadyToPayPaymentGroupKey) {
+          lastReadyToPayPaymentGroupKey = paymentGroup.key;
+          rowHtml.push(`
+            <tr class="border-t border-slate-200">
+              <td colspan="5" class="px-4 py-2">
+                <div class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${paymentGroup.headerClass}">
+                  ${esc(paymentGroup.label)} payouts
+                </div>
+              </td>
+            </tr>
+          `);
+        }
+        const readyToPayPaymentRowClass = showReadyToPayPaymentGroups ? paymentGroup.rowClass : 'bg-white hover:bg-slate-50';
 
         rowHtml.push(`
-          <tr class="bg-white border-t border-slate-200 cursor-pointer hover:bg-slate-50" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
+          <tr class="${readyToPayPaymentRowClass} border-t border-slate-200 cursor-pointer" data-order-row="${esc(order.id)}" ${deviceKey ? `data-device-key="${esc(deviceKey)}"` : ""} data-device-group-keys="${deviceGroupKeysAttr}">
             <td class="px-4 py-3 align-top">
               <div class="flex items-start gap-3">
                 <input type="checkbox" data-order-checkbox="${esc(order.id)}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 mt-1" ${state.selectedOrderIds.has(order.id) ? "checked" : ""} />
@@ -4999,7 +5350,11 @@
               </div>
             </td>
             <td class="px-4 py-3 align-top min-w-0">
-              ${statusBadgeHTML(deviceStatus, statusExtra)}
+              <div class="flex flex-col items-start gap-1">
+                ${statusBadgeHTML(deviceStatus, statusExtra)}
+                ${acceptanceBadgeHtml}
+                ${reofferAgeBadgeHtml}
+              </div>
             </td>
             <td class="px-4 py-3 align-top min-w-0">
               ${trackingNumber ? `
@@ -5318,6 +5673,33 @@
           </div>`;
       }
       function overviewHTML() {
+        const renderCustomerCopyButton = (value, label = 'value') => {
+          const copyValue = String(value || '').trim();
+          if (!copyValue || copyValue === 'N/A') return '';
+          return `
+            <button
+              type="button"
+              data-copy-customer-info="${esc(copyValue)}"
+              class="shrink-0 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+              title="Copy ${esc(label)}"
+              aria-label="Copy ${esc(label)}"
+            >
+              <i data-lucide="copy" style="width:13px;height:13px"></i>
+            </button>
+          `;
+        };
+        const renderCustomerInfoValue = (label, value, { valueClass = '', extra = '' } = {}) => `
+          <div>
+            <label class="text-xs font-medium text-slate-400 uppercase block mb-1">${esc(label)}</label>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0 text-sm font-medium text-slate-900 break-all ${valueClass}">${esc(value || 'N/A')}</div>
+              <div class="flex shrink-0 items-center gap-1">${extra}${renderCustomerCopyButton(value, label)}</div>
+            </div>
+          </div>
+        `;
+        const customerEmailValue = getOrderCustomerEmail(order) || 'N/A';
+        const payoutMethodDisplay = String(order.paymentMethod || 'N/A').replace(/[_-]+/g, ' ');
+        const payoutInfoDisplay = getPayoutInfoDisplay(order);
         const totalDeviceCount = Math.max(1, entries.length || visibleEntries.length || 1);
         const reofferAccepted = isAcceptedReofferStatus(order?.status);
         const acceptedTotal = getAcceptedReofferPayout(order);
@@ -5337,7 +5719,9 @@
           const showAcceptedOfferSwap = (isAcceptedReoffer || isDeclinedReoffer)
             && Number.isFinite(acceptedDeviceOffer)
             && Math.abs(Number(acceptedDeviceOffer || 0) - Number(offer || 0)) > 0.009;
-          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>`;
+          const acceptanceBadgeHtml = readyToPayAcceptanceBadgeHTML(order, deviceKey, deviceStatus);
+          const reofferAgeBadgeHtml = reofferPendingAgeBadgeHTML(order, deviceKey, deviceStatus);
+          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>${acceptanceBadgeHtml ? ` ${acceptanceBadgeHtml}` : ''}${reofferAgeBadgeHtml ? ` ${reofferAgeBadgeHtml}` : ''}`;
           
           // Check if QC has been completed for this device
           const qcData = order?.qcDataByDevice?.[deviceKey];
@@ -5436,14 +5820,9 @@
                 </h3>
               </div>
               <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Full Name</label>
-                  <div class="text-sm font-medium text-slate-900">${esc(order.shippingInfo?.fullName || "N/A")}</div>
-                </div>
-                <div>
-                  <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Phone Number</label>
-                  <div class="text-sm font-medium text-slate-900">${esc(order.shippingInfo?.phone || "N/A")}</div>
-                </div>
+                ${renderCustomerInfoValue('Order ID', order.id || 'N/A')}
+                ${renderCustomerInfoValue('Full Name', order.shippingInfo?.fullName || 'N/A')}
+                ${renderCustomerInfoValue('Phone Number', order.shippingInfo?.phone || 'N/A')}
                 <div>
                   <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Email Address</label>
                   ${state.customerEmailEditOpen ? `
@@ -5475,26 +5854,35 @@
                     </div>
                   ` : `
                     <div class="flex items-start justify-between gap-3">
-                      <div class="text-sm font-medium text-slate-900 flex items-center gap-2 break-all">
-                        ${esc(getOrderCustomerEmail(order) || "N/A")}
-                        ${getOrderCustomerEmail(order) ? `<a href="mailto:${esc(getOrderCustomerEmail(order))}" class="text-indigo-600 hover:text-indigo-800"><i data-lucide="mail" style="width:14px;height:14px"></i></a>` : ""}
+                      <div class="min-w-0 text-sm font-medium text-slate-900 flex items-center gap-2 break-all">
+                        ${esc(customerEmailValue)}
+                        ${customerEmailValue !== 'N/A' ? `<a href="mailto:${esc(customerEmailValue)}" class="text-indigo-600 hover:text-indigo-800"><i data-lucide="mail" style="width:14px;height:14px"></i></a>` : ""}
                       </div>
-                      <button
-                        data-edit-customer-email="${esc(order.id)}"
-                        class="shrink-0 inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-                      >
-                        <i data-lucide="pencil" style="width:13px;height:13px"></i>
-                        Edit
-                      </button>
+                      <div class="flex shrink-0 items-center gap-1">
+                        ${renderCustomerCopyButton(customerEmailValue, 'Email Address')}
+                        <button
+                          data-edit-customer-email="${esc(order.id)}"
+                          class="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          <i data-lucide="pencil" style="width:13px;height:13px"></i>
+                          Edit
+                        </button>
+                      </div>
                     </div>
                   `}
                 </div>
                 <div>
                   <label class="text-xs font-medium text-slate-400 uppercase block mb-1">Payout Method</label>
-                  <div class="text-sm font-medium text-slate-900 capitalize">${esc(String(order.paymentMethod || "N/A").replace(/[_-]+/g, " "))}</div>
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0 text-sm font-medium text-slate-900 capitalize break-all">${esc(payoutMethodDisplay)}</div>
+                    ${renderCustomerCopyButton(payoutMethodDisplay, 'Payout Method')}
+                  </div>
                   <div class="mt-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
                     <label class="text-[11px] font-medium text-slate-400 uppercase block mb-1">Payout Info</label>
-                    <div class="text-sm font-semibold text-slate-900 break-all">${esc(getPayoutInfoDisplay(order))}</div>
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0 text-sm font-semibold text-slate-900 break-all">${esc(payoutInfoDisplay)}</div>
+                      ${renderCustomerCopyButton(payoutInfoDisplay, 'Payout Info')}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -5916,7 +6304,7 @@
                 </button>
               `).join("")}
             </div>
-            <div class="p-3 sm:p-5 lg:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto bg-slate-50/30 min-w-0" style="padding-bottom: calc(14rem + env(safe-area-inset-bottom));">
+            <div id="orderDrawerScrollBody" class="p-3 sm:p-5 lg:p-6 space-y-4 sm:space-y-6 flex-1 overflow-y-auto bg-slate-50/30 min-w-0" style="padding-bottom: calc(14rem + env(safe-area-inset-bottom));">
               ${tabContent}
             </div>
             <div class="border-t border-slate-200 p-3 sm:p-4 lg:p-5 bg-white z-10 max-h-[38vh] overflow-y-auto sticky bottom-0" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
@@ -5984,6 +6372,29 @@
             // Awaiting re-QC. Resume QC from the device cards above.
         }
         else if (status === "re-offered-pending") {
+            const pendingReofferKeys = focusedGroup.isGrouped
+              ? focusedGroup.deviceKeys
+              : [focused.isFocused ? focused.deviceKey : (getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0))];
+            const overdueReofferKeys = getOverduePendingReofferDeviceKeys(order, pendingReofferKeys);
+            if (overdueReofferKeys.length === 1) {
+              groups.primary.push({
+                label: "Auto Accept Overdue Re-offer",
+                action: "autoAcceptReoffer",
+                class: "bg-emerald-600 text-white hover:bg-emerald-700",
+                options: { body: { deviceKey: overdueReofferKeys[0], force: true, sendCustomerEmail: true } },
+                fullWidth: true
+              });
+            } else if (overdueReofferKeys.length > 1) {
+              overdueReofferKeys.forEach((deviceKey) => {
+                groups.primary.push({
+                  label: `Auto Accept: ${esc(getDeviceDisplayLabel(order, deviceKey))}`,
+                  action: "autoAcceptReoffer",
+                  class: "bg-emerald-600 text-white hover:bg-emerald-700",
+                  options: { body: { deviceKey, force: true, sendCustomerEmail: true } },
+                  fullWidth: true
+                });
+              });
+            }
             const cancelReofferDeviceKey = getActiveDeviceKey(order) || buildOrderDeviceKey(order.id, 0);
             groups.primary.push({
               label: "Cancel Re-offer",
@@ -6652,7 +7063,7 @@
       
       return `
         <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" style="z-index: 999999;">
-          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 animate-in max-h-[90vh] overflow-hidden flex flex-col">
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 animate-in max-h-[90vh] overflow-hidden flex flex-col">
             <div class="px-6 py-5 border-b border-slate-100">
               <h3 class="text-lg font-bold text-slate-900">💰 Payment Confirmation</h3>
             </div>
@@ -6695,6 +7106,25 @@
                 <div class="mt-2">
                   <p class="text-xs font-semibold text-emerald-800 mb-1">Account Details:</p>
                   <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
+                </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
                 </div>
                 <div id="checkAddressRow" class="mt-2 hidden">
                   <p class="text-xs font-semibold text-emerald-800 mb-1">Mail Check To:</p>
@@ -6880,6 +7310,11 @@
       if (importBody) {
         importBody.scrollTop = Number(state.modalScrollTop?.import || 0);
         importBody.addEventListener("scroll", () => { state.modalScrollTop.import = importBody.scrollTop; }, { passive: true });
+      }
+      const drawerBody = document.getElementById("orderDrawerScrollBody");
+      if (drawerBody) {
+        drawerBody.scrollTop = Number(state.modalScrollTop?.drawer || 0);
+        drawerBody.addEventListener("scroll", () => { state.modalScrollTop.drawer = drawerBody.scrollTop; }, { passive: true });
       }
     }
     function syncBodyScrollLock() {
@@ -7098,6 +7533,21 @@
       `;
     }
 
+    function preserveWindowScrollForNextRender() {
+      state.pendingWindowScrollRestore = {
+        x: window.scrollX || window.pageXOffset || 0,
+        y: window.scrollY || window.pageYOffset || 0,
+      };
+    }
+    function restoreWindowScrollAfterRender() {
+      const restore = state.pendingWindowScrollRestore;
+      if (!restore) return;
+      state.pendingWindowScrollRestore = null;
+      requestAnimationFrame(() => {
+        window.scrollTo(Number(restore.x || 0), Number(restore.y || 0));
+      });
+    }
+
     function doRender() {
       if (state.authLoading && !state.user) {
         $root.innerHTML = `
@@ -7124,6 +7574,7 @@
       updateSelectAllCheckboxUI();
       syncBodyScrollLock();
       updateAdminBootUi();
+      restoreWindowScrollAfterRender();
     }
     function scheduleRender() {
       if (scheduledRenderFrame) return;
@@ -7378,6 +7829,10 @@
       if (adminOrdersTabBtnMobile) adminOrdersTabBtnMobile.addEventListener("click", () => { state.activeTab = "orders"; state.mobileTopbarMenuOpen = false; render(); });
       const adminEmailInboxTabBtnMobile = document.getElementById("admin-email-inbox-tab-btn-mobile");
       if (adminEmailInboxTabBtnMobile) adminEmailInboxTabBtnMobile.addEventListener("click", () => { state.activeTab = "email-inbox"; state.mobileTopbarMenuOpen = false; render(); });
+      const refreshOrderStatusCacheBtn = document.getElementById("refresh-order-status-cache-btn");
+      if (refreshOrderStatusCacheBtn) refreshOrderStatusCacheBtn.addEventListener("click", () => refreshAllOrderStatusesFromServer());
+      const refreshOrderStatusCacheBtnMobile = document.getElementById("refresh-order-status-cache-btn-mobile");
+      if (refreshOrderStatusCacheBtnMobile) refreshOrderStatusCacheBtnMobile.addEventListener("click", () => { state.mobileTopbarMenuOpen = false; void refreshAllOrderStatusesFromServer(); });
       const gmailSyncBtnMobile = document.getElementById("gmail-sync-btn-mobile");
       if (gmailSyncBtnMobile) gmailSyncBtnMobile.addEventListener("click", () => { state.mobileTopbarMenuOpen = false; void syncGmailNow(); });
       const gmailConnectBtnMobile = document.getElementById("gmail-connect-btn-mobile");
@@ -7436,6 +7891,34 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
           applySearchTerm("", "searchInput");
         });
       }
+      document.querySelectorAll("[data-copy-customer-info]").forEach((btn) => {
+        btn.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const value = btn.getAttribute("data-copy-customer-info") || "";
+          try {
+            await copyTextToClipboard(value);
+            toast("Copied to clipboard", "success");
+          } catch (error) {
+            console.error("Failed to copy customer info", error);
+            toast("Failed to copy", "error");
+          }
+        });
+      });
+      document.querySelectorAll("[data-copy-payment]").forEach((btn) => {
+        btn.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const value = btn.getAttribute("data-copy-payment") || "";
+          try {
+            await copyTextToClipboard(value);
+            toast("Copied to clipboard", "success");
+          } catch (error) {
+            console.error("Failed to copy payment info", error);
+            toast("Failed to copy", "error");
+          }
+        });
+      });
       const editCustomerEmailBtn = document.querySelector("[data-edit-customer-email]");
       if (editCustomerEmailBtn) {
         editCustomerEmailBtn.addEventListener("click", () => {
@@ -7650,6 +8133,7 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         el.addEventListener("click", () => {
           state.selectedOrderId = null;
           state.selectedOrderSnapshot = null;
+          state.modalScrollTop.drawer = 0;
           state.selectedDeviceKey = null;
           state.selectedDeviceGroupKeys = [];
           state.qcDeviceKey = null;
@@ -7799,8 +8283,16 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             return;
           }
 
-          const hasQcData = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
-          if (hasQcData) {
+          const qcDataForDevice = order.qcDataByDevice && order.qcDataByDevice[deviceKey];
+          const hasQcData = !!qcDataForDevice;
+          const shouldResumeReoffer = hasQcData
+            && ['received', 'imei_checked'].includes(normalizeStatusKey(deviceStatus))
+            && getQcDisposition(order, qcDataForDevice, deviceKey).requiresReoffer;
+          if (shouldResumeReoffer) {
+            state.qcOpen = false;
+            state.qcData = null;
+            await openReofferModal(order, qcDataForDevice);
+          } else if (hasQcData) {
             state.qcOpen = false;
             state.qcData = null;
           } else {
@@ -7971,14 +8463,27 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
               return;
             }
             if (action === "reOffer75Less") {
-              if (focusedGroup.isGrouped) {
-                toast("Open a specific device to send a re-offer.", "error");
+              const targetDeviceKeys = focusedGroup.isGrouped
+                ? focusedGroup.deviceKeys
+                : [getActiveDeviceKey(order) || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0)];
+              const uniqueTargetDeviceKeys = [...new Set(targetDeviceKeys.filter(Boolean))];
+              if (!uniqueTargetDeviceKeys.length) {
+                toast("No devices were available for a 75%-less re-offer.", "error");
                 return;
               }
-              const targetDeviceKey = getActiveDeviceKey(order) || state.qcDeviceKey || state.selectedDeviceKey || buildOrderDeviceKey(order.id, 0);
-              const result = await handleAction(order.id, "reOffer75Less", { body: { deviceKey: targetDeviceKey } });
-              if (result?.ok) {
-                toast("75%-less re-offer sent successfully.", "success");
+
+              const results = [];
+              for (const deviceKey of uniqueTargetDeviceKeys) {
+                results.push(await handleAction(order.id, "reOffer75Less", { body: { deviceKey } }));
+              }
+
+              const sentCount = results.filter((result) => result?.ok).length;
+              if (sentCount === uniqueTargetDeviceKeys.length) {
+                toast(sentCount === 1
+                  ? "75%-less re-offer sent successfully."
+                  : `75%-less re-offers sent successfully for ${sentCount} devices.`, "success");
+              } else if (sentCount > 0) {
+                toast(`75%-less re-offers sent for ${sentCount} of ${uniqueTargetDeviceKeys.length} devices.`, "error");
               }
               return;
             }
@@ -8296,44 +8801,20 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             render();
             return;
           }
-          await saveQc(order.id, deviceKey, qcSnapshot);
+          const qcDisposition = getQcDisposition(order, qcSnapshot, deviceKey);
+          const savedDeviceStatus = qcDisposition.requiresReoffer || qcDisposition.hasBlockingIssues ? 'received' : 'ready_to_pay';
+          await saveQc(order.id, deviceKey, qcSnapshot, { deviceStatus: savedDeviceStatus });
           const qcOutcome = await processQcOutcome(order, qcSnapshot, deviceKey);
           state.qcOpen = false;
           state.qcStep = 1;
           state.qcData = null;
           state.qcDeviceKey = null;
           
-          // Get the device's customer-declared data
-          const entries = getOrderDeviceEntries(order);
-          const parsed = parseOrderDeviceKey(deviceKey);
-          const entry = entries.find(e => e.deviceIndex === parsed.deviceIndex) || entries[0] || { deviceIndex: 0, item: order, qtyIndex: 0 };
-          const customerItem = entry.item || order;
-          
-          // Normalize and compare customer input with QC assessment
-          const normalizeStr = (s) => String(s || '').toLowerCase().trim();
-          
-          const customerCondition = normalizeStr(customerItem.condition || order.condition || 'good');
-          const qcCondition = normalizeStr(qcSnapshot.condition || 'good');
-          
-          const customerCarrier = normalizeStr(customerItem.carrier || customerItem.lock || order.carrier || order.lock || 'unlocked');
-          const qcCarrier = normalizeStr(qcSnapshot.carrier || 'unlocked');
-          
-          const customerStorage = normalizeStr(customerItem.storage || order.storage || '');
-          const qcStorage = normalizeStr(qcSnapshot.actualStorage || qcSnapshot.storage || '');
-          
-          // Check if QC matches customer's declared values
-          const conditionMatches = customerCondition === qcCondition;
-          const carrierMatches = customerCarrier === qcCarrier;
-          const storageMatches = !customerStorage || !qcStorage || customerStorage === qcStorage || qcSnapshot.storageMatch === 'yes';
-          
-          const allInputsMatch = conditionMatches && carrierMatches && storageMatches;
-          const hasBlockingIssues = qcOutcome.sentEmails; // FMI, locks, balance, blacklist
-          
-          if (allInputsMatch && !hasBlockingIssues) {
+          if (qcDisposition.allInputsMatch && !qcDisposition.hasBlockingIssues) {
             // Admin's QC matches customer input - skip reoffer, proceed to payment
             toast("QC completed! Admin assessment matches customer input.", "success");
             render();
-          } else if (hasBlockingIssues) {
+          } else if (qcDisposition.hasBlockingIssues || qcOutcome.sentEmails) {
             // Blocking issues detected - emails sent, waiting for customer
             toast("QC saved. Required customer emails sent. Waiting for response.", "info");
             render();
@@ -8531,6 +9012,16 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
         const payoutAmountEl = document.getElementById("payoutAmount");
         const deepLinkBtn = document.getElementById("paymentDeepLinkBtn");
         const deepLinkHint = document.getElementById("paymentDeepLinkHint");
+        const paymentCopyBox = document.getElementById("paymentCopyBox");
+        const zelleNameCopyRow = document.getElementById("zelleNameCopyRow");
+        const paymentCopyZelleNameText = document.getElementById("paymentCopyZelleNameText");
+        const paymentCopyZelleNameBtn = document.getElementById("paymentCopyZelleNameBtn");
+        const paymentCopyOrderIdText = document.getElementById("paymentCopyOrderIdText");
+        const paymentCopyOrderIdBtn = document.getElementById("paymentCopyOrderIdBtn");
+        const paymentCopyAmountText = document.getElementById("paymentCopyAmountText");
+        const paymentCopyAmountBtn = document.getElementById("paymentCopyAmountBtn");
+        const paymentCopyDestinationText = document.getElementById("paymentCopyDestinationText");
+        const paymentCopyDestinationBtn = document.getElementById("paymentCopyDestinationBtn");
         
         if (paymentCancelBtn) {
           paymentCancelBtn.addEventListener("click", () => {
@@ -8549,12 +9040,15 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             const subtotalPrice = Number(settlement?.payableTotal || 0);
             const deductionApplied = Number(settlement?.deductionApplied || 0);
             const deductionLabel = deductionApplied > 0
-              ? `Deduction (${Number(settlement?.nonReofferPayableCount || 0)} regular device${Number(settlement?.nonReofferPayableCount || 0) === 1 ? '' : 's'})`
-              : 'Deduction (not applied)';
+              ? 'Deductions applied'
+              : 'Deductions (none)';
 
             const paymentMethodRaw = currentOrder?.paymentMethod || 'N/A';
             const paymentMethodFormatted = String(paymentMethodRaw).replace(/[_-]+/g, ' ').replace(/\b\w/g, m => m.toUpperCase());
             const paymentIdentifier = getPayoutInfoDisplay(currentOrder);
+            const normalizedPaymentMethod = normalizeStatusKey(paymentMethodRaw);
+            const paymentCopyEnabled = normalizedPaymentMethod === 'cashapp' || normalizedPaymentMethod === 'zelle';
+            const zelleName = currentOrder?.paymentDetails?.zelleName || currentOrder?.paymentDetails?.accountHolderName || currentOrder?.paymentDetails?.name || currentOrder?.shippingInfo?.fullName || '';
             const deepLink = getPaymentDeepLink(currentOrder, finalPrice);
             const checkAddressRow = document.getElementById('checkAddressRow');
             const checkAddressText = document.getElementById('checkAddressText');
@@ -8578,6 +9072,19 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
             const identifierEl = document.getElementById('paymentIdentifier');
             if (methodEl) methodEl.textContent = paymentMethodFormatted;
             if (identifierEl) identifierEl.textContent = paymentIdentifier;
+            if (paymentCopyBox) paymentCopyBox.classList.toggle('hidden', !paymentCopyEnabled);
+            if (zelleNameCopyRow) {
+              zelleNameCopyRow.classList.toggle('hidden', normalizedPaymentMethod !== 'zelle');
+              zelleNameCopyRow.classList.toggle('flex', normalizedPaymentMethod === 'zelle');
+            }
+            if (paymentCopyZelleNameText) paymentCopyZelleNameText.textContent = zelleName || 'N/A';
+            if (paymentCopyZelleNameBtn) paymentCopyZelleNameBtn.setAttribute('data-copy-payment', zelleName || '');
+            if (paymentCopyOrderIdText) paymentCopyOrderIdText.textContent = currentOrder.id || 'N/A';
+            if (paymentCopyOrderIdBtn) paymentCopyOrderIdBtn.setAttribute('data-copy-payment', currentOrder.id || '');
+            if (paymentCopyAmountText) paymentCopyAmountText.textContent = `$${Number(finalPrice || 0).toFixed(2)}`;
+            if (paymentCopyAmountBtn) paymentCopyAmountBtn.setAttribute('data-copy-payment', Number(finalPrice || 0).toFixed(2));
+            if (paymentCopyDestinationText) paymentCopyDestinationText.textContent = paymentIdentifier || 'N/A';
+            if (paymentCopyDestinationBtn) paymentCopyDestinationBtn.setAttribute('data-copy-payment', paymentIdentifier || '');
             if (checkAddressRow) {
               const isCheck = String(paymentMethodRaw || '').toLowerCase() === 'check';
               checkAddressRow.classList.toggle('hidden', !isCheck);
@@ -8700,6 +9207,7 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
                 }
               }
               await hydrateSelectedOrderDetails(orderId);
+              await updateDeviceStatusInline(orderId, deviceKey, 'issue_resolved');
               state.selectedDeviceKey = deviceKey;
               state.qcDeviceKey = deviceKey;
               state.unlockInfoModalOpen = false;
@@ -8827,9 +9335,11 @@ const adminOrdersTabBtn = document.getElementById("admin-orders-tab-btn");
       state.bulkVoidProgressDetails = "";
       state.modalScrollTop = { qc: 0, reoffer: 0, import: 0 };
       state.sidebarOpen = false;
+      state.pendingWindowScrollRestore = null;
       state.ordersLoading = false;
       state.ordersCacheHydrated = false;
       state.ordersCacheLoadedAt = 0;
+      state.orderStatusCacheRefreshing = false;
       state.appBooting = false;
       state.appBootProgress = 0;
       state.appBootLabel = "Loading admin workspace…";
