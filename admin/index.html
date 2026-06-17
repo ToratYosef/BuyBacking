@@ -601,6 +601,50 @@
       return `${deviceName}${details ? ` • ${details}` : ''}`;
     }
 
+    function applyAutoAcceptedReofferResult(orderId, response = {}, requestBody = {}) {
+      const order = state.allOrders.find((entry) => entry.id === orderId) || (state.selectedOrderSnapshot?.id === orderId ? state.selectedOrderSnapshot : null);
+      if (!order) return null;
+      const responseDeviceKeys = Array.isArray(response?.deviceKeys) ? response.deviceKeys : [];
+      const responseDeviceItems = Array.isArray(response?.devices) ? response.devices : [];
+      const requestDeviceKeys = Array.isArray(requestBody?.deviceKeys) ? requestBody.deviceKeys : (requestBody?.deviceKey ? [requestBody.deviceKey] : []);
+      const deviceKeys = [...new Set([
+        ...responseDeviceKeys,
+        ...responseDeviceItems.map((device) => device?.deviceKey).filter(Boolean),
+        ...requestDeviceKeys,
+      ].filter(Boolean))];
+      if (!deviceKeys.length) return null;
+
+      const devicesByKey = new Map(responseDeviceItems.map((device) => [device?.deviceKey, device]).filter(([key]) => !!key));
+      const nextDeviceStatusByKey = { ...(order.deviceStatusByKey || {}) };
+      const nextReOfferByDevice = { ...(order.reOfferByDevice || order.reofferByDevice || {}) };
+      deviceKeys.forEach((deviceKey) => {
+        nextDeviceStatusByKey[deviceKey] = 're-offered-auto-accepted';
+        const responseDevice = devicesByKey.get(deviceKey);
+        nextReOfferByDevice[deviceKey] = {
+          ...(nextReOfferByDevice[deviceKey] || {}),
+          ...(Number.isFinite(Number(responseDevice?.price)) ? { acceptedAmount: Number(responseDevice.price), newPrice: Number(responseDevice.price) } : {}),
+          acceptedAutomatically: true,
+          autoAccepted: true,
+          status: 're-offered-auto-accepted',
+        };
+      });
+
+      const nextOrder = {
+        ...order,
+        deviceStatusByKey: nextDeviceStatusByKey,
+        reOfferByDevice: nextReOfferByDevice,
+        readyToPay: true,
+        paymentReady: true,
+        paymentReadyReason: 'auto_reoffer_accepted',
+        autoRequote: {
+          ...(order.autoRequote || {}),
+          acceptedAutomatically: true,
+        },
+      };
+      nextOrder.status = computeOrderStatus(nextOrder);
+      return upsertOrderInState(nextOrder);
+    }
+
     function hasAnyReofferHistory(order = {}) {
       if (!order || typeof order !== 'object') return false;
       if (hasObjectEntries(order.reOffer) || hasObjectEntries(order.reoffer)) return true;
@@ -4195,11 +4239,19 @@
             method = "POST";
             body = { ...(options?.body || {}) };
             break;
-          case "autoAcceptReoffer":
+          case "autoAcceptReoffer": {
+            const autoAcceptBody = { force: true, sendCustomerEmail: true, ...(options?.body || {}) };
+            const hasDeviceKey = typeof autoAcceptBody.deviceKey === 'string' && autoAcceptBody.deviceKey.trim();
+            const hasDeviceKeys = Array.isArray(autoAcceptBody.deviceKeys) && autoAcceptBody.deviceKeys.filter(Boolean).length > 0;
+            if (!hasDeviceKey && !hasDeviceKeys) {
+              toast('Choose at least one overdue re-offer device to auto-accept.', 'error');
+              return;
+            }
             endpoint = `/orders/${orderId}/re-offer/auto-accept`;
             method = "POST";
-            body = { force: true, sendCustomerEmail: true, ...(options?.body || {}) };
+            body = autoAcceptBody;
             break;
+          }
           case "cancelReoffer":
             endpoint = `/orders/${orderId}/cancel-reoffer`;
             method = "POST";
@@ -4347,6 +4399,14 @@
         else if (method === "POST") actionResult = await apiPost(endpoint, body ?? {});
         else if (method === "PUT") await apiPut(endpoint, body ?? {});
         else if (method === "DELETE") await apiDelete(endpoint);
+
+        if (actionType === 'autoAcceptReoffer') {
+          applyAutoAcceptedReofferResult(orderId, actionResult, body || {});
+          filterAndRenderOrders(state.currentActiveStatus, state.currentSearchTerm, { preservePage: true });
+          render();
+          toast(actionResult?.message || 'Overdue re-offer auto-accepted successfully.', 'success');
+          return { ok: true, data: actionResult };
+        }
 
         if (actionType === "deleteOrder") {
           removeOrderFromState(orderId);
@@ -7121,6 +7181,25 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
                     <button id="paymentDestinationCopyBtn" type="button" data-copy-payment="" class="hidden rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">Copy destination</button>
+                  </div>
+                </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
                   </div>
                 </div>
                 <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
