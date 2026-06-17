@@ -500,6 +500,59 @@
     function hasObjectEntries(value) {
       return !!(value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length);
     }
+    function getDeviceReofferOffer(order = {}, deviceKey = null) {
+      if (deviceKey) {
+        return order?.reOfferByDevice?.[deviceKey]
+          || order?.reofferByDevice?.[deviceKey]
+          || order?.deviceReofferByKey?.[deviceKey]
+          || order?.deviceReOfferByKey?.[deviceKey]
+          || null;
+      }
+      return order?.reOffer || order?.reoffer || order?.requote || null;
+    }
+    function getReofferCreatedAtMillis(order = {}, deviceKey = null) {
+      const offer = getDeviceReofferOffer(order, deviceKey) || order?.reOffer || order?.reoffer || {};
+      const candidates = [
+        offer?.createdAt,
+        offer?.sentAt,
+        offer?.updatedAt,
+        order?.reOfferCreatedAt,
+        order?.reofferCreatedAt,
+        order?.reOfferUpdatedAt,
+        order?.reofferUpdatedAt,
+        order?.statusUpdatedAt,
+        order?.lastStatusUpdateAt,
+      ];
+      for (const candidate of candidates) {
+        const ms = toDateAny(candidate)?.getTime();
+        if (Number.isFinite(ms) && ms > 0) return ms;
+      }
+      return 0;
+    }
+    function getReofferDeadlineMillis(order = {}, deviceKey = null) {
+      const offer = getDeviceReofferOffer(order, deviceKey) || order?.reOffer || order?.reoffer || {};
+      const explicit = toDateAny(offer?.autoAcceptDate || offer?.autoAcceptAt || offer?.deadlineAt || offer?.expiresAt || order?.reOfferAutoAcceptDate || order?.reofferAutoAcceptDate)?.getTime();
+      if (Number.isFinite(explicit) && explicit > 0) return explicit;
+      const created = getReofferCreatedAtMillis(order, deviceKey);
+      return created ? created + (7 * 24 * 60 * 60 * 1000) : 0;
+    }
+    function reofferPendingAgeBadgeHTML(order = {}, deviceKey = null, status = '') {
+      if (normalizeStatusKey(status) !== 're-offered-pending') return '';
+      const deadline = getReofferDeadlineMillis(order, deviceKey);
+      if (!deadline) return '';
+      const remainingMs = deadline - Date.now();
+      const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+      const text = remainingDays > 0
+        ? `${remainingDays} day${remainingDays === 1 ? '' : 's'} left`
+        : `Past 7 days${remainingDays < 0 ? ` by ${Math.abs(remainingDays)} day${Math.abs(remainingDays) === 1 ? '' : 's'}` : ''}`;
+      const colorClass = remainingDays <= 0
+        ? 'bg-rose-50 text-rose-700 border-rose-200'
+        : remainingDays <= 2
+          ? 'bg-amber-50 text-amber-700 border-amber-200'
+          : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${colorClass}">${esc(text)}</span>`;
+    }
+
     function hasAnyReofferHistory(order = {}) {
       if (!order || typeof order !== 'object') return false;
       if (hasObjectEntries(order.reOffer) || hasObjectEntries(order.reoffer)) return true;
@@ -2986,6 +3039,11 @@
           const bPay = getPaymentMethodGroup(b.order);
           if (aPay.key !== bPay.key) return aPay.label.localeCompare(bPay.label);
         }
+        if (s === "re-offered-pending") {
+          const aCreated = getReofferCreatedAtMillis(a.order, a.deviceKey) || 0;
+          const bCreated = getReofferCreatedAtMillis(b.order, b.deviceKey) || 0;
+          if (aCreated !== bCreated) return bCreated - aCreated;
+        }
         if (s === "emailed") {
           const aDue = getDeviceResponseDueAtMillis(a.order, a.deviceKey);
           const bDue = getDeviceResponseDueAtMillis(b.order, b.deviceKey);
@@ -5172,6 +5230,9 @@
         const acceptanceBadgeHtml = showGrouped
           ? groupEntries.map((groupEntry) => readyToPayAcceptanceBadgeHTML(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
           : readyToPayAcceptanceBadgeHTML(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
+        const reofferAgeBadgeHtml = showGrouped
+          ? groupEntries.map((groupEntry) => reofferPendingAgeBadgeHTML(order, groupEntry.deviceKey, getDeviceStatus(order, groupEntry.deviceKey))).find(Boolean) || ""
+          : reofferPendingAgeBadgeHTML(order, groupEntries[0]?.deviceKey || deviceKey, deviceStatus);
         const paymentGroup = getPaymentMethodGroup(order);
         if (showReadyToPayPaymentGroups && paymentGroup.key !== lastReadyToPayPaymentGroupKey) {
           lastReadyToPayPaymentGroupKey = paymentGroup.key;
@@ -5230,6 +5291,7 @@
               <div class="flex flex-col items-start gap-1">
                 ${statusBadgeHTML(deviceStatus, statusExtra)}
                 ${acceptanceBadgeHtml}
+                ${reofferAgeBadgeHtml}
               </div>
             </td>
             <td class="px-4 py-3 align-top min-w-0">
@@ -5596,7 +5658,8 @@
             && Number.isFinite(acceptedDeviceOffer)
             && Math.abs(Number(acceptedDeviceOffer || 0) - Number(offer || 0)) > 0.009;
           const acceptanceBadgeHtml = readyToPayAcceptanceBadgeHTML(order, deviceKey, deviceStatus);
-          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>${acceptanceBadgeHtml ? ` ${acceptanceBadgeHtml}` : ''}`;
+          const reofferAgeBadgeHtml = reofferPendingAgeBadgeHTML(order, deviceKey, deviceStatus);
+          const deviceStatusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getStatusClass(deviceStatus)}">${esc(formatStatusLabel(deviceStatus))}</span>${acceptanceBadgeHtml ? ` ${acceptanceBadgeHtml}` : ''}${reofferAgeBadgeHtml ? ` ${reofferAgeBadgeHtml}` : ''}`;
           
           // Check if QC has been completed for this device
           const qcData = order?.qcDataByDevice?.[deviceKey];
@@ -6973,6 +7036,25 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
                     <button id="paymentDestinationCopyBtn" type="button" data-copy-payment="" class="hidden rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">Copy destination</button>
+                  </div>
+                </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
                   </div>
                 </div>
                 <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
