@@ -462,6 +462,18 @@
     function isReadyToPayQueueOrder(order = {}) {
       return order?.readyToPay === true || order?.paymentReady === true;
     }
+    function isReadyToPayQueueDevice(order = {}, deviceKey = null, deviceStatus = '') {
+      const status = normalizeStatusKey(deviceStatus || (deviceKey ? getDeviceStatus(order, deviceKey) : ''));
+      if (status === 'ready_to_pay') return true;
+      if (!isReadyToPayQueueOrder(order)) return false;
+      return status !== 're-offered-pending'
+        && status !== 're_offered_pending'
+        && status !== 're-offered-declined'
+        && status !== 're_offered_declined'
+        && status !== 'return-label-generated'
+        && status !== 'completed'
+        && status !== 'cancelled';
+    }
     function getReofferAcceptanceSource(order = {}, deviceKey = null, status = '') {
       const normalizedStatus = normalizeStatusKey(status || '');
       const normalizedOrderStatus = normalizeStatusKey(order?.status || '');
@@ -3171,7 +3183,7 @@
         } else if (s === "received") {
           allDevices = allDevices.filter(d => d.deviceStatus === "received");
         } else if (s === "ready_to_pay") {
-          allDevices = allDevices.filter(d => d.deviceStatus === "ready_to_pay" || isReadyToPayQueueOrder(d.order));
+          allDevices = allDevices.filter(d => isReadyToPayQueueDevice(d.order, d.deviceKey, d.deviceStatus));
         } else if (s === "misc") {
           allDevices = allDevices.filter(d => isMiscStatusValue(d.deviceStatus));
         } else {
@@ -4871,7 +4883,7 @@
         const status = normalizeStatusKey(group?.deviceStatus) || "unknown";
         statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
       }
-      const readyToPayQueueCount = visibleGroups.filter((group) => normalizeStatusKey(group?.deviceStatus) === "ready_to_pay" || isReadyToPayQueueOrder(group?.order)).length;
+      const readyToPayQueueCount = visibleGroups.filter((group) => isReadyToPayQueueDevice(group?.order, group?.deviceKeys?.[0], group?.deviceStatus)).length;
       statusCounts.set("ready_to_pay", readyToPayQueueCount);
 
       const cancelledSource = [...cancelled, ...visible.filter((order) => orderHasDeviceWithStatus(order, "cancelled"))];
@@ -7280,6 +7292,25 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
                     <button id="paymentDestinationCopyBtn" type="button" data-copy-payment="" class="hidden rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">Copy destination</button>
+                  </div>
+                </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
                   </div>
                 </div>
                 <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
