@@ -896,8 +896,9 @@
         const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
         if (targetSet && !targetSet.has(deviceKey)) continue;
         const deviceStatus = getDeviceStatus(order, deviceKey);
+        const rawDeviceStatus = order?.deviceStatusByKey?.[deviceKey] || deviceStatus;
         const hasQcData = !!(order?.qcDataByDevice?.[deviceKey] && Object.keys(order.qcDataByDevice[deviceKey]).length);
-        const acceptedReoffer = isAcceptedReofferStatus(deviceStatus);
+        const acceptedReoffer = isAcceptedReofferStatus(rawDeviceStatus) || isAcceptedReofferStatus(deviceStatus);
         const declinedReoffer = isDeclinedReofferStatus(deviceStatus);
         const normalizedStatus = normalizeStatusKey(deviceStatus);
 
@@ -5868,10 +5869,12 @@
           const item = entry.item || {};
           const deviceKey = buildOrderDeviceKey(order.id, entry.deviceIndex);
           const deviceStatus = getDeviceStatus(order, deviceKey);
+          const rawDeviceStatus = order?.deviceStatusByKey?.[deviceKey] || deviceStatus;
           const imeiValue = getDeviceImeiValue(order, entry, deviceKey);
           const offer = getEffectivePerDeviceOffer(order, item, deviceKey);
           const acceptedDeviceOffer = getDeviceAcceptedReofferPayout(order, deviceKey, offer);
-          const isAcceptedReoffer = isAcceptedReofferStatus(deviceStatus);
+          const isAcceptedReoffer = isAcceptedReofferStatus(rawDeviceStatus) || isAcceptedReofferStatus(deviceStatus);
+          const isAutoAcceptedReoffer = statusToken(rawDeviceStatus) === 're-offered-auto-accepted' || statusToken(rawDeviceStatus) === 're_offered_auto_accepted';
           const isDeclinedReoffer = isDeclinedReofferStatus(deviceStatus);
           const showAcceptedOfferSwap = (isAcceptedReoffer || isDeclinedReoffer)
             && Number.isFinite(acceptedDeviceOffer)
@@ -5884,7 +5887,12 @@
           const qcData = order?.qcDataByDevice?.[deviceKey];
           const hasQcData = qcData && Object.keys(qcData).length > 0;
           const isAwaitingReQc = normalizeStatusKey(deviceStatus) === 'issue_resolved';
-          const qcStatusBadge = isAwaitingReQc
+          const qcStatusBadge = isAutoAcceptedReoffer
+            ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">
+                <i data-lucide="check-circle" style="width:11px;height:11px"></i>
+                Auto accepted
+              </span>`
+            : isAwaitingReQc
             ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                 <i data-lucide="rotate-ccw" style="width:11px;height:11px"></i>
                 Pending re-QC
@@ -6609,10 +6617,6 @@
              // Reduced payout finalization is now automated after unresolved issue timeout.
            }
 
-        if (hasAnyReofferHistory(order)) {
-          groups.admin.push({ label: "Cancel Reoffer", action: "cancelReoffer", class: "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100" });
-        }
-
         // Tracking - reordered with better styling
         // Print docs (mock check for URL)
         if (!isNoLabelCustomerSend && order.outboundLabelUrl && order.inboundLabelUrl && ["label_generated", "needs_printing"].includes(status)) {
@@ -7292,6 +7296,25 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <p class="text-sm font-medium text-emerald-900 break-all" id="paymentIdentifier">--</p>
                     <button id="paymentDestinationCopyBtn" type="button" data-copy-payment="" class="hidden rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">Copy destination</button>
+                  </div>
+                </div>
+                <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
+                  <p class="text-xs font-bold uppercase tracking-wide text-emerald-800">Quick copy</p>
+                  <div id="zelleNameCopyRow" class="hidden items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Name</p><p id="paymentCopyZelleNameText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyZelleNameBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Order ID</p><p id="paymentCopyOrderIdText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyOrderIdBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Final price</p><p id="paymentCopyAmountText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyAmountBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2">
+                    <div class="min-w-0"><p class="text-[11px] font-semibold uppercase text-emerald-700">Payout destination</p><p id="paymentCopyDestinationText" class="truncate text-sm font-semibold text-emerald-950">--</p></div>
+                    <button type="button" data-copy-payment="" id="paymentCopyDestinationBtn" class="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">Copy</button>
                   </div>
                 </div>
                 <div id="paymentCopyBox" class="mt-4 hidden rounded-xl border border-emerald-200 bg-white p-3 space-y-2">
