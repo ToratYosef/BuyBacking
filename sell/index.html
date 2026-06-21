@@ -2701,22 +2701,9 @@
                     <div class="select-card-body">
                         <div class="select-card-copy">
                             ${logo ? `<img class="brand-logo-full" src="${logo}" alt="${label} logo" loading="lazy">` : ''}
-                            <div class="brand-fallback-label">${label}</div>
                         </div>
                     </div>
                 `;
-
-                const img = card.querySelector('img');
-                const fallback = card.querySelector('.brand-fallback-label');
-                const showFallback = () => {
-                    if (img) img.style.display = 'none';
-                    if (fallback) fallback.style.display = 'block';
-                };
-                if (!logo) {
-                    showFallback();
-                } else if (img) {
-                    img.addEventListener('error', showFallback, { once: true });
-                }
             } else if (state.currentStep !== 'condition') {
                 card.innerHTML = `<span class="select-card-title">${label}</span>`;
             } else {
@@ -2728,24 +2715,9 @@
     };
 
     const handleSelectionRequested = async (value, label) => {
-        // Only confirm on model selection (needs a phone image).
-        if (state.currentStep !== 'model') {
-            handleSelection(value, label);
-            return;
-        }
-
-        try {
-            const modelData = await getModelDocData(state.selections.brand, value);
-            const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
-            const deviceName = `${fullBrand} ${label}`.trim();
-            pendingConfirmAction = () => handleSelection(value, label, modelData);
-            openDeviceConfirmModal(deviceName, modelData.imageUrl);
-        } catch (e) {
-            const fullBrand = BRAND_DISPLAY[state.selections.brand] || '';
-            const deviceName = `${fullBrand} ${label}`.trim();
-            pendingConfirmAction = () => handleSelection(value, label);
-            openDeviceConfirmModal(deviceName, '');
-        }
+        // Keep every selection step as a direct click-through. The modal confirmation
+        // step was blocking model selections for some visitors.
+        handleSelection(value, label);
     };
 
     const handleSelection = async (value, label, preloadedModelData = null) => {
@@ -3127,19 +3099,8 @@
 
     };
 
-    document.getElementById('startCheckoutBtn').onclick = () => {
-        trackSellEvent('sell_offer_accepted', { step: 'final_offer' });
-        document.getElementById('qty-modal').style.display = 'flex';
-    };
-    document.getElementById('conditionAcceptBtn').onclick = () => {
-        trackSellEvent('sell_offer_accepted', { step: 'condition' });
-        document.getElementById('qty-modal').style.display = 'flex';
-    };
-    document.getElementById('conditionResetBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
-    document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
-    document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
-    document.getElementById('finalSubmitBtn').onclick = async () => {
-        trackSellEvent('sell_continue_to_checkout', { source: 'quantity_modal' });
+    const continueToCheckout = async (source = 'offer_button') => {
+        trackSellEvent('sell_continue_to_checkout', { source });
         const cart = addCurrentDeviceToCart() || getCart();
         const progressEmail = normalizeEmail(currentUser?.email || getStoredEmail());
         if (isValidEmail(progressEmail)) {
@@ -3151,6 +3112,21 @@
         }
         navigatingToCheckout = true;
         window.location.href = '/sell/checkout.html';
+    };
+
+    document.getElementById('startCheckoutBtn').onclick = () => {
+        trackSellEvent('sell_offer_accepted', { step: 'final_offer' });
+        continueToCheckout('final_offer_button');
+    };
+    document.getElementById('conditionAcceptBtn').onclick = () => {
+        trackSellEvent('sell_offer_accepted', { step: 'condition' });
+        continueToCheckout('condition_offer_button');
+    };
+    document.getElementById('conditionResetBtn').onclick = (e) => { e.preventDefault(); window.location.href = '/sell/index.html'; };
+    document.getElementById('qtyPlus').onclick = () => { state.selections.qty++; document.getElementById('qty-val').textContent = state.selections.qty; };
+    document.getElementById('qtyMinus').onclick = () => { if(state.selections.qty > 1) state.selections.qty--; document.getElementById('qty-val').textContent = state.selections.qty; };
+    document.getElementById('finalSubmitBtn').onclick = async () => {
+        await continueToCheckout('quantity_modal');
     };
     document.getElementById('addAnotherDeviceBtn').onclick = async () => {
         trackSellEvent('sell_add_another_device');
@@ -3765,10 +3741,12 @@ if (!window[INIT_FLAG]) {
 } // End of INIT_FLAG check
 </script>
 
+  <script>
+    window.shcDisableShip48Banner = true;
+  </script>
   <script type="module">
     await (window.shcComponentsReady || Promise.resolve());
     await window.shcLoadSharedSiteScripts?.({ includeAuth: false });
   </script>
-  <script type="module" src="/assets/js/live-chat-widget.js?v=20260329c"></script>
 </body>
 </html>
