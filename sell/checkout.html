@@ -2470,6 +2470,20 @@
     const saveCart = (cart) => {
         localStorage.setItem('shc_cart', JSON.stringify(cart.map(normalizeCartItem)));
     };
+    const getCartTotalQty = (items = []) => items.reduce((sum, item) => {
+        const normalized = normalizeCartItem(item);
+        return sum + Math.max(1, Math.floor(Number(normalized.qty || 1)));
+    }, 0);
+    const chooseMostCompleteCart = (localCart = [], savedCart = []) => {
+        const normalizedLocal = (Array.isArray(localCart) ? localCart : []).map(normalizeCartItem);
+        const normalizedSaved = (Array.isArray(savedCart) ? savedCart : []).map(normalizeCartItem);
+        if (!normalizedSaved.length) return normalizedLocal;
+        if (!normalizedLocal.length) return normalizedSaved;
+        const localQty = getCartTotalQty(normalizedLocal);
+        const savedQty = getCartTotalQty(normalizedSaved);
+        if (localQty >= savedQty) return normalizedLocal;
+        return normalizedSaved;
+    };
     const getTotalQty = () => cartItems.reduce((sum, item) => sum + Math.max(1, Math.floor(Number(item.qty || 1))), 0);
     const syncQtyParamToUrl = () => {
         const url = new URL(window.location.href);
@@ -3004,8 +3018,11 @@
             try {
                 const savedCart = await fetchSellProgressCart(checkoutEmail);
                 if (savedCart.length) {
-                    cartItems = savedCart;
+                    cartItems = chooseMostCompleteCart(getCart(), savedCart);
                     saveCart(cartItems);
+                    if (getCartTotalQty(cartItems) > getCartTotalQty(savedCart)) {
+                        await upsertSellProgress({ email: checkoutEmail, didComplete: false, cartItems });
+                    }
                 } else if (cartItems.length) {
                     await upsertSellProgress({ email: checkoutEmail, didComplete: false, cartItems });
                 }
