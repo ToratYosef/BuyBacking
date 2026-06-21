@@ -2999,7 +2999,10 @@
                 setActiveCheckoutStep(target);
             });
         });
-        setActiveCheckoutStep('shipping', { scroll: false });
+        // Keep the user's current step if they interacted before checkout initialization finished.
+        // Without this, selecting shipping during initial hydration can auto-advance to Contact,
+        // then bindCheckoutStepper() resets it back to Shipping when init completes.
+        setActiveCheckoutStep(currentCheckoutStep, { scroll: false });
     };
 
     const init = async () => {
@@ -3575,11 +3578,16 @@
             updateSummary();
             if (currentCheckoutStep === 'shipping' && getSelectedShippingPreference()) {
                 clearTimeout(shippingAutoAdvanceTimer);
+                // Let the radio checked state paint first, then move forward once.
+                // This avoids the flicker where the next step appears and a late init/render
+                // pass snaps the UI back to Shipping.
                 shippingAutoAdvanceTimer = setTimeout(() => {
-                    if (currentCheckoutStep === 'shipping' && validateShippingStep()) {
-                        setActiveCheckoutStep('address');
-                    }
-                }, 180);
+                    requestAnimationFrame(() => {
+                        if (currentCheckoutStep === 'shipping' && validateShippingStep()) {
+                            setActiveCheckoutStep('address');
+                        }
+                    });
+                }, 60);
             }
         };
     });
